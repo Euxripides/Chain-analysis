@@ -1,0 +1,54 @@
+package dataset
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
+)
+
+func TestComputeGaps(t *testing.T) {
+	iv := func(f, t int64) store.BlockInterval { return store.BlockInterval{From: f, To: t} }
+	cases := []struct {
+		name    string
+		covered []store.BlockInterval
+		want    store.BlockInterval
+		gaps    []store.BlockInterval
+	}{
+		{"no cover", nil, iv(0, 100), []store.BlockInterval{iv(0, 100)}},
+		{"full hit", []store.BlockInterval{iv(0, 100)}, iv(0, 100), nil},
+		{"middle gap", []store.BlockInterval{iv(0, 40), iv(60, 100)}, iv(0, 100), []store.BlockInterval{iv(41, 59)}},
+		{"tail gap", []store.BlockInterval{iv(0, 50)}, iv(0, 100), []store.BlockInterval{iv(51, 100)}},
+		{"head gap", []store.BlockInterval{iv(50, 100)}, iv(0, 100), []store.BlockInterval{iv(0, 49)}},
+	}
+	for _, c := range cases {
+		got := ComputeGaps(c.covered, c.want)
+		if !reflect.DeepEqual(got, c.gaps) {
+			t.Errorf("%s: got %v want %v", c.name, got, c.gaps)
+		}
+	}
+}
+
+func TestCoveredBlocks(t *testing.T) {
+	iv := func(f, t int64) store.BlockInterval { return store.BlockInterval{From: f, To: t} }
+	covered := []store.BlockInterval{iv(0, 40), iv(60, 100), iv(200, 300)}
+	if got := CoveredBlocks(covered, iv(0, 100)); got != 82 {
+		t.Errorf("covered blocks = %d, want 82", got)
+	}
+}
+
+func TestNormalizeAndDedupeAddresses(t *testing.T) {
+	a1 := "0x1111111111111111111111111111111111111111"
+	a2 := "0x2222222222222222222222222222222222222222"
+	in := []string{" " + a1 + " ", a1, "bad", a2}
+	out, err := NormalizeAndDedupeAddresses(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("got %d addresses, want 2", len(out))
+	}
+	if out[0] != a1 {
+		t.Errorf("expected %s, got %s", a1, out[0])
+	}
+}
