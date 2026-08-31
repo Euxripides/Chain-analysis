@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { api } from '../api/client'
@@ -29,6 +29,16 @@ export default function DownloadPage() {
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // V1.2：案件/标签（§22/§24）
+  const [cases, setCases] = useState<{ id: string; name: string }[]>([])
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([])
+  const [caseName, setCaseName] = useState('')
+  const [tagNames, setTagNames] = useState<string[]>([])
+  const [subjectMeta, setSubjectMeta] = useState<Record<string, { case_name: string; tags: string[] }>>({})
+
+  useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
+  useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
+
   const addresses = useMemo(() => {
     const lines = addressText.split(/[\n,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean)
     const uniq = [...new Set(lines)]
@@ -50,7 +60,30 @@ export default function DownloadPage() {
           const ws = wb.Sheets[wb.SheetNames[0]]
           text = XLSX.utils.sheet_to_csv(ws)
         }
-        setAddressText((prev) => (prev ? prev + '\n' : '') + text)
+        // §24：CSV 可携带 address,chain,case,tags 列 → Per-Address Override
+        const lines = text.split(/[\r\n]+/).filter((l) => l.trim())
+        let addrLines = lines
+        const meta: Record<string, { case_name: string; tags: string[] }> = {}
+        if (lines.length > 0 && /address/i.test(lines[0])) {
+          const header = lines[0].split(',').map((h) => h.trim().toLowerCase())
+          const ai = header.indexOf('address')
+          const ci = header.indexOf('case')
+          const ti = header.indexOf('tags')
+          if (ai >= 0) {
+            addrLines = []
+            for (const l of lines.slice(1)) {
+              const cells = l.split(',')
+              const addr = (cells[ai] ?? '').trim().toLowerCase()
+              if (!addr) continue
+              addrLines.push(addr)
+              const caseN = ci >= 0 ? (cells[ci] ?? '').trim() : ''
+              const tagList = ti >= 0 ? (cells[ti] ?? '').split('|').map((x) => x.trim()).filter(Boolean) : []
+              if (caseN || tagList.length) meta[addr] = { case_name: caseN, tags: tagList }
+            }
+          }
+        }
+        setSubjectMeta((prev) => ({ ...prev, ...meta }))
+        setAddressText((prev) => (prev ? prev + '\n' : '') + addrLines.join('\n'))
       } catch (e) {
         setError('文件解析失败: ' + String(e))
       }
@@ -95,6 +128,10 @@ export default function DownloadPage() {
         source: 'user_download', priority: 100,
         subjects: addresses.valid, chain, datasets, range: buildRange(),
         reuse_policy: 'prefer_local',
+        case_name: caseName || undefined,
+        tags: tagNames.length ? tagNames : undefined,
+        create_missing_meta: false,
+        subject_meta: subjectMeta,
       })
       if (resp.job_id) navigate('/jobs/' + resp.job_id)
     } catch (e) {
@@ -155,6 +192,27 @@ export default function DownloadPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">案件 / 标签（可选，§22）</div>
+        <div className="row gap">
+          <select style={{ maxWidth: 220 }} value={caseName} onChange={(e) => setCaseName(e.target.value)}>
+            <option value="">选择案件</option>
+            {cases.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+          {tags.map((t) => {
+            const on = tagNames.includes(t.name)
+            return (
+              <label key={t.id} className="chip" style={{ opacity: on ? 1 : 0.6 }}>
+                <input type="checkbox" checked={on} onChange={() => setTagNames((cur) => on ? cur.filter((x) => x !== t.name) : [...cur, t.name])} /> {t.name}
+              </label>
+            )
+          })}
+          {caseName && <button className="ghost sm" onClick={() => api.createCase(caseName).then((c) => setCases((cur) => [...cur, c]))}>+ 新建案件</button>}
+          <button className="ghost sm" onClick={() => { const n = prompt('新标签名'); if (n) api.createTag(n).then((t) => setTags((cur) => [...cur, t])) }}>+ 新建标签</button>
+        </div>
+        {Object.keys(subjectMeta).length > 0 && <p className="muted" style={{ marginTop: 6 }}>已从导入文件解析 {Object.keys(subjectMeta).length} 个地址的案件/标签映射</p>}
       </div>
 
       <div className="card">

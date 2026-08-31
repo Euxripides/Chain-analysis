@@ -154,6 +154,68 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 	return s.queryRows(ctx, dataset, q, args...)
 }
 
+// Explorer 统一浏览查询：地址集合 + 附加过滤 + keyset cursor + 多地址 QUALIFY 去重（§29/§58）。
+func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses []string, filterSQL string, filterArgs []any, cursorTs *time.Time, cursorHash string, limit int) ([]map[string]any, error) {
+	table := tableName(dataset)
+	if dataset == "activity" {
+		table = "address_activity"
+	}
+	args := []any{chain}
+	ph := make([]string, len(addresses))
+	for i := range ph {
+		ph[i] = "?"
+	}
+	in := "(" + strings.Join(ph, ",") + ")"
+	var base string
+	switch dataset {
+	case "transactions", "token_transfers", "nft_transfers":
+		base = "chain=? AND (from_address IN " + in + " OR to_address IN " + in + ")"
+		args = append(args, addresses, addresses)
+	case "logs", "activity":
+		base = "chain=? AND address IN " + in
+		args = append(args, addresses)
+	default:
+		return nil, fmt.Errorf("unknown dataset %s", dataset)
+	}
+	where := base
+	if filterSQL != "" {
+		where += " AND " + filterSQL
+		args = append(args, filterArgs...)
+	}
+	if cursorTs != nil {
+		where += " AND (timestamp < ? OR (timestamp = ? AND tx_hash < ?))"
+		args = append(args, cursorTs.UTC(), cursorHash)
+	}
+	q := "SELECT * FROM blockchain." + table + " FINAL WHERE " + where
+	if len(addresses) > 1 && dataset != "activity" {
+		// 多地址：A→B 交易只显示一次（QUALIFY 窗口去重，不加额外列）
+		q += " QUALIFY row_number() OVER (PARTITION BY " + explorerPartition(dataset) + " ORDER BY timestamp DESC) = 1"
+	}
+	args = append(args, limit+1)
+	q += " ORDER BY timestamp DESC, tx_hash DESC LIMIT ?"
+	rows, err := s.queryRows(ctx, dataset, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows, nil
+}
+
+func explorerPartition(dataset string) string {
+	switch dataset {
+	case "transactions":
+		return "tx_hash"
+	case "logs":
+		return "tx_hash, log_index"
+	case "nft_transfers":
+		return "tx_hash, log_index, contract_address, token_id"
+	default:
+		return "tx_hash, log_index, token_address"
+	}
+}
+
 // Activity 地址活动（§87：资金分析/智能调查统一入口）。
 func (s *Service) Activity(ctx context.Context, chain, address string, limit, offset int) ([]map[string]any, error) {
 	address = strings.ToLower(address)

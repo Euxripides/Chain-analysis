@@ -195,12 +195,73 @@ type Export struct {
 	JobID     *string    `json:"job_id"`
 	Dataset   string     `json:"dataset"`
 	Format    string     `json:"format"`
+	Zip       bool       `json:"zip"`
 	Status    string     `json:"status"`
 	ObjectRef string     `json:"object_ref"`
 	Rows      int64      `json:"rows"`
 	Error     string     `json:"error"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// ---- V1.2 元数据模型 ----
+
+type CaseInfo struct {
+	ID             string    `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	WorkspaceID    string    `json:"workspace_id"`
+	CaseNo         string    `json:"case_no"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Status         string    `json:"status"`
+	Color          string    `json:"color"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type TagInfo struct {
+	ID             string    `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	WorkspaceID    string    `json:"workspace_id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Color          string    `json:"color"`
+	Source         string    `json:"source"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type WorkspaceAddress struct {
+	ID                string     `json:"id"`
+	Chain             string     `json:"chain"`
+	Address           string     `json:"address"`
+	NormalizedAddress string     `json:"normalized_address"`
+	DisplayName       string     `json:"display_name"`
+	PrimaryCaseID     *string    `json:"primary_case_id"`
+	TransactionCount  int64      `json:"transaction_count"`
+	TokenTransferCount int64     `json:"token_transfer_count"`
+	NftTransferCount  int64      `json:"nft_transfer_count"`
+	LogCount          int64      `json:"log_count"`
+	TotalActivityCount int64     `json:"total_activity_count"`
+	FirstDataBlock    *int64     `json:"first_data_block"`
+	LastDataBlock     *int64     `json:"last_data_block"`
+	FirstDataAt       *time.Time `json:"first_data_at"`
+	LastDataAt        *time.Time `json:"last_data_at"`
+	LastSyncAt        *time.Time `json:"last_sync_at"`
+	SyncStatus        string     `json:"sync_status"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+type TokenMetadata struct {
+	Chain           string `json:"chain"`
+	ContractAddress string `json:"contract_address"`
+	Name            string `json:"name"`
+	Symbol          string `json:"symbol"`
+	Decimals        *int   `json:"decimals"`
+	LogoURL         string `json:"logo_url"`
+	TokenType       string `json:"token_type"`
+	Verified        bool   `json:"verified"`
+	MetadataSource  string `json:"metadata_source"`
 }
 
 type JobStats struct {

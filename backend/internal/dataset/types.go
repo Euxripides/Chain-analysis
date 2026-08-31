@@ -19,6 +19,18 @@ type EnsureRequest struct {
 	Datasets    []string  `json:"datasets"`
 	Range       RangeSpec `json:"range"`
 	ReusePolicy string    `json:"reuse_policy"`
+
+	// V1.2：案件/标签（§22/§23）
+	CaseName        string                `json:"case_name"`
+	Tags            []string              `json:"tags"`
+	CreateMissingMeta bool                `json:"create_missing_meta"`
+	SubjectMeta     map[string]SubjectMeta `json:"subject_meta"`
+}
+
+// SubjectMeta 批量地址 Per-Address Override（§23）。
+type SubjectMeta struct {
+	CaseName string   `json:"case_name"`
+	Tags     []string `json:"tags"`
 }
 
 type Gap struct {

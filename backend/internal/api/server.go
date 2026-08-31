@@ -11,15 +11,18 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
+	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/update"
 )
 
 type Deps struct {
@@ -33,12 +36,15 @@ type Deps struct {
 }
 
 type Server struct {
-	deps    Deps
-	router  chi.Router
-	hub     *SSEHub
-	busStop func()
-	svc     *dataset.Service
-	query   *query.Service
+	deps     Deps
+	router   chi.Router
+	hub      *SSEHub
+	busStop  func()
+	svc      *dataset.Service
+	query    *query.Service
+	meta     *addressmeta.Service
+	explorer *explorer.Service
+	updates  *update.Service
 }
 
 func New(deps Deps) *Server {
@@ -49,6 +55,10 @@ func New(deps Deps) *Server {
 		}
 		return 0, nil // live：head 未知，区间由 Provider 语义决定
 	})
+	s.meta = addressmeta.New(deps.Store)
+	s.svc.Meta = s.meta
+	s.explorer = explorer.New(deps.CH, deps.Store)
+	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, deps.Log)
 	s.buildRouter()
 	return s
 }
@@ -86,7 +96,26 @@ func (s *Server) buildRouter() {
 		api.Post("/exports", s.handleCreateExport)
 		api.Get("/exports/{id}", s.handleGetExport)
 		api.Get("/exports/{id}/download", s.handleDownloadExport)
+		api.Post("/exports/{id}/download-ticket", s.handleExportTicket)
+
+		api.Get("/cases", s.handleListCases)
+		api.Post("/cases", s.handleCreateCase)
+		api.Delete("/cases/{id}", s.handleDeleteCase)
+		api.Get("/tags", s.handleListTags)
+		api.Post("/tags", s.handleCreateTag)
+		api.Delete("/tags/{id}", s.handleDeleteTag)
+
+		api.Get("/data-explorer/addresses", s.handleExplorerAddresses)
+		api.Post("/data-explorer/query", s.handleExplorerQuery)
+
+		api.Patch("/addresses/{chain}/{address}/metadata", s.handleAddressMetadata)
+
+		api.Post("/updates/preview", s.handleUpdatePreview)
+		api.Post("/updates/{id}/confirm", s.handleUpdateConfirm)
 	})
+
+	// 短期下载票据（§54：302 → 15 分钟签名 URL）
+	r.Get("/api/v1/download/{ticket}", s.handleTicketDownload)
 	s.router = r
 }
 

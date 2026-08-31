@@ -16,9 +16,15 @@ var addrRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 type HeadFn func(ctx context.Context, chain string) (int64, error)
 
+// MetaUpserter 元数据落库（由 addressmeta 实现，避免循环依赖）。
+type MetaUpserter interface {
+	EnsureLinked(ctx context.Context, chain, addr, caseName string, tags []string, createMissing bool) error
+}
+
 type Service struct {
 	Store  *store.Store
 	HeadFn HeadFn
+	Meta   MetaUpserter
 }
 
 func New(st *store.Store, headFn HeadFn) *Service {
@@ -192,12 +198,13 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		return nil, err
 	}
 	now := time.Now()
-	n, err := s.Store.CountJobNoForDay(ctx, now)
+	day := now.UTC()
+	n, err := s.Store.CountJobNoForDay(ctx, day)
 	if err != nil {
 		return nil, err
 	}
 	resolvedAt := now.UTC()
-	jobNo := fmt.Sprintf("DL-%s-%04d", now.Format("20060102"), n+1)
+	jobNo := fmt.Sprintf("DL-%s-%04d", day.Format("20060102"), n+1)
 
 	preview, err := s.Preview(ctx, EnsureRequest{Subjects: subjects, Chain: chain, Datasets: datasets, Range: req.Range})
 	if err != nil {
@@ -227,10 +234,26 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		job.ReusePolicy = "prefer_local"
 	}
 	// job_no 冲突（并发建任务）自动递增重试
+	// V1.2：Metadata 与下载解耦（§26/§77.5）——先落案件/标签，再创建任务
+	if s.Meta != nil {
+		for _, subj := range subjects {
+			caseName := req.CaseName
+			tags := req.Tags
+			if m, ok := req.SubjectMeta[subj]; ok {
+				caseName = m.CaseName
+				tags = m.Tags
+			}
+			if caseName != "" || len(tags) > 0 {
+				if err := s.Meta.EnsureLinked(ctx, chain, subj, caseName, tags, req.CreateMissingMeta); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	if _, err := s.Store.CreateJobWithSubjects(ctx, job, subjects); err != nil {
 		if strings.Contains(err.Error(), "job_no_key") {
 			for attempt := 1; attempt <= 5; attempt++ {
-				job.JobNo = fmt.Sprintf("DL-%s-%04d", now.Format("20060102"), n+1+attempt)
+				job.JobNo = fmt.Sprintf("DL-%s-%04d", day.Format("20060102"), n+1+attempt)
 				if _, retryErr := s.Store.CreateJobWithSubjects(ctx, job, subjects); retryErr == nil {
 					err = nil
 					break

@@ -98,6 +98,28 @@ func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// OpenRange 按字节区间流式读取（HTTP Range 断点续传，§57）。
+func (s *Store) OpenRange(ctx context.Context, key string, start, end int64) (io.ReadCloser, int64, error) {
+	opts := minio.GetObjectOptions{}
+	if start >= 0 {
+		if end < 0 {
+			opts.SetRange(start, 0)
+		} else {
+			opts.SetRange(start, end)
+		}
+	}
+	obj, err := s.client.GetObject(ctx, s.bucket, key, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		obj.Close()
+		return nil, 0, err
+	}
+	return obj, info.Size, nil
+}
+
 // Open 流式读取对象（导出下载用，不整块进内存）。
 func (s *Store) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})

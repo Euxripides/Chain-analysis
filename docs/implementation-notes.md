@@ -132,6 +132,21 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - **测试**：errors_test（64MiB±1、坏 JSON、超时、取消、官方错误码矩阵、HTTP429 兜底与 -32068 区分、Retry-After）、page_policy_test（降档阶梯/最小页拆分/cooldown 升档/Resume 继承）全部通过。
 - **Canary**：真实 bsc 地址小范围下载验证——usage.page_size=10000、response_bytes≈5.5MB/页、checkpoint 页状态落库、新指标上线（Worker /metrics 可见真实延迟直方图）。
 
+## V1.2 统一数据浏览 / 案件标签 / 混合增量更新 / 公网导出（2026-09-01）
+
+依据《链上分析平台_V1.2_…设计》完成：
+
+- **元数据模型**：cases / tags / workspace_addresses / address_case_links / address_tag_links / token_metadata / update_previews / export_tickets（迁移 0004）；公共链数据与用户元数据分离（§2/§77.1）。
+- **案件/标签 API**：CRUD（workspace 隔离）；地址目录 keyset cursor + 案件/标签/状态筛选 + 搜索（服务端）；地址元数据 PATCH。
+- **下载页案件/标签**：Ensure 扩展 case_name/tags/subject_meta/create_missing_meta；CSV/XLSX/TXT 导入支持 address,chain,case,tags 列（Per-Address Override）；Metadata 与下载解耦（Coverage 100% 也保存）。
+- **统一数据浏览**：POST /data-explorer/query（多地址 QUALIFY 窗口去重、cursor 分页禁止深 OFFSET、方向/Token/金额/时间/区块/Method 筛选、matched_addresses/case_names/tag_names/token_symbol 富化）；地址详情页 Tabs。
+- **OKLink 外链**：utils/explorer-url.ts 集中配置 6 链 slug，target=_blank + noopener noreferrer，未知链不生成链接。
+- **混合增量更新**：SafeHead（本地最大块-15 reorg buffer）；Preview：无缺口→精确 0 不调 Ankr；小增量→精确；大增量→估算（min/est/low/high/bytes/confidence）；15min 过期 + 60s 缓存；Confirm：冻结 target_block、复检 Coverage、复用 EnsureDataset 只下缺口；Balance 作为 Snapshot 刷新。
+- **公网导出**：异步 ExportJob；CSV/XLSX/JSONL/Parquet；**>3 地址强制 ZIP**（addresses/{addr}/{dataset}.{ext} + manifest.json）；下载 Ticket（15min）→ 短时签名 URL；HTTP Range 断点续传（OpenRange 206）；MinIO Private Bucket；对象 24h 过期。
+- **worker 同步**：shard 完成后刷新 workspace_addresses 统计/sync_status（§46）。
+- **修复**：job_no 跨时区重复（统一 UTC 计数+冲突重试）；display_name NULL 扫描；ListCoverage 空 dataset 全量。
+- **验证**：真实地址冒烟——案件/标签创建、目录展示（盘古/入金地址/current/242 行）、Preview up_to_date=1（0 次 Ankr）、Confirm 建任务、4 地址 ZIP 导出（521,113 行/zip=True）、Ticket 下发；go vet 干净、go test 全绿、前端 tsc 通过。
+
 ## V1 验收对照（文档 §101）
 
 - 数据正确性：重复下载不翻倍（ReplacingMergeTree + Coverage 区间合并）；Raw 可回溯（manifest → part → SHA256）；Time/Block Range 不越界（shard 区间持久化）。

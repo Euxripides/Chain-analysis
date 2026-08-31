@@ -35,4 +35,16 @@ export const api = {
   queryRows: (dataset: string, chain: string, subject: string, limit = 100, offset = 0) =>
     http<{ dataset: string; rows: Record<string, unknown>[]; count: number }>(
       `/datasets/${dataset}?chain=${chain}&subject=${subject}&limit=${limit}&offset=${offset}`),
+
+  // ---- V1.2 ----
+  listCases: () => http<{ cases: { id: string; name: string; color?: string }[] }>('/cases'),
+  createCase: (name: string) => http<{ id: string; name: string }>('/cases', { method: 'POST', body: JSON.stringify({ name }) }),
+  listTags: () => http<{ tags: { id: string; name: string; color?: string }[] }>('/tags'),
+  createTag: (name: string) => http<{ id: string; name: string }>('/tags', { method: 'POST', body: JSON.stringify({ name }) }),
+  explorerAddresses: (params: string) => http<{ addresses: unknown[]; next_cursor: string }>('/data-explorer/addresses?' + params),
+  explorerQuery: (payload: unknown) => http<{ rows: Record<string, unknown>[]; next_cursor: string; count: number }>('/data-explorer/query', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePreview: (payload: unknown) => http<Record<string, unknown>>('/updates/preview', { method: 'POST', body: JSON.stringify(payload) }),
+  updateConfirm: (previewId: string) => http<{ job_ids: string[] }>('/updates/' + previewId + '/confirm', { method: 'POST', body: '{}' }),
+  exportV2: (payload: unknown) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify(payload) }),
+  exportTicket: (id: string) => http<{ ticket_id: string; url: string }>('/exports/' + id + '/download-ticket', { method: 'POST', body: '{}' }),
 }

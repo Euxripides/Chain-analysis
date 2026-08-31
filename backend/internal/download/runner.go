@@ -598,6 +598,23 @@ func (sc *Scheduler) recompute(ctx context.Context, sh model.Shard) {
 	if err := sc.store.RecomputeSubject(ctx, sh.SubjectID); err != nil {
 		sc.log.Error("recompute subject failed", "err", err)
 	}
+	// V1.2：同步 workspace_addresses 统计与状态（§46）
+	if sc.meta != nil {
+		job, jerr := sc.store.GetJob(ctx, sh.JobID)
+		if jerr == nil {
+			if subjects, err := sc.store.SubjectsByJob(ctx, sh.JobID); err == nil {
+				for _, subj := range subjects {
+					if subj.ID == sh.SubjectID {
+						status := "current"
+						if sh.Status == model.ShardFailedFinal {
+							status = "failed"
+						}
+						_ = sc.meta.SyncFromCoverage(ctx, job.Chain, subj.Subject, status)
+					}
+				}
+			}
+		}
+	}
 	progress, err := sc.store.RecomputeJob(ctx, sh.JobID)
 	if err != nil {
 		sc.log.Error("recompute job failed", "err", err)

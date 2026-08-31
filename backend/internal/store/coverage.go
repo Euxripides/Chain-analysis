@@ -36,10 +36,16 @@ func MergeBlockRanges(intervals []BlockInterval) []BlockInterval {
 }
 
 func (s *Store) ListCoverage(ctx context.Context, chain, subject, dataset string) ([]model.CoverageRow, error) {
-	rows, err := s.Pool.Query(ctx, "SELECT id, chain, subject_type, subject, dataset, from_block, to_block, status, "+
-		"provider, row_count, raw_bytes, head_block, committed_at "+
-		"FROM dataset_coverage WHERE chain=$1 AND subject=$2 AND dataset=$3 AND status='COMPLETE' "+
-		"ORDER BY from_block", chain, subject, dataset)
+	sql := "SELECT id, chain, subject_type, subject, dataset, from_block, to_block, status, " +
+		"provider, row_count, raw_bytes, head_block, committed_at " +
+		"FROM dataset_coverage WHERE chain=$1 AND subject=$2 AND status='COMPLETE'"
+	args := []any{chain, subject}
+	if dataset != "" {
+		sql += " AND dataset=$3"
+		args = append(args, dataset)
+	}
+	sql += " ORDER BY from_block"
+	rows, err := s.Pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

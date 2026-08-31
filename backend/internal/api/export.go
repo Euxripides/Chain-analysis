@@ -22,14 +22,27 @@ const maxExportRows = 2_000_000
 
 func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		JobID   string `json:"job_id"`
-		Dataset string `json:"dataset"`
-		Format  string `json:"format"`
-		Subject string `json:"subject"`
-		Chain   string `json:"chain"`
+		JobID       string   `json:"job_id"`
+		Dataset     string   `json:"dataset"`
+		Format      string   `json:"format"`
+		Subject     string   `json:"subject"`
+		Chain       string   `json:"chain"`
+		Addresses   []string `json:"addresses"`
+		Datasets    []string `json:"datasets"`
+		IncludeMeta bool     `json:"include_meta"`
+		ForceZip    bool     `json:"force_zip"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	// V1.2：多地址导出走异步 ZIP 管线（§47-§53）
+	if len(req.Addresses) > 0 || len(req.Datasets) > 0 {
+		s.createExportV2(w, r, exportV2Request{
+			JobID: req.JobID, Dataset: req.Dataset, Format: req.Format,
+			Subject: req.Subject, Chain: req.Chain, Addresses: req.Addresses,
+			Datasets: req.Datasets, IncludeMeta: req.IncludeMeta, ForceZip: req.ForceZip,
+		})
 		return
 	}
 	if !model.ValidDataset(req.Dataset) {
@@ -78,24 +91,61 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "export not ready: " + exp.Status})
 		return
 	}
-	// 经 API 流式转发（MinIO 只绑内网，避免暴露存储端口）
-	reader, size, err := s.deps.Raw.Open(r.Context(), exp.ObjectRef)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
-	}
-	defer reader.Close()
+	// 经 API 流式转发（MinIO 只绑内网，避免暴露存储端口）；支持 HTTP Range 断点续传（§57）
+	w.Header().Set("Accept-Ranges", "bytes")
 	ct := "application/octet-stream"
 	switch exp.Format {
 	case "csv":
 		ct = "text/csv"
 	case "xlsx":
 		ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	case "json":
+	case "json", "jsonl":
 		ct = "application/x-ndjson"
+	case "parquet":
+		ct = "application/vnd.apache.parquet"
+	}
+	if strings.HasPrefix(exp.Format, "transactions") || strings.Contains(exp.ObjectRef, ".zip") {
+		ct = "application/zip"
 	}
 	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=export-%s.%s", exp.ID[:8], exp.Format))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=export-%s.%s", exp.ID[:8], extFor(exp.Format)))
+	if strings.Contains(exp.ObjectRef, ".zip") {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=export-%s.zip", exp.ID[:8]))
+	}
+
+	// 单区间 Range：bytes=start-[end]
+	if rng := r.Header.Get("Range"); rng != "" {
+		var start, end int64 = -1, -1
+		if _, err := fmt.Sscanf(rng, "bytes=%d-%d", &start, &end); err != nil || start < 0 {
+			if _, err2 := fmt.Sscanf(rng, "bytes=%d-", &start); err2 != nil || start < 0 {
+				writeJSON(w, http.StatusRequestedRangeNotSatisfiable, map[string]any{"error": "bad range"})
+				return
+			}
+		}
+		reader, size, err := s.deps.Raw.OpenRange(r.Context(), exp.ObjectRef, start, end)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		defer reader.Close()
+		if end < 0 || end >= size {
+			end = size - 1
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
+		w.Header().Set("Content-Length", fmt.Sprint(end-start+1))
+		w.WriteHeader(http.StatusPartialContent)
+		if _, err := io.Copy(w, reader); err != nil {
+			s.deps.Log.Error("export range stream failed", "export_id", exp.ID, "err", err)
+		}
+		return
+	}
+
+	reader, size, err := s.deps.Raw.Open(r.Context(), exp.ObjectRef)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	defer reader.Close()
 	w.Header().Set("Content-Length", fmt.Sprint(size))
 	if _, err := io.Copy(w, reader); err != nil {
 		s.deps.Log.Error("export stream failed", "export_id", exp.ID, "err", err)

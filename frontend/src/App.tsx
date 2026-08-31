@@ -5,7 +5,9 @@ import JobsPage from './pages/JobsPage'
 import JobDetailPage from './pages/JobDetailPage'
 import SystemPage from './pages/SystemPage'
 import BrowsePage from './pages/BrowsePage'
-import { AddressIcon, BrowseIcon, DataIcon, LogsIcon, NftIcon, OverviewIcon, TasksIcon, TransferIcon, TxIcon } from './components/Icons'
+import DataExplorerPage from './pages/DataExplorerPage'
+import AddressDetailPage from './pages/AddressDetailPage'
+import { AddressIcon, BrowseIcon, DataIcon, OverviewIcon, TasksIcon } from './components/Icons'
 
 const downloadNav = [
   { to: '/', label: '地址下载', Icon: AddressIcon },
@@ -14,10 +16,7 @@ const downloadNav = [
 ]
 
 const browseNav = [
-  { to: '/browse/transactions', label: 'Transactions', Icon: TxIcon },
-  { to: '/browse/token_transfers', label: 'Token Transfers', Icon: TransferIcon },
-  { to: '/browse/nft_transfers', label: 'NFT Transfers', Icon: NftIcon },
-  { to: '/browse/logs', label: 'Logs', Icon: LogsIcon },
+  { to: '/data-explorer', label: '数据浏览', Icon: BrowseIcon },
 ]
 
 function useNavOpen(key: string) {
@@ -83,6 +82,8 @@ export default function App() {
           <Route path="/browse/token_transfers" element={<BrowsePage dataset="token_transfers" />} />
           <Route path="/browse/nft_transfers" element={<BrowsePage dataset="nft_transfers" />} />
           <Route path="/browse/logs" element={<BrowsePage dataset="logs" />} />
+          <Route path="/data-explorer" element={<DataExplorerPage />} />
+          <Route path="/data-explorer/:chain/:address" element={<AddressDetailPage />} />
         </Routes>
       </main>
     </div>
