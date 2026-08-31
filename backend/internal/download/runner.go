@@ -262,9 +262,11 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 }
 
 // fetchWithRetry 指数退避 + 抖动；可重试：429/502/503/504/timeout/临时网络错误。
+// 响应过大/超时自动降 pageSize：10000 → 5000 → 2000 → 1000（文档 §3）。
 func (sc *Scheduler) fetchWithRetry(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
 	var lastErr error
-	for attempt := 0; attempt < 5; attempt++ {
+	pageSize := req.PageSize
+	for attempt := 0; attempt < 6; attempt++ {
 		actx, cancel := context.WithTimeout(ctx, sc.cfg.Ankr.RequestTimeout)
 		res, err := sc.prov.Fetch(actx, req)
 		cancel()
@@ -279,7 +281,20 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, req provider.FetchReque
 		if !ok || !pe.Retryable() {
 			return provider.FetchResult{}, err
 		}
-		if attempt < 4 {
+		// 超时/5xx 类错误：减半 pageSize 再试（下限 1000）；429 不降（避免更多请求加剧限流）
+		if pe.Kind == provider.ErrTemporary && req.PageSize > 1000 {
+			switch {
+			case pageSize >= 10000:
+				pageSize = 5000
+			case pageSize >= 5000:
+				pageSize = 2000
+			case pageSize >= 2000:
+				pageSize = 1000
+			}
+			req.PageSize = pageSize
+			sc.log.Warn("page size reduced on retryable error", "dataset", req.Dataset, "page_size", pageSize, "err", err.Error())
+		}
+		if attempt < 5 {
 			backoff := time.Duration(1<<uint(attempt))*time.Second + time.Duration(rand.Int63n(500))*time.Millisecond
 			select {
 			case <-ctx.Done():

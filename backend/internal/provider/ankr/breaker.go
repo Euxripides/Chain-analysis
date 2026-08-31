@@ -82,7 +82,17 @@ func (cb *circuitBreaker) update() {
 	er := cb.errorRate()
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	if cb.state == "OPEN" || cb.state == "HALF_OPEN" {
+	if cb.state == "OPEN" {
+		return
+	}
+	if cb.state == "HALF_OPEN" {
+		// 半开探测：错误率回落则恢复 NORMAL，否则重新 OPEN
+		if er < cb.threshold {
+			cb.state = "NORMAL"
+		} else {
+			cb.state = "OPEN"
+			cb.openedAt = time.Now()
+		}
 		return
 	}
 	if er >= cb.threshold {

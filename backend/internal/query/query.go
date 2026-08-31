@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -136,15 +137,32 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 	return s.queryRows(ctx, dataset, q, args...)
 }
 
-// RowsForExport 导出查询：只按链过滤，流式上限。
-func (s *Service) RowsForExport(ctx context.Context, dataset, chain string, limit, offset int) ([]map[string]any, error) {
+// RowsForExport 导出查询：按链过滤，可选按地址过滤，流式上限。
+func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject string, limit, offset int) ([]map[string]any, error) {
 	switch dataset {
 	case "transactions", "token_transfers", "nft_transfers", "logs", "balances":
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}
-	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE chain=? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-	return s.queryRows(ctx, dataset, q, chain, limit, offset)
+	subject = strings.ToLower(subject)
+	var where string
+	var args []any
+	if subject != "" {
+		switch dataset {
+		case "transactions", "token_transfers", "nft_transfers":
+			where = "chain=? AND (from_address=? OR to_address=?)"
+			args = []any{chain, subject, subject}
+		case "logs", "balances":
+			where = "chain=? AND address=?"
+			args = []any{chain, subject}
+		}
+	} else {
+		where = "chain=?"
+		args = []any{chain}
+	}
+	args = append(args, limit, offset)
+	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	return s.queryRows(ctx, dataset, q, args...)
 }
 
 func (s *Service) queryRows(ctx context.Context, dataset, q string, args ...any) ([]map[string]any, error) {
@@ -188,8 +206,11 @@ func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[
 	if err != nil {
 		return nil, err
 	}
+	// UseNumber：整数（块号/日志索引等）保持精确，避免科学计数法与精度丢失
+	dec := json.NewDecoder(strings.NewReader(string(b)))
+	dec.UseNumber()
 	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
+	if err := dec.Decode(&m); err != nil {
 		return nil, err
 	}
 	return m, nil
