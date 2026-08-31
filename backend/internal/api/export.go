@@ -15,6 +15,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 )
 
 const maxExportRows = 2_000_000
@@ -25,6 +26,7 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		Dataset string `json:"dataset"`
 		Format  string `json:"format"`
 		Subject string `json:"subject"`
+		Chain   string `json:"chain"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -49,7 +51,7 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExport(context.Background(), exp, strings.ToLower(req.Subject))
+	go s.runExport(context.Background(), exp, strings.ToLower(req.Subject), strings.ToLower(req.Chain))
 	writeJSON(w, http.StatusAccepted, exp)
 }
 
@@ -101,17 +103,20 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 }
 
 // runExport 流式导出：查询 → 流式写入 MinIO（不把结果集全部装入内存）。
-func (s *Server) runExport(ctx context.Context, exp *model.Export, subject string) {
+func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chain string) {
 	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "RUNNING", "", 0, "")
-	chain := "bsc"
-	if exp.JobID != nil {
-		if job, err := s.deps.Store.GetJob(ctx, *exp.JobID); err == nil {
-			chain = job.Chain
+	if chain == "" {
+		chain = "bsc"
+		if exp.JobID != nil {
+			if job, err := s.deps.Store.GetJob(ctx, *exp.JobID); err == nil {
+				chain = job.Chain
+			}
 		}
 	}
 	rows, err := s.query.RowsForExport(ctx, exp.Dataset, chain, subject, maxExportRows, 0)
 	if err != nil {
 		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+		observability.ExportJobs.WithLabelValues(exp.Format, "FAILED").Inc()
 		return
 	}
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, exp.Format)
@@ -129,6 +134,7 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject strin
 		return
 	}
 	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "COMPLETED", key, int64(len(rows)), "")
+	observability.ExportJobs.WithLabelValues(exp.Format, "COMPLETED").Inc()
 	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
 		"dataset": exp.Dataset, "format": exp.Format, "rows": len(rows), "bytes": size,
 	})

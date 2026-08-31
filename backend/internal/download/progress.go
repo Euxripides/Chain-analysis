@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 )
 
 // ProgressSnapshot SSE/前端实时进度载荷（1s 聚合推送）。
@@ -69,17 +70,34 @@ func (sc *Scheduler) progressLoop(ctx context.Context) {
 			if err != nil {
 				continue
 			}
+			var activeJobs int
+			var rowsSec, bytesSec, reqSec float64
 			for i := range jobs {
 				j := jobs[i]
 				if !isActiveJob(j.Status) {
 					continue
 				}
+				activeJobs++
 				snap, err := sc.buildSnapshot(ctx, &j)
 				if err != nil {
 					continue
 				}
+				rowsSec += snap.RowsPerSec
+				bytesSec += snap.BytesPerSec
+				reqSec += snap.ReqPerSec
+				if snap.CoverageHitRatio > 0 {
+					observability.CoverageHitRatio.Set(snap.CoverageHitRatio)
+				}
 				sc.publish("events.progress."+j.ID, snap)
 			}
+			observability.DownloadActiveJobs.Set(float64(activeJobs))
+			observability.DownloadRowsPerSec.Set(rowsSec)
+			observability.DownloadBytesPerSec.Set(bytesSec)
+			observability.DownloadReqPerSec.Set(reqSec)
+			var activeShards int64
+			_ = sc.store.Pool.QueryRow(ctx,
+				"SELECT COUNT(*) FROM download_shards WHERE status IN ('LEASED','RUNNING')").Scan(&activeShards)
+			observability.DownloadActiveShards.Set(float64(activeShards))
 		}
 	}
 }

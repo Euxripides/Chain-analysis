@@ -24,15 +24,34 @@ body {
   width: 220px; flex-shrink: 0; background: var(--panel);
   border-right: 1px solid var(--border); padding: 16px 12px;
   display: flex; flex-direction: column; gap: 16px;
+  transition: width .2s ease;
+  overflow: hidden;
 }
 .brand { display: flex; gap: 10px; align-items: center; }
 .brand-logo { font-size: 28px; color: var(--accent); }
 .brand-name { font-weight: 700; }
 .brand-sub { color: var(--muted); font-size: 12px; }
 .sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-main {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 8px; background: transparent; border: none;
+  color: var(--text); font-weight: 600; cursor: pointer; text-align: left;
+}
+.nav-main:hover { background: var(--panel2); }
+.nav-chevron { margin-left: auto; color: var(--muted); font-size: 12px; }
 .nav-item {
   padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
 }
+.nav-item.sub { padding-left: 26px; }
+.nav-item:hover { background: var(--panel2); color: var(--text); }
+.nav-item.active { background: #e3edff; color: var(--accent); font-weight: 600; }
+.nav-icon {
+  width: 22px; height: 22px; flex-shrink: 0; display: inline-flex; align-items: center;
+  justify-content: center; border-radius: 6px; background: var(--panel2); color: var(--muted);
+}
+.nav-item.active .nav-icon { background: #d4e4ff; color: var(--accent); }
+.nav-main .nav-icon { background: transparent; }
 .nav-item:hover { background: var(--panel2); color: var(--text); }
 .nav-item.active { background: #e3edff; color: var(--accent); font-weight: 600; }
 .sidebar-foot { margin-top: auto; color: var(--muted); font-size: 12px; }

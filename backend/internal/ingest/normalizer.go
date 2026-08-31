@@ -321,6 +321,23 @@ func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
 	}, nil
 }
 
+// ActivityRow 地址活动汇总（§65/§87）。
+type ActivityRow struct {
+	Chain        string
+	Address      string
+	Counterparty string
+	Direction    string // in / out / self
+	ActivityType string // transaction / transfer
+	Timestamp    time.Time
+	BlockNumber  uint64
+	TxHash       string
+	TokenAddress string
+	Amount       *big.Int
+	AmountUSD    string
+	Dataset      string
+	Provider     string
+}
+
 type BalanceRow struct {
 	Chain         string
 	Address       string

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 )
 
 type Writer struct {
@@ -20,6 +22,24 @@ func NewWriter(conn *clickhouse.Conn, batchSize int) *Writer {
 		batchSize = 5000
 	}
 	return &Writer{conn: conn, batchSize: batchSize}
+}
+
+// batched 泛型分批写入，并记录 ClickHouse 写入指标（§74）。
+func batched[T any](ctx context.Context, batchSize, n int, flush func(batch []T) error, rows []T, table string) error {
+	start := time.Now()
+	for s := 0; s < n; s += batchSize {
+		e := s + batchSize
+		if e > n {
+			e = n
+		}
+		if err := flush(rows[s:e]); err != nil {
+			observability.ClickhouseInsertLatencyMs.WithLabelValues(table).Observe(float64(time.Since(start).Milliseconds()))
+			return fmt.Errorf("clickhouse batch: %w", err)
+		}
+	}
+	observability.ClickhouseInsertLatencyMs.WithLabelValues(table).Observe(float64(time.Since(start).Milliseconds()))
+	observability.ClickhouseInsertRows.WithLabelValues(table).Add(float64(n))
+	return nil
 }
 
 func (w *Writer) WriteTransactions(ctx context.Context, rows []TxRow) error {
@@ -36,7 +56,7 @@ func (w *Writer) WriteTransactions(ctx context.Context, rows []TxRow) error {
 			}
 		}
 		return stmt.Send()
-	}, rows)
+	}, rows, "transactions")
 }
 
 func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRow) error {
@@ -54,7 +74,7 @@ func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRo
 			}
 		}
 		return stmt.Send()
-	}, rows)
+	}, rows, "token_transfers")
 }
 
 func (w *Writer) WriteNftTransfers(ctx context.Context, rows []NftTransferRow) error {
@@ -71,7 +91,7 @@ func (w *Writer) WriteNftTransfers(ctx context.Context, rows []NftTransferRow) e
 			}
 		}
 		return stmt.Send()
-	}, rows)
+	}, rows, "nft_transfers")
 }
 
 func (w *Writer) WriteLogs(ctx context.Context, rows []LogRow) error {
@@ -88,7 +108,7 @@ func (w *Writer) WriteLogs(ctx context.Context, rows []LogRow) error {
 			}
 		}
 		return stmt.Send()
-	}, rows)
+	}, rows, "logs")
 }
 
 func (w *Writer) WriteBalances(ctx context.Context, rows []BalanceRow) error {
@@ -106,7 +126,25 @@ func (w *Writer) WriteBalances(ctx context.Context, rows []BalanceRow) error {
 			}
 		}
 		return stmt.Send()
-	}, rows)
+	}, rows, "address_balances")
+}
+
+// WriteActivity 地址活动汇总（§65/§87：资金分析统一查询面）。
+func (w *Writer) WriteActivity(ctx context.Context, rows []ActivityRow) error {
+	return batched(ctx, w.batchSize, len(rows), func(batch []ActivityRow) error {
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.address_activity "+
+			"(chain, address, counterparty, direction, activity_type, timestamp, block_number, tx_hash, token_address, amount, amount_usd, dataset, source_provider) VALUES")
+		if err != nil {
+			return err
+		}
+		for _, r := range batch {
+			if err := stmt.Append(r.Chain, r.Address, r.Counterparty, r.Direction, r.ActivityType, r.Timestamp,
+				r.BlockNumber, r.TxHash, r.TokenAddress, decOrZero(r.Amount), r.AmountUSD, r.Dataset, r.Provider); err != nil {
+				return err
+			}
+		}
+		return stmt.Send()
+	}, rows, "address_activity")
 }
 
 func bigIntOrZero(b *big.Int) *big.Int {
@@ -122,18 +160,4 @@ func decOrZero(b *big.Int) decimal.Decimal {
 		return decimal.NewFromInt(0)
 	}
 	return decimal.NewFromBigInt(b, -38)
-}
-
-// batched 泛型分批写入（包级函数，Go 方法不支持类型参数）。
-func batched[T any](ctx context.Context, batchSize, n int, flush func(batch []T) error, rows []T) error {
-	for start := 0; start < n; start += batchSize {
-		end := start + batchSize
-		if end > n {
-			end = n
-		}
-		if err := flush(rows[start:end]); err != nil {
-			return fmt.Errorf("clickhouse batch: %w", err)
-		}
-	}
-	return nil
 }

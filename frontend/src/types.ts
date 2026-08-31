@@ -132,6 +132,14 @@ export function fmtBytes(n: number): string {
   return v.toFixed(1) + ' ' + u[i]
 }
 
+// fmtUsageBytes 用量字节：小于 1G 用 MB，大于等于 1G 用 GB
+export function fmtUsageBytes(n: number): string {
+  if (!n) return '0 MB'
+  const gb = 1024 * 1024 * 1024
+  if (n >= gb) return (n / gb).toFixed(2) + ' GB'
+  return (n / (1024 * 1024)).toFixed(2) + ' MB'
+}
+
 export function fmtDuration(sec: number): string {
   if (!sec || sec < 0) return '—'
   const h = Math.floor(sec / 3600)

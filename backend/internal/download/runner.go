@@ -12,6 +12,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 )
 
@@ -165,7 +166,9 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				chain, sh.Dataset, now.Format("2006"), now.Format("01"), reqHash, pageNo+1)
 			rawPart, _ := json.Marshal(map[string]any{"rows": res.Rows})
 			sum := sha256.Sum256(rawPart)
+			rstart := time.Now()
 			n, rerr := sc.raw.PutGzip(ctx, partKey, rawPart)
+			observability.RawWriteLatencyMs.WithLabelValues(sc.cfg.RawBucket).Observe(float64(time.Since(rstart).Milliseconds()))
 			if rerr != nil {
 				_, _ = sc.store.FailShard(ctx, sh.ID, "raw persist: "+rerr.Error(), true)
 				return
@@ -340,6 +343,7 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 	switch sh.Dataset {
 	case "transactions":
 		batch := make([]ingest.TxRow, 0, len(rows))
+		acts := make([]ingest.ActivityRow, 0, len(rows))
 		for _, raw := range rows {
 			r, err := ingest.NormalizeTransaction(raw, chain, "ankr")
 			if err != nil {
@@ -347,10 +351,25 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 			}
 			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
 			batch = append(batch, r)
+			dir, cp := directionOf(address, r.From, r.To)
+			acts = append(acts, ingest.ActivityRow{
+				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
+				ActivityType: "transaction", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
+				TxHash: r.TxHash, Dataset: "transactions", Provider: "ankr",
+			})
 		}
-		return minB, maxB, sc.writer.WriteTransactions(ctx, batch)
+		if err := sc.writer.WriteTransactions(ctx, batch); err != nil {
+			return 0, 0, err
+		}
+		if len(acts) > 0 {
+			if err := sc.writer.WriteActivity(ctx, acts); err != nil {
+				return 0, 0, err
+			}
+		}
+		return minB, maxB, nil
 	case "token_transfers":
 		batch := make([]ingest.TokenTransferRow, 0, len(rows))
+		acts := make([]ingest.ActivityRow, 0, len(rows))
 		for _, raw := range rows {
 			r, err := ingest.NormalizeTokenTransfer(raw, chain, "ankr")
 			if err != nil {
@@ -358,8 +377,23 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 			}
 			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
 			batch = append(batch, r)
+			dir, cp := directionOf(address, r.From, r.To)
+			acts = append(acts, ingest.ActivityRow{
+				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
+				ActivityType: "transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
+				TxHash: r.TxHash, TokenAddress: r.TokenAddress, Amount: r.Amount,
+				Dataset: "token_transfers", Provider: "ankr",
+			})
 		}
-		return minB, maxB, sc.writer.WriteTokenTransfers(ctx, batch)
+		if err := sc.writer.WriteTokenTransfers(ctx, batch); err != nil {
+			return 0, 0, err
+		}
+		if len(acts) > 0 {
+			if err := sc.writer.WriteActivity(ctx, acts); err != nil {
+				return 0, 0, err
+			}
+		}
+		return minB, maxB, nil
 	case "nft_transfers":
 		batch := make([]ingest.NftTransferRow, 0, len(rows))
 		for _, raw := range rows {
@@ -394,6 +428,20 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 		return 0, 0, sc.writer.WriteBalances(ctx, batch)
 	}
 	return minB, maxB, nil
+}
+
+// directionOf 计算活动方向与对手方。
+func directionOf(subject, from, to string) (direction, counterparty string) {
+	switch {
+	case from == subject && to == subject:
+		return "self", subject
+	case from == subject:
+		return "out", to
+	case to == subject:
+		return "in", from
+	default:
+		return "in", from
+	}
 }
 
 func trackBlocks(minB, maxB *int64, b int64) {

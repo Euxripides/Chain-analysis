@@ -9,7 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
@@ -57,13 +59,16 @@ func (s *Server) buildRouter() {
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(s.corsMiddleware())
 	r.Use(s.logMiddleware())
+	r.Use(auth.Middleware)
 
+	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
 	r.Get("/health/ready", s.handleReady)
 
 	r.Route("/api/v1", func(api chi.Router) {
+		api.Get("/me", s.handleMe)
 		api.Post("/datasets/ensure", s.handleEnsure)
 		api.Post("/datasets/coverage/preview", s.handleCoveragePreview)
 		api.Get("/download-jobs", s.handleListJobs)
@@ -77,6 +82,7 @@ func (s *Server) buildRouter() {
 		api.Get("/coverage", s.handleCoverage)
 		api.Get("/coverage/stats", s.handleCoverageStats)
 		api.Get("/datasets/{dataset}", s.handleDatasetRows)
+		api.Get("/addresses/{address}/activity", s.handleAddressActivity)
 		api.Post("/exports", s.handleCreateExport)
 		api.Get("/exports/{id}", s.handleGetExport)
 		api.Get("/exports/{id}/download", s.handleDownloadExport)

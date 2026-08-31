@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 )
 
@@ -276,6 +277,22 @@ func (c *Client) recordFailure(err error) {
 }
 
 func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, method, status string, elapsed time.Duration, httpStatus int, apiErr string, rows, respBytes int) {
+	// Prometheus 指标（§74）
+	observability.AnkrRequests.WithLabelValues("ankr", req.Dataset, status).Inc()
+	observability.AnkrLatencyMs.WithLabelValues("ankr", req.Dataset).Observe(float64(elapsed.Milliseconds()))
+	if status == "ok" {
+		observability.AnkrRequestsSuccess.WithLabelValues("ankr", req.Dataset).Inc()
+		observability.AnkrRows.WithLabelValues("ankr", req.Dataset).Add(float64(rows))
+		observability.AnkrBytes.WithLabelValues("ankr", req.Dataset).Add(float64(respBytes))
+	} else {
+		observability.AnkrRequestsFailed.WithLabelValues("ankr", req.Dataset).Inc()
+	}
+	if httpStatus == http.StatusTooManyRequests {
+		observability.Ankr429.WithLabelValues("ankr", req.Dataset).Inc()
+	}
+	if httpStatus >= 500 {
+		observability.Ankr5xx.WithLabelValues("ankr", req.Dataset).Inc()
+	}
 	if c.usageHook == nil {
 		return
 	}

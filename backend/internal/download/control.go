@@ -20,6 +20,7 @@ func (sc *Scheduler) controlLoop(ctx context.Context) {
 			sc.convergePauseCancel(ctx)
 			sc.resumeJobs(ctx)
 			sc.finishSkippedJobs(ctx)
+			sc.convergeCompleted(ctx)
 		}
 	}
 }
@@ -95,6 +96,36 @@ func (sc *Scheduler) resumeJobs(ctx context.Context) {
 		sc.publish("events.jobs."+j.ID, map[string]any{
 			"type": "job_status", "job_id": j.ID, "status": model.JobRunning, "ts": time.Now(),
 		})
+	}
+}
+
+// convergeCompleted 自愈收敛：RUNNING 任务全部 Shard 已完成且无执行中 Shard → 重算状态。
+func (sc *Scheduler) convergeCompleted(ctx context.Context) {
+	jobs, err := sc.store.ListJobs(ctx, model.JobRunning, 20, 0)
+	if err != nil {
+		return
+	}
+	for i := range jobs {
+		j := jobs[i]
+		var total, done, active int64
+		_ = sc.store.Pool.QueryRow(ctx,
+			"SELECT COUNT(*), COUNT(*) FILTER (WHERE status='COMPLETED'), "+
+				"COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING')) FROM download_shards WHERE job_id=$1", j.ID).
+			Scan(&total, &done, &active)
+		if total > 0 && done == total && active == 0 {
+			// 先自愈 subject：数据集全完成但 subject 仍 RUNNING 的直接置 COMPLETED
+			_, _ = sc.store.Pool.Exec(ctx,
+				"UPDATE download_subjects s SET status='COMPLETED', progress=1, updated_at=now() "+
+					"WHERE s.job_id=$1 AND s.status='RUNNING' "+
+					"AND EXISTS (SELECT 1 FROM download_datasets d WHERE d.subject_id=s.id) "+
+					"AND NOT EXISTS (SELECT 1 FROM download_datasets d WHERE d.subject_id=s.id AND d.status NOT IN ('COMPLETED','SKIPPED'))",
+				j.ID)
+			if _, err := sc.store.RecomputeJob(ctx, j.ID); err == nil {
+				sc.publish("events.jobs."+j.ID, map[string]any{
+					"type": "job_status", "job_id": j.ID, "status": model.JobCompleted, "ts": time.Now(),
+				})
+			}
+		}
 	}
 }
 

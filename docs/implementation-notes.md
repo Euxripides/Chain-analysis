@@ -43,14 +43,56 @@
 
 字段形态：transactions 为 RPC 风格（`blockNumber`/十六进制、`hash`、`from`/`to`、`timestamp` 为十六进制秒）；token/nft transfers 为 camelCase（`transfers` 键、`blockHeight` 十进制、`timestamp` 秒）；normalizer 双形态兼容并统一小写地址。0 行结果不提交 Coverage（防止误标）。
 
+## 文档剩余项补齐（§74/§33/§89/§88/§92/§51/§87）
+
+1. **Prometheus 指标**：`GET /metrics`（API:8080 / Worker:8081，独立指标端口），含 ankr_requests_total/429/5xx/延迟直方图/rows/bytes、download_active_jobs/shards、rows-per-sec(EWMA)、clickhouse_insert_*、raw_write_latency_ms、coverage_hit_ratio/saved_requests、export_jobs_total。
+2. **数据浏览页**：主导航「数据浏览」→ Transactions / Token Transfers / NFT Transfers / Logs（地址过滤 + 分页 + 按地址 CSV 导出）。
+3. **Benchmark 矩阵**（见下）。
+4. **企业化预留**：workspaces / projects / quotas 表，download_jobs 增加 organization_id/workspace_id/project_id；auth 中间件（X-User-* 头注入上下文，`GET /api/v1/me` 返回用户与角色列表，V1 不强制鉴权）。
+5. **resolved_at**：创建任务时持久化“全量”解析时刻（§92 可审计/可恢复）。
+6. **MinIO buckets**：blockchain-raw / blockchain-exports / **blockchain-backups** 启动时自动确保。
+7. **address_activity**：token_transfers/transactions 入库时同步写活动表（direction in/out/self、counterparty、amount），`GET /api/v1/addresses/{address}/activity` 为资金分析统一查询入口（§65/§87）。
+8. **job_no 并发冲突**：Ensure 对唯一约束冲突自动递增重试；controlLoop 新增自愈收敛（数据集全完成但 subject 卡 RUNNING / 任务卡 RUNNING 时自动翻 COMPLETED）。
+
 ## Benchmark（VM 16 核，2026-08-31 实测）
+
+### Provider 分页吞吐（§89，本地 httptest 合成 512B/行）
+
+| pageSize | 延迟/页 | 吞吐 |
+|---|---|---|
+| 1000 | 15.8 ms | 32.3 MB/s |
+| 5000 | 69.7 ms | 36.7 MB/s |
+| 10000 | 112.8 ms | 45.4 MB/s |
+
+### 并发扩展性（§89，1/2/4/8/16/32，合成负载）
+
+并发 1→32 单请求延迟稳定在 3.8~4.7 ms（本地服务端饱和，说明客户端无锁竞争瓶颈）。
+
+### ClickHouse 批次写入（§89，ReplacingMergeTree 实际写入）
+
+| 批次行数 | 延迟 | 折合吞吐 |
+|---|---|---|
+| 10,000 | 68 ms | ~147k rows/s |
+| 50,000 | 230 ms | ~217k rows/s |
+| 100,000 | 485 ms | ~206k rows/s |
+| 500,000 | 1,585 ms | ~315k rows/s |
+
+### 端到端（§89，mock Provider，块区间 0-20000，transactions+token_transfers）
+
+| 地址数 | 行数 | 耗时 | 吞吐 |
+|---|---|---|---|
+| 1 | 6,031 | 4 s | 1,507 rows/s |
+| 10 | 54,024 | 7 s | 7,717 rows/s |
+| 100 | 539,931 | 29 s | 18,618 rows/s |
+| 1000 | 5,397,229 | 下载主体 ~225 s（1800 shards） | ~24k rows/s |
+
+### 单元基准
 
 | Benchmark | 结果 |
 |---|---|
 | Coverage 区间合并（1000 区间） | 24 µs/op · 50 KB/op · 15 allocs |
 | NormalizeTransaction（Ankr JSON → CH 行） | 9.4 µs/op · 3 KB/op |
 | TokenBucket Acquire（软件令牌桶） | 纳秒级/op |
-| 端到端（mock，4 并发起步） | ~22k rows/s（含 ClickHouse 批量写入 + MinIO gzip） |
 
 ## 运行
 

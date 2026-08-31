@@ -29,6 +29,10 @@ export const api = {
   providerStatus: () => http<Record<string, unknown>>('/providers/ankr/status'),
   providerUsage: (hours = 24) => http<{ since: string; by_dataset: Record<string, { requests: number; credits: number; cost_usd: number; rows: number; bytes: number }> }>(`/providers/ankr/usage?hours=${hours}`),
   createExport: (jobId: string, dataset: string, format: string) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify({ job_id: jobId, dataset, format }) }),
+  createExportBySubject: (dataset: string, subject: string, chain: string) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify({ dataset, format: 'csv', subject, chain }) }),
   getExport: (id: string) => http<ExportRow>(`/exports/${id}`),
   snapshot: (id: string) => http<JobDetail>(`/download-jobs/${id}`).then((d) => d.progress as Snapshot),
+  queryRows: (dataset: string, chain: string, subject: string, limit = 100, offset = 0) =>
+    http<{ dataset: string; rows: Record<string, unknown>[]; count: number }>(
+      `/datasets/${dataset}?chain=${chain}&subject=${subject}&limit=${limit}&offset=${offset}`),
 }

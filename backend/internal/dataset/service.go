@@ -196,6 +196,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
+	resolvedAt := now.UTC()
 	jobNo := fmt.Sprintf("DL-%s-%04d", now.Format("20060102"), n+1)
 
 	preview, err := s.Preview(ctx, EnsureRequest{Subjects: subjects, Chain: chain, Datasets: datasets, Range: req.Range})
@@ -217,6 +218,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		Datasets:      datasets,
 		ReusePolicy:   req.ReusePolicy,
 		HeadBlock:     rng.HeadBlock,
+		ResolvedAt:    &resolvedAt,
 		Stats: map[string]any{
 			"coverage_before": preview.OverallRatio,
 		},
@@ -224,8 +226,22 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if job.ReusePolicy == "" {
 		job.ReusePolicy = "prefer_local"
 	}
+	// job_no 冲突（并发建任务）自动递增重试
 	if _, err := s.Store.CreateJobWithSubjects(ctx, job, subjects); err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "job_no_key") {
+			for attempt := 1; attempt <= 5; attempt++ {
+				job.JobNo = fmt.Sprintf("DL-%s-%04d", now.Format("20060102"), n+1+attempt)
+				if _, retryErr := s.Store.CreateJobWithSubjects(ctx, job, subjects); retryErr == nil {
+					err = nil
+					break
+				} else if !strings.Contains(retryErr.Error(), "job_no_key") {
+					return nil, retryErr
+				}
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	s.Store.InsertAudit(ctx, nil, "dataset.ensure", "download_job", job.ID, map[string]any{
 		"subjects": len(subjects), "datasets": datasets, "chain": chain, "range_type": rng.RangeType,

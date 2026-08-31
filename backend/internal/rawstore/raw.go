@@ -33,6 +33,20 @@ func New(ctx context.Context, endpoint, accessKey, secretKey string, secure bool
 	return s, nil
 }
 
+// EnsureNamedBucket 确保任意命名 bucket 存在（导出/备份等）。
+func (s *Store) EnsureNamedBucket(ctx context.Context, name string) error {
+	exists, err := s.client.BucketExists(ctx, name)
+	if err != nil {
+		return fmt.Errorf("bucket exists: %w", err)
+	}
+	if !exists {
+		if err := s.client.MakeBucket(ctx, name, minio.MakeBucketOptions{}); err != nil {
+			return fmt.Errorf("make bucket %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
 func (s *Store) EnsureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {

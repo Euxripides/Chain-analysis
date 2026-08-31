@@ -29,6 +29,7 @@ make frontend-dev   # 终端 3: Frontend (3000)
 MinIO 控制台 http://SERVER:9002（仅本机/SSH 隧道，勿暴露公网）· NATS 监控 http://SERVER:8222
 
 > 当前开发机（192.168.31.152）：前端 http://192.168.31.152:3000 · API http://192.168.31.152:8080
+> Prometheus：API /metrics（8080）与 Worker /metrics（8081）；数据浏览页（Transactions/Transfers/NFT/Logs + 按地址 CSV 导出）已上线
 > 没有 ANKR_API_KEY 时默认 `ANKR_MODE=mock`，可跑通全部链路；接入真实数据改 `ANKR_MODE=live`。
 
 ## 验收（V1）

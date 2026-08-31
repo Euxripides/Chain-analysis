@@ -12,11 +12,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
 func jsonEncode(w io.Writer, v any) error { return json.NewEncoder(w).Encode(v) }
+
+// handleMe 鉴权接口预留（§72）：返回当前用户上下文。
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"user": u, "roles": auth.Roles})
+}
 
 func decodeJSON(r *http.Request, v any) error {
 	defer r.Body.Close()
@@ -229,6 +236,33 @@ func (s *Server) handleDatasetRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"dataset": ds, "rows": rows, "count": len(rows)})
+}
+
+// handleAddressActivity 地址活动查询（§87）。
+func (s *Server) handleAddressActivity(w http.ResponseWriter, r *http.Request) {
+	address := chi.URLParam(r, "address")
+	if address == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "address required"})
+		return
+	}
+	chain := r.URL.Query().Get("chain")
+	if chain == "" {
+		chain = "bsc"
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.query.Activity(r.Context(), chain, address, limit, offset)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"address": address, "chain": chain, "rows": rows, "count": len(rows)})
 }
 
 // snapshotFor 轻量进度快照（API 侧，供 SSE 降级轮询与详情页使用）。

@@ -7,6 +7,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
@@ -73,6 +74,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	}
 	if ds == "balances" {
 		if len(covered) > 0 {
+			observability.CoverageSavedRequests.Inc()
 			return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
 		}
 		sh := p.baseShard(job, subj, item)
@@ -91,6 +93,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	}
 	gaps = dataset.ComputeGaps(intervals, want)
 	if len(gaps) == 0 {
+		observability.CoverageSavedRequests.Inc()
 		return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
 	}
 

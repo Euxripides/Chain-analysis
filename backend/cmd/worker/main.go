@@ -3,9 +3,13 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/app"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
@@ -27,6 +31,19 @@ func main() {
 
 	writer := ingest.NewWriter(infra.CH, 5000)
 	sched := download.NewScheduler(cfg, infra.Store, infra.Prov, infra.Raw, writer, infra.Bus, log)
+
+	// Worker 独立指标端口（Prometheus 抓取）
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		mux.HandleFunc("/health/live", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+		srv := &http.Server{Addr: ":" + strconv.Itoa(cfg.WorkerMetricsPort), Handler: mux}
+		log.Info("worker metrics listening", "addr", srv.Addr)
+		_ = srv.ListenAndServe()
+	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

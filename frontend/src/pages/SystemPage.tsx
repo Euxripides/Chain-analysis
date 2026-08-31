@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { fmtBytes } from '../types'
+import { fmtUsageBytes } from '../types'
 
 export default function SystemPage() {
   const { data: status } = useQuery({ queryKey: ['provider-status'], queryFn: api.providerStatus, refetchInterval: 10000 })
@@ -20,7 +20,7 @@ export default function SystemPage() {
 
   return (
     <div className="page">
-      <h1>系统</h1>
+      <h1>状态总览</h1>
 
       <div className="card">
         <div className="card-title">Provider 状态</div>
@@ -39,7 +39,7 @@ export default function SystemPage() {
           <div className="metric"><label>总请求</label><b>{datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.requests ?? 0), 0)}</b></div>
           <div className="metric"><label>总行数</label><b>{totalRows.toLocaleString()}</b></div>
           <div className="metric"><label>总成本</label><b>{'$' + totalCost.toFixed(4)}</b></div>
-          <div className="metric"><label>总字节</label><b>{fmtBytes(datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.bytes ?? 0), 0))}</b></div>
+          <div className="metric"><label>总字节</label><b>{fmtUsageBytes(datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.bytes ?? 0), 0))}</b></div>
         </div>
         <table className="table" style={{ marginTop: 10 }}>
           <thead><tr><th>Dataset</th><th>请求</th><th>Credits</th><th>成本</th><th>行数</th><th>字节</th></tr></thead>
@@ -51,7 +51,7 @@ export default function SystemPage() {
                 <td>{usage?.by_dataset[d]?.credits}</td>
                 <td>{'$' + (usage?.by_dataset[d]?.cost_usd ?? 0).toFixed(5)}</td>
                 <td>{usage?.by_dataset[d]?.rows.toLocaleString()}</td>
-                <td>{fmtBytes(usage?.by_dataset[d]?.bytes ?? 0)}</td>
+                <td>{fmtUsageBytes(usage?.by_dataset[d]?.bytes ?? 0)}</td>
               </tr>
             ))}
             {datasets.length === 0 && <tr><td colSpan={6} className="muted center">暂无请求</td></tr>}

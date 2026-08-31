@@ -50,8 +50,10 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	if err != nil {
 		return nil, err
 	}
-	_ = raw.EnsureBucket(ctx) // export bucket 由导出前确保
-	log.Info("minio ready")
+	_ = raw.EnsureBucket(ctx)
+	_ = raw.EnsureNamedBucket(ctx, cfg.ExportBucket)
+	_ = raw.EnsureNamedBucket(ctx, cfg.BackupsBucket)
+	log.Info("minio ready", "buckets", []string{cfg.RawBucket, cfg.ExportBucket, cfg.BackupsBucket})
 
 	bus := events.New(cfg.NatsURL, log)
 

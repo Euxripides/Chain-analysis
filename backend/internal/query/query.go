@@ -108,6 +108,23 @@ type balanceRow struct {
 	SourceIngested time.Time       `ch:"source_ingested_at" json:"source_ingested_at"`
 }
 
+type activityRow struct {
+	Chain          string          `ch:"chain" json:"chain"`
+	Address        string          `ch:"address" json:"address"`
+	Counterparty   string          `ch:"counterparty" json:"counterparty"`
+	Direction      string          `ch:"direction" json:"direction"`
+	ActivityType   string          `ch:"activity_type" json:"activity_type"`
+	Timestamp      time.Time       `ch:"timestamp" json:"timestamp"`
+	BlockNumber    uint64          `ch:"block_number" json:"block_number"`
+	TxHash         string          `ch:"tx_hash" json:"tx_hash"`
+	TokenAddress   string          `ch:"token_address" json:"token_address"`
+	Amount         decimal.Decimal `ch:"amount" json:"amount"`
+	AmountUSD      string          `ch:"amount_usd" json:"amount_usd"`
+	Dataset        string          `ch:"dataset" json:"dataset"`
+	SourceProvider string          `ch:"source_provider" json:"source_provider"`
+	SourceIngested time.Time       `ch:"source_ingested_at" json:"source_ingested_at"`
+}
+
 // tableName dataset 逻辑名 → ClickHouse 表名。
 func tableName(dataset string) string {
 	if dataset == "balances" {
@@ -135,6 +152,13 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 	args = append(args, limit, offset)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	return s.queryRows(ctx, dataset, q, args...)
+}
+
+// Activity 地址活动（§87：资金分析/智能调查统一入口）。
+func (s *Service) Activity(ctx context.Context, chain, address string, limit, offset int) ([]map[string]any, error) {
+	address = strings.ToLower(address)
+	q := "SELECT * FROM blockchain.address_activity FINAL WHERE chain=? AND address=? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	return s.queryRows(ctx, "activity", q, chain, address, limit, offset)
 }
 
 // RowsForExport 导出查询：按链过滤，可选按地址过滤，流式上限。
@@ -196,6 +220,8 @@ func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[
 		v = &logRow{}
 	case "balances":
 		v = &balanceRow{}
+	case "activity":
+		v = &activityRow{}
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}

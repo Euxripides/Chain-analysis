@@ -48,13 +48,25 @@ POST /api/v1/datasets/ensure
 | GET | `/exports/{id}` | 导出状态 |
 | GET | `/exports/{id}/download` | 302 → MinIO 预签名 URL |
 
-## Provider / 健康
+## 地址活动（资金分析统一入口，§87）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/addresses/{address}/activity?chain=&limit=&offset=` | 活动表（direction/activity_type/counterparty/amount） |
+
+## 导出补充参数
+
+`POST /exports` 支持 `subject`（按地址导出）与 `chain`（数据浏览页导出时指定链）。
+
+## Provider / 健康 / 观测
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/providers/ankr/status` | 断路器状态/错误率/连续失败 |
 | GET | `/providers/ankr/usage?hours=24` | 按 Dataset 的请求/Credits/成本/行数/字节 |
 | GET | `/health/live` `/health/ready` | 存活/就绪（PG/CH/MinIO/NATS） |
+| GET | `/metrics` | Prometheus 指标（API:8080；Worker 独立 :8081） |
+| GET | `/api/v1/me` | 当前用户上下文（auth 接口预留，X-User-* 头） |
 
 ## SSE 事件
 

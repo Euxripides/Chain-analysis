@@ -72,6 +72,10 @@ type DownloadJob struct {
 	ReusePolicy   string         `json:"reuse_policy"`
 	HeadBlock     int64          `json:"head_block"`
 	CreatedBy     *string        `json:"created_by"`
+	OrganizationID *string       `json:"organization_id"`
+	WorkspaceID   *string        `json:"workspace_id"`
+	ProjectID     *string        `json:"project_id"`
+	ResolvedAt    *time.Time     `json:"resolved_at"`
 	Error         string         `json:"error"`
 	Stats         map[string]any `json:"stats"`
 	CreatedAt     time.Time      `json:"created_at"`

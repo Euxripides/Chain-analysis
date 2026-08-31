@@ -33,6 +33,8 @@ type Config struct {
 	NatsURL        string
 	RawBucket      string
 	ExportBucket   string
+	BackupsBucket  string
+	WorkerMetricsPort int
 	Ankr           AnkrConfig
 }
 
@@ -85,6 +87,8 @@ func Load() *Config {
 		NatsURL:        env("NATS_URL", "nats://127.0.0.1:4222"),
 		RawBucket:      env("RAW_BUCKET", "blockchain-raw"),
 		ExportBucket:   env("EXPORT_BUCKET", "blockchain-exports"),
+		BackupsBucket:  env("BACKUPS_BUCKET", "blockchain-backups"),
+		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
 		Ankr: AnkrConfig{
 			Mode:               env("ANKR_MODE", "mock"),
 			APIKey:             os.Getenv("ANKR_API_KEY"),
