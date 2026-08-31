@@ -31,6 +31,18 @@
 | 时间范围先解析为块 | 直接透传 fromTimestamp/toTimestamp，Coverage 提交内部块 | 无独立 block→time 索引源，保守提交保证不误标 |
 | shadcn/ui + AG Grid + ECharts | 轻量 CSS 组件 | V1 聚焦下载闭环，数据浏览阶段再上重型组件 |
 
+## Ankr Live 实测行为（2026-08-31，Advanced API 真机验证）
+
+| 数据集 | 区块边界行为 | 平台策略 |
+|---|---|---|
+| transactions | 带 `toBlock` 返回空；`fromBlock` 被忽略；从链头往前翻页；索引为稀疏近期集合（实测热钱包仅 174 条） | 不传边界 → 客户端按 [from,to] 过滤 → 降序越过下边界即停止 |
+| token_transfers | 同上（带 `toBlock` 返回空；fromBlock 忽略；实测全量 12,237 行可完整翻页） | 同上 |
+| nft_transfers | 同上（最新在前） | 同上 |
+| logs | **尊重 from/toBlock**（实测 1,722 行全部落在请求区间内） | 直接传边界 |
+| balances | 快照（无分页），返回 `assets`（74 资产/热钱包） | 直接请求 |
+
+字段形态：transactions 为 RPC 风格（`blockNumber`/十六进制、`hash`、`from`/`to`、`timestamp` 为十六进制秒）；token/nft transfers 为 camelCase（`transfers` 键、`blockHeight` 十进制、`timestamp` 秒）；normalizer 双形态兼容并统一小写地址。0 行结果不提交 Coverage（防止误标）。
+
 ## Benchmark（VM 16 核，2026-08-31 实测）
 
 | Benchmark | 结果 |

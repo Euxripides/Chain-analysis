@@ -1,4 +1,6 @@
 // Package ingest：Ankr 原始行 → 标准化 ClickHouse 行。
+// 兼容两种字段形态：Ankr 官方文档形态（camelCase / ms 时间戳 / blockHeight）与
+// 实测 RPC 风格（blockNumber/hash/from/to/十六进制秒级时间戳）。
 package ingest
 
 import (
@@ -26,6 +28,51 @@ func asString(m map[string]any, key string) string {
 	return ""
 }
 
+func pickString(m map[string]any, keys ...string) string {
+	for _, k := range keys {
+		if s := asString(m, k); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// pickAddress 地址统一小写（Ankr 返回校验和大小写混合，查询需一致）。
+func pickAddress(m map[string]any, keys ...string) string {
+	return strings.ToLower(pickString(m, keys...))
+}
+
+// RawTimestamp 提取原始行的时间戳。
+func RawTimestamp(raw json.RawMessage) (time.Time, bool) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return time.Time{}, false
+	}
+	if _, ok := m["timestamp"]; !ok {
+		return time.Time{}, false
+	}
+	return asTime(m, "timestamp"), true
+}
+
+// RawBlockNumber 提取原始行的块号（用于客户端侧范围过滤与降序停止）。
+func RawBlockNumber(raw json.RawMessage) (uint64, bool) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return 0, false
+	}
+	for _, k := range []string{"blockNumber", "blockHeight"} {
+		if s := asString(m, k); s != "" {
+			if n, err := strconv.ParseUint(strings.TrimPrefix(s, "0x"), 16, 64); err == nil {
+				return n, true
+			}
+			if n, err := strconv.ParseUint(s, 10, 64); err == nil {
+				return n, true
+			}
+		}
+	}
+	return 0, false
+}
+
 func asUint64(m map[string]any, key string) uint64 {
 	s := asString(m, key)
 	if s == "" {
@@ -51,29 +98,39 @@ func asBool(m map[string]any, key string) bool {
 	return false
 }
 
-// asTimeMs Ankr 时间戳为毫秒（number 或 string）。
-func asTimeMs(m map[string]any, key string) time.Time {
+func fromUnixN(n float64) time.Time {
+	// 阈值 1e11：以上为毫秒，以下为秒
+	if n > 1e11 {
+		return time.UnixMilli(int64(n)).UTC()
+	}
+	if n > 1e8 {
+		return time.Unix(int64(n), 0).UTC()
+	}
+	return time.Now().UTC()
+}
+
+// asTime 时间戳兼容：秒 / 毫秒 / 十进制字符串 / 十六进制(0x)秒。
+func asTime(m map[string]any, key string) time.Time {
 	v, ok := m[key]
 	if !ok || v == nil {
 		return time.Now().UTC()
 	}
 	switch t := v.(type) {
 	case float64:
-		return time.UnixMilli(int64(t)).UTC()
+		return fromUnixN(t)
 	case json.Number:
-		n, _ := t.Int64()
-		return time.UnixMilli(n).UTC()
+		n, _ := t.Float64()
+		return fromUnixN(n)
 	case string:
-		n, err := strconv.ParseInt(t, 10, 64)
-		if err != nil {
-			return time.Now().UTC()
-		}
-		if n > 1e12 { // 秒级时间戳补偿
-			if n > 1e14 {
-				n /= 1000
+		lower := strings.ToLower(t)
+		if strings.HasPrefix(lower, "0x") {
+			if n, err := strconv.ParseUint(lower[2:], 16, 64); err == nil {
+				return fromUnixN(float64(n))
 			}
 		}
-		return time.UnixMilli(n).UTC()
+		if n, err := strconv.ParseFloat(t, 64); err == nil {
+			return fromUnixN(n)
+		}
 	}
 	return time.Now().UTC()
 }
@@ -120,38 +177,51 @@ func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, e
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return TxRow{}, err
 	}
-	status := "0x0"
-	if asString(m, "status") == "0x1" || asString(m, "status") == "1" {
-		status = "0x1"
-	}
+	status := asString(m, "status")
 	r := TxRow{
-		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), BlockHash: asString(m, "blockHash"),
-		TxHash: asString(m, "transactionHash"), Timestamp: asTimeMs(m, "timestamp"),
-		From: asString(m, "fromAddress"), To: asString(m, "toAddress"), ValueRaw: asString(m, "value"),
-		Nonce: asUint64(m, "nonce"), Gas: asUint64(m, "gasLimit"), GasUsed: asUint64(m, "gasUsed"),
-		GasPrice: asString(m, "gasPrice"), TxType: asString(m, "type"),
-		Input: asString(m, "input"), MethodID: asString(m, "methodId"), Provider: provider,
+		Chain:       chain,
+		BlockNumber: asUint64(m, "blockNumber"),
+		BlockHash:   pickString(m, "blockHash"),
+		TxHash:      pickString(m, "hash", "transactionHash"),
+		Timestamp:   asTime(m, "timestamp"),
+		From:        pickAddress(m, "from", "fromAddress"),
+		To:          pickAddress(m, "to", "toAddress"),
+		ValueRaw:    pickString(m, "value"),
+		Nonce:       asUint64(m, "nonce"),
+		Gas:         asUint64(m, "gasLimit"),
+		GasUsed:     asUint64(m, "gasUsed"),
+		GasPrice:    pickString(m, "gasPrice"),
+		TxType:      pickString(m, "type"),
+		Input:       pickString(m, "input", "inputData"),
+		MethodID:    pickString(m, "methodId", "methodID"),
+		Provider:    provider,
 	}
-	if status == "0x1" {
+	if r.BlockNumber == 0 {
+		r.BlockNumber = asUint64(m, "blockHeight")
+	}
+	if r.Gas == 0 {
+		r.Gas = asUint64(m, "gas")
+	}
+	if status == "0x1" || status == "1" || status == "true" {
 		r.Status = 1
 	}
 	return r, nil
 }
 
 type TokenTransferRow struct {
-	Chain        string
-	BlockNumber  uint64
-	Timestamp    time.Time
-	TxHash       string
-	LogIndex     uint32
-	TokenAddress string
-	TokenSymbol  string
+	Chain         string
+	BlockNumber   uint64
+	Timestamp     time.Time
+	TxHash        string
+	LogIndex      uint32
+	TokenAddress  string
+	TokenSymbol   string
 	TokenDecimals uint16
-	From         string
-	To           string
-	AmountRaw    string
-	Amount       *big.Int
-	Provider     string
+	From          string
+	To            string
+	AmountRaw     string
+	Amount        *big.Int
+	Provider      string
 }
 
 func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenTransferRow, error) {
@@ -159,30 +229,41 @@ func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenT
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return TokenTransferRow{}, err
 	}
+	// 实测字段：valueRawInteger（原始整数）；value 为展示值
+	amountRaw := pickString(m, "valueRawInteger", "value")
 	return TokenTransferRow{
-		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTimeMs(m, "timestamp"),
-		TxHash: asString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		TokenAddress: asString(m, "contractAddress"), TokenSymbol: asString(m, "tokenSymbol"),
+		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTime(m, "timestamp"),
+		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
+		TokenAddress: pickAddress(m, "contractAddress"), TokenSymbol: pickString(m, "tokenSymbol"),
 		TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
-		From: asString(m, "fromAddress"), To: asString(m, "toAddress"),
-		AmountRaw: asString(m, "value"), Amount: asBigInt(m, "value"), Provider: provider,
+		From: pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
+		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"), Provider: provider,
 	}, nil
 }
 
+func asBigIntValue(m map[string]any, keys ...string) *big.Int {
+	for _, k := range keys {
+		if s := asString(m, k); s != "" {
+			return asBigInt(m, k)
+		}
+	}
+	return big.NewInt(0)
+}
+
 type NftTransferRow struct {
-	Chain         string
-	BlockNumber   uint64
-	Timestamp     time.Time
-	TxHash        string
-	LogIndex      uint32
-	Contract      string
-	TokenID       string
-	From          string
-	To            string
-	TokenName     string
-	TokenSymbol   string
-	AmountRaw     string
-	Provider      string
+	Chain       string
+	BlockNumber uint64
+	Timestamp   time.Time
+	TxHash      string
+	LogIndex    uint32
+	Contract    string
+	TokenID     string
+	From        string
+	To          string
+	TokenName   string
+	TokenSymbol string
+	AmountRaw   string
+	Provider    string
 }
 
 func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTransferRow, error) {
@@ -191,12 +272,13 @@ func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTrans
 		return NftTransferRow{}, err
 	}
 	return NftTransferRow{
-		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTimeMs(m, "timestamp"),
-		TxHash: asString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		Contract: asString(m, "contractAddress"), TokenID: asString(m, "tokenId"),
-		From: asString(m, "fromAddress"), To: asString(m, "toAddress"),
-		TokenName: asString(m, "tokenName"), TokenSymbol: asString(m, "tokenSymbol"),
-		AmountRaw: asString(m, "value"), Provider: provider,
+		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTime(m, "timestamp"),
+		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
+		Contract: pickAddress(m, "contractAddress"), TokenID: pickString(m, "tokenId"),
+		From: pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
+		TokenName: pickString(m, "name", "collectionName", "tokenName"),
+		TokenSymbol: pickString(m, "collectionSymbol", "tokenSymbol"),
+		AmountRaw: pickString(m, "value"), Provider: provider,
 	}, nil
 }
 
@@ -222,7 +304,9 @@ func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
 	var topics []string
 	if v, ok := m["topics"].([]any); ok {
 		for _, t := range v {
-			topics = append(topics, asString(map[string]any{"t": t}, "t"))
+			if s, ok := t.(string); ok {
+				topics = append(topics, s)
+			}
 		}
 	}
 	removed := uint8(0)
@@ -230,28 +314,28 @@ func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
 		removed = 1
 	}
 	return LogRow{
-		Chain: chain, BlockNumber: asUint64(m, "blockNumber"), BlockHash: asString(m, "blockHash"),
-		TxHash: asString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		Address: asString(m, "address"), Topics: topics, Data: asString(m, "data"),
-		Removed: removed, Timestamp: asTimeMs(m, "timestamp"), Provider: provider,
+		Chain: chain, BlockNumber: asUint64(m, "blockNumber"), BlockHash: pickString(m, "blockHash"),
+		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
+		Address: pickAddress(m, "address"), Topics: topics, Data: pickString(m, "data"),
+		Removed: removed, Timestamp: asTime(m, "timestamp"), Provider: provider,
 	}, nil
 }
 
 type BalanceRow struct {
-	Chain        string
-	Address      string
-	TokenSymbol  string
-	TokenName    string
-	TokenAddress string
-	TokenType    string
+	Chain         string
+	Address       string
+	TokenSymbol   string
+	TokenName     string
+	TokenAddress  string
+	TokenType     string
 	TokenDecimals uint16
-	BalanceRaw   string
-	Balance      *big.Int
-	BalanceUSD   string
-	TokenPrice   string
+	BalanceRaw    string
+	Balance       *big.Int
+	BalanceUSD    string
+	TokenPrice    string
 	SnapshotBlock uint64
-	Timestamp    time.Time
-	Provider     string
+	Timestamp     time.Time
+	Provider      string
 }
 
 func NormalizeBalance(raw json.RawMessage, chain, address string, snapshot uint64, provider string) (BalanceRow, error) {
@@ -259,12 +343,16 @@ func NormalizeBalance(raw json.RawMessage, chain, address string, snapshot uint6
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return BalanceRow{}, err
 	}
+	holder := pickAddress(m, "holderAddress")
+	if holder == "" {
+		holder = address
+	}
 	return BalanceRow{
-		Chain: chain, Address: asString(m, "holderAddress"), TokenSymbol: asString(m, "tokenSymbol"),
-		TokenName: asString(m, "tokenName"), TokenAddress: asString(m, "tokenAddress"),
-		TokenType: asString(m, "tokenType"), TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
-		BalanceRaw: asString(m, "balanceRawInteger"), Balance: asBigInt(m, "balanceRawInteger"),
-		BalanceUSD: asString(m, "balanceUsd"), TokenPrice: asString(m, "tokenPrice"),
+		Chain: chain, Address: holder, TokenSymbol: pickString(m, "tokenSymbol"),
+		TokenName: pickString(m, "tokenName"), TokenAddress: pickAddress(m, "contractAddress"),
+		TokenType: pickString(m, "tokenType"), TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
+		BalanceRaw: pickString(m, "balanceRawInteger", "balance"), Balance: asBigIntValue(m, "balanceRawInteger"),
+		BalanceUSD: pickString(m, "balanceUsd"), TokenPrice: pickString(m, "tokenPrice"),
 		SnapshotBlock: snapshot, Timestamp: time.Now().UTC(), Provider: provider,
 	}, nil
 }

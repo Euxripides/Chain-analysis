@@ -24,11 +24,11 @@ type rpcError struct {
 }
 
 type pagedResult struct {
-	NextPageToken  string            `json:"nextPageToken"`
-	Transactions   []json.RawMessage `json:"transactions"`
-	TokenTransfers []json.RawMessage `json:"tokenTransfers"`
-	NftTransfers   []json.RawMessage `json:"nftTransfers"`
-	Logs           []json.RawMessage `json:"logs"`
+	NextPageToken string            `json:"nextPageToken"`
+	Transactions  []json.RawMessage `json:"transactions"`
+	// Ankr 实际响应：token_transfers 与 nft_transfers 都放在 transfers 键下
+	Transfers []json.RawMessage `json:"transfers"`
+	Logs      []json.RawMessage `json:"logs"`
 }
 
 type balanceResult struct {

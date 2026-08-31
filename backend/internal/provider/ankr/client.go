@@ -121,10 +121,10 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		params["blockchain"] = req.Chain
 		params["address"] = req.Address
 		if req.FromBlock != nil {
-			params["fromBlock"] = fmt.Sprintf("%d", *req.FromBlock)
+			params["fromBlock"] = fmt.Sprintf("0x%x", *req.FromBlock)
 		}
 		if req.ToBlock != nil {
-			params["toBlock"] = fmt.Sprintf("%d", *req.ToBlock)
+			params["toBlock"] = fmt.Sprintf("0x%x", *req.ToBlock)
 		}
 		if req.FromTime != nil && c.Capabilities().SupportsTimeRange[req.Dataset] {
 			params["fromTimestamp"] = req.FromTime.UnixMilli()
@@ -224,10 +224,8 @@ func (c *Client) parseResult(dataset string, raw []byte) (provider.FetchResult, 
 	switch dataset {
 	case "transactions":
 		rows = pr.Transactions
-	case "token_transfers":
-		rows = pr.TokenTransfers
-	case "nft_transfers":
-		rows = pr.NftTransfers
+	case "token_transfers", "nft_transfers":
+		rows = pr.Transfers
 	case "logs":
 		rows = pr.Logs
 	}

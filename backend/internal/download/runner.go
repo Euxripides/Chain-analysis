@@ -114,24 +114,28 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			Chain: chain, Dataset: sh.Dataset, Address: address,
 			PageSize: sc.cfg.Ankr.MaxPageSize, PageToken: pageToken,
 		}
-		// 全量(live)：不传块区间（Provider 默认最新）；显式块区间才传
-		if !(sh.FromBlock == 0 && sh.ToBlock == 0 && sh.FromTimestamp == nil) {
-			f := uint64(sh.FromBlock)
-			t := uint64(sh.ToBlock)
-			req.FromBlock = &f
-			req.ToBlock = &t
-		}
-		if sh.FromTimestamp != nil {
-			req.FromTime = sh.FromTimestamp
-		}
-		if sh.ToTimestamp != nil {
-			req.ToTime = sh.ToTimestamp
-		}
-		if sh.Dataset == "balances" {
-			req.FromBlock = nil
-			req.ToBlock = nil
-			req.FromTime = nil
-			req.ToTime = nil
+		// 实测 Ankr 行为差异：
+		// - transactions / token_transfers / nft_transfers：带 toBlock 返回空、
+		//   fromBlock 被忽略；只能从最新往前翻页，边界由客户端过滤 + 降序停止实现。
+		// - logs：尊重 from/toBlock。
+		switch sh.Dataset {
+		case "transactions", "token_transfers", "nft_transfers":
+			// 不传块边界（时间边界也由客户端过滤）
+		case "balances":
+			req.FromBlock, req.ToBlock, req.FromTime, req.ToTime = nil, nil, nil, nil
+		default:
+			if !(sh.FromBlock == 0 && sh.ToBlock == 0 && sh.FromTimestamp == nil) {
+				f := uint64(sh.FromBlock)
+				t := uint64(sh.ToBlock)
+				req.FromBlock = &f
+				req.ToBlock = &t
+			}
+			if sh.FromTimestamp != nil {
+				req.FromTime = sh.FromTimestamp
+			}
+			if sh.ToTimestamp != nil {
+				req.ToTime = sh.ToTimestamp
+			}
 		}
 
 		res, err := sc.fetchWithRetry(ctx, req)
@@ -150,6 +154,10 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			})
 			return
 		}
+
+		// 客户端侧范围过滤（transactions/nft 不信任 Provider 边界）
+		filtered, passedLower := sc.filterRows(sh, res.Rows)
+		res.Rows = filtered
 
 		if len(res.Rows) > 0 {
 			now := time.Now()
@@ -188,6 +196,10 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		}
 
 		if !res.HasMore {
+			break
+		}
+		if passedLower {
+			// 降序遍历已越过下边界：剩余页全部更旧，停止
 			break
 		}
 		pageToken = res.NextPageToken
@@ -279,6 +291,34 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, req provider.FetchReque
 	return provider.FetchResult{}, lastErr
 }
 
+// filterRows 客户端侧范围过滤：块区间 + 时间区间；passedLower 表示本页已越过下边界。
+func (sc *Scheduler) filterRows(sh model.Shard, rows []json.RawMessage) ([]json.RawMessage, bool) {
+	passedLower := false
+	out := rows[:0]
+	for _, raw := range rows {
+		if bn, ok := ingest.RawBlockNumber(raw); ok && bn > 0 {
+			if sh.FromBlock > 0 && int64(bn) < sh.FromBlock {
+				passedLower = true
+				continue
+			}
+			if sh.ToBlock > 0 && int64(bn) > sh.ToBlock {
+				continue
+			}
+		}
+		if ts, ok := ingest.RawTimestamp(raw); ok {
+			if sh.FromTimestamp != nil && ts.Before(*sh.FromTimestamp) {
+				passedLower = true
+				continue
+			}
+			if sh.ToTimestamp != nil && ts.After(*sh.ToTimestamp) {
+				continue
+			}
+		}
+		out = append(out, raw)
+	}
+	return out, passedLower
+}
+
 // ingestRows 标准化并批量写入 ClickHouse（返回观察到的最小/最大块）。
 func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json.RawMessage, chain, address string) (int64, int64, error) {
 	var minB, maxB int64
@@ -355,6 +395,11 @@ func trackBlocks(minB, maxB *int64, b int64) {
 
 // commitCoverage 数据全部持久化 + 校验之后才提交 Coverage（不允许提前标记 COMPLETE）。
 func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, address string, minBlock, maxBlock, rows, bytes int64) {
+	if rows == 0 {
+		// 未下载到任何行：不能证明该区间已覆盖，不提交（防止 Provider 边界异常导致误标）
+		sc.log.Info("coverage skipped (zero rows)", "shard_id", sh.ID, "dataset", sh.Dataset)
+		return
+	}
 	if sh.Dataset == "balances" {
 		if err := sc.store.AddCoverage(ctx, chain, address, "balances", "ankr", 0, sh.ToBlock, rows, bytes, sh.ToBlock); err != nil {
 			sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)

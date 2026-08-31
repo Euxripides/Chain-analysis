@@ -41,16 +41,16 @@ func (cb *circuitBreaker) record(success bool) {
 
 func (cb *circuitBreaker) errorRate() float64 {
 	cb.mu.Lock()
-	defer cb.mu.Unlock()
 	n := cb.pos
-	if n < cb.minSamples {
-		return 0
-	}
 	fail := 0
 	for i := 0; i < n; i++ {
 		if !cb.window[i] {
 			fail++
 		}
+	}
+	cb.mu.Unlock()
+	if n < cb.minSamples {
+		return 0
 	}
 	return float64(fail) / float64(n)
 }
@@ -78,12 +78,13 @@ func (cb *circuitBreaker) stateStr() string {
 }
 
 func (cb *circuitBreaker) update() {
+	// 注意：errorRate 自身加锁，不能在本函数持锁时调用（否则自死锁）
+	er := cb.errorRate()
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if cb.state == "OPEN" || cb.state == "HALF_OPEN" {
 		return
 	}
-	er := cb.errorRate()
 	if er >= cb.threshold {
 		cb.state = "OPEN"
 		cb.openedAt = time.Now()
