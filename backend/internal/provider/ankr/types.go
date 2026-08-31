@@ -21,6 +21,9 @@ type rpcResponse struct {
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Data    struct {
+		TraceID string `json:"trace_id"`
+	} `json:"data"`
 }
 
 type pagedResult struct {

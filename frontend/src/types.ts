@@ -123,6 +123,16 @@ export function statusLabel(s: string): string {
   return STATUS_LABEL[s] ?? s
 }
 
+// V1.1：自动可恢复错误友好文案（§39）
+export function friendlyError(s: string): string {
+  if (s.startsWith('[response_too_large]')) return '单次返回数据较大，系统已自动降低单页数据量并继续下载'
+  if (s.startsWith('[request_timeout]')) return '单次查询耗时较长，系统正在自动减小请求规模'
+  if (s.startsWith('[rate_limit]')) return 'Provider 请求频率受限，系统正在自动降速重试'
+  if (s.startsWith('[connection_limit]')) return 'Provider 并发连接达到限制，系统正在自动降低并发'
+  if (s.startsWith('[split_range]')) return '请求区间过重，系统已自动拆分范围重试'
+  return s
+}
+
 export function fmtBytes(n: number): string {
   if (!n) return '0 B'
   const u = ['B', 'KB', 'MB', 'GB', 'TB']

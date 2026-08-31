@@ -329,17 +329,23 @@ func (s *Store) UpdateDatasetStatus(ctx context.Context, id, status string) erro
 // ---- Shards ----
 
 const shardCols = "id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, " +
-	"status, priority, retries, max_retries, lease_owner, leased_until, downloaded_rows, downloaded_bytes, " +
+	"page_size, page_state, status, priority, retries, max_retries, lease_owner, leased_until, downloaded_rows, downloaded_bytes, " +
 	"raw_object, error, created_at, updated_at"
 
 func scanShard(rows pgx.Rows) (*model.Shard, error) {
 	var r model.Shard
 	var lu, fts, tts pgtype.Timestamptz
+	var ps []byte
 	err := rows.Scan(&r.ID, &r.JobID, &r.SubjectID, &r.DatasetID, &r.Dataset, &r.FromBlock, &r.ToBlock,
-		&fts, &tts, &r.PageToken, &r.PageNo, &r.Status, &r.Priority, &r.Retries, &r.MaxRetries, &r.LeaseOwner, &lu,
+		&fts, &tts, &r.PageToken, &r.PageNo, &r.PageSize, &ps, &r.Status, &r.Priority, &r.Retries, &r.MaxRetries, &r.LeaseOwner, &lu,
 		&r.DownloadedRows, &r.DownloadedBytes, &r.RawObject, &r.Error, &r.CreatedAt, &r.UpdatedAt)
 	if err != nil {
 		return nil, err
+	}
+	if len(ps) > 0 && string(ps) != "{}" {
+		m := map[string]any{}
+		_ = json.Unmarshal(ps, &m)
+		r.PageState = m
 	}
 	if lu.Valid {
 		t := lu.Time
@@ -367,11 +373,11 @@ func (s *Store) CreateShards(ctx context.Context, shards []model.Shard) error {
 			shards[i].ID = uuid.NewString()
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO download_shards "+
-			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, status, priority, max_retries) "+
-			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, page_size, page_state, status, priority, max_retries) "+
+			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
 			shards[i].ID, shards[i].JobID, shards[i].SubjectID, shards[i].DatasetID, shards[i].Dataset,
 			shards[i].FromBlock, shards[i].ToBlock, shards[i].FromTimestamp, shards[i].ToTimestamp,
-			shards[i].PageToken, shards[i].PageNo, shards[i].Status,
+			shards[i].PageToken, shards[i].PageNo, shards[i].PageSize, "{}", shards[i].Status,
 			shards[i].Priority, shards[i].MaxRetries)
 		if err != nil {
 			return fmt.Errorf("insert shard: %w", err)
@@ -399,7 +405,7 @@ func (s *Store) LeaseShards(ctx context.Context, worker string, n int, leaseFor 
 		"UPDATE download_shards s SET status='LEASED', lease_owner=$2, leased_until=$3, updated_at=now() "+
 		"FROM picked WHERE s.id = picked.id "+
 		"RETURNING s.id, s.job_id, s.subject_id, s.dataset_id, s.dataset, s.from_block, s.to_block, s.from_timestamp, s.to_timestamp, s.page_token, s.page_no, "+
-		"s.status, s.priority, s.retries, s.max_retries, s.lease_owner, s.leased_until, s.downloaded_rows, s.downloaded_bytes, "+
+		"s.page_size, s.page_state, s.status, s.priority, s.retries, s.max_retries, s.lease_owner, s.leased_until, s.downloaded_rows, s.downloaded_bytes, "+
 		"s.raw_object, s.error, s.created_at, s.updated_at", n, worker, until)
 	if err != nil {
 		return nil, err
@@ -431,17 +437,21 @@ func (s *Store) GetShard(ctx context.Context, id string) (*model.Shard, error) {
 	return scanShard(rows)
 }
 
-// CheckpointShard 每页成功后更新 Shard 与 Checkpoint（原子，崩溃安全）。
-func (s *Store) CheckpointShard(ctx context.Context, id string, pageToken string, pageNo int, rows, bytes int64) error {
+// CheckpointShard 每页成功后更新 Shard 与 Checkpoint（原子，崩溃安全；V1.1 保存 pageSize 与 PagePolicy 状态）。
+func (s *Store) CheckpointShard(ctx context.Context, id string, pageToken string, pageNo, pageSize int, rows, bytes int64, pageState map[string]any) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	ps, _ := json.Marshal(pageState)
+	if len(ps) == 0 {
+		ps = []byte("{}")
+	}
 	_, err = tx.Exec(ctx, "UPDATE download_shards "+
-		"SET status='RUNNING', page_token=$2, page_no=$3, downloaded_rows=$4, downloaded_bytes=$5, lease_owner=$6, leased_until=$7, error='', updated_at=now() "+
+		"SET status='RUNNING', page_token=$2, page_no=$3, page_size=$4, page_state=$5::jsonb, downloaded_rows=$6, downloaded_bytes=$7, lease_owner=$8, leased_until=$9, error='', updated_at=now() "+
 		"WHERE id=$1",
-		id, pageToken, pageNo, rows, bytes, "checkpoint", time.Now().Add(10*time.Minute))
+		id, pageToken, pageNo, pageSize, ps, rows, bytes, "checkpoint", time.Now().Add(10*time.Minute))
 	if err != nil {
 		return err
 	}

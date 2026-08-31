@@ -56,6 +56,25 @@ type HealthStatus struct {
 	CurrentConcurrency int         `json:"current_concurrency"`
 }
 
+// ---- V1.1 错误模型（文档 §4/§21-§25）----
+
+type ErrorClass string
+
+const (
+	ClassRateLimit        ErrorClass = "rate_limit"
+	ClassConnectionLimit  ErrorClass = "connection_limit"
+	ClassRequestTimeout   ErrorClass = "request_timeout"
+	ClassResponseTooLarge ErrorClass = "response_too_large"
+	ClassInvalidJSON      ErrorClass = "invalid_json"
+	ClassUpstream         ErrorClass = "upstream"
+	ClassRequestTooLarge  ErrorClass = "request_too_large"
+	ClassInvalidRequest   ErrorClass = "invalid_request"
+	ClassAuth             ErrorClass = "auth"
+	ClassUnsupported      ErrorClass = "unsupported"
+	ClassCancelled        ErrorClass = "cancelled"
+)
+
+// 旧分类（兼容保留；新代码使用 Class）
 type ErrorKind int
 
 const (
@@ -66,16 +85,50 @@ const (
 	ErrCircuitOpen
 )
 
+// Error 结构化 Provider 错误：禁止依赖字符串匹配作为主要决策手段（§4）。
 type Error struct {
-	Kind       ErrorKind
-	Message    string
+	Provider  string
+	Class     ErrorClass
+	Message   string
 	HTTPStatus int
+	RPCCode   int
+	TraceID   string
+
+	Retryable bool
+	Duration  time.Duration
+	PageSize  int
+	BodyBytes int64
+
+	// 控制决策（§21 Retry 决策矩阵）
+	ReduceRate        bool
+	ReduceConcurrency bool
+	ReducePageSize    bool
+	SplitRange        bool
+	RetryAfter        time.Duration
+
+	Cause error
+	Kind  ErrorKind // legacy compat
 }
 
 func (e *Error) Error() string { return e.Message }
 
-func (e *Error) Retryable() bool {
-	return e.Kind == ErrTemporary || e.Kind == ErrRateLimit
+// 常用构造
+func NewCancelled(msg string) *Error {
+	return &Error{Class: ClassCancelled, Message: msg, Retryable: false, Kind: ErrInvalidParams}
+}
+
+func NewTimeout(msg string, pageSize int, cause error) *Error {
+	return &Error{
+		Class: ClassRequestTimeout, Message: msg, Retryable: true,
+		ReducePageSize: true, PageSize: pageSize, Cause: cause, Kind: ErrTemporary,
+	}
+}
+
+func NewResponseTooLarge(msg string, pageSize int, bodyBytes int64) *Error {
+	return &Error{
+		Class: ClassResponseTooLarge, Message: msg, Retryable: true,
+		ReducePageSize: true, PageSize: pageSize, BodyBytes: bodyBytes, Kind: ErrTemporary,
+	}
 }
 
 type Provider interface {

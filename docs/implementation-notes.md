@@ -118,6 +118,20 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - `internal/query` —— 统一数据面查询
 - `migrations` —— PostgreSQL / ClickHouse 迁移（幂等，自动执行）
 
+## V1.1 稳定性与性能调整（2026-09-01）
+
+依据《Ankr下载器_V1.1_稳定性性能调整_超时响应体与自适应PageSize.md》完成：
+
+- **响应体保护**：maxBytes+1 检测 + Content-Length 快速拒绝；软限制 32MiB / 硬限制 64MiB；截断响应返回 `ErrResponseTooLarge`（不再误报 bad json）。
+- **错误模型重构**：`provider.Error{Class,RPCCode,TraceID,Retryable,ReduceRate/Concurrency/PageSize,SplitRange,RetryAfter...}`；context 优先分类（Canceled→不重试；DeadlineExceeded→request_timeout）；官方错误码映射：-32090/-32005(legacy)→rate_limit、-32067/-32068/-32069/-32077/-32070→connection_limit、-32062→request_too_large、-32071→request_timeout、-32055/-32056/-32057/-32059/-32061/-32063/-32064/-32076→upstream；HTTP 429 先解析 JSON-RPC 错误码再兜底；Retry-After 优先。
+- **PagePolicy 状态机**：阶梯 1000/2000/5000/10000；Timeout/TooLarge→降一级+短抖动重试同一逻辑页；连续 3 次快成功(<30s,<16MiB)+降档后 5 页 cooldown→升一级（防振荡）；策略按 chain|dataset|subject 隔离；logs 初始 5000。
+- **Checkpoint 持久化**：shards 新增 page_size/page_state，每页 Checkpoint 保存策略状态，Resume 继承（不重置回 10000）。
+- **Range 拆分**：最小页连续失败 3 次→自动拆半区间，原 Shard 不标 COMPLETE、不提交 Coverage。
+- **四控制器解耦**：Rate（令牌桶+Retry-After）、Concurrency（仅连接数限制/全局健康触发，不因单地址超时降全局）、Page（策略状态机）、Range（拆分）。
+- **可观测**：provider_usage 新增 error_class/rpc_code/trace_id/page_size/returned_rows/response_bytes/duration_ms/retry_attempt 等；Prometheus 新增 ankr_inflight_requests、ankr_request_duration_seconds、ankr_response_bytes/rows、ankr_page_size_current/降升档、ankr_response_too_large/request_timeout/invalid_json/rate_limit/connection_limit。
+- **测试**：errors_test（64MiB±1、坏 JSON、超时、取消、官方错误码矩阵、HTTP429 兜底与 -32068 区分、Retry-After）、page_policy_test（降档阶梯/最小页拆分/cooldown 升档/Resume 继承）全部通过。
+- **Canary**：真实 bsc 地址小范围下载验证——usage.page_size=10000、response_bytes≈5.5MB/页、checkpoint 页状态落库、新指标上线（Worker /metrics 可见真实延迟直方图）。
+
 ## V1 验收对照（文档 §101）
 
 - 数据正确性：重复下载不翻倍（ReplacingMergeTree + Coverage 区间合并）；Raw 可回溯（manifest → part → SHA256）；Time/Block Range 不越界（shard 区间持久化）。

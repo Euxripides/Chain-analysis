@@ -16,6 +16,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
@@ -36,7 +37,9 @@ type Scheduler struct {
 	active      int64
 	wg          sync.WaitGroup
 
-	rates sync.Map // jobID -> *rateTracker
+	rates      sync.Map // jobID -> *rateTracker
+	pagePolicy *ankr.PagePolicy
+	lastConnLimit int64
 }
 
 func NewScheduler(cfg *config.Config, st *store.Store, prov provider.Provider, raw *rawstore.Store,
@@ -47,6 +50,7 @@ func NewScheduler(cfg *config.Config, st *store.Store, prov provider.Provider, r
 		planner: NewPlanner(st, log), bus: bus, log: log,
 		workerID:    fmt.Sprintf("%s-%d", host, os.Getpid()),
 		concurrency: cfg.Ankr.InitialConcurrency,
+		pagePolicy:  ankr.NewPagePolicy(cfg),
 	}
 }
 
@@ -140,6 +144,18 @@ func (sc *Scheduler) concurrencyLoop(ctx context.Context) {
 				"SELECT COUNT(*) FROM download_shards WHERE status IN ('PENDING','FAILED_RETRYABLE')").Scan(&pending)
 			active := atomic.LoadInt64(&sc.active)
 			cur := sc.currentConcurrency()
+
+			// V1.1（§23/§29）：Connection Limit 由 Concurrency Controller 响应，
+			// 不因单地址超时/大响应直接降全局并发。
+			if ac, ok := sc.prov.(*ankr.Client); ok {
+				conn := ac.ConnectionLimitCount()
+				if conn > sc.lastConnLimit {
+					cur = maxInt(1, cur/2)
+					sc.log.Warn("connection limit detected, reducing concurrency", "current", cur)
+				}
+				sc.lastConnLimit = conn
+			}
+
 			switch hs.State {
 			case provider.HealthOpen:
 				cur = 1

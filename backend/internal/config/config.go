@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,8 +17,25 @@ type AnkrConfig struct {
 	MaxConcurrency     int
 	RequestsPerMinute  int
 	RequestTimeout     time.Duration
+	ResponseHeaderTimeout time.Duration
 	CreditsPerRequest  float64
 	CostPerRequestUSD  float64
+
+	// V1.1：响应体保护（§8/§32）
+	ResponseSoftLimitBytes int64
+	ResponseHardLimitBytes int64
+
+	// V1.1：自适应 PageSize（§12-§15/§32）
+	PageLevels             []int
+	PageSizeTransactions   int
+	PageSizeTokenTransfers int
+	PageSizeNftTransfers   int
+	PageSizeLogs           int
+	PageUpSuccessCount     int
+	PageUpMaxDuration      time.Duration
+	PageUpMaxBodyBytes     int64
+	PageDownCooldownSuccess int
+	RangeSplitOnMinPageFailures int
 }
 
 type Config struct {
@@ -36,6 +55,53 @@ type Config struct {
 	BackupsBucket  string
 	WorkerMetricsPort int
 	Ankr           AnkrConfig
+}
+
+// parsePageLevels 解析 "1000,2000,5000,10000"。
+func parsePageLevels(s string) []int {
+	var out []int
+	for _, part := range strings.Split(s, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if n, err := strconv.Atoi(p); err == nil {
+			out = append(out, n)
+		}
+	}
+	if len(out) == 0 {
+		return []int{1000, 2000, 5000, 10000}
+	}
+	return out
+}
+
+// Validate 启动校验（§32：错误配置直接启动失败）。
+func (c *Config) Validate() error {
+	a := &c.Ankr
+	if a.ResponseHardLimitBytes <= 0 || a.ResponseSoftLimitBytes <= 0 {
+		return fmt.Errorf("ankr response limits must be positive")
+	}
+	if a.ResponseSoftLimitBytes >= a.ResponseHardLimitBytes {
+		return fmt.Errorf("ankr response soft limit must be < hard limit")
+	}
+	if len(a.PageLevels) < 2 {
+		return fmt.Errorf("ankr page levels need at least 2 levels")
+	}
+	for i := 1; i < len(a.PageLevels); i++ {
+		if a.PageLevels[i] <= a.PageLevels[i-1] {
+			return fmt.Errorf("ankr page levels must be strictly increasing")
+		}
+	}
+	if a.PageLevels[len(a.PageLevels)-1] > 10000 {
+		return fmt.Errorf("ankr max page size must be <= 10000")
+	}
+	if a.PageLevels[0] <= 0 {
+		return fmt.Errorf("ankr min page size must be > 0")
+	}
+	if a.MaxPageSize > 10000 {
+		return fmt.Errorf("ANKR_MAX_PAGE_SIZE must be <= 10000")
+	}
+	return nil
 }
 
 func env(key, def string) string {
@@ -98,8 +164,21 @@ func Load() *Config {
 			MaxConcurrency:     envInt("ANKR_MAX_CONCURRENCY", 32),
 			RequestsPerMinute:  envInt("ANKR_REQUESTS_PER_MINUTE", 900),
 			RequestTimeout:     time.Duration(envInt("ANKR_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
+			ResponseHeaderTimeout: time.Duration(envInt("ANKR_RESPONSE_HEADER_TIMEOUT_SECONDS", 120)) * time.Second,
 			CreditsPerRequest:  envFloat("ANKR_CREDITS_PER_REQUEST", 700),
 			CostPerRequestUSD:  envFloat("ANKR_COST_PER_REQUEST_USD", 0.00007),
+			ResponseSoftLimitBytes:  int64(envInt("ANKR_RESPONSE_SOFT_LIMIT_MB", 32)) << 20,
+			ResponseHardLimitBytes:  int64(envInt("ANKR_RESPONSE_HARD_LIMIT_MB", 64)) << 20,
+			PageLevels:             parsePageLevels(env("ANKR_PAGE_LEVELS", "1000,2000,5000,10000")),
+			PageSizeTransactions:   envInt("ANKR_PAGE_SIZE_TRANSACTIONS", 10000),
+			PageSizeTokenTransfers: envInt("ANKR_PAGE_SIZE_TOKEN_TRANSFERS", 10000),
+			PageSizeNftTransfers:   envInt("ANKR_PAGE_SIZE_NFT_TRANSFERS", 10000),
+			PageSizeLogs:           envInt("ANKR_PAGE_SIZE_LOGS", 5000),
+			PageUpSuccessCount:     envInt("ANKR_PAGE_UP_SUCCESS_COUNT", 3),
+			PageUpMaxDuration:      time.Duration(envInt("ANKR_PAGE_UP_MAX_DURATION_SECONDS", 30)) * time.Second,
+			PageUpMaxBodyBytes:     int64(envInt("ANKR_PAGE_UP_MAX_BODY_MB", 16)) << 20,
+			PageDownCooldownSuccess: envInt("ANKR_PAGE_DOWN_COOLDOWN_SUCCESS_COUNT", 5),
+			RangeSplitOnMinPageFailures: envInt("ANKR_RANGE_SPLIT_ON_MIN_PAGE_FAILURES", 3),
 		},
 	}
 }

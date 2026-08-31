@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -27,6 +28,9 @@ type Infra struct {
 
 // Bootstrap 连接全部依赖并执行迁移。
 func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infra, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config invalid: %w", err)
+	}
 	st, err := store.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
@@ -62,6 +66,9 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		prov = ankr.New(ankr.Options{
 			Endpoint: cfg.Ankr.Endpoint, APIKey: cfg.Ankr.APIKey, MaxPageSize: cfg.Ankr.MaxPageSize,
 			RequestsPerMinute: cfg.Ankr.RequestsPerMinute, RequestTimeout: cfg.Ankr.RequestTimeout,
+			ResponseHeaderTimeout: cfg.Ankr.ResponseHeaderTimeout,
+			ResponseSoftLimitBytes: cfg.Ankr.ResponseSoftLimitBytes,
+			ResponseHardLimitBytes: cfg.Ankr.ResponseHardLimitBytes,
 			CreditsPerRequest: cfg.Ankr.CreditsPerRequest, CostPerRequestUSD: cfg.Ankr.CostPerRequestUSD,
 		}, usageHook)
 		log.Info("provider: ankr (live)")

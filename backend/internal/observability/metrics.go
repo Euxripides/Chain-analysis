@@ -64,6 +64,47 @@ var (
 		Buckets: []float64{10, 25, 50, 100, 250, 500, 1000, 2500, 5000},
 	}, []string{"bucket"})
 
+	// V1.1 精细指标（文档 §35）
+	AnkrInflight = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "ankr_inflight_requests", Help: "Ankr 在途请求数",
+	})
+	AnkrRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "ankr_request_duration_seconds", Help: "Ankr 请求耗时(秒)",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 180},
+	})
+	AnkrResponseBytes = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "ankr_response_bytes", Help: "Ankr 响应体大小(字节)",
+		Buckets: []float64{1 << 10, 1 << 15, 1 << 20, 1 << 22, 1 << 24, 1 << 25, 1 << 26},
+	})
+	AnkrResponseRows = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "ankr_response_rows", Help: "Ankr 响应行数",
+		Buckets: []float64{10, 100, 500, 1000, 2000, 5000, 10000},
+	})
+	AnkrPageSizeGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ankr_page_size_current", Help: "当前自适应 pageSize（按策略 key）",
+	}, []string{"key"})
+	AnkrPageSizeDowngrade = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_page_size_downgrade_total", Help: "pageSize 降档次数",
+	})
+	AnkrPageSizeUpgrade = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_page_size_upgrade_total", Help: "pageSize 升档次数",
+	})
+	AnkrResponseTooLarge = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_response_too_large_total", Help: "响应体超硬限制次数",
+	})
+	AnkrRequestTimeout = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_request_timeout_total", Help: "请求超时次数",
+	})
+	AnkrInvalidJSON = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_invalid_json_total", Help: "真正 InvalidJSON 次数",
+	})
+	AnkrRateLimit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_rate_limit_total", Help: "限流错误次数（-32090/429 等）",
+	})
+	AnkrConnectionLimit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_connection_limit_total", Help: "连接数限制错误次数（-32067 等）",
+	})
+
 	// Coverage / Export
 	CoverageHitRatio = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "coverage_hit_ratio", Help: "本地数据命中率（最近任务）",

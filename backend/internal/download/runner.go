@@ -14,6 +14,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 )
 
 var downloadMethodByDataset = map[string]string{
@@ -101,6 +102,19 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	bytesTotal := sh.DownloadedBytes
 	var minBlock, maxBlock int64
 
+	// V1.1：PagePolicy（§16-§18）——Resume 继承上次自适应状态
+	pkey := sc.pagePolicy.Key(chain, sh.Dataset, "address", address)
+	if sh.PageSize > 0 {
+		if st := pageStateFromMap(sh.PageState); st != nil {
+			st.CurrentPageSize = sh.PageSize
+			sc.pagePolicy.Restore(pkey, st)
+		}
+	}
+	currentSize := sh.PageSize
+	if currentSize <= 0 {
+		currentSize = sc.pagePolicy.Current(pkey, sh.Dataset)
+	}
+
 	for {
 		action, cerr := sc.jobControl(ctx, sh)
 		if cerr != nil {
@@ -113,7 +127,7 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 
 		req := provider.FetchRequest{
 			Chain: chain, Dataset: sh.Dataset, Address: address,
-			PageSize: sc.cfg.Ankr.MaxPageSize, PageToken: pageToken,
+			PageSize: currentSize, PageToken: pageToken,
 		}
 		// 实测 Ankr 行为差异：
 		// - transactions / token_transfers / nft_transfers：带 toBlock 返回空、
@@ -139,13 +153,26 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			}
 		}
 
-		res, err := sc.fetchWithRetry(ctx, req)
+		pageStart := time.Now()
+		res, dec, err := sc.fetchWithRetry(ctx, pkey, sh.Dataset, req)
+		if dec != nil && dec.SplitRange {
+			// §20/§43：最小 pageSize 仍反复失败 → 拆 Range；原 Shard 不能标 COMPLETE
+			sc.log.Warn("split range on repeated min-page failures", "shard_id", sh.ID, "dataset", sh.Dataset, "range", fmt.Sprintf("%d-%d", sh.FromBlock, sh.ToBlock))
+			sc.splitShardRange(ctx, sh)
+			return
+		}
 		if err != nil {
 			retryable := false
-			if pe, ok := err.(*provider.Error); ok && pe.Retryable() {
-				retryable = true
+			errMsg := err.Error()
+			if pe, ok := err.(*provider.Error); ok {
+				if pe.Retryable {
+					retryable = true
+				}
+				if pe.Class != "" {
+					errMsg = "[" + string(pe.Class) + "] " + errMsg
+				}
 			}
-			newStatus, ferr := sc.store.FailShard(ctx, sh.ID, err.Error(), retryable)
+			newStatus, ferr := sc.store.FailShard(ctx, sh.ID, errMsg, retryable)
 			if ferr != nil {
 				log.Error("fail shard failed", "err", ferr)
 			}
@@ -154,6 +181,17 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				"type": "shard_status", "shard_id": sh.ID, "status": newStatus, "error": err.Error(), "ts": time.Now(),
 			})
 			return
+		}
+		currentSize = req.PageSize
+		// 成功页反馈（§14）：连续快成功才升档（一次一级，降档后有 cooldown）
+		var bodyEst int64
+		for _, r := range res.Rows {
+			bodyEst += int64(len(r))
+		}
+		nextSize := sc.pagePolicy.OnSuccess(pkey, sh.Dataset, int64(currentSize), bodyEst, time.Since(pageStart))
+		if nextSize != currentSize {
+			currentSize = nextSize
+			log.Debug("page size upgraded", "page_size", nextSize, "dataset", sh.Dataset)
 		}
 
 		// 客户端侧范围过滤（transactions/nft 不信任 Provider 边界）
@@ -193,8 +231,8 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		}
 
 		pageNo++
-		// Checkpoint：持久化与入库之后才推进（崩溃后可安全恢复）
-		if err := sc.store.CheckpointShard(ctx, sh.ID, res.NextPageToken, pageNo, rowsTotal, bytesTotal); err != nil {
+		// Checkpoint：持久化与入库之后才推进（崩溃后可安全恢复；§18 保存 PagePolicy 状态）
+		if err := sc.store.CheckpointShard(ctx, sh.ID, res.NextPageToken, pageNo, currentSize, rowsTotal, bytesTotal, pageStateToMap(sc.pagePolicy.Snapshot(pkey))); err != nil {
 			log.Error("checkpoint failed", "err", err)
 		}
 
@@ -264,49 +302,59 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 	return "continue", nil
 }
 
-// fetchWithRetry 指数退避 + 抖动；可重试：429/502/503/504/timeout/临时网络错误。
-// 响应过大/超时自动降 pageSize：10000 → 5000 → 2000 → 1000（文档 §3）。
-func (sc *Scheduler) fetchWithRetry(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
+// fetchWithRetry V1.1（§21/§27/§28）：
+//   - RateLimit / Upstream：指数退避 + 全抖动（429 优先 Retry-After，§26）
+//   - Timeout / ResponseTooLarge：PagePolicy 降一档 + 短抖动，重试同一逻辑页
+//   - 最小 pageSize 连续失败：返回 SplitRange 决策（由调用方拆 Range）
+//   - context.Canceled 禁止重试（§10）
+func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, req provider.FetchRequest) (provider.FetchResult, *ankr.PageDecision, error) {
 	var lastErr error
-	pageSize := req.PageSize
-	for attempt := 0; attempt < 6; attempt++ {
-		actx, cancel := context.WithTimeout(ctx, sc.cfg.Ankr.RequestTimeout)
+	var lastDec *ankr.PageDecision
+	for attempt := 0; attempt < 8; attempt++ {
+		actx := context.WithValue(ctx, "retry_attempt", attempt)
+		actx, cancel := context.WithTimeout(actx, sc.cfg.Ankr.RequestTimeout)
 		res, err := sc.prov.Fetch(actx, req)
 		cancel()
 		if err == nil {
-			return res, nil
+			return res, nil, nil
 		}
 		lastErr = err
 		if ctx.Err() != nil {
-			return provider.FetchResult{}, ctx.Err()
+			return provider.FetchResult{}, nil, ctx.Err()
 		}
 		pe, ok := err.(*provider.Error)
-		if !ok || !pe.Retryable() {
-			return provider.FetchResult{}, err
+		if !ok || !pe.Retryable {
+			return provider.FetchResult{}, nil, err
 		}
-		// 超时/5xx 类错误：减半 pageSize 再试（下限 1000）；429 不降（避免更多请求加剧限流）
-		if pe.Kind == provider.ErrTemporary && req.PageSize > 1000 {
-			switch {
-			case pageSize >= 10000:
-				pageSize = 5000
-			case pageSize >= 5000:
-				pageSize = 2000
-			case pageSize >= 2000:
-				pageSize = 1000
-			}
-			req.PageSize = pageSize
-			sc.log.Warn("page size reduced on retryable error", "dataset", req.Dataset, "page_size", pageSize, "err", err.Error())
+
+		dec := sc.pagePolicy.OnError(pkey, dataset, pe, req.PageSize)
+		lastDec = &dec
+		if dec.SplitRange {
+			return provider.FetchResult{}, &dec, nil
 		}
-		if attempt < 5 {
-			backoff := time.Duration(1<<uint(attempt))*time.Second + time.Duration(rand.Int63n(500))*time.Millisecond
-			select {
-			case <-ctx.Done():
-				return provider.FetchResult{}, ctx.Err()
-			case <-time.After(backoff):
-			}
+		if dec.NextPageSize != req.PageSize {
+			// 降一档重试同一逻辑页（不推进 pageToken，§37）
+			req.PageSize = dec.NextPageSize
+			sc.log.Warn("page size reduced on retryable error",
+				"error_class", string(pe.Class), "dataset", dataset,
+				"page_size", req.PageSize, "err", pe.Message)
+			observability.AnkrPageSizeGauge.WithLabelValues(pkey).Set(float64(req.PageSize))
+		}
+		if dec.ReduceRate && dec.RetryAfter > 0 {
+			// §26：429/-32090 优先遵守 Retry-After
+			dec.Backoff = dec.RetryAfter
+		}
+		backoff := dec.Backoff
+		if backoff <= 0 {
+			backoff = time.Duration(1<<uint(minInt(attempt, 5)))*time.Second + time.Duration(rand.Int63n(1000))*time.Millisecond
+		}
+		select {
+		case <-ctx.Done():
+			return provider.FetchResult{}, nil, ctx.Err()
+		case <-time.After(backoff):
 		}
 	}
-	return provider.FetchResult{}, lastErr
+	return provider.FetchResult{}, lastDec, lastErr
 }
 
 // filterRows 客户端侧范围过滤：块区间 + 时间区间；passedLower 表示本页已越过下边界。
@@ -442,6 +490,65 @@ func directionOf(subject, from, to string) (direction, counterparty string) {
 	default:
 		return "in", from
 	}
+}
+
+// pageStateFromMap 从 shard.page_state(JSONB) 恢复策略状态。
+func pageStateFromMap(m map[string]any) *ankr.PagePolicyState {
+	if m == nil {
+		return nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	var st ankr.PagePolicyState
+	if err := json.Unmarshal(b, &st); err != nil {
+		return nil
+	}
+	return &st
+}
+
+// pageStateToMap 序列化策略状态进 Checkpoint。
+func pageStateToMap(st *ankr.PagePolicyState) map[string]any {
+	if st == nil {
+		return map[string]any{}
+	}
+	b, _ := json.Marshal(st)
+	m := map[string]any{}
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
+// splitShardRange §20/§43：最小 pageSize 仍反复失败 → 拆成两半；原 Shard 不标 COMPLETE。
+func (sc *Scheduler) splitShardRange(ctx context.Context, sh model.Shard) {
+	if sh.ToBlock-sh.FromBlock < 2 {
+		// 无法再拆（含 live/full 0..0）：标记可重试，等下次调度
+		_, _ = sc.store.FailShard(ctx, sh.ID, "range unsplittable, retry later", true)
+		return
+	}
+	mid := sh.FromBlock + (sh.ToBlock-sh.FromBlock)/2
+	base := model.Shard{
+		JobID: sh.JobID, SubjectID: sh.SubjectID, DatasetID: sh.DatasetID, Dataset: sh.Dataset,
+		FromTimestamp: sh.FromTimestamp, ToTimestamp: sh.ToTimestamp,
+		Status: model.ShardPending, Priority: sh.Priority, MaxRetries: sh.MaxRetries,
+	}
+	first, second := base, base
+	first.FromBlock, first.ToBlock = sh.FromBlock, mid
+	second.FromBlock, second.ToBlock = mid+1, sh.ToBlock
+	if err := sc.store.CreateShards(ctx, []model.Shard{first, second}); err != nil {
+		sc.log.Error("split shard failed", "shard_id", sh.ID, "err", err)
+		_, _ = sc.store.FailShard(ctx, sh.ID, "split failed: "+err.Error(), true)
+		return
+	}
+	// 已完成页保留在 ClickHouse（幂等去重）；本 shard 不标 COMPLETE、不提交 Coverage
+	_ = sc.store.CancelShard(ctx, sh.ID)
+	sc.publish("events.shards."+sh.JobID, map[string]any{
+		"type": "shard_status", "shard_id": sh.ID, "status": model.ShardCancelled,
+		"reason": "split_range", "ts": time.Now(),
+	})
+	sc.log.Warn("shard split into two ranges",
+		"shard_id", sh.ID, "first", fmt.Sprintf("%d-%d", first.FromBlock, first.ToBlock),
+		"second", fmt.Sprintf("%d-%d", second.FromBlock, second.ToBlock))
 }
 
 func trackBlocks(minB, maxB *int64, b int64) {

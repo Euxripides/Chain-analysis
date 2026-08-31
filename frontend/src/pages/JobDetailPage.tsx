@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { fmtBytes, fmtDuration, statusLabel, type Snapshot } from '../types'
+import { fmtBytes, fmtDuration, friendlyError, statusLabel, type Snapshot } from '../types'
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -128,7 +128,7 @@ export default function JobDetailPage() {
                 <td>{sh.page_no}</td>
                 <td>{sh.retries}</td>
                 <td className="mono muted" title={sh.raw_object}>{sh.raw_object ? '✓' : '—'}</td>
-                <td className="muted">{sh.error ? sh.error.slice(0, 80) : ''}</td>
+                <td className="muted" title={sh.error}>{sh.error ? friendlyError(sh.error).slice(0, 60) : ''}</td>
               </tr>
             ))}
           </tbody>

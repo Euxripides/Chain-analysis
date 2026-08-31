@@ -119,6 +119,8 @@ type Shard struct {
 	ToTimestamp     *time.Time `json:"to_timestamp"`
 	PageToken       string     `json:"page_token"`
 	PageNo          int        `json:"page_no"`
+	PageSize        int        `json:"page_size"`
+	PageState       map[string]any `json:"page_state"`
 	Status          string     `json:"status"`
 	Priority        int        `json:"priority"`
 	Retries         int        `json:"retries"`
@@ -165,6 +167,17 @@ type UsageRow struct {
 	Bytes       int
 	Credits     float64
 	CostUSD     float64
+
+	// V1.1（§34）
+	ErrorClass    string
+	RPCCode       int
+	TraceID       string
+	PageSize      int
+	ReturnedRows  int
+	ResponseBytes int
+	RetryAttempt  int
+	RetryReason   string
+	RequestID     string
 }
 
 type AuditEvent struct {
