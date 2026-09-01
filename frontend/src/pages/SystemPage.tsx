@@ -1,97 +1,54 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../api/client'
-import { fmtUsageBytes } from '../types'
+import { Link } from 'react-router-dom'
+import { Activity, AlertTriangle, Boxes, CheckCircle2, CircleGauge, Coins, Database, ExternalLink, ShieldCheck } from 'lucide-react'
+import { api, apiControlHttp } from '../api/client'
+import type { AggregateItem, Overview } from '../features/api-control/types'
+
+const number = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 })
+const exact = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
+const pct = (n: number) => (Number(n || 0) * 100).toFixed(2) + '%'
+const money = (n: number) => '$' + Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
+
+function HealthCard({ icon: Icon, label, value, note, tone = 'ok', to }: { icon: typeof Activity; label: string; value: string; note: string; tone?: 'ok' | 'warn' | 'danger'; to: string }) {
+  return <Link className={'status-health-card ' + tone} to={to}><div className="status-health-icon"><Icon size={18} /></div><span>{label}</span><b>{value}</b><small>{note}</small><i>查看详情 →</i></Link>
+}
 
 export default function SystemPage() {
-  const { data: status } = useQuery({ queryKey: ['provider-status'], queryFn: api.providerStatus, refetchInterval: 10000 })
-  const { data: usage } = useQuery({ queryKey: ['provider-usage'], queryFn: () => api.providerUsage(24), refetchInterval: 10000 })
-  const { data: cov } = useQuery({
-    queryKey: ['coverage-stats'],
-    queryFn: async () => {
-      const res = await fetch('/api/v1/coverage/stats')
-      return (await res.json()) as { stats: Record<string, number> }
-    },
-    refetchInterval: 10000,
-  })
-  const { data: tokens } = useQuery({ queryKey: ['token-enrichment'], queryFn: api.tokenEnrichment, refetchInterval: 10000 })
+  const ready = useQuery({ queryKey: ['ready'], queryFn: async () => { const r = await fetch('/health/ready'); if (!r.ok) throw new Error('系统未就绪'); return r.json() as Promise<{ status: string; checks: Record<string, string> }> }, refetchInterval: 15_000, staleTime: 20_000 })
+  const provider = useQuery({ queryKey: ['provider-status'], queryFn: api.providerStatus, refetchInterval: 15_000, staleTime: 20_000 })
+  const overview = useQuery({ queryKey: ['ac-overview', 'system'], queryFn: () => apiControlHttp<Overview>('/overview?range=24h'), refetchInterval: 30_000, staleTime: 30_000 })
+  const account = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: { provider: string; status: string; official_available: boolean; plan: string; remaining_credits: number; balance_usd: number; synced_at: string }[] }>('/provider-accounts') })
+  const errors = useQuery({ queryKey: ['ac-errors', 'system'], queryFn: () => apiControlHttp<{ items: AggregateItem[] }>('/errors?range=24h') })
+  const coverage = useQuery({ queryKey: ['coverage-stats'], queryFn: async () => { const r = await fetch('/api/v1/coverage/stats'); if (!r.ok) throw new Error('Coverage 加载失败'); return r.json() as Promise<{ stats: Record<string, number> }> }, refetchInterval: 30_000 })
+  const tokens = useQuery({ queryKey: ['token-enrichment'], queryFn: api.tokenEnrichment, refetchInterval: 30_000 })
 
-  const datasets = Object.keys(usage?.by_dataset ?? {})
-  const totalCost = datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.cost_usd ?? 0), 0)
-  const totalRows = datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.rows ?? 0), 0)
+  const systemOK = ready.data?.status === 'ready' || ready.data?.status === 'ok'
+  const providerState = String(provider.data?.state || 'UNKNOWN')
+  const control = overview.data?.control
+  const metrics = overview.data?.metrics
+  const acc = account.data?.accounts[0]
+  const tokenTotal = tokens.data?.token_contracts || 0
+  const tokenComplete = tokens.data?.complete || 0
+  const tokenRate = tokenTotal ? tokenComplete / tokenTotal : 0
+  const stats = coverage.data?.stats || {}
+  const coveredBlocks = Object.entries(stats).filter(([k]) => k.endsWith(':blocks')).reduce((sum, [, v]) => sum + Number(v || 0), 0)
+  const coveredRows = Object.entries(stats).filter(([k]) => k.endsWith(':rows')).reduce((sum, [, v]) => sum + Number(v || 0), 0)
+  const recentErrors = (errors.data?.items || []).filter((item) => item.error_class && item.error_class !== 'none' && item.errors > 0)
 
-  return (
-    <div className="page">
-      <h1>状态总览</h1>
-
-      <div className="card">
-        <div className="card-title">Provider 状态</div>
-        <div className="row gap wrap">
-          <div className="metric"><label>Provider</label><b>{String(status?.provider ?? '—')}</b></div>
-          <div className="metric"><label>状态</label><b>{String(status?.state ?? '—')}</b></div>
-          <div className="metric"><label>近期错误率</label><b>{((Number(status?.recent_error_rate) || 0) * 100).toFixed(1)}%</b></div>
-          <div className="metric"><label>连续失败</label><b>{String(status?.consecutive_failures ?? 0)}</b></div>
-          <div className="metric"><label>最近错误</label><b className="muted">{String(status?.error || '—').slice(0, 60)}</b></div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Token Metadata</div>
-        <div className="metrics token-metadata-metrics">
-          <div className="metric"><label>Token Contracts</label><b>{(tokens?.token_contracts ?? 0).toLocaleString()}</b></div>
-          <div className="metric"><label>完整</label><b className="metric-good">{(tokens?.complete ?? 0).toLocaleString()}</b></div>
-          <div className="metric"><label>部分收录</label><b>{(tokens?.partial ?? 0).toLocaleString()}</b></div>
-          <div className="metric"><label>未知</label><b>{(tokens?.unknown ?? 0).toLocaleString()}</b></div>
-          <div className="metric"><label>冲突</label><b className="metric-danger">{(tokens?.conflict ?? 0).toLocaleString()}</b></div>
-          <div className="metric"><label>解析队列</label><b>{(tokens?.queue_depth ?? 0).toLocaleString()}</b></div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Ankr API 用量（最近 24h）</div>
-        <div className="metrics">
-          <div className="metric"><label>总请求</label><b>{datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.requests ?? 0), 0)}</b></div>
-          <div className="metric"><label>总行数</label><b>{totalRows.toLocaleString()}</b></div>
-          <div className="metric"><label>总成本</label><b>{'$' + totalCost.toFixed(4)}</b></div>
-          <div className="metric"><label>总字节</label><b>{fmtUsageBytes(datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.bytes ?? 0), 0))}</b></div>
-        </div>
-        <table className="table" style={{ marginTop: 10 }}>
-          <thead><tr><th>Dataset</th><th>请求</th><th>Credits</th><th>成本</th><th>行数</th><th>字节</th></tr></thead>
-          <tbody>
-            {datasets.map((d) => (
-              <tr key={d}>
-                <td>{d}</td>
-                <td>{usage?.by_dataset[d]?.requests}</td>
-                <td>{usage?.by_dataset[d]?.credits}</td>
-                <td>{'$' + (usage?.by_dataset[d]?.cost_usd ?? 0).toFixed(5)}</td>
-                <td>{usage?.by_dataset[d]?.rows.toLocaleString()}</td>
-                <td>{fmtUsageBytes(usage?.by_dataset[d]?.bytes ?? 0)}</td>
-              </tr>
-            ))}
-            {datasets.length === 0 && <tr><td colSpan={6} className="muted center">暂无请求</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <div className="card-title">本地 Coverage</div>
-        <table className="table">
-          <thead><tr><th>Dataset</th><th>区间数</th><th>覆盖块数</th><th>覆盖行数</th></tr></thead>
-          <tbody>
-            {Object.keys(cov?.stats ?? {}).filter((k) => k.endsWith(':ranges')).map((k) => {
-              const d = k.replace(':ranges', '')
-              return (
-                <tr key={d}>
-                  <td>{d}</td>
-                  <td>{cov?.stats[d + ':ranges'] ?? 0}</td>
-                  <td>{(cov?.stats[d + ':blocks'] ?? 0).toLocaleString()}</td>
-                  <td>{(cov?.stats[d + ':rows'] ?? 0).toLocaleString()}</td>
-                </tr>
-              )
-            })}
-            {Object.keys(cov?.stats ?? {}).length === 0 && <tr><td colSpan={4} className="muted center">暂无 Coverage</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+  return <div className="page status-overview">
+    <header className="status-title"><div><span>STATUS OVERVIEW</span><h1>状态总览</h1><p>系统健康、Provider、数据覆盖与 API 状态</p></div><span className={ready.isError || overview.isError ? 'status-live warn' : 'status-live'}><i />{ready.isError || overview.isError ? '部分数据异常' : '实时监测中'}</span></header>
+    <section className="status-health-grid">
+      <HealthCard icon={CheckCircle2} label="System" value={systemOK ? 'HEALTHY' : ready.isPending ? 'CHECKING' : 'UNHEALTHY'} note={`${Object.keys(ready.data?.checks || {}).length} 个基础设施检查`} tone={systemOK ? 'ok' : 'danger'} to="/system" />
+      <HealthCard icon={Boxes} label="Provider" value={providerState} note={String(provider.data?.provider || 'Ankr')} tone={providerState === 'NORMAL' || providerState === 'CLOSED' || providerState === 'HEALTHY' ? 'ok' : providerState === 'UNKNOWN' ? 'warn' : 'danger'} to="/api-control?tab=providers" />
+      <HealthCard icon={ShieldCheck} label="Auto Control" value={control?.state || 'UNKNOWN'} note={control?.reason || '正在读取控制状态'} tone={control?.state === 'NORMAL' ? 'ok' : control?.state === 'OBSERVE' || control?.state === 'DEGRADED' ? 'warn' : 'danger'} to="/api-control?tab=control" />
+      <HealthCard icon={CircleGauge} label="Audit" value={pct(metrics?.success_rate || 0)} note={`${exact.format(metrics?.errors || 0)} 个错误 · P95 ${exact.format(metrics?.p95_ms || 0)} ms`} tone={(metrics?.success_rate || 0) >= .99 ? 'ok' : 'warn'} to="/api-control?tab=requests" />
+    </section>
+    <section className="status-summary-grid">
+      <Link className="status-summary-card" to="/api-control?tab=providers"><header><div><Coins size={18} /><span>Ankr Account</span></div><span className={acc?.official_available ? 'status-origin official' : 'status-origin unavailable'}>{acc?.official_available ? '官方数据' : '未接入'}</span></header>{acc?.official_available ? <><b>{number.format(acc.remaining_credits)} Credits</b><p>{acc.plan || '—'} · 余额 {money(acc.balance_usd)}</p></> : <><b>官方账户数据未配置</b><p>内部估算不会冒充余额或剩余额度</p></>}<footer>查看 Provider 详情 <ExternalLink size={12} /></footer></Link>
+      <Link className="status-summary-card" to="/api-control"><header><div><Activity size={18} /><span>API 24h</span></div><span className="status-origin internal">内部审计</span></header><b>{number.format(metrics?.logical_calls || 0)} Calls</b><p>{number.format(metrics?.provider_calls || 0)} 次外部请求 · 成本 {money(metrics?.estimated_cost_usd || 0)}</p><footer>打开 API 控制中心 <ExternalLink size={12} /></footer></Link>
+      <Link className="status-summary-card" to="/system"><header><div><Database size={18} /><span>Token Metadata</span></div><span className="status-origin internal">本地数据</span></header><b>{pct(tokenRate)} Complete</b><p>{number.format(tokenComplete)} / {number.format(tokenTotal)} · 队列 {number.format(tokens.data?.queue_depth || 0)}</p><footer>查看元数据状态 <ExternalLink size={12} /></footer></Link>
+      <Link className="status-summary-card" to="/data-explorer"><header><div><Database size={18} /><span>Coverage</span></div><span className="status-origin internal">本地数据</span></header><b>{number.format(coveredBlocks)} Blocks</b><p>{number.format(coveredRows)} 行已纳入本地覆盖</p><footer>进入数据浏览 <ExternalLink size={12} /></footer></Link>
+    </section>
+    <section className="status-recent"><header><div><AlertTriangle size={17} /><div><span>Recent Errors / Warnings</span><small>最近 24 小时 · 内部审计</small></div></div><Link to="/api-control?tab=errors">查看全部 →</Link></header>{errors.isPending ? <div className="status-loading">正在读取近期异常…</div> : recentErrors.length ? <div>{recentErrors.slice(0, 5).map((item) => <Link key={item.error_class} to={`/api-control?tab=requests&error_class=${encodeURIComponent(item.error_class || '')}`}><span>{item.error_class}</span><b>{item.errors} 次</b><small>P95 {exact.format(item.p95_ms)} ms</small></Link>)}</div> : <div className="status-no-errors"><CheckCircle2 size={18} /><span>当前窗口没有记录到 API 错误</span></div>}</section>
+  </div>
 }

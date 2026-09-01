@@ -20,6 +20,8 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export const apiControlHttp = <T,>(path: string, init?: RequestInit) => http<T>('/api-control' + path, init)
+
 export const api = {
   ensure: (payload: unknown) => http<{ job_id: string | null; coverage: number; status: string }>('/datasets/ensure', { method: 'POST', body: JSON.stringify(payload) }),
   preview: (payload: unknown) => http<CoveragePreview>('/datasets/coverage/preview', { method: 'POST', body: JSON.stringify(payload) }),

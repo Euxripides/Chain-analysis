@@ -430,6 +430,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .decoded-logs { margin-top: 14px; }
 .decoded-log { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; }
 
+/* V1.6 Status Overview */
+.status-overview { max-width: 1680px; margin: 0 auto; font-variant-numeric: tabular-nums; }
+.status-title { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.status-title > div > span { display: block; margin-bottom: 7px; color: #2563eb; font-size: 10px; font-weight: 800; letter-spacing: .18em; }
+.status-title h1 { margin: 0; font-size: 28px; letter-spacing: -.035em; }
+.status-title p { margin: 7px 0 0; color: #64748b; }
+.status-live { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #a7f3d0; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 11px; }
+.status-live i { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.1); }
+.status-live.warn { border-color: #fed7aa; background: #fff7ed; color: #c2410c; }.status-live.warn i { background: #f97316; }
+.status-health-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.status-health-card { position: relative; display: grid; grid-template-columns: 38px 1fr; gap: 2px 10px; min-width: 0; padding: 15px; overflow: hidden; border: 1px solid #e6eaf0; border-top: 3px solid #059669; border-radius: 10px; background: #fff; color: #0f172a; text-decoration: none; box-shadow: 0 1px 2px rgba(15,23,42,.025); transition: transform .16s, box-shadow .16s; }
+.status-health-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,23,42,.07); }.status-health-card.warn { border-top-color: #d97706; }.status-health-card.danger { border-top-color: #dc2626; }
+.status-health-icon { grid-row: 1/5; display: grid; place-items: center; align-self: start; width: 34px; height: 34px; border-radius: 9px; background: #ecfdf5; color: #047857; }.status-health-card.warn .status-health-icon { background: #fff7ed; color: #c2410c; }.status-health-card.danger .status-health-icon { background: #fef2f2; color: #b91c1c; }
+.status-health-card > span { color: #64748b; font-size: 10px; }.status-health-card > b { margin: 3px 0; font-size: 18px; letter-spacing: .02em; }.status-health-card > small { overflow: hidden; color: #64748b; text-overflow: ellipsis; white-space: nowrap; }.status-health-card > i { margin-top: 8px; color: #2563eb; font-size: 10px; font-style: normal; opacity: 0; transition: opacity .16s; }.status-health-card:hover > i { opacity: 1; }
+.status-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.status-summary-card { display: block; padding: 17px; border: 1px solid #e6eaf0; border-radius: 11px; background: #fff; color: #0f172a; text-decoration: none; transition: border-color .16s, box-shadow .16s; }.status-summary-card:hover { border-color: #bfdbfe; box-shadow: 0 8px 24px rgba(37,99,235,.06); }
+.status-summary-card header { display: flex; align-items: center; justify-content: space-between; }.status-summary-card header > div { display: flex; align-items: center; gap: 8px; color: #475569; font-weight: 700; }.status-summary-card header svg { color: #2563eb; }.status-summary-card > b { display: block; margin-top: 18px; font-size: 23px; letter-spacing: -.025em; }.status-summary-card > p { margin: 5px 0 15px; color: #64748b; }.status-summary-card footer { display: flex; align-items: center; gap: 5px; padding-top: 11px; border-top: 1px solid #eef1f5; color: #2563eb; font-size: 11px; }
+.status-origin { padding: 3px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; }.status-origin.official { background: #ecfdf5; color: #047857; }.status-origin.internal { background: #eff6ff; color: #1d4ed8; }.status-origin.unavailable { background: #fff7ed; color: #c2410c; }
+.status-recent { border: 1px solid #e6eaf0; border-radius: 11px; background: #fff; }.status-recent > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 17px; border-bottom: 1px solid #e6eaf0; }.status-recent > header > div { display: flex; align-items: center; gap: 9px; }.status-recent > header svg { color: #d97706; }.status-recent > header div div { display: grid; gap: 2px; font-weight: 700; }.status-recent > header small { color: #64748b; font-size: 10px; font-weight: 400; }.status-recent > header a { color: #2563eb; font-size: 11px; text-decoration: none; }
+.status-recent > div > a { display: grid; grid-template-columns: 1fr auto 120px; gap: 12px; padding: 11px 17px; border-bottom: 1px solid #eef1f5; color: #0f172a; text-decoration: none; }.status-recent > div > a:hover { background: #f8fafc; }.status-recent > div > a small { color: #64748b; text-align: right; }.status-no-errors,.status-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 100px; color: #64748b; }.status-no-errors svg { color: #059669; }
+
 @media (max-width: 760px) {
   .layout { display: block; }
   .sidebar {
@@ -479,4 +500,5 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .detail-table { min-width: 1028px; }
   .detail-pagination { gap: 10px; align-items: center !important; }
   button { white-space: nowrap; }
+	.status-title { align-items: flex-start; }.status-title h1 { font-size: 23px; }.status-live { margin-top: 4px; font-size: 0; }.status-health-grid { grid-template-columns: 1fr 1fr; }.status-health-card { grid-template-columns: 30px 1fr; padding: 12px; }.status-health-icon { width: 28px; height: 28px; }.status-health-card > b { font-size: 15px; }.status-health-card > i { display: none; }.status-summary-grid { grid-template-columns: 1fr; }.status-recent > div > a { grid-template-columns: 1fr auto; }.status-recent > div > a small { grid-column: 1/3; text-align: left; }
 }

@@ -49,6 +49,9 @@ func (b *BackfillRunner) runBackfill(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if b.protectionPaused(ctx) {
+				continue
+			}
 			if job, err := b.nextJob(ctx); err == nil && job != "" {
 				if err = b.runJob(ctx, job); err != nil {
 					b.Log.Error("token metadata backfill failed", "job_id", job, "err", err)
@@ -66,6 +69,14 @@ func (b *BackfillRunner) runResolver(ctx context.Context) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return
+		}
+		if b.protectionPaused(ctx) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(idle):
+			}
+			continue
 		}
 		ok, err := b.resolveNext(ctx)
 		if err != nil {
@@ -91,6 +102,16 @@ func (b *BackfillRunner) runResolver(ctx context.Context) {
 	}
 }
 
+// protectionPaused 将 V1.6 控制面的保护状态落实到最容易产生大量外部请求的
+// Token Metadata 后台解析器。表尚未迁移时保持原行为，避免升级期间阻断 worker。
+func (b *BackfillRunner) protectionPaused(ctx context.Context) bool {
+	var paused bool
+	if err := b.Service.Store.Pool.QueryRow(ctx, `SELECT background_paused OR kill_switch FROM api_control_settings WHERE id=1`).Scan(&paused); err != nil {
+		return false
+	}
+	return paused
+}
+
 func (b *BackfillRunner) CreateJob(ctx context.Context, chain string) (string, error) {
 	id := uuid.NewString()
 	_, err := b.Service.Store.Pool.Exec(ctx, `INSERT INTO token_metadata_backfill_jobs(id,chain,status) VALUES($1,NULLIF($2,''),'pending')`, id, strings.ToLower(strings.TrimSpace(chain)))
@@ -99,7 +120,7 @@ func (b *BackfillRunner) CreateJob(ctx context.Context, chain string) (string, e
 
 func (b *BackfillRunner) nextJob(ctx context.Context) (string, error) {
 	var id string
-	err := b.Service.Store.Pool.QueryRow(ctx, `SELECT id FROM token_metadata_backfill_jobs WHERE status IN ('pending','running') ORDER BY updated_at LIMIT 1`).Scan(&id)
+	err := b.Service.Store.Pool.QueryRow(ctx, `SELECT id FROM token_metadata_backfill_jobs WHERE status IN ('pending','running','paused') ORDER BY updated_at LIMIT 1`).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -143,6 +164,10 @@ func (b *BackfillRunner) runJob(ctx context.Context, id string) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if b.protectionPaused(ctx) {
+			_, _ = b.Service.Store.Pool.Exec(ctx, `UPDATE token_metadata_backfill_jobs SET status='paused',updated_at=now(),last_error='API Control Center 自动保护暂停' WHERE id=$1`, id)
+			return nil
 		}
 		items, err := b.scanCatalog(ctx, chain, cur, batch)
 		if err != nil {
@@ -201,6 +226,10 @@ func (b *BackfillRunner) runRawPhase(ctx context.Context, jobID, requestedChain 
 		return b.checkpointRaw(ctx, jobID, *cur, 0, 0, 0, 0)
 	}
 	for {
+		if b.protectionPaused(ctx) {
+			_, _ = b.Service.Store.Pool.Exec(ctx, `UPDATE token_metadata_backfill_jobs SET status='paused',updated_at=now(),last_error='API Control Center 自动保护暂停' WHERE id=$1`, jobID)
+			return nil
+		}
 		rows, err := b.Service.Store.Pool.Query(ctx, `SELECT id::text,raw_object FROM download_shards WHERE dataset='token_transfers' AND status='COMPLETED' AND raw_object<>'' AND id::text>$1 ORDER BY id::text LIMIT 50`, cur.RawID)
 		if err != nil {
 			return err

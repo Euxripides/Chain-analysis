@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import DownloadPage from './pages/DownloadPage'
 import JobsPage from './pages/JobsPage'
@@ -8,12 +8,14 @@ import BrowsePage from './pages/BrowsePage'
 import DataExplorerPage from './pages/DataExplorerPage'
 import AddressDetailPage from './pages/AddressDetailPage'
 import CombinedDataPage from './pages/CombinedDataPage'
+const ApiControlPage = lazy(() => import('./features/api-control/ApiControlPage'))
 import { AddressIcon, BrowseIcon, DataIcon, OverviewIcon, TasksIcon } from './components/Icons'
 
 const downloadNav = [
   { to: '/', label: '地址下载', Icon: AddressIcon },
   { to: '/jobs', label: '任务中心', Icon: TasksIcon },
   { to: '/system', label: '状态总览', Icon: OverviewIcon },
+  { to: '/api-control', label: 'API 控制中心', Icon: OverviewIcon },
 ]
 
 const browseNav = [
@@ -79,6 +81,7 @@ export default function App() {
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/system" element={<SystemPage />} />
+          <Route path="/api-control" element={<Suspense fallback={<div className="card">正在加载 API 控制中心…</div>}><ApiControlPage /></Suspense>} />
           <Route path="/browse/transactions" element={<BrowsePage dataset="transactions" />} />
           <Route path="/browse/token_transfers" element={<BrowsePage dataset="token_transfers" />} />
           <Route path="/browse/nft_transfers" element={<BrowsePage dataset="nft_transfers" />} />
