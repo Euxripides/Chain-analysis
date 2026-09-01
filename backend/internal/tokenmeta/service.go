@@ -177,9 +177,9 @@ func (s *Service) Recompute(ctx context.Context, chain, contract string) error {
 	meta := Resolve(obs)
 	now := time.Now().UTC()
 	meta.LastResolvedAt = &now
-	_, err = s.Store.Pool.Exec(ctx, `INSERT INTO token_metadata(chain,contract_address,normalized_address,name,symbol,decimals,logo_url,token_type,verified,metadata_source,confidence,metadata_status,last_resolved_at)
-		VALUES($1,$2,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,NULLIF($9,''),$10,$11,$12)
-		ON CONFLICT(chain,contract_address) DO UPDATE SET normalized_address=EXCLUDED.normalized_address,name=EXCLUDED.name,symbol=EXCLUDED.symbol,decimals=EXCLUDED.decimals,logo_url=EXCLUDED.logo_url,token_type=EXCLUDED.token_type,verified=EXCLUDED.verified,metadata_source=EXCLUDED.metadata_source,confidence=EXCLUDED.confidence,metadata_status=EXCLUDED.metadata_status,last_resolved_at=EXCLUDED.last_resolved_at,updated_at=now()`,
+	_, err = s.Store.Pool.Exec(ctx, `INSERT INTO token_metadata(chain,contract_address,normalized_address,name,symbol,decimals,logo_url,token_type,verified,metadata_source,confidence,metadata_status,last_resolved_at,last_verified_at)
+		VALUES($1,$2,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,NULLIF($9,''),$10,$11,$12::timestamptz,CASE WHEN $8 THEN $12::timestamptz ELSE NULL::timestamptz END)
+		ON CONFLICT(chain,contract_address) DO UPDATE SET normalized_address=EXCLUDED.normalized_address,name=EXCLUDED.name,symbol=EXCLUDED.symbol,decimals=EXCLUDED.decimals,logo_url=EXCLUDED.logo_url,token_type=EXCLUDED.token_type,verified=EXCLUDED.verified,metadata_source=EXCLUDED.metadata_source,confidence=EXCLUDED.confidence,metadata_status=EXCLUDED.metadata_status,last_resolved_at=EXCLUDED.last_resolved_at,last_verified_at=CASE WHEN EXCLUDED.verified THEN EXCLUDED.last_verified_at ELSE token_metadata.last_verified_at END,updated_at=now()`,
 		strings.ToLower(chain), normalizeAddress(contract), meta.Name, meta.Symbol, meta.Decimals, meta.LogoURL, meta.TokenType, meta.Verified, meta.MetadataSource, meta.Confidence, meta.MetadataStatus, now)
 	if err == nil {
 		ResolvedTotal.WithLabelValues(meta.MetadataStatus).Inc()

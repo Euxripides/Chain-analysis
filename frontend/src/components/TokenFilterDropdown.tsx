@@ -28,7 +28,8 @@ function compactAddress(address: string) {
 }
 
 function TokenIcon({ token }: { token: TokenFilterOption }) {
-  if (token.logo) return <img className="token-filter-icon" src={token.logo} alt="" />
+  const [failed, setFailed] = useState(false)
+  if (token.logo && !failed) return <img className="token-filter-icon" src={token.logo} alt="" onError={() => setFailed(true)} />
   const hue = [...(token.symbol || token.address)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360
   return <span className="token-filter-icon token-filter-fallback" style={{ background: `hsl(${hue} 68% 47%)` }}>{(token.symbol || '?').slice(0, 1)}</span>
 }
@@ -65,7 +66,7 @@ export default function TokenFilterDropdown({ chain, value, options, onConfirm }
         if (!active) return
         setRemoteOptions(result.tokens.map((token) => ({
           value: token.contract_address, address: token.contract_address, symbol: token.symbol || '未知代币',
-          name: token.name || '', count: 0, logo: token.logo_url, status: token.metadata_status,
+          name: token.name || '', count: 0, logo: token.verified ? token.logo_url : '', status: token.metadata_status,
           confidence: token.confidence, verified: token.verified, decimals: token.decimals,
         })))
       } catch { if (active) setRemoteOptions([]) } finally { if (active) setRemoteLoading(false) }

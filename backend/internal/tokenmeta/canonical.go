@@ -15,6 +15,8 @@ func sourceRank(source string) int {
 	switch source {
 	case "admin_override":
 		return 600
+	case "verified_registry":
+		return 550
 	case "verified_explorer":
 		return 500
 	case "rpc", "rpc_symbol", "rpc_name", "rpc_decimals":
@@ -87,7 +89,7 @@ func Resolve(observations []Observation) Metadata {
 		meta.MetadataStatus = StatusUnknown
 	}
 	for _, o := range valid {
-		if sourceRank(o.Source) >= 500 {
+		if o.Source == "verified_registry" || o.Source == "verified_explorer" {
 			meta.Verified = true
 			break
 		}

@@ -233,7 +233,7 @@ func Load() *Config {
 			WorkerInterval:    time.Duration(envInt("TOKEN_METADATA_WORKER_INTERVAL_SECONDS", 5)) * time.Second,
 			BatchIdle:         time.Duration(envInt("TOKEN_METADATA_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
 			RPCMaxRetries:     envInt("TOKEN_METADATA_RPC_MAX_RETRIES", 3),
-			LogoEnabled:       envBool("TOKEN_LOGO_ENABLED", false),
+			LogoEnabled:       envBool("TOKEN_LOGO_ENABLED", true),
 			LogoMaxBytes:      int64(envInt("TOKEN_LOGO_MAX_BYTES", 2097152)),
 			LogoMaxWidth:      envInt("TOKEN_LOGO_MAX_WIDTH", 4096),
 			LogoMaxHeight:     envInt("TOKEN_LOGO_MAX_HEIGHT", 4096),

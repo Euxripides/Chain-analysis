@@ -59,3 +59,16 @@ func TestCanonicalDeterministicConflictAndPartial(t *testing.T) {
 		t.Fatalf("unexpected partial: %+v", partial)
 	}
 }
+
+func TestVerifiedRegistryIsTheOnlyLocalVerificationAuthority(t *testing.T) {
+	registry := Observation{Chain: "bsc", ContractAddress: "0x55d398326f99059ff775485246999027b3197955", Name: "Tether USD", Symbol: "USDT", Decimals: intPtr(18), Source: "verified_registry", Valid: true}
+	got := Resolve([]Observation{registry})
+	if !got.Verified || got.MetadataStatus != StatusComplete || got.MetadataSource != "verified_registry" {
+		t.Fatalf("registry token not verified: %+v", got)
+	}
+	manual := registry
+	manual.Source = "admin_override"
+	if got := Resolve([]Observation{manual}); got.Verified {
+		t.Fatalf("manual metadata override must not certify token identity: %+v", got)
+	}
+}

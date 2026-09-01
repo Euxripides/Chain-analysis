@@ -357,6 +357,9 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 				r["token_type"] = meta.TokenType
 				if meta.LogoObjectKey != "" {
 					r["token_logo"] = "/api/v1/tokens/" + chain + "/" + ta + "/logo"
+				} else if meta.Verified && meta.LogoURL != "" {
+					// Only reviewed registry entries may fall back to a remote logo.
+					r["token_logo"] = meta.LogoURL
 				} else {
 					r["token_logo"] = ""
 				}
