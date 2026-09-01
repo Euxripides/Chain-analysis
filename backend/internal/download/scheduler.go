@@ -15,6 +15,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
@@ -42,6 +43,17 @@ type Scheduler struct {
 	pagePolicy *ankr.PagePolicy
 	lastConnLimit int64
 	meta       *addressmeta.Service
+
+	// V1.3：Fast Method Resolver（§16/§17）。只读内存索引，不阻塞下载。
+	methodResolver *method.FastResolver
+	methodRegistry *method.Registry
+}
+
+// SetMethodResolver 注入 Method 解析栈。为空时下载链路完全不做解析，
+// 交易本体照常入库（§36：Method 未解析不影响 Coverage）。
+func (sc *Scheduler) SetMethodResolver(resolver *method.FastResolver, registry *method.Registry) {
+	sc.methodResolver = resolver
+	sc.methodRegistry = registry
 }
 
 func NewScheduler(cfg *config.Config, st *store.Store, prov provider.Provider, raw *rawstore.Store,

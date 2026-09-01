@@ -34,6 +34,8 @@ type exportV2Request struct {
 	Datasets    []string `json:"datasets"`
 	IncludeMeta bool     `json:"include_meta"`
 	ForceZip    bool     `json:"force_zip"`
+	// §47：Method 字段默认导出；Decoded Input 默认关闭（完整参数会显著增加文件体积）
+	IncludeDecodedInput bool `json:"include_decoded_input"`
 }
 
 func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req exportV2Request) {
@@ -74,6 +76,7 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	snapshot, _ := json.Marshal(map[string]any{
 		"chain": chain, "addresses": addresses, "datasets": datasets,
 		"format": format, "include_meta": req.IncludeMeta, "zip": zipIt,
+		"include_decoded_input": req.IncludeDecodedInput,
 	})
 	orgID, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
 	if err != nil {
@@ -85,12 +88,12 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExportMulti(context.Background(), exp, chain, addresses, datasets, format, req.IncludeMeta, zipIt)
+	go s.runExportMulti(context.Background(), exp, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
 	writeJSON(w, 202, exp)
 }
 
 // runExportMulti 流式多地址导出（`52：Go API 不承载 GB 级文件，行级流式写 MinIO）。
-func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain string, addresses, datasets []string, format string, includeMeta, zipIt bool) {
+func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool) {
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "RUNNING", "", "", 0, "")
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, extFor(format))
 	if zipIt {
@@ -101,9 +104,9 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain st
 	var ferr error
 
 	if zipIt {
-		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, key, chain, addresses, datasets, format, includeMeta)
+		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, key, chain, addresses, datasets, format, includeMeta, includeDecodedInput)
 	} else {
-		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, key, chain, addresses[0], datasets[0], format, includeMeta)
+		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, key, chain, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
 	}
 	if ferr != nil {
 		_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "FAILED", "", "", 0, ferr.Error())
@@ -116,7 +119,7 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain st
 }
 
 // writeSingleExport 单地址单数据集：流式写一个对象。
-func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, dataset, format string, includeMeta bool) (int64, string, error) {
+func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
 	rows, err := s.query.RowsForExport(ctx, dataset, chain, addr, maxExportRows, 0)
 	if err != nil {
 		return 0, "", err
@@ -124,6 +127,7 @@ func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, datase
 	if includeMeta {
 		s.annotateRows(ctx, chain, addr, rows)
 	}
+	s.attachDecodedInput(ctx, chain, dataset, rows, includeDecodedInput)
 	rowCount := int64(len(rows))
 	pr, pw := io.Pipe()
 	done := make(chan error, 1)
@@ -162,7 +166,7 @@ func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, datase
 }
 
 // writeZipExport 多地址/多文件：流式 ZIP（`49 结构 + manifest.json）。
-func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, chain string, addresses, datasets []string, format string, includeMeta bool) (int64, string, error) {
+func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, chain string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
 	pr, pw := io.Pipe()
 	type zipResult struct {
 		rows int64
@@ -175,7 +179,8 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 		mf, _ := json.Marshal(map[string]any{
 			"export_id": exp.ID, "created_at": time.Now().UTC().Format(time.RFC3339),
 			"chain": chain, "addresses": addresses, "datasets": datasets,
-			"format": format, "schema_version": 2, "zip": true,
+			"format": format, "schema_version": 3, "zip": true,
+			"include_decoded_input": includeDecodedInput,
 		})
 		hdr := &zip.FileHeader{Name: "manifest.json", Method: zip.Deflate}
 		w, _ := zw.CreateHeader(hdr)
@@ -193,6 +198,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 				if includeMeta {
 					s.annotateRows(ctx, chain, addr, rows)
 				}
+				s.attachDecodedInput(ctx, chain, ds, rows, includeDecodedInput)
 				rowsTotal += int64(len(rows))
 				name := fmt.Sprintf("addresses/%s/%s.%s", addr, ds, extFor(format))
 				fh := &zip.FileHeader{Name: name, Method: zip.Deflate}
@@ -237,6 +243,38 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 	}
 	sha, err := s.objectSHA256(ctx, key)
 	return result.rows, sha, err
+}
+
+// attachDecodedInput 可选附加 Decoded Input（§47：默认关闭，完整参数会显著增加文件体积）。
+func (s *Server) attachDecodedInput(ctx context.Context, chain, dataset string, rows []map[string]any, enabled bool) {
+	if !enabled || dataset != "transactions" || len(rows) == 0 || s.deps.MethodData == nil {
+		return
+	}
+	hashes := make([]string, 0, len(rows))
+	seen := map[string]bool{}
+	for _, row := range rows {
+		hash := strings.ToLower(fmt.Sprint(row["tx_hash"]))
+		if hash == "" || seen[hash] {
+			continue
+		}
+		seen[hash] = true
+		hashes = append(hashes, hash)
+	}
+	decoded, err := s.deps.MethodData.DecodedInputsByTxHashes(ctx, chain, hashes)
+	if err != nil {
+		s.deps.Log.Warn("attach decoded input failed", "err", err)
+		return
+	}
+	for _, row := range rows {
+		hash := strings.ToLower(fmt.Sprint(row["tx_hash"]))
+		if record, ok := decoded[hash]; ok {
+			row["decoded_input"] = record.DecodedJSON
+			row["decode_source"] = record.DecodeSource
+		} else {
+			row["decoded_input"] = ""
+			row["decode_source"] = ""
+		}
+	}
 }
 
 // annotateRows 附加案件/标签元数据（`50：matched_address/case_names/tag_names）。
@@ -432,6 +470,15 @@ type parquetExportRow struct {
 	BalanceUSD       string   `parquet:"balance_usd"`
 	TokenPrice       string   `parquet:"token_price"`
 	MethodID         string   `parquet:"method_id"`
+	MethodName       string   `parquet:"method_name"`
+	MethodSignature  string   `parquet:"method_signature"`
+	MethodSource     string   `parquet:"method_source"`
+	MethodVerified   string   `parquet:"method_verified"`
+	MethodConfidence string   `parquet:"method_confidence"`
+	MethodType       string   `parquet:"method_type"`
+	DecodedInput     string   `parquet:"decoded_input"`
+	EventName        string   `parquet:"event_name"`
+	EventSignature   string   `parquet:"event_signature"`
 	Input            string   `parquet:"input"`
 	Data             string   `parquet:"data"`
 	Topics           []string `parquet:"topics,list"`
@@ -472,6 +519,11 @@ func toParquetExportRow(dataset string, row map[string]any) parquetExportRow {
 		TokenDecimals: exportUint64(row, "token_decimals"), AmountRaw: exportString(row, "amount_raw"), Amount: exportString(row, "amount"),
 		ValueRaw: exportString(row, "value_raw"), BalanceRaw: exportString(row, "balance_raw"), Balance: exportString(row, "balance"),
 		BalanceUSD: exportString(row, "balance_usd"), TokenPrice: exportString(row, "token_price"), MethodID: exportString(row, "method_id"),
+		MethodName: exportString(row, "method_name"), MethodSignature: exportString(row, "method_signature"),
+		MethodSource: exportString(row, "method_source"), MethodVerified: exportString(row, "method_verified"),
+		MethodConfidence: exportString(row, "method_confidence"), MethodType: exportString(row, "method_type"),
+		DecodedInput: exportString(row, "decoded_input"),
+		EventName:    exportString(row, "event_name"), EventSignature: exportString(row, "event_signature"),
 		Input: exportString(row, "input"), Data: exportString(row, "data"), Topics: exportStrings(row, "topics"),
 		SourceProvider: exportString(row, "source_provider"), SourceIngestedAt: exportString(row, "source_ingested_at"),
 		MatchedAddress: exportString(row, "matched_address"), CaseNames: exportString(row, "case_names"), TagNames: exportString(row, "tag_names"),

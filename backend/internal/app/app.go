@@ -10,6 +10,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/migrations"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
@@ -24,6 +25,13 @@ type Infra struct {
 	Raw   *rawstore.Store
 	Bus   *events.Bus
 	Prov  provider.Provider
+
+	// V1.3 Method / ABI 解析栈（§17/§20）：API 与 Worker 共享同一份内存索引结构。
+	Registry   *method.Registry
+	Resolver   *method.FastResolver
+	Enqueuer   *method.Enqueuer
+	MethodData *method.ClickHouseStore
+	DeepDecode *method.AnkrDeepResolver
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
@@ -77,7 +85,74 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		log.Info("provider: ankr-mock (ANKR_MODE=mock)", "hint", "set ANKR_API_KEY and ANKR_MODE=live for real data")
 	}
 
-	return &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov}, nil
+	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov}
+	if err := infra.initMethod(ctx, cfg, log); err != nil {
+		return nil, err
+	}
+	return infra, nil
+}
+
+// initMethod 初始化 Method 解析栈：种子 + 内存索引首次加载（§17/§32）。
+// 解析属于 Enrichment：即使这里失败也不能阻断数据面启动（§36）。
+func (i *Infra) initMethod(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
+	i.Registry = method.NewRegistry()
+	i.MethodData = method.NewClickHouseStore(i.CH)
+	if fetcher, ok := i.Prov.(provider.TxDetailFetcher); ok {
+		i.DeepDecode = method.NewAnkrDeepResolver(fetcher)
+	}
+	if !cfg.Method.Enabled {
+		i.Resolver = method.NewFastResolver(i.Registry, nil)
+		log.Warn("method resolver disabled (METHOD_RESOLVER_ENABLED=false)")
+		return nil
+	}
+	if cfg.Method.SeedOnStart {
+		if methods, events, err := method.EnsureSeed(ctx, i.Store); err != nil {
+			log.Warn("method signature seed failed", "err", err)
+		} else {
+			log.Info("method signature seed ready", "signatures", methods, "events", events)
+		}
+	}
+	if err := i.Registry.Refresh(ctx, i.Store); err != nil {
+		log.Warn("method registry load failed", "err", err)
+	} else {
+		log.Info("method registry ready", "loaded_at", i.Registry.LoadedAt())
+	}
+	i.Enqueuer = method.NewEnqueuer(i.Store, func(subject string, payload any) {
+		// NATS Stream 只订阅 events.>，未知 Selector 事件只带元数据（§18）
+		i.Bus.Publish(context.Background(), "events."+subject, payload)
+	}, log)
+	i.Resolver = method.NewFastResolver(i.Registry, i.Enqueuer.Enqueue)
+	return nil
+}
+
+// StartMethodBackground 启动后台循环。
+// withWorkers=true 时同时启动异步补全与回填（只在 Worker 进程启用，避免多实例重复执行）。
+func (i *Infra) StartMethodBackground(ctx context.Context, cfg *config.Config, log *slog.Logger, withWorkers bool) {
+	if !cfg.Method.Enabled || i.Registry == nil {
+		return
+	}
+	i.Registry.StartRefresh(ctx, i.Store, cfg.Method.RegistryRefresh, func(err error) {
+		log.Warn("method registry refresh failed", "err", err)
+	})
+	if !withWorkers || i.Enqueuer == nil {
+		return
+	}
+	go i.Enqueuer.Run(ctx)
+	go (&method.ResolverWorker{
+		Store:    i.Store,
+		Registry: i.Registry,
+		Public: method.NewPublicSignatureResolver(cfg.Method.PublicSignatureEnabled,
+			cfg.Method.PublicSignatureEndpoint, cfg.Method.PublicSignatureTimeout),
+		Log:      log,
+		Interval: cfg.Method.ResolverInterval,
+		Batch:    cfg.Method.ResolverBatch,
+	}).Run(ctx)
+	go (&method.BackfillRunner{
+		Store: i.Store, Data: i.MethodData, Resolver: i.Resolver, Log: log,
+		Interval: cfg.Method.BackfillInterval, BatchIdle: cfg.Method.BackfillBatchIdle,
+	}).Run(ctx)
+	log.Info("method background workers started",
+		"public_signature", cfg.Method.PublicSignatureEnabled, "backfill_batch", cfg.Method.BackfillBatchSize)
 }
 
 // UsageRecorder 每次 Provider 请求异步写入用量表（成本核算基础）。

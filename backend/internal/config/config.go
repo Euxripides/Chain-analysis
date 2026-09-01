@@ -38,6 +38,22 @@ type AnkrConfig struct {
 	RangeSplitOnMinPageFailures int
 }
 
+// MethodConfig V1.3 Method / ABI 解析（§17-§20/§31/§35）。
+type MethodConfig struct {
+	Enabled                 bool
+	SeedOnStart             bool
+	RegistryRefresh         time.Duration
+	ResolverInterval        time.Duration
+	ResolverBatch           int
+	PublicSignatureEnabled  bool
+	PublicSignatureEndpoint string
+	PublicSignatureTimeout  time.Duration
+	BackfillInterval        time.Duration
+	BackfillBatchSize       int
+	BackfillBatchIdle       time.Duration
+	MaxCachedABIs           int
+}
+
 type Config struct {
 	Env            string
 	Timezone       string
@@ -55,6 +71,7 @@ type Config struct {
 	BackupsBucket  string
 	WorkerMetricsPort int
 	Ankr           AnkrConfig
+	Method         MethodConfig
 }
 
 // parsePageLevels 解析 "1000,2000,5000,10000"。
@@ -179,6 +196,21 @@ func Load() *Config {
 			PageUpMaxBodyBytes:     int64(envInt("ANKR_PAGE_UP_MAX_BODY_MB", 16)) << 20,
 			PageDownCooldownSuccess: envInt("ANKR_PAGE_DOWN_COOLDOWN_SUCCESS_COUNT", 5),
 			RangeSplitOnMinPageFailures: envInt("ANKR_RANGE_SPLIT_ON_MIN_PAGE_FAILURES", 3),
+		},
+		Method: MethodConfig{
+			Enabled:          envBool("METHOD_RESOLVER_ENABLED", true),
+			SeedOnStart:      envBool("METHOD_SEED_ON_START", true),
+			RegistryRefresh:  time.Duration(envInt("METHOD_REGISTRY_REFRESH_SECONDS", 60)) * time.Second,
+			ResolverInterval: time.Duration(envInt("METHOD_RESOLVER_INTERVAL_SECONDS", 15)) * time.Second,
+			ResolverBatch:    envInt("METHOD_RESOLVER_BATCH", 50),
+			// 公共 4-byte 签名库默认关闭：内网部署无外网，且它只能做候选补全（§31）
+			PublicSignatureEnabled:  envBool("METHOD_PUBLIC_SIGNATURE_ENABLED", false),
+			PublicSignatureEndpoint: env("METHOD_PUBLIC_SIGNATURE_ENDPOINT", "https://www.4byte.directory/api/v1/signatures/"),
+			PublicSignatureTimeout:  time.Duration(envInt("METHOD_PUBLIC_SIGNATURE_TIMEOUT_SECONDS", 10)) * time.Second,
+			BackfillInterval:        time.Duration(envInt("METHOD_BACKFILL_INTERVAL_SECONDS", 10)) * time.Second,
+			BackfillBatchSize:       envInt("METHOD_BACKFILL_BATCH_SIZE", 20000),
+			BackfillBatchIdle:       time.Duration(envInt("METHOD_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
+			MaxCachedABIs:           envInt("METHOD_MAX_CACHED_ABIS", 20000),
 		},
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +41,15 @@ type txRow struct {
 	MethodID         string    `ch:"method_id" json:"method_id"`
 	SourceProvider   string    `ch:"source_provider" json:"source_provider"`
 	SourceIngestedAt time.Time `ch:"source_ingested_at" json:"source_ingested_at"`
+
+	// V1.3 Method 解析结果（§7）。SELECT * 依赖结构体完整覆盖全部列。
+	MethodName       string     `ch:"method_name" json:"method_name"`
+	MethodSignature  string     `ch:"method_signature" json:"method_signature"`
+	MethodSource     string     `ch:"method_source" json:"method_source"`
+	MethodVerified   uint8      `ch:"method_verified" json:"method_verified"`
+	MethodConfidence string     `ch:"method_confidence" json:"method_confidence"`
+	MethodType       string     `ch:"method_type" json:"method_type"`
+	MethodResolvedAt *time.Time `ch:"method_resolved_at" json:"method_resolved_at"`
 }
 
 type tokenTransferRow struct {
@@ -88,6 +99,12 @@ type logRow struct {
 	Timestamp      time.Time `ch:"timestamp" json:"timestamp"`
 	SourceProvider string    `ch:"source_provider" json:"source_provider"`
 	SourceIngested time.Time `ch:"source_ingested_at" json:"source_ingested_at"`
+
+	// V1.3 事件解析（§29）
+	EventName      string `ch:"event_name" json:"event_name"`
+	EventSignature string `ch:"event_signature" json:"event_signature"`
+	EventSource    string `ch:"event_source" json:"event_source"`
+	EventVerified  uint8  `ch:"event_verified" json:"event_verified"`
 }
 
 type balanceRow struct {
@@ -117,7 +134,11 @@ type activityRow struct {
 	Timestamp      time.Time       `ch:"timestamp" json:"timestamp"`
 	BlockNumber    uint64          `ch:"block_number" json:"block_number"`
 	TxHash         string          `ch:"tx_hash" json:"tx_hash"`
+	LogIndex       uint32          `ch:"log_index" json:"log_index"`
 	TokenAddress   string          `ch:"token_address" json:"token_address"`
+	TokenSymbol    string          `ch:"token_symbol" json:"token_symbol"`
+	TokenDecimals  uint16          `ch:"token_decimals" json:"token_decimals"`
+	AmountRaw      string          `ch:"amount_raw" json:"amount_raw"`
 	Amount         decimal.Decimal `ch:"amount" json:"amount"`
 	AmountUSD      string          `ch:"amount_usd" json:"amount_usd"`
 	Dataset        string          `ch:"dataset" json:"dataset"`
@@ -208,6 +229,11 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 	if err != nil {
 		return nil, err
 	}
+	if dataset == "activity" {
+		if err := s.hydrateActivityAmounts(ctx, chain, rows); err != nil {
+			return nil, err
+		}
+	}
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
@@ -265,7 +291,14 @@ func explorerPartition(dataset string) string {
 func (s *Service) Activity(ctx context.Context, chain, address string, limit, offset int) ([]map[string]any, error) {
 	address = strings.ToLower(address)
 	q := "SELECT * FROM blockchain.address_activity FINAL WHERE chain=? AND address=? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-	return s.queryRows(ctx, "activity", q, chain, address, limit, offset)
+	rows, err := s.queryRows(ctx, "activity", q, chain, address, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateActivityAmounts(ctx, chain, rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 // RowsForExport 导出查询：按链过滤，可选按地址过滤，流式上限。
@@ -308,9 +341,94 @@ func (s *Service) queryRows(ctx context.Context, dataset, q string, args ...any)
 		if err != nil {
 			return nil, fmt.Errorf("clickhouse [ScanRow]: %w", err)
 		}
+		normalizeStoredAmount(dataset, item)
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func normalizeStoredAmount(dataset string, item map[string]any) {
+	var rawKey, amountKey, decimalsKey string
+	switch dataset {
+	case "token_transfers", "activity":
+		rawKey, amountKey, decimalsKey = "amount_raw", "amount", "token_decimals"
+	case "balances":
+		rawKey, amountKey, decimalsKey = "balance_raw", "balance", "token_decimals"
+	default:
+		return
+	}
+	raw := strings.TrimSpace(fmt.Sprint(item[rawKey]))
+	if raw == "" {
+		return
+	}
+	decimals, err := strconv.ParseUint(fmt.Sprint(item[decimalsKey]), 10, 16)
+	if err != nil || decimals > 76 {
+		return
+	}
+	integer, ok := new(big.Int).SetString(raw, 10)
+	if !ok {
+		return
+	}
+	item[amountKey] = decimal.NewFromBigInt(integer, -int32(decimals)).String()
+}
+
+// hydrateActivityAmounts repairs legacy activity rows from authoritative token
+// transfers. New rows already carry amount_raw/token_decimals and skip this path.
+func (s *Service) hydrateActivityAmounts(ctx context.Context, chain string, rows []map[string]any) error {
+	hashSet := map[string]bool{}
+	for _, row := range rows {
+		if fmt.Sprint(row["activity_type"]) == "transfer" && strings.TrimSpace(fmt.Sprint(row["amount_raw"])) == "" {
+			hashSet[fmt.Sprint(row["tx_hash"])] = true
+		}
+	}
+	if len(hashSet) == 0 {
+		return nil
+	}
+	hashes := make([]string, 0, len(hashSet))
+	for hash := range hashSet {
+		hashes = append(hashes, hash)
+	}
+	candidates, err := s.queryRows(ctx, "token_transfers",
+		"SELECT * FROM blockchain.token_transfers FINAL WHERE chain=? AND tx_hash IN (?)", chain, hashes)
+	if err != nil {
+		return err
+	}
+	byHashToken := make(map[string][]map[string]any, len(candidates))
+	for _, candidate := range candidates {
+		key := fmt.Sprint(candidate["tx_hash"]) + "|" + strings.ToLower(fmt.Sprint(candidate["token_address"]))
+		byHashToken[key] = append(byHashToken[key], candidate)
+	}
+	for _, row := range rows {
+		if fmt.Sprint(row["activity_type"]) != "transfer" || strings.TrimSpace(fmt.Sprint(row["amount_raw"])) != "" {
+			continue
+		}
+		key := fmt.Sprint(row["tx_hash"]) + "|" + strings.ToLower(fmt.Sprint(row["token_address"]))
+		for _, candidate := range byHashToken[key] {
+			if !activityCandidateMatches(row, candidate) {
+				continue
+			}
+			for _, field := range []string{"amount", "amount_raw", "token_decimals", "token_symbol", "log_index"} {
+				row[field] = candidate[field]
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func activityCandidateMatches(activity, transfer map[string]any) bool {
+	address := strings.ToLower(fmt.Sprint(activity["address"]))
+	counterparty := strings.ToLower(fmt.Sprint(activity["counterparty"]))
+	from := strings.ToLower(fmt.Sprint(transfer["from_address"]))
+	to := strings.ToLower(fmt.Sprint(transfer["to_address"]))
+	switch fmt.Sprint(activity["direction"]) {
+	case "out":
+		return from == address && to == counterparty
+	case "self":
+		return from == address && to == address
+	default:
+		return to == address && from == counterparty
+	}
 }
 
 // scanOne 按 dataset 用对应结构体 ScanStruct，再转 map（json 往返，decimal → 字符串）。

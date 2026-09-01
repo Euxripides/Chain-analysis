@@ -116,6 +116,7 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - `internal/rawstore` —— MinIO Raw JSON（gzip + manifest + SHA256）
 - `internal/api` —— REST/SSE/Export
 - `internal/query` —— 统一数据面查询
+- `internal/method` —— V1.3 Method/ABI 解析（selector 提取、ABI 解析与解码、签名候选、缓存、异步补全、深度解码、Backfill、指标）
 - `migrations` —— PostgreSQL / ClickHouse 迁移（幂等，自动执行）
 
 ## V1.1 稳定性与性能调整（2026-09-01）
@@ -146,6 +147,59 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - **worker 同步**：shard 完成后刷新 workspace_addresses 统计/sync_status（§46）。
 - **修复**：job_no 跨时区重复（统一 UTC 计数+冲突重试）；display_name NULL 扫描；ListCoverage 空 dataset 全量。
 - **验证**：真实地址冒烟——案件/标签创建、目录展示（盘古/入金地址/current/242 行）、Preview up_to_date=1（0 次 Ankr）、Confirm 建任务；CSV/Parquet 均为 242 行且 SHA-256 与下载文件一致，Parquet 首尾均为 `PAR1`；4 地址 ZIP 含 manifest + 4 个地址文件；直接下载和 Ticket 下载分别验证 100-byte Range/206；重复 Worker 端口冲突会在参与调度前退出，SIGTERM 可正常收敛；Edge 桌面和 390px 移动端 6 项浏览器测试通过。
+
+## V1.3 Transaction Method / ABI 解析增强（2026-09-01）
+
+依据《链上分析平台_V1.3_Transaction_Method_ABI解析增强方案.md》完成。核心结论：**批量下载不逐笔调用 Ankr 深度接口**，
+而是 input → selector → 本地快速解析 → 未知异步补全 → 重点交易按需 Deep Decode。
+
+- **Schema**：ClickHouse 0004 为 transactions 增加 method_name/signature/source/verified/confidence/type/resolved_at 与
+  method_id 跳数索引，新增 `transaction_decoded_inputs`（Decoded Input 独立存表，主表只保留轻量 Method 信息），
+  logs 增加 event_name/signature/source/verified；PostgreSQL 0005 新增 method_signatures（唯一键 selector+signature，
+  允许碰撞候选并存）、contract_abis、event_signatures、method_resolve_queue（唯一键 chain+contract+method_id 天然去重）、
+  method_backfill_jobs，并为 provider_usage 增加 usage_type/tx_hash/cache_hit/decode_priority/decode_budget。
+- **Selector 提取**：`method.Classify` 本地解析 input，带 Hex 校验；不信任 Provider 的 methodId。
+  分类：contract_creation（to=null，部署字节码不按 Selector 解析）、native_transfer（input=0x 且 value>0）、
+  empty_call（input=0x 且 value=0）、contract_call。结构化分类的 source 记为 heuristic 且 verified=false，
+  不与"已验证 ABI"混淆。**完整 input 永远保留**。
+- **解析优先级**：manual_override > contract_abi（含 Proxy→Implementation 回落）> ankr > local_signature >
+  public_signature > heuristic > unknown。verified 只可能来自 contract_abi / manual_override / Provider 已验证解码；
+  签名库匹配一律 "Signature Match, Not Contract Verified"。
+- **碰撞处理**：候选全部保留；同层多候选先按 input 参数长度（含 tuple/动态类型的最小编码长度）收敛，
+  仍不能判定则保留 selector、method_name 留空、confidence=low，**绝不随机挑一个并标 Verified**。
+- **Fast Resolver**：只读内存索引（Global Selector Cache + Contract ABI Cache + 5 分钟 TTL 结果缓存），
+  无外部网络、无阻塞 DB 查询；解析失败写 unknown 并投递 `events.method.resolve.request`（只带元数据，不带完整 input）。
+  Method 解析属于 Enrichment，未解析不影响交易入库与 Coverage COMPLETE。
+- **异步补全**：Enqueuer 进程内去重 + DB 唯一约束兜底（百万笔同 selector 只有一条 Job）；
+  MethodResolverWorker 领取任务，先复查本地索引，再（仅后台、默认关闭）查公共 4-byte 库，结果一律 verified=false。
+- **Seed**：启动时写入 ERC20/721/1155、Uniswap V2/V3、PancakeSwap、WETH/WBNB、Proxy、Ownable、AccessControl
+  等 100+ 常见签名与 19 个事件签名，selector 由 keccak256 现算（不硬编码）。
+- **Deep Decode**：`GET /api/v1/transactions/{chain}/{tx_hash}?decode=local_only|auto|force_refresh`。
+  auto = 本地解码缓存 → 本地 ABI 解码（零成本）→ 才请求 Provider 一次并持久化；同一 tx 第二次不再请求；
+  原生转账/空调用/合约创建没有参数可解，直接跳过 Provider；每次真实请求写 provider_usage(usage_type=tx_deep_decode)，
+  缓存命中也补记一条 cache_hit=true 便于统计命中率与成本。
+- **ABI 解码**：自研 ABI 解析/解码（uint/int/address/bool/bytesN/bytes/string/定长与动态数组/tuple 嵌套），
+  uint256/int256 一律输出十进制字符串，地址规范化小写，bytes 输出 0x Hex，**绝不经过 float64**。
+- **Backfill**：MethodBackfillJob 按主键 (chain, tx_hash) keyset 分批（默认 20K，上限 100K），
+  支持 checkpoint/pause/resume/cancel/progress，批次之间让路给实时下载；重写走 ReplacingMergeTree 新版本行，
+  原样保留 input 等所有原始字段；**不重新向 Ankr 下载历史交易**。
+- **Data Explorer**：Method 列（已解析显示 Transfer/0xa9059cbb；未解析显示 0x12ab34cd/Unknown，永不留空）、
+  Hover Tooltip（Method/Selector/Source/Confidence/Verified，签名库来源额外提示 Not Contract Verified）、
+  Method 统一筛选（名称/签名/selector/unknown）、交易详情抽屉（Overview / Method Header / Input Data /
+  Decoded Input / Event Logs）与「尝试深度解析」按钮。
+- **导出**：transactions 导出默认带 method_id/name/signature/source/verified；`include_decoded_input` 默认关闭；
+  导出列顺序改为稳定排序（此前依赖 Go map 迭代顺序，列序不可复现）。
+- **指标**：method_selector_extracted_total、method_resolved_total、method_unknown_total、
+  method_resolve_{contract_abi,local_signature,public_signature,ankr}_total、method_collision_total、
+  method_deep_decode_{requests,cache_hit,error}_total、method_resolve_queue_depth、method_registry_entries。
+- **性能（§57，`go test -bench . -benchtime 300000x ./internal/method`，Windows/386 开发机，Linux VM 上更快）**：
+  Fast Resolver 热缓存 **527 ns/op、1 alloc**（≈190 万行/秒/核）；冷缓存（每笔都是新合约）1.5 µs/op、6 allocs；
+  仅结构分类 277 ns/op；单笔 ABI 参数解码 661 ns/op。相较网络受限的下载吞吐（万行/秒量级），
+  解析开销在噪声范围内，满足"Fast Resolver 不得明显降低主下载吞吐"。
+- **测试**：selector 提取与非法 hex、四类交易分类、种子 selector 自洽（含 keccak 已知常量）、
+  唯一候选/碰撞不标 Verified/input 长度收敛/本地优先公共/manual_override 优先、ABI 优先于本地签名、
+  ABI 动态类型与事件解码、未知入队与去重、深度解码缓存（第一次 1 次请求，第二次 0 次，force_refresh 才再请求）、
+  local_only 不触发 Provider、Provider 数值精度与签名自洽校验、Unknown 不阻塞交易入库。
 
 ## V1 验收对照（文档 §101）
 

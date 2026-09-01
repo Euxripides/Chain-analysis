@@ -34,6 +34,8 @@ export default function DataExplorerPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null)
   const [busy, setBusy] = useState(false)
+  // §47：Decoded Input 默认关闭，完整参数会显著增加导出文件体积
+  const [includeDecodedInput, setIncludeDecodedInput] = useState(false)
 	const [error, setError] = useState('')
 
   useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
@@ -107,6 +109,7 @@ export default function DataExplorerPage() {
 			exp = await api.exportV2({
 				chain, format: 'csv', include_meta: true,
 				addresses: selectedAddrs, datasets: ['transactions', 'token_transfers'],
+				include_decoded_input: includeDecodedInput,
 			})
 		} catch (e) {
 			setError(String(e))
@@ -161,11 +164,16 @@ export default function DataExplorerPage() {
         </div>
       </div>
 
-      <div className="row between" style={{ marginBottom: 10 }}>
+      <div className="row between explorer-actions" style={{ marginBottom: 10 }}>
         <span className="muted">已显示 {rows.length} 个地址 · 已选 {selected.size}</span>
         <div className="row gap">
           <button disabled={selected.size === 0 || busy} onClick={doUpdatePreview}>更新</button>
-			<button disabled={selected.size === 0 || busy} onClick={doExport}>导出 CSV</button>
+			<button disabled={selected.size === 0} onClick={() => nav('/data-explorer/combined?chain=' + chain + '&addresses=' + selectedAddrs.join(','))}>查看组合数据</button>
+			<button disabled={selected.size === 0} onClick={doExport}>导出 CSV</button>
+			<label className="export-option" title="导出交易的完整解码参数，会显著增加文件体积（§47）">
+				<input type="checkbox" checked={includeDecodedInput} onChange={(e) => setIncludeDecodedInput(e.target.checked)} />
+				Include Decoded Input
+			</label>
           {selected.size > 0 && <button className="ghost" onClick={() => setSelected(new Set())}>清除</button>}
         </div>
       </div>

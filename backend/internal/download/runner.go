@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
@@ -397,6 +399,9 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 			if err != nil {
 				return 0, 0, err
 			}
+			// §16/§17：Fast Local Resolver —— 只读内存缓存，无外部网络，
+			// 解析不到写 unknown 并投递异步补全，绝不阻塞主下载链路。
+			sc.resolveMethod(ctx, chain, &r)
 			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
 			batch = append(batch, r)
 			dir, cp := directionOf(address, r.From, r.To)
@@ -429,7 +434,8 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 			acts = append(acts, ingest.ActivityRow{
 				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
 				ActivityType: "transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
-				TxHash: r.TxHash, TokenAddress: r.TokenAddress, Amount: r.Amount,
+				TxHash: r.TxHash, LogIndex: r.LogIndex, TokenAddress: r.TokenAddress,
+				TokenSymbol: r.TokenSymbol, TokenDecimals: r.TokenDecimals, AmountRaw: r.AmountRaw, Amount: r.Amount,
 				Dataset: "token_transfers", Provider: "ankr",
 			})
 		}
@@ -460,6 +466,8 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 			if err != nil {
 				return 0, 0, err
 			}
+			// §29：topic0 → event name/signature（同样只读本地索引）
+			sc.resolveEvent(&r)
 			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
 			batch = append(batch, r)
 		}
@@ -476,6 +484,33 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 		return 0, 0, sc.writer.WriteBalances(ctx, batch)
 	}
 	return minB, maxB, nil
+}
+
+// resolveMethod 在入库前补齐 Method 轻量字段（§16）。
+func (sc *Scheduler) resolveMethod(ctx context.Context, chain string, r *ingest.TxRow) {
+	if sc.methodResolver == nil {
+		return
+	}
+	res, err := sc.methodResolver.Resolve(ctx, method.MethodResolveRequest{
+		Chain: chain, ContractAddress: r.To, MethodID: r.MethodID, Input: r.Input,
+		TxHash: r.TxHash, Value: r.ValueRaw, ToIsNull: r.To == "",
+	})
+	if err != nil {
+		// 解析失败绝不能让交易入库失败（§36/§62-6）
+		sc.log.Debug("method resolve failed", "tx_hash", r.TxHash, "err", err)
+		return
+	}
+	r.ApplyMethod(res)
+}
+
+// resolveEvent 事件签名解析（§29）。
+func (sc *Scheduler) resolveEvent(r *ingest.LogRow) {
+	if sc.methodRegistry == nil || len(r.Topics) == 0 {
+		return
+	}
+	if record, ok := sc.methodRegistry.EventSignature(strings.ToLower(r.Topics[0])); ok {
+		r.ApplyEvent(record.Name, record.Signature, record.Source, false)
+	}
 }
 
 // directionOf 计算活动方向与对手方。

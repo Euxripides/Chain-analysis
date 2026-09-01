@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
@@ -26,15 +27,23 @@ func New(ch *clickhouse.Conn, st *store.Store) *Service {
 }
 
 type Filter struct {
-	FromTime  *time.Time `json:"from_time"`
-	ToTime    *time.Time `json:"to_time"`
-	Direction string     `json:"direction"`
-	Token     string     `json:"token"`
-	MethodID  string     `json:"method_id"`
-	MinAmount string     `json:"min_amount"`
-	MaxAmount string     `json:"max_amount"`
-	BlockFrom *int64     `json:"block_from"`
-	BlockTo   *int64     `json:"block_to"`
+	FromTime    *time.Time `json:"from_time"`
+	ToTime      *time.Time `json:"to_time"`
+	Direction   string     `json:"direction"`
+	Token       string     `json:"token"`
+	FromAddress string     `json:"from_address"`
+	ToAddress   string     `json:"to_address"`
+	MethodID    string     `json:"method_id"`
+	// V1.3 Method 搜索/筛选（§28）：名称、签名与统一搜索框
+	MethodName      string `json:"method_name"`
+	MethodSignature string `json:"method_signature"`
+	Method          string `json:"method"`
+	MethodSource    string `json:"method_source"`
+	MethodVerified  *bool  `json:"method_verified"`
+	MinAmount       string `json:"min_amount"`
+	MaxAmount       string `json:"max_amount"`
+	BlockFrom       *int64 `json:"block_from"`
+	BlockTo         *int64 `json:"block_to"`
 }
 
 type QueryRequest struct {
@@ -101,6 +110,7 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 	single := len(req.Addresses) == 1
 	switch req.Dataset {
 	case "transactions":
+		appendPartyFilters(&conds, &args, f)
 		if single && f.Direction != "" {
 			if f.Direction == "out" {
 				conds = append(conds, "from_address = ?")
@@ -109,11 +119,9 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 			}
 			args = append(args, req.Addresses[0])
 		}
-		if f.MethodID != "" {
-			conds = append(conds, "method_id = ?")
-			args = append(args, f.MethodID)
-		}
+		appendMethodFilters(&conds, &args, f)
 	case "token_transfers":
+		appendPartyFilters(&conds, &args, f)
 		if single && f.Direction != "" {
 			if f.Direction == "out" {
 				conds = append(conds, "from_address = ?")
@@ -123,28 +131,50 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 			args = append(args, req.Addresses[0])
 		}
 		if f.Token != "" {
-			conds = append(conds, "token_address = ?")
-			args = append(args, strings.ToLower(f.Token))
+			appendTokenFilter(&conds, &args, f.Token, "token_symbol", "token_address")
 		}
 		if f.MinAmount != "" {
-			conds = append(conds, "amount >= toDecimal256(?,38)")
+			conds = append(conds, "length(amount_raw) <= toUInt64(token_decimals) + 38 AND "+
+				"divideDecimal(toDecimal256(amount_raw,0), toDecimal256(concat('1',repeat('0',toUInt64(token_decimals))),0),38) >= toDecimal256(?,38)")
 			args = append(args, f.MinAmount)
 		}
 		if f.MaxAmount != "" {
-			conds = append(conds, "amount <= toDecimal256(?,38)")
+			conds = append(conds, "length(amount_raw) <= toUInt64(token_decimals) + 38 AND "+
+				"divideDecimal(toDecimal256(amount_raw,0), toDecimal256(concat('1',repeat('0',toUInt64(token_decimals))),0),38) <= toDecimal256(?,38)")
 			args = append(args, f.MaxAmount)
 		}
 	case "nft_transfers":
+		appendPartyFilters(&conds, &args, f)
 		if f.Token != "" {
-			conds = append(conds, "contract_address = ?")
-			args = append(args, strings.ToLower(f.Token))
+			appendTokenFilter(&conds, &args, f.Token, "token_name", "token_symbol", "contract_address")
 		}
 	case "logs":
 		if f.Token != "" {
-			conds = append(conds, "address = ?")
-			args = append(args, strings.ToLower(f.Token))
+			appendTokenFilter(&conds, &args, f.Token, "address")
 		}
 	case "activity":
+		if f.FromAddress != "" {
+			from := strings.ToLower(f.FromAddress)
+			conds = append(conds, "((direction IN ('out','self') AND address = ?) OR (direction = 'in' AND counterparty = ?))")
+			args = append(args, from, from)
+		}
+		if f.ToAddress != "" {
+			to := strings.ToLower(f.ToAddress)
+			conds = append(conds, "((direction IN ('in','self') AND address = ?) OR (direction = 'out' AND counterparty = ?))")
+			args = append(args, to, to)
+		}
+		if f.Token != "" {
+			appendTokenFilter(&conds, &args, f.Token, "token_symbol", "token_address")
+		}
+		amountExpr := "if(amount_raw != '', divideDecimal(toDecimal256(amount_raw,0), toDecimal256(concat('1',repeat('0',toUInt64(token_decimals))),0),38), amount)"
+		if f.MinAmount != "" {
+			conds = append(conds, amountExpr+" >= toDecimal256(?,38)")
+			args = append(args, f.MinAmount)
+		}
+		if f.MaxAmount != "" {
+			conds = append(conds, amountExpr+" <= toDecimal256(?,38)")
+			args = append(args, f.MaxAmount)
+		}
 		if f.Direction != "" {
 			conds = append(conds, "direction = ?")
 			args = append(args, f.Direction)
@@ -160,6 +190,92 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		}
 	}
 	return s.Q.Explorer(ctx, req.Dataset, req.Chain, req.Addresses, filterSQL, args, qCursor, req.Limit)
+}
+
+func appendPartyFilters(conds *[]string, args *[]any, f Filter) {
+	if f.FromAddress != "" {
+		*conds = append(*conds, "from_address = ?")
+		*args = append(*args, strings.ToLower(f.FromAddress))
+	}
+	if f.ToAddress != "" {
+		*conds = append(*conds, "to_address = ?")
+		*args = append(*args, strings.ToLower(f.ToAddress))
+	}
+}
+
+// appendMethodFilters Method 搜索与筛选（§28）。
+//
+// 支持：
+//   - method_id：0xa9059cbb（可逗号分隔多个）
+//   - method_name / method_signature：子串匹配
+//   - method：统一搜索框，自动识别 selector / 名称 / 签名 / "unknown"
+//   - method_source / method_verified：来源与验证状态筛选（§27）
+func appendMethodFilters(conds *[]string, args *[]any, f Filter) {
+	if f.MethodID != "" {
+		var selectorConds []string
+		for _, raw := range strings.Split(f.MethodID, ",") {
+			selector := method.NormalizeSelector(raw)
+			if selector == "" {
+				continue
+			}
+			selectorConds = append(selectorConds, "method_id = ?")
+			*args = append(*args, selector)
+		}
+		if len(selectorConds) > 0 {
+			*conds = append(*conds, "("+strings.Join(selectorConds, " OR ")+")")
+		}
+	}
+	if term := strings.TrimSpace(f.MethodName); term != "" {
+		*conds = append(*conds, "positionCaseInsensitive(method_name, ?) > 0")
+		*args = append(*args, term)
+	}
+	if term := strings.TrimSpace(f.MethodSignature); term != "" {
+		*conds = append(*conds, "positionCaseInsensitive(method_signature, ?) > 0")
+		*args = append(*args, term)
+	}
+	if term := strings.TrimSpace(f.Method); term != "" {
+		if selector := method.NormalizeSelector(term); selector != "" {
+			*conds = append(*conds, "method_id = ?")
+			*args = append(*args, selector)
+		} else if strings.EqualFold(term, "unknown") {
+			// Unknown 必须可筛选（§62-19/§62-20）
+			*conds = append(*conds, "method_name = '' AND method_id != ''")
+		} else {
+			*conds = append(*conds, "(positionCaseInsensitive(method_name, ?) > 0 OR positionCaseInsensitive(method_signature, ?) > 0)")
+			*args = append(*args, term, term)
+		}
+	}
+	if source := strings.TrimSpace(f.MethodSource); source != "" {
+		*conds = append(*conds, "method_source = ?")
+		*args = append(*args, source)
+	}
+	if f.MethodVerified != nil {
+		verified := uint8(0)
+		if *f.MethodVerified {
+			verified = 1
+		}
+		*conds = append(*conds, "method_verified = ?")
+		*args = append(*args, verified)
+	}
+}
+
+func appendTokenFilter(conds *[]string, args *[]any, input string, columns ...string) {
+	var tokenConds []string
+	for _, raw := range strings.Split(input, ",") {
+		term := strings.TrimSpace(raw)
+		if term == "" {
+			continue
+		}
+		var columnConds []string
+		for _, column := range columns {
+			columnConds = append(columnConds, "positionCaseInsensitive("+column+", ?) > 0")
+			*args = append(*args, term)
+		}
+		tokenConds = append(tokenConds, "("+strings.Join(columnConds, " OR ")+")")
+	}
+	if len(tokenConds) > 0 {
+		*conds = append(*conds, "("+strings.Join(tokenConds, " OR ")+")")
+	}
 }
 
 func partitionBy(ds string) string {

@@ -178,7 +178,20 @@ type UsageRow struct {
 	RetryAttempt  int
 	RetryReason   string
 	RequestID     string
+
+	// V1.3（§49/§50）：Deep Decode 成本归属与预算预留
+	UsageType      string
+	TxHash         string
+	CacheHit       bool
+	DecodePriority string
+	DecodeBudget   *int
 }
+
+// Provider 用量类型（§49）。
+const (
+	UsageTypeDatasetDownload = "dataset_download"
+	UsageTypeTxDeepDecode    = "tx_deep_decode"
+)
 
 type AuditEvent struct {
 	ID           string         `json:"id"`

@@ -27,8 +27,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// V1.3：API 侧只需要 Method 索引刷新（异步补全与回填在 Worker 进程执行）
+	runCtx, cancelBackground := context.WithCancel(ctx)
+	defer cancelBackground()
+	infra.StartMethodBackground(runCtx, cfg, log, false)
+
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,
+		Registry: infra.Registry, MethodData: infra.MethodData, DeepDecode: infra.DeepDecode,
 	})
 	srv.StartForwarder()
 

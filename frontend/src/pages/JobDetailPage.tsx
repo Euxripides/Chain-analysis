@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { fmtBytes, fmtDuration, friendlyError, statusLabel, type Snapshot } from '../types'
+import { datasetLabel } from '../utils/field-labels'
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -92,7 +93,7 @@ export default function JobDetailPage() {
       <div className="card">
         <div className="card-title">地址 × Dataset</div>
         <table className="table">
-          <thead><tr><th>地址</th>{job.datasets.map((d) => <th key={d}>{d}</th>)}<th>进度</th></tr></thead>
+          <thead><tr><th>地址</th>{job.datasets.map((d) => <th key={d}>{datasetLabel(d)}</th>)}<th>进度</th></tr></thead>
           <tbody>
             {subjects.map((s) => (
               <tr key={s.id}>

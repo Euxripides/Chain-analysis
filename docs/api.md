@@ -76,6 +76,67 @@ POST /api/v1/datasets/ensure
 | POST | `/updates/preview` | 增量缺口预览 |
 | POST | `/updates/{id}/confirm` | 冻结预览目标并创建缺口下载任务 |
 
+## V1.3 Transaction Method / ABI 解析
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/transactions/{chain}/{tx_hash}?decode=local_only\|auto\|force_refresh` | 交易详情 + Method + Decoded Input + Logs |
+| GET | `/methods/{selector}` | Selector 查询，返回全部候选签名与碰撞标记 |
+| GET | `/methods/search?q=&limit=` | Method 名称 / 签名 / Selector 搜索 |
+| GET | `/methods/enrichment?chain=` | Method 解析覆盖率（与下载 Coverage 解耦） |
+| POST | `/admin/methods/backfill` | 创建历史数据回填任务（admin） |
+| GET | `/admin/methods/backfill` | 回填任务列表（admin） |
+| GET | `/admin/methods/backfill/{id}` | 回填任务进度与 checkpoint（admin） |
+| POST | `/admin/methods/backfill/{id}/{pause\|resume\|cancel}` | 回填任务控制（admin） |
+| POST | `/admin/methods/signatures` | 人工覆盖签名 manual_override（admin） |
+| POST | `/admin/contracts/{chain}/{address}/abi` | 上传合约 ABI（admin） |
+
+`decode` 语义：
+
+- `local_only`：只读本地，永远不产生 Provider 请求；
+- `auto`（默认）：本地解码缓存 → 本地 ABI 解码 → 仍失败才向 Provider 请求一次并缓存；
+- `force_refresh`：跳过缓存强制重新深度解码，需要 owner/admin/analyst/investigator 角色。
+
+同一 `tx_hash` 第二次 `auto` 请求不会再访问 Provider（`decode_cache_hit=true`）；
+每次真实请求都会写 `provider_usage`，`usage_type=tx_deep_decode`。
+
+### 交易详情响应（节选）
+
+```json
+{
+  "tx_hash": "0x...",
+  "input": "0xa9059cbb...",
+  "method": {
+    "id": "0xa9059cbb", "name": "transfer", "signature": "transfer(address,uint256)",
+    "source": "contract_abi", "verified": true, "confidence": "verified",
+    "method_type": "contract_call", "category": "transfer", "risk": false
+  },
+  "decoded_input": { "to": "0x...", "value": "1000000000000000000" },
+  "decode_source": "contract_abi",
+  "decode_cache_hit": false
+}
+```
+
+### Method Lookup 响应
+
+```json
+{
+  "selector": "0xa9059cbb",
+  "candidates": [
+    { "name": "transfer", "signature": "transfer(address,uint256)", "source": "local_signature", "verified": true }
+  ],
+  "collision": false
+}
+```
+
+### Data Explorer Method 筛选
+
+`POST /data-explorer/query` 的 `filters` 新增：`method`（统一搜索：名称/签名/selector/`unknown`）、
+`method_id`（可逗号分隔多个 selector）、`method_name`、`method_signature`、`method_source`、`method_verified`。
+
+`POST /exports` 新增 `include_decoded_input`（默认 false）；transactions 导出默认包含
+`method_id / method_name / method_signature / method_source / method_verified`。
+
 ## Provider / 健康 / 观测
 
 | 方法 | 路径 | 说明 |

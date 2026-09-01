@@ -18,3 +18,25 @@ func TestExplorerCursorConditionMatchesStableOrder(t *testing.T) {
 		t.Fatalf("order = %q", order)
 	}
 }
+
+func TestNormalizeStoredAmountUsesRowTokenDecimals(t *testing.T) {
+	row := map[string]any{
+		"amount_raw":     "50225000000000000000000",
+		"amount":         "0.00000000000000050225",
+		"token_decimals": 18,
+	}
+	normalizeStoredAmount("token_transfers", row)
+	if got := row["amount"]; got != "50225" {
+		t.Fatalf("amount = %v, want 50225", got)
+	}
+}
+
+func TestActivityCandidateMatchesDirection(t *testing.T) {
+	transfer := map[string]any{"from_address": "0xfrom", "to_address": "0xto"}
+	if !activityCandidateMatches(map[string]any{"address": "0xto", "counterparty": "0xfrom", "direction": "in"}, transfer) {
+		t.Fatal("incoming transfer did not match")
+	}
+	if activityCandidateMatches(map[string]any{"address": "0xfrom", "counterparty": "0xwrong", "direction": "out"}, transfer) {
+		t.Fatal("wrong counterparty matched")
+	}
+}

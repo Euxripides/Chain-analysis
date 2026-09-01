@@ -60,6 +60,10 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	runCtx, cancel := context.WithCancel(ctx)
 
+	// V1.3：Method 解析栈（Fast Resolver + 异步补全 + Backfill，§16-§19/§35）
+	sched.SetMethodResolver(infra.Resolver, infra.Registry)
+	infra.StartMethodBackground(runCtx, cfg, log, true)
+
 	errCh := make(chan error, 1)
 	go func() { errCh <- sched.Run(runCtx) }()
 

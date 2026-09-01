@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
 )
 
 func asString(m map[string]any, key string) string {
@@ -170,6 +172,45 @@ type TxRow struct {
 	Input       string
 	MethodID    string
 	Provider    string
+
+	// V1.3 Method 解析结果（§7）。原始 input 永远完整保留（§6/§62-2）。
+	MethodName       string
+	MethodSignature  string
+	MethodSource     string
+	MethodVerified   uint8
+	MethodConfidence string
+	MethodType       string
+	MethodResolvedAt *time.Time
+}
+
+// ApplyMethod 写入 Method 解析结果（§16：Normalize 之后、入库之前）。
+func (r *TxRow) ApplyMethod(res method.MethodResolution) {
+	if res.MethodID != "" {
+		r.MethodID = res.MethodID
+	}
+	if res.MethodType != "" {
+		r.MethodType = res.MethodType
+	}
+	r.MethodName = res.Name
+	r.MethodSignature = res.Signature
+	r.MethodSource = res.Source
+	if r.MethodSource == "" {
+		r.MethodSource = method.SourceUnknown
+	}
+	r.MethodConfidence = res.Confidence
+	if r.MethodConfidence == "" {
+		r.MethodConfidence = method.ConfidenceUnknown
+	}
+	r.MethodVerified = 0
+	if res.Verified {
+		r.MethodVerified = 1
+	}
+	if res.Resolved() && !res.ResolvedAt.IsZero() {
+		resolvedAt := res.ResolvedAt
+		r.MethodResolvedAt = &resolvedAt
+	} else {
+		r.MethodResolvedAt = nil
+	}
 }
 
 func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, error) {
@@ -193,7 +234,6 @@ func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, e
 		GasPrice:    pickString(m, "gasPrice"),
 		TxType:      pickString(m, "type"),
 		Input:       pickString(m, "input", "inputData"),
-		MethodID:    pickString(m, "methodId", "methodID"),
 		Provider:    provider,
 	}
 	if r.BlockNumber == 0 {
@@ -205,6 +245,13 @@ func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, e
 	if status == "0x1" || status == "1" || status == "true" {
 		r.Status = 1
 	}
+	// §5：Method Selector 一律从 input 本地提取并做 Hex 校验，
+	// 不信任 Provider 自带的 methodId；to = null 走 contract_creation 分类（§38）。
+	methodType, selector := method.Classify(r.Input, r.ValueRaw, r.To == "")
+	r.MethodType = methodType
+	r.MethodID = selector
+	r.MethodSource = method.SourceUnknown
+	r.MethodConfidence = method.ConfidenceUnknown
 	return r, nil
 }
 
@@ -236,7 +283,7 @@ func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenT
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
 		TokenAddress: pickAddress(m, "contractAddress"), TokenSymbol: pickString(m, "tokenSymbol"),
 		TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
-		From: pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
+		From:          pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
 		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"), Provider: provider,
 	}, nil
 }
@@ -276,9 +323,9 @@ func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTrans
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
 		Contract: pickAddress(m, "contractAddress"), TokenID: pickString(m, "tokenId"),
 		From: pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
-		TokenName: pickString(m, "name", "collectionName", "tokenName"),
+		TokenName:   pickString(m, "name", "collectionName", "tokenName"),
 		TokenSymbol: pickString(m, "collectionSymbol", "tokenSymbol"),
-		AmountRaw: pickString(m, "value"), Provider: provider,
+		AmountRaw:   pickString(m, "value"), Provider: provider,
 	}, nil
 }
 
@@ -294,6 +341,23 @@ type LogRow struct {
 	Removed     uint8
 	Timestamp   time.Time
 	Provider    string
+
+	// V1.3 事件解析预留（§29）：topic0 → event name/signature
+	EventName      string
+	EventSignature string
+	EventSource    string
+	EventVerified  uint8
+}
+
+// ApplyEvent 写入事件签名解析结果（§29）。
+func (r *LogRow) ApplyEvent(name, signature, source string, verified bool) {
+	r.EventName = name
+	r.EventSignature = signature
+	r.EventSource = source
+	r.EventVerified = 0
+	if verified {
+		r.EventVerified = 1
+	}
 }
 
 func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
@@ -323,19 +387,23 @@ func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
 
 // ActivityRow 地址活动汇总（§65/§87）。
 type ActivityRow struct {
-	Chain        string
-	Address      string
-	Counterparty string
-	Direction    string // in / out / self
-	ActivityType string // transaction / transfer
-	Timestamp    time.Time
-	BlockNumber  uint64
-	TxHash       string
-	TokenAddress string
-	Amount       *big.Int
-	AmountUSD    string
-	Dataset      string
-	Provider     string
+	Chain         string
+	Address       string
+	Counterparty  string
+	Direction     string // in / out / self
+	ActivityType  string // transaction / transfer
+	Timestamp     time.Time
+	BlockNumber   uint64
+	TxHash        string
+	LogIndex      uint32
+	TokenAddress  string
+	TokenSymbol   string
+	TokenDecimals uint16
+	AmountRaw     string
+	Amount        *big.Int
+	AmountUSD     string
+	Dataset       string
+	Provider      string
 }
 
 type BalanceRow struct {

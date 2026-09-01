@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -24,15 +25,16 @@ const maxExportRows = 2_000_000
 
 func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		JobID       string   `json:"job_id"`
-		Dataset     string   `json:"dataset"`
-		Format      string   `json:"format"`
-		Subject     string   `json:"subject"`
-		Chain       string   `json:"chain"`
-		Addresses   []string `json:"addresses"`
-		Datasets    []string `json:"datasets"`
-		IncludeMeta bool     `json:"include_meta"`
-		ForceZip    bool     `json:"force_zip"`
+		JobID               string   `json:"job_id"`
+		Dataset             string   `json:"dataset"`
+		Format              string   `json:"format"`
+		Subject             string   `json:"subject"`
+		Chain               string   `json:"chain"`
+		Addresses           []string `json:"addresses"`
+		Datasets            []string `json:"datasets"`
+		IncludeMeta         bool     `json:"include_meta"`
+		ForceZip            bool     `json:"force_zip"`
+		IncludeDecodedInput bool     `json:"include_decoded_input"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -44,6 +46,7 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 			JobID: req.JobID, Dataset: req.Dataset, Format: req.Format,
 			Subject: req.Subject, Chain: req.Chain, Addresses: req.Addresses,
 			Datasets: req.Datasets, IncludeMeta: req.IncludeMeta, ForceZip: req.ForceZip,
+			IncludeDecodedInput: req.IncludeDecodedInput,
 		})
 		return
 	}
@@ -328,11 +331,40 @@ func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any
 	return info.Size, werr
 }
 
+// exportFieldOrder 导出列的稳定顺序：交易身份 → Method（§47）→ 参与方 → 金额 → 技术字段。
+// Go map 迭代顺序随机，必须显式排序，否则同一次导出的列顺序不可复现。
+var exportFieldOrder = []string{
+	"chain", "tx_hash", "block_number", "block_hash", "timestamp", "log_index",
+	"method_id", "method_name", "method_signature", "method_source", "method_verified",
+	"method_confidence", "method_type", "method_resolved_at", "decoded_input", "decode_source",
+	"event_name", "event_signature", "event_source", "event_verified",
+	"from_address", "to_address", "address", "counterparty", "direction", "activity_type",
+	"token_address", "contract_address", "token_id", "token_symbol", "token_name", "token_decimals",
+	"amount", "amount_raw", "amount_usd", "value_raw", "balance", "balance_raw", "balance_usd", "token_price",
+	"status", "nonce", "gas", "gas_used", "gas_price", "tx_type", "topics", "data", "removed", "input",
+	"matched_address", "case_names", "tag_names", "dataset", "source_provider", "source_ingested_at",
+}
+
 func mapKeys(m map[string]any) []string {
-	var out []string
+	rank := make(map[string]int, len(exportFieldOrder))
+	for i, name := range exportFieldOrder {
+		rank[name] = i
+	}
+	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		ri, oki := rank[out[i]]
+		rj, okj := rank[out[j]]
+		if oki != okj {
+			return oki
+		}
+		if oki && okj && ri != rj {
+			return ri < rj
+		}
+		return out[i] < out[j]
+	})
 	return out
 }
 

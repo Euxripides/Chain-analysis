@@ -137,3 +137,11 @@ type Provider interface {
 	Fetch(ctx context.Context, req FetchRequest) (FetchResult, error)
 	Health(ctx context.Context) HealthStatus
 }
+
+// TxDetailFetcher 单笔交易深度解码能力（V1.3 §23）。
+//
+// 可选能力：调用方类型断言获取。只允许交易详情 / 智能调查按需调用，
+// 批量下载链路禁止逐笔调用（§62-1）。
+type TxDetailFetcher interface {
+	TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error)
+}

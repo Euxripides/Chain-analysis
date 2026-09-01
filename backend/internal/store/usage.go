@@ -18,13 +18,23 @@ func (s *Store) InsertUsage(ctx context.Context, u model.UsageRow) error {
 	if u.ShardID != "" {
 		shardID = u.ShardID
 	}
+	usageType := u.UsageType
+	if usageType == "" {
+		usageType = model.UsageTypeDatasetDownload
+	}
+	decodePriority := u.DecodePriority
+	if decodePriority == "" {
+		decodePriority = "normal"
+	}
 	_, err := s.Pool.Exec(ctx, "INSERT INTO provider_usage "+
 		"(id, provider, method, dataset, job_id, shard_id, tenant_id, request_time, duration_ms, status, http_status, api_error, rows, bytes, credits, estimated_cost_usd, "+
-		" error_class, rpc_code, trace_id, page_size, returned_rows, response_bytes, retry_attempt, retry_reason, request_id) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)",
+		" error_class, rpc_code, trace_id, page_size, returned_rows, response_bytes, retry_attempt, retry_reason, request_id, "+
+		" usage_type, tx_hash, cache_hit, decode_priority, decode_budget) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)",
 		uuid.NewString(), u.Provider, u.Method, u.Dataset, jobID, shardID, u.TenantID, u.RequestTime,
 		u.DurationMs, u.Status, u.HTTPStatus, u.APIError, u.Rows, u.Bytes, u.Credits, u.CostUSD,
-		u.ErrorClass, u.RPCCode, u.TraceID, u.PageSize, u.ReturnedRows, u.ResponseBytes, u.RetryAttempt, u.RetryReason, u.RequestID)
+		u.ErrorClass, u.RPCCode, u.TraceID, u.PageSize, u.ReturnedRows, u.ResponseBytes, u.RetryAttempt, u.RetryReason, u.RequestID,
+		usageType, u.TxHash, u.CacheHit, decodePriority, u.DecodeBudget)
 	return err
 }
 

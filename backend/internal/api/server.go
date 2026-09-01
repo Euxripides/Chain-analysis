@@ -18,6 +18,8 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
+	"github.com/blockchain-platform/blockchain-platform/internal/method"
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
@@ -33,6 +35,11 @@ type Deps struct {
 	Bus   *events.Bus
 	Prov  provider.Provider
 	Log   *slog.Logger
+
+	// V1.3 Method / ABI（§25/§52）
+	Registry   *method.Registry
+	MethodData *method.ClickHouseStore
+	DeepDecode *method.AnkrDeepResolver
 }
 
 type Server struct {
@@ -45,6 +52,7 @@ type Server struct {
 	meta     *addressmeta.Service
 	explorer *explorer.Service
 	updates  *update.Service
+	detail   *method.DetailService
 }
 
 func New(deps Deps) *Server {
@@ -59,8 +67,34 @@ func New(deps Deps) *Server {
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store)
 	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, deps.Log)
+	if deps.Registry != nil && deps.MethodData != nil {
+		// 智能调查/前端都必须经过 TransactionDetailService，不允许直连 Provider（§50）
+		s.detail = method.NewDetailService(deps.MethodData, deps.Registry, deps.DeepDecode, s.recordDeepDecodeUsage, deps.Log)
+	}
 	s.buildRouter()
 	return s
+}
+
+// recordDeepDecodeUsage 记录深度解码用量（§49）。
+// 真实 Provider 请求由 Provider 客户端自己记账；这里只补记缓存命中，
+// 保证 usage_type=tx_deep_decode 的命中率可统计且不会重复计费。
+func (s *Server) recordDeepDecodeUsage(usage method.DeepDecodeUsage) {
+	if !usage.CacheHit {
+		return
+	}
+	row := model.UsageRow{
+		Provider: "local-cache", Method: "transaction_decoded_inputs", Dataset: "transaction_detail",
+		RequestTime: time.Now(), DurationMs: usage.DurationMs, Status: usage.Status, HTTPStatus: 200,
+		UsageType: model.UsageTypeTxDeepDecode, TxHash: usage.TxHash, CacheHit: true,
+		DecodePriority: usage.Priority,
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := s.deps.Store.InsertUsage(ctx, row); err != nil {
+			s.deps.Log.Warn("insert deep decode usage failed", "err", err)
+		}
+	}()
 }
 
 func (s *Server) buildRouter() {
@@ -112,6 +146,20 @@ func (s *Server) buildRouter() {
 
 		api.Post("/updates/preview", s.handleUpdatePreview)
 		api.Post("/updates/{id}/confirm", s.handleUpdateConfirm)
+
+		// V1.3 Method / ABI（§52）
+		api.Get("/transactions/{chain}/{tx_hash}", s.handleTransactionDetail)
+		api.Get("/methods/search", s.handleMethodSearch)
+		api.Get("/methods/enrichment", s.handleMethodEnrichment)
+		api.Get("/methods/{selector}", s.handleMethodLookup)
+
+		// 管理员接口必须权限控制（§52）
+		api.Post("/admin/methods/backfill", s.handleCreateBackfill)
+		api.Get("/admin/methods/backfill", s.handleListBackfill)
+		api.Get("/admin/methods/backfill/{id}", s.handleGetBackfill)
+		api.Post("/admin/methods/backfill/{id}/{action}", s.handleControlBackfill)
+		api.Post("/admin/methods/signatures", s.handleCreateSignature)
+		api.Post("/admin/contracts/{chain}/{address}/abi", s.handleUploadABI)
 	})
 
 	// 短期下载票据：校验后经 API 流式传输，支持 HTTP Range。

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { CHAINS, fmtBytes } from '../types'
+import { buildOklinkTxUrl, shortHash } from '../utils/explorer-url'
+import { fieldLabel } from '../utils/field-labels'
+import { orderedFields } from '../utils/field-order'
 
 const TITLES: Record<string, string> = {
   transactions: 'Transactions',
@@ -21,7 +24,7 @@ export default function BrowsePage({ dataset }: { dataset: string }) {
   const [error, setError] = useState('')
   const [exporting, setExporting] = useState(false)
 
-  const cols = rows.length > 0 ? Object.keys(rows[0]) : []
+  const cols = orderedFields(rows[0], dataset, { appendRemaining: true })
 
   async function query(nextOffset = 0) {
     if (!subject.trim()) return
@@ -94,7 +97,7 @@ export default function BrowsePage({ dataset }: { dataset: string }) {
         <div style={{ overflowX: 'auto', marginTop: 8 }}>
           <table className="table">
             <thead>
-              <tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr>
+              <tr>{cols.map((c) => <th key={c}>{fieldLabel(c)}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
@@ -103,6 +106,16 @@ export default function BrowsePage({ dataset }: { dataset: string }) {
                     const v = r[c]
                     let text = v === null || v === undefined ? '' : String(v)
                     if (c === 'downloaded_bytes' || c === 'bytes') text = fmtBytes(Number(v) || 0)
+                    if (c === 'tx_hash' && text.startsWith('0x')) {
+                      const url = buildOklinkTxUrl(chain, text)
+                      return (
+                        <td key={c} className="mono">
+                          {url
+                            ? <a className="link" href={url} target="_blank" rel="noopener noreferrer">{shortHash(text)} ↗</a>
+                            : text.slice(0, 16) + '…'}
+                        </td>
+                      )
+                    }
                     return (
                       <td key={c} className={(c === 'tx_hash' || c === 'address' || c === 'block_hash') ? 'mono' : ''}
                         title={text.length > 60 ? text : undefined}>

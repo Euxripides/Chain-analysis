@@ -7,6 +7,7 @@ import SystemPage from './pages/SystemPage'
 import BrowsePage from './pages/BrowsePage'
 import DataExplorerPage from './pages/DataExplorerPage'
 import AddressDetailPage from './pages/AddressDetailPage'
+import CombinedDataPage from './pages/CombinedDataPage'
 import { AddressIcon, BrowseIcon, DataIcon, OverviewIcon, TasksIcon } from './components/Icons'
 
 const downloadNav = [
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="/browse/nft_transfers" element={<BrowsePage dataset="nft_transfers" />} />
           <Route path="/browse/logs" element={<BrowsePage dataset="logs" />} />
           <Route path="/data-explorer" element={<DataExplorerPage />} />
+          <Route path="/data-explorer/combined" element={<CombinedDataPage />} />
           <Route path="/data-explorer/:chain/:address" element={<AddressDetailPage />} />
         </Routes>
       </main>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { CHAINS, DATASETS } from '../types'
+import { datasetLabel } from '../utils/field-labels'
 
 interface RangeSpec {
   type: 'full' | 'block' | 'time'
@@ -252,7 +253,7 @@ export default function DownloadPage() {
         <div className="row gap wrap">
           {DATASETS.map((d) => (
             <label key={d} className="chip">
-              <input type="checkbox" checked={datasets.includes(d)} onChange={() => toggleDataset(d)} /> {d}
+              <input type="checkbox" checked={datasets.includes(d)} onChange={() => toggleDataset(d)} /> {datasetLabel(d)}
             </label>
           ))}
         </div>
@@ -272,7 +273,7 @@ export default function DownloadPage() {
             <thead><tr><th>地址</th><th>Dataset</th><th>复用率</th></tr></thead>
             <tbody>
               {preview.items.slice(0, 50).map((it, i) => (
-                <tr key={i}><td className="mono">{it.subject.slice(0, 10)}…</td><td>{it.dataset}</td><td>{(it.ratio * 100).toFixed(1)}%</td></tr>
+                <tr key={i}><td className="mono">{it.subject.slice(0, 10)}…</td><td>{datasetLabel(it.dataset)}</td><td>{(it.ratio * 100).toFixed(1)}%</td></tr>
               ))}
             </tbody>
           </table>

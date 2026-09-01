@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
@@ -143,13 +144,26 @@ func (m *MockProvider) mockRows(req provider.FetchRequest, from, to uint64) []js
 			var row map[string]any
 			switch req.Dataset {
 			case "transactions":
+				// V1.3：Mock 必须覆盖 Method 解析的全部分支
+				// （原生转账 / ERC20 / Swap / 未知 Selector / 合约创建），
+				// 否则本地开发看不到 Method 列的真实行为。
+				input := mockInput(rng, seed+i)
+				value := hex(rng.Uint64() % 1000000)
+				if input != "0x" {
+					value = "0x0"
+				}
+				toAddress := any(hex(seed + i))
+				if rng.Uint64()%37 == 0 {
+					toAddress = nil // 合约创建（§38）
+					input = "0x60806040523480156100" + strconv.FormatUint(rng.Uint64(), 16)
+				}
 				row = map[string]any{
 					"blockHeight": fmt.Sprintf("%d", b), "blockHash": hex(b), "transactionHash": hex(b*1000+i),
 					"timestamp": int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
-					"fromAddress": req.Address, "toAddress": hex(seed + i), "value": hex(rng.Uint64() % 1000000),
+					"fromAddress": req.Address, "toAddress": toAddress, "value": value,
 					"nonce": fmt.Sprintf("%d", i), "gasLimit": fmt.Sprintf("%d", 21000), "gasUsed": fmt.Sprintf("%d", 21000),
 					"gasPrice": hex(1000000000 + rng.Uint64()%100), "type": "0x0", "status": "0x1",
-					"input": "0x", "methodId": "0x",
+					"input": input,
 				}
 			case "token_transfers":
 				row = map[string]any{
@@ -180,6 +194,95 @@ func (m *MockProvider) mockRows(req provider.FetchRequest, from, to uint64) []js
 	}
 	return rows
 }
+
+// word 32 字节 ABI 字（十六进制，无 0x）。
+func word(value string) string {
+	if len(value) >= 64 {
+		return value[len(value)-64:]
+	}
+	return strings.Repeat("0", 64-len(value)) + value
+}
+
+func addressWord(v uint64) string { return word("00000000000000000000" + strconv.FormatUint(v, 16)) }
+
+// mockInput 生成覆盖各类 Method 分支的 input（§55 用例形态）。
+func mockInput(rng *rand.Rand, salt uint64) string {
+	switch rng.Uint64() % 10 {
+	case 0, 1, 2, 3:
+		return "0x" // 原生转账
+	case 4, 5:
+		// transfer(address,uint256)
+		return "0xa9059cbb" + addressWord(salt) + word(strconv.FormatUint(rng.Uint64()%1e12, 16))
+	case 6:
+		// approve(address,uint256)
+		return "0x095ea7b3" + addressWord(salt+1) + word("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	case 7:
+		// transferFrom(address,address,uint256)
+		return "0x23b872dd" + addressWord(salt+2) + addressWord(salt+3) + word(strconv.FormatUint(rng.Uint64()%1e9, 16))
+	case 8:
+		// swapExactTokensForTokens(uint256,uint256,address[],address,uint256)
+		return "0x38ed1739" +
+			word(strconv.FormatUint(rng.Uint64()%1e12, 16)) +
+			word("0") +
+			word("a0") + // path 偏移量
+			addressWord(salt+4) +
+			word(strconv.FormatUint(uint64(time.Now().Unix()), 16)) +
+			word("2") + addressWord(salt+5) + addressWord(salt+6)
+	default:
+		// 未知 Selector：Data Explorer 必须原样显示（§26/§62-19）
+		return "0x12ab34cd" + addressWord(salt+7) + word(strconv.FormatUint(rng.Uint64()%1e6, 16))
+	}
+}
+
+// TxDetail Mock 深度解码（§23）：让本地开发也能验证详情页与缓存路径。
+func (m *MockProvider) TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	start := time.Now()
+	detail := map[string]any{
+		"hash": txHash, "blockchain": chain,
+		"method": map[string]any{
+			"id": "0xa9059cbb", "name": "transfer", "verified": true,
+			"string": "transfer(address to, uint256 value)",
+			"inputs": []any{
+				map[string]any{"name": "to", "type": "address", "value": hex(hash64(txHash))},
+				map[string]any{"name": "value", "type": "uint256", "size": 256, "value": "1000000000000000000"},
+			},
+		},
+	}
+	if decodeLogs {
+		detail["logs"] = []any{map[string]any{
+			"address": hex(hash64(txHash, "log")), "logIndex": "0x0",
+			"topics": []string{"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"},
+			"data":   "0x",
+			"event": map[string]any{
+				"name": "Transfer", "verified": true,
+				"string": "Transfer(address from, address to, uint256 value)",
+				"inputs": []any{
+					map[string]any{"name": "from", "type": "address", "indexed": true, "value": hex(hash64(txHash, "from"))},
+					map[string]any{"name": "to", "type": "address", "indexed": true, "value": hex(hash64(txHash, "to"))},
+					map[string]any{"name": "value", "type": "uint256", "value": "1000000000000000000"},
+				},
+			},
+		}}
+	}
+	raw, err := json.Marshal(map[string]any{"transactions": []any{detail}})
+	if err != nil {
+		return nil, err
+	}
+	if m.usageHook != nil {
+		m.usageHook(model.UsageRow{
+			Provider: "ankr-mock", Method: MethodTxDetail, Dataset: "transaction_detail",
+			RequestTime: time.Now(), DurationMs: int(time.Since(start).Milliseconds()), Status: "ok",
+			HTTPStatus: 200, Bytes: len(raw), Credits: 700, CostUSD: 0.00007,
+			UsageType: model.UsageTypeTxDeepDecode, TxHash: txHash,
+		})
+	}
+	return raw, nil
+}
+
+var _ provider.TxDetailFetcher = (*MockProvider)(nil)
 
 func (m *MockProvider) mockBalances(chain, address string) []json.RawMessage {
 	var rows []json.RawMessage
