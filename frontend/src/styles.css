@@ -314,6 +314,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .flow-token b, .flow-token small { display: block; overflow: hidden; max-width: 125px; text-overflow: ellipsis; white-space: nowrap; }
 .flow-token b { color: #1d4ed8; font-size: 13px; }
 .flow-token small { margin-top: 3px; color: #64748b; font-size: 11px; }
+.token-cell { position: relative; display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.token-cell-copy { min-width: 0; }
+.token-cell-title { display: flex; align-items: center; gap: 6px; }
+.token-cell-title > b { color: #1d4ed8; font-size: 13px; }
+.token-contract { display: block; max-width: 150px; margin-top: 3px; overflow: hidden; color: #64748b; font-family: ui-monospace, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.metadata-status { padding: 2px 5px; border-radius: 3px; background: #f1f5f9; color: #64748b; font-size: 9px; font-style: normal; font-weight: 500; white-space: nowrap; }
+.metadata-status-complete { background: #ecfdf5; color: #047857; }
+.metadata-status-conflict { background: #fee2e2; color: #b91c1c; }
+.metadata-status-partial { background: #fff7ed; color: #b45309; }
+.token-metadata-tooltip { position: fixed; z-index: 85; width: 310px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 14px 34px rgba(15,23,42,.2); color: var(--text); text-align: left; }
+.token-metadata-tooltip > strong, .token-metadata-tooltip > b { display: block; }
+.token-metadata-tooltip > b { margin-top: 3px; color: #1d4ed8; }
+.token-metadata-tooltip dl { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 5px 8px; margin: 11px 0 0; font-size: 11px; }
+.token-metadata-tooltip dt { color: var(--muted); }
+.token-metadata-tooltip dd { margin: 0; overflow-wrap: anywhere; }
+.token-filter-names b em { margin-left: 5px; padding: 1px 4px; border-radius: 3px; background: #fee2e2; color: #b91c1c; font-size: 9px; font-style: normal; }
+.metric-good { color: var(--green) !important; }
+.metric-danger { color: var(--red) !important; }
 .detail-table .col-direction { width: 72px; }
 .detail-table .col-activity { width: 100px; }
 .detail-table .col-amount { width: 160px; }

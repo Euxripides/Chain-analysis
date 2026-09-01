@@ -87,12 +87,12 @@ const (
 
 // Error 结构化 Provider 错误：禁止依赖字符串匹配作为主要决策手段（§4）。
 type Error struct {
-	Provider  string
-	Class     ErrorClass
-	Message   string
+	Provider   string
+	Class      ErrorClass
+	Message    string
 	HTTPStatus int
-	RPCCode   int
-	TraceID   string
+	RPCCode    int
+	TraceID    string
 
 	Retryable bool
 	Duration  time.Duration
@@ -144,4 +144,20 @@ type Provider interface {
 // 批量下载链路禁止逐笔调用（§62-1）。
 type TxDetailFetcher interface {
 	TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error)
+}
+
+// TokenMetadataResult is the optional standard-contract RPC capability used by
+// V1.4. Each field is independent so a reverting name() does not discard a
+// successful symbol()/decimals() result.
+type TokenMetadataResult struct {
+	Name          *string
+	Symbol        *string
+	Decimals      *int
+	NameError     string
+	SymbolError   string
+	DecimalsError string
+}
+
+type TokenMetadataResolver interface {
+	ResolveTokenMetadata(ctx context.Context, chain, contract string) (TokenMetadataResult, error)
 }

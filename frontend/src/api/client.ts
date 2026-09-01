@@ -1,5 +1,7 @@
 import type { CoveragePreview, ExportRow, Job, JobDetail, Snapshot } from '../types'
 
+export type TokenMetadata = { chain: string; contract_address: string; name?: string; symbol?: string; decimals: number | null; token_type?: string; logo_url?: string; verified: boolean; metadata_source?: string; confidence: string; metadata_status: string }
+
 const BASE = '/api/v1'
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
@@ -52,4 +54,6 @@ export const api = {
   updateConfirm: (previewId: string) => http<{ job_ids: string[] }>('/updates/' + previewId + '/confirm', { method: 'POST', body: '{}' }),
   exportV2: (payload: unknown) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify(payload) }),
   exportTicket: (id: string) => http<{ ticket_id: string; url: string }>('/exports/' + id + '/download-ticket', { method: 'POST', body: '{}' }),
+  tokenSearch: (chain: string, query: string, limit = 30) => http<{ tokens: TokenMetadata[] }>(`/tokens/search?chain=${encodeURIComponent(chain)}&q=${encodeURIComponent(query)}&limit=${limit}`),
+  tokenEnrichment: () => http<{ token_contracts: number; complete: number; partial: number; unknown: number; conflict: number; failed: number; logo_available: number; queue_depth: number }>('/tokens/enrichment'),
 }

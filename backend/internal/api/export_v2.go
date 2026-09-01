@@ -124,6 +124,7 @@ func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, datase
 	if err != nil {
 		return 0, "", err
 	}
+	s.attachTokenMetadata(ctx, chain, rows)
 	if includeMeta {
 		s.annotateRows(ctx, chain, addr, rows)
 	}
@@ -195,6 +196,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 					werr = err
 					break
 				}
+				s.attachTokenMetadata(ctx, chain, rows)
 				if includeMeta {
 					s.annotateRows(ctx, chain, addr, rows)
 				}

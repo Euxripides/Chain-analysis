@@ -77,11 +77,11 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 type jobDetail struct {
-	Job      model.DownloadJob    `json:"job"`
-	Subjects []model.Subject      `json:"subjects"`
-	Datasets []model.DatasetItem  `json:"datasets"`
-	Shards   []model.Shard        `json:"shards"`
-	Progress map[string]any       `json:"progress"`
+	Job      model.DownloadJob   `json:"job"`
+	Subjects []model.Subject     `json:"subjects"`
+	Datasets []model.DatasetItem `json:"datasets"`
+	Shards   []model.Shard       `json:"shards"`
+	Progress map[string]any      `json:"progress"`
 }
 
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +118,9 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, detail)
 }
 
-func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) { s.controlJob(w, r, model.JobPauseReq, "pause") }
+func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
+	s.controlJob(w, r, model.JobPauseReq, "pause")
+}
 func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 	s.controlJob(w, r, model.JobResuming, "resume")
 }
@@ -289,7 +291,7 @@ func (s *Server) snapshotFor(ctx context.Context, jobID string) map[string]any {
 	elapsed := time.Since(job.CreatedAt).Seconds()
 	var eta float64
 	if progress > 0 && progress < 1 && elapsed > 0 {
-		eta = elapsed*(1-float64(progress))/float64(progress)
+		eta = elapsed * (1 - float64(progress)) / float64(progress)
 	}
 	snap := map[string]any{
 		"job_id": jobID, "status": job.Status, "progress": progress,

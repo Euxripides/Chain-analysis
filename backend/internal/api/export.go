@@ -183,6 +183,7 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 		observability.ExportJobs.WithLabelValues(exp.Format, "FAILED").Inc()
 		return
 	}
+	s.attachTokenMetadata(ctx, chain, rows)
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, exp.Format)
 	var size int64
 	switch exp.Format {
@@ -340,7 +341,8 @@ var exportFieldOrder = []string{
 	"event_name", "event_signature", "event_source", "event_verified",
 	"from_address", "to_address", "address", "counterparty", "direction", "activity_type",
 	"token_address", "contract_address", "token_id", "token_symbol", "token_name", "token_decimals",
-	"amount", "amount_raw", "amount_usd", "value_raw", "balance", "balance_raw", "balance_usd", "token_price",
+	"token_contract", "token_type", "token_metadata_status", "token_metadata_source", "token_metadata_confidence",
+	"amount", "amount_raw", "raw_value", "formatted_amount", "amount_usd", "value_raw", "balance", "balance_raw", "balance_usd", "token_price",
 	"status", "nonce", "gas", "gas_used", "gas_price", "tx_type", "topics", "data", "removed", "input",
 	"matched_address", "case_names", "tag_names", "dataset", "source_provider", "source_ingested_at",
 }

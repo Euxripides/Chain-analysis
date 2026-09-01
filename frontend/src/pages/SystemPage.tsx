@@ -13,6 +13,7 @@ export default function SystemPage() {
     },
     refetchInterval: 10000,
   })
+  const { data: tokens } = useQuery({ queryKey: ['token-enrichment'], queryFn: api.tokenEnrichment, refetchInterval: 10000 })
 
   const datasets = Object.keys(usage?.by_dataset ?? {})
   const totalCost = datasets.reduce((s, d) => s + (usage?.by_dataset[d]?.cost_usd ?? 0), 0)
@@ -30,6 +31,18 @@ export default function SystemPage() {
           <div className="metric"><label>近期错误率</label><b>{((Number(status?.recent_error_rate) || 0) * 100).toFixed(1)}%</b></div>
           <div className="metric"><label>连续失败</label><b>{String(status?.consecutive_failures ?? 0)}</b></div>
           <div className="metric"><label>最近错误</label><b className="muted">{String(status?.error || '—').slice(0, 60)}</b></div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Token Metadata</div>
+        <div className="metrics token-metadata-metrics">
+          <div className="metric"><label>Token Contracts</label><b>{(tokens?.token_contracts ?? 0).toLocaleString()}</b></div>
+          <div className="metric"><label>完整</label><b className="metric-good">{(tokens?.complete ?? 0).toLocaleString()}</b></div>
+          <div className="metric"><label>部分收录</label><b>{(tokens?.partial ?? 0).toLocaleString()}</b></div>
+          <div className="metric"><label>未知</label><b>{(tokens?.unknown ?? 0).toLocaleString()}</b></div>
+          <div className="metric"><label>冲突</label><b className="metric-danger">{(tokens?.conflict ?? 0).toLocaleString()}</b></div>
+          <div className="metric"><label>解析队列</label><b>{(tokens?.queue_depth ?? 0).toLocaleString()}</b></div>
         </div>
       </div>
 

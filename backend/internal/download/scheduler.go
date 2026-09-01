@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
-	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
@@ -21,17 +21,18 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 )
 
 type Scheduler struct {
-	cfg     *config.Config
-	store   *store.Store
-	prov    provider.Provider
-	raw     *rawstore.Store
-	writer  *ingest.Writer
-	planner *Planner
-	bus     *events.Bus
-	log     *slog.Logger
+	cfg      *config.Config
+	store    *store.Store
+	prov     provider.Provider
+	raw      *rawstore.Store
+	writer   *ingest.Writer
+	planner  *Planner
+	bus      *events.Bus
+	log      *slog.Logger
 	workerID string
 
 	mu          sync.Mutex
@@ -39,15 +40,18 @@ type Scheduler struct {
 	active      int64
 	wg          sync.WaitGroup
 
-	rates      sync.Map // jobID -> *rateTracker
-	pagePolicy *ankr.PagePolicy
+	rates         sync.Map // jobID -> *rateTracker
+	pagePolicy    *ankr.PagePolicy
 	lastConnLimit int64
-	meta       *addressmeta.Service
+	meta          *addressmeta.Service
 
 	// V1.3：Fast Method Resolver（§16/§17）。只读内存索引，不阻塞下载。
 	methodResolver *method.FastResolver
 	methodRegistry *method.Registry
+	tokenMeta      *tokenmeta.Service
 }
+
+func (sc *Scheduler) SetTokenMetadata(service *tokenmeta.Service) { sc.tokenMeta = service }
 
 // SetMethodResolver 注入 Method 解析栈。为空时下载链路完全不做解析，
 // 交易本体照常入库（§36：Method 未解析不影响 Coverage）。

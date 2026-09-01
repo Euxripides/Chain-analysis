@@ -24,6 +24,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/update"
 )
 
@@ -37,9 +38,11 @@ type Deps struct {
 	Log   *slog.Logger
 
 	// V1.3 Method / ABI（§25/§52）
-	Registry   *method.Registry
-	MethodData *method.ClickHouseStore
-	DeepDecode *method.AnkrDeepResolver
+	Registry      *method.Registry
+	MethodData    *method.ClickHouseStore
+	DeepDecode    *method.AnkrDeepResolver
+	TokenMeta     *tokenmeta.Service
+	TokenBackfill *tokenmeta.BackfillRunner
 }
 
 type Server struct {
@@ -65,7 +68,7 @@ func New(deps Deps) *Server {
 	})
 	s.meta = addressmeta.New(deps.Store)
 	s.svc.Meta = s.meta
-	s.explorer = explorer.New(deps.CH, deps.Store)
+	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
 	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, deps.Log)
 	if deps.Registry != nil && deps.MethodData != nil {
 		// 智能调查/前端都必须经过 TransactionDetailService，不允许直连 Provider（§50）
@@ -143,6 +146,14 @@ func (s *Server) buildRouter() {
 		api.Post("/data-explorer/query", s.handleExplorerQuery)
 
 		api.Patch("/addresses/{chain}/{address}/metadata", s.handleAddressMetadata)
+		api.Get("/tokens/search", s.handleTokenSearch)
+		api.Get("/tokens/enrichment", s.handleTokenEnrichment)
+		api.Get("/tokens/{chain}/{contract}/logo", s.handleTokenLogo)
+		api.Get("/tokens/{chain}/{contract}", s.handleTokenGet)
+		api.Post("/admin/tokens/{chain}/{contract}/resolve", s.handleTokenResolve)
+		api.Post("/admin/tokens/{chain}/{contract}/override", s.handleTokenOverride)
+		api.Post("/admin/token-metadata/backfill", s.handleTokenBackfill)
+		api.Get("/admin/token-metadata/backfill", s.handleTokenBackfillList)
 
 		api.Post("/updates/preview", s.handleUpdatePreview)
 		api.Post("/updates/{id}/confirm", s.handleUpdateConfirm)

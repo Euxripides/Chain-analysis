@@ -11,12 +11,13 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
-	"github.com/blockchain-platform/blockchain-platform/migrations"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
+	"github.com/blockchain-platform/blockchain-platform/migrations"
 )
 
 type Infra struct {
@@ -27,11 +28,13 @@ type Infra struct {
 	Prov  provider.Provider
 
 	// V1.3 Method / ABI 解析栈（§17/§20）：API 与 Worker 共享同一份内存索引结构。
-	Registry   *method.Registry
-	Resolver   *method.FastResolver
-	Enqueuer   *method.Enqueuer
-	MethodData *method.ClickHouseStore
-	DeepDecode *method.AnkrDeepResolver
+	Registry      *method.Registry
+	Resolver      *method.FastResolver
+	Enqueuer      *method.Enqueuer
+	MethodData    *method.ClickHouseStore
+	DeepDecode    *method.AnkrDeepResolver
+	TokenMeta     *tokenmeta.Service
+	TokenBackfill *tokenmeta.BackfillRunner
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
@@ -74,10 +77,10 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		prov = ankr.New(ankr.Options{
 			Endpoint: cfg.Ankr.Endpoint, APIKey: cfg.Ankr.APIKey, MaxPageSize: cfg.Ankr.MaxPageSize,
 			RequestsPerMinute: cfg.Ankr.RequestsPerMinute, RequestTimeout: cfg.Ankr.RequestTimeout,
-			ResponseHeaderTimeout: cfg.Ankr.ResponseHeaderTimeout,
+			ResponseHeaderTimeout:  cfg.Ankr.ResponseHeaderTimeout,
 			ResponseSoftLimitBytes: cfg.Ankr.ResponseSoftLimitBytes,
 			ResponseHardLimitBytes: cfg.Ankr.ResponseHardLimitBytes,
-			CreditsPerRequest: cfg.Ankr.CreditsPerRequest, CostPerRequestUSD: cfg.Ankr.CostPerRequestUSD,
+			CreditsPerRequest:      cfg.Ankr.CreditsPerRequest, CostPerRequestUSD: cfg.Ankr.CostPerRequestUSD,
 		}, usageHook)
 		log.Info("provider: ankr (live)")
 	} else {
@@ -89,7 +92,33 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	if err := infra.initMethod(ctx, cfg, log); err != nil {
 		return nil, err
 	}
+	if cfg.TokenMetadata.Enabled {
+		var rpc tokenmeta.RPCResolver
+		if candidate, ok := prov.(provider.TokenMetadataResolver); ok {
+			rpc = candidate
+		}
+		infra.TokenMeta = tokenmeta.New(st, ch, rpc, log)
+		infra.TokenMeta.ConfigureLogo(raw, tokenmeta.LogoConfig{Enabled: cfg.TokenMetadata.LogoEnabled, MaxBytes: cfg.TokenMetadata.LogoMaxBytes, MaxWidth: cfg.TokenMetadata.LogoMaxWidth, MaxHeight: cfg.TokenMetadata.LogoMaxHeight})
+		infra.TokenBackfill = &tokenmeta.BackfillRunner{Service: infra.TokenMeta, BatchSize: cfg.TokenMetadata.BackfillBatchSize, Interval: cfg.TokenMetadata.WorkerInterval, BatchIdle: cfg.TokenMetadata.BatchIdle, MaxRetries: cfg.TokenMetadata.RPCMaxRetries, Log: log}
+	}
 	return infra, nil
+}
+
+func (i *Infra) StartTokenMetadataBackground(ctx context.Context, cfg *config.Config, log *slog.Logger, withWorkers bool) {
+	if i.TokenMeta == nil || !withWorkers || !cfg.TokenMetadata.BackfillEnabled {
+		return
+	}
+	go i.TokenBackfill.Run(ctx)
+	i.TokenMeta.StartLogoWorker(ctx)
+	// Ensure one recoverable all-chain catalog job exists. The unique runnable
+	// guard is transactionally checked here; restarts continue its cursor.
+	var exists bool
+	if err := i.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM token_metadata_backfill_jobs WHERE status IN ('pending','running'))`).Scan(&exists); err == nil && !exists {
+		if id, e := i.TokenBackfill.CreateJob(ctx, ""); e == nil {
+			log.Info("token metadata catalog backfill queued", "job_id", id)
+		}
+	}
+	log.Info("token metadata background worker started", "batch", cfg.TokenMetadata.BackfillBatchSize)
 }
 
 // initMethod 初始化 Method 解析栈：种子 + 内存索引首次加载（§17/§32）。

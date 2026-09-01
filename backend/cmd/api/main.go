@@ -35,6 +35,7 @@ func main() {
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,
 		Registry: infra.Registry, MethodData: infra.MethodData, DeepDecode: infra.DeepDecode,
+		TokenMeta: infra.TokenMeta, TokenBackfill: infra.TokenBackfill,
 	})
 	srv.StartForwarder()
 

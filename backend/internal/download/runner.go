@@ -442,6 +442,13 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 		if err := sc.writer.WriteTokenTransfers(ctx, batch); err != nil {
 			return 0, 0, err
 		}
+		// Enrichment is best-effort and batch-deduplicated. It must never change
+		// chain-fact coverage or make a completed transfer page fail.
+		if sc.tokenMeta != nil {
+			if err := sc.tokenMeta.ProcessPage(ctx, chain, "ankr_token_transfer", rows); err != nil {
+				sc.log.Warn("token metadata page enrichment failed", "err", err)
+			}
+		}
 		if len(acts) > 0 {
 			if err := sc.writer.WriteActivity(ctx, acts); err != nil {
 				return 0, 0, err

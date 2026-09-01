@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../api/client'
 
 export type TokenFilterOption = {
   value: string
@@ -7,10 +8,15 @@ export type TokenFilterOption = {
   address: string
   logo?: string
   count: number
+  status?: string
+  confidence?: string
+  verified?: boolean
+  decimals?: number | null
 }
 
 type Props = {
   value: string
+  chain: string
   options: TokenFilterOption[]
   onConfirm: (value: string) => void
 }
@@ -27,12 +33,14 @@ function TokenIcon({ token }: { token: TokenFilterOption }) {
   return <span className="token-filter-icon token-filter-fallback" style={{ background: `hsl(${hue} 68% 47%)` }}>{(token.symbol || '?').slice(0, 1)}</span>
 }
 
-export default function TokenFilterDropdown({ value, options, onConfirm }: Props) {
+export default function TokenFilterDropdown({ chain, value, options, onConfirm }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<string[]>(value ? value.split(',').filter(Boolean) : [])
   const [history, setHistory] = useState<string[]>([])
+  const [remoteOptions, setRemoteOptions] = useState<TokenFilterOption[]>([])
+  const [remoteLoading, setRemoteLoading] = useState(false)
 
   useEffect(() => setDraft(value ? value.split(',').filter(Boolean) : []), [value])
   useEffect(() => {
@@ -47,21 +55,44 @@ export default function TokenFilterDropdown({ value, options, onConfirm }: Props
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape) }
   }, [open])
 
-  const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options])
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    const timer = window.setTimeout(async () => {
+      setRemoteLoading(true)
+      try {
+        const result = await api.tokenSearch(chain, search.trim(), 40)
+        if (!active) return
+        setRemoteOptions(result.tokens.map((token) => ({
+          value: token.contract_address, address: token.contract_address, symbol: token.symbol || '未知代币',
+          name: token.name || '', count: 0, logo: token.logo_url, status: token.metadata_status,
+          confidence: token.confidence, verified: token.verified, decimals: token.decimals,
+        })))
+      } catch { if (active) setRemoteOptions([]) } finally { if (active) setRemoteLoading(false) }
+    }, search ? 220 : 0)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [chain, open, search])
+
+  const mergedOptions = useMemo(() => {
+    const merged = new Map<string, TokenFilterOption>()
+    for (const option of [...options, ...remoteOptions]) merged.set(option.value, { ...merged.get(option.value), ...option })
+    return [...merged.values()]
+  }, [options, remoteOptions])
+  const byValue = useMemo(() => new Map(mergedOptions.map((option) => [option.value, option])), [mergedOptions])
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) {
       const symbols = new Set<string>()
-      const diverse = options.filter((option) => {
+      const diverse = mergedOptions.filter((option) => {
         const symbol = option.symbol.toLowerCase()
         if (symbols.has(symbol)) return false
         symbols.add(symbol)
         return true
       })
-      return [...diverse, ...options.filter((option) => !diverse.includes(option))].slice(0, 20)
+      return [...diverse, ...mergedOptions.filter((option) => !diverse.includes(option))].slice(0, 20)
     }
-    return options.filter((option) => [option.symbol, option.name, option.address].some((part) => part.toLowerCase().includes(query))).slice(0, 30)
-  }, [options, search])
+    return mergedOptions.filter((option) => [option.symbol, option.name, option.address].some((part) => part.toLowerCase().includes(query))).slice(0, 30)
+  }, [mergedOptions, search])
   const selectedOptions = draft.map((item) => byValue.get(item) ?? { value: item, symbol: compactAddress(item), name: '', address: item, count: 0 })
   const applied = value ? value.split(',').filter(Boolean) : []
   const buttonLabel = applied.length === 0 ? '全部' : applied.length === 1 ? (byValue.get(applied[0])?.symbol || compactAddress(applied[0])) : `已选 ${applied.length} 项`
@@ -94,11 +125,11 @@ export default function TokenFilterDropdown({ value, options, onConfirm }: Props
             <div className="token-filter-list">
               {visible.map((token) => <label className="token-filter-option" key={token.value}>
                 <TokenIcon token={token} />
-                <span className="token-filter-names"><b>{token.symbol || '未知代币'}</b><small>{token.name || '—'}</small></span>
+                <span className="token-filter-names"><b>{token.symbol || '未知代币'}{token.status === 'conflict' && <em>冲突</em>}</b><small>{token.name || (token.status === 'partial' ? '部分收录' : '名称未收录')}</small></span>
                 <span className="token-filter-address" title={token.address}>{compactAddress(token.address)}</span>
                 <input aria-label={`${token.symbol || token.address} ${token.address}`} type="checkbox" checked={draft.includes(token.value)} onChange={() => toggle(token.value)} />
               </label>)}
-              {visible.length === 0 && <div className="token-filter-empty">{search ? '没有匹配的代币' : '正在加载代币…'}</div>}
+              {visible.length === 0 && <div className="token-filter-empty">{remoteLoading ? '正在搜索代币…' : search ? '没有匹配的代币' : '暂无代币元数据'}</div>}
             </div>
           </div>
         </div>

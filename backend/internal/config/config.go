@@ -9,32 +9,32 @@ import (
 )
 
 type AnkrConfig struct {
-	Mode               string
-	APIKey             string
-	Endpoint           string
-	MaxPageSize        int
-	InitialConcurrency int
-	MaxConcurrency     int
-	RequestsPerMinute  int
-	RequestTimeout     time.Duration
+	Mode                  string
+	APIKey                string
+	Endpoint              string
+	MaxPageSize           int
+	InitialConcurrency    int
+	MaxConcurrency        int
+	RequestsPerMinute     int
+	RequestTimeout        time.Duration
 	ResponseHeaderTimeout time.Duration
-	CreditsPerRequest  float64
-	CostPerRequestUSD  float64
+	CreditsPerRequest     float64
+	CostPerRequestUSD     float64
 
 	// V1.1：响应体保护（§8/§32）
 	ResponseSoftLimitBytes int64
 	ResponseHardLimitBytes int64
 
 	// V1.1：自适应 PageSize（§12-§15/§32）
-	PageLevels             []int
-	PageSizeTransactions   int
-	PageSizeTokenTransfers int
-	PageSizeNftTransfers   int
-	PageSizeLogs           int
-	PageUpSuccessCount     int
-	PageUpMaxDuration      time.Duration
-	PageUpMaxBodyBytes     int64
-	PageDownCooldownSuccess int
+	PageLevels                  []int
+	PageSizeTransactions        int
+	PageSizeTokenTransfers      int
+	PageSizeNftTransfers        int
+	PageSizeLogs                int
+	PageUpSuccessCount          int
+	PageUpMaxDuration           time.Duration
+	PageUpMaxBodyBytes          int64
+	PageDownCooldownSuccess     int
 	RangeSplitOnMinPageFailures int
 }
 
@@ -54,24 +54,38 @@ type MethodConfig struct {
 	MaxCachedABIs           int
 }
 
+type TokenMetadataConfig struct {
+	Enabled           bool
+	BackfillEnabled   bool
+	BackfillBatchSize int
+	WorkerInterval    time.Duration
+	BatchIdle         time.Duration
+	RPCMaxRetries     int
+	LogoEnabled       bool
+	LogoMaxBytes      int64
+	LogoMaxWidth      int
+	LogoMaxHeight     int
+}
+
 type Config struct {
-	Env            string
-	Timezone       string
-	LogLevel       string
-	HTTPPort       int
-	DatabaseURL    string
-	ClickHouseURL  string
-	MinioEndpoint  string
-	MinioSecure    bool
-	MinioAccessKey string
-	MinioSecretKey string
-	NatsURL        string
-	RawBucket      string
-	ExportBucket   string
-	BackupsBucket  string
+	Env               string
+	Timezone          string
+	LogLevel          string
+	HTTPPort          int
+	DatabaseURL       string
+	ClickHouseURL     string
+	MinioEndpoint     string
+	MinioSecure       bool
+	MinioAccessKey    string
+	MinioSecretKey    string
+	NatsURL           string
+	RawBucket         string
+	ExportBucket      string
+	BackupsBucket     string
 	WorkerMetricsPort int
-	Ankr           AnkrConfig
-	Method         MethodConfig
+	Ankr              AnkrConfig
+	Method            MethodConfig
+	TokenMetadata     TokenMetadataConfig
 }
 
 // parsePageLevels 解析 "1000,2000,5000,10000"。
@@ -157,44 +171,44 @@ func envFloat(key string, def float64) float64 {
 
 func Load() *Config {
 	return &Config{
-		Env:            env("APP_ENV", "development"),
-		Timezone:       env("APP_TIMEZONE", "Asia/Bangkok"),
-		LogLevel:       env("API_LOG_LEVEL", "info"),
-		HTTPPort:       envInt("API_HTTP_PORT", 8080),
-		DatabaseURL:    env("DATABASE_URL", "postgres://blockchain:change_me_pg_2026@127.0.0.1:5433/blockchain_platform?sslmode=disable"),
-		ClickHouseURL:  env("CLICKHOUSE_URL", "clickhouse://blockchain:change_me_ch_2026@127.0.0.1:9000/blockchain"),
-		MinioEndpoint:  env("MINIO_ENDPOINT", "127.0.0.1:9001"),
-		MinioSecure:    envBool("MINIO_SECURE", false),
-		MinioAccessKey: env("MINIO_ROOT_USER", "blockchain_admin"),
-		MinioSecretKey: env("MINIO_ROOT_PASSWORD", "change_me_minio_2026"),
-		NatsURL:        env("NATS_URL", "nats://127.0.0.1:4222"),
-		RawBucket:      env("RAW_BUCKET", "blockchain-raw"),
-		ExportBucket:   env("EXPORT_BUCKET", "blockchain-exports"),
-		BackupsBucket:  env("BACKUPS_BUCKET", "blockchain-backups"),
+		Env:               env("APP_ENV", "development"),
+		Timezone:          env("APP_TIMEZONE", "Asia/Bangkok"),
+		LogLevel:          env("API_LOG_LEVEL", "info"),
+		HTTPPort:          envInt("API_HTTP_PORT", 8080),
+		DatabaseURL:       env("DATABASE_URL", "postgres://blockchain:change_me_pg_2026@127.0.0.1:5433/blockchain_platform?sslmode=disable"),
+		ClickHouseURL:     env("CLICKHOUSE_URL", "clickhouse://blockchain:change_me_ch_2026@127.0.0.1:9000/blockchain"),
+		MinioEndpoint:     env("MINIO_ENDPOINT", "127.0.0.1:9001"),
+		MinioSecure:       envBool("MINIO_SECURE", false),
+		MinioAccessKey:    env("MINIO_ROOT_USER", "blockchain_admin"),
+		MinioSecretKey:    env("MINIO_ROOT_PASSWORD", "change_me_minio_2026"),
+		NatsURL:           env("NATS_URL", "nats://127.0.0.1:4222"),
+		RawBucket:         env("RAW_BUCKET", "blockchain-raw"),
+		ExportBucket:      env("EXPORT_BUCKET", "blockchain-exports"),
+		BackupsBucket:     env("BACKUPS_BUCKET", "blockchain-backups"),
 		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
 		Ankr: AnkrConfig{
-			Mode:               env("ANKR_MODE", "mock"),
-			APIKey:             os.Getenv("ANKR_API_KEY"),
-			Endpoint:           env("ANKR_ENDPOINT", "https://rpc.ankr.com/multichain"),
-			MaxPageSize:        envInt("ANKR_MAX_PAGE_SIZE", 10000),
-			InitialConcurrency: envInt("ANKR_INITIAL_CONCURRENCY", 4),
-			MaxConcurrency:     envInt("ANKR_MAX_CONCURRENCY", 32),
-			RequestsPerMinute:  envInt("ANKR_REQUESTS_PER_MINUTE", 900),
-			RequestTimeout:     time.Duration(envInt("ANKR_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
-			ResponseHeaderTimeout: time.Duration(envInt("ANKR_RESPONSE_HEADER_TIMEOUT_SECONDS", 120)) * time.Second,
-			CreditsPerRequest:  envFloat("ANKR_CREDITS_PER_REQUEST", 700),
-			CostPerRequestUSD:  envFloat("ANKR_COST_PER_REQUEST_USD", 0.00007),
-			ResponseSoftLimitBytes:  int64(envInt("ANKR_RESPONSE_SOFT_LIMIT_MB", 32)) << 20,
-			ResponseHardLimitBytes:  int64(envInt("ANKR_RESPONSE_HARD_LIMIT_MB", 64)) << 20,
-			PageLevels:             parsePageLevels(env("ANKR_PAGE_LEVELS", "1000,2000,5000,10000")),
-			PageSizeTransactions:   envInt("ANKR_PAGE_SIZE_TRANSACTIONS", 10000),
-			PageSizeTokenTransfers: envInt("ANKR_PAGE_SIZE_TOKEN_TRANSFERS", 10000),
-			PageSizeNftTransfers:   envInt("ANKR_PAGE_SIZE_NFT_TRANSFERS", 10000),
-			PageSizeLogs:           envInt("ANKR_PAGE_SIZE_LOGS", 5000),
-			PageUpSuccessCount:     envInt("ANKR_PAGE_UP_SUCCESS_COUNT", 3),
-			PageUpMaxDuration:      time.Duration(envInt("ANKR_PAGE_UP_MAX_DURATION_SECONDS", 30)) * time.Second,
-			PageUpMaxBodyBytes:     int64(envInt("ANKR_PAGE_UP_MAX_BODY_MB", 16)) << 20,
-			PageDownCooldownSuccess: envInt("ANKR_PAGE_DOWN_COOLDOWN_SUCCESS_COUNT", 5),
+			Mode:                        env("ANKR_MODE", "mock"),
+			APIKey:                      os.Getenv("ANKR_API_KEY"),
+			Endpoint:                    env("ANKR_ENDPOINT", "https://rpc.ankr.com/multichain"),
+			MaxPageSize:                 envInt("ANKR_MAX_PAGE_SIZE", 10000),
+			InitialConcurrency:          envInt("ANKR_INITIAL_CONCURRENCY", 4),
+			MaxConcurrency:              envInt("ANKR_MAX_CONCURRENCY", 32),
+			RequestsPerMinute:           envInt("ANKR_REQUESTS_PER_MINUTE", 900),
+			RequestTimeout:              time.Duration(envInt("ANKR_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
+			ResponseHeaderTimeout:       time.Duration(envInt("ANKR_RESPONSE_HEADER_TIMEOUT_SECONDS", 120)) * time.Second,
+			CreditsPerRequest:           envFloat("ANKR_CREDITS_PER_REQUEST", 700),
+			CostPerRequestUSD:           envFloat("ANKR_COST_PER_REQUEST_USD", 0.00007),
+			ResponseSoftLimitBytes:      int64(envInt("ANKR_RESPONSE_SOFT_LIMIT_MB", 32)) << 20,
+			ResponseHardLimitBytes:      int64(envInt("ANKR_RESPONSE_HARD_LIMIT_MB", 64)) << 20,
+			PageLevels:                  parsePageLevels(env("ANKR_PAGE_LEVELS", "1000,2000,5000,10000")),
+			PageSizeTransactions:        envInt("ANKR_PAGE_SIZE_TRANSACTIONS", 10000),
+			PageSizeTokenTransfers:      envInt("ANKR_PAGE_SIZE_TOKEN_TRANSFERS", 10000),
+			PageSizeNftTransfers:        envInt("ANKR_PAGE_SIZE_NFT_TRANSFERS", 10000),
+			PageSizeLogs:                envInt("ANKR_PAGE_SIZE_LOGS", 5000),
+			PageUpSuccessCount:          envInt("ANKR_PAGE_UP_SUCCESS_COUNT", 3),
+			PageUpMaxDuration:           time.Duration(envInt("ANKR_PAGE_UP_MAX_DURATION_SECONDS", 30)) * time.Second,
+			PageUpMaxBodyBytes:          int64(envInt("ANKR_PAGE_UP_MAX_BODY_MB", 16)) << 20,
+			PageDownCooldownSuccess:     envInt("ANKR_PAGE_DOWN_COOLDOWN_SUCCESS_COUNT", 5),
 			RangeSplitOnMinPageFailures: envInt("ANKR_RANGE_SPLIT_ON_MIN_PAGE_FAILURES", 3),
 		},
 		Method: MethodConfig{
@@ -211,6 +225,18 @@ func Load() *Config {
 			BackfillBatchSize:       envInt("METHOD_BACKFILL_BATCH_SIZE", 20000),
 			BackfillBatchIdle:       time.Duration(envInt("METHOD_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
 			MaxCachedABIs:           envInt("METHOD_MAX_CACHED_ABIS", 20000),
+		},
+		TokenMetadata: TokenMetadataConfig{
+			Enabled:           envBool("TOKEN_METADATA_ENABLED", true),
+			BackfillEnabled:   envBool("TOKEN_METADATA_BACKFILL_ENABLED", true),
+			BackfillBatchSize: envInt("TOKEN_METADATA_BACKFILL_BATCH_SIZE", 500),
+			WorkerInterval:    time.Duration(envInt("TOKEN_METADATA_WORKER_INTERVAL_SECONDS", 5)) * time.Second,
+			BatchIdle:         time.Duration(envInt("TOKEN_METADATA_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
+			RPCMaxRetries:     envInt("TOKEN_METADATA_RPC_MAX_RETRIES", 3),
+			LogoEnabled:       envBool("TOKEN_LOGO_ENABLED", false),
+			LogoMaxBytes:      int64(envInt("TOKEN_LOGO_MAX_BYTES", 2097152)),
+			LogoMaxWidth:      envInt("TOKEN_LOGO_MAX_WIDTH", 4096),
+			LogoMaxHeight:     envInt("TOKEN_LOGO_MAX_HEIGHT", 4096),
 		},
 	}
 }

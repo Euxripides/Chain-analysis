@@ -14,16 +14,22 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 )
 
 type Service struct {
-	CH    *clickhouse.Conn
-	Store *store.Store
-	Q     *query.Service
+	CH     *clickhouse.Conn
+	Store  *store.Store
+	Q      *query.Service
+	Tokens *tokenmeta.Service
 }
 
-func New(ch *clickhouse.Conn, st *store.Store) *Service {
-	return &Service{CH: ch, Store: st, Q: query.New(ch)}
+func New(ch *clickhouse.Conn, st *store.Store, tokens ...*tokenmeta.Service) *Service {
+	var svc *tokenmeta.Service
+	if len(tokens) > 0 {
+		svc = tokens[0]
+	}
+	return &Service{CH: ch, Store: st, Q: query.New(ch), Tokens: svc}
 }
 
 type Filter struct {
@@ -266,6 +272,18 @@ func appendTokenFilter(conds *[]string, args *[]any, input string, columns ...st
 		if term == "" {
 			continue
 		}
+		if strings.HasPrefix(strings.ToLower(term), "0x") && len(term) == 42 {
+			contractColumn := "token_address"
+			if len(columns) > 0 && columns[len(columns)-1] == "contract_address" {
+				contractColumn = "contract_address"
+			}
+			if len(columns) == 1 && columns[0] == "address" {
+				contractColumn = "address"
+			}
+			tokenConds = append(tokenConds, contractColumn+" = ?")
+			*args = append(*args, strings.ToLower(term))
+			continue
+		}
 		var columnConds []string
 		for _, column := range columns {
 			columnConds = append(columnConds, "positionCaseInsensitive("+column+", ?) > 0")
@@ -305,7 +323,10 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 			contracts = append(contracts, ta)
 		}
 	}
-	metas, _ := s.Store.TokenMetadatas(ctx, chain, contracts)
+	metas := map[string]tokenmeta.Metadata{}
+	if s.Tokens != nil {
+		metas, _ = s.Tokens.GetMany(ctx, chain, contracts)
+	}
 	// 案件/标签（当前页涉及的地址）
 	needMeta := map[string]bool{}
 	for _, r := range rows {
@@ -328,7 +349,21 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 			if meta, ok2 := metas[ta]; ok2 {
 				r["token_symbol"] = meta.Symbol
 				r["token_name"] = meta.Name
-				r["token_logo"] = meta.LogoURL
+				if meta.Decimals != nil {
+					r["token_decimals"] = *meta.Decimals
+				} else {
+					r["token_decimals"] = nil
+				}
+				r["token_type"] = meta.TokenType
+				if meta.LogoObjectKey != "" {
+					r["token_logo"] = "/api/v1/tokens/" + chain + "/" + ta + "/logo"
+				} else {
+					r["token_logo"] = ""
+				}
+				r["token_metadata_status"] = meta.MetadataStatus
+				r["token_metadata_source"] = meta.MetadataSource
+				r["token_metadata_confidence"] = meta.Confidence
+				r["token_verified"] = meta.Verified
 			} else {
 				if sym, ok3 := r["token_symbol"].(string); ok3 && sym != "" {
 					r["token_symbol"] = sym

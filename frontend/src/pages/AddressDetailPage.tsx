@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import TokenFilterDropdown, { type TokenFilterOption } from '../components/TokenFilterDropdown'
 import MethodCell from '../features/data-explorer/components/MethodCell'
 import TransactionDetailDrawer from '../features/data-explorer/components/TransactionDetailDrawer'
+import TokenCell from '../features/tokens/components/TokenCell'
 import { calculateDetailStats, EMPTY_DETAIL_FILTERS, exportDetailRows, filterPayload, hasActiveFilters, rowKey, type DetailFilters } from '../utils/detail-table'
 import { buildOklinkTxUrl, shortHash } from '../utils/explorer-url'
 import { fieldLabel } from '../utils/field-labels'
@@ -40,14 +41,6 @@ const FLOW_LABELS: Record<string, string> = {
 
 type MetadataOption = { id: string; name: string; color?: string }
 type AddressMeta = { case_names: string[]; tag_names: string[]; total_activity_count?: number; last_data_block?: number; last_sync_at?: string }
-
-function FlowTokenIcon({ row }: { row: Record<string, unknown> }) {
-  const logo = String(row.token_logo ?? '')
-  const symbol = cleanTokenSymbol(String(row.token_symbol ?? row.token_name ?? '?'))
-  if (logo) return <img className="flow-token-icon" src={logo} alt="" />
-  const hue = [...symbol].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360
-  return <span className="flow-token-icon flow-token-fallback" style={{ background: `hsl(${hue} 58% 46%)` }}>{symbol.slice(0, 1)}</span>
-}
 
 export default function AddressDetailPage() {
   const { chain = 'bsc', address = '' } = useParams()
@@ -244,7 +237,9 @@ export default function AddressDetailPage() {
       const value = contract || symbol
       if (!value) continue
       const current = options.get(value)
-      options.set(value, { value, symbol: symbol || '未知代币', name, address: contract, logo, count: (current?.count ?? 0) + 1 })
+      options.set(value, { value, symbol: symbol || '未知代币', name, address: contract, logo, count: (current?.count ?? 0) + 1,
+        status: String(row.token_metadata_status ?? ''), confidence: String(row.token_metadata_confidence ?? ''),
+        verified: Boolean(row.token_verified), decimals: row.token_decimals == null ? null : Number(row.token_decimals) })
     }
     return [...options.values()].sort((left, right) => right.count - left.count)
   }, [allFilteredRows])
@@ -340,7 +335,7 @@ export default function AddressDetailPage() {
     const symbol = cleanTokenSymbol(String(row.token_symbol ?? (tab === 'transactions' ? chain.toUpperCase() : '未知代币')))
     const name = String(row.token_name ?? (tab === 'transactions' ? `${chain.toUpperCase()} 原生币` : '名称未收录'))
     const contract = String(row.token_address ?? row.contract_address ?? '')
-    return <td key={column}><span className="flow-token" title={contract}><FlowTokenIcon row={{ ...row, token_symbol: symbol }} /><span><b>{symbol}</b><small>{name}</small></span></span></td>
+    return <td key={column}><TokenCell token={{ symbol, name, contract, logo: String(row.token_logo ?? ''), decimals: row.token_decimals == null ? null : Number(row.token_decimals), status: String(row.token_metadata_status ?? (contract ? 'unknown' : 'complete')), source: String(row.token_metadata_source ?? ''), confidence: String(row.token_metadata_confidence ?? 'unknown'), verified: Boolean(row.token_verified) }} /></td>
   }
 
   async function doExport() {
@@ -381,7 +376,7 @@ export default function AddressDetailPage() {
       <div className="card detail-card">
         <section className="detail-tools compact-filter-bar" aria-label="数据筛选与导出">
           <div className="compact-filter-controls">
-            {FILTERABLE_TOKEN.has(tab) && <TokenFilterDropdown value={filters.token} options={tokenCatalog} onConfirm={(value) => updateFilter('token', value)} />}
+            {FILTERABLE_TOKEN.has(tab) && <TokenFilterDropdown chain={chain} value={filters.token} options={tokenCatalog} onConfirm={(value) => updateFilter('token', value)} />}
             {FILTERABLE_AMOUNT.has(tab) && <label className="compact-pill amount-pill"><span>数量:</span><select aria-label="数量条件" value={amountMode} onChange={(event) => { const mode = event.target.value as typeof amountMode; setAmountMode(mode); setFilters((current) => ({ ...current, minAmount: '', maxAmount: '' })) }}><option value="gte">≥</option><option value="lte">≤</option><option value="between">区间</option></select><input aria-label="最小数量" inputMode="decimal" placeholder={amountMode === 'between' ? '最小' : '数量'} value={amountMode === 'lte' ? filters.maxAmount : filters.minAmount} onChange={(event) => updateFilter(amountMode === 'lte' ? 'maxAmount' : 'minAmount', event.target.value)} />{amountMode === 'between' && <><i>—</i><input aria-label="最大数量" inputMode="decimal" placeholder="最大" value={filters.maxAmount} onChange={(event) => updateFilter('maxAmount', event.target.value)} /></>}</label>}
             <label className="compact-pill date-pill"><input aria-label="开始时间" type="date" value={filters.fromTime} onChange={(event) => updateFilter('fromTime', event.target.value)} /><i>→</i><input aria-label="结束时间" type="date" value={filters.toTime} onChange={(event) => updateFilter('toTime', event.target.value)} /></label>
             {FILTERABLE_PARTIES.has(tab) && <label className="compact-pill party-pill"><select aria-label="地址类型" value={partyField} onChange={(event) => { const field = event.target.value as typeof partyField; setPartyField(field); setFilters((current) => ({ ...current, fromAddress: '', toAddress: '' })) }}><option value="fromAddress">发送方</option><option value="toAddress">接收方</option></select><input aria-label={partyField === 'fromAddress' ? '发送方' : '接收方'} className="mono" placeholder="输入地址搜索" value={filters[partyField]} onChange={(event) => updateFilter(partyField, event.target.value)} /></label>}

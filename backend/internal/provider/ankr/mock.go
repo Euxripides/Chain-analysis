@@ -16,10 +16,10 @@ import (
 
 // MockProvider 无 API Key 时用于开发与端到端演示的确定性数据源。
 type MockProvider struct {
-	pageSize    int
-	usageHook   provider.UsageHook
-	requestSeq  int64
-	maxPages    int
+	pageSize   int
+	usageHook  provider.UsageHook
+	requestSeq int64
+	maxPages   int
 }
 
 func NewMock(pageSize int, hook provider.UsageHook) *MockProvider {
@@ -30,6 +30,14 @@ func NewMock(pageSize int, hook provider.UsageHook) *MockProvider {
 }
 
 func (m *MockProvider) Name() string { return "ankr-mock" }
+
+func (m *MockProvider) ResolveTokenMetadata(_ context.Context, _ string, contract string) (provider.TokenMetadataResult, error) {
+	name, symbol, decimals := "Mock Token", "MOCK", 18
+	if strings.HasSuffix(strings.ToLower(contract), "55d398326f99059ff775485246999027b3197955") {
+		name, symbol, decimals = "Tether USD", "USDT", 18
+	}
+	return provider.TokenMetadataResult{Name: &name, Symbol: &symbol, Decimals: &decimals}, nil
+}
 
 func (m *MockProvider) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
@@ -158,8 +166,8 @@ func (m *MockProvider) mockRows(req provider.FetchRequest, from, to uint64) []js
 					input = "0x60806040523480156100" + strconv.FormatUint(rng.Uint64(), 16)
 				}
 				row = map[string]any{
-					"blockHeight": fmt.Sprintf("%d", b), "blockHash": hex(b), "transactionHash": hex(b*1000+i),
-					"timestamp": int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
+					"blockHeight": fmt.Sprintf("%d", b), "blockHash": hex(b), "transactionHash": hex(b*1000 + i),
+					"timestamp":   int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
 					"fromAddress": req.Address, "toAddress": toAddress, "value": value,
 					"nonce": fmt.Sprintf("%d", i), "gasLimit": fmt.Sprintf("%d", 21000), "gasUsed": fmt.Sprintf("%d", 21000),
 					"gasPrice": hex(1000000000 + rng.Uint64()%100), "type": "0x0", "status": "0x1",
@@ -168,22 +176,22 @@ func (m *MockProvider) mockRows(req provider.FetchRequest, from, to uint64) []js
 			case "token_transfers":
 				row = map[string]any{
 					"blockHeight": fmt.Sprintf("%d", b), "timestamp": int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
-					"transactionHash": hex(b*1000+i), "logIndex": fmt.Sprintf("%d", i),
-					"fromAddress": req.Address, "toAddress": hex(seed+i), "value": fmt.Sprintf("%d", rng.Uint64()%1000000000000),
-					"tokenName": "Mock Token", "tokenSymbol": "MCK", "tokenDecimals": 18, "contractAddress": hex(seed+7),
+					"transactionHash": hex(b*1000 + i), "logIndex": fmt.Sprintf("%d", i),
+					"fromAddress": req.Address, "toAddress": hex(seed + i), "value": fmt.Sprintf("%d", rng.Uint64()%1000000000000),
+					"tokenName": "Mock Token", "tokenSymbol": "MCK", "tokenDecimals": 18, "contractAddress": hex(seed + 7),
 				}
 			case "nft_transfers":
 				row = map[string]any{
 					"blockHeight": fmt.Sprintf("%d", b), "timestamp": int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
-					"transactionHash": hex(b*1000+i), "logIndex": fmt.Sprintf("%d", i),
-					"fromAddress": req.Address, "toAddress": hex(seed+i), "contractAddress": hex(seed+9),
+					"transactionHash": hex(b*1000 + i), "logIndex": fmt.Sprintf("%d", i),
+					"fromAddress": req.Address, "toAddress": hex(seed + i), "contractAddress": hex(seed + 9),
 					"tokenId": fmt.Sprintf("%d", i+1), "tokenName": "MockNFT", "tokenSymbol": "MNFT", "value": "1",
 				}
 			case "logs":
 				row = map[string]any{
-					"address": req.Address, "topics": []string{hex(rng.Uint64()), hex(rng.Uint64()%16)},
-					"data": "0x" + strconv.FormatUint(rng.Uint64()%4096, 16),
-					"blockNumber": fmt.Sprintf("%d", b), "transactionHash": hex(b*1000+i),
+					"address": req.Address, "topics": []string{hex(rng.Uint64()), hex(rng.Uint64() % 16)},
+					"data":        "0x" + strconv.FormatUint(rng.Uint64()%4096, 16),
+					"blockNumber": fmt.Sprintf("%d", b), "transactionHash": hex(b*1000 + i),
 					"transactionIndex": fmt.Sprintf("%d", i), "blockHash": hex(b), "logIndex": fmt.Sprintf("%d", i),
 					"removed": false, "timestamp": int64(time.Now().UnixMilli()) - int64((to-b)*12*1000),
 				}
