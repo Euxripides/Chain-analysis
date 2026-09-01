@@ -56,6 +56,7 @@ body {
 .nav-item.active { background: #e3edff; color: var(--accent); font-weight: 600; }
 .sidebar-foot { margin-top: auto; color: var(--muted); font-size: 12px; }
 .content { flex: 1; padding: 24px 28px; max-width: 1280px; }
+.content, .page { min-width: 0; }
 h1 { margin: 0 0 4px; font-size: 22px; color: var(--text); }
 .sub { color: var(--muted); margin: 0 0 18px; }
 .card {
@@ -114,3 +115,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--red); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
 .link { color: var(--accent); text-decoration: none; }
 .link:hover { text-decoration: underline; }
+
+@media (max-width: 760px) {
+  .layout { display: block; }
+  .sidebar {
+    width: 100%; min-width: 0; padding: 10px 12px; gap: 9px;
+    border-right: 0; border-bottom: 1px solid var(--border); overflow: visible;
+  }
+  .brand-logo { font-size: 22px; }
+  .brand-sub, .sidebar-foot { display: none; }
+  .sidebar nav {
+    flex-direction: row; overflow-x: auto; overscroll-behavior-x: contain;
+    padding-bottom: 2px; scrollbar-width: thin;
+  }
+  .nav-main, .nav-item { flex: 0 0 auto; width: auto; padding: 8px 10px; }
+  .nav-item.sub { padding-left: 10px; }
+  .nav-chevron { margin-left: 4px; }
+  .content { width: 100%; max-width: none; padding: 16px 12px 24px; }
+  h1 { font-size: 20px; overflow-wrap: anywhere; }
+  .sub { margin-bottom: 14px; }
+  .card { padding: 14px; overflow-x: auto; }
+  .page > .row, .card > .row { flex-wrap: wrap; }
+  .row.between { align-items: flex-start; }
+  .flex-1, .flex-2 { flex: 1 1 100%; min-width: 0; }
+  .table { min-width: 760px; }
+  button { white-space: nowrap; }
+}

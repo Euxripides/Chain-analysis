@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import * as XLSX from 'xlsx'
 import { api } from '../api/client'
 import { CHAINS, DATASETS } from '../types'
 
@@ -35,6 +34,7 @@ export default function DownloadPage() {
   const [caseName, setCaseName] = useState('')
   const [tagNames, setTagNames] = useState<string[]>([])
   const [subjectMeta, setSubjectMeta] = useState<Record<string, { case_name: string; tags: string[] }>>({})
+  const [subjectChains, setSubjectChains] = useState<Record<string, string>>({})
 
   useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
   useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
@@ -50,39 +50,39 @@ export default function DownloadPage() {
 
   function handleFile(file: File) {
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
-        let text = ''
-        if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
-          text = String(reader.result ?? '')
-        } else {
-          const wb = XLSX.read(reader.result, { type: 'array' })
-          const ws = wb.Sheets[wb.SheetNames[0]]
-          text = XLSX.utils.sheet_to_csv(ws)
-        }
-        // §24：CSV 可携带 address,chain,case,tags 列 → Per-Address Override
-        const lines = text.split(/[\r\n]+/).filter((l) => l.trim())
-        let addrLines = lines
+        const lowerName = file.name.toLowerCase()
+        let addrLines: string[] = []
         const meta: Record<string, { case_name: string; tags: string[] }> = {}
-        if (lines.length > 0 && /address/i.test(lines[0])) {
-          const header = lines[0].split(',').map((h) => h.trim().toLowerCase())
-          const ai = header.indexOf('address')
-          const ci = header.indexOf('case')
-          const ti = header.indexOf('tags')
-          if (ai >= 0) {
-            addrLines = []
-            for (const l of lines.slice(1)) {
-              const cells = l.split(',')
-              const addr = (cells[ai] ?? '').trim().toLowerCase()
+        const chains: Record<string, string> = {}
+        if (lowerName.endsWith('.txt')) {
+          addrLines = String(reader.result ?? '').split(/[\r\n,;\s]+/).map((value) => value.trim().toLowerCase()).filter(Boolean)
+        } else {
+          // XLSX parser also handles quoted CSV correctly; load it only while importing.
+          const XLSX = await import('xlsx')
+          const wb = XLSX.read(reader.result, { type: lowerName.endsWith('.csv') ? 'string' : 'array' })
+          const ws = wb.Sheets[wb.SheetNames[0]]
+          const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false })
+          const hasAddressHeader = records.length > 0 && Object.keys(records[0]).some((key) => key.trim().toLowerCase() === 'address')
+          if (hasAddressHeader) {
+            for (const raw of records) {
+              const record = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key.trim().toLowerCase(), String(value ?? '').trim()]))
+              const addr = (record.address ?? '').toLowerCase()
               if (!addr) continue
               addrLines.push(addr)
-              const caseN = ci >= 0 ? (cells[ci] ?? '').trim() : ''
-              const tagList = ti >= 0 ? (cells[ti] ?? '').split('|').map((x) => x.trim()).filter(Boolean) : []
+              const caseN = record.case ?? ''
+              const tagList = (record.tags ?? '').split(/[|;；]/).map((value) => value.trim()).filter(Boolean)
               if (caseN || tagList.length) meta[addr] = { case_name: caseN, tags: tagList }
+              const rowChain = (record.chain ?? '').toLowerCase()
+              if (rowChain && CHAINS.includes(rowChain)) chains[addr] = rowChain
             }
+          } else {
+            addrLines = XLSX.utils.sheet_to_csv(ws).split(/[\r\n,;\s]+/).map((value) => value.trim().toLowerCase()).filter(Boolean)
           }
         }
         setSubjectMeta((prev) => ({ ...prev, ...meta }))
+        setSubjectChains((prev) => ({ ...prev, ...chains }))
         setAddressText((prev) => (prev ? prev + '\n' : '') + addrLines.join('\n'))
       } catch (e) {
         setError('文件解析失败: ' + String(e))
@@ -92,6 +92,32 @@ export default function DownloadPage() {
       reader.readAsArrayBuffer(file)
     } else {
       reader.readAsText(file)
+    }
+  }
+
+  async function createCase() {
+    const name = prompt('新案件名')?.trim()
+    if (!name) return
+    setError('')
+    try {
+      const created = await api.createCase(name)
+      setCases((cur) => [...cur, created].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')))
+      setCaseName(created.name)
+    } catch (e) {
+      setError('新建案件失败: ' + String(e))
+    }
+  }
+
+  async function createTag() {
+    const name = prompt('新标签名')?.trim()
+    if (!name) return
+    setError('')
+    try {
+      const created = await api.createTag(name)
+      setTags((cur) => [...cur, created].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')))
+      setTagNames((cur) => [...new Set([...cur, created.name])])
+    } catch (e) {
+      setError('新建标签失败: ' + String(e))
     }
   }
 
@@ -109,10 +135,13 @@ export default function DownloadPage() {
     setError('')
     setBusy(true)
     try {
-      const resp = await api.preview({
-        subjects: addresses.valid, chain, datasets, range: buildRange(),
-      })
-      setPreview(resp)
+			const groups = groupAddressesByChain(addresses.valid, chain, subjectChains)
+			const responses = await Promise.all(Object.entries(groups).map(([groupChain, subjects]) => api.preview({
+				subjects, chain: groupChain, datasets, range: buildRange(),
+			})))
+			const items = responses.flatMap((response) => response.items)
+			const overallRatio = items.length > 0 ? items.reduce((sum, item) => sum + item.ratio, 0) / items.length : 0
+			setPreview({ overall_ratio: overallRatio, items })
     } catch (e) {
       setError(String(e))
     } finally {
@@ -124,16 +153,19 @@ export default function DownloadPage() {
     setError('')
     setBusy(true)
     try {
-      const resp = await api.ensure({
-        source: 'user_download', priority: 100,
-        subjects: addresses.valid, chain, datasets, range: buildRange(),
-        reuse_policy: 'prefer_local',
-        case_name: caseName || undefined,
-        tags: tagNames.length ? tagNames : undefined,
-        create_missing_meta: false,
-        subject_meta: subjectMeta,
-      })
-      if (resp.job_id) navigate('/jobs/' + resp.job_id)
+			const groups = groupAddressesByChain(addresses.valid, chain, subjectChains)
+			const responses = await Promise.all(Object.entries(groups).map(([groupChain, subjects]) => api.ensure({
+				source: 'user_download', priority: 100,
+				subjects, chain: groupChain, datasets, range: buildRange(),
+				reuse_policy: 'prefer_local',
+				case_name: caseName || undefined,
+				tags: tagNames.length ? tagNames : undefined,
+				create_missing_meta: false,
+				subject_meta: Object.fromEntries(subjects.filter((addr) => subjectMeta[addr]).map((addr) => [addr, subjectMeta[addr]])),
+			})))
+			const jobIDs = responses.flatMap((response) => response.job_id ? [response.job_id] : [])
+			if (jobIDs.length === 1) navigate('/jobs/' + jobIDs[0])
+			else if (jobIDs.length > 1) navigate('/jobs')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -209,10 +241,10 @@ export default function DownloadPage() {
               </label>
             )
           })}
-          {caseName && <button className="ghost sm" onClick={() => api.createCase(caseName).then((c) => setCases((cur) => [...cur, c]))}>+ 新建案件</button>}
-          <button className="ghost sm" onClick={() => { const n = prompt('新标签名'); if (n) api.createTag(n).then((t) => setTags((cur) => [...cur, t])) }}>+ 新建标签</button>
+          <button className="ghost sm" onClick={createCase}>+ 新建案件</button>
+          <button className="ghost sm" onClick={createTag}>+ 新建标签</button>
         </div>
-        {Object.keys(subjectMeta).length > 0 && <p className="muted" style={{ marginTop: 6 }}>已从导入文件解析 {Object.keys(subjectMeta).length} 个地址的案件/标签映射</p>}
+		{(Object.keys(subjectMeta).length > 0 || Object.keys(subjectChains).length > 0) && <p className="muted" style={{ marginTop: 6 }}>已解析 {Object.keys(subjectMeta).length} 个案件/标签映射、{Object.keys(subjectChains).length} 个链映射；不同链将自动拆为多个任务</p>}
       </div>
 
       <div className="card">
@@ -257,4 +289,14 @@ export default function DownloadPage() {
       </div>
     </div>
   )
+}
+
+function groupAddressesByChain(addresses: string[], fallbackChain: string, overrides: Record<string, string>) {
+	const groups: Record<string, string[]> = {}
+	for (const address of addresses) {
+		const addressChain = overrides[address] || fallbackChain
+		if (!groups[addressChain]) groups[addressChain] = []
+		groups[addressChain].push(address)
+	}
+	return groups
 }

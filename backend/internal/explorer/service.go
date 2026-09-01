@@ -4,7 +4,9 @@ package explorer
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,15 +26,15 @@ func New(ch *clickhouse.Conn, st *store.Store) *Service {
 }
 
 type Filter struct {
-	FromTime    *time.Time `json:"from_time"`
-	ToTime      *time.Time `json:"to_time"`
-	Direction   string     `json:"direction"`
-	Token       string     `json:"token"`
-	MethodID    string     `json:"method_id"`
-	MinAmount   string     `json:"min_amount"`
-	MaxAmount   string     `json:"max_amount"`
-	BlockFrom   *int64     `json:"block_from"`
-	BlockTo     *int64     `json:"block_to"`
+	FromTime  *time.Time `json:"from_time"`
+	ToTime    *time.Time `json:"to_time"`
+	Direction string     `json:"direction"`
+	Token     string     `json:"token"`
+	MethodID  string     `json:"method_id"`
+	MinAmount string     `json:"min_amount"`
+	MaxAmount string     `json:"max_amount"`
+	BlockFrom *int64     `json:"block_from"`
+	BlockTo   *int64     `json:"block_to"`
 }
 
 type QueryRequest struct {
@@ -68,9 +70,9 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 	next := ""
 	if len(rows) == req.Limit {
 		last := rows[len(rows)-1]
-		if ts, ok := last["timestamp"].(time.Time); ok {
-			hash := fmt.Sprintf("%v", last["tx_hash"])
-			next = encodeCursor(ts, hash)
+		if cur, ok := cursorFromRow(last); ok {
+			cur.Dataset = req.Dataset
+			next = encodeCursor(cur)
 		}
 	}
 	return &Result{Rows: rows, NextCursor: next, Count: len(rows)}, nil
@@ -149,14 +151,15 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		}
 	}
 	filterSQL := strings.Join(conds, " AND ")
-	var cursorTs *time.Time
-	var cursorHash string
+	var qCursor *query.ExplorerCursor
 	if cur, err := decodeCursor(req.Cursor); err == nil && !cur.Ts.IsZero() {
-		t := cur.Ts
-		cursorTs = &t
-		cursorHash = cur.Hash
+		qCursor = &query.ExplorerCursor{
+			Timestamp: cur.Ts, TxHash: cur.Hash, LogIndex: cur.LogIndex,
+			TokenAddress: cur.TokenAddress, ContractAddress: cur.ContractAddress,
+			TokenID: cur.TokenID, ActivityType: cur.ActivityType, Counterparty: cur.Counterparty,
+		}
 	}
-	return s.Q.Explorer(ctx, req.Dataset, req.Chain, req.Addresses, filterSQL, args, cursorTs, cursorHash, req.Limit)
+	return s.Q.Explorer(ctx, req.Dataset, req.Chain, req.Addresses, filterSQL, args, qCursor, req.Limit)
 }
 
 func partitionBy(ds string) string {
@@ -263,15 +266,24 @@ func dedupe(in []string) []string {
 
 // ---- cursor ----
 
-func encodeCursor(ts time.Time, hash string) string {
-	raw := ts.UTC().Format(time.RFC3339Nano) + "|" + hash
-	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+type pageCursor struct {
+	Ts              time.Time `json:"ts"`
+	Hash            string    `json:"hash"`
+	Dataset         string    `json:"dataset,omitempty"`
+	LogIndex        uint64    `json:"log_index,omitempty"`
+	TokenAddress    string    `json:"token_address,omitempty"`
+	ContractAddress string    `json:"contract_address,omitempty"`
+	TokenID         string    `json:"token_id,omitempty"`
+	ActivityType    string    `json:"activity_type,omitempty"`
+	Counterparty    string    `json:"counterparty,omitempty"`
 }
 
-func decodeCursor(c string) (cur struct {
-	Ts   time.Time
-	Hash string
-}, err error) {
+func encodeCursor(cur pageCursor) string {
+	raw, _ := json.Marshal(cur)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeCursor(c string) (cur pageCursor, err error) {
 	if c == "" {
 		return cur, fmt.Errorf("empty cursor")
 	}
@@ -279,6 +291,13 @@ func decodeCursor(c string) (cur struct {
 	if err != nil {
 		return cur, err
 	}
+	if len(b) > 0 && b[0] == '{' {
+		if err := json.Unmarshal(b, &cur); err != nil {
+			return cur, err
+		}
+		return cur, nil
+	}
+	// Backward compatibility with the original timestamp|hash cursor.
 	parts := strings.SplitN(string(b), "|", 2)
 	if len(parts) != 2 {
 		return cur, fmt.Errorf("bad cursor")
@@ -290,4 +309,55 @@ func decodeCursor(c string) (cur struct {
 	cur.Ts = ts
 	cur.Hash = parts[1]
 	return cur, nil
+}
+
+func cursorFromRow(row map[string]any) (pageCursor, bool) {
+	ts, ok := valueTime(row["timestamp"])
+	if !ok {
+		return pageCursor{}, false
+	}
+	return pageCursor{
+		Ts: ts, Hash: valueString(row["tx_hash"]), LogIndex: valueUint64(row["log_index"]),
+		TokenAddress: valueString(row["token_address"]), ContractAddress: valueString(row["contract_address"]),
+		TokenID: valueString(row["token_id"]), ActivityType: valueString(row["activity_type"]),
+		Counterparty: valueString(row["counterparty"]),
+	}, true
+}
+
+func valueTime(v any) (time.Time, bool) {
+	switch x := v.(type) {
+	case time.Time:
+		return x, true
+	case string:
+		t, err := time.Parse(time.RFC3339Nano, x)
+		return t, err == nil
+	default:
+		return time.Time{}, false
+	}
+}
+
+func valueString(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+func valueUint64(v any) uint64 {
+	switch x := v.(type) {
+	case json.Number:
+		n, _ := strconv.ParseUint(string(x), 10, 64)
+		return n
+	case uint64:
+		return x
+	case uint32:
+		return uint64(x)
+	case int:
+		return uint64(x)
+	case float64:
+		return uint64(x)
+	default:
+		n, _ := strconv.ParseUint(fmt.Sprint(v), 10, 64)
+		return n
+	}
 }

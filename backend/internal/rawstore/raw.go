@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
+
+var ErrInvalidRange = errors.New("invalid object range")
 
 type Store struct {
 	client *minio.Client
@@ -100,15 +103,7 @@ func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
 
 // OpenRange 按字节区间流式读取（HTTP Range 断点续传，§57）。
 func (s *Store) OpenRange(ctx context.Context, key string, start, end int64) (io.ReadCloser, int64, error) {
-	opts := minio.GetObjectOptions{}
-	if start >= 0 {
-		if end < 0 {
-			opts.SetRange(start, 0)
-		} else {
-			opts.SetRange(start, end)
-		}
-	}
-	obj, err := s.client.GetObject(ctx, s.bucket, key, opts)
+	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -117,7 +112,30 @@ func (s *Store) OpenRange(ctx context.Context, key string, start, end int64) (io
 		obj.Close()
 		return nil, 0, err
 	}
-	return obj, info.Size, nil
+	if start < 0 || start >= info.Size {
+		obj.Close()
+		return nil, info.Size, fmt.Errorf("%w: start %d outside object size %d", ErrInvalidRange, start, info.Size)
+	}
+	if end < 0 || end >= info.Size {
+		end = info.Size - 1
+	}
+	if end < start {
+		obj.Close()
+		return nil, info.Size, fmt.Errorf("%w: end %d before start %d", ErrInvalidRange, end, start)
+	}
+	if _, err := obj.Seek(start, io.SeekStart); err != nil {
+		obj.Close()
+		return nil, info.Size, err
+	}
+	return &limitedReadCloser{
+		Reader: io.LimitReader(obj, end-start+1),
+		Closer: obj,
+	}, info.Size, nil
+}
+
+type limitedReadCloser struct {
+	io.Reader
+	io.Closer
 }
 
 // Open 流式读取对象（导出下载用，不整块进内存）。

@@ -262,7 +262,7 @@ func (s *Store) DeleteExpiredPreviews(ctx context.Context) (int64, error) {
 
 func (s *Store) CreateExportV2(ctx context.Context, wsID, orgID string, createdBy *string, dataset, format string, zip bool, snapshot []byte) (*model.Export, error) {
 	e := &model.Export{
-		ID: uuid.NewString(), Dataset: dataset, Format: format, Status: "PENDING",
+		ID: uuid.NewString(), Dataset: dataset, Format: format, Zip: zip, Status: "PENDING",
 	}
 	_, err := s.Pool.Exec(ctx, "INSERT INTO exports (id, dataset, format, zip, status, organization_id, workspace_id, created_by, query_snapshot, expires_at) "+
 		"VALUES ($1,$2,$3,$4,'PENDING',$5,$6,$7,$8::jsonb, now() + interval '24 hours')",

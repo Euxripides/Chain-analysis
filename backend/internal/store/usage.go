@@ -79,7 +79,7 @@ func (s *Store) CreateExport(ctx context.Context, jobID *string, dataset, format
 }
 
 func (s *Store) GetExport(ctx context.Context, id string) (*model.Export, error) {
-	rows, err := s.Pool.Query(ctx, "SELECT id, job_id, dataset, format, zip, status, object_ref, rows, error, created_at, updated_at "+
+	rows, err := s.Pool.Query(ctx, "SELECT id, job_id, dataset, format, zip, status, object_ref, rows, sha256, error, created_at, updated_at "+
 		"FROM exports WHERE id=$1", id)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (s *Store) GetExport(ctx context.Context, id string) (*model.Export, error)
 		return nil, nil
 	}
 	var e model.Export
-	if err := rows.Scan(&e.ID, &e.JobID, &e.Dataset, &e.Format, &e.Zip, &e.Status, &e.ObjectRef, &e.Rows, &e.Error, &e.CreatedAt, &e.UpdatedAt); err != nil {
+	if err := rows.Scan(&e.ID, &e.JobID, &e.Dataset, &e.Format, &e.Zip, &e.Status, &e.ObjectRef, &e.Rows, &e.SHA256, &e.Error, &e.CreatedAt, &e.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &e, nil

@@ -114,7 +114,7 @@ func (s *Server) buildRouter() {
 		api.Post("/updates/{id}/confirm", s.handleUpdateConfirm)
 	})
 
-	// 短期下载票据（§54：302 → 15 分钟签名 URL）
+	// 短期下载票据：校验后经 API 流式传输，支持 HTTP Range。
 	r.Get("/api/v1/download/{ticket}", s.handleTicketDownload)
 	s.router = r
 }
@@ -147,8 +147,8 @@ func (s *Server) corsMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id, X-User-Email, X-Org-Id, X-User-Role")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return

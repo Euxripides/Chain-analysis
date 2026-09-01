@@ -34,6 +34,7 @@ export default function DataExplorerPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null)
   const [busy, setBusy] = useState(false)
+	const [error, setError] = useState('')
 
   useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
   useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
@@ -46,10 +47,15 @@ export default function DataExplorerPage() {
     if (tagMode === 'all') params.set('tag_mode', 'all')
     if (nextCursor) params.set('cursor', nextCursor)
     setBusy(true)
+		setError('')
     try {
       const d = await api.explorerAddresses(params.toString())
-      setRows((d.addresses ?? []) as CatalogRow[])
+			const incoming = (d.addresses ?? []) as CatalogRow[]
+			setRows((current) => nextCursor ? [...current, ...incoming] : incoming)
+			if (!nextCursor) setSelected(new Set())
       setCursor(d.next_cursor ?? '')
+		} catch (e) {
+			setError(String(e))
     } finally {
       setBusy(false)
     }
@@ -73,8 +79,16 @@ export default function DataExplorerPage() {
 
   async function doUpdatePreview() {
     setPreview(null)
-    const resp = await api.updatePreview({ chain, addresses: selectedAddrs, preview_page_size: 500 })
-    setPreview(resp)
+		setBusy(true)
+		setError('')
+		try {
+			const resp = await api.updatePreview({ chain, addresses: selectedAddrs, preview_page_size: 500 })
+			setPreview(resp)
+		} catch (e) {
+			setError(String(e))
+		} finally {
+			setBusy(false)
+		}
   }
 
   async function confirmUpdate() {
@@ -86,19 +100,36 @@ export default function DataExplorerPage() {
   }
 
   async function doExport() {
-    const exp = await api.exportV2({
-      chain, format: 'csv', include_meta: true,
-      addresses: selectedAddrs, datasets: ['transactions', 'token_transfers'],
-    })
+		setBusy(true)
+		setError('')
+		let exp
+		try {
+			exp = await api.exportV2({
+				chain, format: 'csv', include_meta: true,
+				addresses: selectedAddrs, datasets: ['transactions', 'token_transfers'],
+			})
+		} catch (e) {
+			setError(String(e))
+			setBusy(false)
+			return
+		}
     const timer = setInterval(async () => {
-      const cur = await api.getExport(exp.id)
-      if (cur.status === 'COMPLETED') {
-        clearInterval(timer)
-        window.open('/api/v1/exports/' + exp.id + '/download', '_blank')
-      } else if (cur.status === 'FAILED') {
-        clearInterval(timer)
-        alert('导出失败: ' + cur.error)
-      }
+			try {
+				const cur = await api.getExport(exp.id)
+				if (cur.status === 'COMPLETED') {
+					clearInterval(timer)
+					setBusy(false)
+					window.open('/api/v1/exports/' + exp.id + '/download', '_blank', 'noopener,noreferrer')
+				} else if (cur.status === 'FAILED') {
+					clearInterval(timer)
+					setBusy(false)
+					setError('导出失败: ' + cur.error)
+				}
+			} catch (e) {
+				clearInterval(timer)
+				setBusy(false)
+				setError(String(e))
+			}
     }, 1500)
   }
 
@@ -134,7 +165,7 @@ export default function DataExplorerPage() {
         <span className="muted">已显示 {rows.length} 个地址 · 已选 {selected.size}</span>
         <div className="row gap">
           <button disabled={selected.size === 0 || busy} onClick={doUpdatePreview}>更新</button>
-          <button disabled={selected.size === 0} onClick={doExport}>导出 CSV</button>
+			<button disabled={selected.size === 0 || busy} onClick={doExport}>导出 CSV</button>
           {selected.size > 0 && <button className="ghost" onClick={() => setSelected(new Set())}>清除</button>}
         </div>
       </div>
@@ -169,14 +200,16 @@ export default function DataExplorerPage() {
             {rows.length === 0 && <tr><td colSpan={12} className="muted center">{busy ? '加载中…' : '目录为空，去「地址下载」页下载或导入地址'}</td></tr>}
           </tbody>
         </table>
-        {cursor && <button className="ghost" onClick={() => load(cursor)}>加载更多</button>}
+		{cursor && <button className="ghost" disabled={busy} onClick={() => load(cursor)}>{busy ? '加载中…' : '加载更多'}</button>}
       </div>
+
+		{error && <div className="error">{error}</div>}
 
       {preview && (
         <div className="card">
           <div className="card-title">更新预览 {preview.target_block ? '· 检查至 Block ' + preview.target_block : ''}</div>
           <p>
-            有新增 {summary?.addresses ?? 0} · 已是最新 {summary?.up_to_date ?? 0} · 精确新增 {summary?.exact_rows ?? 0} · 估算新增 ≈{summary?.estimated_rows ?? 0} · 预计 {summary?.estimated_bytes ?? 0} 字节
+			共 {summary?.addresses ?? 0} 个地址 · 有新增 {summary?.with_new_data ?? 0} · 已是最新 {summary?.up_to_date ?? 0} · 精确新增 {summary?.exact_rows ?? 0} · 估算新增 ≈{summary?.estimated_rows ?? 0} · 预计 {summary?.estimated_bytes ?? 0} 字节
           </p>
           <div className="row gap">
             <button className="primary" onClick={confirmUpdate}>确认更新</button>

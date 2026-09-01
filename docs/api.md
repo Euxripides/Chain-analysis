@@ -40,13 +40,17 @@ POST /api/v1/datasets/ensure
 | GET | `/coverage?chain=&subject=&dataset=` | 查询 Coverage 区间 |
 | GET | `/coverage/stats` | 各 Dataset Coverage 汇总 |
 
-## 导出（流式，不整表进内存）
+## 导出（异步生成 MinIO 对象）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/exports` `{job_id, dataset, format}` | format: csv / xlsx / json(NDJSON) |
-| GET | `/exports/{id}` | 导出状态 |
-| GET | `/exports/{id}/download` | 302 → MinIO 预签名 URL |
+| POST | `/exports` | format: csv / xlsx / json(JSONL) / parquet；支持 addresses/datasets/include_meta |
+| GET | `/exports/{id}` | 导出状态、真实行数、对象大小和 SHA-256 |
+| GET | `/exports/{id}/download` | API 代理下载；支持 HTTP Range / 206 |
+| POST | `/exports/{id}/download-ticket` | 创建 15 分钟下载 Ticket |
+| GET | `/download/{ticket}` | 校验 Ticket 后由 API 流式下载；支持 HTTP Range / 206 |
+
+超过 3 个地址时自动生成 ZIP，结构为 `addresses/{address}/{dataset}.{ext}` 加 `manifest.json`。当前单次导出最多读取 2,000,000 行；超大导出仍应按地址/数据集拆分，后续再接真正的分批游标写入。
 
 ## 地址活动（资金分析统一入口，§87）
 
@@ -57,6 +61,20 @@ POST /api/v1/datasets/ensure
 ## 导出补充参数
 
 `POST /exports` 支持 `subject`（按地址导出）与 `chain`（数据浏览页导出时指定链）。
+
+## V1.2 数据浏览、元数据与增量更新
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/cases` | 案件列表 / 新建案件 |
+| DELETE | `/cases/{id}` | 删除案件并安全重选地址的主案件 |
+| GET/POST | `/tags` | 标签列表 / 新建标签 |
+| DELETE | `/tags/{id}` | 删除标签 |
+| PATCH | `/addresses/{chain}/{address}/metadata` | 更新显示名、案件、主案件和标签 |
+| GET | `/data-explorer/addresses` | 地址目录；服务端筛选和 keyset cursor |
+| POST | `/data-explorer/query` | 多地址统一查询；稳定 keyset cursor |
+| POST | `/updates/preview` | 增量缺口预览 |
+| POST | `/updates/{id}/confirm` | 冻结预览目标并创建缺口下载任务 |
 
 ## Provider / 健康 / 观测
 

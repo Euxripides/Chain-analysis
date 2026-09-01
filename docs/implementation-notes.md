@@ -142,10 +142,10 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - **统一数据浏览**：POST /data-explorer/query（多地址 QUALIFY 窗口去重、cursor 分页禁止深 OFFSET、方向/Token/金额/时间/区块/Method 筛选、matched_addresses/case_names/tag_names/token_symbol 富化）；地址详情页 Tabs。
 - **OKLink 外链**：utils/explorer-url.ts 集中配置 6 链 slug，target=_blank + noopener noreferrer，未知链不生成链接。
 - **混合增量更新**：SafeHead（本地最大块-15 reorg buffer）；Preview：无缺口→精确 0 不调 Ankr；小增量→精确；大增量→估算（min/est/low/high/bytes/confidence）；15min 过期 + 60s 缓存；Confirm：冻结 target_block、复检 Coverage、复用 EnsureDataset 只下缺口；Balance 作为 Snapshot 刷新。
-- **公网导出**：异步 ExportJob；CSV/XLSX/JSONL/Parquet；**>3 地址强制 ZIP**（addresses/{addr}/{dataset}.{ext} + manifest.json）；下载 Ticket（15min）→ 短时签名 URL；HTTP Range 断点续传（OpenRange 206）；MinIO Private Bucket；对象 24h 过期。
+- **公网导出**：异步 ExportJob；CSV/XLSX/JSONL/真实 Parquet；**>3 地址强制 ZIP**（addresses/{addr}/{dataset}.{ext} + manifest.json）；下载 Ticket（15min）由 API 校验后代理私有 MinIO 对象；HTTP Range 断点续传（OpenRange 206）；对象 SHA-256 与真实行数可审计；MinIO Private Bucket；对象 24h 过期。
 - **worker 同步**：shard 完成后刷新 workspace_addresses 统计/sync_status（§46）。
 - **修复**：job_no 跨时区重复（统一 UTC 计数+冲突重试）；display_name NULL 扫描；ListCoverage 空 dataset 全量。
-- **验证**：真实地址冒烟——案件/标签创建、目录展示（盘古/入金地址/current/242 行）、Preview up_to_date=1（0 次 Ankr）、Confirm 建任务、4 地址 ZIP 导出（521,113 行/zip=True）、Ticket 下发；go vet 干净、go test 全绿、前端 tsc 通过。
+- **验证**：真实地址冒烟——案件/标签创建、目录展示（盘古/入金地址/current/242 行）、Preview up_to_date=1（0 次 Ankr）、Confirm 建任务；CSV/Parquet 均为 242 行且 SHA-256 与下载文件一致，Parquet 首尾均为 `PAR1`；4 地址 ZIP 含 manifest + 4 个地址文件；直接下载和 Ticket 下载分别验证 100-byte Range/206；重复 Worker 端口冲突会在参与调度前退出，SIGTERM 可正常收敛；Edge 桌面和 390px 移动端 6 项浏览器测试通过。
 
 ## V1 验收对照（文档 §101）
 

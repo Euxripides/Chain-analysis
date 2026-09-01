@@ -4,16 +4,20 @@ import (
 	"archive/zip"
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/parquet-go/parquet-go"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
@@ -93,32 +97,34 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain st
 		key = fmt.Sprintf("exports/%s.zip", exp.ID)
 	}
 	var rowsTotal int64
+	var objectSHA string
 	var ferr error
 
 	if zipIt {
-		rowsTotal, ferr = s.writeZipExport(ctx, exp, key, chain, addresses, datasets, format, includeMeta)
+		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, key, chain, addresses, datasets, format, includeMeta)
 	} else {
-		rowsTotal, ferr = s.writeSingleExport(ctx, key, chain, addresses[0], datasets[0], format, includeMeta)
+		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, key, chain, addresses[0], datasets[0], format, includeMeta)
 	}
 	if ferr != nil {
 		_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "FAILED", "", "", 0, ferr.Error())
 		return
 	}
-	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "COMPLETED", key, "", rowsTotal, "")
+	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "COMPLETED", key, objectSHA, rowsTotal, "")
 	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
 		"chain": chain, "addresses": len(addresses), "datasets": datasets, "format": format, "zip": zipIt, "rows": rowsTotal,
 	})
 }
 
 // writeSingleExport 单地址单数据集：流式写一个对象。
-func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, dataset, format string, includeMeta bool) (int64, error) {
+func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, dataset, format string, includeMeta bool) (int64, string, error) {
 	rows, err := s.query.RowsForExport(ctx, dataset, chain, addr, maxExportRows, 0)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if includeMeta {
-		s.annotateRows(ctx, chain, rows)
+		s.annotateRows(ctx, chain, addr, rows)
 	}
+	rowCount := int64(len(rows))
 	pr, pw := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
@@ -135,21 +141,34 @@ func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, datase
 		done <- werr
 	}()
 	if format == "parquet" {
-		return s.writeParquetTemp(ctx, key, rows)
+		if _, err := s.writeParquetTemp(ctx, key, dataset, rows); err != nil {
+			return 0, "", err
+		}
+		sha, err := s.objectSHA256(ctx, key)
+		return rowCount, sha, err
 	}
 	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: contentType(format)})
 	_ = pr.CloseWithError(err)
 	werr := <-done
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	return info.Size, werr
+	_ = info
+	if werr != nil {
+		return 0, "", werr
+	}
+	sha, err := s.objectSHA256(ctx, key)
+	return rowCount, sha, err
 }
 
 // writeZipExport 多地址/多文件：流式 ZIP（`49 结构 + manifest.json）。
-func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, chain string, addresses, datasets []string, format string, includeMeta bool) (int64, error) {
+func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, chain string, addresses, datasets []string, format string, includeMeta bool) (int64, string, error) {
 	pr, pw := io.Pipe()
-	done := make(chan error, 1)
+	type zipResult struct {
+		rows int64
+		err  error
+	}
+	done := make(chan zipResult, 1)
 	go func() {
 		zw := zip.NewWriter(pw)
 		// manifest.json（`49）
@@ -162,6 +181,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 		w, _ := zw.CreateHeader(hdr)
 		_, _ = w.Write(mf)
 
+		var rowsTotal int64
 		var werr error
 		for _, addr := range addresses {
 			for _, ds := range datasets {
@@ -171,8 +191,9 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 					break
 				}
 				if includeMeta {
-					s.annotateRows(ctx, chain, rows)
+					s.annotateRows(ctx, chain, addr, rows)
 				}
+				rowsTotal += int64(len(rows))
 				name := fmt.Sprintf("addresses/%s/%s.%s", addr, ds, extFor(format))
 				fh := &zip.FileHeader{Name: name, Method: zip.Deflate}
 				fh.SetModTime(time.Now())
@@ -189,7 +210,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 				case "xlsx":
 					werr = streamXLSX(fw, rows)
 				case "parquet":
-					werr = s.streamParquetZipEntry(ctx, fw, rows)
+					werr = s.streamParquetZipEntry(ctx, fw, ds, rows)
 				}
 				if werr != nil {
 					break
@@ -199,28 +220,34 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 				break
 			}
 		}
-		_ = zw.Close()
+		if err := zw.Close(); werr == nil && err != nil {
+			werr = err
+		}
 		_ = pw.CloseWithError(werr)
-		done <- werr
+		done <- zipResult{rows: rowsTotal, err: werr}
 	}()
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "application/zip"})
+	_, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "application/zip"})
 	_ = pr.CloseWithError(err)
-	werr := <-done
+	result := <-done
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	return info.Size, werr
+	if result.err != nil {
+		return 0, "", result.err
+	}
+	sha, err := s.objectSHA256(ctx, key)
+	return result.rows, sha, err
 }
 
 // annotateRows 附加案件/标签元数据（`50：matched_address/case_names/tag_names）。
-func (s *Server) annotateRows(ctx context.Context, chain string, rows []map[string]any) {
+func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows []map[string]any) {
 	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(ctx)
 	if err != nil {
 		return
 	}
 	cache := map[string][]string{}
 	for _, r := range rows {
-		matched, _ := r["matched_addresses"].([]string)
+		matched := matchedExportAddresses(subject, r)
 		var cases, tags []string
 		for _, a := range matched {
 			if v, ok := cache["c:"+a]; ok {
@@ -244,6 +271,20 @@ func (s *Server) annotateRows(ctx context.Context, chain string, rows []map[stri
 	}
 }
 
+func matchedExportAddresses(subject string, row map[string]any) []string {
+	subject = strings.ToLower(subject)
+	if subject == "" {
+		return nil
+	}
+	from := strings.ToLower(fmt.Sprint(row["from_address"]))
+	to := strings.ToLower(fmt.Sprint(row["to_address"]))
+	address := strings.ToLower(fmt.Sprint(row["address"]))
+	if from == subject || to == subject || address == subject {
+		return []string{subject}
+	}
+	return nil
+}
+
 func dedupeStrings(in []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -259,6 +300,8 @@ func dedupeStrings(in []string) []string {
 func extFor(format string) string {
 	switch format {
 	case "jsonl":
+		return "jsonl"
+	case "json":
 		return "jsonl"
 	case "parquet":
 		return "parquet"
@@ -288,13 +331,17 @@ func streamCSV(w io.Writer, rows []map[string]any) error {
 	cw := csv.NewWriter(bw)
 	if len(rows) > 0 {
 		cols := mapKeys(rows[0])
-		_ = cw.Write(cols)
+		if err := cw.Write(cols); err != nil {
+			return err
+		}
 		for _, r := range rows {
 			rec := make([]string, len(cols))
 			for i, c := range cols {
 				rec[i] = fmt.Sprintf("%v", r[c])
 			}
-			_ = cw.Write(rec)
+			if err := cw.Write(rec); err != nil {
+				return err
+			}
 		}
 	}
 	cw.Flush()
@@ -316,13 +363,13 @@ func streamNDJSON(w io.Writer, rows []map[string]any) error {
 }
 
 // streamParquetZipEntry 占位：Parquet 在 ZIP 中先落临时文件再拷贝（保持内存有界）。
-func (s *Server) streamParquetZipEntry(ctx context.Context, w io.Writer, rows []map[string]any) error {
+func (s *Server) streamParquetZipEntry(ctx context.Context, w io.Writer, dataset string, rows []map[string]any) error {
 	tmp, err := os.CreateTemp("", "parquet-entry-*.parquet")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if _, err := s.writeParquetTo(ctx, tmp, rows); err != nil {
+	if _, err := s.writeParquetTo(ctx, tmp, dataset, rows); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -336,13 +383,13 @@ func (s *Server) streamParquetZipEntry(ctx context.Context, w io.Writer, rows []
 }
 
 // writeParquetTemp 单文件 Parquet：临时文件 + 上传（内存有界）。
-func (s *Server) writeParquetTemp(ctx context.Context, key string, rows []map[string]any) (int64, error) {
+func (s *Server) writeParquetTemp(ctx context.Context, key, dataset string, rows []map[string]any) (int64, error) {
 	tmp, err := os.CreateTemp("", "export-*.parquet")
 	if err != nil {
 		return 0, err
 	}
 	defer os.Remove(tmp.Name())
-	if _, err := s.writeParquetTo(ctx, tmp, rows); err != nil {
+	if _, err := s.writeParquetTo(ctx, tmp, dataset, rows); err != nil {
 		tmp.Close()
 		return 0, err
 	}
@@ -358,20 +405,110 @@ func (s *Server) writeParquetTemp(ctx context.Context, key string, rows []map[st
 	return info.Size, nil
 }
 
-// writeParquetTo 最小 Parquet 实现（本地文件，行式 JSON schema）。
-func (s *Server) writeParquetTo(ctx context.Context, w io.Writer, rows []map[string]any) (int64, error) {
-	// V1.2 简化：Parquet 先以 JSONL 落盘实现路径（真实 Parquet 编码见 TODO 依赖 xitongsys）
-	bw := bufio.NewWriterSize(w, 1<<20)
-	enc := json.NewEncoder(bw)
-	for _, r := range rows {
-		if err := enc.Encode(r); err != nil {
-			return 0, err
-		}
-	}
-	if err := bw.Flush(); err != nil {
+// parquetExportRow 是所有链上数据集的稳定列并集；不适用的列保持零值。
+// 金额字段保留字符串，避免 Decimal256 精度损失。
+type parquetExportRow struct {
+	Dataset          string   `parquet:"dataset"`
+	Chain            string   `parquet:"chain"`
+	BlockNumber      uint64   `parquet:"block_number"`
+	BlockHash        string   `parquet:"block_hash"`
+	TxHash           string   `parquet:"tx_hash"`
+	Timestamp        string   `parquet:"timestamp"`
+	FromAddress      string   `parquet:"from_address"`
+	ToAddress        string   `parquet:"to_address"`
+	Address          string   `parquet:"address"`
+	LogIndex         uint64   `parquet:"log_index"`
+	TokenAddress     string   `parquet:"token_address"`
+	ContractAddress  string   `parquet:"contract_address"`
+	TokenID          string   `parquet:"token_id"`
+	TokenSymbol      string   `parquet:"token_symbol"`
+	TokenName        string   `parquet:"token_name"`
+	TokenDecimals    uint64   `parquet:"token_decimals"`
+	AmountRaw        string   `parquet:"amount_raw"`
+	Amount           string   `parquet:"amount"`
+	ValueRaw         string   `parquet:"value_raw"`
+	BalanceRaw       string   `parquet:"balance_raw"`
+	Balance          string   `parquet:"balance"`
+	BalanceUSD       string   `parquet:"balance_usd"`
+	TokenPrice       string   `parquet:"token_price"`
+	MethodID         string   `parquet:"method_id"`
+	Input            string   `parquet:"input"`
+	Data             string   `parquet:"data"`
+	Topics           []string `parquet:"topics,list"`
+	SourceProvider   string   `parquet:"source_provider"`
+	SourceIngestedAt string   `parquet:"source_ingested_at"`
+	MatchedAddress   string   `parquet:"matched_address"`
+	CaseNames        string   `parquet:"case_names"`
+	TagNames         string   `parquet:"tag_names"`
+}
+
+func (s *Server) writeParquetTo(ctx context.Context, w io.Writer, dataset string, rows []map[string]any) (int64, error) {
+	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	return 0, nil
+	pw := parquet.NewGenericWriter[parquetExportRow](w)
+	batch := make([]parquetExportRow, len(rows))
+	for i, row := range rows {
+		batch[i] = toParquetExportRow(dataset, row)
+	}
+	n, err := pw.Write(batch)
+	if err != nil {
+		_ = pw.Close()
+		return int64(n), err
+	}
+	if err := pw.Close(); err != nil {
+		return int64(n), err
+	}
+	return int64(n), nil
+}
+
+func toParquetExportRow(dataset string, row map[string]any) parquetExportRow {
+	return parquetExportRow{
+		Dataset: dataset, Chain: exportString(row, "chain"), BlockNumber: exportUint64(row, "block_number"),
+		BlockHash: exportString(row, "block_hash"), TxHash: exportString(row, "tx_hash"), Timestamp: exportString(row, "timestamp"),
+		FromAddress: exportString(row, "from_address"), ToAddress: exportString(row, "to_address"), Address: exportString(row, "address"),
+		LogIndex: exportUint64(row, "log_index"), TokenAddress: exportString(row, "token_address"), ContractAddress: exportString(row, "contract_address"),
+		TokenID: exportString(row, "token_id"), TokenSymbol: exportString(row, "token_symbol"), TokenName: exportString(row, "token_name"),
+		TokenDecimals: exportUint64(row, "token_decimals"), AmountRaw: exportString(row, "amount_raw"), Amount: exportString(row, "amount"),
+		ValueRaw: exportString(row, "value_raw"), BalanceRaw: exportString(row, "balance_raw"), Balance: exportString(row, "balance"),
+		BalanceUSD: exportString(row, "balance_usd"), TokenPrice: exportString(row, "token_price"), MethodID: exportString(row, "method_id"),
+		Input: exportString(row, "input"), Data: exportString(row, "data"), Topics: exportStrings(row, "topics"),
+		SourceProvider: exportString(row, "source_provider"), SourceIngestedAt: exportString(row, "source_ingested_at"),
+		MatchedAddress: exportString(row, "matched_address"), CaseNames: exportString(row, "case_names"), TagNames: exportString(row, "tag_names"),
+	}
+}
+
+func exportString(row map[string]any, key string) string {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+func exportUint64(row map[string]any, key string) uint64 {
+	n, _ := strconv.ParseUint(exportString(row, key), 10, 64)
+	return n
+}
+
+func exportStrings(row map[string]any, key string) []string {
+	if values, ok := row[key].([]string); ok {
+		return values
+	}
+	return nil
+}
+
+func (s *Server) objectSHA256(ctx context.Context, key string) (string, error) {
+	r, _, err := s.deps.Raw.Open(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // streamXLSX 流式 XLSX（§51：excelize StreamWriter，不整表进 RAM）。
@@ -401,7 +538,7 @@ func streamXLSX(w io.Writer, rows []map[string]any) error {
 		if err != nil {
 			return err
 		}
-		if start == 0 && len(cols) > 0 {
+		if len(cols) > 0 {
 			if err := sw.SetRow("A1", colsToAny(cols)); err != nil {
 				return err
 			}
@@ -423,4 +560,3 @@ func streamXLSX(w io.Writer, rows []map[string]any) error {
 	}
 	return f.Write(w)
 }
-

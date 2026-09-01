@@ -3,8 +3,13 @@
 node_modules/
 dist/
 frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
 backend/blockchain-platform-api
 backend/blockchain-platform-worker
 *.log
+*.tsbuildinfo
+__pycache__/
+*.pyc
 .DS_Store
 tmp/

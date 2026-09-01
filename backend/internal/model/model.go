@@ -57,29 +57,29 @@ func ValidDataset(d string) bool {
 }
 
 type DownloadJob struct {
-	ID            string         `json:"id"`
-	JobNo         string         `json:"job_no"`
-	Status        string         `json:"status"`
-	Priority      int            `json:"priority"`
-	Source        string         `json:"source"`
-	Chain         string         `json:"chain"`
-	RangeType     string         `json:"range_type"`
-	FromBlock     *int64         `json:"from_block"`
-	ToBlock       *int64         `json:"to_block"`
-	FromTimestamp *time.Time     `json:"from_timestamp"`
-	ToTimestamp   *time.Time     `json:"to_timestamp"`
-	Datasets      []string       `json:"datasets"`
-	ReusePolicy   string         `json:"reuse_policy"`
-	HeadBlock     int64          `json:"head_block"`
-	CreatedBy     *string        `json:"created_by"`
-	OrganizationID *string       `json:"organization_id"`
-	WorkspaceID   *string        `json:"workspace_id"`
-	ProjectID     *string        `json:"project_id"`
-	ResolvedAt    *time.Time     `json:"resolved_at"`
-	Error         string         `json:"error"`
-	Stats         map[string]any `json:"stats"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID             string         `json:"id"`
+	JobNo          string         `json:"job_no"`
+	Status         string         `json:"status"`
+	Priority       int            `json:"priority"`
+	Source         string         `json:"source"`
+	Chain          string         `json:"chain"`
+	RangeType      string         `json:"range_type"`
+	FromBlock      *int64         `json:"from_block"`
+	ToBlock        *int64         `json:"to_block"`
+	FromTimestamp  *time.Time     `json:"from_timestamp"`
+	ToTimestamp    *time.Time     `json:"to_timestamp"`
+	Datasets       []string       `json:"datasets"`
+	ReusePolicy    string         `json:"reuse_policy"`
+	HeadBlock      int64          `json:"head_block"`
+	CreatedBy      *string        `json:"created_by"`
+	OrganizationID *string        `json:"organization_id"`
+	WorkspaceID    *string        `json:"workspace_id"`
+	ProjectID      *string        `json:"project_id"`
+	ResolvedAt     *time.Time     `json:"resolved_at"`
+	Error          string         `json:"error"`
+	Stats          map[string]any `json:"stats"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 type Subject struct {
@@ -108,31 +108,31 @@ type DatasetItem struct {
 }
 
 type Shard struct {
-	ID              string     `json:"id"`
-	JobID           string     `json:"job_id"`
-	SubjectID       string     `json:"subject_id"`
-	DatasetID       string     `json:"dataset_id"`
-	Dataset         string     `json:"dataset"`
-	FromBlock       int64      `json:"from_block"`
-	ToBlock         int64      `json:"to_block"`
-	FromTimestamp   *time.Time `json:"from_timestamp"`
-	ToTimestamp     *time.Time `json:"to_timestamp"`
-	PageToken       string     `json:"page_token"`
-	PageNo          int        `json:"page_no"`
-	PageSize        int        `json:"page_size"`
+	ID              string         `json:"id"`
+	JobID           string         `json:"job_id"`
+	SubjectID       string         `json:"subject_id"`
+	DatasetID       string         `json:"dataset_id"`
+	Dataset         string         `json:"dataset"`
+	FromBlock       int64          `json:"from_block"`
+	ToBlock         int64          `json:"to_block"`
+	FromTimestamp   *time.Time     `json:"from_timestamp"`
+	ToTimestamp     *time.Time     `json:"to_timestamp"`
+	PageToken       string         `json:"page_token"`
+	PageNo          int            `json:"page_no"`
+	PageSize        int            `json:"page_size"`
 	PageState       map[string]any `json:"page_state"`
-	Status          string     `json:"status"`
-	Priority        int        `json:"priority"`
-	Retries         int        `json:"retries"`
-	MaxRetries      int        `json:"max_retries"`
-	LeaseOwner      string     `json:"lease_owner"`
-	LeasedUntil     *time.Time `json:"leased_until"`
-	DownloadedRows  int64      `json:"downloaded_rows"`
-	DownloadedBytes int64      `json:"downloaded_bytes"`
-	RawObject       string     `json:"raw_object"`
-	Error           string     `json:"error"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	Status          string         `json:"status"`
+	Priority        int            `json:"priority"`
+	Retries         int            `json:"retries"`
+	MaxRetries      int            `json:"max_retries"`
+	LeaseOwner      string         `json:"lease_owner"`
+	LeasedUntil     *time.Time     `json:"leased_until"`
+	DownloadedRows  int64          `json:"downloaded_rows"`
+	DownloadedBytes int64          `json:"downloaded_bytes"`
+	RawObject       string         `json:"raw_object"`
+	Error           string         `json:"error"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 type CoverageRow struct {
@@ -191,17 +191,18 @@ type AuditEvent struct {
 }
 
 type Export struct {
-	ID        string     `json:"id"`
-	JobID     *string    `json:"job_id"`
-	Dataset   string     `json:"dataset"`
-	Format    string     `json:"format"`
-	Zip       bool       `json:"zip"`
-	Status    string     `json:"status"`
-	ObjectRef string     `json:"object_ref"`
-	Rows      int64      `json:"rows"`
-	Error     string     `json:"error"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	ID        string    `json:"id"`
+	JobID     *string   `json:"job_id"`
+	Dataset   string    `json:"dataset"`
+	Format    string    `json:"format"`
+	Zip       bool      `json:"zip"`
+	Status    string    `json:"status"`
+	ObjectRef string    `json:"object_ref"`
+	Rows      int64     `json:"rows"`
+	SHA256    string    `json:"sha256"`
+	Error     string    `json:"error"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ---- V1.2 元数据模型 ----
@@ -232,24 +233,24 @@ type TagInfo struct {
 }
 
 type WorkspaceAddress struct {
-	ID                string     `json:"id"`
-	Chain             string     `json:"chain"`
-	Address           string     `json:"address"`
-	NormalizedAddress string     `json:"normalized_address"`
-	DisplayName       string     `json:"display_name"`
-	PrimaryCaseID     *string    `json:"primary_case_id"`
-	TransactionCount  int64      `json:"transaction_count"`
-	TokenTransferCount int64     `json:"token_transfer_count"`
-	NftTransferCount  int64      `json:"nft_transfer_count"`
-	LogCount          int64      `json:"log_count"`
-	TotalActivityCount int64     `json:"total_activity_count"`
-	FirstDataBlock    *int64     `json:"first_data_block"`
-	LastDataBlock     *int64     `json:"last_data_block"`
-	FirstDataAt       *time.Time `json:"first_data_at"`
-	LastDataAt        *time.Time `json:"last_data_at"`
-	LastSyncAt        *time.Time `json:"last_sync_at"`
-	SyncStatus        string     `json:"sync_status"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID                 string     `json:"id"`
+	Chain              string     `json:"chain"`
+	Address            string     `json:"address"`
+	NormalizedAddress  string     `json:"normalized_address"`
+	DisplayName        string     `json:"display_name"`
+	PrimaryCaseID      *string    `json:"primary_case_id"`
+	TransactionCount   int64      `json:"transaction_count"`
+	TokenTransferCount int64      `json:"token_transfer_count"`
+	NftTransferCount   int64      `json:"nft_transfer_count"`
+	LogCount           int64      `json:"log_count"`
+	TotalActivityCount int64      `json:"total_activity_count"`
+	FirstDataBlock     *int64     `json:"first_data_block"`
+	LastDataBlock      *int64     `json:"last_data_block"`
+	FirstDataAt        *time.Time `json:"first_data_at"`
+	LastDataAt         *time.Time `json:"last_data_at"`
+	LastSyncAt         *time.Time `json:"last_sync_at"`
+	SyncStatus         string     `json:"sync_status"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type TokenMetadata struct {

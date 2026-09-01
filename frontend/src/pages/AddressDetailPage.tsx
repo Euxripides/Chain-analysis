@@ -16,6 +16,8 @@ export default function AddressDetailPage() {
   const [tab, setTab] = useState('activity')
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [cursor, setCursor] = useState('')
+	const [loading, setLoading] = useState(false)
+	const [error, setError] = useState('')
   const [meta, setMeta] = useState<{ case_names: string[]; tag_names: string[]; total_activity_count?: number; last_data_block?: number; last_sync_at?: string } | null>(null)
 
   useEffect(() => {
@@ -26,12 +28,22 @@ export default function AddressDetailPage() {
   }, [chain, address])
 
   async function query(nextCursor = '') {
-    const resp = await api.explorerQuery({
-      chain, addresses: [address], dataset: tab,
-      cursor: nextCursor, limit: 100,
-    })
-    setRows(resp.rows)
-    setCursor(resp.next_cursor ?? '')
+		setLoading(true)
+		setError('')
+		try {
+			const resp = await api.explorerQuery({
+				chain, addresses: [address], dataset: tab,
+				cursor: nextCursor, limit: 100,
+			})
+			setRows(resp.rows)
+			setCursor(resp.next_cursor ?? '')
+		} catch (e) {
+			setRows([])
+			setCursor('')
+			setError(String(e))
+		} finally {
+			setLoading(false)
+		}
   }
 
   useEffect(() => { query('') }, [tab, address, chain])
@@ -62,6 +74,7 @@ export default function AddressDetailPage() {
       </div>
 
       <div className="card">
+		{error && <div className="error">{error}</div>}
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
             <thead>
@@ -90,11 +103,11 @@ export default function AddressDetailPage() {
                   })}
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={Math.max(cols.length, 1)} className="muted center">无数据（可用「数据浏览」页对该地址执行更新）</td></tr>}
+			{rows.length === 0 && <tr><td colSpan={Math.max(cols.length, 1)} className="muted center">{loading ? '加载中…' : '无数据（可用「数据浏览」页对该地址执行更新）'}</td></tr>}
             </tbody>
           </table>
         </div>
-        {cursor && <button className="ghost" onClick={() => query(cursor)}>下一页</button>}
+		{cursor && <button className="ghost" disabled={loading} onClick={() => query(cursor)}>下一页</button>}
       </div>
     </div>
   )

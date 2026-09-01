@@ -15,14 +15,15 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
 const (
-	previewTTL     = 15 * time.Minute
+	previewTTL      = 15 * time.Minute
 	previewCacheTTL = 60 * time.Second
-	safeHeadBuffer = 15
+	safeHeadBuffer  = 15
 )
 
 type Service struct {
@@ -38,8 +39,8 @@ type Service struct {
 }
 
 type cacheEntry struct {
-	result   []byte
-	expires  time.Time
+	result  []byte
+	expires time.Time
 }
 
 func New(st *store.Store, ch *clickhouse.Conn, prov provider.Provider, ds *dataset.Service, meta *addressmeta.Service, log *slog.Logger) *Service {
@@ -54,32 +55,33 @@ type PreviewRequest struct {
 }
 
 type PreviewItem struct {
-	Address       string `json:"address"`
-	Dataset       string `json:"dataset"`
-	FromBlock     int64  `json:"from_block"`
-	ToBlock       int64  `json:"to_block"`
-	HasNewData    bool   `json:"has_new_data"`
-	CountMode     string `json:"count_mode"` // exact | estimate | snapshot
-	NewRows       int64  `json:"new_rows"`
-	Snapshot      bool   `json:"snapshot"`
-	MinimumRows   int64  `json:"minimum_rows"`
-	EstimatedRows int64  `json:"estimated_rows"`
-	EstimatedLow  int64  `json:"estimated_low"`
-	EstimatedHigh int64  `json:"estimated_high"`
-	EstimatedBytes int64 `json:"estimated_bytes"`
-	Confidence    string `json:"confidence"`
+	Address        string `json:"address"`
+	Dataset        string `json:"dataset"`
+	FromBlock      int64  `json:"from_block"`
+	ToBlock        int64  `json:"to_block"`
+	HasNewData     bool   `json:"has_new_data"`
+	CountMode      string `json:"count_mode"` // exact | estimate | snapshot
+	NewRows        int64  `json:"new_rows"`
+	Snapshot       bool   `json:"snapshot"`
+	MinimumRows    int64  `json:"minimum_rows"`
+	EstimatedRows  int64  `json:"estimated_rows"`
+	EstimatedLow   int64  `json:"estimated_low"`
+	EstimatedHigh  int64  `json:"estimated_high"`
+	EstimatedBytes int64  `json:"estimated_bytes"`
+	Confidence     string `json:"confidence"`
 }
 
 type PreviewResponse struct {
-	PreviewID   string        `json:"preview_id"`
-	TargetBlock int64         `json:"target_block"`
-	ExpiresAt   time.Time     `json:"expires_at"`
+	PreviewID   string         `json:"preview_id"`
+	TargetBlock int64          `json:"target_block"`
+	ExpiresAt   time.Time      `json:"expires_at"`
 	Summary     PreviewSummary `json:"summary"`
-	Items       []PreviewItem `json:"items"`
+	Items       []PreviewItem  `json:"items"`
 }
 
 type PreviewSummary struct {
 	Addresses      int   `json:"addresses"`
+	WithNewData    int   `json:"with_new_data"`
 	UpToDate       int   `json:"up_to_date"`
 	ExactRows      int64 `json:"exact_rows"`
 	EstimatedRows  int64 `json:"estimated_rows"`
@@ -118,6 +120,10 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	if req.PageSize <= 0 {
 		req.PageSize = 500
 	}
+	req.Datasets, err = normalizeDatasets(req.Datasets)
+	if err != nil {
+		return nil, err
+	}
 	target, err := s.SafeHead(ctx, chain)
 	if err != nil {
 		return nil, err
@@ -126,31 +132,10 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	if err != nil {
 		return nil, err
 	}
+	req.Addresses = addresses
+	req.Chain = chain
 
-	items := []PreviewItem{}
-	for _, addr := range addresses {
-		items = append(items, s.previewAddress(ctx, chain, addr, req.Datasets, req.PageSize, target)...)
-	}
-
-	var summary PreviewSummary
-	summary.Addresses = len(addresses)
-	for _, it := range items {
-		if !it.HasNewData && !it.Snapshot {
-			summary.UpToDate++
-		}
-		if it.CountMode == "exact" {
-			summary.ExactRows += it.NewRows
-		}
-		if it.CountMode == "estimate" {
-			summary.EstimatedRows += it.EstimatedRows
-			summary.EstimatedBytes += it.EstimatedBytes
-		}
-	}
-
-	resultJSON, _ := json.Marshal(map[string]any{"items": items, "summary": summary})
-	requestJSON, _ := json.Marshal(req)
-
-	// 60s 缓存防连续点击（`68）
+	// 60s 缓存防连续点击。必须在 Probe 之前命中，否则仍会消耗 Provider 请求。
 	cacheKey := chain + "|" + strings.Join(addresses, ",") + "|" + strings.Join(req.Datasets, ",") + "|" + fmt.Sprint(target)
 	s.mu.Lock()
 	if ce, ok := s.cache[cacheKey]; ok && time.Now().Before(ce.expires) {
@@ -162,6 +147,37 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	}
 	s.mu.Unlock()
 
+	items := []PreviewItem{}
+	for _, addr := range addresses {
+		items = append(items, s.previewAddress(ctx, chain, addr, req.Datasets, req.PageSize, target)...)
+	}
+
+	var summary PreviewSummary
+	summary.Addresses = len(addresses)
+	addressHasNew := make(map[string]bool, len(addresses))
+	for _, it := range items {
+		if it.HasNewData || it.Snapshot {
+			addressHasNew[it.Address] = true
+		}
+		if it.CountMode == "exact" {
+			summary.ExactRows += it.NewRows
+		}
+		if it.CountMode == "estimate" {
+			summary.EstimatedRows += it.EstimatedRows
+			summary.EstimatedBytes += it.EstimatedBytes
+		}
+	}
+	for _, addr := range addresses {
+		if addressHasNew[addr] {
+			summary.WithNewData++
+		} else {
+			summary.UpToDate++
+		}
+	}
+
+	resultJSON, _ := json.Marshal(map[string]any{"items": items, "summary": summary})
+	requestJSON, _ := json.Marshal(req)
+
 	previewID, err := s.Store.CreateUpdatePreview(ctx, wsID, orgID, chain, target, requestJSON, resultJSON, previewTTL)
 	if err != nil {
 		return nil, err
@@ -169,7 +185,7 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	resp := &PreviewResponse{
 		PreviewID: previewID, TargetBlock: target,
 		ExpiresAt: time.Now().Add(previewTTL),
-		Summary: summary, Items: items,
+		Summary:   summary, Items: items,
 	}
 	b, _ := json.Marshal(resp)
 	s.mu.Lock()
@@ -188,17 +204,18 @@ func (s *Service) previewAddress(ctx context.Context, chain, addr string, wantDa
 	existing := map[string]bool{}
 	var items []PreviewItem
 	for _, c := range covered {
-		if c.Dataset == "balances" {
-			items = append(items, PreviewItem{Address: addr, Dataset: "balances", CountMode: "snapshot", Snapshot: true, HasNewData: true})
-			continue
-		}
 		existing[c.Dataset] = true
 	}
 	datasets := wantDatasets
 	if len(datasets) == 0 {
-		for d := range existing {
-			datasets = append(datasets, d)
+		for _, d := range model.AllDatasets {
+			if existing[d] {
+				datasets = append(datasets, d)
+			}
 		}
+	}
+	if containsDataset(datasets, "balances") {
+		items = append(items, PreviewItem{Address: addr, Dataset: "balances", CountMode: "snapshot", Snapshot: true, HasNewData: true})
 	}
 	seen := map[string]bool{}
 	for _, d := range datasets {
@@ -221,6 +238,35 @@ func (s *Service) previewAddress(ctx context.Context, chain, addr string, wantDa
 		items = append(items, s.probe(ctx, chain, addr, d, from, target, pageSize))
 	}
 	return items
+}
+
+func normalizeDatasets(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	wanted := make(map[string]bool, len(in))
+	for _, datasetName := range in {
+		if !model.ValidDataset(datasetName) {
+			return nil, fmt.Errorf("unknown dataset %s", datasetName)
+		}
+		wanted[datasetName] = true
+	}
+	out := make([]string, 0, len(wanted))
+	for _, datasetName := range model.AllDatasets {
+		if wanted[datasetName] {
+			out = append(out, datasetName)
+		}
+	}
+	return out, nil
+}
+
+func containsDataset(datasets []string, want string) bool {
+	for _, datasetName := range datasets {
+		if datasetName == want {
+			return true
+		}
+	}
+	return false
 }
 
 // probe 单页探测（`36-`41）：小增量精确、大增量估算。
@@ -378,10 +424,13 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 		}
 		datasets := req.Datasets
 		if len(datasets) == 0 {
-			for d := range ends {
-				datasets = append(datasets, d)
+			for _, d := range model.AllDatasets {
+				if ends[d] > 0 || (d == "balances" && hasBalances) {
+					datasets = append(datasets, d)
+				}
 			}
 		}
+		refreshBalances := hasBalances || containsDataset(datasets, "balances")
 		var gaps []string
 		minFrom := int64(0)
 		for _, d := range datasets {
@@ -397,7 +446,7 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 				minFrom = from
 			}
 		}
-		if len(gaps) == 0 && !hasBalances {
+		if len(gaps) == 0 && !refreshBalances {
 			continue // 其它任务已补全 → 复用，不重复下载（`44.5）
 		}
 		if len(gaps) > 0 {
@@ -414,7 +463,7 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 				jobIDs = append(jobIDs, *resp.JobID)
 			}
 		}
-		if hasBalances {
+		if refreshBalances {
 			resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{
 				Source: "update", Priority: 90,
 				Subjects: []string{addr}, Chain: chain, Datasets: []string{"balances"},

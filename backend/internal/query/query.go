@@ -155,17 +155,27 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 }
 
 // Explorer 统一浏览查询：地址集合 + 附加过滤 + keyset cursor + 多地址 QUALIFY 去重（§29/§58）。
-func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses []string, filterSQL string, filterArgs []any, cursorTs *time.Time, cursorHash string, limit int) ([]map[string]any, error) {
+type ExplorerCursor struct {
+	Timestamp       time.Time
+	TxHash          string
+	LogIndex        uint64
+	TokenAddress    string
+	ContractAddress string
+	TokenID         string
+	ActivityType    string
+	Counterparty    string
+}
+
+func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses []string, filterSQL string, filterArgs []any, cursor *ExplorerCursor, limit int) ([]map[string]any, error) {
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("addresses required")
+	}
 	table := tableName(dataset)
 	if dataset == "activity" {
 		table = "address_activity"
 	}
 	args := []any{chain}
-	ph := make([]string, len(addresses))
-	for i := range ph {
-		ph[i] = "?"
-	}
-	in := "(" + strings.Join(ph, ",") + ")"
+	in := "(?)" // clickhouse-go expands a slice bound to one IN placeholder.
 	var base string
 	switch dataset {
 	case "transactions", "token_transfers", "nft_transfers":
@@ -182,9 +192,10 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 		where += " AND " + filterSQL
 		args = append(args, filterArgs...)
 	}
-	if cursorTs != nil {
-		where += " AND (timestamp < ? OR (timestamp = ? AND tx_hash < ?))"
-		args = append(args, cursorTs.UTC(), cursorHash)
+	if cursor != nil {
+		condition, values := explorerCursorCondition(dataset, cursor)
+		where += " AND " + condition
+		args = append(args, values...)
 	}
 	q := "SELECT * FROM blockchain." + table + " FINAL WHERE " + where
 	if len(addresses) > 1 && dataset != "activity" {
@@ -192,7 +203,7 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 		q += " QUALIFY row_number() OVER (PARTITION BY " + explorerPartition(dataset) + " ORDER BY timestamp DESC) = 1"
 	}
 	args = append(args, limit+1)
-	q += " ORDER BY timestamp DESC, tx_hash DESC LIMIT ?"
+	q += " ORDER BY " + explorerOrder(dataset) + " LIMIT ?"
 	rows, err := s.queryRows(ctx, dataset, q, args...)
 	if err != nil {
 		return nil, err
@@ -201,6 +212,40 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 		rows = rows[:limit]
 	}
 	return rows, nil
+}
+
+func explorerOrder(dataset string) string {
+	switch dataset {
+	case "token_transfers":
+		return "timestamp DESC, tx_hash DESC, log_index DESC, token_address DESC"
+	case "nft_transfers":
+		return "timestamp DESC, tx_hash DESC, log_index DESC, contract_address DESC, token_id DESC"
+	case "logs":
+		return "timestamp DESC, tx_hash DESC, log_index DESC"
+	case "activity":
+		return "timestamp DESC, tx_hash DESC, activity_type DESC, counterparty DESC, token_address DESC"
+	default:
+		return "timestamp DESC, tx_hash DESC"
+	}
+}
+
+func explorerCursorCondition(dataset string, cursor *ExplorerCursor) (string, []any) {
+	ts := cursor.Timestamp.UTC()
+	switch dataset {
+	case "token_transfers":
+		return "(timestamp, tx_hash, log_index, token_address) < (?, ?, ?, ?)",
+			[]any{ts, cursor.TxHash, cursor.LogIndex, cursor.TokenAddress}
+	case "nft_transfers":
+		return "(timestamp, tx_hash, log_index, contract_address, token_id) < (?, ?, ?, ?, ?)",
+			[]any{ts, cursor.TxHash, cursor.LogIndex, cursor.ContractAddress, cursor.TokenID}
+	case "logs":
+		return "(timestamp, tx_hash, log_index) < (?, ?, ?)", []any{ts, cursor.TxHash, cursor.LogIndex}
+	case "activity":
+		return "(timestamp, tx_hash, activity_type, counterparty, token_address) < (?, ?, ?, ?, ?)",
+			[]any{ts, cursor.TxHash, cursor.ActivityType, cursor.Counterparty, cursor.TokenAddress}
+	default:
+		return "(timestamp, tx_hash) < (?, ?)", []any{ts, cursor.TxHash}
+	}
 }
 
 func explorerPartition(dataset string) string {

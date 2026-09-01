@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -168,7 +169,7 @@ func (s *Server) handleAddressMetadata(w http.ResponseWriter, r *http.Request) {
 	chain := chi.URLParam(r, "chain")
 	addr := chi.URLParam(r, "address")
 	var req struct {
-		DisplayName    string   `json:"display_name"`
+		DisplayName    *string  `json:"display_name"`
 		SetPrimaryCase bool     `json:"set_primary_case"`
 		AddCases       []string `json:"add_cases"`
 		RemoveCases    []string `json:"remove_cases"`
@@ -190,23 +191,46 @@ func (s *Server) handleAddressMetadata(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if req.SetPrimaryCase {
-			_ = s.deps.Store.SetPrimaryCase(r.Context(), wsID, chain, addr, id)
+			if err := s.deps.Store.SetPrimaryCase(r.Context(), wsID, chain, addr, id); err != nil {
+				writeJSON(w, 500, map[string]any{"error": err.Error()})
+				return
+			}
 		}
 	}
 	for _, id := range req.RemoveCases {
-		_ = s.deps.Store.RemoveCaseLink(r.Context(), wsID, chain, addr, id)
+		if err := s.deps.Store.RemoveCaseLink(r.Context(), wsID, chain, addr, id); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
 	}
 	for _, id := range req.AddTags {
-		_ = s.deps.Store.AddTagLink(r.Context(), wsID, chain, addr, id)
+		if err := s.deps.Store.AddTagLink(r.Context(), wsID, chain, addr, id); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
 	}
 	for _, id := range req.RemoveTags {
-		_ = s.deps.Store.RemoveTagLink(r.Context(), wsID, chain, addr, id)
+		if err := s.deps.Store.RemoveTagLink(r.Context(), wsID, chain, addr, id); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
 	}
-	if req.DisplayName != "" {
-		_ = s.deps.Store.SetDisplayName(r.Context(), wsID, chain, addr, req.DisplayName)
+	if req.DisplayName != nil {
+		if err := s.deps.Store.SetDisplayName(r.Context(), wsID, chain, addr, *req.DisplayName); err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
 	}
 	s.deps.Store.InsertAudit(r.Context(), nil, "address.metadata.update", "address", chain+":"+addr, map[string]any{})
-	entry, _ := s.meta.Meta(r.Context(), chain, addr)
+	entry, err := s.meta.Meta(r.Context(), chain, addr)
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	if entry == nil {
+		writeJSON(w, 404, map[string]any{"error": "address not found"})
+		return
+	}
 	writeJSON(w, 200, map[string]any{"address": entry})
 }
 
@@ -268,12 +292,13 @@ func (s *Server) handleTicketDownload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]any{"error": "export not found"})
 		return
 	}
-	url, err := s.deps.Raw.PresignedGet(r.Context(), exp.ObjectRef, 15*time.Minute)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
-		return
-	}
-	http.Redirect(w, r, url, http.StatusFound)
+	// MinIO is intentionally bound to loopback, so a presigned internal URL is not
+	// reachable by a remote browser. Stream through the ticket endpoint and reuse
+	// the same bounded-memory/Range implementation as the authenticated route.
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add("id", exp.ID)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx))
+	s.handleDownloadExport(w, r)
 }
 
 func splitCSV(s string) []string {

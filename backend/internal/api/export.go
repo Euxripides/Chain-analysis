@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
+	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 )
 
 const maxExportRows = 2_000_000
@@ -116,6 +118,10 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 	// 单区间 Range：bytes=start-[end]
 	if rng := r.Header.Get("Range"); rng != "" {
 		var start, end int64 = -1, -1
+		if strings.Contains(rng, ",") {
+			writeJSON(w, http.StatusRequestedRangeNotSatisfiable, map[string]any{"error": "multiple ranges are not supported"})
+			return
+		}
 		if _, err := fmt.Sscanf(rng, "bytes=%d-%d", &start, &end); err != nil || start < 0 {
 			if _, err2 := fmt.Sscanf(rng, "bytes=%d-", &start); err2 != nil || start < 0 {
 				writeJSON(w, http.StatusRequestedRangeNotSatisfiable, map[string]any{"error": "bad range"})
@@ -124,6 +130,11 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 		}
 		reader, size, err := s.deps.Raw.OpenRange(r.Context(), exp.ObjectRef, start, end)
 		if err != nil {
+			if errors.Is(err, rawstore.ErrInvalidRange) {
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
+				writeJSON(w, http.StatusRequestedRangeNotSatisfiable, map[string]any{"error": err.Error()})
+				return
+			}
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}

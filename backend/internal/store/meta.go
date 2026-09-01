@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -79,6 +80,13 @@ func (s *Store) DeleteCase(ctx context.Context, wsID, id string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// Avoid leaving a dangling primary_case_id when a case is removed.
+	if _, err := tx.Exec(ctx, "UPDATE workspace_addresses wa SET primary_case_id=("+
+		"SELECT l.case_id FROM address_case_links l WHERE l.workspace_id=wa.workspace_id AND l.chain=wa.chain "+
+		"AND l.normalized_address=wa.normalized_address AND l.case_id<>$1 ORDER BY l.assigned_at LIMIT 1) "+
+		"WHERE wa.workspace_id=$2 AND wa.primary_case_id=$1", id, wsID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, "DELETE FROM address_case_links WHERE case_id=$1 AND workspace_id=$2", id, wsID); err != nil {
 		return err
 	}
@@ -150,8 +158,17 @@ func (s *Store) DeleteTag(ctx context.Context, wsID, id string) error {
 // ---- Address links ----
 
 func (s *Store) AddCaseLink(ctx context.Context, wsID, chain, addr, caseID string) error {
+	addr = strings.ToLower(addr)
+	var valid bool
+	if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_addresses WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3) "+
+		"AND EXISTS(SELECT 1 FROM cases WHERE workspace_id=$1 AND id=$4)", wsID, chain, addr, caseID).Scan(&valid); err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("address or case not found in workspace")
+	}
 	_, err := s.Pool.Exec(ctx, "INSERT INTO address_case_links (workspace_id, chain, normalized_address, case_id) "+
-		"VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING", wsID, chain, strings.ToLower(addr), caseID)
+		"VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING", wsID, chain, addr, caseID)
 	return err
 }
 
@@ -162,8 +179,17 @@ func (s *Store) RemoveCaseLink(ctx context.Context, wsID, chain, addr, caseID st
 }
 
 func (s *Store) AddTagLink(ctx context.Context, wsID, chain, addr, tagID string) error {
+	addr = strings.ToLower(addr)
+	var valid bool
+	if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_addresses WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3) "+
+		"AND EXISTS(SELECT 1 FROM tags WHERE workspace_id=$1 AND id=$4)", wsID, chain, addr, tagID).Scan(&valid); err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("address or tag not found in workspace")
+	}
 	_, err := s.Pool.Exec(ctx, "INSERT INTO address_tag_links (workspace_id, chain, normalized_address, tag_id) "+
-		"VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING", wsID, chain, strings.ToLower(addr), tagID)
+		"VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING", wsID, chain, addr, tagID)
 	return err
 }
 
@@ -174,17 +200,30 @@ func (s *Store) RemoveTagLink(ctx context.Context, wsID, chain, addr, tagID stri
 }
 
 func (s *Store) SetPrimaryCase(ctx context.Context, wsID, chain, addr, caseID string) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET primary_case_id=$4, updated_at=now() "+
-		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3",
+	tag, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET primary_case_id=$4, updated_at=now() "+
+		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3 AND EXISTS ("+
+		"SELECT 1 FROM address_case_links l WHERE l.workspace_id=$1 AND l.chain=$2 AND l.normalized_address=$3 AND l.case_id=$4)",
 		wsID, chain, strings.ToLower(addr), caseID)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("address or linked case not found in workspace")
+	}
+	return nil
 }
 
 func (s *Store) SetDisplayName(ctx context.Context, wsID, chain, addr, name string) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET display_name=$4, updated_at=now() "+
+	tag, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET display_name=$4, updated_at=now() "+
 		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3",
 		wsID, chain, strings.ToLower(addr), name)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("address not found in workspace")
+	}
+	return nil
 }
 
 func (s *Store) AddressCaseNames(ctx context.Context, wsID, chain, addr string) ([]string, error) {
