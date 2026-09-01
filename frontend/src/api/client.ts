@@ -41,6 +41,11 @@ export const api = {
   createCase: (name: string) => http<{ id: string; name: string }>('/cases', { method: 'POST', body: JSON.stringify({ name }) }),
   listTags: () => http<{ tags: { id: string; name: string; color?: string }[] }>('/tags'),
   createTag: (name: string) => http<{ id: string; name: string }>('/tags', { method: 'POST', body: JSON.stringify({ name }) }),
+  updateAddressMetadata: (chain: string, address: string, payload: unknown) =>
+    http<{ address: { case_names: string[]; tag_names: string[]; total_activity_count?: number; last_data_block?: number; last_sync_at?: string } }>(
+      `/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/metadata`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+    ),
   explorerAddresses: (params: string) => http<{ addresses: unknown[]; next_cursor: string }>('/data-explorer/addresses?' + params),
   explorerQuery: (payload: unknown) => http<{ rows: Record<string, unknown>[]; next_cursor: string; count: number }>('/data-explorer/query', { method: 'POST', body: JSON.stringify(payload) }),
   updatePreview: (payload: unknown) => http<Record<string, unknown>>('/updates/preview', { method: 'POST', body: JSON.stringify(payload) }),

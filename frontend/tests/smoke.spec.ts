@@ -113,6 +113,28 @@ test('wide address detail uses the workspace and shows a compact normalized amou
   await screenshot(page, 'wide-address-detail.png')
 })
 
+test('address cases and tags can be edited from the header', async ({ page }, testInfo) => {
+  const errors = captureBrowserErrors(page)
+  await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+  await expect(page.getByRole('heading', { name: /0x9b77e3b4/ })).toBeVisible()
+  await expect(page.getByText(/案件：盘古/)).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: '修改案件和标签' }).click()
+  const dialog = page.getByRole('dialog', { name: '修改案件和标签' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('案件')).toHaveValue(/.+/)
+  await expect(dialog.getByLabel('标签 入金地址')).toBeChecked()
+  await screenshot(page, `${testInfo.project.name}-metadata-editor.png`)
+
+  const patchResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes('/metadata'))
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  expect((await patchResponse).ok()).toBe(true)
+  await expect(dialog).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByText(/案件：盘古/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('入金地址', { exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
 test('filters update full-result statistics and selected rows can be exported', async ({ page }, testInfo) => {
   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
   await page.getByRole('button', { name: '代币转账' }).click()

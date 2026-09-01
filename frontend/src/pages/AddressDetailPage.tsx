@@ -38,6 +38,9 @@ const FLOW_LABELS: Record<string, string> = {
   to_display: '接收方', amount_display: '数量', token_display: '代币',
 }
 
+type MetadataOption = { id: string; name: string; color?: string }
+type AddressMeta = { case_names: string[]; tag_names: string[]; total_activity_count?: number; last_data_block?: number; last_sync_at?: string }
+
 function FlowTokenIcon({ row }: { row: Record<string, unknown> }) {
   const logo = String(row.token_logo ?? '')
   const symbol = cleanTokenSymbol(String(row.token_symbol ?? row.token_name ?? '?'))
@@ -65,7 +68,15 @@ export default function AddressDetailPage() {
   const [exportScope, setExportScope] = useState<'all' | 'filtered' | 'selected'>('filtered')
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx' | 'json'>('xlsx')
   const [exporting, setExporting] = useState(false)
-  const [meta, setMeta] = useState<{ case_names: string[]; tag_names: string[]; total_activity_count?: number; last_data_block?: number; last_sync_at?: string } | null>(null)
+  const [meta, setMeta] = useState<AddressMeta | null>(null)
+  const [metadataEditorOpen, setMetadataEditorOpen] = useState(false)
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataSaving, setMetadataSaving] = useState(false)
+  const [metadataError, setMetadataError] = useState('')
+  const [caseOptions, setCaseOptions] = useState<MetadataOption[]>([])
+  const [tagOptions, setTagOptions] = useState<MetadataOption[]>([])
+  const [selectedCaseID, setSelectedCaseID] = useState('')
+  const [selectedTagIDs, setSelectedTagIDs] = useState<string[]>([])
   // V1.3：交易详情抽屉（Method / Decoded Input / Logs，§42）
   const [detailTx, setDetailTx] = useState('')
   const refreshID = useRef(0)
@@ -76,6 +87,53 @@ export default function AddressDetailPage() {
       if (hit) setMeta(hit as never)
     }).catch(() => {})
   }, [chain, address])
+
+  async function openMetadataEditor() {
+    setMetadataEditorOpen(true)
+    setMetadataLoading(true)
+    setMetadataError('')
+    try {
+      const [caseData, tagData, catalogData] = await Promise.all([
+        api.listCases(), api.listTags(), api.explorerAddresses('chain=' + chain + '&q=' + address + '&limit=5'),
+      ])
+      const latestMeta = (catalogData.addresses ?? []).find((item: any) => item.normalized_address === address.toLowerCase()) as AddressMeta | undefined
+      if (latestMeta) setMeta(latestMeta)
+      setCaseOptions(caseData.cases)
+      setTagOptions(tagData.tags)
+      setSelectedCaseID(caseData.cases.find((item) => latestMeta?.case_names?.includes(item.name))?.id ?? '')
+      setSelectedTagIDs(tagData.tags.filter((item) => latestMeta?.tag_names?.includes(item.name)).map((item) => item.id))
+    } catch (reason) {
+      setMetadataError(`加载案件和标签失败：${String(reason)}`)
+    } finally {
+      setMetadataLoading(false)
+    }
+  }
+
+  function toggleMetadataTag(id: string) {
+    setSelectedTagIDs((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+
+  async function saveMetadata() {
+    setMetadataSaving(true)
+    setMetadataError('')
+    try {
+      const currentCaseIDs = caseOptions.filter((item) => meta?.case_names?.includes(item.name)).map((item) => item.id)
+      const currentTagIDs = tagOptions.filter((item) => meta?.tag_names?.includes(item.name)).map((item) => item.id)
+      const response = await api.updateAddressMetadata(chain, address, {
+        set_primary_case: Boolean(selectedCaseID),
+        add_cases: selectedCaseID ? [selectedCaseID] : [],
+        remove_cases: currentCaseIDs.filter((id) => id !== selectedCaseID),
+        add_tags: selectedTagIDs.filter((id) => !currentTagIDs.includes(id)),
+        remove_tags: currentTagIDs.filter((id) => !selectedTagIDs.includes(id)),
+      })
+      setMeta(response.address)
+      setMetadataEditorOpen(false)
+    } catch (reason) {
+      setMetadataError(`保存失败：${String(reason)}`)
+    } finally {
+      setMetadataSaving(false)
+    }
+  }
 
   async function fetchAll(activeFilters: DetailFilters) {
     const collected: Record<string, unknown>[] = []
@@ -280,7 +338,12 @@ export default function AddressDetailPage() {
       <div className="row between detail-head">
         <div>
           <h1>{chain.toUpperCase()} · {address}</h1>
-          <p className="sub">案件：{meta?.case_names?.join('、') || '—'} ｜ 标签：{meta?.tag_names?.map((tag) => <span key={tag} className="badge b-RUNNING">{tag}</span>) || '—'}</p>
+          <div className="sub address-meta-line">
+            <span>案件：{meta?.case_names?.join('、') || '—'} ｜ 标签：{meta?.tag_names?.length ? meta.tag_names.map((tag) => <span key={tag} className="badge b-RUNNING">{tag}</span>) : '—'}</span>
+            <button className="metadata-edit-button" aria-label="修改案件和标签" title="修改案件和标签" onClick={openMetadataEditor}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V20h3.5L18.7 8.8l-3.5-3.5L4 16.5Zm17.4-10.4a1 1 0 0 0 0-1.4l-2.1-2.1a1 1 0 0 0-1.4 0l-1.6 1.6 3.5 3.5 1.6-1.6Z" /></svg>
+            </button>
+          </div>
           <p className="muted">本地数据：更新至 Block {meta?.last_data_block ?? '—'} · 最后同步 {meta?.last_sync_at ? new Date(meta.last_sync_at).toLocaleString() : '—'}</p>
         </div>
         <Link to="/data-explorer" className="ghost">← 数据浏览</Link>
@@ -345,6 +408,20 @@ export default function AddressDetailPage() {
       </div>
 
       {detailTx && <TransactionDetailDrawer chain={chain} txHash={detailTx} onClose={() => setDetailTx('')} />}
+      {metadataEditorOpen && <div className="metadata-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !metadataSaving) setMetadataEditorOpen(false) }}>
+        <section className="metadata-dialog" role="dialog" aria-modal="true" aria-label="修改案件和标签">
+          <div className="metadata-dialog-head row between">
+            <div><h2>修改案件和标签</h2><p>为当前地址选择所属案件和标签</p></div>
+            <button className="metadata-dialog-close" aria-label="关闭" disabled={metadataSaving} onClick={() => setMetadataEditorOpen(false)}>×</button>
+          </div>
+          {metadataLoading ? <div className="metadata-dialog-loading">正在加载…</div> : <div className="metadata-dialog-body">
+            <label className="metadata-case-field"><span>案件</span><select aria-label="案件" value={selectedCaseID} onChange={(event) => setSelectedCaseID(event.target.value)}><option value="">不关联案件</option>{caseOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <fieldset className="metadata-tag-field"><legend>标签</legend><div className="metadata-tag-list">{tagOptions.map((item) => <label key={item.id} className={selectedTagIDs.includes(item.id) ? 'selected' : ''}><input type="checkbox" aria-label={`标签 ${item.name}`} checked={selectedTagIDs.includes(item.id)} onChange={() => toggleMetadataTag(item.id)} /><span className="metadata-tag-dot" style={{ background: item.color || '#2563eb' }} /><b>{item.name}</b></label>)}{tagOptions.length === 0 && <span className="muted">暂无可选标签</span>}</div></fieldset>
+          </div>}
+          {metadataError && <div className="metadata-dialog-error">{metadataError}</div>}
+          <div className="metadata-dialog-actions"><button disabled={metadataSaving} onClick={() => setMetadataEditorOpen(false)}>取消</button><button className="primary" disabled={metadataLoading || metadataSaving || Boolean(metadataError && caseOptions.length === 0 && tagOptions.length === 0)} onClick={saveMetadata}>{metadataSaving ? '保存中…' : '保存'}</button></div>
+        </section>
+      </div>}
     </div>
   )
 }

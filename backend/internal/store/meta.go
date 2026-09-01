@@ -173,9 +173,25 @@ func (s *Store) AddCaseLink(ctx context.Context, wsID, chain, addr, caseID strin
 }
 
 func (s *Store) RemoveCaseLink(ctx context.Context, wsID, chain, addr, caseID string) error {
-	_, err := s.Pool.Exec(ctx, "DELETE FROM address_case_links WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3 AND case_id=$4",
-		wsID, chain, strings.ToLower(addr), caseID)
-	return err
+	addr = strings.ToLower(addr)
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Removing the selected case must also move (or clear) the primary pointer.
+	if _, err := tx.Exec(ctx, "UPDATE workspace_addresses wa SET primary_case_id=("+
+		"SELECT l.case_id FROM address_case_links l WHERE l.workspace_id=wa.workspace_id AND l.chain=wa.chain "+
+		"AND l.normalized_address=wa.normalized_address AND l.case_id<>$4 ORDER BY l.assigned_at LIMIT 1), updated_at=now() "+
+		"WHERE wa.workspace_id=$1 AND wa.chain=$2 AND wa.normalized_address=$3 AND wa.primary_case_id=$4",
+		wsID, chain, addr, caseID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM address_case_links WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3 AND case_id=$4",
+		wsID, chain, addr, caseID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) AddTagLink(ctx context.Context, wsID, chain, addr, tagID string) error {
