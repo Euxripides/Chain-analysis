@@ -3,8 +3,8 @@ package tokenmeta
 import (
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type BackfillRunner struct {
@@ -19,12 +20,18 @@ type BackfillRunner struct {
 	BatchSize           int
 	Interval, BatchIdle time.Duration
 	MaxRetries          int
+	RPCWorkers          int
+	RPCMinInterval      time.Duration
 	Log                 *slog.Logger
 }
 
 func (b *BackfillRunner) Run(ctx context.Context) {
 	// 历史目录扫描可能运行数小时，RPC 解析必须独立运行，不能被其阻塞。
-	for i := 0; i < 4; i++ {
+	workers := b.RPCWorkers
+	if workers <= 0 {
+		workers = 1
+	}
+	for i := 0; i < workers; i++ {
 		go b.runResolver(ctx)
 	}
 	b.runBackfill(ctx)
@@ -65,6 +72,15 @@ func (b *BackfillRunner) runResolver(ctx context.Context) {
 			b.Log.Warn("token metadata resolve failed", "err", err)
 		}
 		if ok {
+			interval := b.RPCMinInterval
+			if interval <= 0 {
+				interval = 2 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(interval):
+			}
 			continue
 		}
 		select {
@@ -84,7 +100,7 @@ func (b *BackfillRunner) CreateJob(ctx context.Context, chain string) (string, e
 func (b *BackfillRunner) nextJob(ctx context.Context) (string, error) {
 	var id string
 	err := b.Service.Store.Pool.QueryRow(ctx, `SELECT id FROM token_metadata_backfill_jobs WHERE status IN ('pending','running') ORDER BY updated_at LIMIT 1`).Scan(&id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	return id, err
@@ -267,10 +283,10 @@ func (b *BackfillRunner) checkpointRaw(ctx context.Context, jobID string, cur cu
 }
 
 func (b *BackfillRunner) scanCatalog(ctx context.Context, chain string, cur cursor, limit int) ([]CatalogItem, error) {
-	where := "(chain,token_address) > (?,?)"
+	where := "(chain,token_address) > (?,?) AND match(token_address,'^0x[0-9a-fA-F]{40}$')"
 	args := []any{cur.Chain, cur.Address}
 	if chain != "" {
-		where = "chain=? AND token_address>?"
+		where = "chain=? AND token_address>? AND match(token_address,'^0x[0-9a-fA-F]{40}$')"
 		args = []any{chain, cur.Address}
 	}
 	args = append(args, limit)
@@ -296,6 +312,9 @@ func (b *BackfillRunner) scanCatalog(ctx context.Context, chain string, cur curs
 
 func (s *Service) processCatalogItem(ctx context.Context, item CatalogItem) error {
 	contract := normalizeAddress(item.ContractAddress)
+	if !validEVMAddress(contract) {
+		return nil
+	}
 	rawHash := fmt.Sprintf("ch:%s:%d:%d:%s:%d", contract, item.FirstBlock, item.LastBlock, item.Symbol, *item.Decimals)
 	obs := Observation{Chain: item.Chain, ContractAddress: contract, Symbol: item.Symbol, Decimals: item.Decimals, Source: "clickhouse_history", ObservedAt: item.LastSeen, RawHash: rawHash}
 	Validate(&obs)
@@ -319,7 +338,7 @@ func (b *BackfillRunner) resolveNext(ctx context.Context) (bool, error) {
 	var chain, contract string
 	var attempts int
 	err = tx.QueryRow(ctx, `SELECT chain,normalized_address,attempts FROM token_metadata_resolve_queue WHERE status IN ('pending','retry_wait') AND (next_retry_at IS NULL OR next_retry_at<=now()) ORDER BY priority DESC,updated_at FOR UPDATE SKIP LOCKED LIMIT 1`).Scan(&chain, &contract, &attempts)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
@@ -330,6 +349,9 @@ func (b *BackfillRunner) resolveNext(ctx context.Context) (bool, error) {
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return false, err
+	}
+	if !validEVMAddress(contract) {
+		return true, b.finishQueue(ctx, chain, contract, "failed_final", "invalid token contract address", attempts+1)
 	}
 	if b.Service.RPC == nil {
 		return true, b.finishQueue(ctx, chain, contract, "failed_final", "rpc resolver unavailable", attempts+1)

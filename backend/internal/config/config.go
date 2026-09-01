@@ -61,6 +61,8 @@ type TokenMetadataConfig struct {
 	WorkerInterval    time.Duration
 	BatchIdle         time.Duration
 	RPCMaxRetries     int
+	RPCWorkers        int
+	RPCMinInterval    time.Duration
 	LogoEnabled       bool
 	LogoMaxBytes      int64
 	LogoMaxWidth      int
@@ -233,6 +235,8 @@ func Load() *Config {
 			WorkerInterval:    time.Duration(envInt("TOKEN_METADATA_WORKER_INTERVAL_SECONDS", 5)) * time.Second,
 			BatchIdle:         time.Duration(envInt("TOKEN_METADATA_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
 			RPCMaxRetries:     envInt("TOKEN_METADATA_RPC_MAX_RETRIES", 3),
+			RPCWorkers:        envInt("TOKEN_METADATA_RPC_WORKERS", 1),
+			RPCMinInterval:    time.Duration(envInt("TOKEN_METADATA_RPC_MIN_INTERVAL_MS", 2000)) * time.Millisecond,
 			LogoEnabled:       envBool("TOKEN_LOGO_ENABLED", true),
 			LogoMaxBytes:      int64(envInt("TOKEN_LOGO_MAX_BYTES", 2097152)),
 			LogoMaxWidth:      envInt("TOKEN_LOGO_MAX_WIDTH", 4096),

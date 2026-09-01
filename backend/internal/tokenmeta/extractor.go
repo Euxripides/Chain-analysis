@@ -15,6 +15,10 @@ var evmAddress = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 func normalizeAddress(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
 
+func validEVMAddress(value string) bool { return evmAddress.MatchString(normalizeAddress(value)) }
+
+func IsValidContractAddress(value string) bool { return validEVMAddress(value) }
+
 func ExtractPage(chain, source string, rows []json.RawMessage) []Observation {
 	// A page can contain 10k transfers but should produce at most one observation
 	// for each chain+contract. Merge only fields observed for the same contract.
@@ -25,7 +29,9 @@ func ExtractPage(chain, source string, rows []json.RawMessage) []Observation {
 			continue
 		}
 		contract := normalizeAddress(stringValue(item, "contractAddress", "tokenAddress"))
-		if contract == "" {
+		// Provider/raw rows sometimes contain truncated identifiers. They are not
+		// contracts and must never enter the metadata catalog or RPC queue.
+		if !validEVMAddress(contract) {
 			continue
 		}
 		obs := byContract[contract]

@@ -262,7 +262,7 @@ test('token metadata differentiates lookalike contracts and exposes resolved too
   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
 
   const firstToken = page.locator('.token-cell').first()
-  await expect(firstToken).toBeVisible()
+  await expect(firstToken).toBeVisible({ timeout: 20_000 })
   await expect(firstToken).toHaveAttribute('data-contract', '0xefc391a6e4a1c0775d845c4ced7bfcaa653e6a6e')
   await expect(firstToken.locator('.token-name')).toHaveText('U5DТ')
   await expect(firstToken.locator('.metadata-status')).toHaveCount(0)

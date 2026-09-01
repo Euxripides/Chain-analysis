@@ -88,7 +88,12 @@ func (s *Server) handleTokenResolve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]any{"error": "token metadata disabled"})
 		return
 	}
-	if err := s.deps.TokenMeta.Enqueue(r.Context(), chi.URLParam(r, "chain"), chi.URLParam(r, "contract")); err != nil {
+	contract := chi.URLParam(r, "contract")
+	if !tokenmeta.IsValidContractAddress(contract) {
+		writeJSON(w, 400, map[string]any{"error": "invalid token contract address"})
+		return
+	}
+	if err := s.deps.TokenMeta.Enqueue(r.Context(), chi.URLParam(r, "chain"), contract); err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}

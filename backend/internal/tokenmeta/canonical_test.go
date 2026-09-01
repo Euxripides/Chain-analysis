@@ -38,6 +38,21 @@ func TestExtractPageDeduplicatesContractsAndValidatesDecimals(t *testing.T) {
 	}
 }
 
+func TestExtractPageRejectsTruncatedContractBeforeCatalog(t *testing.T) {
+	rows := []json.RawMessage{
+		json.RawMessage(`{"contractAddress":"0x609bfd9972ea3316","tokenSymbol":"BAD","tokenDecimals":18}`),
+		json.RawMessage(`{"contractAddress":"0x55d398326f99059ff775485246999027b3197955","tokenSymbol":"USDT","tokenDecimals":18}`),
+	}
+	got := ExtractPage("bsc", "ankr_token_transfer", rows)
+	if len(got) != 1 || got[0].ContractAddress != "0x55d398326f99059ff775485246999027b3197955" {
+		t.Fatalf("invalid contract reached catalog: %+v", got)
+	}
+	counts := pageContractCounts(rows)
+	if len(counts) != 1 || counts[got[0].ContractAddress] != 1 {
+		t.Fatalf("invalid contract reached counts: %+v", counts)
+	}
+}
+
 func TestCanonicalDeterministicConflictAndPartial(t *testing.T) {
 	base := []Observation{
 		{Chain: "bsc", ContractAddress: "0x55d398326f99059ff775485246999027b3197955", Symbol: "USDT", Decimals: intPtr(18), Source: "ankr_token_transfer", RawHash: "b", Valid: true},

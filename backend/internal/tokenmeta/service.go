@@ -135,7 +135,7 @@ func pageContractCounts(rows []json.RawMessage) map[string]int64 {
 		var m map[string]any
 		if json.Unmarshal(raw, &m) == nil {
 			a := normalizeAddress(stringValue(m, "contractAddress", "tokenAddress"))
-			if a != "" {
+			if validEVMAddress(a) {
 				out[a]++
 			}
 		}
@@ -170,6 +170,9 @@ func (s *Service) observations(ctx context.Context, chain, contract string) ([]O
 }
 
 func (s *Service) Recompute(ctx context.Context, chain, contract string) error {
+	if !validEVMAddress(contract) {
+		return fmt.Errorf("invalid token contract address: %q", contract)
+	}
 	obs, err := s.observations(ctx, chain, contract)
 	if err != nil {
 		return err
@@ -185,7 +188,7 @@ func (s *Service) Recompute(ctx context.Context, chain, contract string) error {
 		ResolvedTotal.WithLabelValues(meta.MetadataStatus).Inc()
 		_, _ = s.Store.Pool.Exec(ctx, `UPDATE token_contract_catalog SET metadata_status=$3,updated_at=now() WHERE chain=$1 AND normalized_address=$2`, strings.ToLower(chain), normalizeAddress(contract), meta.MetadataStatus)
 		if meta.MetadataStatus != StatusComplete {
-			_ = s.enqueue(ctx, chain, contract, 0)
+			_ = s.enqueue(ctx, chain, contract, 0, false)
 		}
 		s.queueLogo(ctx, chain, contract)
 	}
@@ -193,12 +196,23 @@ func (s *Service) Recompute(ctx context.Context, chain, contract string) error {
 }
 
 func (s *Service) Enqueue(ctx context.Context, chain, contract string) error {
-	return s.enqueue(ctx, chain, contract, 10)
+	return s.enqueue(ctx, chain, contract, 10, true)
 
 }
 
-func (s *Service) enqueue(ctx context.Context, chain, contract string, priority int) error {
-	_, err := s.Store.Pool.Exec(ctx, `INSERT INTO token_metadata_resolve_queue(chain,normalized_address,status,priority) VALUES($1,$2,'pending',$3) ON CONFLICT(chain,normalized_address) DO UPDATE SET status='pending',priority=GREATEST(token_metadata_resolve_queue.priority,EXCLUDED.priority),next_retry_at=NULL,last_error=NULL,updated_at=now()`, strings.ToLower(chain), normalizeAddress(contract), priority)
+func (s *Service) enqueue(ctx context.Context, chain, contract string, priority int, force bool) error {
+	contract = normalizeAddress(contract)
+	if !validEVMAddress(contract) {
+		return fmt.Errorf("invalid token contract address: %q", contract)
+	}
+	if force {
+		_, err := s.Store.Pool.Exec(ctx, `INSERT INTO token_metadata_resolve_queue(chain,normalized_address,status,priority) VALUES($1,$2,'pending',$3) ON CONFLICT(chain,normalized_address) DO UPDATE SET status='pending',priority=GREATEST(token_metadata_resolve_queue.priority,EXCLUDED.priority),attempts=0,next_retry_at=NULL,last_error=NULL,updated_at=now()`, strings.ToLower(chain), contract, priority)
+		return err
+	}
+	// Automatic recomputation may create a new queue item, but must never reset
+	// retry_wait, partial, resolved or failed_final rows. Only an explicit admin
+	// resolve request is allowed to reactivate a terminal item.
+	_, err := s.Store.Pool.Exec(ctx, `INSERT INTO token_metadata_resolve_queue(chain,normalized_address,status,priority) VALUES($1,$2,'pending',$3) ON CONFLICT(chain,normalized_address) DO UPDATE SET priority=GREATEST(token_metadata_resolve_queue.priority,EXCLUDED.priority),updated_at=now()`, strings.ToLower(chain), contract, priority)
 	return err
 }
 

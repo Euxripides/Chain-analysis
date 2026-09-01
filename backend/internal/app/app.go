@@ -102,7 +102,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		if err := infra.TokenMeta.EnsureVerifiedRegistry(ctx); err != nil {
 			log.Warn("verified token registry seed failed", "err", err)
 		}
-		infra.TokenBackfill = &tokenmeta.BackfillRunner{Service: infra.TokenMeta, BatchSize: cfg.TokenMetadata.BackfillBatchSize, Interval: cfg.TokenMetadata.WorkerInterval, BatchIdle: cfg.TokenMetadata.BatchIdle, MaxRetries: cfg.TokenMetadata.RPCMaxRetries, Log: log}
+		infra.TokenBackfill = &tokenmeta.BackfillRunner{Service: infra.TokenMeta, BatchSize: cfg.TokenMetadata.BackfillBatchSize, Interval: cfg.TokenMetadata.WorkerInterval, BatchIdle: cfg.TokenMetadata.BatchIdle, MaxRetries: cfg.TokenMetadata.RPCMaxRetries, RPCWorkers: cfg.TokenMetadata.RPCWorkers, RPCMinInterval: cfg.TokenMetadata.RPCMinInterval, Log: log}
 	}
 	return infra, nil
 }
@@ -113,14 +113,9 @@ func (i *Infra) StartTokenMetadataBackground(ctx context.Context, cfg *config.Co
 	}
 	go i.TokenBackfill.Run(ctx)
 	i.TokenMeta.StartLogoWorker(ctx)
-	// Ensure one recoverable all-chain catalog job exists. The unique runnable
-	// guard is transactionally checked here; restarts continue its cursor.
-	var exists bool
-	if err := i.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM token_metadata_backfill_jobs WHERE status IN ('pending','running'))`).Scan(&exists); err == nil && !exists {
-		if id, e := i.TokenBackfill.CreateJob(ctx, ""); e == nil {
-			log.Info("token metadata catalog backfill queued", "job_id", id)
-		}
-	}
+	// Backfill can consume thousands of billable RPC calls. Startup only resumes
+	// an explicitly created pending/running job; it never creates a new full-chain
+	// job implicitly. Administrators start backfills through the admin endpoint.
 	log.Info("token metadata background worker started", "batch", cfg.TokenMetadata.BackfillBatchSize)
 }
 
