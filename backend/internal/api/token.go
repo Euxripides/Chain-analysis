@@ -138,7 +138,7 @@ func (s *Server) handleTokenBackfill(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTokenBackfillList(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.deps.Store.Pool.Query(r.Context(), `SELECT id,COALESCE(chain,''),status,cursor_json,scanned_tokens,completed_tokens,partial_tokens,failed_tokens,raw_objects,raw_observations,started_at,updated_at,completed_at,COALESCE(last_error,'') FROM token_metadata_backfill_jobs ORDER BY updated_at DESC LIMIT 50`)
+	rows, err := s.deps.Store.Pool.Query(r.Context(), `SELECT id,COALESCE(chain,''),status,cursor_json,scanned_tokens,completed_tokens,partial_tokens,failed_tokens,raw_objects,raw_observations,raw_failed_objects,raw_failed_parts,started_at,updated_at,completed_at,COALESCE(last_error,'') FROM token_metadata_backfill_jobs ORDER BY updated_at DESC LIMIT 50`)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
@@ -148,13 +148,13 @@ func (s *Server) handleTokenBackfillList(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var id, chain, status, errorText string
 		var cursor json.RawMessage
-		var scanned, complete, partial, failed, rawObjects, rawObservations int64
+		var scanned, complete, partial, failed, rawObjects, rawObservations, rawFailedObjects, rawFailedParts int64
 		var started, completed sql.NullTime
 		var updated any
-		if err := rows.Scan(&id, &chain, &status, &cursor, &scanned, &complete, &partial, &failed, &rawObjects, &rawObservations, &started, &updated, &completed, &errorText); err != nil {
+		if err := rows.Scan(&id, &chain, &status, &cursor, &scanned, &complete, &partial, &failed, &rawObjects, &rawObservations, &rawFailedObjects, &rawFailedParts, &started, &updated, &completed, &errorText); err != nil {
 			continue
 		}
-		out = append(out, map[string]any{"id": id, "chain": chain, "status": status, "cursor": cursor, "scanned_tokens": scanned, "completed_tokens": complete, "partial_tokens": partial, "failed_tokens": failed, "raw_objects": rawObjects, "raw_observations": rawObservations, "started_at": nullableTime(started), "updated_at": updated, "completed_at": nullableTime(completed), "last_error": errorText})
+		out = append(out, map[string]any{"id": id, "chain": chain, "status": status, "cursor": cursor, "scanned_tokens": scanned, "completed_tokens": complete, "partial_tokens": partial, "failed_tokens": failed, "raw_objects": rawObjects, "raw_observations": rawObservations, "raw_failed_objects": rawFailedObjects, "raw_failed_parts": rawFailedParts, "started_at": nullableTime(started), "updated_at": updated, "completed_at": nullableTime(completed), "last_error": errorText})
 	}
 	writeJSON(w, 200, map[string]any{"jobs": out})
 }

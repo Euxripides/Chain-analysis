@@ -182,7 +182,7 @@ type rawManifest struct {
 func (b *BackfillRunner) runRawPhase(ctx context.Context, jobID, requestedChain string, cur *cursor) error {
 	if b.Service.Raw == nil {
 		cur.Phase = "clickhouse"
-		return b.checkpointRaw(ctx, jobID, *cur, 0, 0)
+		return b.checkpointRaw(ctx, jobID, *cur, 0, 0, 0, 0)
 	}
 	for {
 		rows, err := b.Service.Store.Pool.Query(ctx, `SELECT id::text,raw_object FROM download_shards WHERE dataset='token_transfers' AND status='COMPLETED' AND raw_object<>'' AND id::text>$1 ORDER BY id::text LIMIT 50`, cur.RawID)
@@ -206,13 +206,15 @@ func (b *BackfillRunner) runRawPhase(ctx context.Context, jobID, requestedChain 
 		}
 		if len(objects) == 0 {
 			cur.Phase, cur.RawID, cur.Chain, cur.Address = "clickhouse", "", "", ""
-			return b.checkpointRaw(ctx, jobID, *cur, 0, 0)
+			return b.checkpointRaw(ctx, jobID, *cur, 0, 0, 0, 0)
 		}
-		var objectCount, observationCount int64
+		var objectCount, observationCount, failedObjects, failedParts int64
 		for _, object := range objects {
 			var manifest rawManifest
 			if err := b.readGzipJSON(ctx, object.key, &manifest); err != nil {
 				b.Log.Warn("skip unreadable token raw manifest", "object", object.key, "err", err)
+				failedObjects++
+				objectCount++
 				cur.RawID = object.id
 				continue
 			}
@@ -226,6 +228,7 @@ func (b *BackfillRunner) runRawPhase(ctx context.Context, jobID, requestedChain 
 				}
 				if err := b.readGzipJSON(ctx, part.Key, &page); err != nil {
 					b.Log.Warn("skip unreadable token raw part", "object", part.Key, "err", err)
+					failedParts++
 					continue
 				}
 				n, err := b.Service.StoreRawObservations(ctx, manifest.Chain, page.Rows)
@@ -237,7 +240,7 @@ func (b *BackfillRunner) runRawPhase(ctx context.Context, jobID, requestedChain 
 			objectCount++
 			cur.RawID = object.id
 		}
-		if err := b.checkpointRaw(ctx, jobID, *cur, objectCount, observationCount); err != nil {
+		if err := b.checkpointRaw(ctx, jobID, *cur, objectCount, observationCount, failedObjects, failedParts); err != nil {
 			return err
 		}
 	}
@@ -257,9 +260,9 @@ func (b *BackfillRunner) readGzipJSON(ctx context.Context, key string, target an
 	return json.NewDecoder(io.LimitReader(gz, 64<<20)).Decode(target)
 }
 
-func (b *BackfillRunner) checkpointRaw(ctx context.Context, jobID string, cur cursor, objects, observations int64) error {
+func (b *BackfillRunner) checkpointRaw(ctx context.Context, jobID string, cur cursor, objects, observations, failedObjects, failedParts int64) error {
 	checkpoint, _ := json.Marshal(cur)
-	_, err := b.Service.Store.Pool.Exec(ctx, `UPDATE token_metadata_backfill_jobs SET cursor_json=$2,raw_objects=raw_objects+$3,raw_observations=raw_observations+$4,updated_at=now() WHERE id=$1`, jobID, checkpoint, objects, observations)
+	_, err := b.Service.Store.Pool.Exec(ctx, `UPDATE token_metadata_backfill_jobs SET cursor_json=$2,raw_objects=raw_objects+$3,raw_observations=raw_observations+$4,raw_failed_objects=raw_failed_objects+$5,raw_failed_parts=raw_failed_parts+$6,updated_at=now() WHERE id=$1`, jobID, checkpoint, objects, observations, failedObjects, failedParts)
 	return err
 }
 
