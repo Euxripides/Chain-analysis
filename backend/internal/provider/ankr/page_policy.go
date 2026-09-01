@@ -12,34 +12,34 @@ import (
 
 // PagePolicyState 每个 (chain|dataset|subject) 的自适应状态（§17），可序列化进 Checkpoint。
 type PagePolicyState struct {
-	CurrentPageSize        int           `json:"current_page_size"`
-	ConsecutiveSuccess     int           `json:"consecutive_success"`
-	ConsecutiveFastSuccess int           `json:"consecutive_fast_success"`
-	LastBodyBytes          int64         `json:"last_response_bytes"`
-	LastDurationMs         int64         `json:"last_duration_ms"`
-	TimeoutCount           int           `json:"timeout_count"`
-	TooLargeCount          int           `json:"too_large_count"`
-	LastFailedLevel        int           `json:"last_failed_page_level"`
-	CooldownRemaining      int           `json:"cooldown_remaining"`
-	UpdatedAt              time.Time     `json:"updated_at"`
+	CurrentPageSize        int       `json:"current_page_size"`
+	ConsecutiveSuccess     int       `json:"consecutive_success"`
+	ConsecutiveFastSuccess int       `json:"consecutive_fast_success"`
+	LastBodyBytes          int64     `json:"last_response_bytes"`
+	LastDurationMs         int64     `json:"last_duration_ms"`
+	TimeoutCount           int       `json:"timeout_count"`
+	TooLargeCount          int       `json:"too_large_count"`
+	LastFailedLevel        int       `json:"last_failed_page_level"`
+	CooldownRemaining      int       `json:"cooldown_remaining"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // PageDecision 一页失败后的控制器决策（§21 矩阵）。
 type PageDecision struct {
-	NextPageSize       int
-	SplitRange         bool
-	ReduceRate         bool
-	ReduceConcurrency  bool
-	RetryAfter         time.Duration
-	Backoff            time.Duration
+	NextPageSize      int
+	SplitRange        bool
+	ReduceRate        bool
+	ReduceConcurrency bool
+	RetryAfter        time.Duration
+	Backoff           time.Duration
 }
 
 // PagePolicy 按 key(chain|dataset|subject_type|subject) 维护自适应 pageSize（§16）。
 type PagePolicy struct {
-	mu       sync.Mutex
-	cfg      *config.Config
-	levels   []int
-	states   map[string]*PagePolicyState
+	mu     sync.Mutex
+	cfg    *config.Config
+	levels []int
+	states map[string]*PagePolicyState
 }
 
 func NewPagePolicy(cfg *config.Config) *PagePolicy {

@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/chain"
+	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
+	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
@@ -14,6 +17,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
+	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
@@ -35,6 +39,19 @@ type Infra struct {
 	DeepDecode    *method.AnkrDeepResolver
 	TokenMeta     *tokenmeta.Service
 	TokenBackfill *tokenmeta.BackfillRunner
+
+	// V1.5 RPC Infrastructure（§7）：业务只拿类型化服务，拿不到 Provider 与 Key。
+	Chains      *chain.Registry
+	RPCProvider rpc.Provider
+	RPCGateway  *rpc.Gateway
+	RPCBatcher  *rpc.Batcher
+	ChainRead   *chainread.Service
+	Head        *chainread.HeadService
+	Contract    *chainread.ContractService
+	AddressType *chainread.AddressTypeService
+	BalanceRead *chainread.BalanceService
+	LogsRead    *chainread.LogsService
+	Trace       *chaintrace.Service
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
@@ -92,12 +109,20 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	if err := infra.initMethod(ctx, cfg, log); err != nil {
 		return nil, err
 	}
+	// V1.5：RPC 基础设施必须在依赖它的业务服务之前装配（§248）
+	if err := infra.initRPC(ctx, cfg, log); err != nil {
+		return nil, err
+	}
 	if cfg.TokenMetadata.Enabled {
-		var rpc tokenmeta.RPCResolver
-		if candidate, ok := prov.(provider.TokenMetadataResolver); ok {
-			rpc = candidate
+		// V1.5 §234：Token Metadata 必须走 ContractReadService → RPCGateway，
+		// 不允许保留第二套 raw http RPC client。
+		var resolver tokenmeta.RPCResolver
+		if infra.Contract != nil {
+			resolver = tokenmeta.NewContractResolver(infra.Contract)
+		} else {
+			log.Warn("token metadata rpc resolver disabled: rpc infrastructure is not available")
 		}
-		infra.TokenMeta = tokenmeta.New(st, ch, rpc, log)
+		infra.TokenMeta = tokenmeta.New(st, ch, resolver, log)
 		infra.TokenMeta.ConfigureLogo(raw, tokenmeta.LogoConfig{Enabled: cfg.TokenMetadata.LogoEnabled, MaxBytes: cfg.TokenMetadata.LogoMaxBytes, MaxWidth: cfg.TokenMetadata.LogoMaxWidth, MaxHeight: cfg.TokenMetadata.LogoMaxHeight})
 		if err := infra.TokenMeta.EnsureVerifiedRegistry(ctx); err != nil {
 			log.Warn("verified token registry seed failed", "err", err)

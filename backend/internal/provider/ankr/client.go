@@ -21,16 +21,16 @@ import (
 )
 
 type Options struct {
-	Endpoint     string
-	APIKey       string
-	MaxPageSize  int
-	RequestsPerMinute int
-	RequestTimeout    time.Duration
-	ResponseHeaderTimeout time.Duration
+	Endpoint               string
+	APIKey                 string
+	MaxPageSize            int
+	RequestsPerMinute      int
+	RequestTimeout         time.Duration
+	ResponseHeaderTimeout  time.Duration
 	ResponseSoftLimitBytes int64
 	ResponseHardLimitBytes int64
-	CreditsPerRequest float64
-	CostPerRequestUSD float64
+	CreditsPerRequest      float64
+	CostPerRequestUSD      float64
 }
 
 type Client struct {
@@ -72,13 +72,13 @@ func New(opts Options, hook provider.UsageHook) *Client {
 		opts.ResponseHardLimitBytes = 64 << 20
 	}
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-		MaxIdleConns:        256,
-		MaxIdleConnsPerHost: 128,
-		MaxConnsPerHost:     128,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		MaxIdleConns:          256,
+		MaxIdleConnsPerHost:   128,
+		MaxConnsPerHost:       128,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: opts.ResponseHeaderTimeout,
 	}
 	c := &Client{
@@ -144,7 +144,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	if !ok {
 		return provider.FetchResult{}, &provider.Error{
 			Provider: "ankr", Class: provider.ClassUpstream,
-			Message: fmt.Sprintf("provider circuit breaker %s", state),
+			Message:   fmt.Sprintf("provider circuit breaker %s", state),
 			Retryable: true, ReduceConcurrency: true,
 		}
 	}

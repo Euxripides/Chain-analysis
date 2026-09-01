@@ -69,6 +69,60 @@ type TokenMetadataConfig struct {
 	LogoMaxHeight     int
 }
 
+// RPCConfig V1.5 统一链 RPC 基础设施（§188/§189）。
+// 所有阈值都可配置：Provider 价格、限额、能力不得硬编码为业务常量（§254）。
+type RPCConfig struct {
+	Enabled         bool
+	DefaultProvider string
+	Chains          []string
+	ChainRegistry   string
+
+	AnkrEnabled          bool
+	AnkrEndpointTemplate string
+	AnkrAPIKey           string
+
+	HTTPMaxIdleConns        int
+	HTTPMaxIdleConnsPerHost int
+	HTTPMaxConnsPerHost     int
+
+	GlobalConcurrency int
+	RequestsPerSecond float64
+
+	ChainHeadTimeout time.Duration
+	StandardTimeout  time.Duration
+	LogsTimeout      time.Duration
+	TraceTimeout     time.Duration
+	DebugTimeout     time.Duration
+
+	ResponseHardLimitBytes int64
+	MaxRequestBytes        int
+
+	BatchEnabled bool
+	BatchMaxSize int
+	BatchMaxWait time.Duration
+
+	CacheEnabled  bool
+	CacheCapacity int
+
+	TraceEnabled    bool
+	DebugEnabled    bool
+	WriteEnabled    bool
+	TraceRawPersist bool
+
+	ProbeOnStart    bool
+	HealthSnapshot  time.Duration
+	RetryMaxAttempt int
+
+	BudgetEnabled            bool
+	BudgetWindow             time.Duration
+	TraceMaxRequests         int64
+	InvestigationMaxRequests int64
+	InvestigationMaxCredits  int64
+
+	CreditsPerCall float64
+	CostPerCallUSD float64
+}
+
 type Config struct {
 	Env               string
 	Timezone          string
@@ -88,6 +142,18 @@ type Config struct {
 	Ankr              AnkrConfig
 	Method            MethodConfig
 	TokenMetadata     TokenMetadataConfig
+	RPC               RPCConfig
+}
+
+// splitList 解析逗号分隔配置。
+func splitList(value string) []string {
+	var out []string
+	for _, part := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 // parsePageLevels 解析 "1000,2000,5000,10000"。
@@ -133,6 +199,20 @@ func (c *Config) Validate() error {
 	}
 	if a.MaxPageSize > 10000 {
 		return fmt.Errorf("ANKR_MAX_PAGE_SIZE must be <= 10000")
+	}
+	if c.RPC.Enabled {
+		if c.RPC.ResponseHardLimitBytes <= 0 {
+			return fmt.Errorf("RPC_RESPONSE_HARD_LIMIT_MB must be positive")
+		}
+		if c.RPC.GlobalConcurrency <= 0 {
+			return fmt.Errorf("RPC_GLOBAL_CONCURRENCY must be positive")
+		}
+		if c.RPC.BatchMaxSize <= 0 {
+			return fmt.Errorf("RPC_BATCH_MAX_SIZE must be positive")
+		}
+		if len(c.RPC.Chains) == 0 {
+			return fmt.Errorf("RPC_CHAINS must list at least one chain")
+		}
 	}
 	return nil
 }
@@ -227,6 +307,58 @@ func Load() *Config {
 			BackfillBatchSize:       envInt("METHOD_BACKFILL_BATCH_SIZE", 20000),
 			BackfillBatchIdle:       time.Duration(envInt("METHOD_BACKFILL_BATCH_IDLE_MS", 200)) * time.Millisecond,
 			MaxCachedABIs:           envInt("METHOD_MAX_CACHED_ABIS", 20000),
+		},
+		RPC: RPCConfig{
+			Enabled:         envBool("RPC_ENABLED", true),
+			DefaultProvider: env("RPC_DEFAULT_PROVIDER", "ankr"),
+			Chains:          splitList(env("RPC_CHAINS", "bsc")),
+			ChainRegistry:   os.Getenv("CHAIN_REGISTRY_JSON"),
+
+			AnkrEnabled:          envBool("ANKR_RPC_ENABLED", true),
+			AnkrEndpointTemplate: env("ANKR_RPC_ENDPOINT_TEMPLATE", "https://rpc.ankr.com/{chain}/{key}"),
+			AnkrAPIKey:           env("ANKR_RPC_API_KEY", os.Getenv("ANKR_API_KEY")),
+
+			HTTPMaxIdleConns:        envInt("RPC_HTTP_MAX_IDLE_CONNS", 256),
+			HTTPMaxIdleConnsPerHost: envInt("RPC_HTTP_MAX_IDLE_CONNS_PER_HOST", 128),
+			HTTPMaxConnsPerHost:     envInt("RPC_HTTP_MAX_CONNS_PER_HOST", 128),
+
+			GlobalConcurrency: envInt("RPC_GLOBAL_CONCURRENCY", 64),
+			RequestsPerSecond: envFloat("RPC_REQUESTS_PER_SECOND", 25),
+
+			ChainHeadTimeout: time.Duration(envInt("RPC_CHAIN_HEAD_TIMEOUT_SECONDS", 5)) * time.Second,
+			StandardTimeout:  time.Duration(envInt("RPC_STANDARD_TIMEOUT_SECONDS", 15)) * time.Second,
+			LogsTimeout:      time.Duration(envInt("RPC_LOGS_TIMEOUT_SECONDS", 60)) * time.Second,
+			TraceTimeout:     time.Duration(envInt("RPC_TRACE_TIMEOUT_SECONDS", 60)) * time.Second,
+			DebugTimeout:     time.Duration(envInt("RPC_DEBUG_TIMEOUT_SECONDS", 120)) * time.Second,
+
+			ResponseHardLimitBytes: int64(envInt("RPC_RESPONSE_HARD_LIMIT_MB", 64)) << 20,
+			MaxRequestBytes:        envInt("RPC_MAX_REQUEST_BYTES", 1<<20),
+
+			BatchEnabled: envBool("RPC_BATCH_ENABLED", true),
+			BatchMaxSize: envInt("RPC_BATCH_MAX_SIZE", 100),
+			BatchMaxWait: time.Duration(envInt("RPC_BATCH_MAX_WAIT_MS", 10)) * time.Millisecond,
+
+			CacheEnabled:  envBool("RPC_CACHE_ENABLED", true),
+			CacheCapacity: envInt("RPC_CACHE_CAPACITY", 200000),
+
+			// 写方法默认禁用（§247-10）
+			TraceEnabled:    envBool("RPC_TRACE_ENABLED", true),
+			DebugEnabled:    envBool("RPC_DEBUG_ENABLED", true),
+			WriteEnabled:    envBool("RPC_WRITE_ENABLED", false),
+			TraceRawPersist: envBool("RPC_TRACE_RAW_PERSIST", true),
+
+			ProbeOnStart:    envBool("RPC_PROBE_ON_START", true),
+			HealthSnapshot:  time.Duration(envInt("RPC_HEALTH_SNAPSHOT_SECONDS", 60)) * time.Second,
+			RetryMaxAttempt: envInt("RPC_RETRY_MAX_ATTEMPTS", 3),
+
+			BudgetEnabled:            envBool("RPC_BUDGET_ENABLED", true),
+			BudgetWindow:             time.Duration(envInt("RPC_BUDGET_WINDOW_HOURS", 24)) * time.Hour,
+			TraceMaxRequests:         int64(envInt("RPC_TRACE_MAX_REQUESTS_PER_WINDOW", 20000)),
+			InvestigationMaxRequests: int64(envInt("RPC_INVESTIGATION_MAX_REQUESTS", 5000)),
+			InvestigationMaxCredits:  int64(envInt("RPC_INVESTIGATION_MAX_CREDITS", 200000)),
+
+			CreditsPerCall: envFloat("RPC_CREDITS_PER_CALL", 200),
+			CostPerCallUSD: envFloat("RPC_COST_PER_CALL_USD", 0.00002),
 		},
 		TokenMetadata: TokenMetadataConfig{
 			Enabled:           envBool("TOKEN_METADATA_ENABLED", true),

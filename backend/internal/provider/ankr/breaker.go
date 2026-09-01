@@ -7,14 +7,14 @@ import (
 
 // circuitBreaker 统计 Provider 错误率并维护状态机 NORMAL → DEGRADED → OPEN → HALF_OPEN。
 type circuitBreaker struct {
-	mu        sync.Mutex
-	state     string
-	window    []bool // true = 成功
-	pos       int
-	full      bool
-	openedAt  time.Time
-	cooldown  time.Duration
-	threshold float64
+	mu         sync.Mutex
+	state      string
+	window     []bool // true = 成功
+	pos        int
+	full       bool
+	openedAt   time.Time
+	cooldown   time.Duration
+	threshold  float64
 	minSamples int
 }
 

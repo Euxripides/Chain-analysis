@@ -129,10 +129,10 @@ func TestCancelNotRetryable(t *testing.T) {
 // §41：官方错误码矩阵
 func TestOfficialErrorCodes(t *testing.T) {
 	cases := []struct {
-		code    int
-		want    provider.ErrorClass
-		rate    bool
-		conn    bool
+		code int
+		want provider.ErrorClass
+		rate bool
+		conn bool
 	}{
 		{-32090, provider.ClassRateLimit, true, false},
 		{-32005, provider.ClassRateLimit, true, false}, // legacy

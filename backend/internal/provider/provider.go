@@ -158,9 +158,9 @@ type TokenMetadataResult struct {
 	DecimalsError string
 }
 
-type TokenMetadataResolver interface {
-	ResolveTokenMetadata(ctx context.Context, chain, contract string) (TokenMetadataResult, error)
-}
+// 注意（V1.5 §234）：Token Metadata 不再由 Advanced API Provider 直接解析。
+// 解析路径固定为 TokenMetadataRPCResolver → ContractReadService → RPCGateway，
+// 因此这里不再暴露 Provider 级别的 TokenMetadataResolver 接口。
 
 // AddressTypeResolver is an optional raw-RPC capability used by the explorer
 // to distinguish contracts from externally owned accounts. Implementations

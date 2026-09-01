@@ -31,14 +31,6 @@ func NewMock(pageSize int, hook provider.UsageHook) *MockProvider {
 
 func (m *MockProvider) Name() string { return "ankr-mock" }
 
-func (m *MockProvider) ResolveTokenMetadata(_ context.Context, _ string, contract string) (provider.TokenMetadataResult, error) {
-	name, symbol, decimals := "Mock Token", "MOCK", 18
-	if strings.HasSuffix(strings.ToLower(contract), "55d398326f99059ff775485246999027b3197955") {
-		name, symbol, decimals = "Tether USD", "USDT", 18
-	}
-	return provider.TokenMetadataResult{Name: &name, Symbol: &symbol, Decimals: &decimals}, nil
-}
-
 func (m *MockProvider) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
 		Name:        "ankr-mock",

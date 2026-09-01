@@ -185,12 +185,29 @@ type UsageRow struct {
 	CacheHit       bool
 	DecodePriority string
 	DecodeBudget   *int
+
+	// V1.5（§39/§40）：统一 RPC 用量。
+	// 成本以 method call 为基准：100 个 call 的 Batch 不得记成 1 次调用。
+	APIType         string
+	Chain           string
+	MethodClass     string
+	MethodCalls     int
+	BatchSize       int
+	SingleflightHit bool
+	InvestigationID string
+	Priority        string
 }
 
 // Provider 用量类型（§49）。
 const (
 	UsageTypeDatasetDownload = "dataset_download"
 	UsageTypeTxDeepDecode    = "tx_deep_decode"
+)
+
+// Provider API 类型（V1.5 §39）：索引型 Advanced API 与原始链 RPC 分开统计。
+const (
+	APITypeAdvanced = "advanced"
+	APITypeRPC      = "rpc"
 )
 
 type AuditEvent struct {
