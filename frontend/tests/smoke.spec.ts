@@ -121,7 +121,11 @@ test('address cases and tags can be edited from the header', async ({ page }, te
   await page.getByRole('button', { name: '修改案件和标签' }).click()
   const dialog = page.getByRole('dialog', { name: '修改案件和标签' })
   await expect(dialog).toBeVisible()
-  await expect(dialog.getByLabel('案件')).toHaveValue(/.+/)
+  await expect(dialog.getByLabel('案件名称')).toHaveValue('盘古')
+  await expect(dialog.getByLabel('标签 入金地址')).toBeChecked()
+  await expect(dialog.getByLabel('新标签名称')).toBeVisible()
+  await dialog.getByLabel('新标签名称').fill('入金地址')
+  await dialog.getByRole('button', { name: '添加', exact: true }).click()
   await expect(dialog.getByLabel('标签 入金地址')).toBeChecked()
   await screenshot(page, `${testInfo.project.name}-metadata-editor.png`)
 
@@ -133,6 +137,57 @@ test('address cases and tags can be edited from the header', async ({ page }, te
   await expect(page.getByText(/案件：盘古/)).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('入金地址', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
+})
+
+test('arbitrary case and tag names are created, linked and restored', async ({ page, request }) => {
+  test.skip(process.env.E2E_LIVE_METADATA_MUTATION !== '1', '仅在显式启用时修改真实元数据')
+  const address = '0x9b77e3b4f85c7cea7da451f454895edbd10b80dd'
+  const suffix = Date.now().toString().slice(-8)
+  const caseName = `验收案件-${suffix}`
+  const tagName = `验收标签-${suffix}`
+  const [casesResponse, tagsResponse, catalogResponse] = await Promise.all([
+    request.get('/api/v1/cases'), request.get('/api/v1/tags'),
+    request.get(`/api/v1/data-explorer/addresses?chain=bsc&q=${address}&limit=5`),
+  ])
+  const cases = (await casesResponse.json()).cases as { id: string; name: string }[]
+  const tags = (await tagsResponse.json()).tags as { id: string; name: string }[]
+  const original = (await catalogResponse.json()).addresses.find((item: any) => item.normalized_address === address)
+  const originalCaseIDs = cases.filter((item) => original.case_names.includes(item.name)).map((item) => item.id)
+  const originalTagIDs = tags.filter((item) => original.tag_names.includes(item.name)).map((item) => item.id)
+  let temporaryCaseID = ''
+  let temporaryTagID = ''
+
+  try {
+    await page.goto(`/data-explorer/bsc/${address}`)
+    await page.getByRole('button', { name: '修改案件和标签' }).click()
+    const dialog = page.getByRole('dialog', { name: '修改案件和标签' })
+    await dialog.getByLabel('案件名称').fill(caseName)
+    await dialog.getByLabel('新标签名称').fill(tagName)
+    await dialog.getByRole('button', { name: '添加', exact: true }).click()
+    await expect(dialog.getByRole('button', { name: `移除新标签 ${tagName}` })).toBeVisible()
+    const caseCreated = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/v1/cases'))
+    const tagCreated = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/v1/tags'))
+    const metadataSaved = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().endsWith('/metadata'))
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    temporaryCaseID = (await (await caseCreated).json()).id
+    temporaryTagID = (await (await tagCreated).json()).id
+    expect((await metadataSaved).ok()).toBe(true)
+    await page.reload()
+    await expect(page.getByText(new RegExp(`案件：${caseName}`))).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(tagName, { exact: true })).toBeVisible()
+  } finally {
+    if (temporaryCaseID || temporaryTagID) {
+      await request.patch(`/api/v1/addresses/bsc/${address}/metadata`, { data: {
+        set_primary_case: originalCaseIDs.length > 0,
+        add_cases: originalCaseIDs,
+        remove_cases: temporaryCaseID ? [temporaryCaseID] : [],
+        add_tags: originalTagIDs,
+        remove_tags: temporaryTagID ? [temporaryTagID] : [],
+      } })
+    }
+    if (temporaryCaseID) await request.delete(`/api/v1/cases/${temporaryCaseID}`)
+    if (temporaryTagID) await request.delete(`/api/v1/tags/${temporaryTagID}`)
+  }
 })
 
 test('filters update full-result statistics and selected rows can be exported', async ({ page }, testInfo) => {

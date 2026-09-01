@@ -75,8 +75,10 @@ export default function AddressDetailPage() {
   const [metadataError, setMetadataError] = useState('')
   const [caseOptions, setCaseOptions] = useState<MetadataOption[]>([])
   const [tagOptions, setTagOptions] = useState<MetadataOption[]>([])
-  const [selectedCaseID, setSelectedCaseID] = useState('')
+  const [caseNameDraft, setCaseNameDraft] = useState('')
   const [selectedTagIDs, setSelectedTagIDs] = useState<string[]>([])
+  const [customTagNames, setCustomTagNames] = useState<string[]>([])
+  const [newTagName, setNewTagName] = useState('')
   // V1.3：交易详情抽屉（Method / Decoded Input / Logs，§42）
   const [detailTx, setDetailTx] = useState('')
   const refreshID = useRef(0)
@@ -100,8 +102,10 @@ export default function AddressDetailPage() {
       if (latestMeta) setMeta(latestMeta)
       setCaseOptions(caseData.cases)
       setTagOptions(tagData.tags)
-      setSelectedCaseID(caseData.cases.find((item) => latestMeta?.case_names?.includes(item.name))?.id ?? '')
+      setCaseNameDraft(latestMeta?.case_names?.[0] ?? '')
       setSelectedTagIDs(tagData.tags.filter((item) => latestMeta?.tag_names?.includes(item.name)).map((item) => item.id))
+      setCustomTagNames([])
+      setNewTagName('')
     } catch (reason) {
       setMetadataError(`加载案件和标签失败：${String(reason)}`)
     } finally {
@@ -113,18 +117,41 @@ export default function AddressDetailPage() {
     setSelectedTagIDs((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
 
+  function addCustomTag() {
+    const name = newTagName.trim()
+    if (!name) return
+    const existing = tagOptions.find((item) => item.name.localeCompare(name, 'zh-CN', { sensitivity: 'accent' }) === 0)
+    if (existing) {
+      setSelectedTagIDs((current) => current.includes(existing.id) ? current : [...current, existing.id])
+    } else {
+      setCustomTagNames((current) => current.some((item) => item.localeCompare(name, 'zh-CN', { sensitivity: 'accent' }) === 0) ? current : [...current, name])
+    }
+    setNewTagName('')
+  }
+
   async function saveMetadata() {
     setMetadataSaving(true)
     setMetadataError('')
     try {
+      const desiredCaseName = caseNameDraft.trim()
+      let desiredCase = caseOptions.find((item) => item.name.localeCompare(desiredCaseName, 'zh-CN', { sensitivity: 'accent' }) === 0)
+      if (desiredCaseName && !desiredCase) desiredCase = await api.createCase(desiredCaseName)
+
+      const pendingTagNames = [...customTagNames, ...(newTagName.trim() ? [newTagName.trim()] : [])]
+      const desiredTagIDs = [...selectedTagIDs]
+      for (const name of pendingTagNames) {
+        let tag = tagOptions.find((item) => item.name.localeCompare(name, 'zh-CN', { sensitivity: 'accent' }) === 0)
+        if (!tag) tag = await api.createTag(name)
+        if (!desiredTagIDs.includes(tag.id)) desiredTagIDs.push(tag.id)
+      }
       const currentCaseIDs = caseOptions.filter((item) => meta?.case_names?.includes(item.name)).map((item) => item.id)
       const currentTagIDs = tagOptions.filter((item) => meta?.tag_names?.includes(item.name)).map((item) => item.id)
       const response = await api.updateAddressMetadata(chain, address, {
-        set_primary_case: Boolean(selectedCaseID),
-        add_cases: selectedCaseID ? [selectedCaseID] : [],
-        remove_cases: currentCaseIDs.filter((id) => id !== selectedCaseID),
-        add_tags: selectedTagIDs.filter((id) => !currentTagIDs.includes(id)),
-        remove_tags: currentTagIDs.filter((id) => !selectedTagIDs.includes(id)),
+        set_primary_case: Boolean(desiredCase?.id),
+        add_cases: desiredCase?.id ? [desiredCase.id] : [],
+        remove_cases: currentCaseIDs.filter((id) => id !== desiredCase?.id),
+        add_tags: desiredTagIDs.filter((id) => !currentTagIDs.includes(id)),
+        remove_tags: currentTagIDs.filter((id) => !desiredTagIDs.includes(id)),
       })
       setMeta(response.address)
       setMetadataEditorOpen(false)
@@ -415,8 +442,8 @@ export default function AddressDetailPage() {
             <button className="metadata-dialog-close" aria-label="关闭" disabled={metadataSaving} onClick={() => setMetadataEditorOpen(false)}>×</button>
           </div>
           {metadataLoading ? <div className="metadata-dialog-loading">正在加载…</div> : <div className="metadata-dialog-body">
-            <label className="metadata-case-field"><span>案件</span><select aria-label="案件" value={selectedCaseID} onChange={(event) => setSelectedCaseID(event.target.value)}><option value="">不关联案件</option>{caseOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <fieldset className="metadata-tag-field"><legend>标签</legend><div className="metadata-tag-list">{tagOptions.map((item) => <label key={item.id} className={selectedTagIDs.includes(item.id) ? 'selected' : ''}><input type="checkbox" aria-label={`标签 ${item.name}`} checked={selectedTagIDs.includes(item.id)} onChange={() => toggleMetadataTag(item.id)} /><span className="metadata-tag-dot" style={{ background: item.color || '#2563eb' }} /><b>{item.name}</b></label>)}{tagOptions.length === 0 && <span className="muted">暂无可选标签</span>}</div></fieldset>
+            <label className="metadata-case-field"><span>案件名称</span><input list="metadata-case-options" aria-label="案件名称" placeholder="选择已有案件，或直接输入新名称" value={caseNameDraft} onChange={(event) => setCaseNameDraft(event.target.value)} /><datalist id="metadata-case-options">{caseOptions.map((item) => <option key={item.id} value={item.name} />)}</datalist><small>留空表示不关联案件；输入新名称后会自动创建。</small></label>
+            <fieldset className="metadata-tag-field"><legend>标签</legend><div className="metadata-tag-list">{tagOptions.map((item) => <label key={item.id} className={selectedTagIDs.includes(item.id) ? 'selected' : ''}><input type="checkbox" aria-label={`标签 ${item.name}`} checked={selectedTagIDs.includes(item.id)} onChange={() => toggleMetadataTag(item.id)} /><span className="metadata-tag-dot" style={{ background: item.color || '#2563eb' }} /><b>{item.name}</b></label>)}{tagOptions.length === 0 && customTagNames.length === 0 && <span className="muted">暂无已有标签，可在下方直接添加</span>}</div>{customTagNames.length > 0 && <div className="metadata-custom-tags">{customTagNames.map((name) => <button key={name} aria-label={`移除新标签 ${name}`} onClick={() => setCustomTagNames((current) => current.filter((item) => item !== name))}><span className="metadata-tag-dot" />{name}<i>×</i></button>)}</div>}<div className="metadata-new-tag"><input aria-label="新标签名称" placeholder="输入任意标签名称" value={newTagName} onChange={(event) => setNewTagName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustomTag() } }} /><button disabled={!newTagName.trim()} onClick={addCustomTag}>添加</button></div><small>可输入多个新标签，按回车或点击“添加”。</small></fieldset>
           </div>}
           {metadataError && <div className="metadata-dialog-error">{metadataError}</div>}
           <div className="metadata-dialog-actions"><button disabled={metadataSaving} onClick={() => setMetadataEditorOpen(false)}>取消</button><button className="primary" disabled={metadataLoading || metadataSaving || Boolean(metadataError && caseOptions.length === 0 && tagOptions.length === 0)} onClick={saveMetadata}>{metadataSaving ? '保存中…' : '保存'}</button></div>
