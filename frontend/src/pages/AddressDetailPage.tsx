@@ -300,10 +300,10 @@ export default function AddressDetailPage() {
     return direction === 'out' ? { from: address, to: counterparty } : direction === 'in' ? { from: counterparty, to: address } : { from: address, to: address }
   }
 
-  function renderFlowAddress(value: string, label: string) {
+  function renderFlowAddress(value: string, label: string, isContract: boolean) {
     if (!value) return <span>—</span>
     const own = value.toLowerCase() === address.toLowerCase()
-    return <span className="flow-address"><Link className={own ? 'own-address' : 'link'} to={`/data-explorer/${chain}/${value}`} title={value}>{value.slice(0, 7)}…{value.slice(-8)}</Link><button aria-label={`复制${label}`} title="复制完整地址" onClick={() => navigator.clipboard.writeText(value)}>▣</button></span>
+    return <span className="flow-address">{isContract && <span className="contract-address-icon" aria-label="合约地址" title="合约地址"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 1.75h6l3.5 3.5v9H3.25z" /><path d="M9.25 1.75v3.5h3.5M6.4 7 5 8.4l1.4 1.4M9.6 7 11 8.4 9.6 9.8" /></svg></span>}<Link className={own ? 'own-address' : 'link'} to={`/data-explorer/${chain}/${value}`} title={value}>{value.slice(0, 7)}…{value.slice(-8)}</Link><button aria-label={`复制${label}`} title="复制完整地址" onClick={() => navigator.clipboard.writeText(value)}>▣</button></span>
   }
 
   function renderFlowCell(row: Record<string, unknown>, column: string) {
@@ -324,8 +324,8 @@ export default function AddressDetailPage() {
       )
     }
     if (column === 'timestamp') return <td key={column} className="flow-time" title={String(row.timestamp ?? '')}>{formatDateTime(String(row.timestamp ?? ''))}</td>
-    if (column === 'from_display') return <td key={column}>{renderFlowAddress(parties.from, '发送方')}</td>
-    if (column === 'to_display') return <td key={column}><span className="flow-recipient"><span className={`flow-direction flow-direction-${direction}`}>{direction === 'out' ? 'Out' : direction === 'in' ? 'In' : 'Self'}</span>{renderFlowAddress(parties.to, '接收方')}</span></td>
+    if (column === 'from_display') return <td key={column}>{renderFlowAddress(parties.from, '发送方', Boolean(row.from_is_contract))}</td>
+    if (column === 'to_display') return <td key={column}><span className="flow-recipient"><span className={`flow-direction flow-direction-${direction}`}>{direction === 'out' ? 'Out' : direction === 'in' ? 'In' : 'Self'}</span>{renderFlowAddress(parties.to, '接收方', Boolean(row.to_is_contract))}</span></td>
     if (column === 'amount_display') {
       const amount = String(row.amount ?? row.value_raw ?? row.amount_raw ?? '')
       const signed = amount && amount !== '0' ? `${direction === 'out' ? '-' : direction === 'in' ? '+' : ''}${formatDecimal(amount.replace(/^[-+]/, ''))}` : formatDecimal(amount || '0')

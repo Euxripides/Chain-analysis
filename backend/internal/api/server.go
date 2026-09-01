@@ -69,6 +69,9 @@ func New(deps Deps) *Server {
 	s.meta = addressmeta.New(deps.Store)
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
+	if resolver, ok := deps.Prov.(provider.AddressTypeResolver); ok {
+		s.explorer.WithAddressTypeResolver(resolver)
+	}
 	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, deps.Log)
 	if deps.Registry != nil && deps.MethodData != nil {
 		// 智能调查/前端都必须经过 TransactionDetailService，不允许直连 Provider（§50）

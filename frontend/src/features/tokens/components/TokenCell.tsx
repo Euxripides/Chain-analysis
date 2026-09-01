@@ -2,8 +2,6 @@ import { useCallback, useRef, useState } from 'react'
 import { cleanTokenSymbol } from '../../../utils/value-format'
 import type { TokenView } from '../types'
 
-function compact(value: string) { return value.length > 18 ? `${value.slice(0, 9)}…${value.slice(-6)}` : value }
-
 export function TokenLogo({ token }: { token: TokenView }) {
   const [failed, setFailed] = useState(false)
   if (token.logo && !failed) return <img className="flow-token-icon" src={token.logo} alt="" onError={() => setFailed(true)} />
@@ -18,10 +16,10 @@ export default function TokenCell({ token }: { token: TokenView }) {
   const show = useCallback(() => { const rect = anchor.current?.getBoundingClientRect(); if (!rect) return; setPosition({ top: Math.min(rect.bottom + 7, window.innerHeight - 235), left: Math.min(Math.max(8, rect.left), window.innerWidth - 322) }) }, [])
   const symbol = cleanTokenSymbol(token.symbol || '未知代币')
   const status = token.status || 'unknown'
-  const statusLabel = token.verified ? '已认证' : status === 'conflict' ? '元数据冲突' : status === 'complete' ? '已解析' : status === 'partial' ? '部分解析' : '待解析'
-  return <span ref={anchor} className="token-cell" data-status={status} tabIndex={0} onMouseEnter={show} onMouseLeave={() => setPosition(null)} onFocus={show} onBlur={() => setPosition(null)}>
+  const name = token.name || (token.contract ? '名称未收录' : '原生币')
+  return <span ref={anchor} className="token-cell" data-status={status} data-contract={token.contract} tabIndex={0} onMouseEnter={show} onMouseLeave={() => setPosition(null)} onFocus={show} onBlur={() => setPosition(null)}>
     <TokenLogo token={{ ...token, symbol }} />
-    <span className="token-cell-copy"><span className="token-cell-title"><b>{symbol}</b><em className={`metadata-status metadata-status-${status}`}>{statusLabel}</em></span><small className="token-contract" title={token.contract}>{token.contract ? compact(token.contract) : token.name || '原生币'}</small></span>
-    {position && <span className="token-metadata-tooltip" role="tooltip" style={position}><strong>{token.name || '名称未收录'}</strong><b>{symbol}</b><dl><dt>合约</dt><dd>{token.contract || '原生币'}</dd><dt>Decimals</dt><dd>{token.decimals ?? '未知'}</dd><dt>来源</dt><dd>{token.source || '未解析'}</dd><dt>置信度</dt><dd>{token.confidence || 'unknown'}</dd><dt>认证状态</dt><dd>{token.verified ? '可信注册表已认证' : '未认证'}</dd></dl></span>}
+    <span className="token-cell-copy"><span className="token-cell-title"><b>{symbol}</b></span><small className="token-name">{name}</small></span>
+    {position && <span className="token-metadata-tooltip" role="tooltip" style={position}><strong>{name}</strong><b>{symbol}</b><dl><dt>合约</dt><dd>{token.contract || '原生币'}</dd><dt>Decimals</dt><dd>{token.decimals ?? '未知'}</dd><dt>来源</dt><dd>{token.source || '暂无来源'}</dd><dt>置信度</dt><dd>{token.confidence || 'unknown'}</dd><dt>认证状态</dt><dd>{token.verified ? '可信注册表已认证' : '未认证'}</dd></dl></span>}
   </span>
 }

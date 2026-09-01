@@ -161,3 +161,10 @@ type TokenMetadataResult struct {
 type TokenMetadataResolver interface {
 	ResolveTokenMetadata(ctx context.Context, chain, contract string) (TokenMetadataResult, error)
 }
+
+// AddressTypeResolver is an optional raw-RPC capability used by the explorer
+// to distinguish contracts from externally owned accounts. Implementations
+// must key the result by normalized, lower-case address.
+type AddressTypeResolver interface {
+	ResolveAddressTypes(ctx context.Context, chain string, addresses []string) (map[string]bool, error)
+}

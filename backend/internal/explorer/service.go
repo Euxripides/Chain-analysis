@@ -8,20 +8,30 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 )
 
 type Service struct {
-	CH     *clickhouse.Conn
-	Store  *store.Store
-	Q      *query.Service
-	Tokens *tokenmeta.Service
+	CH           *clickhouse.Conn
+	Store        *store.Store
+	Q            *query.Service
+	Tokens       *tokenmeta.Service
+	AddressTypes provider.AddressTypeResolver
+	typeMu       sync.Mutex
+	typeCache    map[string]cachedAddressType
+}
+
+type cachedAddressType struct {
+	isContract bool
+	expiresAt  time.Time
 }
 
 func New(ch *clickhouse.Conn, st *store.Store, tokens ...*tokenmeta.Service) *Service {
@@ -29,7 +39,12 @@ func New(ch *clickhouse.Conn, st *store.Store, tokens ...*tokenmeta.Service) *Se
 	if len(tokens) > 0 {
 		svc = tokens[0]
 	}
-	return &Service{CH: ch, Store: st, Q: query.New(ch), Tokens: svc}
+	return &Service{CH: ch, Store: st, Q: query.New(ch), Tokens: svc, typeCache: map[string]cachedAddressType{}}
+}
+
+func (s *Service) WithAddressTypeResolver(resolver provider.AddressTypeResolver) *Service {
+	s.AddressTypes = resolver
+	return s
 }
 
 type Filter struct {
@@ -323,6 +338,7 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 			contracts = append(contracts, ta)
 		}
 	}
+	addressTypes := s.resolveAddressTypes(ctx, chain, rows)
 	metas := map[string]tokenmeta.Metadata{}
 	if s.Tokens != nil {
 		metas, _ = s.Tokens.GetMany(ctx, chain, contracts)
@@ -332,6 +348,20 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 	for _, r := range rows {
 		from, _ := r["from_address"].(string)
 		to, _ := r["to_address"].(string)
+		if from == "" && to == "" {
+			direction, _ := r["direction"].(string)
+			own, _ := r["address"].(string)
+			counterparty, _ := r["counterparty"].(string)
+			if direction == "out" {
+				from, to = own, counterparty
+			} else if direction == "in" {
+				from, to = counterparty, own
+			} else {
+				from, to = own, own
+			}
+		}
+		r["from_is_contract"] = addressTypes[strings.ToLower(from)]
+		r["to_is_contract"] = addressTypes[strings.ToLower(to)]
 		matched := []string{}
 		if set[from] {
 			matched = append(matched, from)
@@ -404,6 +434,51 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 		r["case_names"] = dedupe(cases)
 		r["tag_names"] = dedupe(tags)
 	}
+}
+
+func (s *Service) resolveAddressTypes(ctx context.Context, chain string, rows []map[string]any) map[string]bool {
+	result := map[string]bool{}
+	if s.AddressTypes == nil {
+		return result
+	}
+	candidates := map[string]bool{}
+	for _, row := range rows {
+		for _, field := range []string{"from_address", "to_address", "address", "counterparty"} {
+			value := strings.ToLower(strings.TrimSpace(valueString(row[field])))
+			if len(value) == 42 && strings.HasPrefix(value, "0x") {
+				candidates[value] = true
+			}
+		}
+	}
+	now := time.Now()
+	missing := make([]string, 0, len(candidates))
+	s.typeMu.Lock()
+	for address := range candidates {
+		key := strings.ToLower(chain) + ":" + address
+		if cached, ok := s.typeCache[key]; ok && now.Before(cached.expiresAt) {
+			result[address] = cached.isContract
+		} else {
+			missing = append(missing, address)
+		}
+	}
+	s.typeMu.Unlock()
+	if len(missing) == 0 {
+		return result
+	}
+	resolveCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	resolved, err := s.AddressTypes.ResolveAddressTypes(resolveCtx, chain, missing)
+	if err != nil {
+		return result
+	}
+	s.typeMu.Lock()
+	defer s.typeMu.Unlock()
+	for _, address := range missing {
+		isContract := resolved[address]
+		result[address] = isContract
+		s.typeCache[strings.ToLower(chain)+":"+address] = cachedAddressType{isContract: isContract, expiresAt: now.Add(24 * time.Hour)}
+	}
+	return result
 }
 
 func dedupe(in []string) []string {

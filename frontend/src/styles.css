@@ -298,6 +298,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .flow-address > a { overflow: hidden; font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .flow-address .own-address { color: #111827; font-weight: 550; text-decoration: none; }
 .flow-address button { padding: 0; border: 0; background: transparent; color: #87909d; font-size: 12px; }
+.contract-address-icon { display: inline-flex; width: 15px; height: 15px; flex: 0 0 auto; align-items: center; justify-content: center; color: #111827; }
+.contract-address-icon svg { width: 15px; height: 15px; overflow: visible; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.25; }
 .flow-recipient { display: flex; align-items: center; gap: 7px; }
 .flow-direction { display: inline-flex; min-width: 29px; justify-content: center; padding: 3px 5px; border-radius: 3px; font-size: 10px; }
 .flow-direction-in { background: #ecfdf5; color: #059669; }
@@ -318,11 +320,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .token-cell-copy { min-width: 0; }
 .token-cell-title { display: flex; align-items: center; gap: 6px; }
 .token-cell-title > b { color: #1d4ed8; font-size: 13px; }
-.token-contract { display: block; max-width: 150px; margin-top: 3px; overflow: hidden; color: #64748b; font-family: ui-monospace, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.metadata-status { padding: 2px 5px; border-radius: 3px; background: #f1f5f9; color: #64748b; font-size: 9px; font-style: normal; font-weight: 500; white-space: nowrap; }
-.metadata-status-complete { background: #ecfdf5; color: #047857; }
-.metadata-status-conflict { background: #fee2e2; color: #b91c1c; }
-.metadata-status-partial { background: #fff7ed; color: #b45309; }
+.token-name { display: block; max-width: 150px; margin-top: 3px; overflow: hidden; color: #64748b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .token-metadata-tooltip { position: fixed; z-index: 85; width: 310px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 14px 34px rgba(15,23,42,.2); color: var(--text); text-align: left; }
 .token-metadata-tooltip > strong, .token-metadata-tooltip > b { display: block; }
 .token-metadata-tooltip > b { margin-top: 3px; color: #1d4ed8; }
