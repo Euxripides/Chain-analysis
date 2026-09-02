@@ -170,20 +170,43 @@ func (i *Infra) StartRPCBackground(ctx context.Context, cfg *config.Config, log 
 }
 
 func (i *Infra) probeCapabilities(ctx context.Context, cfg *config.Config, log *slog.Logger) {
-	prober, ok := i.RPCProvider.(interface {
-		Probe(ctx context.Context, chainSlug string) (rpc.CapabilitySet, error)
-	})
-	if !ok {
-		return
-	}
 	probeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	for _, slug := range cfg.RPC.Chains {
-		caps, err := prober.Probe(probeCtx, slug)
+		caps, err := i.RPCProvider.Capabilities(probeCtx, slug)
 		if err != nil {
 			log.Warn("rpc capability probe failed", "chain", slug, "err", rpc.Redact(err.Error()))
 			continue
 		}
+		caps.Source = rpc.CapSourceProbe
+		probeBudget := rpc.BudgetContext{Purpose: rpc.PurposeCanary, Priority: rpc.PriorityMaintenance}
+		_, err = i.RPCGateway.Call(probeCtx, rpc.Request{
+			Chain: slug, Method: "eth_blockNumber", Params: []any{}, Class: rpc.ClassChainHead,
+			Priority: rpc.PriorityMaintenance, Budget: probeBudget, Consistency: rpc.ConsistencyForceRefresh,
+			CachePolicy: rpc.CachePolicy{Disabled: true},
+		})
+		if err != nil {
+			caps.StandardRPC = false
+			log.Warn("rpc standard capability probe failed", "chain", slug, "err", rpc.Redact(err.Error()))
+		} else {
+			caps.StandardRPC = true
+		}
+		_, archiveErr := i.RPCGateway.Call(probeCtx, rpc.Request{
+			Chain: slug, Method: "eth_getBalance",
+			Params: []any{"0x0000000000000000000000000000000000000000", chain.AtBlock(1).String()},
+			Class:  rpc.ClassBalance, BlockRef: chain.AtBlock(1), Priority: rpc.PriorityMaintenance,
+			Budget: probeBudget, Consistency: rpc.ConsistencyForceRefresh, CachePolicy: rpc.CachePolicy{Disabled: true},
+		})
+		if archiveErr == nil {
+			caps.Archive = true
+		} else if rpc.IsClass(archiveErr, rpc.ClassArchiveRequired) || rpc.IsClass(archiveErr, rpc.ClassMethodUnsupported) {
+			caps.Archive = false
+		}
+		batchResults, batchErr := i.RPCGateway.BatchCall(probeCtx, []rpc.Request{
+			{Chain: slug, Method: "eth_blockNumber", Params: []any{}, Class: rpc.ClassChainHead, Priority: rpc.PriorityMaintenance, Budget: probeBudget, Consistency: rpc.ConsistencyForceRefresh, CachePolicy: rpc.CachePolicy{Disabled: true}},
+			{Chain: slug, Method: "eth_chainId", Params: []any{}, Class: rpc.ClassNetwork, Priority: rpc.PriorityMaintenance, Budget: probeBudget, Consistency: rpc.ConsistencyForceRefresh, CachePolicy: rpc.CachePolicy{Disabled: true}},
+		})
+		caps.Batch = batchErr == nil && len(batchResults) == 2 && batchResults[0].Error == nil && batchResults[1].Error == nil
 		i.RPCGateway.Capabilities().Set(i.RPCProvider.Name(), slug, caps, rpc.CapSourceProbe)
 		log.Info("rpc capability probed", "chain", slug, "archive", caps.Archive,
 			"batch", caps.Batch, "trace", caps.Trace, "debug", caps.Debug)

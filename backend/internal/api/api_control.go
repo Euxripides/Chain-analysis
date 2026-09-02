@@ -81,7 +81,8 @@ func (s *Server) handleAPIControlOverview(w http.ResponseWriter, r *http.Request
 	}
 
 	trendRows, err := s.deps.Store.Pool.Query(r.Context(), `SELECT date_trunc('hour', request_time) bucket,
-		COUNT(*)::bigint, COUNT(*) FILTER (WHERE status NOT IN ('success','ok','cache_hit','singleflight_hit') OR http_status>=400)::bigint,
+		COUNT(*) FILTER (WHERE NOT cache_hit AND NOT singleflight_hit)::bigint,
+		COUNT(*) FILTER (WHERE status NOT IN ('success','ok','cache_hit','singleflight_hit') OR http_status>=400)::bigint,
 		COALESCE(SUM(estimated_cost_usd),0)::float8, COALESCE(percentile_cont(.95) WITHIN GROUP (ORDER BY duration_ms),0)::float8
 		FROM provider_usage WHERE `+where+` GROUP BY 1 ORDER BY 1`, args...)
 	if err != nil {
@@ -99,9 +100,20 @@ func (s *Server) handleAPIControlOverview(w http.ResponseWriter, r *http.Request
 	}
 	trendRows.Close()
 	control, _ := s.refreshControlState(r.Context())
+	var captureStartedAt *time.Time
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT MIN(request_time) FROM provider_usage`).Scan(&captureStartedAt)
 	writeJSON(w, 200, map[string]any{"window": map[string]any{"from": f.Since, "to": f.Until}, "freshness": time.Now(),
 		"metrics": map[string]any{"logical_calls": calls, "provider_calls": providerCalls, "errors": errors, "retries": retries, "cache_hits": cacheHits, "success_rate": successRate, "credits": credits, "estimated_cost_usd": cost, "p50_ms": p50, "p95_ms": p95, "p99_ms": p99},
-		"trend":   trend, "control": control, "sources": map[string]string{"usage": "内部审计", "cost": "内部估算", "account": "官方数据（如已配置）"}})
+		"trend":   trend, "control": control,
+		"scope": map[string]any{
+			"usage":               "仅统计本平台已接入 provider_usage 审计链路的调用",
+			"account":             "Ankr 官网按同一账户/项目/API Key 汇总全部客户端请求",
+			"credits":             "本地按方法单价估算的已消耗积分，不是账户剩余积分",
+			"capture_started_at":  captureStartedAt,
+			"official_comparable": false,
+			"comparison_reason":   "未接入 Ankr 官方遥测明细，且官网账户总账与本地捕获范围不同",
+		},
+		"sources": map[string]string{"usage": "本地审计", "cost": "本地估算", "account": "官方数据（如已配置）"}})
 }
 
 func envNumber(key string) (float64, bool) {
@@ -128,7 +140,23 @@ func (s *Server) handleAPIControlProviderAccounts(w http.ResponseWriter, r *http
 			status = "STALE"
 		}
 	}
-	writeJSON(w, 200, map[string]any{"accounts": []map[string]any{{"provider": "ankr", "status": status, "official_available": official, "stale": stale, "plan": plan, "remaining_credits": remaining, "balance_usd": balance, "synced_at": synced, "source": "官方数据", "console_url": os.Getenv("ANKR_PROVIDER_CONSOLE_URL")}}})
+	var remainingValue, balanceValue any
+	if rok {
+		remainingValue = remaining
+	}
+	if bok {
+		balanceValue = balance
+	}
+	reason := ""
+	if !official {
+		reason = "未配置 Ankr 官方账户快照；本地估算消耗不能推导账户余额"
+	}
+	writeJSON(w, 200, map[string]any{"accounts": []map[string]any{{
+		"provider": "ankr", "status": status, "official_available": official, "stale": stale,
+		"plan": plan, "remaining_credits": remainingValue, "balance_usd": balanceValue,
+		"balance_kind": "remaining", "synced_at": synced, "source": "Ankr 官方账户快照",
+		"reason": reason, "console_url": os.Getenv("ANKR_PROVIDER_CONSOLE_URL"),
+	}}})
 }
 
 func (s *Server) controlMetrics(ctx context.Context) (requests, failures int64, p95 float64, err error) {
@@ -433,7 +461,7 @@ func (s *Server) aggregateUsage(w http.ResponseWriter, r *http.Request, kind str
 	case "usage-types":
 		group, label = "COALESCE(NULLIF(usage_type,''),'unknown')", "usage_type"
 	}
-	q := `SELECT ` + group + ` label,COUNT(*)::bigint,COALESCE(SUM(method_calls),0)::bigint,COUNT(*) FILTER (WHERE status NOT IN ('success','ok','cache_hit','singleflight_hit') OR http_status>=400)::bigint,COALESCE(AVG(duration_ms),0)::float8,COALESCE(percentile_cont(.95) WITHIN GROUP (ORDER BY duration_ms),0)::float8,COALESCE(SUM(credits),0)::float8,COALESCE(SUM(estimated_cost_usd),0)::float8 FROM provider_usage WHERE ` + where + ` GROUP BY 1 ORDER BY 8 DESC,2 DESC LIMIT 100`
+	q := `SELECT ` + group + ` label,COUNT(*) FILTER (WHERE NOT cache_hit AND NOT singleflight_hit)::bigint,COALESCE(SUM(method_calls),0)::bigint,COUNT(*) FILTER (WHERE status NOT IN ('success','ok','cache_hit','singleflight_hit') OR http_status>=400)::bigint,COALESCE(AVG(duration_ms),0)::float8,COALESCE(percentile_cont(.95) WITHIN GROUP (ORDER BY duration_ms),0)::float8,COALESCE(SUM(credits),0)::float8,COALESCE(SUM(estimated_cost_usd),0)::float8 FROM provider_usage WHERE ` + where + ` GROUP BY 1 ORDER BY 8 DESC,2 DESC LIMIT 100`
 	rows, e := s.deps.Store.Pool.Query(r.Context(), q, args...)
 	if e != nil {
 		writeJSON(w, 500, map[string]any{"error": e.Error()})

@@ -51,11 +51,12 @@ function OverviewTab({ filter, onDrill }: { filter: string; onDrill: (tab: strin
   const query = useQuery({ queryKey: ['ac-overview', filter], queryFn: () => apiControlHttp<Overview>('/overview?' + filter), refetchInterval: 30_000 })
   const m = query.data?.metrics
   const cards = [
-    ['逻辑调用', compact.format(m?.logical_calls || 0), '业务请求口径'], ['Provider 请求', compact.format(m?.provider_calls || 0), '真实外部调用'],
+    ['本地记录的逻辑调用', compact.format(m?.logical_calls || 0), '仅本平台审计链路'], ['本地记录的外部请求', compact.format(m?.provider_calls || 0), '不等于官网账户总数'],
     ['成功率', pct(m?.success_rate || 0), `${fmt.format(m?.errors || 0)} 个错误`], ['P95 延迟', fmt.format(m?.p95_ms || 0) + ' ms', `P50 ${fmt.format(m?.p50_ms || 0)} ms`],
-    ['消耗积分', compact.format(m?.credits || 0), '内部审计'], ['估算成本', money(m?.estimated_cost_usd || 0), '内部估算'],
+    ['本地估算已消耗积分', compact.format(m?.credits || 0), '不是账户剩余额度'], ['本地估算成本', money(m?.estimated_cost_usd || 0), '不是官网账单余额'],
   ]
   return <QueryState pending={query.isPending} error={query.error}>
+    <section className="ac-scope-notice"><AlertTriangle size={19} /><div><b>官网总账与本地审计是两套口径，不能直接对比</b><span>Ankr 官网统计同一账户或 API Key 的全部客户端请求；这里仅统计本平台已写入审计表的调用。积分卡展示本地估算的已消耗量，不是官网剩余额度。</span><small>本地开始留痕：{dateTime(query.data?.scope?.capture_started_at)} · {query.data?.scope?.comparison_reason || '当前没有官方遥测明细，无法自动对账'}</small></div></section>
     <div className="ac-kpis">{cards.map(([label, value, note], i) => <button key={label} className="ac-kpi" onClick={() => onDrill(i === 5 ? 'costs' : i === 2 ? 'errors' : i === 3 ? 'operations' : 'requests')}><span>{label}</span><b>{value}</b><small>{note}</small></button>)}</div>
     <div className="ac-grid-12">
       <section className="ac-panel ac-span-8"><div className="ac-panel-head"><div><small>流量与稳定性</small><h2>请求趋势</h2></div><SourceTag>内部审计</SourceTag></div><Suspense fallback={<div className="ac-chart-loading">正在加载图表…</div>}><TrendChart data={query.data?.trend || []} onSelect={() => onDrill('requests')} /></Suspense></section>
@@ -72,8 +73,8 @@ function AggregateTab({ endpoint, filter, onOpen }: { endpoint: AggEndpoint; fil
 }
 
 function ProvidersTab({ filter }: { filter: string }) {
-  const q = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: { provider: string; status: string; official_available: boolean; stale: boolean; plan: string; remaining_credits: number; balance_usd: number; synced_at: string; source: string; console_url: string }[] }>('/provider-accounts') })
-  return <><div className="ac-account-grid"><QueryState pending={q.isPending} error={q.error}>{q.data?.accounts.map((a) => <section className="ac-account" key={a.provider}><div className="ac-account-head"><div className="ac-provider-logo">A</div><div><b>{a.provider.toUpperCase()}</b><span>Provider 账户</span></div><StatusBadge value={a.status} /></div>{a.official_available ? <div className="ac-account-values"><div><span>套餐</span><b>{a.plan || '—'}</b></div><div><span>剩余积分</span><b>{fmt.format(a.remaining_credits)}</b></div><div><span>余额</span><b>{money(a.balance_usd)}</b></div></div> : <div className="ac-official-empty"><AlertTriangle size={18} /><div><b>官方账户数据未接入</b><span>不会使用内部成本估算冒充官方余额。</span></div></div>}<footer><SourceTag tone="official">官方数据</SourceTag><span>同步：{dateTime(a.synced_at)}</span>{a.console_url && <a href={a.console_url} target="_blank" rel="noreferrer">Provider 控制台 <ExternalLink size={13} /></a>}</footer></section>)}</QueryState></div><AggregateTab endpoint="providers" filter={filter} /></>
+  const q = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: { provider: string; status: string; official_available: boolean; stale: boolean; plan: string; remaining_credits: number | null; balance_usd: number | null; synced_at: string; source: string; reason: string; console_url: string }[] }>('/provider-accounts') })
+  return <><div className="ac-account-grid"><QueryState pending={q.isPending} error={q.error}>{q.data?.accounts.map((a) => <section className="ac-account" key={a.provider}><div className="ac-account-head"><div className="ac-provider-logo">A</div><div><b>{a.provider.toUpperCase()}</b><span>官网账户余额快照</span></div><StatusBadge value={a.status} /></div>{a.official_available ? <div className="ac-account-values"><div><span>套餐</span><b>{a.plan || '—'}</b></div><div><span>账户剩余积分</span><b>{a.remaining_credits == null ? '—' : fmt.format(a.remaining_credits)}</b></div><div><span>账户剩余余额</span><b>{a.balance_usd == null ? '—' : money(a.balance_usd)}</b></div></div> : <div className="ac-official-empty"><AlertTriangle size={18} /><div><b>官网账户余额尚未接入</b><span>{a.reason || '不会使用本地估算消耗冒充官网余额。'}</span></div></div>}<footer><SourceTag tone="official">官网账户快照</SourceTag><span>同步：{dateTime(a.synced_at)}</span>{a.console_url && <a href={a.console_url} target="_blank" rel="noreferrer">Provider 控制台 <ExternalLink size={13} /></a>}</footer></section>)}</QueryState></div><AggregateTab endpoint="providers" filter={filter} /></>
 }
 
 function RequestsTab({ filter, preset }: { filter: string; preset?: { key: string; value: string } }) {
