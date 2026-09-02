@@ -15,6 +15,7 @@ import (
 var addrRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 type HeadFn func(ctx context.Context, chain string) (int64, error)
+type ChainValidator func(chain string) error
 
 // MetaUpserter 元数据落库（由 addressmeta 实现，避免循环依赖）。
 type MetaUpserter interface {
@@ -22,9 +23,10 @@ type MetaUpserter interface {
 }
 
 type Service struct {
-	Store  *store.Store
-	HeadFn HeadFn
-	Meta   MetaUpserter
+	Store         *store.Store
+	HeadFn        HeadFn
+	Meta          MetaUpserter
+	ValidateChain ChainValidator
 }
 
 func New(st *store.Store, headFn HeadFn) *Service {
@@ -78,6 +80,9 @@ func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec
 		}
 		if *spec.FromBlock > *spec.ToBlock {
 			return r, errors.New("from_block > to_block")
+		}
+		if *spec.FromBlock < 0 || *spec.ToBlock < 0 {
+			return r, errors.New("block range cannot be negative")
 		}
 		r.FromBlock = spec.FromBlock
 		r.ToBlock = spec.ToBlock
@@ -147,8 +152,16 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 	if err != nil {
 		return nil, err
 	}
-	datasets := sanitizeDatasets(req.Datasets)
+	datasets, err := sanitizeDatasets(req.Datasets)
+	if err != nil {
+		return nil, err
+	}
 	chain := sanitizeChain(req.Chain)
+	if s.ValidateChain != nil {
+		if err := s.ValidateChain(chain); err != nil {
+			return nil, err
+		}
+	}
 	resp := &CoveragePreviewResponse{Chain: chain, Datasets: datasets, Items: []SubjectDatasetCoverage{}}
 	tmpJob := &model.DownloadJob{}
 	rng, err := s.ResolveRange(ctx, chain, req.Range)
@@ -184,8 +197,16 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
-	datasets := sanitizeDatasets(req.Datasets)
+	datasets, err := sanitizeDatasets(req.Datasets)
+	if err != nil {
+		return nil, err
+	}
 	chain := sanitizeChain(req.Chain)
+	if s.ValidateChain != nil {
+		if err := s.ValidateChain(chain); err != nil {
+			return nil, err
+		}
+	}
 	priority := req.Priority
 	if priority <= 0 {
 		priority = 100
@@ -278,17 +299,23 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	}, nil
 }
 
-func sanitizeDatasets(in []string) []string {
+func sanitizeDatasets(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return model.DefaultDatasets, nil
+	}
 	var out []string
+	seen := map[string]bool{}
 	for _, d := range in {
-		if model.ValidDataset(d) {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if !model.ValidDataset(d) {
+			return nil, fmt.Errorf("unknown dataset %q", d)
+		}
+		if !seen[d] {
+			seen[d] = true
 			out = append(out, d)
 		}
 	}
-	if len(out) == 0 {
-		return model.DefaultDatasets
-	}
-	return out
+	return out, nil
 }
 
 func sanitizeChain(chain string) string {

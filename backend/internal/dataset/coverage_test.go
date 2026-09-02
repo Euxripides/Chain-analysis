@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -50,5 +51,25 @@ func TestNormalizeAndDedupeAddresses(t *testing.T) {
 	}
 	if out[0] != a1 {
 		t.Errorf("expected %s, got %s", a1, out[0])
+	}
+}
+
+func TestSanitizeDatasetsRejectsUnknownAndDeduplicates(t *testing.T) {
+	got, err := sanitizeDatasets([]string{" logs ", "LOGS", "transactions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{"logs", "transactions"}) {
+		t.Fatalf("datasets = %v", got)
+	}
+	if _, err := sanitizeDatasets([]string{"log"}); err == nil {
+		t.Fatal("unknown dataset was accepted")
+	}
+}
+
+func TestResolveRangeRejectsNegativeBlocks(t *testing.T) {
+	from, to := int64(-1), int64(1)
+	if _, err := (&Service{}).ResolveRange(context.Background(), "bsc", RangeSpec{Type: "block", FromBlock: &from, ToBlock: &to}); err == nil {
+		t.Fatal("negative block range was accepted")
 	}
 }

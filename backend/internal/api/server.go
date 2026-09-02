@@ -86,6 +86,12 @@ func New(deps Deps) *Server {
 		}
 		return 0, nil // live：head 未知，区间由 Provider 语义决定
 	})
+	if deps.ChainRead != nil && deps.ChainRead.Chains() != nil {
+		s.svc.ValidateChain = func(chain string) error {
+			_, err := deps.ChainRead.Chains().Require(chain)
+			return err
+		}
+	}
 	s.meta = addressmeta.New(deps.Store, deps.CH)
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
@@ -109,6 +115,13 @@ func New(deps Deps) *Server {
 	}
 	s.buildRouter()
 	return s
+}
+
+func (s *Server) validateChain(chain string) error {
+	if s.svc != nil && s.svc.ValidateChain != nil {
+		return s.svc.ValidateChain(chain)
+	}
+	return nil
 }
 
 // recordDeepDecodeUsage 记录深度解码用量（§49）。

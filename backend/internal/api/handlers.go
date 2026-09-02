@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -189,13 +190,27 @@ func (s *Server) handleProviderUsage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCoverage(w http.ResponseWriter, r *http.Request) {
-	chain := r.URL.Query().Get("chain")
-	subject := r.URL.Query().Get("subject")
-	ds := r.URL.Query().Get("dataset")
+	chain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("chain")))
+	subject := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("subject")))
+	ds := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("dataset")))
 	if chain == "" || subject == "" || ds == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "chain, subject, dataset required"})
 		return
 	}
+	if err := s.validateChain(chain); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if !model.ValidDataset(ds) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unknown dataset " + ds})
+		return
+	}
+	normalized, err := dataset.NormalizeAndDedupeAddresses([]string{subject})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	subject = normalized[0]
 	rows, err := s.deps.Store.ListCoverage(r.Context(), chain, subject, ds)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -224,6 +239,19 @@ func (s *Server) handleDatasetRows(w http.ResponseWriter, r *http.Request) {
 	if chain == "" {
 		chain = "bsc"
 	}
+	chain = strings.ToLower(strings.TrimSpace(chain))
+	if err := s.validateChain(chain); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if subject != "" {
+		normalized, err := dataset.NormalizeAndDedupeAddresses([]string{subject})
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		subject = normalized[0]
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > 1000 {
 		limit = 100
@@ -251,6 +279,17 @@ func (s *Server) handleAddressActivity(w http.ResponseWriter, r *http.Request) {
 	if chain == "" {
 		chain = "bsc"
 	}
+	chain = strings.ToLower(strings.TrimSpace(chain))
+	if err := s.validateChain(chain); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	normalized, err := dataset.NormalizeAndDedupeAddresses([]string{address})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	address = normalized[0]
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > 1000 {
 		limit = 100

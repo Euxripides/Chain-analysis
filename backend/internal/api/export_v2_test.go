@@ -81,3 +81,14 @@ func TestExportJobBoundsIgnoreCurrentBalanceSnapshot(t *testing.T) {
 		t.Fatalf("log export bounds = %v..%v, want %d..%d", gotFrom, gotTo, from, to)
 	}
 }
+
+func TestValidExplorerDatasetIncludesVirtualActivityOnly(t *testing.T) {
+	for _, dataset := range []string{"activity", "transactions", "logs"} {
+		if !validExplorerDataset(dataset) {
+			t.Fatalf("valid explorer dataset %q rejected", dataset)
+		}
+	}
+	if validExplorerDataset("log") {
+		t.Fatal("unknown explorer dataset accepted")
+	}
+}

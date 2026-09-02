@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +21,11 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 )
+
+var ErrInvalidCursor = errors.New("invalid cursor")
+var ErrInvalidFilter = errors.New("invalid filter")
+var decimalFilterRe = regexp.MustCompile(`^(?:\d+(?:\.\d*)?|\.\d+)$`)
+var addressFilterRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 type Service struct {
 	CH           *clickhouse.Conn
@@ -89,6 +97,9 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 	if len(req.Addresses) == 0 || req.Chain == "" {
 		return nil, fmt.Errorf("chain and addresses required")
 	}
+	if err := validateFilters(req.Filters); err != nil {
+		return nil, err
+	}
 	for i := range req.Addresses {
 		req.Addresses[i] = strings.ToLower(req.Addresses[i])
 	}
@@ -106,6 +117,48 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 		}
 	}
 	return &Result{Rows: rows, NextCursor: next, Count: len(rows)}, nil
+}
+
+func validateFilters(f Filter) error {
+	if f.FromTime != nil && f.ToTime != nil && f.FromTime.After(*f.ToTime) {
+		return fmt.Errorf("%w: from_time is after to_time", ErrInvalidFilter)
+	}
+	if (f.BlockFrom != nil && *f.BlockFrom < 0) || (f.BlockTo != nil && *f.BlockTo < 0) {
+		return fmt.Errorf("%w: block range cannot be negative", ErrInvalidFilter)
+	}
+	if f.BlockFrom != nil && f.BlockTo != nil && *f.BlockFrom > *f.BlockTo {
+		return fmt.Errorf("%w: block_from is greater than block_to", ErrInvalidFilter)
+	}
+	if f.Direction != "" && f.Direction != "in" && f.Direction != "out" && f.Direction != "self" {
+		return fmt.Errorf("%w: unsupported direction", ErrInvalidFilter)
+	}
+	for name, value := range map[string]string{"from_address": f.FromAddress, "to_address": f.ToAddress} {
+		if value != "" && !addressFilterRe.MatchString(value) {
+			return fmt.Errorf("%w: %s is not an EVM address", ErrInvalidFilter, name)
+		}
+	}
+	var min, max *big.Rat
+	for name, value := range map[string]string{"min_amount": f.MinAmount, "max_amount": f.MaxAmount} {
+		if value == "" {
+			continue
+		}
+		if !decimalFilterRe.MatchString(value) {
+			return fmt.Errorf("%w: %s is not a non-negative decimal", ErrInvalidFilter, name)
+		}
+		parsed, ok := new(big.Rat).SetString(value)
+		if !ok {
+			return fmt.Errorf("%w: %s is not a decimal", ErrInvalidFilter, name)
+		}
+		if name == "min_amount" {
+			min = parsed
+		} else {
+			max = parsed
+		}
+	}
+	if min != nil && max != nil && min.Cmp(max) > 0 {
+		return fmt.Errorf("%w: min_amount is greater than max_amount", ErrInvalidFilter)
+	}
+	return nil
 }
 
 func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[string]any, error) {
@@ -203,7 +256,11 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 	}
 	filterSQL := strings.Join(conds, " AND ")
 	var qCursor *query.ExplorerCursor
-	if cur, err := decodeCursor(req.Cursor); err == nil && !cur.Ts.IsZero() {
+	if req.Cursor != "" {
+		cur, err := decodeCursor(req.Cursor)
+		if err != nil || cur.Ts.IsZero() || (cur.Dataset != "" && cur.Dataset != req.Dataset) {
+			return nil, ErrInvalidCursor
+		}
 		qCursor = &query.ExplorerCursor{
 			Timestamp: cur.Ts, TxHash: cur.Hash, LogIndex: cur.LogIndex,
 			TokenAddress: cur.TokenAddress, ContractAddress: cur.ContractAddress,

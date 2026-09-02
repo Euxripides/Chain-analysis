@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/update"
 )
 
@@ -152,15 +155,39 @@ func (s *Server) handleExplorerQuery(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
 		return
 	}
+	req.Chain = strings.ToLower(strings.TrimSpace(req.Chain))
+	req.Dataset = strings.ToLower(strings.TrimSpace(req.Dataset))
+	if err := s.validateChain(req.Chain); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if !validExplorerDataset(req.Dataset) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unknown dataset " + req.Dataset})
+		return
+	}
+	addresses, err := dataset.NormalizeAndDedupeAddresses(req.Addresses)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	req.Addresses = addresses
 	if req.Limit <= 0 || req.Limit > 500 {
 		req.Limit = 100
 	}
 	res, err := s.explorer.Query(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, explorer.ErrInvalidCursor) || errors.Is(err, explorer.ErrInvalidFilter) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
 	writeJSON(w, 200, res)
+}
+
+func validExplorerDataset(dataset string) bool {
+	return dataset == "activity" || model.ValidDataset(dataset)
 }
 
 // ---- 地址元数据（`65）----

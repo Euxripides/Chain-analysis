@@ -95,6 +95,14 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 
 	id, ch := s.hub.Subscribe(jobID)
 	defer s.hub.Unsubscribe(jobID, id)
+	// A subscriber must receive the current state immediately. With NATS
+	// enabled there may be no future event for an already completed job, and
+	// waiting for the heartbeat makes the stream appear broken.
+	if snap := s.snapshotFor(r.Context(), jobID); snap != nil {
+		b, _ := json.Marshal(snap)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		fl.Flush()
+	}
 
 	hb := time.NewTicker(15 * time.Second)
 	defer hb.Stop()

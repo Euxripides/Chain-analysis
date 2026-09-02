@@ -3,12 +3,42 @@ package explorer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
 
 type fakeAddressTypeResolver struct {
 	calls int
+}
+
+func TestQueryRejectsInvalidCursorBeforeDatabaseAccess(t *testing.T) {
+	service := New(nil, nil)
+	_, err := service.Query(context.Background(), QueryRequest{
+		Chain: "bsc", Addresses: []string{"0x9b77e3b4f85c7cea7da451f454895edbd10b80dd"},
+		Dataset: "logs", Cursor: "not-a-cursor", Limit: 10,
+	})
+	if !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("error = %v, want ErrInvalidCursor", err)
+	}
+}
+
+func TestValidateFiltersRejectsInvalidValues(t *testing.T) {
+	negative := int64(-1)
+	one, zero := int64(1), int64(0)
+	cases := []Filter{
+		{MinAmount: "abc"}, {MinAmount: "-1"}, {MinAmount: "2", MaxAmount: "1"},
+		{BlockFrom: &negative}, {BlockFrom: &one, BlockTo: &zero},
+		{Direction: "sideways"}, {FromAddress: "bad"},
+	}
+	for _, filter := range cases {
+		if err := validateFilters(filter); !errors.Is(err, ErrInvalidFilter) {
+			t.Fatalf("filter %+v error = %v", filter, err)
+		}
+	}
+	if err := validateFilters(Filter{MinAmount: "0.0001", MaxAmount: "50000", Direction: "out"}); err != nil {
+		t.Fatalf("valid filter rejected: %v", err)
+	}
 }
 
 func (f *fakeAddressTypeResolver) ResolveAddressTypes(_ context.Context, _ string, addresses []string) (map[string]bool, error) {
