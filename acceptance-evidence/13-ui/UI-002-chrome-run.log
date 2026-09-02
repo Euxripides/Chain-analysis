@@ -1,0 +1,260 @@
+
+Running 21 tests using 1 worker
+
+node.exe : (node:41224) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Euripides\AppData\Roam ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:41224) Wa... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 [desktop] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 (1.5s)
+  ok  2 [desktop] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 (5.7s)
+  ok  3 [desktop] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 (2.8s)
+  ok  4 [desktop] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 (1.5s)
+  x   5 [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (1.5s)
+(node:55628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  6 [desktop] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 (3.0s)
+  x   7 [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (5.7s)
+(node:58656) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  8 [desktop] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 (723ms)
+  ok  9 [desktop] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors (434ms)
+  ok 10 [desktop] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges (566ms)
+  ok 11 [desktop] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route (8.1s)
+  ok 12 [desktop] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details (1.4s)
+  x  13 [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (30.1s)
+(node:83252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 14 [desktop] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally (498ms)
+  ok 15 [desktop] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount (1.7s)
+  ok 16 [desktop] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header (1.4s)
+  -  17 [desktop] › tests\smoke.spec.ts:193:1 › arbitrary case and tag names are created, linked and restored
+  x  18 [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (20.7s)
+(node:68908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  19 [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (20.7s)
+(node:50952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  20 [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (21.7s)
+(node:75712) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 21 [desktop] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon (11.1s)
+
+
+  1) [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ──────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('全局停机开关')
+    Expected: visible
+    Error: strict mode violation: getByText('全局停机开关') resolved to 2 elements:
+        1) <b>全局停机开关</b> aka getByText('全局停机开关', { exact: true })
+        2) <span>全局停机开关已启用</span> aka getByText('全局停机开关已启用')
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('全局停机开关')
+
+
+      83 |     await expect(page.locator('.ac-warning')).toHaveCount(0)
+      84 |     await expect(page.getByText('有效期（分钟）')).toBeVisible()
+    > 85 |     await expect(page.getByText('全局停机开关')).toBeVisible()
+         |                                            ^
+      86 |     const mode = page.getByLabel('覆盖模式')
+      87 |     await expect(mode.locator('option')).toHaveText(['观察', '降级', '隔离', '保护', '恢复中', '正常'])
+      88 |     await mode.selectOption('NORMAL')
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:85:44
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ─────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('1359 Calls', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('1359 Calls', { exact: true })
+
+
+      129 |   await expect(page.getByText('Ankr 官网账户余额')).toBeVisible()
+      130 |   await expect(page.getByText(`${compact.format(account.remaining_credits)} Credits`, { exact: true })).toBeVisible()
+    > 131 |   await expect(page.getByText(`${compact.format(overview.metrics.logical_calls)} Calls`, { exact: true })).toBeVisible()
+          |                                                                                                            ^
+      132 |   await expect(page.getByText(new RegExp(`本地捕获 ${compact.format(overview.metrics.provider_calls)} 次外部请求`))).toBeVisible()
+      133 |   await expect(page.getByText('Recent Errors / Warnings')).toBeVisible()
+      134 |   await expect(page.locator('.status-overview table')).toHaveCount(0)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:131:108
+
+    Error Context: test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+
+    Test timeout of 30000ms exceeded.
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('统计中…')
+    Expected: 0
+    Received: 1
+
+    Call log:
+      - Expect "toHaveCount" with timeout 20000ms
+      - waiting for getByText('统计中…')
+        38 × locator resolved to 1 element
+           - unexpected value "1"
+      - Test timeout of 30000ms exceeded.
+
+
+      121 |   await expect(methodFilter).toBeVisible()
+      122 |   await methodFilter.fill('unknown')
+    > 123 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+          |                                        ^
+      124 |   const unknownLabels = await page.locator('tbody .method-cell small.method-unknown-tag').allTextContents()
+      125 |   expect(unknownLabels.every((value) => value === 'Unknown')).toBe(true)
+      126 |   await methodFilter.fill('')
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:123:40
+
+    Error Context: test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: '选择代币' }).getByLabel(/U5DТ 0xefc391/i).first()
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByRole('dialog', { name: '选择代币' }).getByLabel(/U5DТ 0xefc391/i).first()
+
+
+      250 |   await expect(tokenDialog.getByLabel('搜索代币')).toBeVisible()
+      251 |   const tokenCheckbox = tokenDialog.getByLabel(/U5DТ 0xefc391/i).first()
+    > 252 |   await expect(tokenCheckbox).toBeVisible({ timeout: 20_000 })
+          |                               ^
+      253 |   await tokenCheckbox.check()
+      254 |   await tokenDialog.getByRole('button', { name: '确认' }).click()
+      255 |   await page.getByRole('button', { name: '代币筛选' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:252:31
+
+    Error Context: test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.token-cell').first()
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for locator('.token-cell').first()
+
+
+      314 |
+      315 |   const firstToken = page.locator('.token-cell').first()
+    > 316 |   await expect(firstToken).toBeVisible({ timeout: 20_000 })
+          |                            ^
+      317 |   await expect(firstToken).toHaveAttribute('data-contract', '0xefc391a6e4a1c0775d845c4ced7bfcaa653e6a6e')
+      318 |   await expect(firstToken.locator('.token-name')).toHaveText('U5DТ')
+      319 |   await expect(firstToken.locator('.metadata-status')).toHaveCount(0)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:316:28
+
+    Error Context: test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('统计中…')
+    Expected: 0
+    Received: 1
+    Timeout:  20000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 20000ms
+      - waiting for getByText('统计中…')
+        43 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      346 |   await option.check()
+      347 |   await dialog.getByRole('button', { name: '确认' }).click()
+    > 348 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+          |                                        ^
+      349 |
+      350 |   const token = page.locator('.token-cell').first()
+      351 |   await expect(token).toHaveAttribute('data-contract', official)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:348:40
+
+    Error Context: test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ───────────────
+    [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ──────────────────
+    [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+    [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+    [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+    [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+  1 skipped
+  14 passed (2.5m)

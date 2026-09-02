@@ -1,0 +1,64 @@
+
+Running 48 tests using 1 worker
+
+node.exe : (node:13800) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Euripides\AppData\Roam ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:13800) Wa... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 [desktop] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 (1.4s)
+  ok  2 [desktop] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 (6.0s)
+  ok  3 [desktop] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 (2.8s)
+  ok  4 [desktop] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 (1.5s)
+  ok  5 [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (1.6s)
+  ok  6 [desktop] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 (3.0s)
+  ok  7 [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (1.0s)
+  ok  8 [desktop] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 (537ms)
+  -   9 [desktop] › tests\live-download.spec.ts:28:1 › live address download completes or reuses coverage and exposes the verified provider row
+  -  10 [desktop] › tests\live-download.spec.ts:89:1 › live data explorer export downloads a valid ZIP with manifest and CSV rows
+  -  11 [desktop] › tests\live-download.spec.ts:131:1 › live job detail downloads scoped CSV and XLSX files
+  ok 12 [desktop] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors (440ms)
+  ok 13 [desktop] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges (534ms)
+  ok 14 [desktop] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route (7.4s)
+  ok 15 [desktop] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details (978ms)
+  ok 16 [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (5.6s)
+  ok 17 [desktop] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally (401ms)
+  ok 18 [desktop] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount (1.7s)
+  ok 19 [desktop] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header (988ms)
+  -  20 [desktop] › tests\smoke.spec.ts:193:1 › arbitrary case and tag names are created, linked and restored
+  ok 21 [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (11.7s)
+  ok 22 [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (3.5s)
+  ok 23 [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (6.1s)
+  ok 24 [desktop] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon (1.9s)
+(node:59092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 25 [mobile] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 (1.4s)
+  ok 26 [mobile] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 (4.3s)
+  ok 27 [mobile] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 (2.8s)
+  ok 28 [mobile] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 (1.5s)
+  ok 29 [mobile] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (1.7s)
+  ok 30 [mobile] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 (2.9s)
+  ok 31 [mobile] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (1.0s)
+  ok 32 [mobile] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 (579ms)
+  -  33 [mobile] › tests\live-download.spec.ts:28:1 › live address download completes or reuses coverage and exposes the verified provider row
+  -  34 [mobile] › tests\live-download.spec.ts:89:1 › live data explorer export downloads a valid ZIP with manifest and CSV rows
+  -  35 [mobile] › tests\live-download.spec.ts:131:1 › live job detail downloads scoped CSV and XLSX files
+  ok 36 [mobile] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors (476ms)
+  ok 37 [mobile] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges (539ms)
+  ok 38 [mobile] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route (7.1s)
+  ok 39 [mobile] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details (1.0s)
+  ok 40 [mobile] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (5.6s)
+  ok 41 [mobile] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally (394ms)
+  -  42 [mobile] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount
+  ok 43 [mobile] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header (1.6s)
+  -  44 [mobile] › tests\smoke.spec.ts:193:1 › arbitrary case and tag names are created, linked and restored
+  ok 45 [mobile] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (11.7s)
+  ok 46 [mobile] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (3.3s)
+  ok 47 [mobile] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (6.4s)
+  ok 48 [mobile] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon (1.9s)
+
+  9 skipped
+  39 passed (2.0m)

@@ -1,0 +1,1213 @@
+node.exe : [WebServer] (node:56212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Euripides\AppData\Roam ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([WebServer] (no... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 48 tests using 1 worker
+
+(node:38256) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   1 [desktop] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 (6.6s)
+(node:39444) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   2 [desktop] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 (2.8s)
+(node:43024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   3 [desktop] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 (2.8s)
+(node:75956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   4 [desktop] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 (2.8s)
+(node:58708) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   5 [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (2.7s)
+(node:30492) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   6 [desktop] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 (2.9s)
+(node:4660) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   7 [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (278ms)
+(node:27032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   8 [desktop] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 (2.7s)
+(node:78076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -   9 [desktop] › tests\live-download.spec.ts:28:1 › live address download completes or reuses coverage and exposes the verified provider row
+  -  10 [desktop] › tests\live-download.spec.ts:89:1 › live data explorer export downloads a valid ZIP with manifest and CSV rows
+  -  11 [desktop] › tests\live-download.spec.ts:131:1 › live job detail downloads scoped CSV and XLSX files
+  x  12 [desktop] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors (2.2s)
+(node:29124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  13 [desktop] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges (2.7s)
+(node:39380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  14 [desktop] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route (281ms)
+(node:72616) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  15 [desktop] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details (3.3s)
+(node:74008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  16 [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (2.8s)
+(node:35932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  17 [desktop] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally (3.4s)
+(node:88476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  18 [desktop] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount (2.8s)
+(node:72696) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  19 [desktop] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header (2.7s)
+(node:74504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -  20 [desktop] › tests\smoke.spec.ts:193:1 › arbitrary case and tag names are created, linked and restored
+  x  21 [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (2.6s)
+(node:45160) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  22 [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (3.6s)
+(node:31592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  23 [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (2.7s)
+(node:1500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  24 [desktop] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon (2.8s)
+(node:36920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  25 [mobile] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 (2.7s)
+(node:87312) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  26 [mobile] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 (2.7s)
+(node:70740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  27 [mobile] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 (2.7s)
+(node:31132) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  28 [mobile] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 (2.7s)
+(node:17624) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  29 [mobile] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (2.7s)
+(node:23120) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  30 [mobile] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 (2.9s)
+(node:110536) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  31 [mobile] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (281ms)
+(node:37800) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  32 [mobile] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 (3.4s)
+(node:89256) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -  33 [mobile] › tests\live-download.spec.ts:28:1 › live address download completes or reuses coverage and exposes the verified provider row
+  -  34 [mobile] › tests\live-download.spec.ts:89:1 › live data explorer export downloads a valid ZIP with manifest and CSV rows
+  -  35 [mobile] › tests\live-download.spec.ts:131:1 › live job detail downloads scoped CSV and XLSX files
+  x  36 [mobile] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors (2.7s)
+(node:33888) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  37 [mobile] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges (2.8s)
+(node:50208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  38 [mobile] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route (280ms)
+(node:99544) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  39 [mobile] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details (2.7s)
+(node:38404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  40 [mobile] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (2.8s)
+(node:12692) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  41 [mobile] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally (3.3s)
+(node:78564) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -  42 [mobile] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount
+  x  43 [mobile] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header (2.5s)
+(node:81936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -  44 [mobile] › tests\smoke.spec.ts:193:1 › arbitrary case and tag names are created, linked and restored
+  x  45 [mobile] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (2.5s)
+(node:107780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  46 [mobile] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (2.7s)
+(node:97008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  47 [mobile] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (2.7s)
+(node:30056) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  48 [mobile] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon (2.7s)
+
+
+  1) [desktop] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 ───────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('请求趋势')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('请求趋势')
+
+
+      30 |     await expect(page.getByRole('img', { name: /API 请求、错误和 P95/ })).toBeVisible()
+      31 |     await page.getByLabel('时间范围').selectOption('7d')
+    > 32 |     await expect(page.getByText('请求趋势')).toBeVisible()
+         |                                          ^
+      33 |   })
+      34 |
+      35 |   test('Provider 展示官方余额且立即同步后与接口一致', async ({ page, request }, testInfo) => {
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:32:42
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 ───────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 ──────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [desktop] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 ──────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ──────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [desktop] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 ─────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ─────────────────
+
+    Error: apiRequestContext.get: connect ECONNREFUSED 127.0.0.1:3000
+    Call log:
+      - → GET http://127.0.0.1:3000/api/v1/api-control/overview?range=24h
+        - user-agent: Playwright/1.62.1 (x64; windows 10.0) node/24.15
+        - accept: */*
+        - accept-encoding: gzip,deflate,br
+
+
+      116 | test('状态总览与 API 控制中心使用同一份 24h 指标和官方余额', async ({ page, request }, testInfo) => {
+      117 |   const [overviewResponse, accountResponse] = await Promise.all([
+    > 118 |     request.get('/api/v1/api-control/overview?range=24h'),
+          |             ^
+      119 |     request.get('/api/v1/api-control/provider-accounts'),
+      120 |   ])
+      121 |   expect(overviewResponse.ok()).toBe(true)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:118:13
+
+    Error Context: test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) [desktop] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 ────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/system
+    Call log:
+      - navigating to "http://127.0.0.1:3000/system", waiting until "load"
+
+
+      142 | test('状态总览和 API 控制中心不产生页面级横向溢出', async ({ page }) => {
+      143 |   for (const route of ['/system', '/api-control']) {
+    > 144 |     await page.goto(route)
+          |                ^
+      145 |     await expect.poll(() => page.evaluate(() =>
+      146 |       document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      147 |     )).toBe(true)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:144:16
+
+    Error Context: test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) [desktop] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/
+    Call log:
+      - navigating to "http://127.0.0.1:3000/", waiting until "load"
+
+
+      23 | test('download page renders its primary workflow without browser errors', async ({ page }, testInfo) => {
+      24 |   const errors = captureBrowserErrors(page)
+    > 25 |   await page.goto('/')
+         |              ^
+      26 |   await expect(page.getByRole('heading', { name: '地址数据下载' })).toBeVisible()
+      27 |   await expect(page.getByRole('button', { name: '+ 新建案件' })).toBeVisible()
+      28 |   await expect(page.getByRole('button', { name: '+ 新建标签' })).toBeVisible()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:25:14
+
+    Error Context: test-results\smoke-download-page-render-41327-flow-without-browser-errors-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-download-page-render-41327-flow-without-browser-errors-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-download-page-render-41327-flow-without-browser-errors-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) [desktop] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/
+    Call log:
+      - navigating to "http://127.0.0.1:3000/", waiting until "load"
+
+
+      33 |
+      34 | test('download page rejects missing and reversed block ranges', async ({ page }) => {
+    > 35 |   await page.goto('/')
+         |              ^
+      36 |   await page.locator('textarea').fill('0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+      37 |   await page.getByLabel('区块范围').check()
+      38 |   await expect(page.getByRole('button', { name: 'Coverage 预览' })).toBeDisabled()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:35:14
+
+    Error Context: test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) [desktop] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route
+
+    Error: apiRequestContext.get: connect ECONNREFUSED 127.0.0.1:3000
+    Call log:
+      - → GET http://127.0.0.1:3000/api/v1/chains/bsc/head
+        - user-agent: Playwright/1.62.1 (x64; windows 10.0) node/24.15
+        - accept: */*
+        - accept-encoding: gzip,deflate,br
+
+
+      48 |   const errors = captureBrowserErrors(page)
+      49 |   for (const chain of ['bsc', 'eth', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']) {
+    > 50 |     const response = await request.get(`/api/v1/chains/${chain}/head`)
+         |                                    ^
+      51 |     expect(response.status(), `${chain} RPC head endpoint`).toBe(200)
+      52 |     const payload = await response.json()
+      53 |     expect(payload.chain).toBe(chain)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:50:36
+
+    Error Context: test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) [desktop] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer", waiting until "load"
+
+
+      81 | test('data explorer loads live catalog rows and opens address details', async ({ page }, testInfo) => {
+      82 |   const errors = captureBrowserErrors(page)
+    > 83 |   await page.goto('/data-explorer')
+         |              ^
+      84 |   await expect(page.getByRole('heading', { name: '数据浏览' })).toBeVisible()
+      85 |   const firstDetails = page.getByRole('link', { name: '详情' }).first()
+      86 |   await expect(firstDetails).toBeVisible({ timeout: 15_000 })
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:83:14
+
+    Error Context: test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      106 | test('transactions expose a method column, method filter and decoded detail drawer', async ({ page }, testInfo) => {
+      107 |   const errors = captureBrowserErrors(page)
+    > 108 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      109 |   await page.getByRole('button', { name: '交易', exact: true }).click()
+      110 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      111 |
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:108:14
+
+    Error Context: test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) [desktop] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally ──────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer", waiting until "load"
+
+
+      140 |
+      141 | test('viewport does not overflow horizontally', async ({ page }) => {
+    > 142 |   await page.goto('/data-explorer')
+          |              ^
+      143 |   await expect(page.getByRole('heading', { name: '数据浏览' })).toBeVisible()
+      144 |   await expect.poll(() => page.evaluate(() =>
+      145 |     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:142:14
+
+    Error Context: test-results\smoke-viewport-does-not-overflow-horizontally-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-viewport-does-not-overflow-horizontally-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-viewport-does-not-overflow-horizontally-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) [desktop] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      150 |   test.skip(testInfo.project.name !== 'desktop')
+      151 |   await page.setViewportSize({ width: 1920, height: 1080 })
+    > 152 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      153 |   await expect(page.getByRole('heading', { name: /0x9b77e3b4/ })).toBeVisible()
+      154 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      155 |   const amount = page.locator('.flow-amount b').first()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:152:14
+
+    Error Context: test-results\smoke-wide-address-detail--b1168-a-compact-normalized-amount-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-wide-address-detail--b1168-a-compact-normalized-amount-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-wide-address-detail--b1168-a-compact-normalized-amount-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) [desktop] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header ─
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      167 | test('address cases and tags can be edited from the header', async ({ page }, testInfo) => {
+      168 |   const errors = captureBrowserErrors(page)
+    > 169 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      170 |   await expect(page.getByRole('heading', { name: /0x9b77e3b4/ })).toBeVisible()
+      171 |   await expect(page.getByText(/案件：盘古/)).toBeVisible({ timeout: 15_000 })
+      172 |   await page.getByRole('button', { name: '修改案件和标签' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:169:14
+
+    Error Context: test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      243 |
+      244 | test('filters update full-result statistics and selected rows can be exported', async ({ page }, testInfo) => {
+    > 245 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      246 |   await page.getByRole('button', { name: '代币转账' }).click()
+      247 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      248 |   await page.getByRole('button', { name: '代币筛选' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:245:14
+
+    Error Context: test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      309 | test('token metadata differentiates lookalike contracts and exposes resolved tooltip fields', async ({ page }, testInfo) => {
+      310 |   const errors = captureBrowserErrors(page)
+    > 311 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      312 |   await page.getByRole('button', { name: '代币转账' }).click()
+      313 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      314 |
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:311:14
+
+    Error Context: test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      336 |   const errors = captureBrowserErrors(page)
+      337 |   const official = '0x55d398326f99059ff775485246999027b3197955'
+    > 338 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      339 |   await page.getByRole('button', { name: '代币转账' }).click()
+      340 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      341 |   await page.getByRole('button', { name: '代币筛选' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:338:14
+
+    Error Context: test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) [desktop] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon ───
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      364 | test('contract parties use an OKLink-style contract icon', async ({ page }, testInfo) => {
+      365 |   const errors = captureBrowserErrors(page)
+    > 366 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      367 |   await page.getByRole('button', { name: '交易', exact: true }).click()
+      368 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      369 |   const icon = page.getByLabel('合约地址').first()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:366:14
+
+    Error Context: test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) [mobile] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 ───────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-总览数据与筛选器可用-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  22) [mobile] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 ───────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-Provider-展示官方余额且立即同步后与接口一致-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  23) [mobile] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 ──────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-请求表格可打开详情抽屉-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  24) [mobile] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 ──────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-聚合行下钻会把条件带入请求查询-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  25) [mobile] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ──────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  26) [mobile] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 ─────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/api-control
+    Call log:
+      - navigating to "http://127.0.0.1:3000/api-control", waiting until "load"
+
+
+      17 |     const errors: string[] = []
+      18 |     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+    > 19 |     await page.goto('/api-control')
+         |                ^
+      20 |     await expect(page.getByRole('heading', { name: 'API 控制中心' })).toBeVisible()
+      21 |     await expect(page.getByText('自动管控状态')).toBeVisible()
+      22 |     await page.waitForTimeout(500)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:19:16
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-全局筛选同步到聚合请求，各标签页均能加载-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  27) [mobile] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ─────────────────
+
+    Error: apiRequestContext.get: connect ECONNREFUSED 127.0.0.1:3000
+    Call log:
+      - → GET http://127.0.0.1:3000/api/v1/api-control/overview?range=24h
+        - user-agent: Playwright/1.62.1 (x64; windows 10.0) node/24.15
+        - accept: */*
+        - accept-encoding: gzip,deflate,br
+
+
+      116 | test('状态总览与 API 控制中心使用同一份 24h 指标和官方余额', async ({ page, request }, testInfo) => {
+      117 |   const [overviewResponse, accountResponse] = await Promise.all([
+    > 118 |     request.get('/api/v1/api-control/overview?range=24h'),
+          |             ^
+      119 |     request.get('/api/v1/api-control/provider-accounts'),
+      120 |   ])
+      121 |   expect(overviewResponse.ok()).toBe(true)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:118:13
+
+    Error Context: test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-状态总览与-API-控制中心使用同一份-24h-指标和官方余额-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  28) [mobile] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 ────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/system
+    Call log:
+      - navigating to "http://127.0.0.1:3000/system", waiting until "load"
+
+
+      142 | test('状态总览和 API 控制中心不产生页面级横向溢出', async ({ page }) => {
+      143 |   for (const route of ['/system', '/api-control']) {
+    > 144 |     await page.goto(route)
+          |                ^
+      145 |     await expect.poll(() => page.evaluate(() =>
+      146 |       document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      147 |     )).toBe(true)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:144:16
+
+    Error Context: test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-状态总览和-API-控制中心不产生页面级横向溢出-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  29) [mobile] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/
+    Call log:
+      - navigating to "http://127.0.0.1:3000/", waiting until "load"
+
+
+      23 | test('download page renders its primary workflow without browser errors', async ({ page }, testInfo) => {
+      24 |   const errors = captureBrowserErrors(page)
+    > 25 |   await page.goto('/')
+         |              ^
+      26 |   await expect(page.getByRole('heading', { name: '地址数据下载' })).toBeVisible()
+      27 |   await expect(page.getByRole('button', { name: '+ 新建案件' })).toBeVisible()
+      28 |   await expect(page.getByRole('button', { name: '+ 新建标签' })).toBeVisible()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:25:14
+
+    Error Context: test-results\smoke-download-page-render-41327-flow-without-browser-errors-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-download-page-render-41327-flow-without-browser-errors-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-download-page-render-41327-flow-without-browser-errors-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  30) [mobile] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/
+    Call log:
+      - navigating to "http://127.0.0.1:3000/", waiting until "load"
+
+
+      33 |
+      34 | test('download page rejects missing and reversed block ranges', async ({ page }) => {
+    > 35 |   await page.goto('/')
+         |              ^
+      36 |   await page.locator('textarea').fill('0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+      37 |   await page.getByLabel('区块范围').check()
+      38 |   await expect(page.getByRole('button', { name: 'Coverage 预览' })).toBeDisabled()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:35:14
+
+    Error Context: test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-download-page-reject-346c6-g-and-reversed-block-ranges-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  31) [mobile] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route
+
+    Error: apiRequestContext.get: connect ECONNREFUSED 127.0.0.1:3000
+    Call log:
+      - → GET http://127.0.0.1:3000/api/v1/chains/bsc/head
+        - user-agent: Playwright/1.62.1 (x64; windows 10.0) node/24.15
+        - accept: */*
+        - accept-encoding: gzip,deflate,br
+
+
+      48 |   const errors = captureBrowserErrors(page)
+      49 |   for (const chain of ['bsc', 'eth', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']) {
+    > 50 |     const response = await request.get(`/api/v1/chains/${chain}/head`)
+         |                                    ^
+      51 |     expect(response.status(), `${chain} RPC head endpoint`).toBe(200)
+      52 |     const payload = await response.json()
+      53 |     expect(payload.chain).toBe(chain)
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:50:36
+
+    Error Context: test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-chain-selectors-show-6c5ab--chain-has-a-live-RPC-route-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  32) [mobile] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer", waiting until "load"
+
+
+      81 | test('data explorer loads live catalog rows and opens address details', async ({ page }, testInfo) => {
+      82 |   const errors = captureBrowserErrors(page)
+    > 83 |   await page.goto('/data-explorer')
+         |              ^
+      84 |   await expect(page.getByRole('heading', { name: '数据浏览' })).toBeVisible()
+      85 |   const firstDetails = page.getByRole('link', { name: '详情' }).first()
+      86 |   await expect(firstDetails).toBeVisible({ timeout: 15_000 })
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:83:14
+
+    Error Context: test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-data-explorer-loads--118df-s-and-opens-address-details-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  33) [mobile] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      106 | test('transactions expose a method column, method filter and decoded detail drawer', async ({ page }, testInfo) => {
+      107 |   const errors = captureBrowserErrors(page)
+    > 108 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      109 |   await page.getByRole('button', { name: '交易', exact: true }).click()
+      110 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      111 |
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:108:14
+
+    Error Context: test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-transactions-expose--79341-r-and-decoded-detail-drawer-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  34) [mobile] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally ───────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer", waiting until "load"
+
+
+      140 |
+      141 | test('viewport does not overflow horizontally', async ({ page }) => {
+    > 142 |   await page.goto('/data-explorer')
+          |              ^
+      143 |   await expect(page.getByRole('heading', { name: '数据浏览' })).toBeVisible()
+      144 |   await expect.poll(() => page.evaluate(() =>
+      145 |     document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:142:14
+
+    Error Context: test-results\smoke-viewport-does-not-overflow-horizontally-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-viewport-does-not-overflow-horizontally-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-viewport-does-not-overflow-horizontally-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  35) [mobile] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header ──
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      167 | test('address cases and tags can be edited from the header', async ({ page }, testInfo) => {
+      168 |   const errors = captureBrowserErrors(page)
+    > 169 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      170 |   await expect(page.getByRole('heading', { name: /0x9b77e3b4/ })).toBeVisible()
+      171 |   await expect(page.getByText(/案件：盘古/)).toBeVisible({ timeout: 15_000 })
+      172 |   await page.getByRole('button', { name: '修改案件和标签' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:169:14
+
+    Error Context: test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-address-cases-and-tags-can-be-edited-from-the-header-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  36) [mobile] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      243 |
+      244 | test('filters update full-result statistics and selected rows can be exported', async ({ page }, testInfo) => {
+    > 245 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      246 |   await page.getByRole('button', { name: '代币转账' }).click()
+      247 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      248 |   await page.getByRole('button', { name: '代币筛选' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:245:14
+
+    Error Context: test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-filters-update-full--29fd5-lected-rows-can-be-exported-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  37) [mobile] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      309 | test('token metadata differentiates lookalike contracts and exposes resolved tooltip fields', async ({ page }, testInfo) => {
+      310 |   const errors = captureBrowserErrors(page)
+    > 311 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      312 |   await page.getByRole('button', { name: '代币转账' }).click()
+      313 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      314 |
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:311:14
+
+    Error Context: test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-token-metadata-diffe-466be-ses-resolved-tooltip-fields-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  38) [mobile] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      336 |   const errors = captureBrowserErrors(page)
+      337 |   const official = '0x55d398326f99059ff775485246999027b3197955'
+    > 338 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      339 |   await page.getByRole('button', { name: '代币转账' }).click()
+      340 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      341 |   await page.getByRole('button', { name: '代币筛选' }).click()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:338:14
+
+    Error Context: test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-official-BSC-USDT-us-812cf-nd-verified-registry-status-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  39) [mobile] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon ────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd
+    Call log:
+      - navigating to "http://127.0.0.1:3000/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd", waiting until "load"
+
+
+      364 | test('contract parties use an OKLink-style contract icon', async ({ page }, testInfo) => {
+      365 |   const errors = captureBrowserErrors(page)
+    > 366 |   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+          |              ^
+      367 |   await page.getByRole('button', { name: '交易', exact: true }).click()
+      368 |   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+      369 |   const icon = page.getByLabel('合约地址').first()
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\smoke.spec.ts:366:14
+
+    Error Context: test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-mobile\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-mobile\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\smoke-contract-parties-use-an-OKLink-style-contract-icon-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  39 failed
+    [desktop] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 ────────────────────────
+    [desktop] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 ────────
+    [desktop] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 ───────────────────────
+    [desktop] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 ───────────────────
+    [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ───────────────
+    [desktop] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 ──────────────
+    [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ──────────────────
+    [desktop] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 ─────────────────────────
+    [desktop] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors
+    [desktop] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges ─
+    [desktop] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route
+    [desktop] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details
+    [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+    [desktop] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally ────────────────
+    [desktop] › tests\smoke.spec.ts:149:1 › wide address detail uses the workspace and shows a compact normalized amount
+    [desktop] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header ───
+    [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+    [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+    [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+    [desktop] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon ─────
+    [mobile] › tests\api-control.spec.ts:26:3 › V1.6 API 控制中心 › 总览数据与筛选器可用 ─────────────────────────
+    [mobile] › tests\api-control.spec.ts:35:3 › V1.6 API 控制中心 › Provider 展示官方余额且立即同步后与接口一致 ─────────
+    [mobile] › tests\api-control.spec.ts:58:3 › V1.6 API 控制中心 › 请求表格可打开详情抽屉 ────────────────────────
+    [mobile] › tests\api-control.spec.ts:69:3 › V1.6 API 控制中心 › 聚合行下钻会把条件带入请求查询 ────────────────────
+    [mobile] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ────────────────
+    [mobile] › tests\api-control.spec.ts:96:3 › V1.6 API 控制中心 › 全局筛选同步到聚合请求，各标签页均能加载 ───────────────
+    [mobile] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 ───────────────────
+    [mobile] › tests\api-control.spec.ts:142:1 › 状态总览和 API 控制中心不产生页面级横向溢出 ──────────────────────────
+    [mobile] › tests\smoke.spec.ts:23:1 › download page renders its primary workflow without browser errors
+    [mobile] › tests\smoke.spec.ts:34:1 › download page rejects missing and reversed block ranges ──
+    [mobile] › tests\smoke.spec.ts:47:1 › chain selectors show branded icons and every selectable chain has a live RPC route
+    [mobile] › tests\smoke.spec.ts:81:1 › data explorer loads live catalog rows and opens address details
+    [mobile] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer
+    [mobile] › tests\smoke.spec.ts:141:1 › viewport does not overflow horizontally ─────────────────
+    [mobile] › tests\smoke.spec.ts:167:1 › address cases and tags can be edited from the header ────
+    [mobile] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported
+    [mobile] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields
+    [mobile] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status
+    [mobile] › tests\smoke.spec.ts:364:1 › contract parties use an OKLink-style contract icon ──────
+  9 skipped

@@ -1,0 +1,92 @@
+
+Running 5 tests using 1 worker
+
+node.exe : (node:38108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Euripides\AppData\Roam ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:38108) Wa... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\zz-acceptance-temp.spec.ts:6:3 › UI-001 viewport 768x1024 no horizontal overflow (5.7s)
+(node:60560) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [desktop] › tests\zz-acceptance-temp.spec.ts:6:3 › UI-001 viewport 1366x768 no horizontal overflow (10.9s)
+  x  3 [desktop] › tests\zz-acceptance-temp.spec.ts:17:1 › UI-003 keyboard: Escape closes dialog and returns focus (5.8s)
+(node:63292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+OFFLINE_DIALOGS=0
+RECOVERED_ROWS=1
+  ok 4 [desktop] › tests\zz-acceptance-temp.spec.ts:33:1 › UI-004 offline shows error dialog and recovers (8.1s)
+SLOW_DIALOGS=0 OVERFLOW=false
+  ok 5 [desktop] › tests\zz-acceptance-temp.spec.ts:50:1 › UI-004 slow API keeps loading state and completes (6.4s)
+
+
+  1) [desktop] › tests\zz-acceptance-temp.spec.ts:6:3 › UI-001 viewport 768x1024 no horizontal overflow
+
+    Error: /data-explorer must not overflow
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      10 |       await page.waitForTimeout(2500)
+      11 |       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+    > 12 |       expect(overflow, route + ' must not overflow').toBe(false)
+         |                                                      ^
+      13 |     }
+      14 |   })
+      15 | }
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\zz-acceptance-temp.spec.ts:12:54
+
+    Error Context: test-results\zz-acceptance-temp-UI-001--b4370-1024-no-horizontal-overflow-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\zz-acceptance-temp-UI-001--b4370-1024-no-horizontal-overflow-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\zz-acceptance-temp-UI-001--b4370-1024-no-horizontal-overflow-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\zz-acceptance-temp.spec.ts:17:1 › UI-003 keyboard: Escape closes dialog and returns focus
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: '修改案件和标签' })
+    Expected: 0
+    Received: 1
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 5000ms
+      - waiting for getByRole('dialog', { name: '修改案件和标签' })
+        13 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      21 |   await expect(dialog).toBeVisible()
+      22 |   await page.keyboard.press('Escape')
+    > 23 |   await expect(dialog).toHaveCount(0)
+         |                        ^
+      24 |   const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent?.slice(0, 30) ?? document.activeElement?.tagName)
+      25 |   console.log('FOCUS_AFTER_ESC=' + JSON.stringify(focused))
+      26 |   // token filter dialog focus trap
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\zz-acceptance-temp.spec.ts:23:24
+
+    Error Context: test-results\zz-acceptance-temp-UI-003--7e8ee-es-dialog-and-returns-focus-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\zz-acceptance-temp-UI-003--7e8ee-es-dialog-and-returns-focus-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\zz-acceptance-temp-UI-003--7e8ee-es-dialog-and-returns-focus-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\zz-acceptance-temp.spec.ts:6:3 › UI-001 viewport 768x1024 no horizontal overflow
+    [desktop] › tests\zz-acceptance-temp.spec.ts:17:1 › UI-003 keyboard: Escape closes dialog and returns focus
+  3 passed (40.1s)

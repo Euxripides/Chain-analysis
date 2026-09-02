@@ -1,0 +1,58 @@
+
+Running 6 tests using 1 worker
+
+node.exe : (node:50916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Euripides\AppData\Roam ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:50916) Wa... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 (1.6s)
+(node:71740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [desktop] › tests\api-control.spec.ts:116:1 › 状态总览与 API 控制中心使用同一份 24h 指标和官方余额 (1.4s)
+  ok 3 [desktop] › tests\smoke.spec.ts:106:1 › transactions expose a method column, method filter and decoded detail drawer (16.3s)
+  ok 4 [desktop] › tests\smoke.spec.ts:244:1 › filters update full-result statistics and selected rows can be exported (11.5s)
+  ok 5 [desktop] › tests\smoke.spec.ts:309:1 › token metadata differentiates lookalike contracts and exposes resolved tooltip fields (3.3s)
+  ok 6 [desktop] › tests\smoke.spec.ts:335:1 › official BSC USDT uses the trusted logo and verified registry status (7.3s)
+
+
+  1) [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ──────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('全局停机开关')
+    Expected: visible
+    Error: strict mode violation: getByText('全局停机开关') resolved to 2 elements:
+        1) <b>全局停机开关</b> aka getByText('全局停机开关', { exact: true })
+        2) <span>全局停机开关已启用</span> aka getByText('全局停机开关已启用')
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('全局停机开关')
+
+
+      83 |     await expect(page.locator('.ac-warning')).toHaveCount(0)
+      84 |     await expect(page.getByText('有效期（分钟）')).toBeVisible()
+    > 85 |     await expect(page.getByText('全局停机开关')).toBeVisible()
+         |                                            ^
+      86 |     const mode = page.getByLabel('覆盖模式')
+      87 |     await expect(mode.locator('option')).toHaveText(['观察', '降级', '隔离', '保护', '恢复中', '正常'])
+      88 |     await mode.selectOption('NORMAL')
+        at E:\Code\远程虚拟机\harness\blockchain-platform\frontend\tests\api-control.spec.ts:85:44
+
+    Error Context: test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\api-control-V1-6-API-控制中心-管控页展示人工覆盖表单且不内嵌风险提示-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\api-control.spec.ts:79:3 › V1.6 API 控制中心 › 管控页展示人工覆盖表单且不内嵌风险提示 ───────────────
+  5 passed (43.7s)
