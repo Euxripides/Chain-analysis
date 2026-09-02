@@ -169,13 +169,13 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 
 // runExport 流式导出：查询 → 流式写入 MinIO（不把结果集全部装入内存）。
 func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chain string) {
-	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "RUNNING", "", 0, "")
+	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "RUNNING", "", "", 0, "")
 	var job *model.DownloadJob
 	if exp.JobID != nil {
 		var err error
 		job, err = s.deps.Store.GetJob(ctx, *exp.JobID)
 		if err != nil {
-			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())
 			return
 		}
 		chain = job.Chain
@@ -187,7 +187,7 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 	if subject == "" && exp.JobID != nil {
 		jobSubjects, err := s.deps.Store.SubjectsByJob(ctx, *exp.JobID)
 		if err != nil {
-			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())
 			return
 		}
 		subjects = subjects[:0]
@@ -215,7 +215,7 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 		rows = append(rows, batch...)
 	}
 	if err != nil {
-		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())
 		observability.ExportJobs.WithLabelValues(exp.Format, "FAILED").Inc()
 		return
 	}
@@ -232,10 +232,16 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 		size, err = writeXLSX(ctx, s, key, rows)
 	}
 	if err != nil {
-		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())
 		return
 	}
-	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "COMPLETED", key, int64(len(rows)), "")
+	// BUG-001 修复：V1 导出同样回填对象 SHA-256，保证 GET /exports/{id} 的 sha256
+	// 非空且可被下载文件复算（与 V2 管线口径一致）。
+	sha, shaErr := s.objectSHA256(ctx, key)
+	if shaErr != nil {
+		s.deps.Log.Warn("export sha256 failed", "export_id", exp.ID, "err", shaErr)
+	}
+	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "COMPLETED", key, sha, int64(len(rows)), "")
 	observability.ExportJobs.WithLabelValues(exp.Format, "COMPLETED").Inc()
 	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
 		"dataset": exp.Dataset, "format": exp.Format, "rows": len(rows), "bytes": size,

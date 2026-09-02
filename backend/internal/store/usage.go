@@ -119,9 +119,9 @@ func (s *Store) GetExport(ctx context.Context, id string) (*model.Export, error)
 	return &e, nil
 }
 
-func (s *Store) UpdateExport(ctx context.Context, id, status, objectRef string, rows int64, errMsg string) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE exports SET status=$2, object_ref=$3, rows=$4, error=$5, updated_at=now() WHERE id=$1",
-		id, status, objectRef, rows, errMsg)
+func (s *Store) UpdateExport(ctx context.Context, id, status, objectRef, sha string, rows int64, errMsg string) error {
+	_, err := s.Pool.Exec(ctx, "UPDATE exports SET status=$2, object_ref=$3, sha256=$4, rows=$5, error=$6, updated_at=now() WHERE id=$1",
+		id, status, objectRef, sha, rows, errMsg)
 	return err
 }
 

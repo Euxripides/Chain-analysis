@@ -212,7 +212,14 @@ func (s *Server) attachTokenMetadata(ctx context.Context, chain string, rows []m
 		if m.Symbol != "" {
 			row["token_symbol"] = m.Symbol
 		}
-		row["token_decimals"] = m.Decimals
+		// BUG-001 修复：Decimals 是指针，直接存入 row 会让 CSV/XLSX 以 fmt 输出
+		// 非确定性指针地址（如 0x3dffac709738）。必须解引用后再写入；未知时明确置空，
+		// 不伪造 18。formatted_amount 分支随后处理 nil。
+		if m.Decimals != nil {
+			row["token_decimals"] = *m.Decimals
+		} else {
+			row["token_decimals"] = nil
+		}
 		row["token_type"] = m.TokenType
 		row["token_metadata_status"] = m.MetadataStatus
 		row["token_metadata_source"] = m.MetadataSource
