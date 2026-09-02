@@ -12,7 +12,9 @@ test.describe('V1.6 API 控制中心', () => {
   })
 
   test('总览数据与筛选器可用', async ({ page }) => {
-    await expect(page.getByText('逻辑调用')).toBeVisible()
+    await expect(page.getByText('本地记录的逻辑调用')).toBeVisible()
+    await expect(page.getByText('官网总账与本地审计是两套口径，不能直接对比')).toHaveCount(0)
+    await expect(page.locator('.ac-scope-notice')).toHaveCount(0)
     await expect(page.getByRole('img', { name: /API 请求、错误和 P95/ })).toBeVisible()
     await page.getByLabel('时间范围').selectOption('7d')
     await expect(page.getByText('请求趋势')).toBeVisible()

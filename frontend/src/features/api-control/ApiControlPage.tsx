@@ -56,7 +56,6 @@ function OverviewTab({ filter, onDrill }: { filter: string; onDrill: (tab: strin
     ['本地估算已消耗积分', compact.format(m?.credits || 0), '不是账户剩余额度'], ['本地估算成本', money(m?.estimated_cost_usd || 0), '不是官网账单余额'],
   ]
   return <QueryState pending={query.isPending} error={query.error}>
-    <section className="ac-scope-notice"><AlertTriangle size={19} /><div><b>官网总账与本地审计是两套口径，不能直接对比</b><span>Ankr 官网统计同一账户或 API Key 的全部客户端请求；这里仅统计本平台已写入审计表的调用。积分卡展示本地估算的已消耗量，不是官网剩余额度。</span><small>本地开始留痕：{dateTime(query.data?.scope?.capture_started_at)} · {query.data?.scope?.comparison_reason || '当前没有官方遥测明细，无法自动对账'}</small></div></section>
     <div className="ac-kpis">{cards.map(([label, value, note], i) => <button key={label} className="ac-kpi" onClick={() => onDrill(i === 5 ? 'costs' : i === 2 ? 'errors' : i === 3 ? 'operations' : 'requests')}><span>{label}</span><b>{value}</b><small>{note}</small></button>)}</div>
     <div className="ac-grid-12">
       <section className="ac-panel ac-span-8"><div className="ac-panel-head"><div><small>流量与稳定性</small><h2>请求趋势</h2></div><SourceTag>内部审计</SourceTag></div><Suspense fallback={<div className="ac-chart-loading">正在加载图表…</div>}><TrendChart data={query.data?.trend || []} onSelect={() => onDrill('requests')} /></Suspense></section>

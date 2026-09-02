@@ -48,3 +48,7 @@ MinIO 控制台 http://SERVER:9002（仅本机/SSH 隧道，勿暴露公网）·
 - deploy/   docker compose（PostgreSQL 18 / ClickHouse / MinIO / NATS）
 - docs/     实现说明与 API 文档
 - scripts/  部署与同步脚本
+
+## 开发规范
+
+前后端代码规范见 [docs/code-standards.md](docs/code-standards.md)。其中前端提示信息必须使用弹窗呈现，禁止把警告、说明、成功或错误提示直接嵌入页面布局。
