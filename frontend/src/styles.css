@@ -80,6 +80,31 @@ textarea, input, select {
   color: var(--text); border-radius: 8px; padding: 9px 10px; font-size: 13px;
 }
 textarea:focus, input:focus, select:focus { outline: 2px solid #bfd4ff; border-color: var(--accent); }
+.chain-select { position: relative; width: 100%; min-width: 0; }
+.chain-select-compact { width: 140px; flex: 0 0 140px; }
+.chain-select-trigger {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) 16px; align-items: center; gap: 9px;
+  width: 100%; height: 38px; padding: 7px 9px; border-color: var(--border); background: #fff; text-align: left;
+}
+.chain-select-trigger:hover:not(:disabled), .chain-select-trigger[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
+.chain-select-trigger:focus-visible { outline: 2px solid #bfd4ff; border-color: var(--accent); }
+.chain-select-trigger span { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.chain-select-trigger i { color: #64748b; font-size: 14px; font-style: normal; text-align: center; transition: transform .15s; }
+.chain-select-trigger[aria-expanded="true"] i { transform: rotate(180deg); }
+.chain-logo { display: block; width: 22px; height: 22px; flex: 0 0 auto; }
+.chain-select-menu {
+  position: absolute; z-index: 70; top: calc(100% + 6px); left: 0; width: max(100%, 210px); overflow: hidden;
+  padding: 6px; border: 1px solid #d8dee8; border-radius: 10px; background: #fff;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, .16);
+}
+.chain-select-menu button {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: 10px;
+  width: 100%; min-height: 40px; padding: 7px 9px; border: 0; border-radius: 7px; background: transparent; text-align: left;
+}
+.chain-select-menu button:hover, .chain-select-menu button:focus-visible { outline: 0; background: #f1f5f9; color: var(--text); }
+.chain-select-menu button.selected { background: #eff6ff; color: #1d4ed8; }
+.chain-select-menu button span { font-weight: 600; }
+.chain-select-menu button b { color: var(--accent); text-align: center; }
 textarea { font-family: ui-monospace, Consolas, monospace; }
 input[type="radio"], input[type="checkbox"] { width: auto; accent-color: var(--accent); }
 .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--panel2);
@@ -470,6 +495,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   h1 { font-size: 20px; overflow-wrap: anywhere; }
   .sub { margin-bottom: 14px; }
   .card { padding: 14px; overflow-x: auto; }
+  .chain-select-card { overflow: visible; }
+  .chain-select-compact { width: 100%; flex-basis: 100%; }
+  .chain-select-menu { width: 100%; }
   .page > .row, .card > .row { flex-wrap: wrap; }
 	.explorer-actions > .row { width: 100%; min-width: 0; flex-wrap: wrap; }
   .row.between { align-items: flex-start; }

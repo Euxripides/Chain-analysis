@@ -31,6 +31,32 @@ test('download page renders its primary workflow without browser errors', async 
   expect(errors).toEqual([])
 })
 
+test('chain selectors show branded icons and update both workflows', async ({ page }, testInfo) => {
+  const errors = captureBrowserErrors(page)
+  for (const [route, screenshotName] of [['/', 'download'], ['/data-explorer', 'explorer']] as const) {
+    await page.goto(route)
+    const selector = page.getByRole('combobox', { name: '链' })
+    await expect(selector).toContainText('BSC')
+    await expect(selector.locator('.chain-logo')).toBeVisible()
+    await selector.click()
+    const options = page.getByRole('listbox', { name: '链选项' }).getByRole('option')
+    await expect(options).toHaveCount(7)
+    await expect(options.locator('.chain-logo')).toHaveCount(7)
+    await screenshot(page, `${testInfo.project.name}-${screenshotName}-chain-icons.png`)
+    if (route === '/') {
+      await page.keyboard.press('End')
+      await expect(page.getByRole('option', { name: 'OPTIMISM' })).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(selector).toContainText('OPTIMISM')
+    } else {
+      await page.getByRole('option', { name: 'POLYGON' }).click()
+      await expect(selector).toContainText('POLYGON')
+    }
+    await expect(selector.locator('.chain-logo')).toBeVisible()
+  }
+  expect(errors).toEqual([])
+})
+
 test('data explorer loads live catalog rows and opens address details', async ({ page }, testInfo) => {
   const errors = captureBrowserErrors(page)
   await page.goto('/data-explorer')

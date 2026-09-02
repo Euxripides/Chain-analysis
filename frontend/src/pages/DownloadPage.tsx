@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import ChainSelect from '../components/ChainSelect'
 import { CHAINS, DATASETS } from '../types'
 import { datasetLabel } from '../utils/field-labels'
 
@@ -199,11 +200,9 @@ export default function DownloadPage() {
       </div>
 
       <div className="row gap">
-        <div className="card flex-1">
+        <div className="card flex-1 chain-select-card">
           <div className="card-title">链</div>
-          <select value={chain} onChange={(e) => setChain(e.target.value)}>
-            {CHAINS.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-          </select>
+          <ChainSelect value={chain} onChange={setChain} />
         </div>
         <div className="card flex-2">
           <div className="card-title">范围</div>

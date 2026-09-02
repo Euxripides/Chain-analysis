@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { CHAINS, DATASETS } from '../types'
+import ChainSelect from '../components/ChainSelect'
+import { DATASETS } from '../types'
 
 interface CatalogRow {
   chain: string
@@ -143,11 +144,9 @@ export default function DataExplorerPage() {
       <h1>数据浏览</h1>
       <p className="sub">浏览、筛选、更新和导出本地链上数据</p>
 
-      <div className="card">
+      <div className="card chain-select-card">
         <div className="row gap wrap">
-          <select style={{ maxWidth: 140 }} value={chain} onChange={(e) => setChain(e.target.value)}>
-            {CHAINS.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-          </select>
+          <ChainSelect className="chain-select-compact" value={chain} onChange={setChain} />
           <input className="flex-2 mono" placeholder="搜索地址 / 前缀 / 后缀 / 名称 / 案件 / 标签" value={q} onChange={(e) => setQ(e.target.value)} />
           <select style={{ maxWidth: 150 }} value={caseIds[0] ?? ''} onChange={(e) => setCaseIds(e.target.value ? [e.target.value] : [])}>
             <option value="">全部案件</option>
