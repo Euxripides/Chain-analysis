@@ -29,7 +29,7 @@ function compactAddress(address: string) {
 
 function TokenIcon({ token }: { token: TokenFilterOption }) {
   const [failed, setFailed] = useState(false)
-  if (token.logo && !failed) return <img className="token-filter-icon" src={token.logo} alt="" onError={() => setFailed(true)} />
+  if (token.logo && !failed) return <img className="token-filter-icon" src={token.logo} alt="" width={22} height={22} onError={() => setFailed(true)} />
   const hue = [...(token.symbol || token.address)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360
   return <span className="token-filter-icon token-filter-fallback" style={{ background: `hsl(${hue} 68% 47%)` }}>{(token.symbol || '?').slice(0, 1)}</span>
 }

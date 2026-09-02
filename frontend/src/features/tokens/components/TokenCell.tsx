@@ -4,7 +4,7 @@ import type { TokenView } from '../types'
 
 export function TokenLogo({ token }: { token: TokenView }) {
   const [failed, setFailed] = useState(false)
-  if (token.logo && !failed) return <img className="flow-token-icon" src={token.logo} alt="" onError={() => setFailed(true)} />
+  if (token.logo && !failed) return <img className="flow-token-icon" src={token.logo} alt="" width={32} height={32} onError={() => setFailed(true)} />
   const seed = token.contract || token.symbol
   const hue = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360
   return <span className="flow-token-icon flow-token-fallback" style={{ background: `hsl(${hue} 58% 46%)` }}>{cleanTokenSymbol(token.symbol).slice(0, 1)}</span>

@@ -44,8 +44,16 @@ test('download page rejects missing and reversed block ranges', async ({ page })
   await expect(page.getByRole('button', { name: '创建下载任务' })).toBeEnabled()
 })
 
-test('chain selectors show branded icons and update both workflows', async ({ page }, testInfo) => {
+test('chain selectors show branded icons and every selectable chain has a live RPC route', async ({ page, request }, testInfo) => {
   const errors = captureBrowserErrors(page)
+  for (const chain of ['bsc', 'eth', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']) {
+    const response = await request.get(`/api/v1/chains/${chain}/head`)
+    expect(response.status(), `${chain} RPC head endpoint`).toBe(200)
+    const payload = await response.json()
+    expect(payload.chain).toBe(chain)
+    expect(payload.head_block).toBeGreaterThan(0)
+    expect(payload.safe_block).toBeLessThan(payload.head_block)
+  }
   for (const [route, screenshotName] of [['/', 'download'], ['/data-explorer', 'explorer']] as const) {
     await page.goto(route)
     const selector = page.getByRole('combobox', { name: '链' })
@@ -85,7 +93,11 @@ test('data explorer loads live catalog rows and opens address details', async ({
   await expect(page.locator('table.detail-table thead th:not(.select-cell)')).toHaveText([
     '交易哈希', '方法', '时间', '发送方', '接收方', '数量', '代币',
   ])
+  await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
   await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 })
+  const hasTokenRow = await page.locator('tbody .token-cell').count()
+  const hasEmptyState = await page.getByText('没有符合筛选条件的数据').count()
+  expect(hasTokenRow + hasEmptyState, '代币转账必须渲染真实数据行或明确空状态').toBeGreaterThan(0)
   await screenshot(page, `${testInfo.project.name}-address-detail.png`)
   expect(errors).toEqual([])
 })
@@ -139,10 +151,10 @@ test('wide address detail uses the workspace and shows a compact normalized amou
   await page.setViewportSize({ width: 1920, height: 1080 })
   await page.goto('/data-explorer/bsc/0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
   await expect(page.getByRole('heading', { name: /0x9b77e3b4/ })).toBeVisible()
-  const amount = page.locator('.flow-amount b').first()
-  await expect(amount).toHaveText(/-16,175\.000597/)
-  await expect(page.getByLabel('数据筛选与导出')).toBeVisible()
   await expect(page.getByText('统计中…')).toHaveCount(0, { timeout: 20_000 })
+  const amount = page.locator('.flow-amount b').first()
+  await expect(amount).toHaveText(/-16,175\.000597/, { timeout: 20_000 })
+  await expect(page.getByLabel('数据筛选与导出')).toBeVisible()
   await expect(page.getByLabel('导出范围')).toHaveValue('filtered')
   const amountAlignment = await page.getByRole('columnheader', { name: '数量' }).evaluate((element) => getComputedStyle(element).textAlign)
   const amountValueAlignment = await page.locator('.flow-amount').first().evaluate((element) => getComputedStyle(element).textAlign)

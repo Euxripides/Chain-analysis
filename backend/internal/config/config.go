@@ -336,7 +336,7 @@ func Load() *Config {
 		RPC: RPCConfig{
 			Enabled:         envBool("RPC_ENABLED", true),
 			DefaultProvider: env("RPC_DEFAULT_PROVIDER", "ankr"),
-			Chains:          splitList(env("RPC_CHAINS", "bsc")),
+			Chains:          splitList(env("RPC_CHAINS", "bsc,eth,polygon,arbitrum,base,avalanche,optimism")),
 			ChainRegistry:   os.Getenv("CHAIN_REGISTRY_JSON"),
 
 			AnkrEnabled:          envBool("ANKR_RPC_ENABLED", true),

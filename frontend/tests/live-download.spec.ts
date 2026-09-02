@@ -25,7 +25,7 @@ async function screenshot(page: Page, name: string) {
   await page.screenshot({ path: path.join(screenshotDir, name), fullPage: true })
 }
 
-test('live address download completes and persists a real provider row', async ({ page, request }, testInfo) => {
+test('live address download completes or reuses coverage and exposes the verified provider row', async ({ page, request }, testInfo) => {
   test.skip(!live || testInfo.project.name !== 'desktop', '仅在显式启用时创建真实下载任务')
   const errors = captureBrowserErrors(page)
   await page.goto('/')
@@ -43,6 +43,7 @@ test('live address download completes and persists a real provider row', async (
   expect(preview.ok()).toBe(true)
   const previewBody = await preview.json()
   expect(previewBody.items).toHaveLength(1)
+  const alreadyCovered = previewBody.items[0].ratio === 1
   await expect(page.getByText('本地 Coverage 预览')).toBeVisible()
 
   const ensureResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/datasets/ensure'))
@@ -65,10 +66,16 @@ test('live address download completes and persists a real provider row', async (
   expect(detail.job.from_block).toBe(testBlock)
   expect(detail.job.to_block).toBe(testBlock)
   expect(detail.job.datasets).toEqual(['token_transfers'])
-  expect(detail.progress.api_requests).toBeGreaterThan(0)
-  expect(detail.progress.downloaded_rows).toBe(1)
-  expect(detail.datasets[0].stats.downloaded_rows).toBe(1)
-  expect(detail.shards.every((shard: any) => shard.status === 'COMPLETED' && shard.raw_object)).toBe(true)
+  if (alreadyCovered) {
+    expect(detail.progress.api_requests).toBe(0)
+    expect(detail.progress.downloaded_rows).toBe(0)
+    expect(detail.shards).toHaveLength(0)
+  } else {
+    expect(detail.progress.api_requests).toBeGreaterThan(0)
+    expect(detail.progress.downloaded_rows).toBe(1)
+    expect(detail.datasets[0].stats.downloaded_rows).toBe(1)
+    expect(detail.shards.every((shard: any) => shard.status === 'COMPLETED' && shard.raw_object)).toBe(true)
+  }
 
   const rowsResponse = await request.get(`/api/v1/datasets/token_transfers?chain=bsc&subject=${address}&limit=300&offset=0`)
   const rows = (await rowsResponse.json()).rows
