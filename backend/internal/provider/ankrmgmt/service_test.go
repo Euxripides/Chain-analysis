@@ -45,4 +45,12 @@ func TestParseBalanceStructuredAndText(t *testing.T) {
 	if text.RemainingCredits == nil || *text.RemainingCredits != 93000000 || text.BalanceUSD == nil || *text.BalanceUSD != 9.26 {
 		t.Fatalf("text balance not parsed: %+v", text)
 	}
+
+	actualMCP := parseBalance(map[string]any{"text": "Balance:\n  USD: 19.260840000000000000\n  ANKR: 4914.507626595359233309\n  credit USD: 192608400\n  credit ANKR: 0\n  voucher: 0\n  level: GREEN"})
+	if actualMCP.RemainingCredits == nil || *actualMCP.RemainingCredits != 192608400 {
+		t.Fatalf("MCP credit USD not parsed: %+v", actualMCP)
+	}
+	if actualMCP.BalanceUSD == nil || *actualMCP.BalanceUSD != 19.26084 || actualMCP.Plan != "GREEN" {
+		t.Fatalf("MCP balance fields not parsed: %+v", actualMCP)
+	}
 }

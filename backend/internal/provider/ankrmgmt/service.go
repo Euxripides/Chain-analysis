@@ -321,8 +321,23 @@ func parseBalance(raw map[string]any) balanceSnapshot {
 	out.Plan = findString(raw, "plan", "level", "tier")
 	out.AccountAddress = findString(raw, "accountaddress", "account", "address")
 	if text, _ := raw["text"].(string); text != "" {
+		// Management MCP 当前文本格式把账户余额和 API credits 分行返回：
+		// "USD: 19.26" 是美元余额，"credit USD: 192608400" 才是 API credits。
+		// 必须先按完整行标签解析，不能把相邻的 ANKR 数量误认成 credits。
+		if n := labeledNumber(text, `credit[ \t]+USD`); n != nil {
+			out.RemainingCredits = n
+		}
+		if n := labeledNumber(text, `USD`); n != nil {
+			out.BalanceUSD = n
+		}
+		if out.Plan == "" {
+			re := regexp.MustCompile(`(?im)^[ \t]*level[ \t]*:[ \t]*([^\r\n]+)`)
+			if match := re.FindStringSubmatch(text); len(match) == 2 {
+				out.Plan = strings.TrimSpace(match[1])
+			}
+		}
 		if out.RemainingCredits == nil {
-			re := regexp.MustCompile(`(?i)([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:API\s*)?credits?`)
+			re := regexp.MustCompile(`(?i)([0-9][0-9,]*(?:\.[0-9]+)?)[ \t]*(?:API[ \t]*)?credits?`)
 			if m := re.FindStringSubmatch(text); len(m) == 2 {
 				if n, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", ""), 64); err == nil {
 					out.RemainingCredits = &n
@@ -339,6 +354,19 @@ func parseBalance(raw map[string]any) balanceSnapshot {
 		}
 	}
 	return out
+}
+
+func labeledNumber(text, labelPattern string) *float64 {
+	re := regexp.MustCompile(`(?im)^[ \t]*` + labelPattern + `[ \t]*:[ \t]*([0-9][0-9,]*(?:\.[0-9]+)?)`)
+	match := re.FindStringSubmatch(text)
+	if len(match) != 2 {
+		return nil
+	}
+	number, err := strconv.ParseFloat(strings.ReplaceAll(match[1], ",", ""), 64)
+	if err != nil {
+		return nil
+	}
+	return &number
 }
 
 func normalizedKey(v string) string {
