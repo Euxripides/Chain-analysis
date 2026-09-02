@@ -651,7 +651,9 @@ func (sc *Scheduler) recompute(ctx context.Context, sh model.Shard) {
 						if sh.Status == model.ShardFailedFinal {
 							status = "failed"
 						}
-						_ = sc.meta.SyncFromCoverage(ctx, job.Chain, subj.Subject, status)
+						if err := sc.meta.SyncFromCoverage(ctx, job.Chain, subj.Subject, status); err != nil {
+							sc.log.Error("workspace address stats sync failed", "job_id", sh.JobID, "subject", subj.Subject, "err", err)
+						}
 					}
 				}
 			}

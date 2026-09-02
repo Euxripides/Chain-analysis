@@ -100,14 +100,14 @@ func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec
 }
 
 // wantInterval 返回请求区间（时间区间以未知块表示，比率按已覆盖计算）。
-func (s *Service) wantInterval(job *model.DownloadJob) store.BlockInterval {
-	if job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock > *job.FromBlock {
-		return store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}
+func (s *Service) wantInterval(job *model.DownloadJob) (store.BlockInterval, bool) {
+	if job.RangeType == "block" && job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock >= *job.FromBlock {
+		return store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}, true
 	}
-	return store.BlockInterval{From: 0, To: 0}
+	return store.BlockInterval{From: 0, To: 0}, false
 }
 
-func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset string, want store.BlockInterval) (SubjectDatasetCoverage, error) {
+func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset string, want store.BlockInterval, bounded bool) (SubjectDatasetCoverage, error) {
 	rows, err := s.Store.ListCoverage(ctx, chain, subject, dataset)
 	if err != nil {
 		return SubjectDatasetCoverage{}, err
@@ -122,7 +122,7 @@ func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset strin
 		}
 		return item, nil
 	}
-	if want.From == 0 && want.To == 0 {
+	if !bounded {
 		return item, nil // 全量/live：总量未知
 	}
 	var intervals []store.BlockInterval
@@ -158,12 +158,12 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 	tmpJob.RangeType = rng.RangeType
 	tmpJob.FromBlock = rng.FromBlock
 	tmpJob.ToBlock = rng.ToBlock
-	want := s.wantInterval(tmpJob)
+	want, bounded := s.wantInterval(tmpJob)
 	var sum float64
 	var n int
 	for _, subj := range subjects {
 		for _, d := range datasets {
-			item, err := s.coverageFor(ctx, chain, subj, d, want)
+			item, err := s.coverageFor(ctx, chain, subj, d, want, bounded)
 			if err != nil {
 				return nil, err
 			}
@@ -271,10 +271,10 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	})
 	jobID := job.ID
 	return &EnsureResponse{
-		Status:    "planned",
+		Status:     "planned",
 		DatasetRef: "ds_" + job.ID[:8],
-		JobID:     &jobID,
-		Coverage:  preview.OverallRatio,
+		JobID:      &jobID,
+		Coverage:   preview.OverallRatio,
 	}, nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
+	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
@@ -60,7 +61,7 @@ func (sc *Scheduler) SetMethodResolver(resolver *method.FastResolver, registry *
 	sc.methodRegistry = registry
 }
 
-func NewScheduler(cfg *config.Config, st *store.Store, prov provider.Provider, raw *rawstore.Store,
+func NewScheduler(cfg *config.Config, st *store.Store, ch *clickhouse.Conn, prov provider.Provider, raw *rawstore.Store,
 	writer *ingest.Writer, bus *events.Bus, log *slog.Logger) *Scheduler {
 	host, _ := os.Hostname()
 	return &Scheduler{
@@ -69,7 +70,7 @@ func NewScheduler(cfg *config.Config, st *store.Store, prov provider.Provider, r
 		workerID:    fmt.Sprintf("%s-%d", host, os.Getpid()),
 		concurrency: cfg.Ankr.InitialConcurrency,
 		pagePolicy:  ankr.NewPagePolicy(cfg),
-		meta:        addressmeta.New(st),
+		meta:        addressmeta.New(st, ch),
 	}
 }
 

@@ -33,7 +33,7 @@ func main() {
 	}
 
 	writer := ingest.NewWriter(infra.CH, 5000)
-	sched := download.NewScheduler(cfg, infra.Store, infra.Prov, infra.Raw, writer, infra.Bus, log)
+	sched := download.NewScheduler(cfg, infra.Store, infra.CH, infra.Prov, infra.Raw, writer, infra.Bus, log)
 
 	// 先同步占用指标端口。端口冲突通常意味着重复 Worker，必须在参与调度前失败退出。
 	metricsAddr := ":" + strconv.Itoa(cfg.WorkerMetricsPort)

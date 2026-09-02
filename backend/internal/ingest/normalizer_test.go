@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestRawBlockNumberUsesDeclaredNumberBase(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want uint64
+	}{
+		{name: "decimal block height", raw: `{"blockHeight":"115394565"}`, want: 115394565},
+		{name: "hex block number", raw: `{"blockNumber":"0x6e0c805"}`, want: 115394565},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := RawBlockNumber(json.RawMessage(tt.raw))
+			if !ok || got != tt.want {
+				t.Fatalf("RawBlockNumber() = %d, %v; want %d, true", got, ok, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeTransaction(t *testing.T) {
 	raw := json.RawMessage(`{"blockHeight":"123","blockHash":"0xabc","transactionHash":"0xdef","timestamp":1700000000123,"fromAddress":"0xaaa","toAddress":"0xbbb","value":"0x10","nonce":"1","gasLimit":"21000","gasUsed":"21000","gasPrice":"0x5","type":"0x0","status":"0x1","input":"0x","methodId":"0x12345678"}`)
 	r, err := NormalizeTransaction(raw, "bsc", "ankr")

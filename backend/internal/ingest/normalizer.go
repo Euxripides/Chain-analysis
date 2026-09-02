@@ -64,10 +64,12 @@ func RawBlockNumber(raw json.RawMessage) (uint64, bool) {
 	}
 	for _, k := range []string{"blockNumber", "blockHeight"} {
 		if s := asString(m, k); s != "" {
-			if n, err := strconv.ParseUint(strings.TrimPrefix(s, "0x"), 16, 64); err == nil {
-				return n, true
+			base := 10
+			if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+				base = 16
+				s = s[2:]
 			}
-			if n, err := strconv.ParseUint(s, 10, 64); err == nil {
+			if n, err := strconv.ParseUint(s, base, 64); err == nil {
 				return n, true
 			}
 		}

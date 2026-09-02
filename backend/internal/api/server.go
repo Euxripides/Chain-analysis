@@ -86,7 +86,7 @@ func New(deps Deps) *Server {
 		}
 		return 0, nil // live：head 未知，区间由 Provider 语义决定
 	})
-	s.meta = addressmeta.New(deps.Store)
+	s.meta = addressmeta.New(deps.Store, deps.CH)
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
 	if deps.AddressType != nil {

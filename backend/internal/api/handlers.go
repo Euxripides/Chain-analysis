@@ -288,7 +288,17 @@ func (s *Server) snapshotFor(ctx context.Context, jobID string) map[string]any {
 	if total > 0 {
 		progress = float32(done) / float32(total)
 	}
-	elapsed := time.Since(job.CreatedAt).Seconds()
+	end := time.Now()
+	switch job.Status {
+	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled:
+		if !job.UpdatedAt.IsZero() {
+			end = job.UpdatedAt
+		}
+	}
+	elapsed := end.Sub(job.CreatedAt).Seconds()
+	if elapsed < 0 {
+		elapsed = 0
+	}
 	var eta float64
 	if progress > 0 && progress < 1 && elapsed > 0 {
 		eta = elapsed * (1 - float64(progress)) / float64(progress)

@@ -168,7 +168,7 @@ export default function DataExplorerPage() {
         <div className="row gap">
           <button disabled={selected.size === 0 || busy} onClick={doUpdatePreview}>更新</button>
 			<button disabled={selected.size === 0} onClick={() => nav('/data-explorer/combined?chain=' + chain + '&addresses=' + selectedAddrs.join(','))}>查看组合数据</button>
-			<button disabled={selected.size === 0} onClick={doExport}>导出 CSV</button>
+			<button disabled={selected.size === 0} onClick={doExport}>导出 CSV 压缩包</button>
 			<label className="export-option" title="导出交易的完整解码参数，会显著增加文件体积（§47）">
 				<input type="checkbox" checked={includeDecodedInput} onChange={(e) => setIncludeDecodedInput(e.target.checked)} />
 				Include Decoded Input

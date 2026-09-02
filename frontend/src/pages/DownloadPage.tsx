@@ -50,6 +50,20 @@ export default function DownloadPage() {
     return { valid, dup, bad }
   }, [addressText])
 
+  const rangeValid = useMemo(() => {
+    if (rangeType === 'full') return true
+    if (rangeType === 'block') {
+      if (fromBlock.trim() === '' || toBlock.trim() === '') return false
+      const from = Number(fromBlock)
+      const to = Number(toBlock)
+      return Number.isSafeInteger(from) && Number.isSafeInteger(to) && from >= 0 && to >= from
+    }
+    if (!fromTime || !toTime) return false
+    const from = new Date(fromTime).getTime()
+    const to = new Date(toTime).getTime()
+    return Number.isFinite(from) && Number.isFinite(to) && to >= from
+  }, [fromBlock, fromTime, rangeType, toBlock, toTime])
+
   function handleFile(file: File) {
     const reader = new FileReader()
     reader.onload = async () => {
@@ -213,8 +227,8 @@ export default function DownloadPage() {
           </div>
           {rangeType === 'block' && (
             <div className="row gap" style={{ marginTop: 8 }}>
-              <input placeholder="from block" value={fromBlock} onChange={(e) => setFromBlock(e.target.value)} />
-              <input placeholder="to block" value={toBlock} onChange={(e) => setToBlock(e.target.value)} />
+              <input type="number" min="0" step="1" placeholder="起始区块" value={fromBlock} onChange={(e) => setFromBlock(e.target.value)} />
+              <input type="number" min="0" step="1" placeholder="结束区块" value={toBlock} onChange={(e) => setToBlock(e.target.value)} />
             </div>
           )}
           {rangeType === 'time' && (
@@ -282,8 +296,8 @@ export default function DownloadPage() {
       {error && <div className="error">{error}</div>}
 
       <div className="row gap" style={{ marginTop: 16 }}>
-        <button onClick={doPreview} disabled={busy || addresses.valid.length === 0}>Coverage 预览</button>
-        <button className="primary" onClick={doCreate} disabled={busy || addresses.valid.length === 0 || datasets.length === 0}>
+        <button onClick={doPreview} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}>Coverage 预览</button>
+        <button className="primary" onClick={doCreate} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}>
           创建下载任务
         </button>
       </div>

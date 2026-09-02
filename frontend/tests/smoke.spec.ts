@@ -31,6 +31,19 @@ test('download page renders its primary workflow without browser errors', async 
   expect(errors).toEqual([])
 })
 
+test('download page rejects missing and reversed block ranges', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('textarea').fill('0x9b77e3b4f85c7cea7da451f454895edbd10b80dd')
+  await page.getByLabel('区块范围').check()
+  await expect(page.getByRole('button', { name: 'Coverage 预览' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '创建下载任务' })).toBeDisabled()
+  await page.getByPlaceholder('起始区块').fill('20')
+  await page.getByPlaceholder('结束区块').fill('10')
+  await expect(page.getByRole('button', { name: '创建下载任务' })).toBeDisabled()
+  await page.getByPlaceholder('结束区块').fill('20')
+  await expect(page.getByRole('button', { name: '创建下载任务' })).toBeEnabled()
+})
+
 test('chain selectors show branded icons and update both workflows', async ({ page }, testInfo) => {
   const errors = captureBrowserErrors(page)
   for (const [route, screenshotName] of [['/', 'download'], ['/data-explorer', 'explorer']] as const) {

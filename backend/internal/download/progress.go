@@ -10,22 +10,22 @@ import (
 
 // ProgressSnapshot SSE/前端实时进度载荷（1s 聚合推送）。
 type ProgressSnapshot struct {
-	JobID            string  `json:"job_id"`
-	Status           string  `json:"status"`
-	Progress         float32 `json:"progress"`
-	DownloadedRows   int64   `json:"downloaded_rows"`
-	DownloadedBytes  int64   `json:"downloaded_bytes"`
-	APIRequests      int64   `json:"api_requests"`
-	APICostUSD       float64 `json:"api_cost_usd"`
-	RowsPerSec       float64 `json:"rows_per_sec"`
-	WriteRowsPerSec  float64 `json:"write_rows_per_sec"`
-	BytesPerSec      float64 `json:"bytes_per_sec"`
-	ReqPerSec        float64 `json:"req_per_sec"`
-	CoverageHitRatio float64 `json:"coverage_hit_ratio"`
-	ElapsedSeconds   float64 `json:"elapsed_seconds"`
-	ETASeconds       float64 `json:"eta_seconds"`
-	TotalShards      int64   `json:"total_shards"`
-	DoneShards       int64   `json:"done_shards"`
+	JobID            string    `json:"job_id"`
+	Status           string    `json:"status"`
+	Progress         float32   `json:"progress"`
+	DownloadedRows   int64     `json:"downloaded_rows"`
+	DownloadedBytes  int64     `json:"downloaded_bytes"`
+	APIRequests      int64     `json:"api_requests"`
+	APICostUSD       float64   `json:"api_cost_usd"`
+	RowsPerSec       float64   `json:"rows_per_sec"`
+	WriteRowsPerSec  float64   `json:"write_rows_per_sec"`
+	BytesPerSec      float64   `json:"bytes_per_sec"`
+	ReqPerSec        float64   `json:"req_per_sec"`
+	CoverageHitRatio float64   `json:"coverage_hit_ratio"`
+	ElapsedSeconds   float64   `json:"elapsed_seconds"`
+	ETASeconds       float64   `json:"eta_seconds"`
+	TotalShards      int64     `json:"total_shards"`
+	DoneShards       int64     `json:"done_shards"`
 	TS               time.Time `json:"ts"`
 }
 
@@ -131,7 +131,11 @@ func (sc *Scheduler) buildSnapshot(ctx context.Context, job *model.DownloadJob) 
 	}
 	// 行级进度（已有数据按区间进度，行数只是展示）
 	if created := job.CreatedAt; !created.IsZero() {
-		snap.ElapsedSeconds = time.Since(created).Seconds()
+		end := time.Now()
+		if isTerminalJob(job.Status) && !job.UpdatedAt.IsZero() {
+			end = job.UpdatedAt
+		}
+		snap.ElapsedSeconds = maxF(end.Sub(created).Seconds(), 0)
 	}
 
 	now := time.Now()
@@ -157,6 +161,14 @@ func (sc *Scheduler) buildSnapshot(ctx context.Context, job *model.DownloadJob) 
 		snap.ETASeconds = 0
 	}
 	return snap, nil
+}
+
+func isTerminalJob(status string) bool {
+	switch status {
+	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled:
+		return true
+	}
+	return false
 }
 
 func (sc *Scheduler) buildFinalSnapshot(ctx context.Context, job *model.DownloadJob) ProgressSnapshot {

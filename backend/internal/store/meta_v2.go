@@ -180,11 +180,16 @@ func (s *Store) SyncWorkspaceAddressStats(ctx context.Context, wsID, orgID, chai
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	return s.UpdateWorkspaceAddressStats(ctx, wsID, chain, addr, syncStatus, tx, tt, nft, logs, firstBlock, lastBlock)
+}
+
+func (s *Store) UpdateWorkspaceAddressStats(ctx context.Context, wsID, chain, addr, syncStatus string, tx, tt, nft, logs, firstBlock, lastBlock int64) error {
 	var firstBlockArg any
 	if firstBlock != 0 {
 		firstBlockArg = firstBlock
 	}
-	_, err = s.Pool.Exec(ctx, "UPDATE workspace_addresses SET "+
+	total := tx + tt + nft + logs
+	_, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET "+
 		"transaction_count=$4, token_transfer_count=$5, nft_transfer_count=$6, log_count=$7, total_activity_count=$8, "+
 		"first_data_block=COALESCE($9, first_data_block), last_data_block=GREATEST(COALESCE(last_data_block,0), $10), "+
 		"last_sync_at=now(), sync_status=$11, updated_at=now() "+

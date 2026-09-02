@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	probeWindow         = 500_000
-	minShardWindow      = 50_000
-	maxShardWindow      = 2_000_000
-	targetRowsPerShard  = 200_000
-	defaultMaxRetries   = 5
+	probeWindow        = 500_000
+	minShardWindow     = 50_000
+	maxShardWindow     = 2_000_000
+	targetRowsPerShard = 200_000
+	defaultMaxRetries  = 5
 )
 
 type gap struct {
@@ -41,13 +41,10 @@ func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
 	if err != nil {
 		return err
 	}
-	want := store.BlockInterval{}
-	if job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock > *job.FromBlock {
-		want = store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}
-	}
+	want, bounded := requestedBlockInterval(job)
 	for _, subj := range subjects {
 		for _, ds := range job.Datasets {
-			if err := p.planDataset(ctx, job, subj, ds, want); err != nil {
+			if err := p.planDataset(ctx, job, subj, ds, want, bounded); err != nil {
 				p.log.Error("plan dataset failed", "job_id", job.ID, "subject", subj.Subject, "dataset", ds, "err", err)
 				_ = p.store.SetJobStatusError(ctx, job.ID, model.JobFailed, err.Error())
 				return err
@@ -60,7 +57,7 @@ func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
 	return p.store.SetJobStatus(ctx, job.ID, model.JobQueued)
 }
 
-func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj model.Subject, ds string, want store.BlockInterval) error {
+func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj model.Subject, ds string, want store.BlockInterval, bounded bool) error {
 	items, err := p.store.CreateDatasetsForSubject(ctx, job.ID, subj.ID, []string{ds})
 	if err != nil {
 		return err
@@ -82,7 +79,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	}
 
 	var gaps []store.BlockInterval
-	if want.From == 0 && want.To == 0 {
+	if !bounded {
 		// 全量(live)/时间范围：单 Shard，区间由 Provider 语义决定
 		sh := p.baseShard(job, subj, item)
 		return p.store.CreateShards(ctx, []model.Shard{sh})
@@ -202,10 +199,7 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 	if err != nil {
 		return err
 	}
-	want := store.BlockInterval{}
-	if job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock > *job.FromBlock {
-		want = store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}
-	}
+	want, bounded := requestedBlockInterval(job)
 	for _, subj := range subjects {
 		items, err := p.store.DatasetsBySubject(ctx, subj.ID)
 		if err != nil {
@@ -215,12 +209,21 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 			if item.Status == model.ItemSkipped || item.Status == model.ItemCompleted {
 				continue
 			}
-			if err := p.planDataset(ctx, job, subj, item.Dataset, want); err != nil {
+			if err := p.planDataset(ctx, job, subj, item.Dataset, want, bounded); err != nil {
 				return err
 			}
 		}
 	}
 	return p.store.SetJobStatus(ctx, job.ID, model.JobRunning)
+}
+
+// requestedBlockInterval keeps a one-block request (including block 0) distinct
+// from the 0..0 sentinel used by full/time downloads.
+func requestedBlockInterval(job *model.DownloadJob) (store.BlockInterval, bool) {
+	if job.RangeType == "block" && job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock >= *job.FromBlock {
+		return store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}, true
+	}
+	return store.BlockInterval{}, false
 }
 
 func min64(a, b int64) int64 {
