@@ -303,6 +303,13 @@ func (s *Service) Activity(ctx context.Context, chain, address string, limit, of
 
 // RowsForExport 导出查询：按链过滤，可选按地址过滤，流式上限。
 func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject string, limit, offset int) ([]map[string]any, error) {
+	return s.RowsForExportRange(ctx, dataset, chain, subject, limit, offset, nil, nil, nil, nil)
+}
+
+// RowsForExportRange keeps job exports scoped to both their subjects and the
+// requested block/time range. Nil bounds preserve the legacy address export.
+func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subject string, limit, offset int,
+	fromBlock, toBlock *int64, fromTime, toTime *time.Time) ([]map[string]any, error) {
 	switch dataset {
 	case "transactions", "token_transfers", "nft_transfers", "logs", "balances":
 	default:
@@ -323,6 +330,22 @@ func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject str
 	} else {
 		where = "chain=?"
 		args = []any{chain}
+	}
+	if fromBlock != nil {
+		where += " AND block_number>=?"
+		args = append(args, *fromBlock)
+	}
+	if toBlock != nil {
+		where += " AND block_number<=?"
+		args = append(args, *toBlock)
+	}
+	if fromTime != nil {
+		where += " AND timestamp>=?"
+		args = append(args, *fromTime)
+	}
+	if toTime != nil {
+		where += " AND timestamp<=?"
+		args = append(args, *toTime)
 	}
 	args = append(args, limit, offset)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/minio/minio-go/v7"
@@ -169,20 +170,56 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 // runExport 流式导出：查询 → 流式写入 MinIO（不把结果集全部装入内存）。
 func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chain string) {
 	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "RUNNING", "", 0, "")
+	var job *model.DownloadJob
+	if exp.JobID != nil {
+		var err error
+		job, err = s.deps.Store.GetJob(ctx, *exp.JobID)
+		if err != nil {
+			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+			return
+		}
+		chain = job.Chain
+	}
 	if chain == "" {
 		chain = "bsc"
-		if exp.JobID != nil {
-			if job, err := s.deps.Store.GetJob(ctx, *exp.JobID); err == nil {
-				chain = job.Chain
-			}
+	}
+	subjects := []string{subject}
+	if subject == "" && exp.JobID != nil {
+		jobSubjects, err := s.deps.Store.SubjectsByJob(ctx, *exp.JobID)
+		if err != nil {
+			_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
+			return
+		}
+		subjects = subjects[:0]
+		for _, item := range jobSubjects {
+			subjects = append(subjects, strings.ToLower(item.Subject))
 		}
 	}
-	rows, err := s.query.RowsForExport(ctx, exp.Dataset, chain, subject, maxExportRows, 0)
+	var fromBlock, toBlock *int64
+	var fromTime, toTime *time.Time
+	if job != nil {
+		fromBlock, toBlock, fromTime, toTime = exportJobBounds(exp.Dataset, job)
+	}
+	rows := make([]map[string]any, 0)
+	var err error
+	for _, itemSubject := range subjects {
+		remaining := maxExportRows - len(rows)
+		if remaining <= 0 {
+			break
+		}
+		var batch []map[string]any
+		batch, err = s.query.RowsForExportRange(ctx, exp.Dataset, chain, itemSubject, remaining, 0, fromBlock, toBlock, fromTime, toTime)
+		if err != nil {
+			break
+		}
+		rows = append(rows, batch...)
+	}
 	if err != nil {
 		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", 0, err.Error())
 		observability.ExportJobs.WithLabelValues(exp.Format, "FAILED").Inc()
 		return
 	}
+	rows = dedupeExportRows(exp.Dataset, rows)
 	s.attachTokenMetadata(ctx, chain, rows)
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, exp.Format)
 	var size int64
@@ -203,6 +240,48 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
 		"dataset": exp.Dataset, "format": exp.Format, "rows": len(rows), "bytes": size,
 	})
+}
+
+func dedupeExportRows(dataset string, rows []map[string]any) []map[string]any {
+	seen := make(map[string]struct{}, len(rows))
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		var key string
+		switch dataset {
+		case "transactions":
+			key = fmt.Sprint(row["tx_hash"])
+		case "token_transfers":
+			key = fmt.Sprintf("%v|%v|%v", row["tx_hash"], row["log_index"], row["token_address"])
+		case "nft_transfers":
+			key = fmt.Sprintf("%v|%v|%v|%v", row["tx_hash"], row["log_index"], row["contract_address"], row["token_id"])
+		case "logs":
+			key = fmt.Sprintf("%v|%v", row["tx_hash"], row["log_index"])
+		case "balances":
+			key = fmt.Sprintf("%v|%v|%v", row["address"], row["token_address"], row["token_symbol"])
+		}
+		if key == "" {
+			key = fmt.Sprint(row)
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, row)
+	}
+	return out
+}
+
+func exportJobBounds(dataset string, job *model.DownloadJob) (*int64, *int64, *time.Time, *time.Time) {
+	// Balances are current snapshots. The provider and storage layer use a
+	// synthetic snapshot_block=0, so historical job bounds must not filter
+	// the rows produced for the job's addresses.
+	if dataset == "balances" || job == nil {
+		return nil, nil, nil, nil
+	}
+	if job.RangeType == "time" {
+		return nil, nil, job.FromTimestamp, job.ToTimestamp
+	}
+	return job.FromBlock, job.ToBlock, nil, nil
 }
 
 func writeCSV(ctx context.Context, s *Server, key string, rows []map[string]any) (int64, error) {

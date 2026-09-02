@@ -28,6 +28,23 @@ func TestMergeBlockRanges(t *testing.T) {
 	}
 }
 
+func TestMergeCoveragePartsKeepsPerRangeMetrics(t *testing.T) {
+	parts := []coveragePart{
+		{BlockInterval: BlockInterval{From: 20, To: 30}, Rows: 4, Bytes: 40, HeadBlock: 30},
+		{BlockInterval: BlockInterval{From: 1, To: 10}, Rows: 2, Bytes: 20, HeadBlock: 10},
+		{BlockInterval: BlockInterval{From: 11, To: 19}, Rows: 3, Bytes: 30, HeadBlock: 19},
+		{BlockInterval: BlockInterval{From: 100, To: 110}, Rows: 5, Bytes: 50, HeadBlock: 110},
+	}
+	got := mergeCoverageParts(parts)
+	want := []coveragePart{
+		{BlockInterval: BlockInterval{From: 1, To: 30}, Rows: 9, Bytes: 90, HeadBlock: 30},
+		{BlockInterval: BlockInterval{From: 100, To: 110}, Rows: 5, Bytes: 50, HeadBlock: 110},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mergeCoverageParts() = %+v, want %+v", got, want)
+	}
+}
+
 func BenchmarkMergeBlockRanges(b *testing.B) {
 	in := make([]BlockInterval, 1000)
 	for i := range in {

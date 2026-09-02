@@ -206,12 +206,26 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 			return err
 		}
 		for _, item := range items {
+			// PAUSED can be observed after every shard left LEASED/RUNNING but
+			// before the last runner has refreshed its parent dataset. Recompute
+			// from durable shards before deciding whether another shard is needed.
+			if err := p.store.RecomputeDataset(ctx, item.ID); err != nil {
+				return err
+			}
+			fresh, err := p.store.GetDataset(ctx, item.ID)
+			if err != nil {
+				return err
+			}
+			item = *fresh
 			if item.Status == model.ItemSkipped || item.Status == model.ItemCompleted {
 				continue
 			}
 			if err := p.planDataset(ctx, job, subj, item.Dataset, want, bounded); err != nil {
 				return err
 			}
+		}
+		if err := p.store.RecomputeSubject(ctx, subj.ID); err != nil {
+			return err
 		}
 	}
 	return p.store.SetJobStatus(ctx, job.ID, model.JobRunning)

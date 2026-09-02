@@ -124,3 +124,15 @@ func (s *Store) UpdateExport(ctx context.Context, id, status, objectRef string, 
 		id, status, objectRef, rows, errMsg)
 	return err
 }
+
+// FailInterruptedExports closes export tasks which belonged to a previous API
+// process. Export workers are in-process goroutines, so neither PENDING nor
+// RUNNING can make progress after that process exits.
+func (s *Store) FailInterruptedExports(ctx context.Context) (int64, error) {
+	tag, err := s.Pool.Exec(ctx, "UPDATE exports SET status='FAILED', error=$1, updated_at=now() WHERE status IN ('PENDING','RUNNING')",
+		"服务已重启，导出任务中断，请重新导出")
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

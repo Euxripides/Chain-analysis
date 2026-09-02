@@ -15,6 +15,37 @@ type BlockInterval struct {
 	To   int64
 }
 
+type coveragePart struct {
+	BlockInterval
+	Rows      int64
+	Bytes     int64
+	HeadBlock int64
+}
+
+func mergeCoverageParts(parts []coveragePart) []coveragePart {
+	if len(parts) == 0 {
+		return nil
+	}
+	sort.Slice(parts, func(i, j int) bool { return parts[i].From < parts[j].From })
+	out := []coveragePart{parts[0]}
+	for _, part := range parts[1:] {
+		last := &out[len(out)-1]
+		if part.From <= last.To+1 {
+			if part.To > last.To {
+				last.To = part.To
+			}
+			last.Rows += part.Rows
+			last.Bytes += part.Bytes
+			if part.HeadBlock > last.HeadBlock {
+				last.HeadBlock = part.HeadBlock
+			}
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
 // MergeBlockRanges 合并重叠与相邻区间。
 func MergeBlockRanges(intervals []BlockInterval) []BlockInterval {
 	if len(intervals) == 0 {
@@ -73,36 +104,36 @@ func (s *Store) AddCoverage(ctx context.Context, chain, subject, dataset, provid
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", lockKey); err != nil {
 		return err
 	}
-	rowsq, err := tx.Query(ctx, "SELECT from_block, to_block FROM dataset_coverage "+
+	rowsq, err := tx.Query(ctx, "SELECT from_block, to_block, row_count, raw_bytes, head_block FROM dataset_coverage "+
 		"WHERE chain=$1 AND subject=$2 AND dataset=$3 AND status='COMPLETE' ORDER BY from_block",
 		chain, subject, dataset)
 	if err != nil {
 		return err
 	}
-	var intervals []BlockInterval
+	var parts []coveragePart
 	for rowsq.Next() {
-		var f, t int64
-		if err := rowsq.Scan(&f, &t); err != nil {
+		var part coveragePart
+		if err := rowsq.Scan(&part.From, &part.To, &part.Rows, &part.Bytes, &part.HeadBlock); err != nil {
 			rowsq.Close()
 			return err
 		}
-		intervals = append(intervals, BlockInterval{f, t})
+		parts = append(parts, part)
 	}
 	rowsq.Close()
 	if err := rowsq.Err(); err != nil {
 		return err
 	}
-	intervals = append(intervals, BlockInterval{from, to})
-	merged := MergeBlockRanges(intervals)
+	parts = append(parts, coveragePart{BlockInterval: BlockInterval{From: from, To: to}, Rows: rows, Bytes: bytes, HeadBlock: head})
+	merged := mergeCoverageParts(parts)
 	if _, err := tx.Exec(ctx, "DELETE FROM dataset_coverage WHERE chain=$1 AND subject=$2 AND dataset=$3 AND status='COMPLETE'",
 		chain, subject, dataset); err != nil {
 		return err
 	}
-	for _, iv := range merged {
+	for _, part := range merged {
 		if _, err := tx.Exec(ctx, "INSERT INTO dataset_coverage "+
 			"(id, chain, subject_type, subject, dataset, from_block, to_block, status, provider, row_count, raw_bytes, head_block) "+
 			"VALUES ($1,$2,'address',$3,$4,$5,$6,'COMPLETE',$7,$8,$9,$10)",
-			uuid.NewString(), chain, subject, dataset, iv.From, iv.To, provider, rows, bytes, head); err != nil {
+			uuid.NewString(), chain, subject, dataset, part.From, part.To, provider, part.Rows, part.Bytes, part.HeadBlock); err != nil {
 			return err
 		}
 	}

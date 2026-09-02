@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/parquet-go/parquet-go"
 )
 
@@ -53,5 +54,30 @@ func TestMatchedExportAddresses(t *testing.T) {
 		if len(got) != 1 || got[0] != subject {
 			t.Fatalf("matchedExportAddresses(%v) = %v", row, got)
 		}
+	}
+}
+
+func TestDedupeExportRowsByDatasetGrain(t *testing.T) {
+	rows := []map[string]any{
+		{"tx_hash": "0x1", "log_index": uint32(7), "token_address": "0xa", "from_address": "0x1"},
+		{"tx_hash": "0x1", "log_index": uint32(7), "token_address": "0xa", "from_address": "0x2"},
+		{"tx_hash": "0x1", "log_index": uint32(8), "token_address": "0xa", "from_address": "0x1"},
+	}
+	got := dedupeExportRows("token_transfers", rows)
+	if len(got) != 2 {
+		t.Fatalf("dedupeExportRows() returned %d rows, want 2", len(got))
+	}
+}
+
+func TestExportJobBoundsIgnoreCurrentBalanceSnapshot(t *testing.T) {
+	from, to := int64(100), int64(200)
+	job := &model.DownloadJob{RangeType: "block", FromBlock: &from, ToBlock: &to}
+	gotFrom, gotTo, gotFromTime, gotToTime := exportJobBounds("balances", job)
+	if gotFrom != nil || gotTo != nil || gotFromTime != nil || gotToTime != nil {
+		t.Fatal("balance export must not apply historical job bounds to current snapshots")
+	}
+	gotFrom, gotTo, _, _ = exportJobBounds("logs", job)
+	if gotFrom == nil || *gotFrom != from || gotTo == nil || *gotTo != to {
+		t.Fatalf("log export bounds = %v..%v, want %d..%d", gotFrom, gotTo, from, to)
 	}
 }

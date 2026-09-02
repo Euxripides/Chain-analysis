@@ -7,6 +7,7 @@ import path from 'node:path'
 const live = process.env.E2E_LIVE_DOWNLOAD === '1'
 const screenshotDir = process.env.E2E_SCREENSHOT_DIR
 const artifactDir = process.env.E2E_ARTIFACT_DIR
+const exportJobId = process.env.E2E_JOB_EXPORT_ID
 const address = '0x9b77e3b4f85c7cea7da451f454895edbd10b80dd'
 const testBlock = 98000718
 const testTxHash = '0x2684ba9654b372f99b349ddf839afda409f4a306182d5fdde2e97af2e4d41617'
@@ -117,5 +118,44 @@ test('live data explorer export downloads a valid ZIP with manifest and CSV rows
   expect(csv).toContain(address)
   expect(csv).toContain(testTxHash)
   await screenshot(page, 'live-data-explorer-export.png')
+  expect(errors).toEqual([])
+})
+
+test('live job detail downloads scoped CSV and XLSX files', async ({ page }, testInfo) => {
+  test.skip(!live || testInfo.project.name !== 'desktop' || !exportJobId, '需要显式指定真实已完成任务 E2E_JOB_EXPORT_ID')
+  test.setTimeout(120_000)
+  const errors = captureBrowserErrors(page)
+  await page.goto(`/jobs/${exportJobId}`)
+  await expect(page.getByText('已完成', { exact: true }).first()).toBeVisible({ timeout: 15_000 })
+
+  for (const format of ['CSV', 'XLSX'] as const) {
+    const exportResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/exports'))
+    const downloadPromise = page.waitForEvent('download', { timeout: 45_000 })
+    await page.getByRole('button', { name: `${format} · logs` }).click()
+    const exportResponse = await exportResponsePromise
+    expect(exportResponse.status()).toBe(202)
+    const createdExport = await exportResponse.json()
+    console.log(`LIVE_JOB_${format}_EXPORT_ID=${createdExport.id}`)
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^export-[a-f0-9]{8}\\.${format.toLowerCase()}$`))
+    let filePath = await download.path()
+    expect(filePath).not.toBeNull()
+    if (artifactDir) {
+      mkdirSync(artifactDir, { recursive: true })
+      filePath = path.join(artifactDir, `job-${createdExport.id}.${format.toLowerCase()}`)
+      await download.saveAs(filePath)
+      console.log(`LIVE_JOB_${format}_EXPORT_FILE=${filePath}`)
+    }
+    const bytes = await readFile(filePath!)
+    if (format === 'CSV') {
+      const text = bytes.toString('utf8')
+      expect(text.split(/\r?\n/).filter(Boolean)).toHaveLength(29)
+      expect(text).toContain('115394565')
+    } else {
+      expect(bytes.subarray(0, 2).toString()).toBe('PK')
+    }
+  }
+
+  await screenshot(page, 'live-job-detail-exports.png')
   expect(errors).toEqual([])
 })

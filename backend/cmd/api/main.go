@@ -26,6 +26,11 @@ func main() {
 		log.Error("bootstrap failed", "err", err)
 		os.Exit(1)
 	}
+	if recovered, err := infra.Store.FailInterruptedExports(ctx); err != nil {
+		log.Error("failed to reconcile interrupted exports", "err", err)
+	} else if recovered > 0 {
+		log.Warn("reconciled interrupted exports", "count", recovered)
+	}
 
 	// V1.3：API 侧只需要 Method 索引刷新（异步补全与回填在 Worker 进程执行）
 	runCtx, cancelBackground := context.WithCancel(ctx)
