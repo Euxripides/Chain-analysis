@@ -104,11 +104,17 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	bytesTotal := sh.DownloadedBytes
 	var minBlock, maxBlock int64
 
-	// 范围完备性守卫（BUG-002）：降序翻页期间记录“是否见过 Provider 行 / 是否已越过下边界”，
-	// 循环结束后校验目标区间确实被覆盖；Ankr 对这三类 Dataset 忽略块边界，
-	// 客户端过滤时若所有行都比区间更新且翻页即止，说明历史未达 → 明确失败，禁止 0 行静默收敛。
+	// 范围完备性守卫（BUG-002 修复）：Ankr 对 transactions/token_transfers/nft_transfers
+	// 忽略块边界，实测按“最旧 → 最新”升序枚举整段索引（证据：DL-20260831-0019 十三页分片
+	// 自 109,998,276 连续升序至 119,154,061）。因此翻页停止条件必须与方向无关：
+	// 记录“是否见过 Provider 行 / 下边界以下行 / 上边界以上行 / 最后一页是否饱和”，
+	// 循环在（下界行 && 上界行均已出现 = 区间已被完整横跨）或 Provider 耗尽时停止；
+	// 若耗尽时既未横跨区间、又无区间内行、且末页仍饱和（可能被 Provider 截断），
+	// 则明确失败，禁止 0 行静默收敛。
 	var guardSawAnyRow bool
 	var guardBelowSeen bool
+	var guardAboveSeen bool
+	var guardFinalPageSaturated bool
 
 	// V1.1：PagePolicy（§16-§18）——Resume 继承上次自适应状态
 	pkey := sc.pagePolicy.Key(chain, sh.Dataset, "address", address)
@@ -139,7 +145,9 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		}
 		// 实测 Ankr 行为差异：
 		// - transactions / token_transfers / nft_transfers：带 toBlock 返回空、
-		//   fromBlock 被忽略；只能从最新往前翻页，边界由客户端过滤 + 降序停止实现。
+		//   fromBlock 被忽略；Ankr 实测按最旧 → 最新升序枚举整段索引
+		//   （证据见 DL-20260831-0019 分片：109,998,276 → 119,154,061 连续升序），
+		//   边界由客户端过滤，停止条件见循环底部（双侧横跨或 Provider 耗尽）。
 		// - logs：尊重 from/toBlock。
 		switch sh.Dataset {
 		case "transactions", "token_transfers", "nft_transfers":
@@ -204,13 +212,22 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 
 		// 客户端侧范围过滤（transactions/nft 不信任 Provider 边界）
 		preFilterCount := len(res.Rows)
-		filtered, passedLower := sc.filterRows(sh, res.Rows)
+		filtered, belowSeenPage, aboveSeenPage := sc.filterRows(sh, res.Rows)
 		res.Rows = filtered
 		if preFilterCount > 0 {
 			guardSawAnyRow = true
 		}
-		if passedLower {
+		if belowSeenPage {
 			guardBelowSeen = true
+		}
+		if aboveSeenPage {
+			guardAboveSeen = true
+		}
+		// 该页返回行数达到请求页大小 → Provider 可能还有更多历史（枚举可能被截断）
+		if preFilterCount >= currentSize {
+			guardFinalPageSaturated = true
+		} else {
+			guardFinalPageSaturated = false
 		}
 
 		if len(res.Rows) > 0 {
@@ -254,19 +271,19 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		if !res.HasMore {
 			break
 		}
-		if passedLower {
-			// 降序遍历已越过下边界：剩余页全部更旧，停止
+		if guardBelowSeen && guardAboveSeen {
+			// 已同时见过下边界以下与上边界以上的数据行：无论 Provider 升序或降序
+			// 翻页，目标区间都已被完整横跨，后续页必在区间之外，停止。
 			break
 		}
 		pageToken = res.NextPageToken
 	}
 
-	// BUG-002 守卫：翻页结束后校验目标范围确实被覆盖。
-	// Ankr 对 transactions/token_transfers/nft_transfers 忽略块边界且可能截断活跃地址的历史；
-	// 若 Provider 返回过数据行、区间内 0 行、且从未越过下边界（所有行都比区间更新），
-	// 说明翻页在到达目标区间前即结束 —— 此时绝不静默以 0 行 COMPLETED 收敛，
-	// 而是明确失败（可重试次数耗尽后 FAILED，错误进入 shard.error 与审计）。
-	if verdict := rangeCoverageVerdict(sh, guardSawAnyRow, guardBelowSeen, rowsTotal); verdict != nil {
+	// BUG-002 守卫：翻页结束后校验目标范围确实被覆盖（详见 rangeCoverageVerdict）。
+	// Provider 返回过数据行、区间内 0 行、从未横跨区间（下/上边界行只出现一侧）、
+	// 且最后一页仍饱和 —— 说明枚举可能被 Provider 在到达区间前截断，
+	// 此时绝不静默以 0 行 COMPLETED 收敛，而是明确失败（错误进入 shard.error 与审计）。
+	if verdict := rangeCoverageVerdict(sh, guardSawAnyRow, guardBelowSeen, guardAboveSeen, rowsTotal, guardFinalPageSaturated); verdict != nil {
 		log.Error("range not reached by provider pagination; refusing silent 0-row completion",
 			"shard_id", sh.ID, "dataset", sh.Dataset,
 			"from_block", sh.FromBlock, "to_block", sh.ToBlock,
@@ -395,14 +412,18 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, r
 
 // rangeCoverageVerdict 范围完备性守卫（BUG-002）。
 // 适用：transactions / token_transfers / nft_transfers 的带界请求（Ankr 实测忽略块边界，
-// 由客户端降序过滤）。翻页结束后：
-//   - 区间内已写入行（rows>0）或已越过下边界（belowSeen）：区间确实被遍历 → 允许完成；
-//   - Provider 从未返回任何行：地址无历史（或整页为空）→ 允许 0 行完成（如实记录，不提交 Coverage）；
-//   - 其余情况（返回过行、全部比区间更新、翻页即止）：目标区间未被覆盖 → 返回明确错误，
-//     调用方将 Shard 置为失败，绝不静默以 0 行 COMPLETED 收敛。
+// 由客户端过滤；枚举为最旧 → 最新升序，停止条件与方向无关）。
+// 翻页结束后允许 0 行收敛的情形：
+//   - 区间内已写入行（rows>0）：区间内确有数据，已入库；
+//   - 已横跨区间（belowSeen && aboveSeen）：区间被完整遍历，0 行 = 区间内确无数据；
+//   - Provider 从未返回任何行（!sawAnyRow）：地址在该 Provider 无任何历史；
+//   - 最后一页未饱和（枚举已到 Provider 索引自然尽头）且未横跨：
+//     目标区间整体位于 Provider 索引之外（比地址最早数据更早或比最晚数据更新），
+//     0 行结果如实记录（不提交 Coverage）。
 //
-// 该守卫只作用于循环退出路径；fetch 错误 / 拆分 / 暂停 / 取消各有独立处理。
-func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen bool, inRangeRows int64) error {
+// 唯一失败情形：见过行、0 区间内行、从未横跨、最后一页仍饱和 —— 枚举可能在到达区间前
+// 被 Provider 截断，绝不静默以 0 行 COMPLETED 收敛，返回明确错误由调用方置 Shard 失败。
+func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen, aboveSeen bool, inRangeRows int64, finalPageSaturated bool) error {
 	bounded := sh.FromBlock > 0 || sh.ToBlock > 0 || sh.FromTimestamp != nil || sh.ToTimestamp != nil
 	if !bounded {
 		return nil // 全量扫描：Coverage 只记录实际观测跨度，不夸大
@@ -412,7 +433,7 @@ func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen bool, inRangeRows
 	default:
 		return nil // logs 尊重块边界、balances 为快照，不适用
 	}
-	if inRangeRows > 0 || belowSeen || !sawAnyRow {
+	if inRangeRows > 0 || (belowSeen && aboveSeen) || !sawAnyRow || !finalPageSaturated {
 		return nil
 	}
 	var span string
@@ -426,35 +447,40 @@ func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen bool, inRangeRows
 	default:
 		span = "requested timestamp range"
 	}
-	return fmt.Errorf("[range_not_reached] provider pagination ended before covering requested %s (returned rows are all newer than the range; provider history may be truncated for this address) — refusing silent 0-row completion", span)
+	return fmt.Errorf("[range_not_reached] provider pagination ended before covering requested %s (rows seen only on one side of the range and the final page was still full; provider history may be truncated) — refusing silent 0-row completion", span)
 }
 
-// filterRows 客户端侧范围过滤：块区间 + 时间区间；passedLower 表示本页已越过下边界。
-func (sc *Scheduler) filterRows(sh model.Shard, rows []json.RawMessage) ([]json.RawMessage, bool) {
-	passedLower := false
+// filterRows 客户端侧范围过滤：块区间 + 时间区间。
+// 返回 (保留行, belowSeen, aboveSeen)：belowSeen=本页出现下边界以下行；
+// aboveSeen=本页出现上边界以上行。过滤与翻页方向无关，停止判定在调用方完成。
+func (sc *Scheduler) filterRows(sh model.Shard, rows []json.RawMessage) ([]json.RawMessage, bool, bool) {
+	belowSeen := false
+	aboveSeen := false
 	out := rows[:0]
 	for _, raw := range rows {
 		if bn, ok := ingest.RawBlockNumber(raw); ok && bn > 0 {
 			if sh.FromBlock > 0 && int64(bn) < sh.FromBlock {
-				passedLower = true
+				belowSeen = true
 				continue
 			}
 			if sh.ToBlock > 0 && int64(bn) > sh.ToBlock {
+				aboveSeen = true
 				continue
 			}
 		}
 		if ts, ok := ingest.RawTimestamp(raw); ok {
 			if sh.FromTimestamp != nil && ts.Before(*sh.FromTimestamp) {
-				passedLower = true
+				belowSeen = true
 				continue
 			}
 			if sh.ToTimestamp != nil && ts.After(*sh.ToTimestamp) {
+				aboveSeen = true
 				continue
 			}
 		}
 		out = append(out, raw)
 	}
-	return out, passedLower
+	return out, belowSeen, aboveSeen
 }
 
 // ingestRows 标准化并批量写入 ClickHouse（返回观察到的最小/最大块）。
