@@ -76,13 +76,19 @@ test.describe('V1.6 API 控制中心', () => {
     await expect(page.getByRole('heading', { name: '请求审计' })).toBeVisible()
   })
 
-  test('管控页展示人工覆盖表单且不内嵌风险提示', async ({ page }) => {
+  test('管控页展示人工覆盖表单且不内嵌风险提示', async ({ page }, testInfo) => {
     const tab = page.getByRole('button', { name: '管控', exact: true })
     await tab.scrollIntoViewIfNeeded(); await tab.click()
     await expect(page.getByText('人工覆盖会暂时绕过自动决策。')).toHaveCount(0)
     await expect(page.locator('.ac-warning')).toHaveCount(0)
     await expect(page.getByText('有效期（分钟）')).toBeVisible()
     await expect(page.getByText('全局停机开关')).toBeVisible()
+    const mode = page.getByLabel('覆盖模式')
+    await expect(mode.locator('option')).toHaveText(['观察', '降级', '隔离', '保护', '恢复中', '正常'])
+    await mode.selectOption('NORMAL')
+    await expect(mode).toHaveValue('NORMAL')
+    await expect(mode).toHaveText(/正常/)
+    await screenshot(page, `${testInfo.project.name}-chinese-control-mode.png`)
     await expect(page.getByRole('button', { name: '确认人工覆盖' })).toBeDisabled()
     await expect(page.getByRole('button', { name: '启用停机' })).toBeDisabled()
   })
