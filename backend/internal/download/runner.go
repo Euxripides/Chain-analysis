@@ -104,6 +104,12 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	bytesTotal := sh.DownloadedBytes
 	var minBlock, maxBlock int64
 
+	// 范围完备性守卫（BUG-002）：降序翻页期间记录“是否见过 Provider 行 / 是否已越过下边界”，
+	// 循环结束后校验目标区间确实被覆盖；Ankr 对这三类 Dataset 忽略块边界，
+	// 客户端过滤时若所有行都比区间更新且翻页即止，说明历史未达 → 明确失败，禁止 0 行静默收敛。
+	var guardSawAnyRow bool
+	var guardBelowSeen bool
+
 	// V1.1：PagePolicy（§16-§18）——Resume 继承上次自适应状态
 	pkey := sc.pagePolicy.Key(chain, sh.Dataset, "address", address)
 	if sh.PageSize > 0 {
@@ -197,8 +203,15 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		}
 
 		// 客户端侧范围过滤（transactions/nft 不信任 Provider 边界）
+		preFilterCount := len(res.Rows)
 		filtered, passedLower := sc.filterRows(sh, res.Rows)
 		res.Rows = filtered
+		if preFilterCount > 0 {
+			guardSawAnyRow = true
+		}
+		if passedLower {
+			guardBelowSeen = true
+		}
 
 		if len(res.Rows) > 0 {
 			now := time.Now()
@@ -246,6 +259,27 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			break
 		}
 		pageToken = res.NextPageToken
+	}
+
+	// BUG-002 守卫：翻页结束后校验目标范围确实被覆盖。
+	// Ankr 对 transactions/token_transfers/nft_transfers 忽略块边界且可能截断活跃地址的历史；
+	// 若 Provider 返回过数据行、区间内 0 行、且从未越过下边界（所有行都比区间更新），
+	// 说明翻页在到达目标区间前即结束 —— 此时绝不静默以 0 行 COMPLETED 收敛，
+	// 而是明确失败（可重试次数耗尽后 FAILED，错误进入 shard.error 与审计）。
+	if verdict := rangeCoverageVerdict(sh, guardSawAnyRow, guardBelowSeen, rowsTotal); verdict != nil {
+		log.Error("range not reached by provider pagination; refusing silent 0-row completion",
+			"shard_id", sh.ID, "dataset", sh.Dataset,
+			"from_block", sh.FromBlock, "to_block", sh.ToBlock,
+			"pages", pageNo, "rows", rowsTotal, "err", verdict)
+		newStatus, ferr := sc.store.FailShard(ctx, sh.ID, verdict.Error(), true)
+		if ferr != nil {
+			log.Error("fail shard failed", "err", ferr)
+		}
+		sc.publish("events.shards."+sh.JobID, map[string]any{
+			"type": "shard_status", "shard_id": sh.ID, "status": newStatus,
+			"error": verdict.Error(), "ts": time.Now(),
+		})
+		return
 	}
 
 	manifest.FinishedAt = time.Now()
@@ -357,6 +391,42 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, r
 		}
 	}
 	return provider.FetchResult{}, lastDec, lastErr
+}
+
+// rangeCoverageVerdict 范围完备性守卫（BUG-002）。
+// 适用：transactions / token_transfers / nft_transfers 的带界请求（Ankr 实测忽略块边界，
+// 由客户端降序过滤）。翻页结束后：
+//   - 区间内已写入行（rows>0）或已越过下边界（belowSeen）：区间确实被遍历 → 允许完成；
+//   - Provider 从未返回任何行：地址无历史（或整页为空）→ 允许 0 行完成（如实记录，不提交 Coverage）；
+//   - 其余情况（返回过行、全部比区间更新、翻页即止）：目标区间未被覆盖 → 返回明确错误，
+//     调用方将 Shard 置为失败，绝不静默以 0 行 COMPLETED 收敛。
+//
+// 该守卫只作用于循环退出路径；fetch 错误 / 拆分 / 暂停 / 取消各有独立处理。
+func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen bool, inRangeRows int64) error {
+	bounded := sh.FromBlock > 0 || sh.ToBlock > 0 || sh.FromTimestamp != nil || sh.ToTimestamp != nil
+	if !bounded {
+		return nil // 全量扫描：Coverage 只记录实际观测跨度，不夸大
+	}
+	switch sh.Dataset {
+	case "transactions", "token_transfers", "nft_transfers":
+	default:
+		return nil // logs 尊重块边界、balances 为快照，不适用
+	}
+	if inRangeRows > 0 || belowSeen || !sawAnyRow {
+		return nil
+	}
+	var span string
+	switch {
+	case sh.FromBlock > 0 && sh.ToBlock > 0:
+		span = fmt.Sprintf("blocks %d..%d", sh.FromBlock, sh.ToBlock)
+	case sh.FromBlock > 0:
+		span = fmt.Sprintf("blocks >= %d", sh.FromBlock)
+	case sh.ToBlock > 0:
+		span = fmt.Sprintf("blocks <= %d", sh.ToBlock)
+	default:
+		span = "requested timestamp range"
+	}
+	return fmt.Errorf("[range_not_reached] provider pagination ended before covering requested %s (returned rows are all newer than the range; provider history may be truncated for this address) — refusing silent 0-row completion", span)
 }
 
 // filterRows 客户端侧范围过滤：块区间 + 时间区间；passedLower 表示本页已越过下边界。
