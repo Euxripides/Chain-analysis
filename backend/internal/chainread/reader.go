@@ -266,37 +266,51 @@ func parseTransaction(raw json.RawMessage) (*Transaction, error) {
 		return nil, err
 	}
 	tx.Hash = hash
-	if from, err := chain.ParseAddress(item.From); err == nil {
-		tx.From = from
+	from, err := chain.ParseAddress(item.From)
+	if err != nil {
+		return nil, fmt.Errorf("invalid transaction from: %w", err)
 	}
+	tx.From = from
 	if item.To != nil && *item.To != "" {
-		if to, err := chain.ParseAddress(*item.To); err == nil {
-			tx.To = &to
+		to, err := chain.ParseAddress(*item.To)
+		if err != nil {
+			return nil, fmt.Errorf("invalid transaction to: %w", err)
 		}
+		tx.To = &to
 	}
 	value, err := chain.HexToBigInt(item.Value)
 	if err != nil {
-		value = big.NewInt(0)
+		return nil, fmt.Errorf("invalid transaction value: %w", err)
 	}
 	tx.Value = value
 	tx.ValueRaw = value.String()
-	tx.Nonce, _ = chain.HexToUint64(item.Nonce)
-	tx.Gas, _ = chain.HexToUint64(item.Gas)
+	if tx.Nonce, err = chain.HexToUint64(item.Nonce); err != nil {
+		return nil, fmt.Errorf("invalid transaction nonce: %w", err)
+	}
+	if tx.Gas, err = chain.HexToUint64(item.Gas); err != nil {
+		return nil, fmt.Errorf("invalid transaction gas: %w", err)
+	}
 	if gasPrice, err := chain.HexToBigInt(item.GasPrice); err == nil {
 		tx.GasPrice = gasPrice.String()
+	} else if item.GasPrice != "" {
+		return nil, fmt.Errorf("invalid transaction gas price: %w", err)
 	}
 	if item.BlockNumber != nil {
-		if n, err := chain.HexToUint64(*item.BlockNumber); err == nil {
-			tx.BlockNumber = &n
+		n, err := chain.HexToUint64(*item.BlockNumber)
+		if err != nil {
+			return nil, fmt.Errorf("invalid transaction block number: %w", err)
 		}
+		tx.BlockNumber = &n
 	}
 	if item.BlockHash != nil {
 		tx.BlockHash = strings.ToLower(*item.BlockHash)
 	}
 	if item.TransactionIndex != nil {
-		if n, err := chain.HexToUint64(*item.TransactionIndex); err == nil {
-			tx.TransactionIndex = &n
+		n, err := chain.HexToUint64(*item.TransactionIndex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid transaction index: %w", err)
 		}
+		tx.TransactionIndex = &n
 	}
 	return tx, nil
 }
@@ -331,9 +345,11 @@ func parseReceipt(raw json.RawMessage) (*Receipt, error) {
 		return nil, fmt.Errorf("invalid receipt payload")
 	}
 	receipt := &Receipt{}
-	if hash, err := chain.ParseHash(item.TxHash); err == nil {
-		receipt.TxHash = hash
+	hash, err := chain.ParseHash(item.TxHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid receipt transaction hash: %w", err)
 	}
+	receipt.TxHash = hash
 	if item.Status != nil {
 		if status, err := chain.HexToUint64(*item.Status); err == nil {
 			receipt.Status = &status
@@ -347,9 +363,11 @@ func parseReceipt(raw json.RawMessage) (*Receipt, error) {
 	if item.BlockHash != nil {
 		receipt.BlockHash = strings.ToLower(*item.BlockHash)
 	}
-	if from, err := chain.ParseAddress(item.From); err == nil {
-		receipt.From = from
+	from, err := chain.ParseAddress(item.From)
+	if err != nil {
+		return nil, fmt.Errorf("invalid receipt from: %w", err)
 	}
+	receipt.From = from
 	if item.To != nil && *item.To != "" {
 		if to, err := chain.ParseAddress(*item.To); err == nil {
 			receipt.To = &to
@@ -360,30 +378,45 @@ func parseReceipt(raw json.RawMessage) (*Receipt, error) {
 			receipt.ContractAddress = &created
 		}
 	}
-	receipt.GasUsed, _ = chain.HexToUint64(item.GasUsed)
-	receipt.CumulativeGasUsed, _ = chain.HexToUint64(item.CumulativeGasUsed)
+	if receipt.GasUsed, err = chain.HexToUint64(item.GasUsed); err != nil {
+		return nil, fmt.Errorf("invalid receipt gas used: %w", err)
+	}
+	if receipt.CumulativeGasUsed, err = chain.HexToUint64(item.CumulativeGasUsed); err != nil {
+		return nil, fmt.Errorf("invalid receipt cumulative gas used: %w", err)
+	}
 	if price, err := chain.HexToBigInt(item.EffectiveGasPrice); err == nil {
 		receipt.EffectiveGasPrice = price.String()
 	}
-	receipt.Logs = convertLogs(item.Logs)
+	receipt.Logs, err = convertLogs(item.Logs)
+	if err != nil {
+		return nil, err
+	}
 	return receipt, nil
 }
 
-func convertLogs(items []rawLog) []Log {
+func convertLogs(items []rawLog) ([]Log, error) {
 	out := make([]Log, 0, len(items))
-	for _, item := range items {
+	for i, item := range items {
 		log := Log{Topics: item.Topics, Data: item.Data, Removed: item.Removed}
-		if address, err := chain.ParseAddress(item.Address); err == nil {
-			log.Address = address
+		address, err := chain.ParseAddress(item.Address)
+		if err != nil {
+			return nil, fmt.Errorf("invalid log[%d] address: %w", i, err)
 		}
-		if hash, err := chain.ParseHash(item.TxHash); err == nil {
-			log.TxHash = hash
+		log.Address = address
+		hash, err := chain.ParseHash(item.TxHash)
+		if err != nil {
+			return nil, fmt.Errorf("invalid log[%d] transaction hash: %w", i, err)
 		}
-		log.BlockNumber, _ = chain.HexToUint64(item.BlockNumber)
-		log.LogIndex, _ = chain.HexToUint64(item.LogIndex)
+		log.TxHash = hash
+		if log.BlockNumber, err = chain.HexToUint64(item.BlockNumber); err != nil {
+			return nil, fmt.Errorf("invalid log[%d] block number: %w", i, err)
+		}
+		if log.LogIndex, err = chain.HexToUint64(item.LogIndex); err != nil {
+			return nil, fmt.Errorf("invalid log[%d] index: %w", i, err)
+		}
 		out = append(out, log)
 	}
-	return out
+	return out, nil
 }
 
 type rawBlock struct {
@@ -402,13 +435,35 @@ func parseBlock(raw json.RawMessage) (*Block, error) {
 		return nil, fmt.Errorf("invalid block payload")
 	}
 	block := &Block{Hash: strings.ToLower(item.Hash), ParentHash: strings.ToLower(item.ParentHash)}
-	block.Number, _ = chain.HexToUint64(item.Number)
-	block.Timestamp, _ = chain.HexToUint64(item.Timestamp)
-	block.GasUsed, _ = chain.HexToUint64(item.GasUsed)
-	block.GasLimit, _ = chain.HexToUint64(item.GasLimit)
+	var err error
+	if block.Number, err = chain.HexToUint64(item.Number); err != nil {
+		return nil, fmt.Errorf("invalid block number: %w", err)
+	}
+	if block.Timestamp, err = chain.HexToUint64(item.Timestamp); err != nil {
+		return nil, fmt.Errorf("invalid block timestamp: %w", err)
+	}
+	if block.GasUsed, err = chain.HexToUint64(item.GasUsed); err != nil {
+		return nil, fmt.Errorf("invalid block gas used: %w", err)
+	}
+	if block.GasLimit, err = chain.HexToUint64(item.GasLimit); err != nil {
+		return nil, fmt.Errorf("invalid block gas limit: %w", err)
+	}
 	var hashes []string
 	if err := json.Unmarshal(item.Transactions, &hashes); err == nil {
 		block.Transactions = hashes
+	} else {
+		var objects []struct {
+			Hash string `json:"hash"`
+		}
+		if err := json.Unmarshal(item.Transactions, &objects); err != nil {
+			return nil, fmt.Errorf("invalid block transactions payload")
+		}
+		for i, tx := range objects {
+			if _, err := chain.ParseHash(tx.Hash); err != nil {
+				return nil, fmt.Errorf("invalid block transaction[%d] hash: %w", i, err)
+			}
+			block.Transactions = append(block.Transactions, strings.ToLower(tx.Hash))
+		}
 	}
 	return block, nil
 }

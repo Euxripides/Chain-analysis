@@ -153,5 +153,10 @@ func (l *LogsService) fetchRange(ctx context.Context, chainSlug string, filter L
 		return nil, &rpc.Error{Class: rpc.ClassInvalidResponse, Chain: chainSlug,
 			Method: "eth_getLogs", Message: "logs payload is not an array"}
 	}
-	return convertLogs(items), nil
+	logs, err := convertLogs(items)
+	if err != nil {
+		return nil, &rpc.Error{Class: rpc.ClassInvalidResponse, Chain: chainSlug,
+			Method: "eth_getLogs", Message: err.Error()}
+	}
+	return logs, nil
 }

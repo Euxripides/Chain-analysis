@@ -31,11 +31,14 @@ func main() {
 	runCtx, cancelBackground := context.WithCancel(ctx)
 	defer cancelBackground()
 	infra.StartMethodBackground(runCtx, cfg, log, false)
+	infra.StartRPCBackground(runCtx, cfg, log, false)
 
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,
 		Registry: infra.Registry, MethodData: infra.MethodData, DeepDecode: infra.DeepDecode,
 		TokenMeta: infra.TokenMeta, TokenBackfill: infra.TokenBackfill,
+		Head: infra.Head, AddressType: infra.AddressType, BalanceRead: infra.BalanceRead,
+		ChainRead: infra.ChainRead, Trace: infra.Trace, RPCGateway: infra.RPCGateway,
 	})
 	srv.StartForwarder()
 
@@ -61,6 +64,9 @@ func main() {
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
 	srv.StopForwarder()
+	if infra.RPCBatcher != nil {
+		infra.RPCBatcher.Close()
+	}
 	infra.Store.Close()
 	_ = infra.CH.Close()
 	infra.Bus.Close()

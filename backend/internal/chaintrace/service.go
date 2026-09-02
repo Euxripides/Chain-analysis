@@ -50,7 +50,8 @@ func (s *Service) Available(chainSlug string) bool {
 	if s == nil || s.gateway == nil {
 		return false
 	}
-	return s.gateway.Capabilities().ChainCapability(chainSlug).Trace
+	caps := s.gateway.Capabilities().ChainCapability(chainSlug)
+	return caps.Trace || caps.Debug
 }
 
 // TransactionTrace 获取一笔交易的规范化调用树。
@@ -88,8 +89,11 @@ func (s *Service) TransactionTrace(ctx context.Context, chainSlug string, hash c
 		Purpose: rpc.PurposeTrace, InvestigationID: opts.InvestigationID, JobID: opts.JobID,
 		Priority: rpc.PriorityInteractive,
 	}
+	if opts.MaxTraceCalls > 0 {
+		budget.MaxRequests = opts.MaxTraceCalls
+	}
 
-	raw, source, err := s.fetch(ctx, chainSlug, hash, budget, mode)
+	raw, source, providerName, err := s.fetch(ctx, chainSlug, hash, budget, mode)
 	if err != nil {
 		rpc.TraceRequestsTotal.WithLabelValues(chainSlug, "error").Inc()
 		return nil, err
@@ -109,7 +113,7 @@ func (s *Service) TransactionTrace(ctx context.Context, chainSlug string, hash c
 
 	// 4) 原始响应落对象存储（§107/§139）
 	if s.rawPersist && s.raw != nil {
-		key := RawObjectKey(chainSlug, hash)
+		key := RawObjectKey(providerName, chainSlug, hash)
 		if _, putErr := s.raw.PutGzip(ctx, key, raw); putErr != nil {
 			s.log.Warn("trace raw persist failed", "err", putErr)
 		} else {
@@ -129,16 +133,16 @@ func (s *Service) TransactionTrace(ctx context.Context, chainSlug string, hash c
 
 // fetch 先 parity trace_transaction，运行时不支持再退到 geth debug_traceTransaction（§101）。
 func (s *Service) fetch(ctx context.Context, chainSlug string, hash chain.Hash,
-	budget rpc.BudgetContext, mode rpc.Consistency) (json.RawMessage, string, error) {
+	budget rpc.BudgetContext, mode rpc.Consistency) (json.RawMessage, string, string, error) {
 	response, err := s.gateway.Call(ctx, rpc.Request{
 		Chain: chainSlug, Method: "trace_transaction", Params: []any{string(hash)},
 		Class: rpc.ClassTrace, Budget: budget, Priority: rpc.PriorityInteractive, Consistency: mode,
 	})
 	if err == nil {
-		return response.Result, "trace_transaction", nil
+		return response.Result, "trace_transaction", response.Provider, nil
 	}
 	if !rpc.IsClass(err, rpc.ClassTraceUnsupported) && !rpc.IsClass(err, rpc.ClassMethodUnsupported) {
-		return nil, "trace_transaction", err
+		return nil, "trace_transaction", "", err
 	}
 	debugResponse, debugErr := s.gateway.Call(ctx, rpc.Request{
 		Chain: chainSlug, Method: "debug_traceTransaction",
@@ -146,9 +150,9 @@ func (s *Service) fetch(ctx context.Context, chainSlug string, hash chain.Hash,
 		Class:  rpc.ClassDebugTrace, Budget: budget, Priority: rpc.PriorityInteractive, Consistency: mode,
 	})
 	if debugErr != nil {
-		return nil, "debug_traceTransaction", debugErr
+		return nil, "debug_traceTransaction", "", debugErr
 	}
-	return debugResponse.Result, "debug_traceTransaction", nil
+	return debugResponse.Result, "debug_traceTransaction", debugResponse.Provider, nil
 }
 
 // InternalCalls 读取已持久化的内部调用（不触发 Provider）。
@@ -160,6 +164,22 @@ func (s *Service) InternalCalls(ctx context.Context, chainSlug string, hash chai
 }
 
 // RawObjectKey 原始 Trace 的对象键（§107）。
-func RawObjectKey(chainSlug string, hash chain.Hash) string {
-	return fmt.Sprintf("raw/rpc/ankr/%s/trace/%s.json.gz", strings.ToLower(chainSlug), strings.ToLower(string(hash)))
+func RawObjectKey(providerName, chainSlug string, hash chain.Hash) string {
+	providerName = safePathSegment(providerName)
+	if providerName == "" {
+		providerName = "unknown"
+	}
+	return fmt.Sprintf("raw/rpc/%s/%s/trace/%s.json.gz", providerName,
+		safePathSegment(chainSlug), strings.ToLower(string(hash)))
+}
+
+func safePathSegment(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var out strings.Builder
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
 }

@@ -249,8 +249,9 @@ func (p *Provider) defaultResult(req rpc.Request, head uint64) (json.RawMessage,
 	case "eth_getTransactionReceipt":
 		return mockReceipt(paramString(req.Params, 0), head), nil
 	case "eth_getBlockByNumber", "eth_getBlockByHash":
-		return json.RawMessage(fmt.Sprintf(`{"number":"%s","hash":"0x%064x","timestamp":"0x%x","transactions":[]}`,
-			chain.Uint64ToHex(head), head, time.Now().Unix())), nil
+		return json.RawMessage(fmt.Sprintf(`{"number":"%s","hash":"0x%064x","parentHash":"0x%064x",`+
+			`"timestamp":"0x%x","gasUsed":"0x5208","gasLimit":"0x1c9c380","transactions":[]}`,
+			chain.Uint64ToHex(head), head, head-1, time.Now().Unix())), nil
 	case "eth_getLogs":
 		return json.RawMessage("[]"), nil
 	case "trace_transaction":
@@ -363,7 +364,7 @@ func mockTransaction(hash string, head uint64) json.RawMessage {
 
 func mockReceipt(hash string, head uint64) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{"transactionHash":"%s","status":"0x1","blockNumber":"%s",`+
-		`"gasUsed":"0x5208","effectiveGasPrice":"0x3b9aca00","contractAddress":null,"logs":[],`+
+		`"gasUsed":"0x5208","cumulativeGasUsed":"0x5208","effectiveGasPrice":"0x3b9aca00","contractAddress":null,"logs":[],`+
 		`"from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222"}`,
 		hash, chain.Uint64ToHex(head-10)))
 }

@@ -46,6 +46,10 @@ func (g *Gateway) BatchCall(ctx context.Context, reqs []Request) ([]Response, er
 				cached.CacheHit = true
 				cached.Chain, cached.Method = reqs[i].Chain, reqs[i].Method
 				responses[i] = cached
+				g.record(usageInput{Provider: cached.Provider, Chain: reqs[i].Chain, Method: reqs[i].Method,
+					Class: spec.Class, Purpose: reqs[i].Budget.Purpose, Priority: reqs[i].Priority,
+					MethodCalls: 1, Status: "cache_hit", CacheHit: true, JobID: reqs[i].Budget.JobID,
+					Investigation: reqs[i].Budget.InvestigationID, TraceID: reqs[i].TraceID})
 				continue
 			}
 			CacheMissTotal.WithLabelValues(reqs[i].Chain, reqs[i].Method).Inc()
@@ -174,7 +178,7 @@ func (g *Gateway) runBatchChunk(ctx context.Context, reqs []Request, specs []Met
 		if !candidate.Capability.Batch {
 			// Provider 不支持 Batch：退化为逐个调用，语义保持一致
 			for _, idx := range chunk {
-				response, err := g.Call(ctx, reqs[idx])
+				response, err := g.executeAdmitted(ctx, reqs[idx], specs[idx], cacheKeys[idx])
 				if err != nil {
 					responses[idx] = Response{Chain: reqs[idx].Chain, Method: reqs[idx].Method, Error: AsError(err)}
 					continue
@@ -282,7 +286,11 @@ func (g *Gateway) runBatchChunk(ctx context.Context, reqs []Request, specs []Met
 			} else {
 				MethodCallsTotal.WithLabelValues(candidate.Name, chainSlug, reqs[idx].Method, "ok").Inc()
 				if specs[idx].Cacheable && !reqs[idx].CachePolicy.Disabled {
-					g.cache.Put(cacheKeys[idx], item, specs[idx].CacheTTL(reqs[idx].BlockRef))
+					ttl := specs[idx].CacheTTL(reqs[idx].BlockRef)
+					if reqs[idx].CachePolicy.TTLOverride > 0 {
+						ttl = time.Duration(reqs[idx].CachePolicy.TTLOverride)
+					}
+					g.cache.Put(cacheKeys[idx], item, ttl)
 				}
 			}
 			responses[idx] = item
@@ -328,6 +336,7 @@ type Batcher struct {
 	mu     sync.Mutex
 	queues map[string]chan batchItem
 	closed bool
+	done   chan struct{}
 }
 
 func NewBatcher(gateway *Gateway, opts BatcherOptions) *Batcher {
@@ -337,7 +346,7 @@ func NewBatcher(gateway *Gateway, opts BatcherOptions) *Batcher {
 	if opts.MaxWait <= 0 {
 		opts.MaxWait = 10 * time.Millisecond
 	}
-	return &Batcher{gateway: gateway, opts: opts, queues: map[string]chan batchItem{}}
+	return &Batcher{gateway: gateway, opts: opts, queues: map[string]chan batchItem{}, done: make(chan struct{})}
 }
 
 // Call 入队并等待结果。聚合失败时退化为直接调用，绝不丢请求。
@@ -346,22 +355,34 @@ func (b *Batcher) Call(ctx context.Context, req Request) (Response, error) {
 	if spec, ok := b.gateway.methods.Spec(req.Method); !ok || !spec.Batchable {
 		return b.gateway.Call(ctx, req)
 	}
-	queue := b.queueFor(strings.ToLower(req.Chain))
+	queue := b.queueFor(batchQueueKey(req))
 	if queue == nil {
 		return b.gateway.Call(ctx, req)
 	}
 	item := batchItem{req: req, result: make(chan batchResult, 1)}
 	select {
 	case queue <- item:
+	case <-b.done:
+		return b.gateway.Call(ctx, req)
 	case <-ctx.Done():
 		return Response{}, &Error{Class: ClassCancelled, Message: "batch enqueue cancelled", Cause: ctx.Err()}
 	}
 	select {
 	case res := <-item.result:
 		return res.response, res.err
+	case <-b.done:
+		return Response{}, &Error{Class: ClassCancelled, Message: "batcher is closed"}
 	case <-ctx.Done():
 		return Response{}, &Error{Class: ClassCancelled, Message: "batch wait cancelled", Cause: ctx.Err()}
 	}
+}
+
+// batchQueueKey 防止不同任务、调查、优先级或一致性语义被合并后错误归账。
+func batchQueueKey(req Request) string {
+	return strings.Join([]string{
+		strings.ToLower(req.Chain), req.Budget.Key(), req.Budget.Purpose,
+		string(req.Priority), string(req.Consistency), req.BlockRef.String(),
+	}, "|")
 }
 
 func (b *Batcher) queueFor(chainSlug string) chan batchItem {
@@ -381,19 +402,24 @@ func (b *Batcher) queueFor(chainSlug string) chan batchItem {
 
 func (b *Batcher) loop(queue chan batchItem) {
 	for {
-		first, ok := <-queue
-		if !ok {
+		var first batchItem
+		select {
+		case <-b.done:
 			return
+		case first = <-queue:
 		}
 		items := []batchItem{first}
 		timer := time.NewTimer(b.opts.MaxWait)
 	collect:
 		for len(items) < b.opts.MaxSize {
 			select {
-			case next, open := <-queue:
-				if !open {
-					break collect
+			case <-b.done:
+				timer.Stop()
+				for _, item := range items {
+					item.result <- batchResult{err: &Error{Class: ClassCancelled, Message: "batcher is closed"}}
 				}
+				return
+			case next := <-queue:
 				items = append(items, next)
 			case <-timer.C:
 				break collect
@@ -436,7 +462,5 @@ func (b *Batcher) Close() {
 		return
 	}
 	b.closed = true
-	for _, queue := range b.queues {
-		close(queue)
-	}
+	close(b.done)
 }

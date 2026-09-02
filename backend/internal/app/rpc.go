@@ -67,6 +67,13 @@ func (i *Infra) initRPC(ctx context.Context, cfg *config.Config, log *slog.Logge
 
 	provider, secrets := buildRPCProvider(cfg, log)
 	i.RPCProvider = provider
+	pricing, pricingErr := i.Store.ProviderPricing(ctx, provider.Name(), model.APITypeRPC)
+	if pricingErr != nil {
+		log.Warn("load rpc provider pricing failed; using configured fallback", "provider", provider.Name(), "err", pricingErr)
+	}
+	if pricing.CreditsPerCall <= 0 {
+		pricing = rpc.Pricing{CreditsPerCall: cfg.RPC.CreditsPerCall, CostPerCallUSD: cfg.RPC.CostPerCallUSD}
+	}
 
 	gateway := rpc.NewGateway(rpc.GatewayOptions{
 		Chains: chains, Methods: methods, Router: router, Capabilities: capabilities,
@@ -77,7 +84,7 @@ func (i *Infra) initRPC(ctx context.Context, cfg *config.Config, log *slog.Logge
 		Breakers:    breakers,
 		Health:      health,
 		Usage:       rpc.UsageHook(UsageRecorder(i.Store, log)),
-		Pricing:     rpc.Pricing{CreditsPerCall: cfg.RPC.CreditsPerCall, CostPerCallUSD: cfg.RPC.CostPerCallUSD},
+		Pricing:     pricing,
 		Retry: rpc.RetryPolicy{MaxAttempts: cfg.RPC.RetryMaxAttempt,
 			BaseBackoff: 200 * time.Millisecond, MaxBackoff: 5 * time.Second},
 		Log: log, Credential: "env:ANKR_API_KEY", Secrets: secrets,

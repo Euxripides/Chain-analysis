@@ -3,6 +3,7 @@ package chaintrace
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -45,11 +46,11 @@ func (s *Store) Get(ctx context.Context, chainSlug string, hash chain.Hash) (*Tr
 		return nil, err
 	}
 	if strings.TrimSpace(rootJSON) == "" {
-		return nil, rows.Err()
+		return nil, fmt.Errorf("stored trace has an empty call tree")
 	}
 	var root CallFrame
 	if err := json.Unmarshal([]byte(rootJSON), &root); err != nil {
-		return nil, rows.Err()
+		return nil, fmt.Errorf("stored trace call tree is invalid: %w", err)
 	}
 	return &TraceResult{
 		Chain: chainValue, TxHash: chain.Hash(txHash), Root: &root, Source: source,

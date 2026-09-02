@@ -50,6 +50,10 @@ def main() -> int:
                     remote_path = remote_root + "/" + name
                     try:
                         sftp.put(local_path, remote_path)
+                        # Windows 本地文件没有可靠的 POSIX executable bit；部署脚本
+                        # 被覆盖后必须显式恢复，否则 VM 上会出现 Permission denied。
+                        if name.endswith(".sh"):
+                            sftp.chmod(remote_path, 0o755)
                         files += 1
                         bytes_ += os.path.getsize(local_path)
                     except Exception as exc:  # report all failed files before exiting

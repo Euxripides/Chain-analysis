@@ -63,6 +63,7 @@ func main() {
 	// V1.3：Method 解析栈（Fast Resolver + 异步补全 + Backfill，§16-§19/§35）
 	sched.SetMethodResolver(infra.Resolver, infra.Registry)
 	infra.StartMethodBackground(runCtx, cfg, log, true)
+	infra.StartRPCBackground(runCtx, cfg, log, true)
 	sched.SetTokenMetadata(infra.TokenMeta)
 	infra.StartTokenMetadataBackground(runCtx, cfg, log, true)
 
@@ -92,6 +93,9 @@ func main() {
 		case <-time.After(15 * time.Second):
 			log.Warn("worker shutdown timed out with in-flight shards")
 		}
+	}
+	if infra.RPCBatcher != nil {
+		infra.RPCBatcher.Close()
 	}
 	infra.Store.Close()
 	_ = infra.CH.Close()

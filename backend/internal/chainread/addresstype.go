@@ -2,6 +2,7 @@ package chainread
 
 import (
 	"context"
+	"strings"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
@@ -14,6 +15,49 @@ import (
 // 因此对外统一叫 "candidate"，后续再细分（§76）。
 type AddressTypeService struct {
 	reader *Service
+}
+
+// ResolveAddressTypes 为列表页提供批量兼容接口。每个 eth_getCode 仍然经
+// RPCGateway，并由 Batcher 在同一业务上下文内聚合，避免业务层直连 Provider。
+func (a *AddressTypeService) ResolveAddressTypes(ctx context.Context, chainSlug string, addresses []string) (map[string]bool, error) {
+	result := make(map[string]bool, len(addresses))
+	requests := make([]rpc.Request, 0, len(addresses))
+	keys := make([]string, 0, len(addresses))
+	seen := make(map[string]bool, len(addresses))
+	for _, raw := range addresses {
+		normalized := strings.ToLower(strings.TrimSpace(raw))
+		address, err := chain.ParseAddress(normalized)
+		if err != nil {
+			return nil, err
+		}
+		if seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		requests = append(requests, Options{Purpose: rpc.PurposeContractClassification, Priority: rpc.PriorityBackground}.
+			request(chainSlug, "eth_getCode", []any{string(address), chain.Latest().String()},
+				rpc.ClassCode, chain.Latest(), rpc.PurposeContractClassification))
+		keys = append(keys, normalized)
+	}
+	responses, err := a.reader.gateway.BatchCall(ctx, requests)
+	if err != nil && responses == nil {
+		return nil, err
+	}
+	for i, response := range responses {
+		if response.Error != nil {
+			return nil, response.Error
+		}
+		value, err := decodeHexString(response.Result)
+		if err != nil {
+			return nil, err
+		}
+		code, err := chain.HexToBytes(value)
+		if err != nil {
+			return nil, err
+		}
+		result[keys[i]] = len(code) > 0
+	}
+	return result, nil
 }
 
 func NewAddressTypeService(reader *Service) *AddressTypeService {

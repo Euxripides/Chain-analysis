@@ -201,6 +201,16 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
   ABI 动态类型与事件解码、未知入队与去重、深度解码缓存（第一次 1 次请求，第二次 0 次，force_refresh 才再请求）、
   local_only 不触发 Provider、Provider 数值精度与签名自洽校验、Unknown 不阻塞交易入库。
 
+## V1.5 RPC Infrastructure 与可扩展链访问层（2026-09-02）
+
+- `chain.Registry` 统一维护链 ID、原生币、确认深度、区块标签和 Logs 窗口；Coverage/Update 使用 `HeadService.SafeHead`，不再拿本地已下载最高块冒充实时链头。
+- 标准只读 RPC 全部经过 Method Allowlist、Router、Capability、全局 Rate/Concurrency、Retry、Circuit Breaker、Timeout、Cache/Singleflight、Budget、Usage 和脱敏日志；写方法默认在 Provider 之前拒绝。
+- Ankr Chain RPC 的 endpoint 模板与密钥分离；业务服务只拿 `ChainRead/Contract/Balance/AddressType/Logs/Trace`，Token Metadata 和 Data Explorer 合约识别均已迁入统一网关。
+- Batch 按 method call 计费，按响应 ID 还原顺序并保留部分失败；自动聚合按链、预算键、用途、优先级、一致性和区块引用隔离，关闭过程不会向已关闭 channel 发送；非 Batch Provider 降级不会重复扣预算。
+- `provider_pricing` 生效区间是 RPC 计价主来源，环境变量只作无记录时回退；Provider 请求、method call、缓存/Singleflight 命中和用途分别写入 `provider_usage`。
+- ChainReader 对交易、回执、日志和区块的必填地址/hash/hex 数值执行严格解析，损坏上游数据返回 `invalid_response`，不再静默写成零值；Trace 同时支持 parity/geth 格式、规范化调用树、派生内部活动、ClickHouse 持久化和 MinIO 原始响应。
+- 对外只开放类型化业务 API 与 Capability API，不开放 Raw RPC；Trace 要求 Analyst/Investigator 及以上角色，能力不足时仅降级 Internal Calls。
+
 ## V1 验收对照（文档 §101）
 
 - 数据正确性：重复下载不翻倍（ReplacingMergeTree + Coverage 区间合并）；Raw 可回溯（manifest → part → SHA256）；Time/Block Range 不越界（shard 区间持久化）。

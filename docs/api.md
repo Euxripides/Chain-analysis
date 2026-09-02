@@ -147,6 +147,21 @@ POST /api/v1/datasets/ensure
 | GET | `/metrics` | Prometheus 指标（API:8080；Worker 独立 :8081） |
 | GET | `/api/v1/me` | 当前用户上下文（auth 接口预留，X-User-* 头） |
 
+## V1.5 统一链 RPC
+
+所有端点都经 `ChainRead -> RPCGateway -> Router -> Provider`，不提供公开 Raw RPC，也不会返回密钥或内部 endpoint。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/system/chains/{chain}/capabilities` | 当前链聚合能力（standard/archive/batch/trace/debug） |
+| GET | `/chains/{chain}/head` | 实时链头、安全高度和缓存命中状态 |
+| GET | `/addresses/{chain}/{address}/runtime` | EOA/合约候选、原生余额、链头 |
+| GET | `/transactions/{chain}/{tx_hash}/receipt` | 类型化交易回执 |
+| GET | `/transactions/{chain}/{tx_hash}/trace?mode=local_only\|auto\|force_refresh` | 规范化调用树；Analyst/Investigator 及以上 |
+| GET | `/transactions/{chain}/{tx_hash}/internal-calls` | 已持久化的派生内部活动，不触发 Provider |
+
+`trace` 不可用时返回 `503 + error_class=trace_unsupported`，其它交易和代币功能不受影响。`local_only` 缓存未命中返回 404，预算耗尽或限流返回 429。
+
 ## SSE 事件
 
 ```text

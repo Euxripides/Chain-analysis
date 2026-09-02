@@ -250,7 +250,12 @@ func (g *Gateway) execute(ctx context.Context, req Request, spec MethodSpec, cac
 		BudgetRejectedTotal.WithLabelValues(req.Budget.Purpose).Inc()
 		return Response{}, err
 	}
+	return g.executeAdmitted(ctx, req, spec, cacheKey)
+}
 
+// executeAdmitted 执行已经通过预算准入的请求。Batch Provider 不可用时逐项
+// 降级会走这里，避免同一个 method call 被预算系统重复扣减。
+func (g *Gateway) executeAdmitted(ctx context.Context, req Request, spec MethodSpec, cacheKey string) (Response, error) {
 	candidates, routeErr := g.router.Candidates(ctx, req, spec)
 	if routeErr != nil {
 		return Response{}, routeErr

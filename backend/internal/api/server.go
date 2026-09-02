@@ -13,6 +13,8 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
+	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
+	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
@@ -21,6 +23,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
@@ -43,6 +46,12 @@ type Deps struct {
 	DeepDecode    *method.AnkrDeepResolver
 	TokenMeta     *tokenmeta.Service
 	TokenBackfill *tokenmeta.BackfillRunner
+	Head          *chainread.HeadService
+	AddressType   *chainread.AddressTypeService
+	BalanceRead   *chainread.BalanceService
+	ChainRead     *chainread.Service
+	Trace         *chaintrace.Service
+	RPCGateway    *rpc.Gateway
 }
 
 type Server struct {
@@ -61,6 +70,10 @@ type Server struct {
 func New(deps Deps) *Server {
 	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH)}
 	s.svc = dataset.New(deps.Store, func(ctx context.Context, chain string) (int64, error) {
+		if deps.Head != nil {
+			head, err := deps.Head.SafeHead(ctx, chain)
+			return int64(head), err
+		}
 		if deps.Prov != nil && deps.Prov.Name() == "ankr-mock" {
 			return 2_000_000, nil
 		}
@@ -69,10 +82,20 @@ func New(deps Deps) *Server {
 	s.meta = addressmeta.New(deps.Store)
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
-	if resolver, ok := deps.Prov.(provider.AddressTypeResolver); ok {
+	if deps.AddressType != nil {
+		s.explorer.WithAddressTypeResolver(deps.AddressType)
+	} else if resolver, ok := deps.Prov.(provider.AddressTypeResolver); ok {
+		// 兼容 RPC 基础设施被显式关闭的旧部署；正常路径必须走 ChainRead。
 		s.explorer.WithAddressTypeResolver(resolver)
 	}
-	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, deps.Log)
+	var safeHead update.SafeHeadFn
+	if deps.Head != nil {
+		safeHead = func(ctx context.Context, chain string) (int64, error) {
+			head, err := deps.Head.SafeHead(ctx, chain)
+			return int64(head), err
+		}
+	}
+	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, safeHead, deps.Log)
 	if deps.Registry != nil && deps.MethodData != nil {
 		// 智能调查/前端都必须经过 TransactionDetailService，不允许直连 Provider（§50）
 		s.detail = method.NewDetailService(deps.MethodData, deps.Registry, deps.DeepDecode, s.recordDeepDecodeUsage, deps.Log)
@@ -129,6 +152,12 @@ func (s *Server) buildRouter() {
 		api.Get("/download-jobs/{id}/events", s.handleJobEvents)
 		api.Get("/providers/ankr/status", s.handleProviderStatus)
 		api.Get("/providers/ankr/usage", s.handleProviderUsage)
+		api.Get("/system/chains/{chain}/capabilities", s.handleChainCapabilities)
+		api.Get("/chains/{chain}/head", s.handleChainHead)
+		api.Get("/addresses/{chain}/{address}/runtime", s.handleAddressRuntime)
+		api.Get("/transactions/{chain}/{tx_hash}/receipt", s.handleRPCReceipt)
+		api.Get("/transactions/{chain}/{tx_hash}/trace", s.handleTransactionTrace)
+		api.Get("/transactions/{chain}/{tx_hash}/internal-calls", s.handleInternalCalls)
 
 		// V1.6 API Control Center：统一审计、成本、异常管控和人工接管。
 		api.Get("/api-control/overview", s.handleAPIControlOverview)

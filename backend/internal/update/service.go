@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	previewTTL      = 15 * time.Minute
-	previewCacheTTL = 60 * time.Second
-	safeHeadBuffer  = 15
+	previewTTL            = 15 * time.Minute
+	previewCacheTTL       = 60 * time.Second
+	fallbackSafeHeadDepth = 15
 )
+
+type SafeHeadFn func(ctx context.Context, chain string) (int64, error)
 
 type Service struct {
 	Store *store.Store
@@ -33,6 +35,7 @@ type Service struct {
 	DS    *dataset.Service
 	Meta  *addressmeta.Service
 	Log   *slog.Logger
+	Head  SafeHeadFn
 
 	mu    sync.Mutex
 	cache map[string]cacheEntry
@@ -43,8 +46,8 @@ type cacheEntry struct {
 	expires time.Time
 }
 
-func New(st *store.Store, ch *clickhouse.Conn, prov provider.Provider, ds *dataset.Service, meta *addressmeta.Service, log *slog.Logger) *Service {
-	return &Service{Store: st, CH: ch, Prov: prov, DS: ds, Meta: meta, Log: log, cache: map[string]cacheEntry{}}
+func New(st *store.Store, ch *clickhouse.Conn, prov provider.Provider, ds *dataset.Service, meta *addressmeta.Service, head SafeHeadFn, log *slog.Logger) *Service {
+	return &Service{Store: st, CH: ch, Prov: prov, DS: ds, Meta: meta, Head: head, Log: log, cache: map[string]cacheEntry{}}
 }
 
 type PreviewRequest struct {
@@ -88,8 +91,12 @@ type PreviewSummary struct {
 	EstimatedBytes int64 `json:"estimated_bytes"`
 }
 
-// SafeHead 链级安全头（`32）：本地最大块 - reorg buffer。
+// SafeHead 链级安全头。正常路径来自 Chain Registry + 实时 HeadService；仅在
+// RPC 基础设施被显式关闭的兼容部署中回退到本地最大块。
 func (s *Service) SafeHead(ctx context.Context, chain string) (int64, error) {
+	if s.Head != nil {
+		return s.Head(ctx, chain)
+	}
 	var head uint64
 	if err := s.CH.DB().QueryRow(ctx,
 		"SELECT COALESCE(max(block_number),0) FROM blockchain.token_transfers FINAL WHERE chain=?", chain).Scan(&head); err != nil {
@@ -101,8 +108,8 @@ func (s *Service) SafeHead(ctx context.Context, chain string) (int64, error) {
 			return 0, err
 		}
 	}
-	if head > safeHeadBuffer {
-		head -= safeHeadBuffer
+	if head > fallbackSafeHeadDepth {
+		head -= fallbackSafeHeadDepth
 	}
 	return int64(head), nil
 }
