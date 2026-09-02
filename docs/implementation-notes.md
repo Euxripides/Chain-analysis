@@ -211,6 +211,15 @@ MinIO 控制台 http://SERVER:9002 · NATS 监控 http://SERVER:8222
 - ChainReader 对交易、回执、日志和区块的必填地址/hash/hex 数值执行严格解析，损坏上游数据返回 `invalid_response`，不再静默写成零值；Trace 同时支持 parity/geth 格式、规范化调用树、派生内部活动、ClickHouse 持久化和 MinIO 原始响应。
 - 对外只开放类型化业务 API 与 Capability API，不开放 Raw RPC；Trace 要求 Analyst/Investigator 及以上角色，能力不足时仅降级 Internal Calls。
 
+## V1.6 Ankr 官网余额接入（2026-09-02）
+
+- 使用 Ankr Management MCP `mgmt_get_balance` 获取官方账户剩余积分和余额；普通 `ANKR_API_KEY` 仅用于链数据，不能读取账户账单。
+- 完整实现 OAuth 2.1 Dynamic Client Registration、Authorization Code + PKCE、一次性/10 分钟 state、回调交换和授权失败回显。
+- OAuth bearer 与 PKCE verifier 使用 `ANKR_MANAGEMENT_ENCRYPTION_KEY` 派生 AES-256-GCM 密钥加密；数据库只保存 ciphertext/nonce，Token 不进入日志或 API 响应。
+- Provider 页面支持连接、重新授权、立即同步和断开；未授权/未配置/过期/同步失败/已连接状态严格区分，官方值不可用时返回 `null`，不以本地估算或 0 冒充余额。
+- 配置项：`ANKR_MANAGEMENT_ENABLED`、`ANKR_MANAGEMENT_REDIRECT_URI`、`ANKR_MANAGEMENT_FRONTEND_URL`、`ANKR_MANAGEMENT_ENCRYPTION_KEY`、`ANKR_MANAGEMENT_SYNC_TTL_SECONDS`。
+- Ankr 拒绝普通局域网 HTTP 回调；生产部署必须配置 HTTPS 回调，当前开发虚拟机通过浏览器本机回环地址和 SSH 端口转发完成 OAuth 回调。
+
 ## V1 验收对照（文档 §101）
 
 - 数据正确性：重复下载不翻倍（ReplacingMergeTree + Coverage 区间合并）；Raw 可回溯（manifest → part → SHA256）；Time/Block Range 不越界（shard 区间持久化）。

@@ -147,6 +147,21 @@ POST /api/v1/datasets/ensure
 | GET | `/metrics` | Prometheus 指标（API:8080；Worker 独立 :8081） |
 | GET | `/api/v1/me` | 当前用户上下文（auth 接口预留，X-User-* 头） |
 
+### Ankr Management MCP 官方账户
+
+官网余额和账户用量不使用 RPC API Key，而是通过 OAuth 2.1 + PKCE 连接 Ankr Management MCP。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api-control/provider-accounts` | 官方连接状态、剩余积分、余额、同步时间；未授权时数值为 `null` |
+| POST | `/api-control/provider-accounts/ankr/connect` | 动态注册 OAuth 客户端并返回 Ankr 官方授权地址 |
+| GET | `/api-control/provider-accounts/ankr/oauth/callback` | 校验一次性 state/PKCE、交换 bearer、首次同步余额 |
+| POST | `/api-control/provider-accounts/ankr/sync` | 调用 `mgmt_get_balance` 立即刷新官网余额 |
+| DELETE | `/api-control/provider-accounts/ankr` | 删除本地 OAuth bearer 和余额快照，保留可复用的公开 client_id |
+
+OAuth bearer 与 PKCE verifier 使用 AES-GCM 加密后存储；接口、日志和数据库均不保存或返回明文。
+Ankr 要求回调为 HTTPS，开发环境可使用浏览器所在机器的 `127.0.0.1` 回环地址。
+
 ## V1.5 统一链 RPC
 
 所有端点都经 `ChainRead -> RPCGateway -> Router -> Provider`，不提供公开 Raw RPC，也不会返回密钥或内部 endpoint。

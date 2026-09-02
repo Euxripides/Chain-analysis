@@ -23,6 +23,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
@@ -65,10 +66,16 @@ type Server struct {
 	explorer *explorer.Service
 	updates  *update.Service
 	detail   *method.DetailService
+	ankrMgmt *ankrmgmt.Service
 }
 
 func New(deps Deps) *Server {
 	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH)}
+	if management, err := ankrmgmt.New(deps.Store.Pool, deps.Cfg.AnkrManagement); err == nil {
+		s.ankrMgmt = management
+	} else {
+		deps.Log.Error("Ankr Management MCP initialization failed", "err", err)
+	}
 	s.svc = dataset.New(deps.Store, func(ctx context.Context, chain string) (int64, error) {
 		if deps.Head != nil {
 			head, err := deps.Head.SafeHead(ctx, chain)
@@ -162,6 +169,10 @@ func (s *Server) buildRouter() {
 		// V1.6 API Control Center：统一审计、成本、异常管控和人工接管。
 		api.Get("/api-control/overview", s.handleAPIControlOverview)
 		api.Get("/api-control/provider-accounts", s.handleAPIControlProviderAccounts)
+		api.Post("/api-control/provider-accounts/ankr/connect", s.handleAnkrManagementConnect)
+		api.Get("/api-control/provider-accounts/ankr/oauth/callback", s.handleAnkrManagementCallback)
+		api.Post("/api-control/provider-accounts/ankr/sync", s.handleAnkrManagementSync)
+		api.Delete("/api-control/provider-accounts/ankr", s.handleAnkrManagementDisconnect)
 		api.Get("/api-control/control/states", s.handleAPIControlState)
 		api.Get("/api-control/control/policies", s.handleAPIControlPolicies)
 		api.Patch("/api-control/control/policies", s.handleAPIControlPolicies)

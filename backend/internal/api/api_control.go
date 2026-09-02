@@ -126,6 +126,10 @@ func envNumber(key string) (float64, bool) {
 }
 
 func (s *Server) handleAPIControlProviderAccounts(w http.ResponseWriter, r *http.Request) {
+	if s.ankrMgmt != nil && s.deps.Cfg != nil && s.deps.Cfg.AnkrManagement.Enabled {
+		writeJSON(w, 200, map[string]any{"accounts": []any{s.ankrMgmt.Status(r.Context(), false)}})
+		return
+	}
 	remaining, rok := envNumber("ANKR_ACCOUNT_REMAINING_CREDITS")
 	balance, bok := envNumber("ANKR_ACCOUNT_BALANCE_USD")
 	plan := strings.TrimSpace(os.Getenv("ANKR_ACCOUNT_PLAN"))

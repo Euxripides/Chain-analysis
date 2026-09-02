@@ -143,6 +143,19 @@ type Config struct {
 	Method            MethodConfig
 	TokenMetadata     TokenMetadataConfig
 	RPC               RPCConfig
+	AnkrManagement    AnkrManagementConfig
+}
+
+// AnkrManagementConfig controls the account-scoped Management MCP connection.
+// The RPC API key is intentionally not accepted here: Management MCP uses OAuth.
+type AnkrManagementConfig struct {
+	Enabled       bool
+	MCPURL        string
+	IssuerURL     string
+	RedirectURI   string
+	FrontendURL   string
+	EncryptionKey string
+	SyncTTL       time.Duration
 }
 
 // splitList 解析逗号分隔配置。
@@ -214,6 +227,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("RPC_CHAINS must list at least one chain")
 		}
 	}
+	if c.AnkrManagement.Enabled && len(c.AnkrManagement.EncryptionKey) < 32 {
+		return fmt.Errorf("ANKR_MANAGEMENT_ENCRYPTION_KEY must contain at least 32 characters when management integration is enabled")
+	}
 	return nil
 }
 
@@ -268,6 +284,15 @@ func Load() *Config {
 		ExportBucket:      env("EXPORT_BUCKET", "blockchain-exports"),
 		BackupsBucket:     env("BACKUPS_BUCKET", "blockchain-backups"),
 		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
+		AnkrManagement: AnkrManagementConfig{
+			Enabled:       envBool("ANKR_MANAGEMENT_ENABLED", false),
+			MCPURL:        env("ANKR_MANAGEMENT_MCP_URL", "https://mcp.ankr.com/mcp"),
+			IssuerURL:     env("ANKR_MANAGEMENT_ISSUER_URL", "https://mcp.ankr.com"),
+			RedirectURI:   strings.TrimSpace(os.Getenv("ANKR_MANAGEMENT_REDIRECT_URI")),
+			FrontendURL:   env("ANKR_MANAGEMENT_FRONTEND_URL", "http://127.0.0.1:3000/api-control?tab=providers"),
+			EncryptionKey: os.Getenv("ANKR_MANAGEMENT_ENCRYPTION_KEY"),
+			SyncTTL:       time.Duration(envInt("ANKR_MANAGEMENT_SYNC_TTL_SECONDS", 300)) * time.Second,
+		},
 		Ankr: AnkrConfig{
 			Mode:                        env("ANKR_MODE", "mock"),
 			APIKey:                      os.Getenv("ANKR_API_KEY"),

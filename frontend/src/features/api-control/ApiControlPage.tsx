@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef, type RowClickedEvent } from 'ag-grid-community'
 import { AnimatePresence, motion } from 'motion/react'
-import { Activity, AlertTriangle, BadgeDollarSign, BookOpenCheck, Boxes, CircleGauge, DatabaseZap, ExternalLink, Gauge, RefreshCw, Search, ShieldAlert, SlidersHorizontal, X } from 'lucide-react'
+import { Activity, AlertTriangle, BadgeDollarSign, BookOpenCheck, Boxes, CheckCircle2, CircleGauge, DatabaseZap, ExternalLink, Gauge, Link2, RefreshCw, Search, ShieldAlert, SlidersHorizontal, Unplug, X } from 'lucide-react'
 import { apiControlHttp } from '../../api/client'
 import type { AggregateItem, ControlState, Overview, RequestRow } from './types'
 import './api-control.css'
@@ -35,7 +35,7 @@ function SourceTag({ children, tone = 'internal' }: { children: React.ReactNode;
   return <span className={'ac-source ' + tone}>{children}</span>
 }
 
-function StatusBadge({ value }: { value: string }) { const key = value.toUpperCase(); return <span className={'ac-status s-' + key}>{value}</span> }
+function StatusBadge({ value }: { value: string }) { const key = value.toUpperCase(); const labels: Record<string, string> = { UNAVAILABLE: '未连接', AVAILABLE: '已连接', STALE: '需刷新', NORMAL: '正常', OBSERVE: '观察', DEGRADED: '降级', ISOLATED: '隔离', PROTECTED: '保护', RECOVERING: '恢复中', WARNING: '警告', CRITICAL: '严重', SUCCESS: '成功', FAILED: '失败' }; return <span className={'ac-status s-' + key}>{labels[key] || value}</span> }
 
 function StateRibbon({ state, stale }: { state?: ControlState; stale: boolean }) {
   const name = state?.state || 'UNKNOWN'
@@ -73,8 +73,35 @@ function AggregateTab({ endpoint, filter, onOpen }: { endpoint: AggEndpoint; fil
 }
 
 function ProvidersTab({ filter }: { filter: string }) {
-  const q = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: { provider: string; status: string; official_available: boolean; stale: boolean; plan: string; remaining_credits: number | null; balance_usd: number | null; synced_at: string; source: string; reason: string; console_url: string }[] }>('/provider-accounts') })
-  return <><div className="ac-account-grid"><QueryState pending={q.isPending} error={q.error}>{q.data?.accounts.map((a) => <section className="ac-account" key={a.provider}><div className="ac-account-head"><div className="ac-provider-logo">A</div><div><b>{a.provider.toUpperCase()}</b><span>官网账户余额快照</span></div><StatusBadge value={a.status} /></div>{a.official_available ? <div className="ac-account-values"><div><span>套餐</span><b>{a.plan || '—'}</b></div><div><span>账户剩余积分</span><b>{a.remaining_credits == null ? '—' : fmt.format(a.remaining_credits)}</b></div><div><span>账户剩余余额</span><b>{a.balance_usd == null ? '—' : money(a.balance_usd)}</b></div></div> : <div className="ac-official-empty"><AlertTriangle size={18} /><div><b>官网账户余额尚未接入</b><span>{a.reason || '不会使用本地估算消耗冒充官网余额。'}</span></div></div>}<footer><SourceTag tone="official">官网账户快照</SourceTag><span>同步：{dateTime(a.synced_at)}</span>{a.console_url && <a href={a.console_url} target="_blank" rel="noreferrer">Provider 控制台 <ExternalLink size={13} /></a>}</footer></section>)}</QueryState></div><AggregateTab endpoint="providers" filter={filter} /></>
+  type ProviderAccount = {
+    provider: string; status: string; configured: boolean; connected: boolean; official_available: boolean; stale: boolean
+    plan: string; remaining_credits: number | null; balance_usd: number | null; account_address: string
+    synced_at: string | null; token_expires_at: string | null; source: string; reason: string; console_url: string
+  }
+  const qc = useQueryClient()
+  const [params, setParams] = useSearchParams()
+  const q = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: ProviderAccount[] }>('/provider-accounts'), refetchInterval: 60_000 })
+  const refresh = () => qc.invalidateQueries({ queryKey: ['ac-provider-accounts'] })
+  const connect = useMutation({
+    mutationFn: () => apiControlHttp<{ authorization_url: string }>('/provider-accounts/ankr/connect', { method: 'POST', body: '{}' }),
+    onSuccess: (data) => window.location.assign(data.authorization_url),
+  })
+  const sync = useMutation({ mutationFn: () => apiControlHttp('/provider-accounts/ankr/sync', { method: 'POST', body: '{}' }), onSuccess: refresh })
+  const disconnect = useMutation({ mutationFn: () => apiControlHttp('/provider-accounts/ankr', { method: 'DELETE' }), onSuccess: refresh })
+  const oauth = params.get('ankr_oauth')
+  const clearOAuthNotice = () => { const next = new URLSearchParams(params); next.delete('ankr_oauth'); next.delete('ankr_message'); setParams(next, { replace: true }) }
+  return <>
+    {oauth && <div className={'ac-oauth-result ' + oauth}>{oauth === 'connected' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}<span>{oauth === 'connected' ? 'Ankr 官方账户已连接，余额数据已完成首次同步。' : `Ankr 授权失败：${params.get('ankr_message') || '请重新授权'}`}</span><button onClick={clearOAuthNotice}>关闭</button></div>}
+    <div className="ac-account-grid"><QueryState pending={q.isPending} error={q.error}>{q.data?.accounts.map((a) => <section className="ac-account" key={a.provider}>
+      <div className="ac-account-head"><div className="ac-provider-logo">A</div><div><b>{a.provider.toUpperCase()}</b><span>Management MCP 官方账户</span></div><StatusBadge value={a.status} /></div>
+      {a.official_available ? <div className="ac-account-values"><div><span>套餐/等级</span><b>{a.plan || '—'}</b></div><div><span>账户剩余积分</span><b>{a.remaining_credits == null ? '—' : fmt.format(a.remaining_credits)}</b></div><div><span>账户剩余余额</span><b>{a.balance_usd == null ? '—' : money(a.balance_usd)}</b></div></div> : <div className="ac-official-empty"><AlertTriangle size={18} /><div><b>{a.connected ? '官方余额同步失败' : '尚未连接 Ankr 官方账户'}</b><span>{a.reason || '需要通过 Ankr OAuth 登录后读取官网余额。'}</span></div></div>}
+      {a.account_address && <div className="ac-account-identity"><span>已授权账户</span><b>{a.account_address}</b></div>}
+      <div className="ac-account-actions">{!a.connected ? <button className="ac-primary" disabled={!a.configured || connect.isPending} onClick={() => connect.mutate()}><Link2 size={14} />连接 Ankr 官方账户</button> : <><button disabled={sync.isPending} onClick={() => sync.mutate()}><RefreshCw size={14} />立即同步</button><button className="ac-muted-action" disabled={connect.isPending} onClick={() => connect.mutate()}>重新授权</button><button className="ac-muted-action" disabled={disconnect.isPending} onClick={() => window.confirm('断开后将停止同步 Ankr 官网余额，确定继续？') && disconnect.mutate()}><Unplug size={14} />断开</button></>}</div>
+      {(connect.error || sync.error || disconnect.error) && <div className="ac-inline-error">{(connect.error || sync.error || disconnect.error)?.message}</div>}
+      <footer><SourceTag tone="official">Management MCP</SourceTag><span>同步：{dateTime(a.synced_at)}</span>{a.token_expires_at && <span>授权到期：{dateTime(a.token_expires_at)}</span>}{a.console_url && <a href={a.console_url} target="_blank" rel="noreferrer">Ankr 控制台 <ExternalLink size={13} /></a>}</footer>
+    </section>)}</QueryState></div>
+    <AggregateTab endpoint="providers" filter={filter} />
+  </>
 }
 
 function RequestsTab({ filter, preset }: { filter: string; preset?: { key: string; value: string } }) {
