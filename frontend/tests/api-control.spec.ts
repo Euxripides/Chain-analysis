@@ -1,4 +1,16 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
+import path from 'node:path'
+
+const screenshotDir = process.env.E2E_SCREENSHOT_DIR
+const compact = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 })
+const exact = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
+
+async function screenshot(page: Page, name: string) {
+  if (!screenshotDir) return
+  mkdirSync(screenshotDir, { recursive: true })
+  await page.screenshot({ path: path.join(screenshotDir, name), fullPage: true })
+}
 
 test.describe('V1.6 API 控制中心', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,11 +32,27 @@ test.describe('V1.6 API 控制中心', () => {
     await expect(page.getByText('请求趋势')).toBeVisible()
   })
 
-  test('Provider 官方数据缺失时不伪造余额', async ({ page }) => {
+  test('Provider 展示官方余额且立即同步后与接口一致', async ({ page, request }, testInfo) => {
+    const response = await request.get('/api/v1/api-control/provider-accounts')
+    expect(response.ok()).toBe(true)
+    const account = (await response.json()).accounts[0]
+    expect(account.connected).toBe(true)
+    expect(account.official_available).toBe(true)
     const tab = page.getByRole('button', { name: 'Provider', exact: true })
     await tab.scrollIntoViewIfNeeded(); await tab.click()
-    await expect(page.getByText('官方账户数据未接入')).toBeVisible()
-    await expect(page.getByText('不会使用内部成本估算冒充官方余额。')).toBeVisible()
+    await expect(page.getByText('Management MCP 官方账户')).toBeVisible()
+    await expect(page.getByText('账户剩余积分')).toBeVisible()
+    await expect(page.getByText(exact.format(account.remaining_credits), { exact: true })).toBeVisible()
+    await expect(page.getByText('GREEN', { exact: true })).toBeVisible()
+
+    const syncResponse = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/provider-accounts/ankr/sync'))
+    await page.getByRole('button', { name: '立即同步' }).click()
+    const synced = await syncResponse
+    expect(synced.ok()).toBe(true)
+    const syncedAccount = (await synced.json()).account
+    await expect(page.getByRole('button', { name: '立即同步' })).toBeEnabled()
+    await expect(page.getByText(exact.format(syncedAccount.remaining_credits), { exact: true })).toBeVisible()
+    await screenshot(page, `${testInfo.project.name}-api-provider.png`)
   })
 
   test('请求表格可打开详情抽屉', async ({ page }) => {
@@ -55,15 +83,61 @@ test.describe('V1.6 API 控制中心', () => {
     await expect(page.locator('.ac-warning')).toHaveCount(0)
     await expect(page.getByText('有效期（分钟）')).toBeVisible()
     await expect(page.getByText('全局停机开关')).toBeVisible()
+    await expect(page.getByRole('button', { name: '确认人工覆盖' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '启用停机' })).toBeDisabled()
+  })
+
+  test('全局筛选同步到聚合请求，各标签页均能加载', async ({ page }, testInfo) => {
+    const filtered = page.waitForResponse((r) => r.url().includes('/api-control/overview?') && r.url().includes('range=7d') && r.url().includes('provider=ankr') && r.url().includes('chain=bsc'))
+    await page.getByLabel('时间范围').selectOption('7d')
+    await page.getByLabel('Provider').selectOption('ankr')
+    await page.getByLabel('链').selectOption('bsc')
+    expect((await filtered).ok()).toBe(true)
+
+    const tabs = [
+      ['Provider', 'Provider 表现'], ['操作', '操作表现'], ['成本', '成本归因'], ['错误', '错误分类'],
+      ['管控', '实时控制面'], ['请求', '请求审计'], ['预算', '预算使用'], ['告警', '告警中心'],
+    ] as const
+    for (const [tab, heading] of tabs) {
+      const button = page.getByRole('button', { name: tab, exact: true })
+      await button.scrollIntoViewIfNeeded(); await button.click()
+      await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+    }
+    await screenshot(page, `${testInfo.project.name}-api-alerts.png`)
   })
 })
 
-test('状态总览使用可下钻健康卡且不再展示大表', async ({ page }) => {
+test('状态总览与 API 控制中心使用同一份 24h 指标和官方余额', async ({ page, request }, testInfo) => {
+  const [overviewResponse, accountResponse] = await Promise.all([
+    request.get('/api/v1/api-control/overview?range=24h'),
+    request.get('/api/v1/api-control/provider-accounts'),
+  ])
+  expect(overviewResponse.ok()).toBe(true)
+  expect(accountResponse.ok()).toBe(true)
+  const overview = await overviewResponse.json()
+  const account = (await accountResponse.json()).accounts[0]
   await page.goto('/system')
   await expect(page.getByRole('heading', { name: '状态总览' })).toBeVisible()
   await expect(page.getByText('System')).toBeVisible()
   await expect(page.getByText('Auto Control')).toBeVisible()
-  await expect(page.getByText('Ankr Account')).toBeVisible()
+  await expect(page.getByText('Ankr 官网账户余额')).toBeVisible()
+  await expect(page.getByText(`${compact.format(account.remaining_credits)} Credits`, { exact: true })).toBeVisible()
+  await expect(page.getByText(`${compact.format(overview.metrics.logical_calls)} Calls`, { exact: true })).toBeVisible()
+  await expect(page.getByText(new RegExp(`本地捕获 ${compact.format(overview.metrics.provider_calls)} 次外部请求`))).toBeVisible()
   await expect(page.getByText('Recent Errors / Warnings')).toBeVisible()
   await expect(page.locator('.status-overview table')).toHaveCount(0)
+  await screenshot(page, `${testInfo.project.name}-system-overview.png`)
+
+  await page.getByText('查看 Provider 详情').click()
+  await expect(page).toHaveURL(/\/api-control\?tab=providers/)
+  await expect(page.getByText(exact.format(account.remaining_credits), { exact: true })).toBeVisible()
+})
+
+test('状态总览和 API 控制中心不产生页面级横向溢出', async ({ page }) => {
+  for (const route of ['/system', '/api-control']) {
+    await page.goto(route)
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    )).toBe(true)
+  }
 })
