@@ -78,11 +78,12 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 type jobDetail struct {
-	Job      model.DownloadJob   `json:"job"`
-	Subjects []model.Subject     `json:"subjects"`
-	Datasets []model.DatasetItem `json:"datasets"`
-	Shards   []model.Shard       `json:"shards"`
-	Progress map[string]any      `json:"progress"`
+	Job         model.DownloadJob             `json:"job"`
+	Subjects    []model.Subject               `json:"subjects"`
+	Datasets    []model.DatasetItem           `json:"datasets"`
+	Shards      []model.Shard                 `json:"shards"`
+	Progress    map[string]any                `json:"progress"`
+	Performance model.PerformanceRuntimeState `json:"performance"`
 }
 
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +117,10 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	}
 	detail.Shards = shards
 	detail.Progress = s.snapshotFor(r.Context(), id)
+	detail.Performance, _ = s.deps.Store.GetAnkrRuntimeState(r.Context())
+	// Job detail distinguishes the job's requested mode from the global pool's
+	// effective mode. Multiple jobs still share one global fetch target.
+	detail.Performance.RequestedMode = job.RequestedMode
 	writeJSON(w, http.StatusOK, detail)
 }
 

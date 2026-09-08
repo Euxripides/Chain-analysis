@@ -13,6 +13,10 @@ export interface Job {
   datasets: string[]
   reuse_policy: string
   head_block: number
+  requested_mode: PerformanceMode
+  effective_mode: PerformanceMode
+  mode_reason: string
+  mode_changed_at?: string | null
   error: string
   stats: Record<string, unknown>
   created_at: string
@@ -67,6 +71,31 @@ export interface JobDetail {
   datasets: DatasetItem[]
   shards: Shard[]
   progress: Snapshot | null
+  performance: PerformanceModeState
+}
+
+export type PerformanceMode = 'safe' | 'fast' | 'turbo'
+
+export interface AnkrProductionProfile {
+  version: string
+  default_mode: PerformanceMode
+  hard_ceiling: number
+  reject_boundary: number
+  memory_budget_bytes: number
+  absolute_rss_limit_bytes: number
+  page_size_default: number
+  request_timeout_seconds: number
+  modes: Record<PerformanceMode, { target_concurrency: number }>
+}
+
+export interface PerformanceModeState {
+  requested_mode: PerformanceMode
+  effective_mode: PerformanceMode
+  target_concurrency: number
+  active_concurrency?: number
+  hard_ceiling?: number
+  mode_reason?: string
+  mode_changed_at?: string
 }
 
 export interface Snapshot {

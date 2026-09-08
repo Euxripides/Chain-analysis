@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import CopyToast from '../components/CopyToast'
 import TokenFilterDropdown, { type TokenFilterOption } from '../components/TokenFilterDropdown'
 import MethodCell from '../features/data-explorer/components/MethodCell'
 import TransactionDetailDrawer from '../features/data-explorer/components/TransactionDetailDrawer'
@@ -10,6 +11,7 @@ import { buildOklinkTxUrl, shortHash } from '../utils/explorer-url'
 import { fieldLabel } from '../utils/field-labels'
 import { orderedFields } from '../utils/field-order'
 import { cleanTokenSymbol, formatDateTime, formatDecimal } from '../utils/value-format'
+import { copyText } from '../utils/clipboard'
 
 const TABS = [
   { key: 'activity', label: '全部活动' },
@@ -74,6 +76,7 @@ export default function AddressDetailPage() {
   const [newTagName, setNewTagName] = useState('')
   // V1.3：交易详情抽屉（Method / Decoded Input / Logs，§42）
   const [detailTx, setDetailTx] = useState('')
+  const [copyToast, setCopyToast] = useState('')
   const refreshID = useRef(0)
 
   useEffect(() => {
@@ -300,10 +303,19 @@ export default function AddressDetailPage() {
     return direction === 'out' ? { from: address, to: counterparty } : direction === 'in' ? { from: counterparty, to: address } : { from: address, to: address }
   }
 
+  async function handleCopy(value: string) {
+    try {
+      await copyText(value)
+      setCopyToast('已复制')
+    } catch {
+      setCopyToast('复制失败')
+    }
+  }
+
   function renderFlowAddress(value: string, label: string, isContract: boolean) {
     if (!value) return <span>—</span>
     const own = value.toLowerCase() === address.toLowerCase()
-    return <span className="flow-address">{isContract && <span className="contract-address-icon" aria-label="合约地址" title="合约地址"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 1.75h6l3.5 3.5v9H3.25z" /><path d="M9.25 1.75v3.5h3.5M6.4 7 5 8.4l1.4 1.4M9.6 7 11 8.4 9.6 9.8" /></svg></span>}<Link className={own ? 'own-address' : 'link'} to={`/data-explorer/${chain}/${value}`} title={value}>{value.slice(0, 7)}…{value.slice(-8)}</Link><button aria-label={`复制${label}`} title="复制完整地址" onClick={() => navigator.clipboard.writeText(value)}>▣</button></span>
+    return <span className="flow-address">{isContract && <span className="contract-address-icon" aria-label="合约地址" title="合约地址"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 1.75h6l3.5 3.5v9H3.25z" /><path d="M9.25 1.75v3.5h3.5M6.4 7 5 8.4l1.4 1.4M9.6 7 11 8.4 9.6 9.8" /></svg></span>}<Link className={own ? 'own-address' : 'link'} to={`/data-explorer/${chain}/${value}`} title={value}>{value.slice(0, 7)}…{value.slice(-8)}</Link><button aria-label={`复制${label}`} title="复制完整地址" onClick={() => void handleCopy(value)}>▣</button></span>
   }
 
   function renderFlowCell(row: Record<string, unknown>, column: string) {
@@ -430,6 +442,7 @@ export default function AddressDetailPage() {
       </div>
 
       {detailTx && <TransactionDetailDrawer chain={chain} txHash={detailTx} onClose={() => setDetailTx('')} />}
+      {copyToast && <CopyToast message={copyToast} onClose={() => setCopyToast('')} />}
       {metadataEditorOpen && <div className="metadata-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !metadataSaving) setMetadataEditorOpen(false) }}>
         <section className="metadata-dialog" role="dialog" aria-modal="true" aria-label="修改案件和标签">
           <div className="metadata-dialog-head row between">

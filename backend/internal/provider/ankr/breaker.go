@@ -77,13 +77,14 @@ func (cb *circuitBreaker) stateStr() string {
 	return cb.state
 }
 
-func (cb *circuitBreaker) update() {
+func (cb *circuitBreaker) update() (string, string) {
 	// 注意：errorRate 自身加锁，不能在本函数持锁时调用（否则自死锁）
 	er := cb.errorRate()
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
+	before := cb.state
 	if cb.state == "OPEN" {
-		return
+		return before, cb.state
 	}
 	if cb.state == "HALF_OPEN" {
 		// 半开探测：错误率回落则恢复 NORMAL，否则重新 OPEN
@@ -93,16 +94,17 @@ func (cb *circuitBreaker) update() {
 			cb.state = "OPEN"
 			cb.openedAt = time.Now()
 		}
-		return
+		return before, cb.state
 	}
 	if er >= cb.threshold {
 		cb.state = "OPEN"
 		cb.openedAt = time.Now()
-		return
+		return before, cb.state
 	}
 	if er >= cb.threshold/2 {
 		cb.state = "DEGRADED"
-		return
+		return before, cb.state
 	}
 	cb.state = "NORMAL"
+	return before, cb.state
 }

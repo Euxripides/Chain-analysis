@@ -36,10 +36,16 @@ type Scheduler struct {
 	log      *slog.Logger
 	workerID string
 
-	mu          sync.Mutex
-	concurrency int
-	active      int64
-	wg          sync.WaitGroup
+	mu            sync.Mutex
+	concurrency   int
+	profile       model.DownloadPerformanceProfile
+	requestedMode model.PerformanceMode
+	effectiveMode model.PerformanceMode
+	modeReason    string
+	modeChangedAt time.Time
+	healthyTicks  int
+	active        int64
+	wg            sync.WaitGroup
 
 	rates         sync.Map // jobID -> *rateTracker
 	pagePolicy    *ankr.PagePolicy
@@ -64,13 +70,16 @@ func (sc *Scheduler) SetMethodResolver(resolver *method.FastResolver, registry *
 func NewScheduler(cfg *config.Config, st *store.Store, ch *clickhouse.Conn, prov provider.Provider, raw *rawstore.Store,
 	writer *ingest.Writer, bus *events.Bus, log *slog.Logger) *Scheduler {
 	host, _ := os.Hostname()
+	profile := cfg.AnkrProductionProfile()
 	return &Scheduler{
 		cfg: cfg, store: st, prov: prov, raw: raw, writer: writer,
 		planner: NewPlanner(st, log), bus: bus, log: log,
 		workerID:    fmt.Sprintf("%s-%d", host, os.Getpid()),
-		concurrency: cfg.Ankr.InitialConcurrency,
-		pagePolicy:  ankr.NewPagePolicy(cfg),
-		meta:        addressmeta.New(st, ch),
+		concurrency: profile.Resolve(profile.DefaultMode), profile: profile,
+		requestedMode: profile.DefaultMode, effectiveMode: profile.DefaultMode,
+		modeReason: "system_default", modeChangedAt: time.Now(),
+		pagePolicy: ankr.NewPagePolicy(cfg),
+		meta:       addressmeta.New(st, ch),
 	}
 }
 
@@ -101,6 +110,9 @@ func (sc *Scheduler) setConcurrency(n int) {
 		n = sc.cfg.Ankr.MaxConcurrency
 	}
 	sc.mu.Lock()
+	if sc.profile.HardCeiling > 0 && n > sc.profile.HardCeiling {
+		n = sc.profile.HardCeiling
+	}
 	sc.concurrency = n
 	sc.mu.Unlock()
 }
@@ -149,7 +161,8 @@ func (sc *Scheduler) reaperLoop(ctx context.Context) {
 	}
 }
 
-// concurrencyLoop 自适应并发：AIMD + Provider 健康状态（安全门：429/5xx/超时率、P95、断路器）。
+// concurrencyLoop maps requested SAFE/FAST/TURBO modes to the audited profile
+// and applies bounded downward protection. It never probes above TURBO.
 func (sc *Scheduler) concurrencyLoop(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -158,37 +171,82 @@ func (sc *Scheduler) concurrencyLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if profile, err := sc.store.GetAnkrProductionProfile(ctx); err == nil {
+				sc.mu.Lock()
+				sc.profile = profile
+				sc.mu.Unlock()
+			}
 			hs := sc.prov.Health(ctx)
-			var pending int64
-			_ = sc.store.Pool.QueryRow(ctx,
-				"SELECT COUNT(*) FROM download_shards WHERE status IN ('PENDING','FAILED_RETRYABLE')").Scan(&pending)
 			active := atomic.LoadInt64(&sc.active)
-			cur := sc.currentConcurrency()
+			sc.mu.Lock()
+			profile := sc.profile
+			requested := sc.requestedMode
+			current := sc.effectiveMode
+			sc.mu.Unlock()
+			if activeMode, ok, err := sc.store.HighestActiveRequestedMode(ctx); err == nil && ok {
+				requested = activeMode
+			} else if !ok {
+				if configured, configuredErr := sc.store.GetAnkrConfiguredMode(ctx); configuredErr == nil {
+					requested = configured
+				} else {
+					requested = profile.DefaultMode
+				}
+			}
 
-			// V1.1（§23/§29）：Connection Limit 由 Concurrency Controller 响应，
-			// 不因单地址超时/大响应直接降全局并发。
+			pressure := hs.State == provider.HealthOpen || hs.State == provider.HealthDegraded || hs.RecentErrorRate > 0.10
+			reason := "user_selected"
+			if hs.State == provider.HealthOpen {
+				reason = "provider_circuit_open"
+			}
+			if hs.State == provider.HealthDegraded || hs.RecentErrorRate > 0.10 {
+				reason = "provider_degraded"
+			}
+
 			if ac, ok := sc.prov.(*ankr.Client); ok {
 				conn := ac.ConnectionLimitCount()
 				if conn > sc.lastConnLimit {
-					cur = maxInt(1, cur/2)
-					sc.log.Warn("connection limit detected, reducing concurrency", "current", cur)
+					pressure = true
+					reason = "provider_degraded"
 				}
 				sc.lastConnLimit = conn
 			}
-
-			switch hs.State {
-			case provider.HealthOpen:
-				cur = 1
-			case provider.HealthDegraded:
-				cur = maxInt(1, cur/2)
-			default:
-				if hs.RecentErrorRate > 0.10 {
-					cur = maxInt(1, cur/2)
-				} else if hs.RecentErrorRate < 0.01 && pending > active && active >= int64(cur) {
-					cur = minInt(sc.cfg.Ankr.MaxConcurrency, cur+2)
+			if pressure {
+				sc.healthyTicks = 0
+			} else {
+				sc.healthyTicks++
+			}
+			effective := nextEffectiveMode(current, requested, pressure, sc.healthyTicks >= 3)
+			if effective != current {
+				sc.healthyTicks = 0
+				if !pressure {
+					reason = "recovered"
+				}
+				sc.modeChangedAt = time.Now()
+				sc.log.Info("Ankr performance mode changed", "requested_mode", requested,
+					"old_effective_mode", current, "new_effective_mode", effective, "reason", reason)
+				_ = sc.store.InsertAudit(ctx, nil, "ankr_performance_mode_changed", "ankr_scheduler", "global", map[string]any{
+					"requested_mode": requested, "old_effective_mode": current, "new_effective_mode": effective,
+					"reason": reason, "target_before": profile.Resolve(current), "target_after": profile.Resolve(effective),
+				})
+				sc.publish("events.ankr.performance_mode", map[string]any{
+					"type": "performance_mode", "requested_mode": requested, "old_effective_mode": current,
+					"effective_mode": effective, "reason": reason, "ts": time.Now(),
+				})
+			} else if !pressure && effective == requested {
+				if active == 0 {
+					reason = "system_default"
 				}
 			}
-			sc.setConcurrency(cur)
+			target := profile.Resolve(effective)
+			sc.setConcurrency(target)
+			sc.mu.Lock()
+			sc.requestedMode, sc.effectiveMode, sc.modeReason = requested, effective, reason
+			changedAt := sc.modeChangedAt
+			sc.mu.Unlock()
+			_ = sc.store.SetAnkrRuntimeState(ctx, model.PerformanceRuntimeState{
+				RequestedMode: requested, EffectiveMode: effective, TargetConcurrency: sc.currentConcurrency(),
+				ActiveConcurrency: int(active), ModeReason: reason, ModeChangedAt: changedAt,
+			})
 		}
 	}
 }

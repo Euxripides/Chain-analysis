@@ -1,4 +1,4 @@
-import type { CoveragePreview, ExportRow, Job, JobDetail, Snapshot } from '../types'
+import type { AnkrProductionProfile, CoveragePreview, ExportRow, Job, JobDetail, PerformanceMode, PerformanceModeState, Snapshot } from '../types'
 
 export type TokenMetadata = { chain: string; contract_address: string; name?: string; symbol?: string; decimals: number | null; token_type?: string; logo_url?: string; verified: boolean; metadata_source?: string; confidence: string; metadata_status: string }
 
@@ -22,6 +22,9 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const apiControlHttp = <T,>(path: string, init?: RequestInit) => http<T>('/api-control' + path, init)
 
+// V1.3：Count Provider Port 只读端点（§72）。
+export const countOracleHttp = <T,>(path: string) => http<T>('/count-oracle' + path)
+
 export const api = {
   ensure: (payload: unknown) => http<{ job_id: string | null; coverage: number; status: string }>('/datasets/ensure', { method: 'POST', body: JSON.stringify(payload) }),
   preview: (payload: unknown) => http<CoveragePreview>('/datasets/coverage/preview', { method: 'POST', body: JSON.stringify(payload) }),
@@ -31,6 +34,10 @@ export const api = {
   resume: (id: string) => http<{ status: string }>(`/download-jobs/${id}/resume`, { method: 'POST' }),
   cancel: (id: string) => http<{ status: string }>(`/download-jobs/${id}/cancel`, { method: 'POST' }),
   providerStatus: () => http<Record<string, unknown>>('/providers/ankr/status'),
+  getAnkrProductionProfile: () => http<AnkrProductionProfile>('/providers/ankr/production-profile'),
+  getAnkrFetchRuntime: () => http<PerformanceModeState>('/providers/ankr/fetch-runtime'),
+  setAnkrPerformanceMode: (mode: PerformanceMode) => http<PerformanceModeState>('/providers/ankr/performance-mode', { method: 'POST', body: JSON.stringify({ mode }) }),
+  setJobPerformanceMode: (id: string, mode: PerformanceMode) => http<PerformanceModeState & { job_id: string }>('/download-jobs/' + id + '/performance-mode', { method: 'POST', body: JSON.stringify({ mode }) }),
   providerUsage: (hours = 24) => http<{ since: string; by_dataset: Record<string, { requests: number; credits: number; cost_usd: number; rows: number; bytes: number }> }>(`/providers/ankr/usage?hours=${hours}`),
   createExport: (jobId: string, dataset: string, format: string) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify({ job_id: jobId, dataset, format }) }),
   createExportBySubject: (dataset: string, subject: string, chain: string) => http<ExportRow>('/exports', { method: 'POST', body: JSON.stringify({ dataset, format: 'csv', subject, chain }) }),

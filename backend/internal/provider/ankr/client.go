@@ -142,6 +142,7 @@ func readBodyWithLimit(r io.Reader, maxBytes int64) ([]byte, bool, error) {
 func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
 	ok, state := c.breaker.allow()
 	if !ok {
+		observability.AnkrCircuitRejection.WithLabelValues(req.Chain, req.Dataset).Inc()
 		return provider.FetchResult{}, &provider.Error{
 			Provider: "ankr", Class: provider.ClassUpstream,
 			Message:   fmt.Sprintf("provider circuit breaker %s", state),
@@ -179,7 +180,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		pe := c.classifyCtxErr(ctx, err, req.PageSize)
 		pe.Duration = elapsed
 		pe.Provider = "ankr"
-		c.recordFailure(pe)
+		c.recordFailure(pe, req.Chain, req.Dataset)
 		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
 		return provider.FetchResult{}, pe
 	}
@@ -192,7 +193,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			req.PageSize, res.ContentLength)
 		pe.Provider = "ankr"
 		pe.HTTPStatus = res.StatusCode
-		c.recordFailure(pe)
+		c.recordFailure(pe, req.Chain, req.Dataset)
 		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
 		return provider.FetchResult{}, pe
 	}
@@ -201,7 +202,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	if rerr != nil {
 		pe := &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
 			Message: "read response: " + rerr.Error(), Retryable: true}
-		c.recordFailure(pe)
+		c.recordFailure(pe, req.Chain, req.Dataset)
 		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
 		return provider.FetchResult{}, pe
 	}
@@ -214,7 +215,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			req.PageSize, int64(respBytes))
 		pe.Provider = "ankr"
 		pe.HTTPStatus = res.StatusCode
-		c.recordFailure(pe)
+		c.recordFailure(pe, req.Chain, req.Dataset)
 		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
 		return provider.FetchResult{}, pe
 	}
@@ -227,7 +228,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 				Message: "invalid json: " + err.Error(), Retryable: true,
 				BodyBytes: int64(respBytes), Cause: err, Kind: provider.ErrTemporary}
-			c.recordFailure(pe)
+			c.recordFailure(pe, req.Chain, req.Dataset)
 			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
 			return provider.FetchResult{}, pe
 		}
@@ -235,7 +236,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			pe := c.classifyRPCError(rpc.Error, retryAfter)
 			pe.Duration = elapsed
 			pe.BodyBytes = int64(respBytes)
-			c.recordFailure(pe)
+			c.recordFailure(pe, req.Chain, req.Dataset)
 			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
 			return provider.FetchResult{}, pe
 		}
@@ -243,7 +244,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		if perr != nil {
 			pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 				Message: "parse result: " + perr.Error(), Retryable: true, Cause: perr, Kind: provider.ErrTemporary}
-			c.recordFailure(pe)
+			c.recordFailure(pe, req.Chain, req.Dataset)
 			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
 			return provider.FetchResult{}, pe
 		}
@@ -256,7 +257,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	pe := c.classifyHTTPError(res.StatusCode, respBody, retryAfter)
 	pe.Duration = elapsed
 	pe.BodyBytes = int64(respBytes)
-	c.recordFailure(pe)
+	c.recordFailure(pe, req.Chain, req.Dataset)
 	c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
 	return provider.FetchResult{}, pe
 }
@@ -434,13 +435,17 @@ func parseRetryAfter(h http.Header) time.Duration {
 
 func (c *Client) recordSuccess() {
 	c.breaker.record(true)
-	c.breaker.update()
+	_, _ = c.breaker.update()
 	c.consecutive.Store(0)
 }
 
-func (c *Client) recordFailure(pe *provider.Error) {
+func (c *Client) recordFailure(pe *provider.Error, chain, dataset string) {
+	observability.AnkrProviderRootFailure.WithLabelValues(chain, dataset, string(pe.Class)).Inc()
 	c.breaker.record(false)
-	c.breaker.update()
+	before, after := c.breaker.update()
+	if before != "OPEN" && after == "OPEN" {
+		observability.AnkrCircuitOpenTransition.Inc()
+	}
 	c.consecutive.Add(1)
 	c.lastErr.Store(pe.Message)
 	c.lastErrAt.Store(time.Now())

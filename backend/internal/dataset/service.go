@@ -193,6 +193,13 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 
 // Ensure 创建下载任务（Worker 端 Planner 负责 Coverage 缺口 → Shard 规划）。
 func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureResponse, error) {
+	if req.Concurrency != nil {
+		return nil, fmt.Errorf("numeric concurrency is not supported; use performance_mode")
+	}
+	performanceMode, err := model.ParsePerformanceMode(req.PerformanceMode)
+	if err != nil {
+		return nil, err
+	}
 	subjects, err := NormalizeAndDedupeAddresses(req.Subjects)
 	if err != nil {
 		return nil, err
@@ -245,6 +252,9 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		ToTimestamp:   rng.ToTimestamp,
 		Datasets:      datasets,
 		ReusePolicy:   req.ReusePolicy,
+		RequestedMode: performanceMode,
+		EffectiveMode: performanceMode,
+		ModeReason:    modeReason(req.PerformanceMode),
 		HeadBlock:     rng.HeadBlock,
 		ResolvedAt:    &resolvedAt,
 		Stats: map[string]any{
@@ -289,6 +299,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	}
 	s.Store.InsertAudit(ctx, nil, "dataset.ensure", "download_job", job.ID, map[string]any{
 		"subjects": len(subjects), "datasets": datasets, "chain": chain, "range_type": rng.RangeType,
+		"requested_mode": performanceMode,
 	})
 	jobID := job.ID
 	return &EnsureResponse{
@@ -297,6 +308,13 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		JobID:      &jobID,
 		Coverage:   preview.OverallRatio,
 	}, nil
+}
+
+func modeReason(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "system_default"
+	}
+	return "user_selected"
 }
 
 func sanitizeDatasets(in []string) ([]string, error) {

@@ -15,6 +15,12 @@ export function buildOklinkTxUrl(chain: string, txHash: string): string | null {
   return 'https://www.oklink.com/' + slug + '/tx/' + txHash
 }
 
+export function buildOklinkAddressUrl(chain: string, address: string): string | null {
+  const slug = OKLINK_CHAIN_SLUG[chain]
+  if (!slug || !address) return null
+  return 'https://www.oklink.com/' + slug + '/address/' + address
+}
+
 export function shortHash(h: string): string {
   if (!h) return ''
   if (h.length <= 16) return h

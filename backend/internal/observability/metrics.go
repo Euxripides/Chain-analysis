@@ -104,6 +104,15 @@ var (
 	AnkrConnectionLimit = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "ankr_connection_limit_total", Help: "连接数限制错误次数（-32067 等）",
 	})
+	AnkrProviderRootFailure = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "ankr_provider_root_failure_total", Help: "Provider 根因失败（不含断路器拒绝）",
+	}, []string{"chain", "dataset", "error_class"})
+	AnkrCircuitOpenTransition = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ankr_circuit_open_transition_total", Help: "Ankr 断路器进入 OPEN 次数",
+	})
+	AnkrCircuitRejection = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "ankr_circuit_rejection_total", Help: "Ankr 断路器 OPEN 后的保护性拒绝次数",
+	}, []string{"chain", "dataset"})
 
 	// Coverage / Export
 	CoverageHitRatio = promauto.NewGauge(prometheus.GaugeOpts{

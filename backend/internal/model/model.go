@@ -57,29 +57,33 @@ func ValidDataset(d string) bool {
 }
 
 type DownloadJob struct {
-	ID             string         `json:"id"`
-	JobNo          string         `json:"job_no"`
-	Status         string         `json:"status"`
-	Priority       int            `json:"priority"`
-	Source         string         `json:"source"`
-	Chain          string         `json:"chain"`
-	RangeType      string         `json:"range_type"`
-	FromBlock      *int64         `json:"from_block"`
-	ToBlock        *int64         `json:"to_block"`
-	FromTimestamp  *time.Time     `json:"from_timestamp"`
-	ToTimestamp    *time.Time     `json:"to_timestamp"`
-	Datasets       []string       `json:"datasets"`
-	ReusePolicy    string         `json:"reuse_policy"`
-	HeadBlock      int64          `json:"head_block"`
-	CreatedBy      *string        `json:"created_by"`
-	OrganizationID *string        `json:"organization_id"`
-	WorkspaceID    *string        `json:"workspace_id"`
-	ProjectID      *string        `json:"project_id"`
-	ResolvedAt     *time.Time     `json:"resolved_at"`
-	Error          string         `json:"error"`
-	Stats          map[string]any `json:"stats"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	ID             string          `json:"id"`
+	JobNo          string          `json:"job_no"`
+	Status         string          `json:"status"`
+	Priority       int             `json:"priority"`
+	Source         string          `json:"source"`
+	Chain          string          `json:"chain"`
+	RangeType      string          `json:"range_type"`
+	FromBlock      *int64          `json:"from_block"`
+	ToBlock        *int64          `json:"to_block"`
+	FromTimestamp  *time.Time      `json:"from_timestamp"`
+	ToTimestamp    *time.Time      `json:"to_timestamp"`
+	Datasets       []string        `json:"datasets"`
+	ReusePolicy    string          `json:"reuse_policy"`
+	HeadBlock      int64           `json:"head_block"`
+	CreatedBy      *string         `json:"created_by"`
+	OrganizationID *string         `json:"organization_id"`
+	WorkspaceID    *string         `json:"workspace_id"`
+	ProjectID      *string         `json:"project_id"`
+	RequestedMode  PerformanceMode `json:"requested_mode"`
+	EffectiveMode  PerformanceMode `json:"effective_mode"`
+	ModeReason     string          `json:"mode_reason"`
+	ModeChangedAt  *time.Time      `json:"mode_changed_at"`
+	ResolvedAt     *time.Time      `json:"resolved_at"`
+	Error          string          `json:"error"`
+	Stats          map[string]any  `json:"stats"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 type Subject struct {

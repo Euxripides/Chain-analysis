@@ -12,19 +12,22 @@ type RangeSpec struct {
 }
 
 type EnsureRequest struct {
-	Source      string    `json:"source"`
-	Priority    int       `json:"priority"`
-	Subjects    []string  `json:"subjects"`
-	Chain       string    `json:"chain"`
-	Datasets    []string  `json:"datasets"`
-	Range       RangeSpec `json:"range"`
-	ReusePolicy string    `json:"reuse_policy"`
+	Source          string    `json:"source"`
+	Priority        int       `json:"priority"`
+	Subjects        []string  `json:"subjects"`
+	Chain           string    `json:"chain"`
+	Datasets        []string  `json:"datasets"`
+	Range           RangeSpec `json:"range"`
+	ReusePolicy     string    `json:"reuse_policy"`
+	PerformanceMode string    `json:"performance_mode"`
+	// Concurrency exists only so legacy numeric requests can be rejected explicitly.
+	Concurrency *int `json:"concurrency,omitempty"`
 
 	// V1.2：案件/标签（§22/§23）
-	CaseName        string                `json:"case_name"`
-	Tags            []string              `json:"tags"`
-	CreateMissingMeta bool                `json:"create_missing_meta"`
-	SubjectMeta     map[string]SubjectMeta `json:"subject_meta"`
+	CaseName          string                 `json:"case_name"`
+	Tags              []string               `json:"tags"`
+	CreateMissingMeta bool                   `json:"create_missing_meta"`
+	SubjectMeta       map[string]SubjectMeta `json:"subject_meta"`
 }
 
 // SubjectMeta 批量地址 Per-Address Override（§23）。
@@ -48,15 +51,15 @@ type SubjectDatasetCoverage struct {
 }
 
 type CoveragePreviewResponse struct {
-	Chain    string                    `json:"chain"`
-	Datasets []string                  `json:"datasets"`
-	Items    []SubjectDatasetCoverage  `json:"items"`
-	OverallRatio float64               `json:"overall_ratio"`
+	Chain        string                   `json:"chain"`
+	Datasets     []string                 `json:"datasets"`
+	Items        []SubjectDatasetCoverage `json:"items"`
+	OverallRatio float64                  `json:"overall_ratio"`
 }
 
 type EnsureResponse struct {
-	Status    string  `json:"status"` // planned | ready
-	DatasetRef string `json:"dataset_ref"`
-	JobID     *string `json:"job_id"`
-	Coverage  float64 `json:"coverage"`
+	Status     string  `json:"status"` // planned | ready
+	DatasetRef string  `json:"dataset_ref"`
+	JobID      *string `json:"job_id"`
+	Coverage   float64 `json:"coverage"`
 }

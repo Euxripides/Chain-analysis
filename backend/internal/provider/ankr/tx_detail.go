@@ -24,6 +24,7 @@ const MethodTxDetail = "ankr_getTransactionsByHash"
 func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error) {
 	ok, state := c.breaker.allow()
 	if !ok {
+		observability.AnkrCircuitRejection.WithLabelValues(chain, "transaction_detail").Inc()
 		return nil, &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
 			Message: fmt.Sprintf("provider circuit breaker %s", state), Retryable: true}
 	}
@@ -54,7 +55,7 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	if err != nil {
 		pe := c.classifyCtxErr(ctx, err, 0)
 		pe.Duration = elapsed
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, 0)
 		return nil, pe
 	}
@@ -64,21 +65,21 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	if rerr != nil {
 		pe := &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
 			Message: "read response: " + rerr.Error(), Retryable: true}
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, 0)
 		return nil, pe
 	}
 	if exceeded {
 		pe := provider.NewResponseTooLarge("tx detail response exceeded hard limit", 0, c.hardLimit)
 		pe.Provider = "ankr"
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, 0)
 		return nil, pe
 	}
 	if res.StatusCode != http.StatusOK {
 		pe := c.classifyHTTPError(res.StatusCode, respBody, parseRetryAfter(res.Header))
 		pe.Duration = elapsed
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, len(respBody))
 		return nil, pe
 	}
@@ -86,14 +87,14 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	if err := json.Unmarshal(respBody, &rpc); err != nil {
 		pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 			Message: "invalid json: " + err.Error(), Retryable: true, Cause: err}
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, len(respBody))
 		return nil, pe
 	}
 	if rpc.Error != nil {
 		pe := c.classifyRPCError(rpc.Error, parseRetryAfter(res.Header))
 		pe.Duration = elapsed
-		c.recordFailure(pe)
+		c.recordFailure(pe, chain, "transaction_detail")
 		c.recordDeepUsage(txHash, "error", pe, elapsed, len(respBody))
 		return nil, pe
 	}

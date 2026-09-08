@@ -16,18 +16,23 @@ import (
 func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 	j := &model.DownloadJob{}
 	var fb, tb pgtype.Int8
-	var ft, tt, rt pgtype.Timestamptz
+	var ft, tt, rt, modeChanged pgtype.Timestamptz
 	var stats []byte
 	var cb *string
 	err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Chain, &j.RangeType,
 		&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.HeadBlock, &cb, &j.Error, &stats,
-		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt)
+		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &j.RequestedMode, &j.EffectiveMode,
+		&j.ModeReason, &modeChanged, &rt, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if rt.Valid {
 		v := rt.Time
 		j.ResolvedAt = &v
+	}
+	if modeChanged.Valid {
+		v := modeChanged.Time
+		j.ModeChangedAt = &v
 	}
 	if fb.Valid {
 		v := fb.Int64
@@ -58,7 +63,7 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 
 const jobCols = "id, job_no, status, priority, source, chain, range_type, from_block, to_block, " +
 	"from_timestamp, to_timestamp, datasets, reuse_policy, head_block, created_by, error, stats, " +
-	"organization_id, workspace_id, project_id, resolved_at, created_at, updated_at"
+	"organization_id, workspace_id, project_id, requested_mode, effective_mode, mode_reason, mode_changed_at, resolved_at, created_at, updated_at"
 
 // CreateJobWithSubjects 创建 Job 与 Subject（四级模型前两级）。
 func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob, subjects []string) ([]model.Subject, error) {
@@ -74,11 +79,11 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 
 	_, err = tx.Exec(ctx, "INSERT INTO download_jobs "+
 		"(id, job_no, status, priority, source, chain, range_type, from_block, to_block, from_timestamp, to_timestamp, "+
-		" datasets, reuse_policy, head_block, created_by, organization_id, workspace_id, project_id, resolved_at) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)",
+		" datasets, reuse_policy, head_block, created_by, organization_id, workspace_id, project_id, requested_mode, effective_mode, mode_reason, mode_changed_at, resolved_at) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)",
 		j.ID, j.JobNo, j.Status, j.Priority, j.Source, j.Chain, j.RangeType, j.FromBlock, j.ToBlock,
 		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.HeadBlock, j.CreatedBy,
-		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.ResolvedAt)
+		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.RequestedMode, j.EffectiveMode, j.ModeReason, time.Now(), j.ResolvedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert job: %w", err)
 	}
@@ -117,7 +122,7 @@ func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, erro
 func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) ([]model.DownloadJob, error) {
 	q := "SELECT j.id, j.job_no, j.status, j.priority, j.source, j.chain, j.range_type, j.from_block, j.to_block, " +
 		"j.from_timestamp, j.to_timestamp, j.datasets, j.reuse_policy, j.head_block, j.created_by, j.error, j.stats, " +
-		"j.organization_id, j.workspace_id, j.project_id, j.resolved_at, j.created_at, j.updated_at, " +
+		"j.organization_id, j.workspace_id, j.project_id, j.requested_mode, j.effective_mode, j.mode_reason, j.mode_changed_at, j.resolved_at, j.created_at, j.updated_at, " +
 		"COALESCE(SUM(sh.downloaded_rows),0), COUNT(sh.id), COUNT(sh.id) FILTER (WHERE sh.status='COMPLETED'), " +
 		"COALESCE(u.req,0), COALESCE(u.cost,0) " +
 		"FROM download_jobs j " +
@@ -139,14 +144,15 @@ func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) 
 	for rows.Next() {
 		var j model.DownloadJob
 		var fb, tb pgtype.Int8
-		var ft, tt, rt pgtype.Timestamptz
+		var ft, tt, rt, modeChanged pgtype.Timestamptz
 		var stats []byte
 		var cb *string
 		var rowsSum, total, done, reqs int64
 		var cost float64
 		err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Chain, &j.RangeType,
 			&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.HeadBlock, &cb, &j.Error, &stats,
-			&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt,
+			&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &j.RequestedMode, &j.EffectiveMode,
+			&j.ModeReason, &modeChanged, &rt, &j.CreatedAt, &j.UpdatedAt,
 			&rowsSum, &total, &done, &reqs, &cost)
 		if err != nil {
 			return nil, err
@@ -170,6 +176,10 @@ func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) 
 		if rt.Valid {
 			v := rt.Time
 			j.ResolvedAt = &v
+		}
+		if modeChanged.Valid {
+			v := modeChanged.Time
+			j.ModeChangedAt = &v
 		}
 		if cb != nil {
 			j.CreatedBy = cb

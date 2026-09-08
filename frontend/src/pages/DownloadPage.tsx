@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FileUp, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 import ChainSelect from '../components/ChainSelect'
-import { CHAINS, DATASETS } from '../types'
+import NoticeDialog from '../components/NoticeDialog'
+import { PerformanceModeSelector, useAnkrProductionProfile } from '../components/PerformanceMode'
+import { CHAINS, DATASETS, type PerformanceMode } from '../types'
 import { datasetLabel } from '../utils/field-labels'
 
 interface RangeSpec {
@@ -25,10 +28,12 @@ export default function DownloadPage() {
   const [fromTime, setFromTime] = useState('')
   const [toTime, setToTime] = useState('')
   const [datasets, setDatasets] = useState<string[]>(['transactions', 'token_transfers', 'nft_transfers', 'logs'])
+  const [performanceMode, setPerformanceMode] = useState<PerformanceMode>('fast')
   const [preview, setPreview] = useState<{ overall_ratio: number; items: { subject: string; dataset: string; ratio: number }[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const profileQuery = useAnkrProductionProfile()
 
   // V1.2：案件/标签（§22/§24）
   const [cases, setCases] = useState<{ id: string; name: string }[]>([])
@@ -174,6 +179,7 @@ export default function DownloadPage() {
 				source: 'user_download', priority: 100,
 				subjects, chain: groupChain, datasets, range: buildRange(),
 				reuse_policy: 'prefer_local',
+				performance_mode: performanceMode,
 				case_name: caseName || undefined,
 				tags: tagNames.length ? tagNames : undefined,
 				create_missing_meta: false,
@@ -193,57 +199,49 @@ export default function DownloadPage() {
     setDatasets((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]))
 
   return (
-    <div className="page">
-      <h1>地址数据下载</h1>
-      <p className="sub">Coverage-aware 下载：已有本地数据自动复用，只请求缺口。Provider：Ankr Advanced API</p>
+    <div className="page download-page">
+      <header className="page-header download-header">
+        <div><h1>地址数据下载</h1><p>配置地址、链、范围和数据集</p></div>
+      </header>
 
-      <div className="card">
-        <div className="card-title">地址</div>
-        <textarea
-          value={addressText}
-          onChange={(e) => setAddressText(e.target.value)}
-          placeholder="每行一个地址，或粘贴 CSV/TXT 内容"
-          rows={6}
-        />
-        <div className="row gap" style={{ marginTop: 8 }}>
-          <span className="muted">{addresses.valid.length} 个有效 · {addresses.dup} 个重复 · {addresses.bad} 个错误</span>
-          <button className="ghost" onClick={() => fileRef.current?.click()}>导入 CSV / TXT / XLSX</button>
-          <input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" hidden
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
-        </div>
-      </div>
+      <div className="form-workspace">
+        <div className="form-main">
+          <section className="form-section">
+            <header className="form-section-head"><span className="form-section-index">01</span><div><h2>调查对象</h2><p>输入单个或批量地址，系统会自动去重并验证格式</p></div></header>
+            <textarea id="download-addresses" className="address-input" aria-label="调查地址" name="addresses" autoComplete="off" spellCheck={false}
+              value={addressText} onChange={(e) => setAddressText(e.target.value)} placeholder={'0x9b77…b80dd\n0x8a123…'} rows={3} />
+            <div className="input-meta"><span><strong>{addresses.valid.length}</strong> 个有效 · {addresses.dup} 个重复 · {addresses.bad} 个错误</span><button className="ghost" onClick={() => fileRef.current?.click()}><FileUp size={14} aria-hidden="true" /> 导入 CSV / TXT / XLSX</button><input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" hidden aria-label="导入地址文件" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} /></div>
+          </section>
 
-      <div className="row gap">
-        <div className="card flex-1 chain-select-card">
-          <div className="card-title">链</div>
-          <ChainSelect value={chain} onChange={setChain} />
-        </div>
-        <div className="card flex-2">
-          <div className="card-title">范围</div>
-          <div className="row gap wrap">
+          <section className="form-section">
+            <header className="form-section-head"><span className="form-section-index">02</span><div><h2>链与数据范围</h2><p>设置默认链和所需区块或时间窗口</p></div></header>
+            <div className="form-control-row">
+              <label>区块链<ChainSelect value={chain} onChange={setChain} /></label>
+              <div className="field-label">数据范围<div className="range-selector">
             <label><input type="radio" checked={rangeType === 'full'} onChange={() => setRangeType('full')} /> 全量</label>
             <label><input type="radio" checked={rangeType === 'block'} onChange={() => setRangeType('block')} /> 区块范围</label>
             <label><input type="radio" checked={rangeType === 'time'} onChange={() => setRangeType('time')} /> 时间范围</label>
-          </div>
+              </div></div>
+            </div>
           {rangeType === 'block' && (
             <div className="row gap" style={{ marginTop: 8 }}>
-              <input type="number" min="0" step="1" placeholder="起始区块" value={fromBlock} onChange={(e) => setFromBlock(e.target.value)} />
-              <input type="number" min="0" step="1" placeholder="结束区块" value={toBlock} onChange={(e) => setToBlock(e.target.value)} />
+              <input aria-label="起始区块" name="from-block" autoComplete="off" type="number" min="0" step="1" placeholder="起始区块…" value={fromBlock} onChange={(e) => setFromBlock(e.target.value)} />
+              <input aria-label="结束区块" name="to-block" autoComplete="off" type="number" min="0" step="1" placeholder="结束区块…" value={toBlock} onChange={(e) => setToBlock(e.target.value)} />
             </div>
           )}
           {rangeType === 'time' && (
             <div className="row gap" style={{ marginTop: 8 }}>
-              <input type="datetime-local" value={fromTime} onChange={(e) => setFromTime(e.target.value)} />
-              <input type="datetime-local" value={toTime} onChange={(e) => setToTime(e.target.value)} />
+              <input aria-label="开始时间" name="from-time" autoComplete="off" type="datetime-local" value={fromTime} onChange={(e) => setFromTime(e.target.value)} />
+              <input aria-label="结束时间" name="to-time" autoComplete="off" type="datetime-local" value={toTime} onChange={(e) => setToTime(e.target.value)} />
             </div>
           )}
-        </div>
-      </div>
+          </section>
 
-      <div className="card">
-        <div className="card-title">案件 / 标签（可选，§22）</div>
+      <details className="form-section advanced-settings">
+        <summary>高级条件（可选）<span>＋ 展开条件</span></summary>
+        <div className="advanced-settings-body">
         <div className="row gap">
-          <select style={{ maxWidth: 220 }} value={caseName} onChange={(e) => setCaseName(e.target.value)}>
+          <select aria-label="选择案件" style={{ maxWidth: 220 }} value={caseName} onChange={(e) => setCaseName(e.target.value)}>
             <option value="">选择案件</option>
             {cases.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
@@ -259,21 +257,28 @@ export default function DownloadPage() {
           <button className="ghost sm" onClick={createTag}>+ 新建标签</button>
         </div>
 		{(Object.keys(subjectMeta).length > 0 || Object.keys(subjectChains).length > 0) && <p className="muted" style={{ marginTop: 6 }}>已解析 {Object.keys(subjectMeta).length} 个案件/标签映射、{Object.keys(subjectChains).length} 个链映射；不同链将自动拆为多个任务</p>}
-      </div>
+        </div>
+      </details>
 
-      <div className="card">
-        <div className="card-title">Dataset</div>
-        <div className="row gap wrap">
+      <section className="form-section">
+        <header className="form-section-head"><span className="form-section-index">04</span><div><h2>数据集</h2><p>选择需要采集和标准化的数据类型</p></div></header>
+        <div className="dataset-grid">
           {DATASETS.map((d) => (
             <label key={d} className="chip">
               <input type="checkbox" checked={datasets.includes(d)} onChange={() => toggleDataset(d)} /> {datasetLabel(d)}
             </label>
           ))}
         </div>
-      </div>
+      </section>
+
+      <section className="form-section">
+        <header className="form-section-head"><span className="form-section-index">05</span><div><h2>运行模式</h2><p>选择 Ankr 全局拉取策略</p></div></header>
+        <PerformanceModeSelector value={performanceMode} onChange={setPerformanceMode} profile={profileQuery.data} disabled={busy} />
+      </section>
 
       {preview && (
-        <div className="card">
+        <div className="coverage-preview">
+          <div style={{ padding: 18 }}>
           <div className="card-title">本地 Coverage 预览</div>
           <div className="meter">
             <div className="meter-fill" style={{ width: (preview.overall_ratio * 100).toFixed(1) + '%' }} />
@@ -290,17 +295,18 @@ export default function DownloadPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
+        </div>
 
-      {error && <div className="error">{error}</div>}
-
-      <div className="row gap" style={{ marginTop: 16 }}>
-        <button onClick={doPreview} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}>Coverage 预览</button>
-        <button className="primary" onClick={doCreate} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}>
-          创建下载任务
-        </button>
+        <aside className="task-preview" aria-label="任务预览">
+          <header><small>TASK PREVIEW</small><h2>任务预览</h2></header>
+          <dl><div><dt>地址数量</dt><dd>{addresses.valid.length.toLocaleString()}</dd></div><div><dt>默认链</dt><dd>{chain.toUpperCase()}</dd></div><div><dt>数据范围</dt><dd>{rangeType === 'full' ? '全量' : rangeType === 'block' ? '区块范围' : '时间范围'}</dd></div><div><dt>数据集</dt><dd>{datasets.length} 类</dd></div><div><dt>运行模式</dt><dd>{performanceMode.toUpperCase()}</dd></div><div><dt>案件</dt><dd>{caseName || '未关联'}</dd></div><div><dt>Provider</dt><dd>Ankr Advanced API</dd></div></dl>
+          <footer><div className={'preview-readiness ' + (addresses.valid.length > 0 && datasets.length > 0 && rangeValid ? 'ready' : '')}><i />{addresses.valid.length > 0 && datasets.length > 0 && rangeValid ? '配置完整，可以创建任务' : '等待补全任务配置'}</div><button onClick={doPreview} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}>Coverage 预览</button><button className="primary" onClick={doCreate} disabled={busy || addresses.valid.length === 0 || datasets.length === 0 || !rangeValid}><ShieldCheck size={14} aria-hidden="true" /> {busy ? '正在创建…' : '创建下载任务'}</button></footer>
+        </aside>
       </div>
+      {error && <NoticeDialog title="下载任务未完成" message={error} onClose={() => setError('')} />}
     </div>
   )
 }

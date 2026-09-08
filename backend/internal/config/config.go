@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
 type AnkrConfig struct {
@@ -36,6 +38,16 @@ type AnkrConfig struct {
 	PageUpMaxBodyBytes          int64
 	PageDownCooldownSuccess     int
 	RangeSplitOnMinPageFailures int
+
+	// V1.4.2 production performance policy. These values bootstrap the audited
+	// database profile; the worker never accepts a target above HardCeiling.
+	ProdSafeConcurrency   int
+	ProdFastConcurrency   int
+	ProdTurboConcurrency  int
+	ProdHardCeiling       int
+	ProdRejectBoundary    int
+	MemoryBudgetBytes     int64
+	AbsoluteRSSLimitBytes int64
 }
 
 // MethodConfig V1.3 Method / ABI 解析（§17-§20/§31/§35）。
@@ -158,6 +170,19 @@ type AnkrManagementConfig struct {
 	SyncTTL       time.Duration
 }
 
+func (c *Config) AnkrProductionProfile() model.DownloadPerformanceProfile {
+	now := time.Now().UTC()
+	return model.DownloadPerformanceProfile{
+		Scope: "global", DefaultMode: model.PerformanceFast,
+		SafeConcurrency: c.Ankr.ProdSafeConcurrency, FastConcurrency: c.Ankr.ProdFastConcurrency,
+		TurboConcurrency: c.Ankr.ProdTurboConcurrency, HardCeiling: c.Ankr.ProdHardCeiling,
+		RejectBoundary: c.Ankr.ProdRejectBoundary, MemoryBudgetBytes: c.Ankr.MemoryBudgetBytes,
+		AbsoluteRSSLimitBytes: c.Ankr.AbsoluteRSSLimitBytes, PageSizeDefault: c.Ankr.MaxPageSize,
+		RequestTimeoutSeconds: int(c.Ankr.RequestTimeout / time.Second), RangeShardingEnabled: true,
+		Version: "v1.4.2", VerifiedAt: now, UpdatedAt: now, UpdatedBy: "env-bootstrap",
+	}
+}
+
 // splitList 解析逗号分隔配置。
 func splitList(value string) []string {
 	var out []string
@@ -190,6 +215,18 @@ func parsePageLevels(s string) []int {
 // Validate 启动校验（§32：错误配置直接启动失败）。
 func (c *Config) Validate() error {
 	a := &c.Ankr
+	if a.ProdSafeConcurrency <= 0 || a.ProdFastConcurrency <= a.ProdSafeConcurrency || a.ProdTurboConcurrency <= a.ProdFastConcurrency {
+		return fmt.Errorf("Ankr production concurrency must increase from SAFE to FAST to TURBO")
+	}
+	if a.ProdHardCeiling <= 0 || a.ProdHardCeiling > 48 {
+		return fmt.Errorf("ANKR_PROD_HARD_CEILING must be between 1 and 48")
+	}
+	if a.ProdTurboConcurrency > a.ProdHardCeiling || a.MaxConcurrency > a.ProdHardCeiling || a.InitialConcurrency > a.ProdHardCeiling {
+		return fmt.Errorf("Ankr production concurrency must not exceed hard ceiling %d", a.ProdHardCeiling)
+	}
+	if a.ProdRejectBoundary <= a.ProdHardCeiling {
+		return fmt.Errorf("ANKR_PROD_REJECT_BOUNDARY must exceed the production hard ceiling")
+	}
 	if a.ResponseHardLimitBytes <= 0 || a.ResponseSoftLimitBytes <= 0 {
 		return fmt.Errorf("ankr response limits must be positive")
 	}
@@ -298,10 +335,10 @@ func Load() *Config {
 			APIKey:                      os.Getenv("ANKR_API_KEY"),
 			Endpoint:                    env("ANKR_ENDPOINT", "https://rpc.ankr.com/multichain"),
 			MaxPageSize:                 envInt("ANKR_MAX_PAGE_SIZE", 10000),
-			InitialConcurrency:          envInt("ANKR_INITIAL_CONCURRENCY", 4),
-			MaxConcurrency:              envInt("ANKR_MAX_CONCURRENCY", 32),
+			InitialConcurrency:          envInt("ANKR_INITIAL_CONCURRENCY", 32),
+			MaxConcurrency:              envInt("ANKR_MAX_CONCURRENCY", 48),
 			RequestsPerMinute:           envInt("ANKR_REQUESTS_PER_MINUTE", 900),
-			RequestTimeout:              time.Duration(envInt("ANKR_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
+			RequestTimeout:              time.Duration(envInt("ANKR_REQUEST_TIMEOUT_SECONDS", 180)) * time.Second,
 			ResponseHeaderTimeout:       time.Duration(envInt("ANKR_RESPONSE_HEADER_TIMEOUT_SECONDS", 120)) * time.Second,
 			CreditsPerRequest:           envFloat("ANKR_CREDITS_PER_REQUEST", 700),
 			CostPerRequestUSD:           envFloat("ANKR_COST_PER_REQUEST_USD", 0.00007),
@@ -311,12 +348,19 @@ func Load() *Config {
 			PageSizeTransactions:        envInt("ANKR_PAGE_SIZE_TRANSACTIONS", 10000),
 			PageSizeTokenTransfers:      envInt("ANKR_PAGE_SIZE_TOKEN_TRANSFERS", 10000),
 			PageSizeNftTransfers:        envInt("ANKR_PAGE_SIZE_NFT_TRANSFERS", 10000),
-			PageSizeLogs:                envInt("ANKR_PAGE_SIZE_LOGS", 5000),
+			PageSizeLogs:                envInt("ANKR_PAGE_SIZE_LOGS", 10000),
 			PageUpSuccessCount:          envInt("ANKR_PAGE_UP_SUCCESS_COUNT", 3),
 			PageUpMaxDuration:           time.Duration(envInt("ANKR_PAGE_UP_MAX_DURATION_SECONDS", 30)) * time.Second,
 			PageUpMaxBodyBytes:          int64(envInt("ANKR_PAGE_UP_MAX_BODY_MB", 16)) << 20,
 			PageDownCooldownSuccess:     envInt("ANKR_PAGE_DOWN_COOLDOWN_SUCCESS_COUNT", 5),
 			RangeSplitOnMinPageFailures: envInt("ANKR_RANGE_SPLIT_ON_MIN_PAGE_FAILURES", 3),
+			ProdSafeConcurrency:         envInt("ANKR_PROD_SAFE_CONCURRENCY", 24),
+			ProdFastConcurrency:         envInt("ANKR_PROD_FAST_CONCURRENCY", 32),
+			ProdTurboConcurrency:        envInt("ANKR_PROD_TURBO_CONCURRENCY", 48),
+			ProdHardCeiling:             envInt("ANKR_PROD_HARD_CEILING", 48),
+			ProdRejectBoundary:          envInt("ANKR_PROD_REJECT_BOUNDARY", 64),
+			MemoryBudgetBytes:           int64(envInt("ANKR_MEMORY_BUDGET_MB", 6144)) << 20,
+			AbsoluteRSSLimitBytes:       int64(envInt("ANKR_ABSOLUTE_RSS_LIMIT_MB", 12288)) << 20,
 		},
 		Method: MethodConfig{
 			Enabled:          envBool("METHOD_RESOLVER_ENABLED", true),
