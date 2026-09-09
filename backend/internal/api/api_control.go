@@ -45,7 +45,7 @@ func parseControlFilter(r *http.Request) apiControlFilter {
 
 func usageWhere(f apiControlFilter, start int) (string, []any) {
 	args := []any{f.Since, f.Until}
-	parts := []string{fmt.Sprintf("request_time >= $%d", start), fmt.Sprintf("request_time < $%d", start+1)}
+	parts := []string{"usage_type<>'trc20_enrichment_summary'", fmt.Sprintf("request_time >= $%d", start), fmt.Sprintf("request_time < $%d", start+1)}
 	n := start + 2
 	if f.Provider != "" && f.Provider != "all" {
 		parts = append(parts, fmt.Sprintf("provider=$%d", n))
@@ -101,7 +101,7 @@ func (s *Server) handleAPIControlOverview(w http.ResponseWriter, r *http.Request
 	trendRows.Close()
 	control, _ := s.refreshControlState(r.Context())
 	var captureStartedAt *time.Time
-	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT MIN(request_time) FROM provider_usage`).Scan(&captureStartedAt)
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT MIN(request_time) FROM provider_usage WHERE usage_type<>'trc20_enrichment_summary'`).Scan(&captureStartedAt)
 	writeJSON(w, 200, map[string]any{"window": map[string]any{"from": f.Since, "to": f.Until}, "freshness": time.Now(),
 		"metrics": map[string]any{"logical_calls": calls, "provider_calls": providerCalls, "errors": errors, "retries": retries, "cache_hits": cacheHits, "success_rate": successRate, "credits": credits, "estimated_cost_usd": cost, "p50_ms": p50, "p95_ms": p95, "p99_ms": p99},
 		"trend":   trend, "control": control,

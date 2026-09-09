@@ -70,7 +70,12 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExport(context.Background(), exp, strings.ToLower(req.Subject), strings.ToLower(req.Chain))
+	chain := strings.ToLower(strings.TrimSpace(req.Chain))
+	subject := strings.TrimSpace(req.Subject)
+	if chain != "tron" {
+		subject = strings.ToLower(subject)
+	}
+	go s.runExport(context.Background(), exp, subject, chain)
 	writeJSON(w, http.StatusAccepted, exp)
 }
 
@@ -99,6 +104,10 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 	}
 	// 经 API 流式转发（MinIO 只绑内网，避免暴露存储端口）；支持 HTTP Range 断点续传（§57）
 	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Cache-Control", "private, max-age=86400, immutable, no-transform")
+	if exp.SHA256 != "" {
+		w.Header().Set("ETag", `"`+exp.SHA256+`"`)
+	}
 	ct := "application/octet-stream"
 	switch exp.Format {
 	case "csv":
@@ -149,7 +158,8 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
 		w.Header().Set("Content-Length", fmt.Sprint(end-start+1))
 		w.WriteHeader(http.StatusPartialContent)
-		if _, err := io.Copy(w, reader); err != nil {
+		buf := make([]byte, 1024*1024)
+		if _, err := io.CopyBuffer(w, reader, buf); err != nil {
 			s.deps.Log.Error("export range stream failed", "export_id", exp.ID, "err", err)
 		}
 		return
@@ -162,7 +172,11 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 	w.Header().Set("Content-Length", fmt.Sprint(size))
-	if _, err := io.Copy(w, reader); err != nil {
+	if r.Method == http.MethodHead {
+		return
+	}
+	buf := make([]byte, 1024*1024)
+	if _, err := io.CopyBuffer(w, reader, buf); err != nil {
 		s.deps.Log.Error("export stream failed", "export_id", exp.ID, "err", err)
 	}
 }
@@ -192,7 +206,11 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 		}
 		subjects = subjects[:0]
 		for _, item := range jobSubjects {
-			subjects = append(subjects, strings.ToLower(item.Subject))
+			subject := strings.TrimSpace(item.Subject)
+			if chain != "tron" {
+				subject = strings.ToLower(subject)
+			}
+			subjects = append(subjects, subject)
 		}
 	}
 	var fromBlock, toBlock *int64
@@ -348,56 +366,22 @@ func writeNDJSON(ctx context.Context, s *Server, key string, rows []map[string]a
 func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any) (int64, error) {
 	f := excelize.NewFile()
 	defer f.Close()
-	sheet := "Sheet1"
 	var cols []string
 	if len(rows) > 0 {
 		cols = mapKeys(rows[0])
 	}
 	const maxRowsPerSheet = 1_048_576
-	writeSheet := func(name string, start, end int) error {
-		idx, err := f.GetSheetIndex(name)
-		if err != nil {
-			return err
-		}
-		if idx < 0 {
-			idx, err = f.NewSheet(name)
-			if err != nil {
-				return err
-			}
-		}
-		_ = idx
-		sw, err := f.NewStreamWriter(name)
-		if err != nil {
-			return err
-		}
-		if start == 0 && len(cols) > 0 {
-			if err := sw.SetRow("A1", colsToAny(cols)); err != nil {
-				return err
-			}
-		}
-		for i := start; i < end; i++ {
-			cell, _ := excelize.CoordinatesToCellName(1, i-start+2)
-			rec := make([]any, len(cols))
-			for j, c := range cols {
-				rec[j] = rows[i][c]
-			}
-			if err := sw.SetRow(cell, rec); err != nil {
-				return err
-			}
-		}
-		return sw.Flush()
-	}
 	sheetIdx := 0
 	for start := 0; start < len(rows); start += maxRowsPerSheet - 1 {
 		end := start + maxRowsPerSheet - 1
 		if end > len(rows) {
 			end = len(rows)
 		}
-		name := sheet
+		name := "Sheet1"
 		if sheetIdx > 0 {
 			name = fmt.Sprintf("Sheet%d", sheetIdx+1)
 		}
-		if err := writeSheet(name, start, end); err != nil {
+		if err := writeXLSXSheet(f, name, rows, cols, start, end); err != nil {
 			return 0, err
 		}
 		sheetIdx++
@@ -415,6 +399,61 @@ func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any
 		return 0, err
 	}
 	return info.Size, werr
+}
+
+// writeXLSXSheet 流式写单个 sheet，承载 rows[start:end)。首表（start==0）在第 1
+// 行写表头，数据从第 2 行开始；续表从第 1 行开始。
+//
+// <dimension> 必须在 NewStreamWriter 之前设置：Excelize 在 StreamWriter.Flush()
+// 时把 NewStreamWriter 快照的 worksheet 结构序列化进工作表 XML，Flush 之后再调
+// SetSheetDimension 不会生效。若保持默认 <dimension ref="A1">，工作表 XML 中虽
+// 有全部数据行，但依赖 dimension 的读取方（openpyxl read_only、pandas 等）会把
+// 该工作簿报告为只有表头、0 数据行（XLSX V1/V2 验收失败的根因）。
+func writeXLSXSheet(f *excelize.File, name string, rows []map[string]any, cols []string, start, end int) error {
+	if idx, err := f.GetSheetIndex(name); err != nil || idx < 0 {
+		if _, err := f.NewSheet(name); err != nil {
+			return err
+		}
+	}
+	withHeader := start == 0 && len(cols) > 0
+	if len(cols) > 0 {
+		totalRows := end - start
+		if withHeader {
+			totalRows++
+		}
+		last, err := excelize.CoordinatesToCellName(len(cols), totalRows)
+		if err != nil {
+			return err
+		}
+		if err := f.SetSheetDimension(name, "A1:"+last); err != nil {
+			return err
+		}
+	}
+	sw, err := f.NewStreamWriter(name)
+	if err != nil {
+		return err
+	}
+	firstDataRow := 1
+	if withHeader {
+		if err := sw.SetRow("A1", colsToAny(cols)); err != nil {
+			return err
+		}
+		firstDataRow = 2
+	}
+	for i := start; i < end; i++ {
+		cell, err := excelize.CoordinatesToCellName(1, i-start+firstDataRow)
+		if err != nil {
+			return err
+		}
+		rec := make([]any, len(cols))
+		for j, c := range cols {
+			rec[j] = rows[i][c]
+		}
+		if err := sw.SetRow(cell, rec); err != nil {
+			return err
+		}
+	}
+	return sw.Flush()
 }
 
 // exportFieldOrder 导出列的稳定顺序：交易身份 → Method（§47）→ 参与方 → 金额 → 技术字段。

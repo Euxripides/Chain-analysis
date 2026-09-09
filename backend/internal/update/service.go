@@ -29,16 +29,41 @@ const (
 type SafeHeadFn func(ctx context.Context, chain string) (int64, error)
 
 type Service struct {
-	Store *store.Store
-	CH    *clickhouse.Conn
-	Prov  provider.Provider
-	DS    *dataset.Service
-	Meta  *addressmeta.Service
-	Log   *slog.Logger
-	Head  SafeHeadFn
+	Store                *store.Store
+	CH                   *clickhouse.Conn
+	Prov                 provider.Provider
+	DS                   *dataset.Service
+	Meta                 *addressmeta.Service
+	Log                  *slog.Logger
+	Head                 SafeHeadFn
+	TronOverlap          time.Duration
+	TronProvider         string
+	TronDefaultProvider  string
+	TronDatasetProviders map[string]string
+	TronOverlapBlocks    uint64
 
 	mu    sync.Mutex
 	cache map[string]cacheEntry
+}
+
+func (s *Service) tronProviderFor(dataset string) string {
+	if s.TronDatasetProviders != nil {
+		if p := strings.ToLower(strings.TrimSpace(s.TronDatasetProviders[dataset])); p != "" {
+			return p
+		}
+		if dataset == "internal_transactions" {
+			if p := strings.ToLower(strings.TrimSpace(s.TronDatasetProviders["internal"])); p != "" {
+				return p
+			}
+		}
+	}
+	if p := strings.ToLower(strings.TrimSpace(s.TronDefaultProvider)); p != "" {
+		return p
+	}
+	if p := strings.ToLower(strings.TrimSpace(s.TronProvider)); p != "" {
+		return p
+	}
+	return "ankr"
 }
 
 type cacheEntry struct {
@@ -51,10 +76,11 @@ func New(st *store.Store, ch *clickhouse.Conn, prov provider.Provider, ds *datas
 }
 
 type PreviewRequest struct {
-	Chain     string   `json:"chain"`
-	Addresses []string `json:"addresses"`
-	Datasets  []string `json:"datasets"`
-	PageSize  int      `json:"preview_page_size"`
+	Chain           string     `json:"chain"`
+	Addresses       []string   `json:"addresses"`
+	Datasets        []string   `json:"datasets"`
+	PageSize        int        `json:"preview_page_size"`
+	TargetTimestamp *time.Time `json:"target_timestamp,omitempty"`
 }
 
 type PreviewItem struct {
@@ -75,11 +101,12 @@ type PreviewItem struct {
 }
 
 type PreviewResponse struct {
-	PreviewID   string         `json:"preview_id"`
-	TargetBlock int64          `json:"target_block"`
-	ExpiresAt   time.Time      `json:"expires_at"`
-	Summary     PreviewSummary `json:"summary"`
-	Items       []PreviewItem  `json:"items"`
+	PreviewID       string         `json:"preview_id"`
+	TargetBlock     int64          `json:"target_block"`
+	TargetTimestamp *time.Time     `json:"target_timestamp,omitempty"`
+	ExpiresAt       time.Time      `json:"expires_at"`
+	Summary         PreviewSummary `json:"summary"`
+	Items           []PreviewItem  `json:"items"`
 }
 
 type PreviewSummary struct {
@@ -116,13 +143,13 @@ func (s *Service) SafeHead(ctx context.Context, chain string) (int64, error) {
 
 // Preview 混合预检（`34-`42）。
 func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResponse, error) {
-	addresses, err := dataset.NormalizeAndDedupeAddresses(req.Addresses)
-	if err != nil {
-		return nil, err
-	}
 	chain := strings.ToLower(strings.TrimSpace(req.Chain))
 	if chain == "" {
 		chain = "bsc"
+	}
+	addresses, err := dataset.NormalizeAndDedupeAddressesForChain(chain, req.Addresses)
+	if err != nil {
+		return nil, err
 	}
 	if req.PageSize <= 0 {
 		req.PageSize = 500
@@ -141,6 +168,10 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	}
 	req.Addresses = addresses
 	req.Chain = chain
+	if chain == "tron" {
+		now := time.Now().UTC()
+		req.TargetTimestamp = &now
+	}
 
 	// 60s 缓存防连续点击。必须在 Probe 之前命中，否则仍会消耗 Provider 请求。
 	cacheKey := chain + "|" + strings.Join(addresses, ",") + "|" + strings.Join(req.Datasets, ",") + "|" + fmt.Sprint(target)
@@ -156,7 +187,11 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 
 	items := []PreviewItem{}
 	for _, addr := range addresses {
-		items = append(items, s.previewAddress(ctx, chain, addr, req.Datasets, req.PageSize, target)...)
+		if chain == "tron" {
+			items = append(items, s.previewTronAddress(ctx, addr, req.Datasets, req.PageSize, uint64(max(target, 0)), *req.TargetTimestamp)...)
+		} else {
+			items = append(items, s.previewAddress(ctx, chain, addr, req.Datasets, req.PageSize, target)...)
+		}
 	}
 
 	var summary PreviewSummary
@@ -191,14 +226,97 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	}
 	resp := &PreviewResponse{
 		PreviewID: previewID, TargetBlock: target,
-		ExpiresAt: time.Now().Add(previewTTL),
-		Summary:   summary, Items: items,
+		TargetTimestamp: req.TargetTimestamp,
+		ExpiresAt:       time.Now().Add(previewTTL),
+		Summary:         summary, Items: items,
 	}
 	b, _ := json.Marshal(resp)
 	s.mu.Lock()
 	s.cache[cacheKey] = cacheEntry{result: b, expires: time.Now().Add(previewCacheTTL)}
 	s.mu.Unlock()
 	return resp, nil
+}
+
+func (s *Service) previewTronAddress(ctx context.Context, addr string, datasets []string, pageSize int, targetBlock uint64, target time.Time) []PreviewItem {
+	if len(datasets) == 0 {
+		datasets = []string{"transactions", "token_transfers", "internal_transactions"}
+	}
+	items := make([]PreviewItem, 0, len(datasets))
+	for _, name := range datasets {
+		if name != "transactions" && name != "token_transfers" && name != "internal_transactions" {
+			continue
+		}
+		last, err := s.lastTronTimestamp(ctx, name, addr)
+		if err != nil {
+			items = append(items, PreviewItem{Address: addr, Dataset: name, HasNewData: true, CountMode: "estimate", Confidence: "low"})
+			continue
+		}
+		if !last.IsZero() {
+			overlap := s.TronOverlap
+			if overlap <= 0 {
+				overlap = 3 * time.Minute
+			}
+			last = last.Add(-overlap)
+		}
+		fetchReq := provider.FetchRequest{Chain: "tron", Dataset: name, Address: addr, FromTime: timePtrUnlessZero(last), ToTime: &target, PageSize: pageSize}
+		if s.tronProviderFor(name) == "ankr" {
+			lastBlock, blockErr := s.lastTronBlock(ctx, name, addr)
+			if blockErr == nil && lastBlock > 0 && targetBlock >= lastBlock {
+				overlap := s.TronOverlapBlocks
+				if overlap == 0 {
+					overlap = 20
+				}
+				fromBlock := uint64(0)
+				if lastBlock > overlap {
+					fromBlock = lastBlock - overlap
+				}
+				fetchReq.FromBlock, fetchReq.ToBlock = &fromBlock, &targetBlock
+				fetchReq.FromTime, fetchReq.ToTime = nil, nil
+			}
+		}
+		res, err := s.Prov.Fetch(ctx, fetchReq)
+		item := PreviewItem{Address: addr, Dataset: name, HasNewData: true, CountMode: "exact", Confidence: "high"}
+		if err != nil {
+			item.CountMode, item.Confidence = "estimate", "low"
+		} else {
+			item.NewRows = int64(len(res.Rows))
+			item.MinimumRows = int64(len(res.Rows))
+			item.HasNewData = len(res.Rows) > 0
+			if res.HasMore {
+				item.CountMode, item.Confidence = "estimate", "medium"
+				item.EstimatedRows = item.MinimumRows
+			}
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func (s *Service) lastTronBlock(ctx context.Context, datasetName, address string) (uint64, error) {
+	table := map[string]string{"transactions": "transactions", "token_transfers": "token_transfers", "internal_transactions": "internal_calls"}[datasetName]
+	if table == "" {
+		return 0, fmt.Errorf("unsupported TRON dataset %s", datasetName)
+	}
+	var value uint64
+	err := s.CH.DB().QueryRow(ctx, "SELECT max(block_number) FROM blockchain."+table+" FINAL WHERE chain='tron' AND (from_address=? OR to_address=?)", address, address).Scan(&value)
+	return value, err
+}
+
+func timePtrUnlessZero(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	return &value
+}
+
+func (s *Service) lastTronTimestamp(ctx context.Context, datasetName, address string) (time.Time, error) {
+	table := map[string]string{"transactions": "transactions", "token_transfers": "token_transfers", "internal_transactions": "internal_calls"}[datasetName]
+	if table == "" {
+		return time.Time{}, fmt.Errorf("unsupported TRON dataset %s", datasetName)
+	}
+	var value time.Time
+	err := s.CH.DB().QueryRow(ctx, "SELECT max(timestamp) FROM blockchain."+table+" FINAL WHERE chain='tron' AND (from_address=? OR to_address=?)", address, address).Scan(&value)
+	return value, err
 }
 
 func (s *Service) previewAddress(ctx context.Context, chain, addr string, wantDatasets []string, pageSize int, target int64) []PreviewItem {
@@ -412,6 +530,67 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 		return nil, err
 	}
 	var jobIDs []string
+	if chain == "tron" {
+		targetTime := time.Now().UTC()
+		if req.TargetTimestamp != nil {
+			targetTime = *req.TargetTimestamp
+		}
+		for _, addr := range req.Addresses {
+			datasets := req.Datasets
+			if len(datasets) == 0 {
+				datasets = []string{"transactions", "token_transfers", "internal_transactions"}
+			}
+			for _, name := range datasets {
+				if name != "transactions" && name != "token_transfers" && name != "internal_transactions" {
+					continue
+				}
+				last, err := s.lastTronTimestamp(ctx, name, addr)
+				if err != nil {
+					return nil, err
+				}
+				if !last.IsZero() {
+					overlap := s.TronOverlap
+					if overlap <= 0 {
+						overlap = 3 * time.Minute
+					}
+					last = last.Add(-overlap)
+				}
+				rangeSpec := dataset.RangeSpec{Type: "full"}
+				if s.tronProviderFor(name) == "ankr" {
+					lastBlock, blockErr := s.lastTronBlock(ctx, name, addr)
+					if blockErr != nil {
+						return nil, blockErr
+					}
+					if lastBlock > 0 && target > 0 {
+						overlap := s.TronOverlapBlocks
+						if overlap == 0 {
+							overlap = 20
+						}
+						fromBlock := int64(0)
+						if lastBlock > overlap {
+							fromBlock = int64(lastBlock - overlap)
+						}
+						toBlock := target
+						rangeSpec = dataset.RangeSpec{Type: "block", FromBlock: &fromBlock, ToBlock: &toBlock}
+					} else {
+						from := targetTime.Add(-30 * 24 * time.Hour)
+						rangeSpec = dataset.RangeSpec{Type: "time", From: &from, To: &targetTime}
+					}
+				} else if !last.IsZero() {
+					rangeSpec = dataset.RangeSpec{Type: "time", From: &last, To: &targetTime}
+				}
+				resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{Source: "update", Priority: 90, Subjects: []string{addr}, Chain: chain, Datasets: []string{name}, Range: rangeSpec})
+				if err != nil {
+					return nil, err
+				}
+				if resp.JobID != nil {
+					jobIDs = append(jobIDs, *resp.JobID)
+				}
+			}
+			_ = s.Store.SetWorkspaceAddressSyncStatus(ctx, wsID, chain, addr, "updating")
+		}
+		return jobIDs, nil
+	}
 	for _, addr := range req.Addresses {
 		// 复检 Coverage（`44.4/`77.11）
 		covered, err := s.Store.ListCoverage(ctx, chain, addr, "")

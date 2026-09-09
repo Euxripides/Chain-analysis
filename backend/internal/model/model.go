@@ -4,25 +4,30 @@ import "time"
 
 // DownloadJob 状态（必须持久化在 PostgreSQL）
 const (
-	JobCreated       = "CREATED"
-	JobPlanning      = "PLANNING"
-	JobQueued        = "QUEUED"
-	JobRunning       = "RUNNING"
-	JobPauseReq      = "PAUSE_REQUESTED"
-	JobPaused        = "PAUSED"
-	JobResuming      = "RESUMING"
-	JobCancelReq     = "CANCEL_REQUESTED"
-	JobCancelled     = "CANCELLED"
-	JobCompleted     = "COMPLETED"
-	JobPartialFailed = "PARTIAL_FAILED"
-	JobFailed        = "FAILED"
+	JobCreated                    = "CREATED"
+	JobPlanning                   = "PLANNING"
+	JobQueued                     = "QUEUED"
+	JobRunning                    = "RUNNING"
+	JobPauseReq                   = "PAUSE_REQUESTED"
+	JobPaused                     = "PAUSED"
+	JobPausedFallbackTooExpensive = "PAUSED_FALLBACK_TOO_EXPENSIVE"
+	JobResuming                   = "RESUMING"
+	JobCancelReq                  = "CANCEL_REQUESTED"
+	JobCancelled                  = "CANCELLED"
+	JobCompleted                  = "COMPLETED"
+	JobPartialFailed              = "PARTIAL_FAILED"
+	JobFailed                     = "FAILED"
 )
 
 // Shard 状态机
 const (
-	ShardPending     = "PENDING"
-	ShardLeased      = "LEASED"
-	ShardRunning     = "RUNNING"
+	ShardPending = "PENDING"
+	ShardLeased  = "LEASED"
+	ShardRunning = "RUNNING"
+	// Ankr 引擎状态拆分（§6/§62）：Fetch 完成后进入 FETCHED，
+	// 异步 Ingest 全部完成后进入 INGESTED，Validation 通过才 COMPLETE。
+	ShardFetched     = "FETCHED"
+	ShardIngested    = "INGESTED"
 	ShardPersisting  = "PERSISTING"
 	ShardVerifying   = "VERIFYING"
 	ShardCompleted   = "COMPLETED"
@@ -44,7 +49,7 @@ const (
 	ItemSkipped   = "SKIPPED"
 )
 
-var AllDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs", "balances"}
+var AllDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions"}
 var DefaultDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs"}
 
 func ValidDataset(d string) bool {
@@ -62,6 +67,11 @@ type DownloadJob struct {
 	Status         string          `json:"status"`
 	Priority       int             `json:"priority"`
 	Source         string          `json:"source"`
+	Mode           string          `json:"mode"` // economy|balanced|turbo|benchmark（V1.1 §41-44）
+	RequestedMode  PerformanceMode `json:"requested_mode"`
+	EffectiveMode  PerformanceMode `json:"effective_mode"`
+	ModeReason     string          `json:"mode_reason"`
+	ModeChangedAt  time.Time       `json:"mode_changed_at"`
 	Chain          string          `json:"chain"`
 	RangeType      string          `json:"range_type"`
 	FromBlock      *int64          `json:"from_block"`
@@ -75,10 +85,6 @@ type DownloadJob struct {
 	OrganizationID *string         `json:"organization_id"`
 	WorkspaceID    *string         `json:"workspace_id"`
 	ProjectID      *string         `json:"project_id"`
-	RequestedMode  PerformanceMode `json:"requested_mode"`
-	EffectiveMode  PerformanceMode `json:"effective_mode"`
-	ModeReason     string          `json:"mode_reason"`
-	ModeChangedAt  *time.Time      `json:"mode_changed_at"`
 	ResolvedAt     *time.Time      `json:"resolved_at"`
 	Error          string          `json:"error"`
 	Stats          map[string]any  `json:"stats"`
@@ -112,31 +118,173 @@ type DatasetItem struct {
 }
 
 type Shard struct {
-	ID              string         `json:"id"`
-	JobID           string         `json:"job_id"`
-	SubjectID       string         `json:"subject_id"`
-	DatasetID       string         `json:"dataset_id"`
-	Dataset         string         `json:"dataset"`
-	FromBlock       int64          `json:"from_block"`
-	ToBlock         int64          `json:"to_block"`
-	FromTimestamp   *time.Time     `json:"from_timestamp"`
-	ToTimestamp     *time.Time     `json:"to_timestamp"`
-	PageToken       string         `json:"page_token"`
-	PageNo          int            `json:"page_no"`
-	PageSize        int            `json:"page_size"`
-	PageState       map[string]any `json:"page_state"`
-	Status          string         `json:"status"`
-	Priority        int            `json:"priority"`
-	Retries         int            `json:"retries"`
-	MaxRetries      int            `json:"max_retries"`
-	LeaseOwner      string         `json:"lease_owner"`
-	LeasedUntil     *time.Time     `json:"leased_until"`
-	DownloadedRows  int64          `json:"downloaded_rows"`
-	DownloadedBytes int64          `json:"downloaded_bytes"`
-	RawObject       string         `json:"raw_object"`
-	Error           string         `json:"error"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID            string         `json:"id"`
+	JobID         string         `json:"job_id"`
+	SubjectID     string         `json:"subject_id"`
+	DatasetID     string         `json:"dataset_id"`
+	Dataset       string         `json:"dataset"`
+	FromBlock     int64          `json:"from_block"`
+	ToBlock       int64          `json:"to_block"`
+	FromTimestamp *time.Time     `json:"from_timestamp"`
+	ToTimestamp   *time.Time     `json:"to_timestamp"`
+	PageToken     string         `json:"page_token"`
+	PageNo        int            `json:"page_no"`
+	PageSize      int            `json:"page_size"`
+	PageState     map[string]any `json:"page_state"`
+	Status        string         `json:"status"`
+	Priority      int            `json:"priority"`
+	Retries       int            `json:"retries"`
+	MaxRetries    int            `json:"max_retries"`
+	LeaseOwner    string         `json:"lease_owner"`
+	LeasedUntil   *time.Time     `json:"leased_until"`
+	// V1.4：Global Ready Queue / Lease Epoch（§8/§33）
+	LeaseEpoch      int64   `json:"lease_epoch"`
+	WorkScore       float64 `json:"work_score"`
+	TailBoost       bool    `json:"tail_boost"`
+	DownloadedRows  int64   `json:"downloaded_rows"`
+	DownloadedBytes int64   `json:"downloaded_bytes"`
+	RawObject       string  `json:"raw_object"`
+	Error           string  `json:"error"`
+	// Ankr 引擎（§6/§84）：Fetch/Ingest/Validate 三阶段时间点与字节拆分。
+	FetchedAt        *time.Time `json:"fetched_at"`
+	IngestedAt       *time.Time `json:"ingested_at"`
+	ValidatedAt      *time.Time `json:"validated_at"`
+	FetchDurationMs  int64      `json:"fetch_duration_ms"`
+	IngestDurationMs int64      `json:"ingest_duration_ms"`
+	WireBytes        int64      `json:"wire_bytes"`
+	DecodedBytes     int64      `json:"decoded_bytes"`
+	PageCount        int        `json:"page_count"`
+	PageGapAvgMs     int64      `json:"page_gap_avg_ms"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// Page 页面级状态机（§6/§80）：DURABLE → INGESTED → VALIDATED。
+type Page struct {
+	ID                string     `json:"id"`
+	JobID             string     `json:"job_id"`
+	ShardID           string     `json:"shard_id"`
+	Dataset           string     `json:"dataset"`
+	PageNo            int        `json:"page_no"`
+	QueryHash         string     `json:"query_hash"`
+	Status            string     `json:"status"`
+	PageSize          int        `json:"page_size"`
+	WireBytes         int64      `json:"wire_bytes"`
+	DecodedBytes      int64      `json:"decoded_bytes"`
+	RawPath           string     `json:"raw_path"`
+	RawSHA256         string     `json:"raw_sha256"`
+	RowsFetched       int        `json:"rows_fetched"`
+	RowsParsed        int        `json:"rows_parsed"`
+	RowsInserted      int        `json:"rows_inserted"`
+	UniqueRows        int        `json:"unique_rows"`
+	NextPageTokenHash string     `json:"next_page_token_hash"`
+	FromBlock         int64      `json:"from_block"`
+	ToBlock           int64      `json:"to_block"`
+	FetchStartedAt    *time.Time `json:"fetch_started_at,omitempty"`
+	BodyCompletedAt   *time.Time `json:"body_completed_at,omitempty"`
+	DurableAt         *time.Time `json:"durable_at,omitempty"`
+	IngestedAt        *time.Time `json:"ingested_at,omitempty"`
+	ValidatedAt       *time.Time `json:"validated_at,omitempty"`
+	Error             string     `json:"error"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// 页面状态常量
+const (
+	PageDurable   = "DURABLE"
+	PageIngested  = "INGESTED"
+	PageValidated = "VALIDATED"
+	PageFailed    = "FAILED"
+)
+
+// BenchmarkRun V1.1 极限性能 Benchmark 记录（§48）。
+type BenchmarkRun struct {
+	ID                   string         `json:"id"`
+	Chain                string         `json:"chain"`
+	Dataset              string         `json:"dataset"`
+	AddressHash          string         `json:"address_hash"`
+	TargetBlock          int64          `json:"target_block"`
+	ShardCount           int            `json:"shard_count"`
+	PageSize             int            `json:"page_size"`
+	JobID                string         `json:"job_id"`
+	Status               string         `json:"status"`
+	WallClockMs          int64          `json:"wall_clock_ms"`
+	Rows                 int64          `json:"rows"`
+	UniqueRows           int64          `json:"unique_rows"`
+	Requests             int            `json:"requests"`
+	Attempts             int            `json:"attempts"`
+	Credits              float64        `json:"credits"`
+	Cost                 float64        `json:"cost"`
+	P50Ms                int            `json:"p50_ms"`
+	P95Ms                int            `json:"p95_ms"`
+	P99Ms                int            `json:"p99_ms"`
+	PageGapAvgMs         int64          `json:"page_gap_avg_ms"`
+	PageGapP95Ms         int64          `json:"page_gap_p95_ms"`
+	PeakActiveShards     int            `json:"peak_active_shards"`
+	RetryRate            float64        `json:"retry_rate"`
+	TimeoutRate          float64        `json:"timeout_rate"`
+	RateLimitRate        float64        `json:"rate_limit_rate"`
+	Error429             int            `json:"error_429"`
+	ErrorConnLimit       int            `json:"error_conn_limit"`
+	ErrorTimeout         int            `json:"error_timeout"`
+	ErrorOversized       int            `json:"error_oversized"`
+	PeakRSS              int64          `json:"peak_rss"`
+	SpoolPeakBytes       int64          `json:"spool_peak_bytes"`
+	CHP95Ms              int            `json:"ch_p95_ms"`
+	RawOverlapRows       int64          `json:"raw_overlap_rows"`
+	BoundaryMissing      int64          `json:"boundary_missing"`
+	BoundaryEvidence     map[string]any `json:"boundary_evidence"`
+	IntegrityStatus      string         `json:"integrity_status"`
+	ExcludedFromLearning bool           `json:"excluded_from_learning"`
+	Error                string         `json:"error"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+
+	// V1.2（§55/§103-§105）：Provider Latency Context + Provider-latency 归一化。
+	ProviderLatencyP50Ms  int     `json:"provider_latency_p50_ms"`
+	ProviderLatencyP95Ms  int     `json:"provider_latency_p95_ms"`
+	ProviderTTFBP50Ms     int     `json:"provider_ttfb_p50_ms"`
+	ProviderTTFBP95Ms     int     `json:"provider_ttfb_p95_ms"`
+	ProviderBodyP50Ms     int     `json:"provider_body_p50_ms"`
+	ProviderBodyP95Ms     int     `json:"provider_body_p95_ms"`
+	NormalizedWallClockMs int64   `json:"normalized_wall_clock_ms"`
+	ProviderWindowRatio   float64 `json:"provider_window_ratio"`
+	ExcludeReason         string  `json:"exclude_reason"`
+}
+
+// ShardProfile Shard 历史画像（§12）。
+type ShardProfile struct {
+	Chain            string
+	Dataset          string
+	SubjectClass     string
+	BlockFrom        int64
+	BlockTo          int64
+	Rows             int64
+	Pages            int
+	WireBytes        int64
+	DecodedBytes     int64
+	FetchDurationMs  int64
+	IngestDurationMs int64
+	PageLatencyP50Ms int64
+	PageLatencyP95Ms int64
+	PageGapAvgMs     int64
+}
+
+// PageProfile PageSize 画像（§32/§33）。
+type PageProfile struct {
+	Chain             string
+	Dataset           string
+	QueryShape        string
+	PreferredPageSize int
+	AvgRows           int
+	AvgWireBytes      int64
+	AvgDecodedBytes   int64
+	AvgLatencyMs      int64
+	P95LatencyMs      int64
+	TimeoutRate       float64
+	OversizedRate     float64
+	PagesObserved     int64
 }
 
 type CoverageRow struct {
@@ -172,6 +320,10 @@ type UsageRow struct {
 	Credits     float64
 	CostUSD     float64
 
+	// Ankr 引擎（§28）：wire / decoded 拆分
+	WireBytes    int64
+	DecodedBytes int64
+
 	// V1.1（§34）
 	ErrorClass    string
 	RPCCode       int
@@ -200,12 +352,30 @@ type UsageRow struct {
 	SingleflightHit bool
 	InvestigationID string
 	Priority        string
+
+	// V1.2（§56/§57）：TTFB 与 Body Download 分离计量（provider latency context）。
+	TTFBMs int
+	BodyMs int
+
+	// TRON V5.1 enrichment summary. These fields are populated only when
+	// UsageType=trc20_enrichment_summary and are not upstream request counters.
+	LogicalCalls   int
+	HTTPRequests   int
+	LogsRequests   int
+	MatchedRows    int
+	FallbackRows   int
+	SavedCalls     int
+	FailureReasons map[string]int
 }
 
 // Provider 用量类型（§49）。
 const (
 	UsageTypeDatasetDownload = "dataset_download"
 	UsageTypeTxDeepDecode    = "tx_deep_decode"
+
+	// V1.2（§83）：Count Oracle 用量类型（成本分账：Planning API Cost 独立统计）。
+	UsageTypeCountOracleTransactions   = "count_oracle_transactions"
+	UsageTypeCountOracleTokenTransfers = "count_oracle_token_transfers"
 )
 
 // Provider API 类型（V1.5 §39）：索引型 Advanced API 与原始链 RPC 分开统计。
@@ -302,6 +472,7 @@ type TokenMetadata struct {
 type JobStats struct {
 	DownloadedRows  int64      `json:"downloaded_rows"`
 	IngestedRows    int64      `json:"ingested_rows"`
+	FetchedRows     int64      `json:"fetched_rows"`
 	APIRequests     int64      `json:"api_requests"`
 	APICostUSD      float64    `json:"api_cost_usd"`
 	HitRatio        float64    `json:"hit_ratio"`

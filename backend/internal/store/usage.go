@@ -38,17 +38,25 @@ func (s *Store) InsertUsage(ctx context.Context, u model.UsageRow) error {
 	if u.InvestigationID != "" {
 		investigationID = u.InvestigationID
 	}
+	failureReasons, _ := json.Marshal(u.FailureReasons)
+	if len(failureReasons) == 0 || string(failureReasons) == "null" {
+		failureReasons = []byte("{}")
+	}
 	_, err := s.Pool.Exec(ctx, "INSERT INTO provider_usage "+
 		"(id, provider, method, dataset, job_id, shard_id, tenant_id, request_time, duration_ms, status, http_status, api_error, rows, bytes, credits, estimated_cost_usd, "+
+		" wire_bytes, decoded_bytes, "+
 		" error_class, rpc_code, trace_id, page_size, returned_rows, response_bytes, retry_attempt, retry_reason, request_id, "+
 		" usage_type, tx_hash, cache_hit, decode_priority, decode_budget, "+
-		" api_type, chain, method_class, method_calls, batch_size, singleflight_hit, investigation_id, priority) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)",
+		" api_type, chain, method_class, method_calls, batch_size, singleflight_hit, investigation_id, priority, "+
+		" ttfb_ms, body_ms, logical_calls, http_requests, logs_requests, matched_rows, fallback_rows, saved_calls, failure_reasons) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49)",
 		uuid.NewString(), u.Provider, u.Method, u.Dataset, jobID, shardID, u.TenantID, u.RequestTime,
 		u.DurationMs, u.Status, u.HTTPStatus, u.APIError, u.Rows, u.Bytes, u.Credits, u.CostUSD,
+		u.WireBytes, u.DecodedBytes,
 		u.ErrorClass, u.RPCCode, u.TraceID, u.PageSize, u.ReturnedRows, u.ResponseBytes, u.RetryAttempt, u.RetryReason, u.RequestID,
 		usageType, u.TxHash, u.CacheHit, decodePriority, u.DecodeBudget,
-		apiType, u.Chain, u.MethodClass, methodCalls, u.BatchSize, u.SingleflightHit, investigationID, u.Priority)
+		apiType, u.Chain, u.MethodClass, methodCalls, u.BatchSize, u.SingleflightHit, investigationID, u.Priority,
+		u.TTFBMs, u.BodyMs, u.LogicalCalls, u.HTTPRequests, u.LogsRequests, u.MatchedRows, u.FallbackRows, u.SavedCalls, string(failureReasons))
 	return err
 }
 
@@ -63,7 +71,7 @@ type UsageSummary struct {
 func (s *Store) UsageSummary(ctx context.Context, since time.Time) (map[string]UsageSummary, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT dataset, COUNT(*), COALESCE(SUM(credits),0), COALESCE(SUM(estimated_cost_usd),0), "+
 		"COALESCE(SUM(rows),0), COALESCE(SUM(bytes),0) "+
-		"FROM provider_usage WHERE request_time >= $1 GROUP BY dataset", since)
+		"FROM provider_usage WHERE request_time >= $1 AND usage_type<>'trc20_enrichment_summary' GROUP BY dataset", since)
 	if err != nil {
 		return nil, err
 	}

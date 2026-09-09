@@ -30,16 +30,16 @@ func New(ctx context.Context, dsn string) (*Conn, error) {
 		dbName = p[1:]
 	}
 	opts := &ch.Options{
-		Addr: []string{u.Host},
-		Auth: ch.Auth{Database: dbName, Username: user, Password: pass},
-		DialTimeout:      10 * time.Second,
-		MaxOpenConns:     16,
-		MaxIdleConns:     8,
-		ConnMaxLifetime:  time.Hour,
-		Compression:      &ch.Compression{Method: ch.CompressionLZ4},
+		Addr:            []string{u.Host},
+		Auth:            ch.Auth{Database: dbName, Username: user, Password: pass},
+		DialTimeout:     10 * time.Second,
+		MaxOpenConns:    16,
+		MaxIdleConns:    8,
+		ConnMaxLifetime: time.Hour,
+		Compression:     &ch.Compression{Method: ch.CompressionLZ4},
 		Settings: ch.Settings{
-			"async_insert":           1,
-			"wait_for_async_insert":  1,
+			"async_insert":               1,
+			"wait_for_async_insert":      1,
 			"async_insert_max_data_size": "10000000",
 		},
 	}

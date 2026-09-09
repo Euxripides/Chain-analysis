@@ -92,7 +92,11 @@ func (s *Service) SyncFromCoverage(ctx context.Context, chain, addr, status stri
 		return err
 	}
 	if s.CH != nil {
-		counts, firstBlock, lastBlock, err := s.dataCounts(ctx, chain, strings.ToLower(addr))
+		normalized := addr
+		if chain != "tron" {
+			normalized = strings.ToLower(addr)
+		}
+		counts, firstBlock, lastBlock, err := s.dataCounts(ctx, chain, normalized)
 		if err != nil {
 			return err
 		}

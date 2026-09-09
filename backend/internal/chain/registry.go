@@ -111,6 +111,13 @@ func defaultChains() []Config {
 			SupportsTraceConcept: true, BlockTags: evmTags, MaxLogBlockRange: 2000,
 			DefaultProvider: "ankr", Enabled: true,
 			ExplorerTxURL: "https://www.oklink.com/avax/tx/", ExplorerAddressURL: "https://www.oklink.com/avax/address/"},
+		{Slug: "tron", Type: "tron", Name: "TRON", ChainID: 0,
+			Native: NativeAsset{Symbol: "TRX", Decimals: 6}, ConfirmationDepth: 0,
+			SupportsTraceConcept: true, BlockTags: []string{}, MaxLogBlockRange: 0,
+			// V3: Ankr remains the TRON node/RPC default; only the
+			// transactions dataset opts into the TronGrid address index.
+			DefaultProvider: "ankr", Enabled: true,
+			ExplorerTxURL: "https://tronscan.org/#/transaction/", ExplorerAddressURL: "https://tronscan.org/#/address/"},
 	}
 }
 

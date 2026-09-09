@@ -14,14 +14,14 @@ type RangeSpec struct {
 type EnsureRequest struct {
 	Source          string    `json:"source"`
 	Priority        int       `json:"priority"`
+	Mode            string    `json:"mode"` // economy|balanced|turbo（V1.1 §41-44）
+	PerformanceMode string    `json:"performance_mode"`
+	Concurrency     *int      `json:"concurrency,omitempty"`
 	Subjects        []string  `json:"subjects"`
 	Chain           string    `json:"chain"`
 	Datasets        []string  `json:"datasets"`
 	Range           RangeSpec `json:"range"`
 	ReusePolicy     string    `json:"reuse_policy"`
-	PerformanceMode string    `json:"performance_mode"`
-	// Concurrency exists only so legacy numeric requests can be rejected explicitly.
-	Concurrency *int `json:"concurrency,omitempty"`
 
 	// V1.2：案件/标签（§22/§23）
 	CaseName          string                 `json:"case_name"`

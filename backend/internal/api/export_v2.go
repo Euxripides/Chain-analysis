@@ -3,17 +3,20 @@ package api
 import (
 	"archive/zip"
 	"bufio"
+	"compress/flate"
 	"context"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -40,6 +43,33 @@ type exportV2Request struct {
 
 func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req exportV2Request) {
 	chain := strings.ToLower(req.Chain)
+	var job *model.DownloadJob
+	var jobID *string
+	if req.JobID != "" {
+		var err error
+		job, err = s.deps.Store.GetJob(r.Context(), req.JobID)
+		if err != nil || job == nil {
+			writeJSON(w, 404, map[string]any{"error": "job not found"})
+			return
+		}
+		if job.Status != model.JobCompleted && job.Status != model.JobPaused && job.Status != model.JobPausedFallbackTooExpensive {
+			writeJSON(w, 409, map[string]any{"error": "job export requires a completed or paused job"})
+			return
+		}
+		jobID = &req.JobID
+		chain = job.Chain
+		req.Datasets = append([]string(nil), job.Datasets...)
+		jobSubjects, err := s.deps.Store.SubjectsByJob(r.Context(), req.JobID)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		req.Addresses = req.Addresses[:0]
+		for _, subject := range jobSubjects {
+			req.Addresses = append(req.Addresses, subject.Subject)
+		}
+		req.ForceZip = true
+	}
 	if chain == "" {
 		chain = "bsc"
 	}
@@ -65,7 +95,10 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	}
 	addresses := req.Addresses
 	for i := range addresses {
-		addresses[i] = strings.ToLower(addresses[i])
+		addresses[i] = strings.TrimSpace(addresses[i])
+		if chain != "tron" {
+			addresses[i] = strings.ToLower(addresses[i])
+		}
 	}
 	if len(addresses) == 0 {
 		writeJSON(w, 400, map[string]any{"error": "addresses required"})
@@ -73,27 +106,52 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	}
 	// `48：超过 3 地址强制 ZIP；文件数 >1 也 ZIP
 	zipIt := req.ForceZip || len(addresses) > 3 || len(datasets) > 1
+	partial := job != nil && job.Status != model.JobCompleted
 	snapshot, _ := json.Marshal(map[string]any{
 		"chain": chain, "addresses": addresses, "datasets": datasets,
 		"format": format, "include_meta": req.IncludeMeta, "zip": zipIt,
-		"include_decoded_input": req.IncludeDecodedInput,
+		"include_decoded_input": req.IncludeDecodedInput, "job_id": req.JobID,
+		"partial": partial, "job_status": func() string {
+			if job != nil {
+				return job.Status
+			}
+			return ""
+		}(),
 	})
+	// Reuse an identical artifact produced after the job's last mutation instead
+	// of querying and compressing millions of rows again. Snapshot equality keeps
+	// paused/partial exports from reusing a different progress version.
+	if job != nil {
+		var existingID string
+		if err := s.deps.Store.Pool.QueryRow(r.Context(), `
+			SELECT id::text FROM exports
+			WHERE job_id=$1 AND status='COMPLETED' AND format=$2 AND zip=$3
+			  AND query_snapshot=$4::jsonb AND object_ref<>''
+			  AND COALESCE(finished_at,updated_at) >= $5
+			ORDER BY finished_at DESC NULLS LAST, updated_at DESC LIMIT 1`,
+			req.JobID, format, zipIt, snapshot, job.UpdatedAt).Scan(&existingID); err == nil {
+			if existing, getErr := s.deps.Store.GetExport(r.Context(), existingID); getErr == nil && existing != nil {
+				writeJSON(w, http.StatusOK, existing)
+				return
+			}
+		}
+	}
 	orgID, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	exp, err := s.deps.Store.CreateExportV2(r.Context(), wsID, orgID, nil, strings.Join(datasets, "+"), format, zipIt, snapshot)
+	exp, err := s.deps.Store.CreateExportV2(r.Context(), wsID, orgID, nil, jobID, strings.Join(datasets, "+"), format, zipIt, snapshot)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExportMulti(context.Background(), exp, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
+	go s.runExportMulti(context.Background(), exp, job, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
 	writeJSON(w, 202, exp)
 }
 
 // runExportMulti 流式多地址导出（`52：Go API 不承载 GB 级文件，行级流式写 MinIO）。
-func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool) {
+func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *model.DownloadJob, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool) {
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "RUNNING", "", "", 0, "")
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, extFor(format))
 	if zipIt {
@@ -104,9 +162,9 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain st
 	var ferr error
 
 	if zipIt {
-		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, key, chain, addresses, datasets, format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, job, key, chain, addresses, datasets, format, includeMeta, includeDecodedInput)
 	} else {
-		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, key, chain, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, job, key, chain, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
 	}
 	if ferr != nil {
 		_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "FAILED", "", "", 0, ferr.Error())
@@ -119,11 +177,13 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, chain st
 }
 
 // writeSingleExport 单地址单数据集：流式写一个对象。
-func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
-	rows, err := s.query.RowsForExport(ctx, dataset, chain, addr, maxExportRows, 0)
+func (s *Server) writeSingleExport(ctx context.Context, job *model.DownloadJob, key, chain, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
+	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, job)
+	rows, err := s.query.RowsForExportRange(ctx, dataset, chain, addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
 	if err != nil {
 		return 0, "", err
 	}
+	rows = dedupeExportRows(dataset, rows)
 	s.attachTokenMetadata(ctx, chain, rows)
 	if includeMeta {
 		s.annotateRows(ctx, chain, addr, rows)
@@ -167,7 +227,7 @@ func (s *Server) writeSingleExport(ctx context.Context, key, chain, addr, datase
 }
 
 // writeZipExport 多地址/多文件：流式 ZIP（`49 结构 + manifest.json）。
-func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, chain string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
+func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *model.DownloadJob, key, chain string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
 	pr, pw := io.Pipe()
 	type zipResult struct {
 		rows int64
@@ -177,57 +237,187 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 	go func() {
 		zw := zip.NewWriter(pw)
 		// manifest.json（`49）
+		partial := job != nil && job.Status != model.JobCompleted
 		mf, _ := json.Marshal(map[string]any{
 			"export_id": exp.ID, "created_at": time.Now().UTC().Format(time.RFC3339),
 			"chain": chain, "addresses": addresses, "datasets": datasets,
 			"format": format, "schema_version": 3, "zip": true,
-			"include_decoded_input": includeDecodedInput,
+			"include_decoded_input": includeDecodedInput, "job_id": exp.JobID,
+			"partial": partial,
+			"job_status": func() string {
+				if job != nil {
+					return job.Status
+				}
+				return ""
+			}(),
+			"job_progress": func() any {
+				if job != nil {
+					return job.Stats["progress"]
+				}
+				return nil
+			}(),
+			"completed_shards": func() any {
+				if job != nil {
+					return job.Stats["done_shards"]
+				}
+				return nil
+			}(),
+			"total_shards": func() any {
+				if job != nil {
+					return job.Stats["total_shards"]
+				}
+				return nil
+			}(),
 		})
 		hdr := &zip.FileHeader{Name: "manifest.json", Method: zip.Deflate}
 		w, _ := zw.CreateHeader(hdr)
 		_, _ = w.Write(mf)
 
+		type exportPart struct {
+			addr, ds string
+			rows     []map[string]any
+			prepared *preparedZipEntry
+			err      error
+		}
+		type exportTask struct {
+			addr, ds string
+			multi    bool
+		}
+		pipelineCtx, cancel := context.WithCancel(ctx)
+		jobs := make(chan exportTask)
+		parts := make(chan exportPart)
+		workerCount := min(4, len(addresses)*len(datasets))
+		var wg sync.WaitGroup
+		for range workerCount {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for task := range jobs {
+					fromBlock, toBlock, fromTime, toTime := exportJobBounds(task.ds, job)
+					if task.multi {
+						rows, err := s.query.RowsForExportRangeMulti(pipelineCtx, task.ds, chain, append([]string(nil), addresses...), maxExportRows*len(addresses), fromBlock, toBlock, fromTime, toTime)
+						if err != nil {
+							select {
+							case parts <- exportPart{ds: task.ds, err: err}:
+							case <-pipelineCtx.Done():
+							}
+							continue
+						}
+						buckets := make(map[string][]map[string]any, len(addresses))
+						for _, row := range rows {
+							for _, addr := range matchingExportSubjects(chain, addresses, row) {
+								buckets[addr] = append(buckets[addr], row)
+							}
+						}
+						for _, addr := range addresses {
+							partRows := dedupeExportRows(task.ds, buckets[addr])
+							s.attachTokenMetadata(pipelineCtx, chain, partRows)
+							if includeMeta {
+								s.annotateRows(pipelineCtx, chain, addr, partRows)
+							}
+							s.attachDecodedInput(pipelineCtx, chain, task.ds, partRows, includeDecodedInput)
+							select {
+							case parts <- exportPart{addr: addr, ds: task.ds, rows: partRows}:
+							case <-pipelineCtx.Done():
+								return
+							}
+						}
+						continue
+					}
+					rows, err := s.query.RowsForExportRange(pipelineCtx, task.ds, chain, task.addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
+					if err == nil {
+						rows = dedupeExportRows(task.ds, rows)
+						s.attachTokenMetadata(pipelineCtx, chain, rows)
+						if includeMeta {
+							s.annotateRows(pipelineCtx, chain, task.addr, rows)
+						}
+						s.attachDecodedInput(pipelineCtx, chain, task.ds, rows, includeDecodedInput)
+						if format == "csv" || format == "jsonl" {
+							prepared, prepareErr := prepareZipEntry(format, rows)
+							if prepareErr != nil {
+								err = prepareErr
+							} else {
+								select {
+								case parts <- exportPart{addr: task.addr, ds: task.ds, rows: rows, prepared: prepared}:
+								case <-pipelineCtx.Done():
+									prepared.remove()
+									return
+								}
+								continue
+							}
+						}
+					}
+					select {
+					case parts <- exportPart{addr: task.addr, ds: task.ds, rows: rows, err: err}:
+					case <-pipelineCtx.Done():
+						return
+					}
+				}
+			}()
+		}
+		go func() {
+			defer close(jobs)
+			for _, addr := range addresses {
+				for _, ds := range datasets {
+					select {
+					case jobs <- exportTask{addr: addr, ds: ds}:
+					case <-pipelineCtx.Done():
+						return
+					}
+				}
+			}
+		}()
+		go func() { wg.Wait(); close(parts) }()
+
 		var rowsTotal int64
 		var werr error
-		for _, addr := range addresses {
-			for _, ds := range datasets {
-				rows, err := s.query.RowsForExport(ctx, ds, chain, addr, maxExportRows, 0)
-				if err != nil {
-					werr = err
-					break
-				}
-				s.attachTokenMetadata(ctx, chain, rows)
-				if includeMeta {
-					s.annotateRows(ctx, chain, addr, rows)
-				}
-				s.attachDecodedInput(ctx, chain, ds, rows, includeDecodedInput)
-				rowsTotal += int64(len(rows))
-				name := fmt.Sprintf("addresses/%s/%s.%s", addr, ds, extFor(format))
-				fh := &zip.FileHeader{Name: name, Method: zip.Deflate}
-				fh.SetModTime(time.Now())
-				fw, err := zw.CreateHeader(fh)
-				if err != nil {
-					werr = err
-					break
-				}
-				switch format {
-				case "csv":
-					werr = streamCSV(fw, rows)
-				case "jsonl":
-					werr = streamNDJSON(fw, rows)
-				case "xlsx":
-					werr = streamXLSX(fw, rows)
-				case "parquet":
-					werr = s.streamParquetZipEntry(ctx, fw, ds, rows)
-				}
-				if werr != nil {
-					break
-				}
+		for part := range parts {
+			if part.err != nil {
+				werr = part.err
+				cancel()
+				continue
 			}
 			if werr != nil {
+				continue
+			}
+			rowsTotal += int64(len(part.rows))
+			name := fmt.Sprintf("addresses/%s/%s.%s", part.addr, part.ds, extFor(format))
+			if part.prepared != nil {
+				fh := &zip.FileHeader{Name: name, Method: zip.Deflate, CRC32: part.prepared.crc32, CompressedSize64: uint64(part.prepared.compressed), UncompressedSize64: uint64(part.prepared.uncompressed)}
+				fh.SetModTime(time.Now())
+				fw, err := zw.CreateRaw(fh)
+				if err == nil {
+					err = part.prepared.copyTo(fw)
+				}
+				part.prepared.remove()
+				if err != nil {
+					werr = err
+					cancel()
+				}
+				continue
+			}
+			fh := &zip.FileHeader{Name: name, Method: zip.Deflate}
+			fh.SetModTime(time.Now())
+			fw, err := zw.CreateHeader(fh)
+			if err != nil {
+				werr = err
 				break
 			}
+			switch format {
+			case "csv":
+				werr = streamCSV(fw, part.rows)
+			case "jsonl":
+				werr = streamNDJSON(fw, part.rows)
+			case "xlsx":
+				werr = streamXLSX(fw, part.rows)
+			case "parquet":
+				werr = s.streamParquetZipEntry(ctx, fw, part.ds, part.rows)
+			}
+			if werr != nil {
+				cancel()
+			}
 		}
+		cancel()
 		if err := zw.Close(); werr == nil && err != nil {
 			werr = err
 		}
@@ -245,6 +435,87 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, key, cha
 	}
 	sha, err := s.objectSHA256(ctx, key)
 	return result.rows, sha, err
+}
+
+type preparedZipEntry struct {
+	path                     string
+	crc32                    uint32
+	compressed, uncompressed int64
+}
+type countOnlyWriter struct{ n int64 }
+
+func (w *countOnlyWriter) Write(p []byte) (int, error) { w.n += int64(len(p)); return len(p), nil }
+func (p *preparedZipEntry) remove() {
+	if p != nil && p.path != "" {
+		_ = os.Remove(p.path)
+	}
+}
+func (p *preparedZipEntry) copyTo(w io.Writer) error {
+	f, err := os.Open(p.path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.CopyBuffer(w, f, make([]byte, 1<<20))
+	return err
+}
+
+func prepareZipEntry(format string, rows []map[string]any) (*preparedZipEntry, error) {
+	f, err := os.CreateTemp("", "export-entry-*.deflate")
+	if err != nil {
+		return nil, err
+	}
+	entry := &preparedZipEntry{path: f.Name()}
+	failed := true
+	defer func() {
+		_ = f.Close()
+		if failed {
+			entry.remove()
+		}
+	}()
+	zw, err := flate.NewWriter(f, flate.DefaultCompression)
+	if err != nil {
+		return nil, err
+	}
+	hash, count := crc32.NewIEEE(), &countOnlyWriter{}
+	w := io.MultiWriter(zw, hash, count)
+	if format == "csv" {
+		err = streamCSV(w, rows)
+	} else {
+		err = streamNDJSON(w, rows)
+	}
+	if closeErr := zw.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	entry.crc32, entry.compressed, entry.uncompressed = hash.Sum32(), info.Size(), count.n
+	failed = false
+	return entry, nil
+}
+
+func matchingExportSubjects(chain string, subjects []string, row map[string]any) []string {
+	normalize := func(v string) string {
+		v = strings.TrimSpace(v)
+		if chain != "tron" {
+			return strings.ToLower(v)
+		}
+		return v
+	}
+	from, to, address := normalize(fmt.Sprint(row["from_address"])), normalize(fmt.Sprint(row["to_address"])), normalize(fmt.Sprint(row["address"]))
+	out := make([]string, 0, 2)
+	for _, subject := range subjects {
+		n := normalize(subject)
+		if n == from || n == to || n == address {
+			out = append(out, subject)
+		}
+	}
+	return out
 }
 
 // attachDecodedInput 可选附加 Decoded Input（§47：默认关闭，完整参数会显著增加文件体积）。
@@ -287,7 +558,7 @@ func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows [
 	}
 	cache := map[string][]string{}
 	for _, r := range rows {
-		matched := matchedExportAddresses(subject, r)
+		matched := matchedExportAddresses(chain, subject, r)
 		var cases, tags []string
 		for _, a := range matched {
 			if v, ok := cache["c:"+a]; ok {
@@ -311,14 +582,21 @@ func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows [
 	}
 }
 
-func matchedExportAddresses(subject string, row map[string]any) []string {
-	subject = strings.ToLower(subject)
+func matchedExportAddresses(chain, subject string, row map[string]any) []string {
+	normalize := func(value string) string {
+		value = strings.TrimSpace(value)
+		if chain == "tron" {
+			return value
+		}
+		return strings.ToLower(value)
+	}
+	subject = normalize(subject)
 	if subject == "" {
 		return nil
 	}
-	from := strings.ToLower(fmt.Sprint(row["from_address"]))
-	to := strings.ToLower(fmt.Sprint(row["to_address"]))
-	address := strings.ToLower(fmt.Sprint(row["address"]))
+	from := normalize(fmt.Sprint(row["from_address"]))
+	to := normalize(fmt.Sprint(row["to_address"]))
+	address := normalize(fmt.Sprint(row["address"]))
 	if from == subject || to == subject || address == subject {
 		return []string{subject}
 	}
@@ -565,7 +843,6 @@ func (s *Server) objectSHA256(ctx context.Context, key string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// streamXLSX 流式 XLSX（§51：excelize StreamWriter，不整表进 RAM）。
 func streamXLSX(w io.Writer, rows []map[string]any) error {
 	f := excelize.NewFile()
 	defer f.Close()
@@ -585,29 +862,7 @@ func streamXLSX(w io.Writer, rows []map[string]any) error {
 		if sheetIdx > 0 {
 			name = fmt.Sprintf("Sheet%d", sheetIdx+1)
 		}
-		if idx, err := f.GetSheetIndex(name); err != nil || idx < 0 {
-			_, _ = f.NewSheet(name)
-		}
-		sw, err := f.NewStreamWriter(name)
-		if err != nil {
-			return err
-		}
-		if len(cols) > 0 {
-			if err := sw.SetRow("A1", colsToAny(cols)); err != nil {
-				return err
-			}
-		}
-		for i := start; i < end; i++ {
-			cell, _ := excelize.CoordinatesToCellName(1, i-start+2)
-			rec := make([]any, len(cols))
-			for j, c := range cols {
-				rec[j] = rows[i][c]
-			}
-			if err := sw.SetRow(cell, rec); err != nil {
-				return err
-			}
-		}
-		if err := sw.Flush(); err != nil {
+		if err := writeXLSXSheet(f, name, rows, cols, start, end); err != nil {
 			return err
 		}
 		sheetIdx++

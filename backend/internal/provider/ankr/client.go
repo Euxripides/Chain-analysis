@@ -1,8 +1,10 @@
-// Package ankr 实现 Ankr Advanced API Provider（V1.1：响应体保护 + 官方错误码分类 + 自适应 pageSize）。
+// Package ankr 实现 Ankr Advanced API Provider（V1.1：响应体保护 + 官方错误码分类 + 自适应 pageSize；
+// V1.6：wire/decoded 字节拆分、Body Idle 超时、传输层截断精确分类）。
 package ankr
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -31,6 +34,10 @@ type Options struct {
 	ResponseHardLimitBytes int64
 	CreditsPerRequest      float64
 	CostPerRequestUSD      float64
+	// Ankr 引擎（§21/§22）：超时分层
+	ConnectTimeout      time.Duration
+	TLSHandshakeTimeout time.Duration
+	BodyIdleTimeout     time.Duration
 }
 
 type Client struct {
@@ -39,6 +46,7 @@ type Client struct {
 	maxPageSize int
 	softLimit   int64
 	hardLimit   int64
+	bodyIdle    time.Duration
 	http        *http.Client
 	limiter     *TokenBucket
 	breaker     *circuitBreaker
@@ -53,6 +61,8 @@ type Client struct {
 	rateLimits  atomic.Int64
 	timeouts    atomic.Int64
 	tooLarge    atomic.Int64
+	connTotal   atomic.Int64
+	connReused  atomic.Int64
 }
 
 func New(opts Options, hook provider.UsageHook) *Client {
@@ -66,19 +76,30 @@ func New(opts Options, hook provider.UsageHook) *Client {
 		opts.ResponseHeaderTimeout = opts.RequestTimeout
 	}
 	if opts.ResponseSoftLimitBytes <= 0 {
-		opts.ResponseSoftLimitBytes = 32 << 20
+		opts.ResponseSoftLimitBytes = 48 << 20
 	}
 	if opts.ResponseHardLimitBytes <= 0 {
-		opts.ResponseHardLimitBytes = 64 << 20
+		opts.ResponseHardLimitBytes = 128 << 20
 	}
+	if opts.ConnectTimeout <= 0 {
+		opts.ConnectTimeout = 10 * time.Second
+	}
+	if opts.TLSHandshakeTimeout <= 0 {
+		opts.TLSHandshakeTimeout = 10 * time.Second
+	}
+	if opts.BodyIdleTimeout <= 0 {
+		opts.BodyIdleTimeout = 30 * time.Second
+	}
+	// DisableCompression：wire（压缩）与 decoded（解压）字节必须分开计量（§28）。
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		DisableCompression:    true,
+		DialContext:           (&net.Dialer{Timeout: opts.ConnectTimeout, KeepAlive: 30 * time.Second}).DialContext,
 		MaxIdleConns:          256,
 		MaxIdleConnsPerHost:   128,
 		MaxConnsPerHost:       128,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   opts.TLSHandshakeTimeout,
 		ResponseHeaderTimeout: opts.ResponseHeaderTimeout,
 	}
 	c := &Client{
@@ -87,6 +108,7 @@ func New(opts Options, hook provider.UsageHook) *Client {
 		maxPageSize: opts.MaxPageSize,
 		softLimit:   opts.ResponseSoftLimitBytes,
 		hardLimit:   opts.ResponseHardLimitBytes,
+		bodyIdle:    opts.BodyIdleTimeout,
 		http:        &http.Client{Transport: transport, Timeout: opts.RequestTimeout},
 		limiter:     NewTokenBucket(opts.RequestsPerMinute),
 		breaker:     newCircuitBreaker(40, 0.25, 30*time.Second),
@@ -127,19 +149,98 @@ var methodByDataset = map[string]string{
 	"balances":        "ankr_getAccountBalance",
 }
 
-// readBodyWithLimit 读取至多 maxBytes+1：超过返回 exceeded=true（防止 64MiB 截断被误报 bad json，§6）。
-func readBodyWithLimit(r io.Reader, maxBytes int64) ([]byte, bool, error) {
-	body, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
-	if err != nil {
-		return nil, false, err
+// idleBodyReader 监控 body 读取进展（§22）：只有连续 N 秒无进展才算卡死。
+type idleBodyReader struct {
+	rc           io.ReadCloser
+	lastProgress atomic.Int64
+	idleFired    atomic.Bool
+}
+
+func (b *idleBodyReader) Read(p []byte) (int, error) {
+	n, err := b.rc.Read(p)
+	if n > 0 {
+		b.lastProgress.Store(time.Now().UnixNano())
 	}
-	if int64(len(body)) > maxBytes {
-		return nil, true, nil
+	return n, err
+}
+
+func (b *idleBodyReader) Close() error { return b.rc.Close() }
+
+// readBody 读取响应体：wire 与 decoded 分开计量（§28）。
+// 返回 (decodedBody, wireBytes, decodedBytes, tooLarge, softExceeded, err)。
+func (c *Client) readBody(res *http.Response) ([]byte, int64, int64, bool, bool, error) {
+	br := &idleBodyReader{rc: res.Body}
+	br.lastProgress.Store(time.Now().UnixNano())
+	done := make(chan struct{})
+	defer close(done)
+	if c.bodyIdle > 0 {
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					if time.Since(time.Unix(0, br.lastProgress.Load())) > c.bodyIdle {
+						br.idleFired.Store(true)
+						_ = br.Close() // 中断读：ErrBodyIdleTimeout，绝不等待整体超时
+						return
+					}
+				}
+			}
+		}()
 	}
-	return body, false, nil
+
+	wire, rerr := io.ReadAll(io.LimitReader(br, c.hardLimit+1))
+	if rerr != nil {
+		if br.idleFired.Load() {
+			pe := provider.NewBodyIdleTimeout(
+				fmt.Sprintf("body idle timeout after %s without progress", c.bodyIdle), rerr)
+			pe.Provider = "ankr"
+			pe.BodyBytes = int64(len(wire))
+			return nil, int64(len(wire)), 0, false, false, pe
+		}
+		// 传输层截断：连接在 body 中途断开（§66）——严禁误报 invalid JSON。
+		pe := provider.NewBodyTruncated(
+			fmt.Sprintf("body truncated after %d wire bytes: %v", len(wire), rerr), int64(len(wire)), rerr)
+		pe.Provider = "ankr"
+		return nil, int64(len(wire)), 0, false, false, pe
+	}
+	if int64(len(wire)) > c.hardLimit {
+		return nil, int64(len(wire)), 0, true, false, nil
+	}
+	encoding := strings.ToLower(res.Header.Get("Content-Encoding"))
+	if strings.Contains(encoding, "gzip") {
+		zr, gerr := gzip.NewReader(bytes.NewReader(wire))
+		if gerr != nil {
+			return nil, int64(len(wire)), 0, false, false,
+				provider.NewBodyTruncated("invalid gzip stream: "+gerr.Error(), int64(len(wire)), gerr)
+		}
+		dec, derr := io.ReadAll(io.LimitReader(zr, c.hardLimit+1))
+		_ = zr.Close()
+		if derr != nil && !errors.Is(derr, io.EOF) {
+			return nil, int64(len(wire)), int64(len(dec)), false, false,
+				provider.NewBodyTruncated("gzip body truncated: "+derr.Error(), int64(len(wire)), derr)
+		}
+		if int64(len(dec)) > c.hardLimit {
+			return nil, int64(len(wire)), int64(len(dec)), true, false, nil
+		}
+		soft := int64(len(dec)) > c.softLimit
+		if soft {
+			observability.AnkrSoftLimitExceeded.Inc()
+		}
+		return dec, int64(len(wire)), int64(len(dec)), false, soft, nil
+	}
+	soft := int64(len(wire)) > c.softLimit
+	if soft {
+		observability.AnkrSoftLimitExceeded.Inc()
+	}
+	return wire, int64(len(wire)), int64(len(wire)), false, soft, nil
 }
 
 func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
+	observability.AnkrFetchAttempts.WithLabelValues("ankr", req.Dataset).Inc()
 	ok, state := c.breaker.allow()
 	if !ok {
 		observability.AnkrCircuitRejection.WithLabelValues(req.Chain, req.Dataset).Inc()
@@ -170,53 +271,83 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		return provider.FetchResult{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	// DisableCompression 后手动声明 gzip：传输层压缩仍生效，字节可分开计量。
+	httpReq.Header.Set("Accept-Encoding", "gzip")
+	httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			total := c.connTotal.Add(1)
+			if info.Reused {
+				c.connReused.Add(1)
+			}
+			if total > 0 {
+				observability.AnkrConnectionReuseRatio.Set(float64(c.connReused.Load()) / float64(total))
+			}
+		},
+	}))
 
 	observability.AnkrInflight.Inc()
+	observability.AnkrActualInflight.Inc()
+	defer observability.AnkrActualInflight.Dec()
 	res, err := c.http.Do(httpReq)
 	observability.AnkrInflight.Dec()
 	elapsed := time.Since(start)
 	observability.AnkrRequestDuration.Observe(elapsed.Seconds())
+	// V1.2（§56/§57）：TTFB = headers 到达前；Body = readBody 分段。
+	headersAt := time.Now()
+	ttfbMs := headersAt.Sub(start).Milliseconds()
 	if err != nil {
 		pe := c.classifyCtxErr(ctx, err, req.PageSize)
 		pe.Duration = elapsed
 		pe.Provider = "ankr"
-		c.recordFailure(pe, req.Chain, req.Dataset)
-		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
+		c.recordFailureFor(req, pe)
+		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0, 0, 0, elapsed.Milliseconds(), 0)
 		return provider.FetchResult{}, pe
 	}
 	defer res.Body.Close()
 
-	// Content-Length 快速拒绝（§7；Chunked 无 CL 时靠 maxBytes+1 兜底）
+	// Content-Length 快速拒绝（§7；Chunked 无 CL 时靠 hardLimit+1 兜底）。
 	if res.ContentLength > 0 && res.ContentLength > c.hardLimit {
 		pe := provider.NewResponseTooLarge(
 			fmt.Sprintf("content-length %d exceeds hard limit %d", res.ContentLength, c.hardLimit),
 			req.PageSize, res.ContentLength)
 		pe.Provider = "ankr"
 		pe.HTTPStatus = res.StatusCode
-		c.recordFailure(pe, req.Chain, req.Dataset)
-		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
+		c.recordFailureFor(req, pe)
+		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, res.ContentLength, 0, 0, ttfbMs, 0)
 		return provider.FetchResult{}, pe
 	}
 
-	respBody, exceeded, rerr := readBodyWithLimit(res.Body, c.hardLimit)
+	observability.AnkrBodyInflightActual.Inc()
+	respBody, wireBytes, decodedBytes, exceeded, softExceeded, rerr := c.readBody(res)
+	observability.AnkrBodyInflightActual.Dec()
+	bodyMs := time.Since(headersAt).Milliseconds()
 	if rerr != nil {
-		pe := &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
-			Message: "read response: " + rerr.Error(), Retryable: true}
-		c.recordFailure(pe, req.Chain, req.Dataset)
-		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, 0)
+		pe := &provider.Error{}
+		if pe2, ok := rerr.(*provider.Error); ok {
+			pe = pe2
+		} else {
+			pe = &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
+				Message: "read response: " + rerr.Error(), Retryable: true}
+		}
+		pe.Provider = "ankr"
+		pe.HTTPStatus = res.StatusCode
+		pe.Duration = elapsed
+		c.recordFailureFor(req, pe)
+		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 		return provider.FetchResult{}, pe
 	}
-	respBytes := len(respBody)
-	observability.AnkrResponseBytes.Observe(float64(respBytes))
+	observability.AnkrResponseBytes.Observe(float64(decodedBytes))
+	observability.AnkrFetchWireBytes.WithLabelValues("ankr", req.Dataset).Add(float64(wireBytes))
+	observability.AnkrFetchDecodedBytes.WithLabelValues("ankr", req.Dataset).Add(float64(decodedBytes))
 
 	if exceeded {
 		pe := provider.NewResponseTooLarge(
 			fmt.Sprintf("response body exceeded hard limit %d", c.hardLimit),
-			req.PageSize, int64(respBytes))
+			req.PageSize, decodedBytes)
 		pe.Provider = "ankr"
 		pe.HTTPStatus = res.StatusCode
-		c.recordFailure(pe, req.Chain, req.Dataset)
-		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
+		c.recordFailureFor(req, pe)
+		c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 		return provider.FetchResult{}, pe
 	}
 
@@ -224,41 +355,52 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	if res.StatusCode == http.StatusOK {
 		var rpc rpcResponse
 		if err := json.Unmarshal(respBody, &rpc); err != nil {
-			// 未超硬限制、未被截断、解析仍失败 → 才是真正 InvalidJSON（§9）
+			// 未超硬限制、未被截断、解析仍失败 → 才是真正 InvalidJSON（§9/§66）
 			pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 				Message: "invalid json: " + err.Error(), Retryable: true,
-				BodyBytes: int64(respBytes), Cause: err, Kind: provider.ErrTemporary}
-			c.recordFailure(pe, req.Chain, req.Dataset)
-			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
+				BodyBytes: decodedBytes, Cause: err, Kind: provider.ErrTemporary}
+			c.recordFailureFor(req, pe)
+			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 			return provider.FetchResult{}, pe
 		}
 		if rpc.Error != nil {
 			pe := c.classifyRPCError(rpc.Error, retryAfter)
 			pe.Duration = elapsed
-			pe.BodyBytes = int64(respBytes)
-			c.recordFailure(pe, req.Chain, req.Dataset)
-			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
+			pe.BodyBytes = decodedBytes
+			c.recordFailureFor(req, pe)
+			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 			return provider.FetchResult{}, pe
 		}
 		result, n, perr := c.parseResult(req.Dataset, rpc.Result)
 		if perr != nil {
 			pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 				Message: "parse result: " + perr.Error(), Retryable: true, Cause: perr, Kind: provider.ErrTemporary}
-			c.recordFailure(pe, req.Chain, req.Dataset)
-			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
+			c.recordFailureFor(req, pe)
+			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 			return provider.FetchResult{}, pe
 		}
+		result.WireBytes = wireBytes
+		result.DecodedBytes = decodedBytes
+		result.SoftLimitExceeded = softExceeded
+		result.RequestID = req.RequestID
+		result.RequestFromBlock = req.FromBlock
+		result.RequestToBlock = req.ToBlock
+		result.RequestPageSize = req.PageSize
+		result.AttemptNo = req.AttemptNo
+		result.RawResponseBody = respBody
+		result.StartedAt = start
+		result.BodyCompleteAt = time.Now()
 		c.recordSuccess()
-		c.recordUsage(ctx, req, method, "ok", nil, elapsed, n, respBytes)
+		c.recordUsage(ctx, req, method, "ok", nil, elapsed, n, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 		observability.AnkrResponseRows.Observe(float64(n))
 		return result, nil
 	}
 
 	pe := c.classifyHTTPError(res.StatusCode, respBody, retryAfter)
 	pe.Duration = elapsed
-	pe.BodyBytes = int64(respBytes)
-	c.recordFailure(pe, req.Chain, req.Dataset)
-	c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, respBytes)
+	pe.BodyBytes = decodedBytes
+	c.recordFailureFor(req, pe)
+	c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 	return provider.FetchResult{}, pe
 }
 
@@ -435,12 +577,14 @@ func parseRetryAfter(h http.Header) time.Duration {
 
 func (c *Client) recordSuccess() {
 	c.breaker.record(true)
-	_, _ = c.breaker.update()
+	before, after := c.breaker.update()
+	if before != "OPEN" && after == "OPEN" {
+		observability.AnkrCircuitOpenTransition.Inc()
+	}
 	c.consecutive.Store(0)
 }
 
-func (c *Client) recordFailure(pe *provider.Error, chain, dataset string) {
-	observability.AnkrProviderRootFailure.WithLabelValues(chain, dataset, string(pe.Class)).Inc()
+func (c *Client) recordFailure(pe *provider.Error) {
 	c.breaker.record(false)
 	before, after := c.breaker.update()
 	if before != "OPEN" && after == "OPEN" {
@@ -465,6 +609,10 @@ func (c *Client) recordFailure(pe *provider.Error, chain, dataset string) {
 	case provider.ClassConnectionLimit:
 		c.connLimits.Add(1)
 		observability.AnkrConnectionLimit.Inc()
+	case provider.ClassBodyTruncated:
+		observability.AnkrBodyTruncated.Inc()
+	case provider.ClassBodyIdleTimeout:
+		observability.AnkrBodyIdleTimeout.Inc()
 	}
 	if pe.HTTPStatus == http.StatusTooManyRequests {
 		observability.Ankr429.WithLabelValues("ankr", "").Inc()
@@ -474,10 +622,17 @@ func (c *Client) recordFailure(pe *provider.Error, chain, dataset string) {
 	}
 }
 
+func (c *Client) recordFailureFor(req provider.FetchRequest, pe *provider.Error) {
+	observability.AnkrProviderRootFailure.WithLabelValues(req.Chain, req.Dataset, string(pe.Class)).Inc()
+	c.recordFailure(pe)
+}
+
 // recordUsage 写用量表（§34 增强字段）+ Prometheus（§35）。
-func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, method, status string, pe *provider.Error, elapsed time.Duration, rows, respBytes int) {
+func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, method, status string, pe *provider.Error, elapsed time.Duration, rows int, wireBytes, decodedBytes, respBytes int64, ttfbMs, bodyMs int64) {
 	observability.AnkrRequests.WithLabelValues("ankr", req.Dataset, status).Inc()
 	observability.AnkrLatencyMs.WithLabelValues("ankr", req.Dataset).Observe(float64(elapsed.Milliseconds()))
+	observability.AnkrTTFBSeconds.WithLabelValues("ankr", req.Dataset).Observe(float64(ttfbMs) / 1000.0)
+	observability.AnkrBodyDownloadSeconds.WithLabelValues("ankr", req.Dataset).Observe(float64(bodyMs) / 1000.0)
 	if status == "ok" {
 		observability.AnkrRequestsSuccess.WithLabelValues("ankr", req.Dataset).Inc()
 		observability.AnkrRows.WithLabelValues("ankr", req.Dataset).Add(float64(rows))
@@ -503,9 +658,11 @@ func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, met
 		Provider: "ankr", Method: method, Dataset: req.Dataset,
 		JobID: jobID, ShardID: shardID,
 		RequestTime: time.Now(), DurationMs: int(elapsed.Milliseconds()),
-		Status: status, Rows: rows, Bytes: respBytes,
-		PageSize: req.PageSize, ResponseBytes: respBytes, RetryAttempt: attempt,
+		Status: status, Rows: rows, Bytes: int(respBytes),
+		WireBytes: wireBytes, DecodedBytes: decodedBytes,
+		PageSize: req.PageSize, ResponseBytes: int(respBytes), RetryAttempt: attempt,
 		Credits: c.credits, CostUSD: c.costUSD,
+		TTFBMs: int(ttfbMs), BodyMs: int(bodyMs),
 	}
 	if pe != nil {
 		u.HTTPStatus = pe.HTTPStatus

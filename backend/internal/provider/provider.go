@@ -10,21 +10,45 @@ import (
 )
 
 type FetchRequest struct {
-	Chain     string
-	Dataset   string
-	Address   string
+	Chain   string
+	Dataset string
+	Address string
+	// QueryMode preserves the user's range intent after planning resolves full
+	// history into a concrete [0, head] shard. Providers must not infer intent
+	// from block bounds because full-history shards also carry resolved bounds.
+	QueryMode string
 	FromBlock *uint64
 	ToBlock   *uint64
 	FromTime  *time.Time
 	ToTime    *time.Time
 	PageSize  int
 	PageToken string
+	// RequestID is an internal immutable attempt correlation identifier. It is
+	// never sent to Ankr and prevents response/shard attribution ambiguity.
+	RequestID string
+	AttemptNo int
+	// Priority is propagated by the download scheduler so providers can apply
+	// quota policy without coupling to job storage. Empty means normal.
+	Priority string
 }
 
 type FetchResult struct {
 	Rows          []json.RawMessage
 	NextPageToken string
 	HasMore       bool
+	// 响应字节拆分（文档 §28）：wire = 传输层压缩字节；decoded = 解压后 JSON 字节。
+	WireBytes    int64
+	DecodedBytes int64
+	// SoftLimitExceeded 仅作为信号（文档 §26/§27），绝不强制降 pageSize。
+	SoftLimitExceeded bool
+	RequestID         string
+	RequestFromBlock  *uint64
+	RequestToBlock    *uint64
+	RequestPageSize   int
+	AttemptNo         int
+	RawResponseBody   []byte
+	StartedAt         time.Time
+	BodyCompleteAt    time.Time
 }
 
 // UsageHook 由 Worker 注入，记录每次 Provider 请求的用量与成本。
@@ -70,8 +94,18 @@ const (
 	ClassRequestTooLarge  ErrorClass = "request_too_large"
 	ClassInvalidRequest   ErrorClass = "invalid_request"
 	ClassAuth             ErrorClass = "auth"
+	ClassQuota            ErrorClass = "quota_exhausted"
 	ClassUnsupported      ErrorClass = "unsupported"
 	ClassCancelled        ErrorClass = "cancelled"
+
+	// Ankr 引擎（文档 §65）：超时/截断必须精确分类。
+	ClassConnectTimeout  ErrorClass = "connect_timeout"
+	ClassHeaderTimeout   ErrorClass = "header_timeout"
+	ClassBodyIdleTimeout ErrorClass = "body_idle_timeout"
+	ClassOverallTimeout  ErrorClass = "overall_timeout"
+	ClassBodyTruncated   ErrorClass = "body_truncated"
+	ClassProviderInvalid ErrorClass = "provider_invalid_response"
+	ClassUnknown         ErrorClass = "unknown"
 )
 
 // 旧分类（兼容保留；新代码使用 Class）
@@ -131,6 +165,22 @@ func NewResponseTooLarge(msg string, pageSize int, bodyBytes int64) *Error {
 	}
 }
 
+// NewBodyTruncated 传输层截断（连接在 body 中途断开）：禁止误报 invalid JSON（§66）。
+func NewBodyTruncated(msg string, wireBytes int64, cause error) *Error {
+	return &Error{
+		Class: ClassBodyTruncated, Message: msg, Retryable: true,
+		BodyBytes: wireBytes, Cause: cause, Kind: ErrTemporary,
+	}
+}
+
+// NewBodyIdleTimeout body 持续无进展超时（§22）：Response 大 ≠ 卡死。
+func NewBodyIdleTimeout(msg string, cause error) *Error {
+	return &Error{
+		Class: ClassBodyIdleTimeout, Message: msg, Retryable: true,
+		Cause: cause, Kind: ErrTemporary,
+	}
+}
+
 type Provider interface {
 	Name() string
 	Capabilities() Capabilities
@@ -144,6 +194,13 @@ type Provider interface {
 // 批量下载链路禁止逐笔调用（§62-1）。
 type TxDetailFetcher interface {
 	TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error)
+}
+
+// TxReceiptFetcher is the optional native receipt capability. It is kept
+// separate from Dataset Fetch so selecting an address-history provider cannot
+// accidentally select the receipt provider.
+type TxReceiptFetcher interface {
+	TxReceipt(ctx context.Context, chain, txHash string) (json.RawMessage, error)
 }
 
 // TokenMetadataResult is the optional standard-contract RPC capability used by

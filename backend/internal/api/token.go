@@ -177,10 +177,17 @@ func (s *Server) attachTokenMetadata(ctx context.Context, chain string, rows []m
 	}
 	seen := map[string]bool{}
 	var contracts []string
+	normalizeContract := func(value any) string {
+		contract := strings.TrimSpace(stringFromAny(value))
+		if chain != "tron" {
+			contract = strings.ToLower(contract)
+		}
+		return contract
+	}
 	for _, row := range rows {
-		contract := strings.ToLower(strings.TrimSpace(stringFromAny(row["token_address"])))
+		contract := normalizeContract(row["token_address"])
 		if contract == "" {
-			contract = strings.ToLower(strings.TrimSpace(stringFromAny(row["contract_address"])))
+			contract = normalizeContract(row["contract_address"])
 		}
 		if contract != "" && !seen[contract] {
 			seen[contract] = true
@@ -192,9 +199,9 @@ func (s *Server) attachTokenMetadata(ctx context.Context, chain string, rows []m
 		return
 	}
 	for _, row := range rows {
-		contract := strings.ToLower(strings.TrimSpace(stringFromAny(row["token_address"])))
+		contract := normalizeContract(row["token_address"])
 		if contract == "" {
-			contract = strings.ToLower(strings.TrimSpace(stringFromAny(row["contract_address"])))
+			contract = normalizeContract(row["contract_address"])
 		}
 		if contract == "" {
 			continue

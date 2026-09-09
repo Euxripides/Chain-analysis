@@ -20,6 +20,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
+	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
 var ErrInvalidCursor = errors.New("invalid cursor")
@@ -97,11 +98,19 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 	if len(req.Addresses) == 0 || req.Chain == "" {
 		return nil, fmt.Errorf("chain and addresses required")
 	}
-	if err := validateFilters(req.Filters); err != nil {
+	if err := validateFiltersForChain(req.Chain, req.Filters); err != nil {
 		return nil, err
 	}
 	for i := range req.Addresses {
-		req.Addresses[i] = strings.ToLower(req.Addresses[i])
+		if req.Chain == "tron" {
+			normalized, err := tron.NormalizeTronAddress(req.Addresses[i])
+			if err != nil {
+				return nil, err
+			}
+			req.Addresses[i] = normalized
+		} else {
+			req.Addresses[i] = strings.ToLower(req.Addresses[i])
+		}
 	}
 	rows, err := s.queryDataset(ctx, req)
 	if err != nil {
@@ -119,7 +128,9 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 	return &Result{Rows: rows, NextCursor: next, Count: len(rows)}, nil
 }
 
-func validateFilters(f Filter) error {
+func validateFilters(f Filter) error { return validateFiltersForChain("", f) }
+
+func validateFiltersForChain(chain string, f Filter) error {
 	if f.FromTime != nil && f.ToTime != nil && f.FromTime.After(*f.ToTime) {
 		return fmt.Errorf("%w: from_time is after to_time", ErrInvalidFilter)
 	}
@@ -133,8 +144,14 @@ func validateFilters(f Filter) error {
 		return fmt.Errorf("%w: unsupported direction", ErrInvalidFilter)
 	}
 	for name, value := range map[string]string{"from_address": f.FromAddress, "to_address": f.ToAddress} {
-		if value != "" && !addressFilterRe.MatchString(value) {
-			return fmt.Errorf("%w: %s is not an EVM address", ErrInvalidFilter, name)
+		if value != "" {
+			if chain == "tron" {
+				if tron.ValidateTronAddress(value) != nil {
+					return fmt.Errorf("%w: %s is not a TRON address", ErrInvalidFilter, name)
+				}
+			} else if !addressFilterRe.MatchString(value) {
+				return fmt.Errorf("%w: %s is not an EVM address", ErrInvalidFilter, name)
+			}
 		}
 	}
 	var min, max *big.Rat
@@ -184,7 +201,7 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 	single := len(req.Addresses) == 1
 	switch req.Dataset {
 	case "transactions":
-		appendPartyFilters(&conds, &args, f)
+		appendPartyFilters(&conds, &args, req.Chain, f)
 		if single && f.Direction != "" {
 			if f.Direction == "out" {
 				conds = append(conds, "from_address = ?")
@@ -195,7 +212,7 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		}
 		appendMethodFilters(&conds, &args, f)
 	case "token_transfers":
-		appendPartyFilters(&conds, &args, f)
+		appendPartyFilters(&conds, &args, req.Chain, f)
 		if single && f.Direction != "" {
 			if f.Direction == "out" {
 				conds = append(conds, "from_address = ?")
@@ -218,7 +235,7 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 			args = append(args, f.MaxAmount)
 		}
 	case "nft_transfers":
-		appendPartyFilters(&conds, &args, f)
+		appendPartyFilters(&conds, &args, req.Chain, f)
 		if f.Token != "" {
 			appendTokenFilter(&conds, &args, f.Token, "token_name", "token_symbol", "contract_address")
 		}
@@ -270,14 +287,24 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 	return s.Q.Explorer(ctx, req.Dataset, req.Chain, req.Addresses, filterSQL, args, qCursor, req.Limit)
 }
 
-func appendPartyFilters(conds *[]string, args *[]any, f Filter) {
+func appendPartyFilters(conds *[]string, args *[]any, chain string, f Filter) {
+	normalize := func(v string) string {
+		if chain == "tron" {
+			n, err := tron.NormalizeTronAddress(v)
+			if err == nil {
+				return n
+			}
+			return v
+		}
+		return strings.ToLower(v)
+	}
 	if f.FromAddress != "" {
 		*conds = append(*conds, "from_address = ?")
-		*args = append(*args, strings.ToLower(f.FromAddress))
+		*args = append(*args, normalize(f.FromAddress))
 	}
 	if f.ToAddress != "" {
 		*conds = append(*conds, "to_address = ?")
-		*args = append(*args, strings.ToLower(f.ToAddress))
+		*args = append(*args, normalize(f.ToAddress))
 	}
 }
 
@@ -417,8 +444,8 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 				from, to = own, own
 			}
 		}
-		r["from_is_contract"] = addressTypes[strings.ToLower(from)]
-		r["to_is_contract"] = addressTypes[strings.ToLower(to)]
+		r["from_is_contract"] = addressTypes[addressTypeKey(chain, from)]
+		r["to_is_contract"] = addressTypes[addressTypeKey(chain, to)]
 		matched := []string{}
 		if set[from] {
 			matched = append(matched, from)
@@ -501,8 +528,9 @@ func (s *Service) resolveAddressTypes(ctx context.Context, chain string, rows []
 	candidates := map[string]bool{}
 	for _, row := range rows {
 		for _, field := range []string{"from_address", "to_address", "address", "counterparty"} {
-			value := strings.ToLower(strings.TrimSpace(valueString(row[field])))
-			if len(value) == 42 && strings.HasPrefix(value, "0x") {
+			value := addressTypeKey(chain, valueString(row[field]))
+			if (chain == "tron" && len(value) == 34 && strings.HasPrefix(value, "T")) ||
+				(chain != "tron" && len(value) == 42 && strings.HasPrefix(value, "0x")) {
 				candidates[value] = true
 			}
 		}
@@ -536,6 +564,14 @@ func (s *Service) resolveAddressTypes(ctx context.Context, chain string, rows []
 		s.typeCache[strings.ToLower(chain)+":"+address] = cachedAddressType{isContract: isContract, expiresAt: now.Add(24 * time.Hour)}
 	}
 	return result
+}
+
+func addressTypeKey(chain, address string) string {
+	address = strings.TrimSpace(address)
+	if chain == "tron" {
+		return address
+	}
+	return strings.ToLower(address)
 }
 
 func dedupe(in []string) []string {
@@ -602,8 +638,12 @@ func cursorFromRow(row map[string]any) (pageCursor, bool) {
 	if !ok {
 		return pageCursor{}, false
 	}
+	index := valueUint64(row["log_index"])
+	if index == 0 {
+		index = valueUint64(row["internal_index"])
+	}
 	return pageCursor{
-		Ts: ts, Hash: valueString(row["tx_hash"]), LogIndex: valueUint64(row["log_index"]),
+		Ts: ts, Hash: valueString(row["tx_hash"]), LogIndex: index,
 		TokenAddress: valueString(row["token_address"]), ContractAddress: valueString(row["contract_address"]),
 		TokenID: valueString(row["token_id"]), ActivityType: valueString(row["activity_type"]),
 		Counterparty: valueString(row["counterparty"]),

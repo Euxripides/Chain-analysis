@@ -46,7 +46,7 @@ func (w *Writer) WriteTransactions(ctx context.Context, rows []TxRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []TxRow) error {
 		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.transactions "+
 			"(chain, block_number, block_hash, tx_hash, timestamp, from_address, to_address, value_raw, nonce, gas, gas_used, gas_price, tx_type, status, input, method_id, source_provider, "+
-			"method_name, method_signature, method_source, method_verified, method_confidence, method_type, method_resolved_at) VALUES")
+			"method_name, method_signature, method_source, method_verified, method_confidence, method_type, method_resolved_at, native_symbol, confirmation, raw_type, raw_status) VALUES")
 		if err != nil {
 			return err
 		}
@@ -62,12 +62,35 @@ func (w *Writer) WriteTransactions(ctx context.Context, rows []TxRow) error {
 			if err := stmt.Append(r.Chain, r.BlockNumber, r.BlockHash, r.TxHash, r.Timestamp, r.From, r.To,
 				r.ValueRaw, r.Nonce, r.Gas, r.GasUsed, r.GasPrice, r.TxType, r.Status, r.Input, r.MethodID, r.Provider,
 				r.MethodName, r.MethodSignature, source, r.MethodVerified, confidence, r.MethodType,
-				r.MethodResolvedAt); err != nil {
+				r.MethodResolvedAt, r.NativeSymbol, r.Confirmation, r.RawType, r.RawStatus); err != nil {
 				return err
 			}
 		}
 		return stmt.Send()
 	}, rows, "transactions")
+}
+
+func (w *Writer) WriteInternalTransfers(ctx context.Context, rows []InternalTransferRow) error {
+	return batched(ctx, w.batchSize, len(rows), func(batch []InternalTransferRow) error {
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.internal_calls "+
+			"(chain, tx_hash, call_index, depth, trace_path, call_type, activity_type, from_address, to_address, value_raw, method_id, gas, gas_used, success, error, block_number, timestamp, source_provider) VALUES")
+		if err != nil {
+			return err
+		}
+		for _, r := range batch {
+			success := uint8(1)
+			errText := ""
+			if r.Rejected {
+				success, errText = 0, "rejected"
+			}
+			if err := stmt.Append(r.Chain, r.TxHash, r.CallIndex, uint16(0), fmt.Sprintf("%d", r.CallIndex), r.CallType,
+				"internal_transfer", r.From, r.To, r.ValueRaw, "", uint64(0), uint64(0), success, errText,
+				r.BlockNumber, r.Timestamp, r.Provider); err != nil {
+				return err
+			}
+		}
+		return stmt.Send()
+	}, rows, "internal_calls")
 }
 
 func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRow) error {
@@ -163,6 +186,65 @@ func (w *Writer) WriteActivity(ctx context.Context, rows []ActivityRow) error {
 		}
 		return stmt.Send()
 	}, rows, "address_activity")
+}
+
+// CountFinal 校验证据（§60/§63）：FINAL 去重后的唯一行数（只读，不阻塞数据面）。
+func (w *Writer) CountFinal(ctx context.Context, dataset, chain, address string, from, to uint64) (uint64, error) {
+	var q string
+	switch dataset {
+	case "transactions":
+		q = "SELECT count() FROM blockchain.transactions FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+	case "token_transfers":
+		q = "SELECT count() FROM blockchain.token_transfers FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+	case "nft_transfers":
+		q = "SELECT count() FROM blockchain.nft_transfers FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+	case "internal_transactions":
+		q = "SELECT count() FROM blockchain.internal_calls FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+	case "logs":
+		q = "SELECT count() FROM blockchain.logs FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND address = ?"
+	default:
+		return 0, fmt.Errorf("CountFinal unsupported for %s", dataset)
+	}
+	args := []any{chain, from, to, address}
+	if dataset == "transactions" || dataset == "token_transfers" || dataset == "nft_transfers" || dataset == "internal_transactions" {
+		args = append(args, address) // WHERE 中 address 出现两次（from/to 双侧匹配）
+	}
+	var n uint64
+	row := w.conn.DB().QueryRow(ctx, q, args...)
+	if err := row.Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// BoundaryHashes 边界证据（V1.1 §16）：区间内首/末交易哈希。
+func (w *Writer) BoundaryHashes(ctx context.Context, dataset, chain, address string, from, to uint64) (string, string, error) {
+	var firstQ, lastQ string
+	switch dataset {
+	case "token_transfers":
+		firstQ = "SELECT tx_hash FROM blockchain.token_transfers WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?) ORDER BY block_number, tx_hash LIMIT 1"
+		lastQ = "SELECT tx_hash FROM blockchain.token_transfers WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?) ORDER BY block_number DESC, tx_hash DESC LIMIT 1"
+	case "internal_transactions":
+		firstQ = "SELECT tx_hash FROM blockchain.internal_calls WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?) ORDER BY block_number, tx_hash, call_index LIMIT 1"
+		lastQ = "SELECT tx_hash FROM blockchain.internal_calls WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?) ORDER BY block_number DESC, tx_hash DESC, call_index DESC LIMIT 1"
+	case "logs":
+		firstQ = "SELECT tx_hash FROM blockchain.logs WHERE chain = ? AND block_number >= ? AND block_number <= ? AND address = ? ORDER BY block_number, tx_hash LIMIT 1"
+		lastQ = "SELECT tx_hash FROM blockchain.logs WHERE chain = ? AND block_number >= ? AND block_number <= ? AND address = ? ORDER BY block_number DESC, tx_hash DESC LIMIT 1"
+	default:
+		return "", "", fmt.Errorf("BoundaryHashes unsupported for %s", dataset)
+	}
+	args := []any{chain, from, to, address}
+	if dataset == "token_transfers" || dataset == "internal_transactions" {
+		args = append(args, address) // WHERE 中 address 出现两次（from/to 双侧匹配）
+	}
+	var first, last string
+	if err := w.conn.DB().QueryRow(ctx, firstQ, args...).Scan(&first); err != nil && err.Error() != "sql: no rows in result set" {
+		return "", "", err
+	}
+	if err := w.conn.DB().QueryRow(ctx, lastQ, args...).Scan(&last); err != nil && err.Error() != "sql: no rows in result set" {
+		return "", "", err
+	}
+	return first, last, nil
 }
 
 func bigIntOrZero(b *big.Int) *big.Int {

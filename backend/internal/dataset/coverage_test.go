@@ -54,6 +54,17 @@ func TestNormalizeAndDedupeAddresses(t *testing.T) {
 	}
 }
 
+func TestNormalizeAndDedupeTronAddressesPreservesBase58(t *testing.T) {
+	const address = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"
+	out, err := NormalizeAndDedupeAddressesForChain("tron", []string{address, "41EA51342D9B1EA6EAE9E7CBE6B7AB93B2E0D27AF8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) == 0 || out[0] != address {
+		t.Fatalf("TRON address was changed: %#v", out)
+	}
+}
+
 func TestSanitizeDatasetsRejectsUnknownAndDeduplicates(t *testing.T) {
 	got, err := sanitizeDatasets([]string{" logs ", "LOGS", "transactions"})
 	if err != nil {

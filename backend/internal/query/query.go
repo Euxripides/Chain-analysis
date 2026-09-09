@@ -50,6 +50,32 @@ type txRow struct {
 	MethodConfidence string     `ch:"method_confidence" json:"method_confidence"`
 	MethodType       string     `ch:"method_type" json:"method_type"`
 	MethodResolvedAt *time.Time `ch:"method_resolved_at" json:"method_resolved_at"`
+	NativeSymbol     string     `ch:"native_symbol" json:"native_symbol"`
+	Confirmation     string     `ch:"confirmation" json:"confirmation"`
+	RawType          string     `ch:"raw_type" json:"raw_type"`
+	RawStatus        string     `ch:"raw_status" json:"raw_status"`
+}
+
+type internalTransferRow struct {
+	Chain          string    `ch:"chain" json:"chain"`
+	TxHash         string    `ch:"tx_hash" json:"tx_hash"`
+	CallIndex      uint32    `ch:"call_index" json:"internal_index"`
+	Depth          uint16    `ch:"depth" json:"depth"`
+	TracePath      string    `ch:"trace_path" json:"trace_path"`
+	CallType       string    `ch:"call_type" json:"call_type"`
+	ActivityType   string    `ch:"activity_type" json:"activity_type"`
+	FromAddress    string    `ch:"from_address" json:"from_address"`
+	ToAddress      string    `ch:"to_address" json:"to_address"`
+	ValueRaw       string    `ch:"value_raw" json:"value_raw"`
+	MethodID       string    `ch:"method_id" json:"method_id"`
+	Gas            uint64    `ch:"gas" json:"gas"`
+	GasUsed        uint64    `ch:"gas_used" json:"gas_used"`
+	Success        uint8     `ch:"success" json:"success"`
+	Error          string    `ch:"error" json:"error"`
+	TracedAt       time.Time `ch:"traced_at" json:"traced_at"`
+	BlockNumber    uint64    `ch:"block_number" json:"block_number"`
+	Timestamp      time.Time `ch:"timestamp" json:"timestamp"`
+	SourceProvider string    `ch:"source_provider" json:"source_provider"`
 }
 
 type tokenTransferRow struct {
@@ -151,6 +177,9 @@ func tableName(dataset string) string {
 	if dataset == "balances" {
 		return "address_balances"
 	}
+	if dataset == "internal_transactions" {
+		return "internal_calls"
+	}
 	return dataset
 }
 
@@ -158,7 +187,7 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 	var where string
 	var args []any
 	switch dataset {
-	case "transactions", "token_transfers", "nft_transfers":
+	case "transactions", "token_transfers", "nft_transfers", "internal_transactions":
 		where = "chain=? AND (from_address=? OR to_address=?)"
 		args = []any{chain, subject, subject}
 	case "logs":
@@ -199,7 +228,7 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 	in := "(?)" // clickhouse-go expands a slice bound to one IN placeholder.
 	var base string
 	switch dataset {
-	case "transactions", "token_transfers", "nft_transfers":
+	case "transactions", "token_transfers", "nft_transfers", "internal_transactions":
 		base = "chain=? AND (from_address IN " + in + " OR to_address IN " + in + ")"
 		args = append(args, addresses, addresses)
 	case "logs", "activity":
@@ -248,6 +277,8 @@ func explorerOrder(dataset string) string {
 		return "timestamp DESC, tx_hash DESC, log_index DESC, contract_address DESC, token_id DESC"
 	case "logs":
 		return "timestamp DESC, tx_hash DESC, log_index DESC"
+	case "internal_transactions":
+		return "timestamp DESC, tx_hash DESC, call_index DESC"
 	case "activity":
 		return "timestamp DESC, tx_hash DESC, activity_type DESC, counterparty DESC, token_address DESC"
 	default:
@@ -266,6 +297,8 @@ func explorerCursorCondition(dataset string, cursor *ExplorerCursor) (string, []
 			[]any{ts, cursor.TxHash, cursor.LogIndex, cursor.ContractAddress, cursor.TokenID}
 	case "logs":
 		return "(timestamp, tx_hash, log_index) < (?, ?, ?)", []any{ts, cursor.TxHash, cursor.LogIndex}
+	case "internal_transactions":
+		return "(timestamp, tx_hash, call_index) < (?, ?, ?)", []any{ts, cursor.TxHash, cursor.LogIndex}
 	case "activity":
 		return "(timestamp, tx_hash, activity_type, counterparty, token_address) < (?, ?, ?, ?, ?)",
 			[]any{ts, cursor.TxHash, cursor.ActivityType, cursor.Counterparty, cursor.TokenAddress}
@@ -278,6 +311,8 @@ func explorerPartition(dataset string) string {
 	switch dataset {
 	case "transactions":
 		return "tx_hash"
+	case "internal_transactions":
+		return "tx_hash, call_index"
 	case "logs":
 		return "tx_hash, log_index"
 	case "nft_transfers":
@@ -289,7 +324,9 @@ func explorerPartition(dataset string) string {
 
 // Activity 地址活动（§87：资金分析/智能调查统一入口）。
 func (s *Service) Activity(ctx context.Context, chain, address string, limit, offset int) ([]map[string]any, error) {
-	address = strings.ToLower(address)
+	if chain != "tron" {
+		address = strings.ToLower(address)
+	}
 	q := "SELECT * FROM blockchain.address_activity FINAL WHERE chain=? AND address=? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	rows, err := s.queryRows(ctx, "activity", q, chain, address, limit, offset)
 	if err != nil {
@@ -311,16 +348,18 @@ func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject str
 func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subject string, limit, offset int,
 	fromBlock, toBlock *int64, fromTime, toTime *time.Time) ([]map[string]any, error) {
 	switch dataset {
-	case "transactions", "token_transfers", "nft_transfers", "logs", "balances":
+	case "transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions":
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}
-	subject = strings.ToLower(subject)
+	if chain != "tron" {
+		subject = strings.ToLower(subject)
+	}
 	var where string
 	var args []any
 	if subject != "" {
 		switch dataset {
-		case "transactions", "token_transfers", "nft_transfers":
+		case "transactions", "token_transfers", "nft_transfers", "internal_transactions":
 			where = "chain=? AND (from_address=? OR to_address=?)"
 			args = []any{chain, subject, subject}
 		case "logs", "balances":
@@ -349,6 +388,53 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 	}
 	args = append(args, limit, offset)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	return s.queryRows(ctx, dataset, q, args...)
+}
+
+// RowsForExportRangeMulti scans ClickHouse once for all requested addresses.
+// Job ZIP export then fans the result into per-address files in memory, avoiding
+// one full FINAL table scan per address.
+func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain string, subjects []string, limit int,
+	fromBlock, toBlock *int64, fromTime, toTime *time.Time) ([]map[string]any, error) {
+	if len(subjects) == 0 {
+		return nil, nil
+	}
+	if chain != "tron" {
+		for i := range subjects {
+			subjects[i] = strings.ToLower(subjects[i])
+		}
+	}
+	var where string
+	switch dataset {
+	case "transactions", "token_transfers", "nft_transfers", "internal_transactions":
+		where = "chain=? AND (from_address IN (?) OR to_address IN (?))"
+	case "logs", "balances":
+		where = "chain=? AND address IN (?)"
+	default:
+		return nil, fmt.Errorf("unknown dataset %s", dataset)
+	}
+	args := []any{chain, subjects}
+	if strings.Contains(where, "to_address") {
+		args = append(args, subjects)
+	}
+	if fromBlock != nil {
+		where += " AND block_number>=?"
+		args = append(args, *fromBlock)
+	}
+	if toBlock != nil {
+		where += " AND block_number<=?"
+		args = append(args, *toBlock)
+	}
+	if fromTime != nil {
+		where += " AND timestamp>=?"
+		args = append(args, *fromTime)
+	}
+	if toTime != nil {
+		where += " AND timestamp<=?"
+		args = append(args, *toTime)
+	}
+	args = append(args, limit)
+	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ?"
 	return s.queryRows(ctx, dataset, q, args...)
 }
 
@@ -470,6 +556,8 @@ func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[
 		v = &balanceRow{}
 	case "activity":
 		v = &activityRow{}
+	case "internal_transactions":
+		v = &internalTransferRow{}
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}
@@ -486,6 +574,13 @@ func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[
 	var m map[string]any
 	if err := dec.Decode(&m); err != nil {
 		return nil, err
+	}
+	if dataset == "internal_transactions" {
+		success := fmt.Sprint(m["success"])
+		m["rejected"] = success == "0" || strings.EqualFold(fmt.Sprint(m["error"]), "rejected")
+		if strings.EqualFold(fmt.Sprint(m["chain"]), "tron") {
+			m["asset_type"] = "TRX"
+		}
 	}
 	return m, nil
 }

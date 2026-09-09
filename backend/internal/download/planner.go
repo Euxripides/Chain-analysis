@@ -3,11 +3,18 @@ package download
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
+	"sync"
+	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
+	"github.com/blockchain-platform/blockchain-platform/internal/countoracle"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
@@ -17,7 +24,17 @@ const (
 	maxShardWindow     = 2_000_000
 	targetRowsPerShard = 200_000
 	defaultMaxRetries  = 5
+	tronMainnetGenesis = "2018-06-25T00:00:00Z"
 )
+
+type timeInterval struct {
+	From time.Time
+	To   time.Time
+}
+
+// multiRangeDatasets V1.1：Provider 实测尊重 block 边界的数据集（token_transfers 实测验证；
+// logs 本就支持）。只有这些数据集允许单地址多 Range 并行（§4/§5：Range 间并行、Range 内串行）。
+var multiRangeDatasets = map[string]bool{"token_transfers": true, "logs": true}
 
 type gap struct {
 	From int64 `json:"from"`
@@ -25,12 +42,87 @@ type gap struct {
 }
 
 type Planner struct {
-	store *store.Store
-	log   *slog.Logger
+	store                     *store.Store
+	ch                        *clickhouse.Conn
+	log                       *slog.Logger
+	localTRC20IdentityEnabled bool
+
+	// V1.2 Count Oracle 平面（nil = 完全关闭，Planner 行为与 V1.1 一致）。
+	oracle            countoracle.Oracle
+	zeroVerify        bool
+	transactionsRange bool
+	txCertRequired    bool // V1.4 §14：transactions 多 Range 必须 Range Certification
+	lpt               bool
+	planningDeadline  time.Duration
+	prov              provider.Provider
+	zeroSkipped       sync.Map // itemID → bool（Ankr verify 确认空，跳过该 dataset）
+	slotMu            sync.Mutex
+	slotCacheAt       time.Time
+	slotCache         *model.SchedulerState
+
+	// V1.2 Planning 软预算（§16）：只限制"等 Count"的时间，绝不卡死规划流程
+	planBudgetSet bool
+	planBudgetAt  time.Time
 }
 
-func NewPlanner(st *store.Store, log *slog.Logger) *Planner {
-	return &Planner{store: st, log: log}
+// beginPlanBudget 开启本 job 的 Planning 预算（Count 不能拖慢下载，§16）。
+func (p *Planner) beginPlanBudget(deadline time.Duration) {
+	if deadline <= 0 {
+		return
+	}
+	p.planBudgetAt = time.Now().Add(deadline)
+	p.planBudgetSet = true
+}
+
+// budgetOpen Count 网络调用是否仍在预算窗口内。
+func (p *Planner) budgetOpen() bool {
+	if !p.planBudgetSet {
+		return true
+	}
+	return time.Now().Before(p.planBudgetAt)
+}
+
+func NewPlanner(st *store.Store, ch *clickhouse.Conn, log *slog.Logger, localTRC20IdentityEnabled bool) *Planner {
+	return &Planner{store: st, ch: ch, log: log, localTRC20IdentityEnabled: localTRC20IdentityEnabled}
+}
+
+// ConfigureV12 Worker 启动时注入 Count Oracle 平面（§89 Shadow / §95 aware 由 oracle.Aware() 决定）。
+func (p *Planner) ConfigureV12(oracle countoracle.Oracle, zeroVerify, txRangeSharding, txCertRequired, lpt bool, deadline time.Duration, prov provider.Provider) {
+	p.oracle = oracle
+	p.zeroVerify = zeroVerify
+	p.transactionsRange = txRangeSharding
+	p.txCertRequired = txCertRequired
+	p.lpt = lpt
+	p.planningDeadline = deadline
+	p.prov = prov
+}
+
+// takeZeroSkip 检查并消费"已 zero-verify 确认空"标记。
+func (p *Planner) takeZeroSkip(itemID string) bool {
+	_, ok := p.zeroSkipped.LoadAndDelete(itemID)
+	return ok
+}
+
+func (p *Planner) markZeroSkip(itemID string) {
+	p.zeroSkipped.Store(itemID, true)
+}
+
+// schedulerStateSnapshot 读取 Scheduler 心跳（1s 缓存，供 Decision Log §88）。
+func (p *Planner) schedulerStateSnapshot(ctx context.Context) *model.SchedulerState {
+	p.slotMu.Lock()
+	defer p.slotMu.Unlock()
+	if p.slotCache != nil && time.Since(p.slotCacheAt) < time.Second {
+		return p.slotCache
+	}
+	st, err := p.store.GetSchedulerState(ctx)
+	if err != nil {
+		return nil
+	}
+	if st != nil {
+		p.slotCache = st
+		p.slotCacheAt = time.Now()
+	}
+	return st
 }
 
 func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
@@ -40,6 +132,20 @@ func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
 	subjects, err := p.store.SubjectsByJob(ctx, job.ID)
 	if err != nil {
 		return err
+	}
+	// V1.2（§16）：Planning Deadline 是"软预算"——只限制等待 Count 的总时长，
+	// 不包在 ctx 上，避免预算耗尽后规划流程/DB 回写被 ctx 取消而卡死。
+	if p.oracle != nil && p.oracle.Enabled() {
+		p.beginPlanBudget(p.planningDeadline)
+	}
+	// V1.2（§46-§48）：Multi-address LPT —— 重的地址先规划（先入 Ready Queue）
+	if p.lpt && len(subjects) > 1 && p.oracle != nil && p.oracle.Enabled() && p.oracle.Configured() && p.oracle.Aware() {
+		scored := p.subjectWorkScores(ctx, job, subjects)
+		subjects = subjects[:0]
+		for _, ws := range scored {
+			subjects = append(subjects, ws.subj)
+		}
+		p.log.Info("multi-address LPT order applied", "job_id", job.ID, "subjects", len(subjects))
 	}
 	want, bounded := requestedBlockInterval(job)
 	for _, subj := range subjects {
@@ -69,6 +175,10 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	if err != nil {
 		return err
 	}
+	// V1.1 Benchmark 任务强制全量重跑（固定 target_block 对比，不命中 Coverage 复用）
+	if job.Source == "benchmark" {
+		covered = nil
+	}
 	if ds == "balances" {
 		if len(covered) > 0 {
 			observability.CoverageSavedRequests.Inc()
@@ -80,7 +190,26 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 
 	var gaps []store.BlockInterval
 	if !bounded {
-		// 全量(live)/时间范围：单 Shard，区间由 Provider 语义决定
+		// TronGrid fingerprints serialize one address stream. Once TRC20
+		// enrichment is Logs-first, that serial pagination becomes the dominant
+		// wall-clock cost. Independent, non-overlapping time ranges preserve
+		// exact coverage while allowing the existing bounded scheduler and
+		// TronGrid concurrency controller to overlap those streams.
+		if job.Chain == "tron" && (ds == "token_transfers" || ds == "transactions") {
+			return p.createTronTimeShards(ctx, job, subj, item)
+		}
+		// 全量（live）：多 Range 数据集按 [0, head] 均分 N 段（V1.1 §4；V1.2 Count-aware 初始分片）
+		if p.multiRangeEligibleV12(job.Chain, ds) && job.HeadBlock > minShardWindow {
+			n := p.rangeShardsFor(ctx, job, subj, item, ds)
+			if p.takeZeroSkip(item.ID) {
+				return nil // Ankr verify 确认空（§26）：zero-row Coverage，无需下载
+			}
+			return p.createRangeShards(ctx, job, subj, item, []store.BlockInterval{{From: 0, To: job.HeadBlock}}, n)
+		}
+		// 其余数据集保持单 Shard（V1.1）；Count 仍可记录（ETA/Decision Log，不改变分片）
+		if p.v12Active(ctx, job, ds) {
+			p.estimateFor(ctx, job, subj, item, ds)
+		}
 		sh := p.baseShard(job, subj, item)
 		return p.store.CreateShards(ctx, []model.Shard{sh})
 	}
@@ -94,7 +223,21 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 		return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
 	}
 
-	// 自适应 Range：先发 Probe Shard，完成后按 rows/block 密度拆分剩余区间
+	// V1.1：多 Range 数据集直接按块区间均分 N 段（0 Missing / 0 Overlap，§6）；
+	// V1.2：Profile MISS + Count-aware 时 n 来自 Count Estimate（§28/§31/§95）
+	if p.multiRangeEligibleForJob(job, ds) {
+		n := p.rangeShardsFor(ctx, job, subj, item, ds)
+		if p.takeZeroSkip(item.ID) {
+			return nil // Ankr verify 确认空（§26）：zero-row Coverage，无需下载
+		}
+		return p.createRangeShards(ctx, job, subj, item, gaps, n)
+	}
+
+	// 其余数据集：自适应 Range——先发 Probe Shard，完成后按 rows/block 密度拆分剩余区间
+	// V1.2：Count 信息仍记录（决策日志/ETA），不改变 V1.1 探测路径
+	if p.v12Active(ctx, job, ds) {
+		p.estimateFor(ctx, job, subj, item, ds)
+	}
 	first := gaps[0]
 	sh := p.baseShard(job, subj, item)
 	sh.FromBlock = first.From
@@ -105,10 +248,219 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	}
 	stats, _ := json.Marshal(map[string]any{"gaps": allGaps})
 	if _, err := p.store.Pool.Exec(ctx,
-		"UPDATE download_datasets SET stats=$2::jsonb WHERE id=$1", item.ID, stats); err != nil {
+		"UPDATE download_datasets SET stats = COALESCE(stats,'{}'::jsonb) || $2::jsonb WHERE id=$1", item.ID, stats); err != nil {
 		return err
 	}
 	return p.store.CreateShards(ctx, []model.Shard{sh})
+}
+
+func tronTimeShardCount(job *model.DownloadJob) int {
+	mode := string(job.EffectiveMode)
+	if mode == "" {
+		mode = string(job.RequestedMode)
+	}
+	if mode == "" {
+		mode = job.Mode
+	}
+	switch mode {
+	case "economy", "safe":
+		return 4
+	case "fast":
+		return 16
+	case "turbo":
+		return 32
+	default:
+		return 8
+	}
+}
+
+func tronTimeIntervals(job *model.DownloadJob, now time.Time) []timeInterval {
+	start, _ := time.Parse(time.RFC3339, tronMainnetGenesis)
+	end := now.UTC().Add(time.Minute)
+	if job.FromTimestamp != nil {
+		start = job.FromTimestamp.UTC()
+	}
+	if job.ToTimestamp != nil {
+		end = job.ToTimestamp.UTC()
+	}
+	if end.Before(start) {
+		return nil
+	}
+	n := tronTimeShardCount(job)
+	spanMillis := end.UnixMilli() - start.UnixMilli() + 1
+	// TronGrid fingerprints serialize every page within an address stream. A
+	// seven-day floor left short, high-density ranges with only one or two
+	// streams, so a single large transaction response (often several MiB) could
+	// dominate the whole job. Six-hour shards keep Turbo's bounded 32-way fanout
+	// available without changing the requested time coverage or paid Ankr work.
+	const minShardMillis = int64((6 * time.Hour) / time.Millisecond)
+	if maxBySpan := int((spanMillis + minShardMillis - 1) / minShardMillis); n > maxBySpan {
+		n = max(1, maxBySpan)
+	}
+	intervals := make([]timeInterval, 0, n)
+	for i := 0; i < n; i++ {
+		fromMillis := start.UnixMilli() + spanMillis*int64(i)/int64(n)
+		toMillis := start.UnixMilli() + spanMillis*int64(i+1)/int64(n) - 1
+		intervals = append(intervals, timeInterval{From: time.UnixMilli(fromMillis).UTC(), To: time.UnixMilli(toMillis).UTC()})
+	}
+	return intervals
+}
+
+func tronColdTimeIntervals(job *model.DownloadJob, now time.Time) []timeInterval {
+	base := tronTimeIntervals(job, now)
+	if len(base) == 0 {
+		return nil
+	}
+	start, end := base[0].From, base[len(base)-1].To
+	const maxColdShards = 128
+	// New addresses have no local quantiles. Use monthly shards for the last two
+	// years and quarterly shards for older history. Annual cold shards looked
+	// cheap for sparse accounts, but a previously unseen address with 3k-4k
+	// transfers in an older year collapsed to one serial 16-20 page tail after
+	// every other shard had finished. Quarterly history keeps enough independent
+	// work available to the bounded worker pool without paying ~100 monthly
+	// probes across the entire chain lifetime.
+	recentCutoff := end.Add(-730 * 24 * time.Hour)
+	if recentCutoff.Before(start) {
+		recentCutoff = start
+	}
+	out := make([]timeInterval, 0, 40)
+	appendSpan := func(from, to time.Time, span time.Duration) {
+		for from.Before(to) && len(out) < maxColdShards {
+			next := from.Add(span)
+			if next.After(to) {
+				next = to
+			}
+			out = append(out, timeInterval{From: from, To: next.Add(-time.Millisecond)})
+			from = next
+		}
+	}
+	appendSpan(start, recentCutoff, 90*24*time.Hour)
+	appendSpan(recentCutoff, end.Add(time.Millisecond), 30*24*time.Hour)
+	if len(out) > 0 {
+		out[len(out)-1].To = end
+	}
+	return out
+}
+
+func tronColdActivityIntervals(job *model.DownloadJob, now, firstActivity, latestActivity time.Time) []timeInterval {
+	base := tronTimeIntervals(job, now)
+	if len(base) == 0 {
+		return nil
+	}
+	start, end := base[0].From, base[len(base)-1].To
+	if firstActivity.After(start) && !firstActivity.After(end) {
+		start = firstActivity.UTC()
+	}
+	activeEnd := end
+	if latestActivity.After(start) && latestActivity.Before(end) {
+		activeEnd = latestActivity.UTC()
+	}
+	n := 47
+	mode := string(job.EffectiveMode)
+	if mode == "" {
+		mode = string(job.RequestedMode)
+	}
+	switch mode {
+	case "safe", "economy":
+		n = 47
+	case "fast":
+		n = 95
+	case "turbo":
+		n = 127
+	}
+	spanMillis := activeEnd.UnixMilli() - start.UnixMilli() + 1
+	const minShardMillis = int64((6 * time.Hour) / time.Millisecond)
+	if maxBySpan := int((spanMillis + minShardMillis - 1) / minShardMillis); n > maxBySpan {
+		n = max(1, maxBySpan)
+	}
+	intervals := make([]timeInterval, 0, n)
+	for i := 0; i < n; i++ {
+		fromMillis := start.UnixMilli() + spanMillis*int64(i)/int64(n)
+		toMillis := start.UnixMilli() + spanMillis*int64(i+1)/int64(n) - 1
+		intervals = append(intervals, timeInterval{From: time.UnixMilli(fromMillis).UTC(), To: time.UnixMilli(toMillis).UTC()})
+	}
+	// Keep full-history semantics if the account has gone quiet: one cheap
+	// catch-up shard covers everything after the newest indexed event through
+	// the job's resolved end, instead of spreading dozens of empty probes there.
+	if activeEnd.Before(end) {
+		intervals = append(intervals, timeInterval{From: activeEnd.Add(time.Millisecond), To: end})
+	}
+	return intervals
+}
+
+func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJob, subj model.Subject, item model.DatasetItem) error {
+	intervals := p.tronDataAwareTimeIntervals(ctx, job, subj.Subject, item.Dataset, time.Now())
+	if len(intervals) == 0 {
+		return p.store.CreateShards(ctx, []model.Shard{p.baseShard(job, subj, item)})
+	}
+	shards := make([]model.Shard, 0, len(intervals))
+	for i, interval := range intervals {
+		from, to := interval.From, interval.To
+		shards = append(shards, model.Shard{
+			JobID: job.ID, SubjectID: subj.ID, DatasetID: item.ID, Dataset: item.Dataset,
+			FromBlock: 0, ToBlock: 0, FromTimestamp: &from, ToTimestamp: &to,
+			Status: model.ShardPending, Priority: job.Priority, MaxRetries: defaultMaxRetries,
+			PageState: map[string]any{"query_mode": "time_subshard", "time_shard_index": i, "time_shard_count": len(intervals)},
+		})
+	}
+	p.log.Info("TRON fingerprint stream split into bounded time shards", "job_id", job.ID, "dataset", item.Dataset, "address", subj.Subject, "shards", len(shards))
+	return p.store.CreateShards(ctx, shards)
+}
+
+func (p *Planner) tronDataAwareTimeIntervals(ctx context.Context, job *model.DownloadJob, address, dataset string, now time.Time) []timeInterval {
+	fallback := tronTimeIntervals(job, now)
+	if !p.localTRC20IdentityEnabled && dataset == "token_transfers" {
+		if resolver, ok := p.prov.(interface {
+			TRC20ActivityBounds(context.Context, string) (time.Time, time.Time, error)
+		}); ok {
+			probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			first, latest, err := resolver.TRC20ActivityBounds(probeCtx, address)
+			cancel()
+			if err == nil && !first.IsZero() {
+				intervals := tronColdActivityIntervals(job, now, first, latest)
+				p.log.Info("TRON cold history bounded by indexed activity", "job_id", job.ID, "dataset", dataset, "address", address, "first_activity", first, "latest_activity", latest, "shards", len(intervals))
+				return intervals
+			}
+			p.log.Warn("TRON activity boundary probe failed; using genesis-safe cold plan", "job_id", job.ID, "address", address, "error", err)
+		}
+		return tronColdTimeIntervals(job, now)
+	}
+	if p.ch == nil || len(fallback) < 2 || (dataset != "token_transfers" && dataset != "transactions") {
+		return fallback
+	}
+	quantiles := make([]string, 0, len(fallback)-1)
+	for i := 1; i < len(fallback); i++ {
+		quantiles = append(quantiles, fmt.Sprintf("%.8f", float64(i)/float64(len(fallback))))
+	}
+	query := "SELECT count(), quantilesExact(" + strings.Join(quantiles, ",") + ")(toUnixTimestamp64Milli(timestamp)) FROM blockchain." + dataset + " FINAL WHERE chain = ? AND (from_address = ? OR to_address = ?)"
+	var count uint64
+	var boundaries []int64
+	if err := p.ch.DB().QueryRow(ctx, query, job.Chain, address, address).Scan(&count, &boundaries); err != nil {
+		return fallback
+	}
+	if count == 0 || len(boundaries) == 0 {
+		return tronColdTimeIntervals(job, now)
+	}
+	startMillis := fallback[0].From.UnixMilli()
+	endMillis := fallback[len(fallback)-1].To.UnixMilli()
+	intervals := make([]timeInterval, 0, len(boundaries)+1)
+	current := startMillis
+	for _, boundary := range boundaries {
+		if boundary < current || boundary >= endMillis {
+			continue
+		}
+		intervals = append(intervals, timeInterval{From: time.UnixMilli(current).UTC(), To: time.UnixMilli(boundary).UTC()})
+		current = boundary + 1
+	}
+	if current <= endMillis {
+		intervals = append(intervals, timeInterval{From: time.UnixMilli(current).UTC(), To: time.UnixMilli(endMillis).UTC()})
+	}
+	if len(intervals) < 2 {
+		return fallback
+	}
+	p.log.Info("TRON time shards balanced by local row quantiles", "job_id", job.ID, "dataset", dataset, "address", address, "local_rows", count, "shards", len(intervals))
+	return intervals
 }
 
 func (p *Planner) baseShard(job *model.DownloadJob, subj model.Subject, item model.DatasetItem) model.Shard {
@@ -117,7 +469,179 @@ func (p *Planner) baseShard(job *model.DownloadJob, subj model.Subject, item mod
 		FromBlock: 0, ToBlock: job.HeadBlock,
 		FromTimestamp: job.FromTimestamp, ToTimestamp: job.ToTimestamp,
 		Status: model.ShardPending, Priority: job.Priority, MaxRetries: defaultMaxRetries,
+		PageState: map[string]any{"query_mode": job.RangeType},
 	}
+}
+
+// createRangeShards V1.1：把若干缺口区间按块数比例均分为 n 个 Range Shard。
+// 边界规范 [start, end)（§6）；数据库 ToBlock 为 inclusive → ToBlock = end-1，保证 0 Missing / 0 Overlap。
+func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob, subj model.Subject, item model.DatasetItem, gaps []store.BlockInterval, n int) error {
+	if n < 1 {
+		n = 1
+	}
+	// V1.1 密度感知（§12/§17）：已知数据跨度时，空前缀固定 1 个 Shard（秒级 0 行），
+	// n 个 Range 全部用于数据段 [first, target] 的均分 —— 让每个 Range 承担相近工作量。
+	var firstData int64 = -1
+	if job.Stats != nil {
+		if v, ok := job.Stats["data_first_block"].(float64); ok && v > 0 {
+			firstData = int64(v)
+		}
+	}
+	var prefixGaps, dataGaps []store.BlockInterval
+	for _, g := range gaps {
+		if firstData > 0 && firstData > g.From && firstData <= g.To {
+			prefixGaps = append(prefixGaps, store.BlockInterval{From: g.From, To: firstData - 1})
+			dataGaps = append(dataGaps, store.BlockInterval{From: firstData, To: g.To})
+		} else if firstData > 0 && g.To < firstData {
+			prefixGaps = append(prefixGaps, g)
+		} else {
+			dataGaps = append(dataGaps, g)
+		}
+	}
+	if len(dataGaps) == 0 {
+		dataGaps = prefixGaps // 无密度提示：按原逻辑处理
+		prefixGaps = nil
+	}
+	var shards []model.Shard
+	// 空前缀：每个 gap 恰好 1 个 Shard（Provider 一次空响应即完成）
+	for _, g := range prefixGaps {
+		shards = append(shards, model.Shard{
+			JobID: job.ID, SubjectID: subj.ID, DatasetID: item.ID, Dataset: item.Dataset,
+			FromBlock: g.From, ToBlock: g.To,
+			Status: model.ShardPending, Priority: job.Priority, MaxRetries: defaultMaxRetries,
+			PageState: map[string]any{"query_mode": job.RangeType},
+		})
+	}
+	// 分位数边界（§17 工作量均衡）：把数据段切成等行量 Range，每段 1 个 Shard
+	var boundaries []int64
+	if job.Stats != nil {
+		if raw, ok := job.Stats["data_boundaries"].([]any); ok {
+			for _, v := range raw {
+				if f, ok := v.(float64); ok && f > 0 {
+					boundaries = append(boundaries, int64(f))
+				}
+			}
+		}
+	}
+	if len(boundaries) > 0 && len(dataGaps) == 1 {
+		g := dataGaps[0]
+		var segments []store.BlockInterval
+		cur := g.From
+		for _, b := range boundaries {
+			if b >= cur && b < g.To {
+				segments = append(segments, store.BlockInterval{From: cur, To: b})
+				cur = b + 1
+			}
+		}
+		if cur <= g.To {
+			segments = append(segments, store.BlockInterval{From: cur, To: g.To})
+		}
+		for _, seg := range segments {
+			shards = append(shards, model.Shard{
+				JobID: job.ID, SubjectID: subj.ID, DatasetID: item.ID, Dataset: item.Dataset,
+				FromBlock: seg.From, ToBlock: seg.To,
+				Status: model.ShardPending, Priority: job.Priority, MaxRetries: defaultMaxRetries,
+				PageState: map[string]any{"query_mode": job.RangeType},
+			})
+		}
+		p.log.Info("multi-range plan (quantile)", "dataset", item.Dataset, "ranges", len(shards), "job_mode", job.Mode)
+		return p.store.CreateShards(ctx, shards)
+	}
+	// 数据段：共享 n 个 Range
+	gaps = dataGaps
+	var total int64
+	for _, g := range gaps {
+		if g.To >= g.From {
+			total += g.To - g.From + 1
+		}
+	}
+	if total <= 0 {
+		if len(shards) == 0 {
+			return nil
+		}
+		return p.store.CreateShards(ctx, shards)
+	}
+	for _, g := range gaps {
+		span := g.To - g.From + 1
+		if span <= 0 {
+			continue
+		}
+		// 该缺口分配到的 shard 数（按块数比例四舍五入，至少 1，至多 n）
+		k := int(float64(n)*float64(span)/float64(total) + 0.5)
+		if k < 1 {
+			k = 1
+		}
+		if k > n {
+			k = n
+		}
+		per := span / int64(k)
+		rem := span % int64(k)
+		cur := g.From
+		for i := 0; i < k && cur <= g.To; i++ {
+			size := per
+			if int64(i) < rem {
+				size++
+			}
+			end := cur + size - 1
+			if end > g.To {
+				end = g.To
+			}
+			if cur > g.To {
+				break
+			}
+			shards = append(shards, model.Shard{
+				JobID: job.ID, SubjectID: subj.ID, DatasetID: item.ID, Dataset: item.Dataset,
+				FromBlock: cur, ToBlock: end,
+				Status: model.ShardPending, Priority: job.Priority, MaxRetries: defaultMaxRetries,
+				PageState: map[string]any{"query_mode": job.RangeType},
+			})
+			cur = end + 1
+		}
+	}
+	if len(shards) == 0 {
+		return nil
+	}
+	p.log.Info("multi-range plan", "dataset", item.Dataset, "ranges", len(shards), "job_mode", job.Mode)
+	return p.store.CreateShards(ctx, shards)
+}
+
+// shardCountFor V1.1 §24/§41-§44：Profile HIT → preferred_shard_count；MISS → 模式默认；
+// economy 减半、turbo ×2（仍受 Provider Health / Backpressure / Budget 运行时约束）。
+func (p *Planner) shardCountFor(ctx context.Context, job *model.DownloadJob, ds string) int {
+	if job.Stats != nil {
+		if v, ok := job.Stats["benchmark_shard_count"].(float64); ok && v >= 1 {
+			return int(v)
+		}
+	}
+	mode := job.Mode
+	if mode == "" {
+		mode = "balanced"
+	}
+	base := 2
+	switch mode {
+	case "economy":
+		base = 1
+	case "balanced":
+		base = 2
+	case "turbo":
+		base = 4
+	}
+	if n, samples, err := p.store.GetSweetSpotProfile(ctx, job.Chain, ds, ds, "NORMAL"); err == nil && samples >= 3 && n > 0 {
+		base = n
+		switch mode {
+		case "economy":
+			base = maxInt(1, n/2)
+		case "turbo":
+			base = minInt(8, n*2)
+		}
+	}
+	if base < 1 {
+		base = 1
+	}
+	if base > 8 {
+		base = 8
+	}
+	return base
 }
 
 // ContinueShards Probe Shard 完成后，按实测密度拆分剩余缺口（自适应 Range 反馈）。
@@ -176,6 +700,7 @@ func (p *Planner) ContinueShards(ctx context.Context, sh model.Shard) error {
 			FromBlock: from, ToBlock: to,
 			FromTimestamp: sh.FromTimestamp, ToTimestamp: sh.ToTimestamp,
 			Status: model.ShardPending, Priority: sh.Priority, MaxRetries: defaultMaxRetries,
+			PageState: sh.PageState,
 		}
 		newShards = append(newShards, ns)
 	}
@@ -185,10 +710,29 @@ func (p *Planner) ContinueShards(ctx context.Context, sh model.Shard) error {
 	return nil
 }
 
-// ResumeJob 恢复：重新计算 Coverage（可能其他任务已补全），再规划剩余缺口。
+// ResumeJob 恢复：优先原地恢复已有可续传 Shard，保留 committed cursor、页码与累计行数。
+// 只有不存在任何可续传 Shard 时（例如历史 FAILED_FINAL 任务），才按 Coverage 重规划。
 func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 	if err := p.store.SetJobStatus(ctx, job.ID, model.JobResuming); err != nil {
 		return err
+	}
+	var resumable int64
+	if err := p.store.Pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('PAUSED','PENDING','FAILED_RETRYABLE','LEASED','RUNNING')",
+		job.ID).Scan(&resumable); err != nil {
+		return err
+	}
+	if resumable > 0 {
+		// PAUSED is the only state that is not dispatchable after the job returns
+		// to RUNNING. PENDING/FAILED_RETRYABLE already participate in leasing;
+		// LEASED/RUNNING are retained defensively so a duplicate resume request can
+		// never destroy an in-flight checkpoint.
+		if _, err := p.store.Pool.Exec(ctx,
+			"UPDATE download_shards SET status='PENDING', lease_owner='', leased_until=NULL, updated_at=now() "+
+				"WHERE job_id=$1 AND status='PAUSED'", job.ID); err != nil {
+			return err
+		}
+		return p.store.SetJobStatus(ctx, job.ID, model.JobRunning)
 	}
 	// 删除未完成 Shard（已完成数据保留，属于公共链上数据）
 	if _, err := p.store.Pool.Exec(ctx,

@@ -235,7 +235,7 @@ func (s *Service) GetMany(ctx context.Context, chain string, contracts []string)
 	}
 	norm := make([]string, 0, len(contracts))
 	for _, v := range contracts {
-		norm = append(norm, normalizeAddress(v))
+		norm = append(norm, normalizeAddressForChain(chain, v))
 	}
 	rows, err := s.Store.Pool.Query(ctx, `SELECT chain,contract_address,COALESCE(name,''),COALESCE(symbol,''),decimals,COALESCE(token_type,''),COALESCE(logo_url,''),COALESCE(logo_object_key,''),COALESCE(logo_mime_type,''),verified,COALESCE(metadata_source,''),confidence,metadata_status,first_seen_block,last_seen_block,first_seen_at,last_seen_at,last_resolved_at,last_verified_at FROM token_metadata WHERE chain=$1 AND normalized_address=ANY($2)`, strings.ToLower(chain), norm)
 	if err != nil {
@@ -273,9 +273,17 @@ func (s *Service) GetMany(ctx context.Context, chain string, contracts []string)
 		if lv.Valid {
 			m.LastVerifiedAt = &lv.Time
 		}
-		out[normalizeAddress(m.ContractAddress)] = m
+		out[normalizeAddressForChain(chain, m.ContractAddress)] = m
 	}
 	return out, rows.Err()
+}
+
+func normalizeAddressForChain(chain, value string) string {
+	value = strings.TrimSpace(value)
+	if strings.EqualFold(chain, "tron") {
+		return value
+	}
+	return strings.ToLower(value)
 }
 
 func (s *Service) Search(ctx context.Context, chain, q string, limit int) ([]Metadata, error) {

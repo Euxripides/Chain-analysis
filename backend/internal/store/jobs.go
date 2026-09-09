@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,23 +17,18 @@ import (
 func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 	j := &model.DownloadJob{}
 	var fb, tb pgtype.Int8
-	var ft, tt, rt, modeChanged pgtype.Timestamptz
+	var ft, tt, rt pgtype.Timestamptz
 	var stats []byte
 	var cb *string
-	err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Chain, &j.RangeType,
+	err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Mode, &j.RequestedMode, &j.EffectiveMode, &j.ModeReason, &j.ModeChangedAt, &j.Chain, &j.RangeType,
 		&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.HeadBlock, &cb, &j.Error, &stats,
-		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &j.RequestedMode, &j.EffectiveMode,
-		&j.ModeReason, &modeChanged, &rt, &j.CreatedAt, &j.UpdatedAt)
+		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if rt.Valid {
 		v := rt.Time
 		j.ResolvedAt = &v
-	}
-	if modeChanged.Valid {
-		v := modeChanged.Time
-		j.ModeChangedAt = &v
 	}
 	if fb.Valid {
 		v := fb.Int64
@@ -61,9 +57,9 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 	return j, nil
 }
 
-const jobCols = "id, job_no, status, priority, source, chain, range_type, from_block, to_block, " +
+const jobCols = "id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, " +
 	"from_timestamp, to_timestamp, datasets, reuse_policy, head_block, created_by, error, stats, " +
-	"organization_id, workspace_id, project_id, requested_mode, effective_mode, mode_reason, mode_changed_at, resolved_at, created_at, updated_at"
+	"organization_id, workspace_id, project_id, resolved_at, created_at, updated_at"
 
 // CreateJobWithSubjects 创建 Job 与 Subject（四级模型前两级）。
 func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob, subjects []string) ([]model.Subject, error) {
@@ -77,13 +73,33 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	mode := j.Mode
+	if mode == "" {
+		mode = "balanced"
+	}
+	if j.RequestedMode == "" {
+		j.RequestedMode = model.PerformanceFast
+	}
+	if j.EffectiveMode == "" {
+		j.EffectiveMode = j.RequestedMode
+	}
+	if j.ModeReason == "" {
+		j.ModeReason = "default_profile"
+	}
+	if j.ModeChangedAt.IsZero() {
+		j.ModeChangedAt = time.Now()
+	}
+	stats, _ := json.Marshal(j.Stats)
+	if len(stats) == 0 {
+		stats = []byte("{}")
+	}
 	_, err = tx.Exec(ctx, "INSERT INTO download_jobs "+
-		"(id, job_no, status, priority, source, chain, range_type, from_block, to_block, from_timestamp, to_timestamp, "+
-		" datasets, reuse_policy, head_block, created_by, organization_id, workspace_id, project_id, requested_mode, effective_mode, mode_reason, mode_changed_at, resolved_at) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)",
-		j.ID, j.JobNo, j.Status, j.Priority, j.Source, j.Chain, j.RangeType, j.FromBlock, j.ToBlock,
+		"(id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, from_timestamp, to_timestamp, "+
+		" datasets, reuse_policy, head_block, created_by, organization_id, workspace_id, project_id, resolved_at, stats) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::jsonb)",
+		j.ID, j.JobNo, j.Status, j.Priority, j.Source, mode, j.RequestedMode, j.EffectiveMode, j.ModeReason, j.ModeChangedAt, j.Chain, j.RangeType, j.FromBlock, j.ToBlock,
 		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.HeadBlock, j.CreatedBy,
-		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.RequestedMode, j.EffectiveMode, j.ModeReason, time.Now(), j.ResolvedAt)
+		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.ResolvedAt, stats)
 	if err != nil {
 		return nil, fmt.Errorf("insert job: %w", err)
 	}
@@ -120,14 +136,16 @@ func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, erro
 }
 
 func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) ([]model.DownloadJob, error) {
-	q := "SELECT j.id, j.job_no, j.status, j.priority, j.source, j.chain, j.range_type, j.from_block, j.to_block, " +
+	q := "SELECT j.id, j.job_no, j.status, j.priority, j.source, j.mode, j.requested_mode, j.effective_mode, j.mode_reason, j.mode_changed_at, j.chain, j.range_type, j.from_block, j.to_block, " +
 		"j.from_timestamp, j.to_timestamp, j.datasets, j.reuse_policy, j.head_block, j.created_by, j.error, j.stats, " +
-		"j.organization_id, j.workspace_id, j.project_id, j.requested_mode, j.effective_mode, j.mode_reason, j.mode_changed_at, j.resolved_at, j.created_at, j.updated_at, " +
-		"COALESCE(SUM(sh.downloaded_rows),0), COUNT(sh.id), COUNT(sh.id) FILTER (WHERE sh.status='COMPLETED'), " +
+		"j.organization_id, j.workspace_id, j.project_id, j.resolved_at, j.created_at, j.updated_at, " +
+		"COALESCE(SUM(sh.downloaded_rows) FILTER (WHERE " + EffectiveShardSQL("sh") + "),0), " +
+		"COUNT(sh.id) FILTER (WHERE " + EffectiveShardSQL("sh") + "), " +
+		"COUNT(sh.id) FILTER (WHERE sh.status='COMPLETED' AND " + EffectiveShardSQL("sh") + "), " +
 		"COALESCE(u.req,0), COALESCE(u.cost,0) " +
 		"FROM download_jobs j " +
 		"LEFT JOIN download_shards sh ON sh.job_id = j.id " +
-		"LEFT JOIN (SELECT job_id, COUNT(*) AS req, COALESCE(SUM(estimated_cost_usd),0) AS cost FROM provider_usage GROUP BY job_id) u ON u.job_id = j.id "
+		"LEFT JOIN (SELECT job_id, COUNT(*) AS req, COALESCE(SUM(estimated_cost_usd),0) AS cost FROM provider_usage WHERE usage_type<>'trc20_enrichment_summary' GROUP BY job_id) u ON u.job_id = j.id "
 	args := []any{}
 	if status != "" {
 		q += " WHERE j.status=$1"
@@ -144,15 +162,14 @@ func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) 
 	for rows.Next() {
 		var j model.DownloadJob
 		var fb, tb pgtype.Int8
-		var ft, tt, rt, modeChanged pgtype.Timestamptz
+		var ft, tt, rt pgtype.Timestamptz
 		var stats []byte
 		var cb *string
 		var rowsSum, total, done, reqs int64
 		var cost float64
-		err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Chain, &j.RangeType,
+		err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Mode, &j.RequestedMode, &j.EffectiveMode, &j.ModeReason, &j.ModeChangedAt, &j.Chain, &j.RangeType,
 			&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.HeadBlock, &cb, &j.Error, &stats,
-			&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &j.RequestedMode, &j.EffectiveMode,
-			&j.ModeReason, &modeChanged, &rt, &j.CreatedAt, &j.UpdatedAt,
+			&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt,
 			&rowsSum, &total, &done, &reqs, &cost)
 		if err != nil {
 			return nil, err
@@ -176,10 +193,6 @@ func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) 
 		if rt.Valid {
 			v := rt.Time
 			j.ResolvedAt = &v
-		}
-		if modeChanged.Valid {
-			v := modeChanged.Time
-			j.ModeChangedAt = &v
 		}
 		if cb != nil {
 			j.CreatedBy = cb
@@ -226,9 +239,16 @@ func (s *Store) SetJobStats(ctx context.Context, id string, stats map[string]any
 
 func (s *Store) CountJobNoForDay(ctx context.Context, day time.Time) (int, error) {
 	var n int
+	// Keep the boundary in the caller's location.  Passing a date-only string
+	// to PostgreSQL makes the comparison use the database session timezone;
+	// the API job number, however, is formatted from time.Now() in the
+	// process timezone.  Around UTC midnight that mismatch made every request
+	// calculate zero and reuse DL-YYYYMMDD-0001.
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	end := start.AddDate(0, 0, 1)
 	err := s.Pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM download_jobs WHERE created_at >= $1 AND created_at < $1::date + interval '1 day'",
-		day.Format("2006-01-02")).Scan(&n)
+		"SELECT COUNT(*) FROM download_jobs WHERE created_at >= $1 AND created_at < $2",
+		start, end).Scan(&n)
 	return n, err
 }
 
@@ -340,15 +360,19 @@ func (s *Store) UpdateDatasetStatus(ctx context.Context, id, status string) erro
 
 const shardCols = "id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, " +
 	"page_size, page_state, status, priority, retries, max_retries, lease_owner, leased_until, downloaded_rows, downloaded_bytes, " +
-	"raw_object, error, created_at, updated_at"
+	"raw_object, error, fetched_at, ingested_at, validated_at, fetch_duration_ms, ingest_duration_ms, wire_bytes, decoded_bytes, " +
+	"page_count, page_gap_avg_ms, lease_epoch, work_score, tail_boost, created_at, updated_at"
 
 func scanShard(rows pgx.Rows) (*model.Shard, error) {
 	var r model.Shard
-	var lu, fts, tts pgtype.Timestamptz
+	var lu, fts, tts, fet, igt, vat pgtype.Timestamptz
 	var ps []byte
 	err := rows.Scan(&r.ID, &r.JobID, &r.SubjectID, &r.DatasetID, &r.Dataset, &r.FromBlock, &r.ToBlock,
 		&fts, &tts, &r.PageToken, &r.PageNo, &r.PageSize, &ps, &r.Status, &r.Priority, &r.Retries, &r.MaxRetries, &r.LeaseOwner, &lu,
-		&r.DownloadedRows, &r.DownloadedBytes, &r.RawObject, &r.Error, &r.CreatedAt, &r.UpdatedAt)
+		&r.DownloadedRows, &r.DownloadedBytes, &r.RawObject, &r.Error, &fet, &igt, &vat,
+		&r.FetchDurationMs, &r.IngestDurationMs, &r.WireBytes, &r.DecodedBytes, &r.PageCount, &r.PageGapAvgMs,
+		&r.LeaseEpoch, &r.WorkScore, &r.TailBoost,
+		&r.CreatedAt, &r.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -369,6 +393,18 @@ func scanShard(rows pgx.Rows) (*model.Shard, error) {
 		t := tts.Time
 		r.ToTimestamp = &t
 	}
+	if fet.Valid {
+		t := fet.Time
+		r.FetchedAt = &t
+	}
+	if igt.Valid {
+		t := igt.Time
+		r.IngestedAt = &t
+	}
+	if vat.Valid {
+		t := vat.Time
+		r.ValidatedAt = &t
+	}
 	return &r, nil
 }
 
@@ -382,13 +418,24 @@ func (s *Store) CreateShards(ctx context.Context, shards []model.Shard) error {
 		if shards[i].ID == "" {
 			shards[i].ID = uuid.NewString()
 		}
+		ws := shards[i].WorkScore
+		if ws <= 0 {
+			span := shards[i].ToBlock - shards[i].FromBlock + 1
+			if span > 0 {
+				ws = math.Round(float64(span)/10000*1000) / 1000 // V1.4 LPT 工作量（§9）
+			}
+		}
+		pageState, _ := json.Marshal(shards[i].PageState)
+		if len(pageState) == 0 || string(pageState) == "null" {
+			pageState = []byte("{}")
+		}
 		_, err := tx.Exec(ctx, "INSERT INTO download_shards "+
-			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, page_size, page_state, status, priority, max_retries) "+
-			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
+			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, page_size, page_state, status, priority, max_retries, work_score, tail_boost) "+
+			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)",
 			shards[i].ID, shards[i].JobID, shards[i].SubjectID, shards[i].DatasetID, shards[i].Dataset,
 			shards[i].FromBlock, shards[i].ToBlock, shards[i].FromTimestamp, shards[i].ToTimestamp,
-			shards[i].PageToken, shards[i].PageNo, shards[i].PageSize, "{}", shards[i].Status,
-			shards[i].Priority, shards[i].MaxRetries)
+			shards[i].PageToken, shards[i].PageNo, shards[i].PageSize, string(pageState), shards[i].Status,
+			shards[i].Priority, shards[i].MaxRetries, ws, shards[i].TailBoost)
 		if err != nil {
 			return fmt.Errorf("insert shard: %w", err)
 		}
@@ -398,6 +445,23 @@ func (s *Store) CreateShards(ctx context.Context, shards []model.Shard) error {
 
 // LeaseShards 领取最多 n 个可调度 Shard（SKIP LOCKED，多 Worker 安全）。
 func (s *Store) LeaseShards(ctx context.Context, worker string, n int, leaseFor time.Duration) ([]model.Shard, error) {
+	return s.LeaseShardsOrdered(ctx, worker, n, leaseFor, "fifo")
+}
+
+// leaseOrderSQL V1.4 Global Ready Queue 排序（§8/§9/§20）：
+// fifo = V1.1-V1.3 行为（priority DESC, created_at）；
+// lpt/weighted = 重任务优先 + Tail Boost + Aging（created_at 升序自带 FIFO，配合 work_score DESC）。
+func leaseOrderSQL(mode string) string {
+	switch mode {
+	case "lpt", "weighted":
+		return "ORDER BY priority DESC, tail_boost DESC, work_score DESC, created_at, id\n"
+	default:
+		return "ORDER BY priority DESC, created_at, id\n"
+	}
+}
+
+// LeaseShardsOrdered 领取最多 n 个可调度 Shard（V1.4：mode 可选 fifo|lpt|weighted）。
+func (s *Store) LeaseShardsOrdered(ctx context.Context, worker string, n int, leaseFor time.Duration, mode string) ([]model.Shard, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -408,15 +472,17 @@ func (s *Store) LeaseShards(ctx context.Context, worker string, n int, leaseFor 
 		"SELECT id FROM download_shards "+
 		"WHERE (status='PENDING' OR (status='FAILED_RETRYABLE' AND updated_at < now() - make_interval(secs => least(retries*30, 300)))) "+
 		"AND NOT EXISTS (SELECT 1 FROM download_jobs j WHERE j.id = download_shards.job_id AND j.status NOT IN ('RUNNING','QUEUED','RESUMING')) "+
-		"ORDER BY priority DESC, created_at "+
+		"AND NOT EXISTS (SELECT 1 FROM download_subjects su WHERE su.id = download_shards.subject_id AND su.status NOT IN ('PENDING','RUNNING')) "+
+		leaseOrderSQL(mode)+
 		"LIMIT $1 "+
 		"FOR UPDATE SKIP LOCKED "+
 		") "+
-		"UPDATE download_shards s SET status='LEASED', lease_owner=$2, leased_until=$3, updated_at=now() "+
+		"UPDATE download_shards s SET status='LEASED', lease_owner=$2, leased_until=$3, lease_epoch=lease_epoch+1, updated_at=now() "+
 		"FROM picked WHERE s.id = picked.id "+
 		"RETURNING s.id, s.job_id, s.subject_id, s.dataset_id, s.dataset, s.from_block, s.to_block, s.from_timestamp, s.to_timestamp, s.page_token, s.page_no, "+
 		"s.page_size, s.page_state, s.status, s.priority, s.retries, s.max_retries, s.lease_owner, s.leased_until, s.downloaded_rows, s.downloaded_bytes, "+
-		"s.raw_object, s.error, s.created_at, s.updated_at", n, worker, until)
+		"s.raw_object, s.error, s.fetched_at, s.ingested_at, s.validated_at, s.fetch_duration_ms, s.ingest_duration_ms, s.wire_bytes, s.decoded_bytes, "+
+		"s.page_count, s.page_gap_avg_ms, s.lease_epoch, s.work_score, s.tail_boost, s.created_at, s.updated_at", n, worker, until)
 	if err != nil {
 		return nil, err
 	}
@@ -433,6 +499,73 @@ func (s *Store) LeaseShards(ctx context.Context, worker string, n int, leaseFor 
 		return nil, err
 	}
 	return out, tx.Commit(ctx)
+}
+
+// SubjectStatus returns the independently controllable address state.
+func (s *Store) SubjectStatus(ctx context.Context, jobID, subjectID string) (string, error) {
+	var status string
+	err := s.Pool.QueryRow(ctx, "SELECT status FROM download_subjects WHERE id=$1 AND job_id=$2", subjectID, jobID).Scan(&status)
+	return status, err
+}
+
+// ControlSubject pauses, resumes, or force-completes one address without
+// disturbing the other addresses in the same job. Force completion preserves
+// every ingested row and invalidates active leases before marking the address done.
+func (s *Store) ControlSubject(ctx context.Context, jobID, subjectID, action string) (string, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var current string
+	if err = tx.QueryRow(ctx, "SELECT status FROM download_subjects WHERE id=$1 AND job_id=$2 FOR UPDATE", subjectID, jobID).Scan(&current); err != nil {
+		return "", err
+	}
+	switch action {
+	case "pause":
+		if current == model.ItemCompleted || current == model.ItemSkipped {
+			return "", fmt.Errorf("address is %s", current)
+		}
+		_, err = tx.Exec(ctx, "UPDATE download_subjects SET status='PAUSED', updated_at=now() WHERE id=$1", subjectID)
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_datasets SET status='PAUSED', updated_at=now() WHERE subject_id=$1 AND status NOT IN ('COMPLETED','SKIPPED')", subjectID)
+		}
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_shards SET status='PAUSED', lease_owner='', leased_until=NULL, updated_at=now() WHERE subject_id=$1 AND status IN ('PENDING','FAILED_RETRYABLE')", subjectID)
+		}
+		current = model.ItemPaused
+	case "resume":
+		if current != model.ItemPaused {
+			return "", fmt.Errorf("address is %s", current)
+		}
+		_, err = tx.Exec(ctx, "UPDATE download_subjects SET status='RUNNING', updated_at=now() WHERE id=$1", subjectID)
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_datasets SET status='RUNNING', updated_at=now() WHERE subject_id=$1 AND status='PAUSED'", subjectID)
+		}
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_shards SET status='PENDING', updated_at=now() WHERE subject_id=$1 AND status='PAUSED'", subjectID)
+		}
+		current = model.ItemRunning
+	case "complete":
+		marker := `{"forced_completed":true,"partial":true}`
+		_, err = tx.Exec(ctx, "UPDATE download_shards SET status='CANCELLED', error=$2, lease_epoch=lease_epoch+1, lease_owner='', leased_until=NULL, updated_at=now() WHERE subject_id=$1 AND status<>'COMPLETED'", subjectID, ForcedSubjectCompleteError)
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_datasets SET status='COMPLETED', progress=1, stats=COALESCE(stats,'{}'::jsonb)||$2::jsonb, updated_at=now() WHERE subject_id=$1", subjectID, marker)
+		}
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_subjects SET status='COMPLETED', progress=1, stats=COALESCE(stats,'{}'::jsonb)||$2::jsonb, updated_at=now() WHERE id=$1", subjectID, marker)
+		}
+		if err == nil {
+			_, err = tx.Exec(ctx, "UPDATE download_jobs SET stats=COALESCE(stats,'{}'::jsonb)||jsonb_build_object('partial',true), updated_at=now() WHERE id=$1", jobID)
+		}
+		current = model.ItemCompleted
+	default:
+		return "", fmt.Errorf("unsupported address action %q", action)
+	}
+	if err != nil {
+		return "", err
+	}
+	return current, tx.Commit(ctx)
 }
 
 func (s *Store) GetShard(ctx context.Context, id string) (*model.Shard, error) {
@@ -460,7 +593,7 @@ func (s *Store) CheckpointShard(ctx context.Context, id string, pageToken string
 	}
 	_, err = tx.Exec(ctx, "UPDATE download_shards "+
 		"SET status='RUNNING', page_token=$2, page_no=$3, page_size=$4, page_state=$5::jsonb, downloaded_rows=$6, downloaded_bytes=$7, lease_owner=$8, leased_until=$9, error='', updated_at=now() "+
-		"WHERE id=$1",
+		"WHERE id=$1 AND status<>'CANCELLED' AND EXISTS (SELECT 1 FROM download_subjects su WHERE su.id=download_shards.subject_id AND su.status NOT IN ('COMPLETED','SKIPPED'))",
 		id, pageToken, pageNo, pageSize, ps, rows, bytes, "checkpoint", time.Now().Add(10*time.Minute))
 	if err != nil {
 		return err
@@ -484,7 +617,7 @@ func (s *Store) CheckpointShard(ctx context.Context, id string, pageToken string
 func (s *Store) CompleteShard(ctx context.Context, id, rawObject string, rows, bytes int64) error {
 	_, err := s.Pool.Exec(ctx, "UPDATE download_shards "+
 		"SET status='COMPLETED', raw_object=$2, downloaded_rows=$3, downloaded_bytes=$4, error='', updated_at=now() "+
-		"WHERE id=$1", id, rawObject, rows, bytes)
+		"WHERE id=$1 AND status<>'CANCELLED' AND EXISTS (SELECT 1 FROM download_subjects su WHERE su.id=download_shards.subject_id AND su.status NOT IN ('COMPLETED','SKIPPED'))", id, rawObject, rows, bytes)
 	return err
 }
 
@@ -589,8 +722,10 @@ func (s *Store) ResetExpiredLeases(ctx context.Context, before time.Time) (int64
 func (s *Store) RecomputeDataset(ctx context.Context, datasetID string) error {
 	var completed, total int64
 	var rows int64
-	err := s.Pool.QueryRow(ctx, "SELECT COUNT(*) FILTER (WHERE status='COMPLETED'), COUNT(*), "+
-		"COALESCE(SUM(downloaded_rows),0) FROM download_shards WHERE dataset_id=$1", datasetID).
+	err := s.Pool.QueryRow(ctx, "SELECT COUNT(*) FILTER (WHERE status='COMPLETED' AND "+EffectiveShardSQL("")+"), "+
+		"COUNT(*) FILTER (WHERE "+EffectiveShardSQL("")+"), "+
+		"COALESCE(SUM(downloaded_rows) FILTER (WHERE "+EffectiveShardSQL("")+"),0) "+
+		"FROM download_shards WHERE dataset_id=$1", datasetID).
 		Scan(&completed, &total, &rows)
 	if err != nil {
 		return err
@@ -609,7 +744,9 @@ func (s *Store) RecomputeDataset(ctx context.Context, datasetID string) error {
 		progress = float32(completed) / float32(total)
 	}
 	stats, _ := json.Marshal(map[string]any{"downloaded_rows": rows})
-	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=$2, progress=$3, stats=$4::jsonb, updated_at=now() WHERE id=$1",
+	// V1.2：合并而不是覆盖 —— download_datasets.stats 同时承载 Count 预估/决策与 actuals 回写
+	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=$2, progress=$3, "+
+		"stats = COALESCE(stats,'{}'::jsonb) || $4::jsonb, updated_at=now() WHERE id=$1",
 		datasetID, status, progress, stats)
 	return err
 }
@@ -712,12 +849,49 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	if err != nil {
 		return 0, err
 	}
+	// 终态任务也要把列表页使用的 stats.progress 同步到有效 Shard 集合。
+	// Tail 加速会把父 Shard 标记为 superseded；若任务先进入终态再调用
+	// RecomputeJob，旧的 stats.progress 可能停留在 6/7（85.71%），而实际
+	// 有效集合已经是 6/6。同步 total/done/progress，避免 UI 显示假性卡住。
+	if jobStatus == model.JobCompleted || jobStatus == model.JobPartialFailed {
+		var shardTotal, shardDone int64
+		if err := s.Pool.QueryRow(ctx,
+			"SELECT COUNT(*) FILTER (WHERE "+EffectiveShardSQL("")+"), COUNT(*) FILTER (WHERE status='COMPLETED' AND "+EffectiveShardSQL("")+") FROM download_shards WHERE job_id=$1",
+			jobID).Scan(&shardTotal, &shardDone); err == nil {
+			shardProgress := float32(0)
+			if shardTotal > 0 {
+				shardProgress = float32(shardDone) / float32(shardTotal)
+			}
+			_, err = s.Pool.Exec(ctx,
+				"UPDATE download_jobs SET stats=COALESCE(stats,'{}'::jsonb) || jsonb_build_object('progress',$2::double precision,'done_shards',$3::bigint,'total_shards',$4::bigint), updated_at=updated_at WHERE id=$1",
+				jobID, shardProgress, shardDone, shardTotal)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
 	// 终态由 Recompute 决定；运行态不受 pause/cancel 影响
 	switch jobStatus {
 	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobPaused, model.JobPauseReq:
 		return progress, nil
 	}
 	if status == model.JobCompleted || status == model.JobPartialFailed {
+		// Persist the authoritative effective-shard totals in the same update that
+		// moves the job to a terminal state. Without this, the last progress sample
+		// can remain at 99/100 even though all shards are already completed.
+		var shardTotal, shardDone int64
+		if qerr := s.Pool.QueryRow(ctx,
+			"SELECT COUNT(*) FILTER (WHERE "+EffectiveShardSQL("")+"), COUNT(*) FILTER (WHERE status='COMPLETED' AND "+EffectiveShardSQL("")+") FROM download_shards WHERE job_id=$1",
+			jobID).Scan(&shardTotal, &shardDone); qerr == nil {
+			shardProgress := float32(0)
+			if shardTotal > 0 {
+				shardProgress = float32(shardDone) / float32(shardTotal)
+			}
+			_, err = s.Pool.Exec(ctx,
+				"UPDATE download_jobs SET status=$2, stats=COALESCE(stats,'{}'::jsonb) || jsonb_build_object('progress',$3::double precision,'done_shards',$4::bigint,'total_shards',$5::bigint), updated_at=now() WHERE id=$1",
+				jobID, status, shardProgress, shardDone, shardTotal)
+			return shardProgress, err
+		}
 		_, err = s.Pool.Exec(ctx, "UPDATE download_jobs SET status=$2, updated_at=now() WHERE id=$1", jobID, status)
 		return progress, err
 	}

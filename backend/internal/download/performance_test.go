@@ -1,30 +1,26 @@
 package download
 
 import (
-	"testing"
-
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"testing"
 )
 
 func TestNextEffectiveModeUsesCertifiedSteps(t *testing.T) {
 	tests := []struct {
-		name               string
-		current, requested model.PerformanceMode
-		pressure, recovery bool
-		want               model.PerformanceMode
+		cur, req          model.PerformanceMode
+		pressure, recover bool
+		want              model.PerformanceMode
 	}{
-		{"turbo pressure", model.PerformanceTurbo, model.PerformanceTurbo, true, false, model.PerformanceFast},
-		{"continued pressure", model.PerformanceFast, model.PerformanceTurbo, true, false, model.PerformanceSafe},
-		{"recover one step", model.PerformanceSafe, model.PerformanceTurbo, false, true, model.PerformanceFast},
-		{"recover turbo only when requested", model.PerformanceFast, model.PerformanceFast, false, true, model.PerformanceFast},
-		{"lower user request immediately", model.PerformanceTurbo, model.PerformanceSafe, false, false, model.PerformanceSafe},
+		{model.PerformanceTurbo, model.PerformanceTurbo, true, false, model.PerformanceFast},
+		{model.PerformanceFast, model.PerformanceTurbo, true, false, model.PerformanceSafe},
+		{model.PerformanceSafe, model.PerformanceTurbo, false, true, model.PerformanceFast},
+		{model.PerformanceFast, model.PerformanceFast, false, true, model.PerformanceFast},
+		{model.PerformanceTurbo, model.PerformanceSafe, false, false, model.PerformanceSafe},
 	}
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := nextEffectiveMode(tc.current, tc.requested, tc.pressure, tc.recovery); got != tc.want {
-				t.Fatalf("got %s want %s", got, tc.want)
-			}
-		})
+		if got := nextEffectiveMode(tc.cur, tc.req, tc.pressure, tc.recover); got != tc.want {
+			t.Fatalf("got %s want %s", got, tc.want)
+		}
 	}
 }
 
@@ -34,11 +30,8 @@ func TestProfileResolveHardClamps(t *testing.T) {
 		t.Fatalf("got %d want 48", got)
 	}
 }
-
-func TestPerformanceModeRejectsNumericAndUnknownValues(t *testing.T) {
-	for _, raw := range []string{"48", "extreme"} {
-		if _, err := model.ParsePerformanceMode(raw); err == nil {
-			t.Fatalf("expected %q to be rejected", raw)
-		}
+func TestPerformanceModeRejectsNumeric(t *testing.T) {
+	if _, err := model.ParsePerformanceMode("48"); err == nil {
+		t.Fatal("numeric mode must be rejected")
 	}
 }

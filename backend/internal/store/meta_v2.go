@@ -210,15 +210,20 @@ func (s *Store) UpsertTokenMetadata(ctx context.Context, chain, contract, name, 
 	if source == "" {
 		source = "ankr"
 	}
-	_, err := s.Pool.Exec(ctx, "INSERT INTO token_metadata (chain, contract_address, name, symbol, decimals, logo_url, token_type, metadata_source) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8) "+
+	chain = strings.ToLower(strings.TrimSpace(chain))
+	contract = strings.TrimSpace(contract)
+	if chain != "tron" {
+		contract = strings.ToLower(contract)
+	}
+	_, err := s.Pool.Exec(ctx, "INSERT INTO token_metadata (chain, contract_address, normalized_address, name, symbol, decimals, logo_url, token_type, metadata_source) "+
+		"VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$8) "+
 		"ON CONFLICT (chain, contract_address) DO UPDATE SET "+
 		"name=COALESCE(EXCLUDED.name, token_metadata.name), "+
 		"symbol=COALESCE(EXCLUDED.symbol, token_metadata.symbol), "+
 		"decimals=COALESCE(EXCLUDED.decimals, token_metadata.decimals), "+
 		"logo_url=COALESCE(EXCLUDED.logo_url, token_metadata.logo_url), "+
 		"token_type=COALESCE(EXCLUDED.token_type, token_metadata.token_type), updated_at=now()",
-		chain, strings.ToLower(contract), name, symbol, decimals, logoURL, tokenType, source)
+		chain, contract, name, symbol, decimals, logoURL, tokenType, source)
 	return err
 }
 
@@ -265,13 +270,13 @@ func (s *Store) DeleteExpiredPreviews(ctx context.Context) (int64, error) {
 
 // ---- Export v1.2 ----
 
-func (s *Store) CreateExportV2(ctx context.Context, wsID, orgID string, createdBy *string, dataset, format string, zip bool, snapshot []byte) (*model.Export, error) {
+func (s *Store) CreateExportV2(ctx context.Context, wsID, orgID string, createdBy, jobID *string, dataset, format string, zip bool, snapshot []byte) (*model.Export, error) {
 	e := &model.Export{
-		ID: uuid.NewString(), Dataset: dataset, Format: format, Zip: zip, Status: "PENDING",
+		ID: uuid.NewString(), JobID: jobID, Dataset: dataset, Format: format, Zip: zip, Status: "PENDING",
 	}
-	_, err := s.Pool.Exec(ctx, "INSERT INTO exports (id, dataset, format, zip, status, organization_id, workspace_id, created_by, query_snapshot, expires_at) "+
-		"VALUES ($1,$2,$3,$4,'PENDING',$5,$6,$7,$8::jsonb, now() + interval '24 hours')",
-		e.ID, dataset, format, zip, orgID, wsID, createdBy, snapshot)
+	_, err := s.Pool.Exec(ctx, "INSERT INTO exports (id, job_id, dataset, format, zip, status, organization_id, workspace_id, created_by, query_snapshot, expires_at) "+
+		"VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7,$8,$9::jsonb, now() + interval '24 hours')",
+		e.ID, jobID, dataset, format, zip, orgID, wsID, createdBy, snapshot)
 	return e, err
 }
 

@@ -50,10 +50,13 @@ func RawTimestamp(raw json.RawMessage) (time.Time, bool) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return time.Time{}, false
 	}
-	if _, ok := m["timestamp"]; !ok {
-		return time.Time{}, false
+	if _, ok := m["timestamp"]; ok {
+		return asTime(m, "timestamp"), true
 	}
-	return asTime(m, "timestamp"), true
+	if _, ok := m["block_timestamp"]; ok {
+		return asTime(m, "block_timestamp"), true
+	}
+	return time.Time{}, false
 }
 
 // RawBlockNumber 提取原始行的块号（用于客户端侧范围过滤与降序停止）。
@@ -62,7 +65,7 @@ func RawBlockNumber(raw json.RawMessage) (uint64, bool) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return 0, false
 	}
-	for _, k := range []string{"blockNumber", "blockHeight"} {
+	for _, k := range []string{"blockNumber", "blockHeight", "block_number"} {
 		if s := asString(m, k); s != "" {
 			base := 10
 			if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
@@ -157,23 +160,27 @@ func asBigInt(m map[string]any, key string) *big.Int {
 }
 
 type TxRow struct {
-	Chain       string
-	BlockNumber uint64
-	BlockHash   string
-	TxHash      string
-	Timestamp   time.Time
-	From        string
-	To          string
-	ValueRaw    string
-	Nonce       uint64
-	Gas         uint64
-	GasUsed     uint64
-	GasPrice    string
-	TxType      string
-	Status      uint8
-	Input       string
-	MethodID    string
-	Provider    string
+	Chain        string
+	BlockNumber  uint64
+	BlockHash    string
+	TxHash       string
+	Timestamp    time.Time
+	From         string
+	To           string
+	ValueRaw     string
+	Nonce        uint64
+	Gas          uint64
+	GasUsed      uint64
+	GasPrice     string
+	TxType       string
+	Status       uint8
+	Input        string
+	MethodID     string
+	Provider     string
+	NativeSymbol string
+	Confirmation string
+	RawType      string
+	RawStatus    string
 
 	// V1.3 Method 解析结果（§7）。原始 input 永远完整保留（§6/§62-2）。
 	MethodName       string
@@ -271,6 +278,24 @@ type TokenTransferRow struct {
 	AmountRaw     string
 	Amount        *big.Int
 	Provider      string
+}
+
+// InternalTransferRow reuses blockchain.internal_calls for TRON internal
+// value movements. Rejected records are persisted for audit but are excluded
+// from address_activity by the download normalizer.
+type InternalTransferRow struct {
+	Chain       string
+	TxHash      string
+	CallIndex   uint32
+	BlockNumber uint64
+	Timestamp   time.Time
+	From        string
+	To          string
+	ValueRaw    string
+	AssetType   string
+	CallType    string
+	Rejected    bool
+	Provider    string
 }
 
 func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenTransferRow, error) {

@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-// PerformanceMode is the only user-facing control for Ankr fetch concurrency.
-// Numeric concurrency remains a server-side production policy.
 type PerformanceMode string
 
 const (
@@ -74,14 +72,12 @@ type DownloadPerformanceProfile struct {
 }
 
 func (p DownloadPerformanceProfile) Resolve(mode PerformanceMode) int {
-	var target int
-	switch mode {
-	case PerformanceSafe:
+	target := p.FastConcurrency
+	if mode == PerformanceSafe {
 		target = p.SafeConcurrency
-	case PerformanceTurbo:
+	}
+	if mode == PerformanceTurbo {
 		target = p.TurboConcurrency
-	default:
-		target = p.FastConcurrency
 	}
 	if target < 1 {
 		target = 1

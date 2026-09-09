@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,9 +17,12 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/app"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
+	"github.com/blockchain-platform/blockchain-platform/internal/countoracle"
 	"github.com/blockchain-platform/blockchain-platform/internal/download"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
 	"github.com/blockchain-platform/blockchain-platform/internal/logger"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/chainbase"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/mockparallel"
 )
 
 func main() {
@@ -35,6 +39,55 @@ func main() {
 	writer := ingest.NewWriter(infra.CH, 5000)
 	sched := download.NewScheduler(cfg, infra.Store, infra.CH, infra.Prov, infra.Raw, writer, infra.Bus, log)
 
+	// V1.2→V1.3：Count Oracle Provider Port（§2/§75/§84：Chainbase 只是 Adapter；
+	// MockParallel 只用于验收/测试环境，生产默认关闭）
+	usageHook := app.UsageRecorder(infra.Store, log)
+	svc := countoracle.NewService(cfg, infra.Store, log)
+	svc.SetDeployment(context.Background(), infra.Store)
+	registerChainbase := cfg.Chainbase.Enabled && cfg.CountProvider.ChainbaseEnabled
+	registerMock := cfg.CountProvider.MockParallelEnabled
+	if registerChainbase || registerMock {
+		if registerChainbase {
+			cbClient := chainbase.New(chainbase.Options{
+				Endpoint: cfg.Chainbase.Endpoint, APIKey: cfg.Chainbase.APIKey,
+				CountTimeout: cfg.Chainbase.CountTimeout, MaxRetries: cfg.Chainbase.MaxRetries,
+				RequestsPerMinute:      cfg.Chainbase.RequestsPerMinute,
+				ResponseHardLimitBytes: cfg.Chainbase.ResponseHardLimitBytes,
+				ConnectTimeout:         cfg.Chainbase.ConnectTimeout,
+				TLSHandshakeTimeout:    cfg.Chainbase.TLSHandshakeTimeout,
+				BodyIdleTimeout:        cfg.Chainbase.BodyIdleTimeout,
+				CreditsPerRequest:      cfg.Chainbase.CreditsPerRequest,
+				CostPerRequestUSD:      cfg.Chainbase.CostPerRequestUSD,
+			}, usageHook)
+			cbAdapter := chainbase.NewAdapter(chainbase.AdapterOptions{
+				Client:       cbClient,
+				TXEnabled:    cfg.CountProvider.ChainbaseTXEnabled,
+				TokenEnabled: cfg.CountProvider.ChainbaseTokenEnabled,
+				ProbeBudget:  cfg.Chainbase.ProbeMaxRequests,
+				DisplayName:  cfg.CountProvider.ChainbaseDisplayName,
+			})
+			if err := svc.Register(cbAdapter); err != nil {
+				log.Error("register chainbase count provider failed", "err", err)
+				os.Exit(1)
+			}
+		}
+		if registerMock {
+			mp := mockparallel.New(mockparallel.Options{
+				MaxConcurrency: cfg.CountProvider.MockParallelMaxConcurrency,
+				Latency:        time.Duration(cfg.CountProvider.MockParallelLatencyMS) * time.Millisecond,
+			})
+			if err := svc.Register(mp); err != nil {
+				log.Error("register mockparallel count provider failed", "err", err)
+				os.Exit(1)
+			}
+		}
+		sched.SetCountOracle(svc)
+		log.Info("count oracle port constructed", "enabled", svc.Enabled(),
+			"aware", svc.Aware(), "configured", svc.Configured(),
+			"chainbase", registerChainbase, "mockparallel", registerMock,
+			"token_enabled", cfg.CountProvider.ChainbaseTokenEnabled)
+	}
+
 	// 先同步占用指标端口。端口冲突通常意味着重复 Worker，必须在参与调度前失败退出。
 	metricsAddr := ":" + strconv.Itoa(cfg.WorkerMetricsPort)
 	listener, err := net.Listen("tcp", metricsAddr)
@@ -44,6 +97,16 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	// Runtime profiles are exposed only on the worker-local metrics listener;
+	// this keeps heap/alloc evidence off the public API surface.
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	mux.HandleFunc("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
 	mux.HandleFunc("/health/live", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -66,6 +129,9 @@ func main() {
 	infra.StartRPCBackground(runCtx, cfg, log, true)
 	sched.SetTokenMetadata(infra.TokenMeta)
 	infra.StartTokenMetadataBackground(runCtx, cfg, log, true)
+	if svc.Enabled() {
+		go svc.Run(runCtx)
+	}
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- sched.Run(runCtx) }()

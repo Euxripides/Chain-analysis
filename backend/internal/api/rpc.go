@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 )
 
@@ -86,6 +88,26 @@ func (s *Server) handleAddressRuntime(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRPCReceipt(w http.ResponseWriter, r *http.Request) {
+	chainSlug := strings.ToLower(chi.URLParam(r, "chain"))
+	if chainSlug == "tron" {
+		fetcher, ok := s.deps.Prov.(provider.TxReceiptFetcher)
+		if !ok {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "TRON receipt provider is disabled"})
+			return
+		}
+		raw, err := fetcher.TxReceipt(r.Context(), chainSlug, chi.URLParam(r, "tx_hash"))
+		if err != nil {
+			writeRPCError(w, err)
+			return
+		}
+		var receipt any
+		if err := json.Unmarshal(raw, &receipt); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]any{"error": "invalid TRON receipt response"})
+			return
+		}
+		writeJSON(w, http.StatusOK, receipt)
+		return
+	}
 	if s.deps.ChainRead == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "chain reader is disabled"})
 		return
@@ -176,5 +198,11 @@ func writeRPCError(w http.ResponseWriter, err error) {
 	case rpc.ClassLocalMiss:
 		status = http.StatusNotFound
 	}
-	writeJSON(w, status, map[string]any{"error": mapped.Public(), "error_class": mapped.Class})
+	msg := mapped.Public()
+	// invalid_params 的 Message 是系统生成的参数说明（无 Provider/Secret 泄漏），
+	// 直接返回便于调用方修正参数，而不是笼统的 “Provider temporarily unavailable”。
+	if mapped.Class == rpc.ClassInvalidParams && mapped.Message != "" {
+		msg = mapped.Message
+	}
+	writeJSON(w, status, map[string]any{"error": msg, "error_class": mapped.Class})
 }

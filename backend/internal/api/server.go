@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -69,6 +70,21 @@ type Server struct {
 	ankrMgmt *ankrmgmt.Service
 }
 
+type chainAwareAddressTypeResolver struct {
+	evm  provider.AddressTypeResolver
+	tron provider.AddressTypeResolver
+}
+
+func (r chainAwareAddressTypeResolver) ResolveAddressTypes(ctx context.Context, chain string, addresses []string) (map[string]bool, error) {
+	if chain == "tron" && r.tron != nil {
+		return r.tron.ResolveAddressTypes(ctx, chain, addresses)
+	}
+	if r.evm != nil {
+		return r.evm.ResolveAddressTypes(ctx, chain, addresses)
+	}
+	return map[string]bool{}, nil
+}
+
 func New(deps Deps) *Server {
 	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH)}
 	if management, err := ankrmgmt.New(deps.Store.Pool, deps.Cfg.AnkrManagement); err == nil {
@@ -77,6 +93,9 @@ func New(deps Deps) *Server {
 		deps.Log.Error("Ankr Management MCP initialization failed", "err", err)
 	}
 	s.svc = dataset.New(deps.Store, func(ctx context.Context, chain string) (int64, error) {
+		if chain == "tron" && deps.Cfg.Tron.Enabled {
+			return 0, nil
+		}
 		if deps.Head != nil {
 			head, err := deps.Head.SafeHead(ctx, chain)
 			return int64(head), err
@@ -86,8 +105,20 @@ func New(deps Deps) *Server {
 		}
 		return 0, nil // live：head 未知，区间由 Provider 语义决定
 	})
+	s.svc.TronProvider = deps.Cfg.Tron.Provider
+	s.svc.TronDefaultProvider = deps.Cfg.Tron.DefaultProvider
+	s.svc.TronDatasetProviders = map[string]string{
+		"transactions":          deps.Cfg.Tron.TransactionsProvider,
+		"token_transfers":       deps.Cfg.Tron.TRC20PrimaryProvider,
+		"internal_transactions": deps.Cfg.Tron.InternalProvider,
+	}
+	s.svc.TronMaxTxAutoScan = deps.Cfg.Tron.MaxTxAutoScan
+	s.svc.TronMaxInternalAutoScan = deps.Cfg.Tron.MaxInternalAutoScan
 	if deps.ChainRead != nil && deps.ChainRead.Chains() != nil {
 		s.svc.ValidateChain = func(chain string) error {
+			if chain == "tron" && !deps.Cfg.Tron.Enabled {
+				return fmt.Errorf("chain tron is disabled")
+			}
 			_, err := deps.ChainRead.Chains().Require(chain)
 			return err
 		}
@@ -95,7 +126,9 @@ func New(deps Deps) *Server {
 	s.meta = addressmeta.New(deps.Store, deps.CH)
 	s.svc.Meta = s.meta
 	s.explorer = explorer.New(deps.CH, deps.Store, deps.TokenMeta)
-	if deps.AddressType != nil {
+	if providerResolver, ok := deps.Prov.(provider.AddressTypeResolver); ok && deps.AddressType != nil {
+		s.explorer.WithAddressTypeResolver(chainAwareAddressTypeResolver{evm: deps.AddressType, tron: providerResolver})
+	} else if deps.AddressType != nil {
 		s.explorer.WithAddressTypeResolver(deps.AddressType)
 	} else if resolver, ok := deps.Prov.(provider.AddressTypeResolver); ok {
 		// 兼容 RPC 基础设施被显式关闭的旧部署；正常路径必须走 ChainRead。
@@ -104,11 +137,27 @@ func New(deps Deps) *Server {
 	var safeHead update.SafeHeadFn
 	if deps.Head != nil {
 		safeHead = func(ctx context.Context, chain string) (int64, error) {
+			if chain == "tron" && deps.Cfg.Tron.Enabled {
+				var head uint64
+				if err := deps.CH.DB().QueryRow(ctx, "SELECT greatest((SELECT coalesce(max(block_number),0) FROM blockchain.transactions FINAL WHERE chain='tron'),(SELECT coalesce(max(block_number),0) FROM blockchain.token_transfers FINAL WHERE chain='tron'))").Scan(&head); err != nil {
+					return 0, err
+				}
+				return int64(head), nil
+			}
 			head, err := deps.Head.SafeHead(ctx, chain)
 			return int64(head), err
 		}
 	}
 	s.updates = update.New(deps.Store, deps.CH, deps.Prov, s.svc, s.meta, safeHead, deps.Log)
+	s.updates.TronOverlap = deps.Cfg.Tron.IncrementalOverlap
+	s.updates.TronProvider = deps.Cfg.Tron.Provider
+	s.updates.TronDefaultProvider = deps.Cfg.Tron.DefaultProvider
+	s.updates.TronDatasetProviders = map[string]string{
+		"transactions":          deps.Cfg.Tron.TransactionsProvider,
+		"token_transfers":       deps.Cfg.Tron.TRC20PrimaryProvider,
+		"internal_transactions": deps.Cfg.Tron.InternalProvider,
+	}
+	s.updates.TronOverlapBlocks = deps.Cfg.Tron.OverlapBlocks
 	if deps.Registry != nil && deps.MethodData != nil {
 		// 智能调查/前端都必须经过 TransactionDetailService，不允许直连 Provider（§50）
 		s.detail = method.NewDetailService(deps.MethodData, deps.Registry, deps.DeepDecode, s.recordDeepDecodeUsage, deps.Log)
@@ -166,15 +215,12 @@ func (s *Server) buildRouter() {
 		api.Post("/datasets/coverage/preview", s.handleCoveragePreview)
 		api.Get("/download-jobs", s.handleListJobs)
 		api.Get("/download-jobs/{id}", s.handleGetJob)
-		api.Post("/download-jobs/{id}/performance-mode", s.handleSetJobPerformanceMode)
 		api.Post("/download-jobs/{id}/pause", s.handlePause)
 		api.Post("/download-jobs/{id}/resume", s.handleResume)
 		api.Post("/download-jobs/{id}/cancel", s.handleCancel)
+		api.Post("/download-jobs/{id}/subjects/{subjectID}/{action}", s.handleSubjectControl)
 		api.Get("/download-jobs/{id}/events", s.handleJobEvents)
 		api.Get("/providers/ankr/status", s.handleProviderStatus)
-		api.Get("/providers/ankr/production-profile", s.handleAnkrProductionProfile)
-		api.Get("/providers/ankr/fetch-runtime", s.handleAnkrFetchRuntime)
-		api.Post("/providers/ankr/performance-mode", s.handleSetAnkrPerformanceMode)
 		api.Get("/providers/ankr/usage", s.handleProviderUsage)
 		api.Get("/system/chains/{chain}/capabilities", s.handleChainCapabilities)
 		api.Get("/chains/{chain}/head", s.handleChainHead)
@@ -205,6 +251,31 @@ func (s *Server) buildRouter() {
 		api.Get("/api-control/usage-types", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "usage-types") })
 		api.Get("/api-control/budgets", s.handleAPIControlBudgets)
 		api.Post("/api-control/budgets", s.handleAPIControlBudgets)
+
+		// V1.1：极限性能 Benchmark（§45/§46）
+		api.Post("/admin/ankr/benchmarks", s.handleBenchmarkCreate)
+		api.Get("/admin/ankr/benchmarks", s.handleBenchmarkList)
+		api.Get("/admin/ankr/benchmarks/{id}", s.handleBenchmarkGet)
+
+		// V1.2：Count Oracle / Global Concurrency（§80-§82/§85/§88/§61）
+		api.Get("/count-oracle/status", s.handleCountOracleStatus)
+		// V1.3：Count Provider Port（§72-§74/§98）
+		api.Get("/count-oracle/providers", s.handleCountProviders)
+		api.Get("/count-oracle/resolutions", s.handleResolutionDecisions)
+		api.Get("/count-oracle/observations", s.handleCountOracleObservations)
+		api.Get("/count-oracle/calibration", s.handleCountOracleCalibration)
+		api.Get("/admin/planning-decisions", s.handlePlanningDecisions)
+		api.Get("/providers/ankr/global-concurrency", s.handleGlobalConcurrency)
+		// V1.4（§51/§14）：Ankr Fetch Runtime / Profile / Global Ready Queue / Range Certifications
+		api.Get("/providers/ankr/fetch-runtime", s.handleAnkrFetchRuntime)
+		api.Get("/providers/ankr/production-profile", s.handleAnkrProductionProfile)
+		api.Post("/providers/ankr/performance-mode", s.handleSetAnkrPerformanceMode)
+		api.Post("/download-jobs/{id}/performance-mode", s.handleSetJobPerformanceMode)
+		api.Get("/providers/ankr/fetch-profile", s.handleAnkrFetchProfile)
+		api.Get("/providers/ankr/ready-queue", s.handleGlobalReadyQueue)
+		api.Get("/admin/ankr/range-certifications", s.handleListRangeCertifications)
+		api.Post("/admin/ankr/range-certifications", s.handleRecordRangeCertification)
+		api.Get("/chains/capabilities", s.handleV12ChainCapabilities)
 		api.Get("/api-control/alerts", s.handleAPIControlAlerts)
 		api.Post("/api-control/alerts/{id}/actions", s.handleAPIControlAlerts)
 		api.Get("/coverage", s.handleCoverage)
@@ -214,6 +285,7 @@ func (s *Server) buildRouter() {
 		api.Post("/exports", s.handleCreateExport)
 		api.Get("/exports/{id}", s.handleGetExport)
 		api.Get("/exports/{id}/download", s.handleDownloadExport)
+		api.Head("/exports/{id}/download", s.handleDownloadExport)
 		api.Post("/exports/{id}/download-ticket", s.handleExportTicket)
 
 		api.Get("/cases", s.handleListCases)

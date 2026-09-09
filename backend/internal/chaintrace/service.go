@@ -59,7 +59,11 @@ func (s *Service) TransactionTrace(ctx context.Context, chainSlug string, hash c
 	chainSlug = strings.ToLower(strings.TrimSpace(chainSlug))
 	mode, err := rpc.ParseConsistency(opts.Consistency)
 	if err != nil {
-		return nil, err
+		// 参数错误必须按 invalid_params 返回（400），不能落成 generic error：
+		// writeRPCError 会把非 rpc.Error 一律归为 ClassUpstream，对外显示成
+		// “Provider temporarily unavailable”，误导为上游故障（Investigation
+		// E2E 曾以 mode=receipt 触发此问题，实际没有发出任何 Provider 请求）。
+		return nil, &rpc.Error{Class: rpc.ClassInvalidParams, Chain: chainSlug, Method: "trace_transaction", Message: err.Error()}
 	}
 
 	// 1) 本地持久缓存优先（§108/§110/§228）

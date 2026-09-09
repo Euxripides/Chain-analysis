@@ -165,7 +165,7 @@ func (s *Server) handleExplorerQuery(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unknown dataset " + req.Dataset})
 		return
 	}
-	addresses, err := dataset.NormalizeAndDedupeAddresses(req.Addresses)
+	addresses, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, req.Addresses)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return

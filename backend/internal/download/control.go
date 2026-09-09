@@ -5,20 +5,27 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
 // controlLoop 处理 Job 生命周期转换：CREATED→规划、PAUSE/CANCEL 收敛、RESUMING→重规划。
 func (sc *Scheduler) controlLoop(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	// Job creation is latency-sensitive and only needs the small CREATED /
+	// RESUMING indexes. Keep it off the slower lifecycle sweep so a new cold
+	// download does not spend up to two seconds waiting before planning starts.
+	fast := time.NewTicker(200 * time.Millisecond)
+	maintenance := time.NewTicker(2 * time.Second)
+	defer fast.Stop()
+	defer maintenance.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-fast.C:
 			sc.planCreatedJobs(ctx)
-			sc.convergePauseCancel(ctx)
 			sc.resumeJobs(ctx)
+		case <-maintenance.C:
+			sc.convergePauseCancel(ctx)
 			sc.finishSkippedJobs(ctx)
 			sc.convergeCompleted(ctx)
 		}
@@ -54,7 +61,7 @@ func (sc *Scheduler) convergePauseCancel(ctx context.Context) {
 		case model.JobPauseReq:
 			var active int64
 			_ = sc.store.Pool.QueryRow(ctx,
-				"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING')", j.ID).Scan(&active)
+				"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING','FETCHED','INGESTED')", j.ID).Scan(&active)
 			if active == 0 {
 				if err := sc.store.SetJobStatus(ctx, j.ID, model.JobPaused); err == nil {
 					sc.publish("events.jobs."+j.ID, map[string]any{
@@ -68,7 +75,7 @@ func (sc *Scheduler) convergePauseCancel(ctx context.Context) {
 					"WHERE job_id=$1 AND status NOT IN ('COMPLETED','CANCELLED','LEASED','RUNNING')", j.ID)
 			var active int64
 			_ = sc.store.Pool.QueryRow(ctx,
-				"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING')", j.ID).Scan(&active)
+				"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING','FETCHED','INGESTED')", j.ID).Scan(&active)
 			if active == 0 {
 				if err := sc.store.SetJobStatus(ctx, j.ID, model.JobCancelled); err == nil {
 					sc.publish("events.jobs."+j.ID, map[string]any{
@@ -109,8 +116,10 @@ func (sc *Scheduler) convergeCompleted(ctx context.Context) {
 		j := jobs[i]
 		var total, done, active int64
 		_ = sc.store.Pool.QueryRow(ctx,
-			"SELECT COUNT(*), COUNT(*) FILTER (WHERE status='COMPLETED'), "+
-				"COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING')) FROM download_shards WHERE job_id=$1", j.ID).
+			"SELECT COUNT(*) FILTER (WHERE "+store.EffectiveShardSQL("")+"), "+
+				"COUNT(*) FILTER (WHERE status='COMPLETED' AND "+store.EffectiveShardSQL("")+"), "+
+				"COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING') AND "+store.EffectiveShardSQL("")+") "+
+				"FROM download_shards WHERE job_id=$1", j.ID).
 			Scan(&total, &done, &active)
 		if total > 0 && done == total && active == 0 {
 			// 先自愈 subject：数据集全完成但 subject 仍 RUNNING 的直接置 COMPLETED

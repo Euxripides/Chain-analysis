@@ -3,8 +3,11 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"testing"
+
+	"github.com/xuri/excelize/v2"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/parquet-go/parquet-go"
@@ -50,7 +53,7 @@ func TestMatchedExportAddresses(t *testing.T) {
 		{"from_address": "0xdef", "to_address": subject},
 		{"address": subject},
 	} {
-		got := matchedExportAddresses(subject, row)
+		got := matchedExportAddresses("bsc", subject, row)
 		if len(got) != 1 || got[0] != subject {
 			t.Fatalf("matchedExportAddresses(%v) = %v", row, got)
 		}
@@ -90,5 +93,69 @@ func TestValidExplorerDatasetIncludesVirtualActivityOnly(t *testing.T) {
 	}
 	if validExplorerDataset("log") {
 		t.Fatal("unknown explorer dataset accepted")
+	}
+}
+
+func TestStreamXLSXAllDataRowsAndDimension(t *testing.T) {
+	rows := make([]map[string]any, 0, 130)
+	for i := 0; i < 130; i++ {
+		rows = append(rows, map[string]any{
+			"chain": "tron", "tx_hash": fmt.Sprintf("tx%05d", i), "block_number": i + 1, "log_index": i % 9,
+		})
+	}
+	var buf bytes.Buffer
+	if err := streamXLSX(&buf, rows); err != nil {
+		t.Fatal(err)
+	}
+	f, err := excelize.OpenReader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got := f.GetSheetList(); len(got) != 1 || got[0] != "Sheet1" {
+		t.Fatalf("sheets = %v, want [Sheet1]", got)
+	}
+	// Regression: dimension must cover header + every data row. A stale
+	// <dimension ref="A1"> makes openpyxl read_only / pandas report the
+	// workbook as header-only (0 data rows) even though sheetData is complete.
+	dim, err := f.GetSheetDimension("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const wantDim = "A1:D131"
+	if dim != wantDim {
+		t.Fatalf("dimension = %q, want %q", dim, wantDim)
+	}
+	sheet, err := f.GetRows("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheet) != 131 {
+		t.Fatalf("rows = %d, want 131 (1 header + 130 data)", len(sheet))
+	}
+	if sheet[0][0] != "chain" || sheet[0][1] != "tx_hash" {
+		t.Fatalf("unexpected header row: %v", sheet[0])
+	}
+	if sheet[1][1] != "tx00000" || sheet[130][1] != "tx00129" {
+		t.Fatalf("first/last data tx mismatch: %q / %q", sheet[1][1], sheet[130][1])
+	}
+}
+
+func TestWriteXLSXEmptyRowsStillWritesValidWorkbook(t *testing.T) {
+	var buf bytes.Buffer
+	if err := streamXLSX(&buf, nil); err != nil {
+		t.Fatal(err)
+	}
+	f, err := excelize.OpenReader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	sheet, err := f.GetRows("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheet) != 0 {
+		t.Fatalf("empty export produced %d rows, want 0", len(sheet))
 	}
 }

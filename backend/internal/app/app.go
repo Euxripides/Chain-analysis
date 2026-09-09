@@ -21,6 +21,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
+	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 	"github.com/blockchain-platform/blockchain-platform/migrations"
 )
 
@@ -98,11 +99,101 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			ResponseSoftLimitBytes: cfg.Ankr.ResponseSoftLimitBytes,
 			ResponseHardLimitBytes: cfg.Ankr.ResponseHardLimitBytes,
 			CreditsPerRequest:      cfg.Ankr.CreditsPerRequest, CostPerRequestUSD: cfg.Ankr.CostPerRequestUSD,
+			ConnectTimeout:      cfg.Ankr.ConnectTimeout,
+			TLSHandshakeTimeout: cfg.Ankr.TLSHandshakeTimeout,
+			BodyIdleTimeout:     cfg.Ankr.BodyIdleTimeout,
 		}, usageHook)
 		log.Info("provider: ankr (live)")
 	} else {
 		prov = ankr.NewMock(cfg.Ankr.MaxPageSize, usageHook)
 		log.Info("provider: ankr-mock (ANKR_MODE=mock)", "hint", "set ANKR_API_KEY and ANKR_MODE=live for real data")
+	}
+	if cfg.Tron.Enabled {
+		needsAnkr, needsTronGrid := false, false
+		for _, dataset := range []string{"transactions", "token_transfers", "internal_transactions"} {
+			switch cfg.Tron.ProviderForDataset(dataset) {
+			case "ankr":
+				needsAnkr = true
+			case "trongrid":
+				needsTronGrid = true
+			}
+		}
+		if cfg.Tron.TRC20AnkrFallbackEnabled {
+			needsAnkr = true
+		}
+		for _, capability := range []string{"receipt", "tx_detail"} {
+			switch cfg.Tron.ProviderForCapability(capability) {
+			case "ankr":
+				needsAnkr = true
+			case "trongrid":
+				needsTronGrid = true
+			}
+		}
+		var tronAnkr, tronGridTransactions, tronGridTRC20 provider.Provider
+		if needsAnkr {
+			client, tronErr := tron.NewAnkr(tron.AnkrOptions{APIKey: cfg.Ankr.APIKey,
+				RequestTimeout: cfg.Tron.RequestTimeout, ConnectTimeout: cfg.Tron.ConnectTimeout,
+				MaxRetries: cfg.Tron.MaxRetries, Concurrency: cfg.Tron.AnkrConcurrency,
+				LogInitialSpan: cfg.Tron.LogInitialSpan, LogMinSpan: cfg.Tron.LogMinSpan, LogMaxSpan: cfg.Tron.LogMaxSpan,
+				BlockSpan: cfg.Tron.BlockSpan, ReceiptSpan: cfg.Tron.ReceiptSpan, MaxScanBlocks: cfg.Tron.MaxScanBlocks,
+				MaxTxAutoScan: cfg.Tron.MaxTxAutoScan, MaxInternalAutoScan: cfg.Tron.MaxInternalAutoScan,
+				TimeBlockCacheTTL: cfg.Tron.TimeBlockCacheTTL, TimeBlockProbeRetry: cfg.Tron.TimeBlockProbeRetry,
+				ReceiptCacheMaxEntries: cfg.Tron.ReceiptCacheMaxEntries, ReceiptCacheTTL: cfg.Tron.ReceiptCacheTTL,
+				ReceiptInitialConcurrency: cfg.Tron.ReceiptInitialConcurrency, ReceiptMaxConcurrency: cfg.Tron.ReceiptMaxConcurrency,
+				ReceiptAdaptiveEnabled: cfg.Tron.ReceiptAdaptiveEnabled, ReceiptAdaptiveHardMax: cfg.Tron.ReceiptAdaptiveHardMax,
+				TRC20AdaptiveEnrichment: cfg.Tron.TRC20AdaptiveEnrichment, TRC20LogEnrichmentRatio: cfg.Tron.TRC20LogEnrichmentRatio,
+				TRC20EnrichLogMaxWindows: cfg.Tron.TRC20EnrichLogMaxWindows, TRC20EnrichLogSpan: cfg.Tron.TRC20EnrichLogSpan,
+				TRC20BatchReceipts: cfg.Tron.TRC20BatchReceipts}, usageHook, log)
+			if tronErr != nil {
+				return nil, fmt.Errorf("Ankr TRON init: %w", tronErr)
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+			caps, probeErr := client.Probe(probeCtx)
+			cancel()
+			if probeErr != nil {
+				return nil, fmt.Errorf("Ankr TRON capability probe: %w", probeErr)
+			}
+			tronAnkr = client
+			log.Info("provider: Ankr TRON Node API enabled", "endpoint", "https://rpc.ankr.com/tron_jsonrpc/***", "capabilities", caps)
+		}
+		if needsTronGrid {
+			accountPacer := tron.NewRatePacer(cfg.Tron.TronGridMinRequestInterval)
+			newGrid := func(pageSize, initial, normal, maximum int, timeout time.Duration, retries int, identity tron.TRC20IdentityResolver) (provider.Provider, error) {
+				return tron.New(tron.Options{BaseURL: cfg.Tron.BaseURL, APIKey: cfg.Tron.APIKey,
+					RequestTimeout: timeout, ConnectTimeout: cfg.Tron.ConnectTimeout,
+					MaxRetries: retries, InitialConcurrency: initial, NormalConcurrency: normal, MaxConcurrency: maximum,
+					PageSize: pageSize, MinRequestInterval: cfg.Tron.TronGridMinRequestInterval,
+					DailyRequestBudget: cfg.Tron.TronGridDailyRequestBudget, RatePacer: accountPacer, IdentityResolver: identity,
+					TRC20PrefetchPages: cfg.Tron.TRC20PrefetchPages, TRC20PageQueueMax: cfg.Tron.TRC20PageQueueMax}, usageHook, log)
+			}
+			txClient, tronErr := newGrid(cfg.Tron.TronGridTXPageSize, cfg.Tron.TronGridTXInitialConcurrency, cfg.Tron.TronGridTXNormalConcurrency, cfg.Tron.TronGridTXMaxConcurrency, cfg.Tron.TronGridTXRequestTimeout, cfg.Tron.TronGridTXMaxRetries, nil)
+			if tronErr != nil {
+				return nil, fmt.Errorf("TronGrid transactions init: %w", tronErr)
+			}
+			trc20Client, tronErr := newGrid(cfg.Tron.TronGridTRC20PageSize, cfg.Tron.TronGridTRC20InitialConcurrency, cfg.Tron.TronGridTRC20NormalConcurrency, cfg.Tron.TronGridTRC20MaxConcurrency, cfg.Tron.TronGridTRC20RequestTimeout, cfg.Tron.TronGridTRC20MaxRetries, newTRC20IdentityResolver(ch, tronAnkr, log, cfg.Tron.TRC20LocalIdentityEnabled))
+			if tronErr != nil {
+				return nil, fmt.Errorf("TronGrid TRC20 init: %w", tronErr)
+			}
+			tronGridTransactions, tronGridTRC20 = txClient, trc20Client
+			log.Info("provider: TronGrid dataset pools enabled", "base_url", cfg.Tron.BaseURL, "api_key_configured", cfg.Tron.APIKey != "", "tx_max_concurrency", cfg.Tron.TronGridTXMaxConcurrency, "trc20_max_concurrency", cfg.Tron.TronGridTRC20MaxConcurrency)
+		}
+		defaultTron := tronAnkr
+		if defaultTron == nil {
+			defaultTron = tronGridTransactions
+		}
+		var trc20 provider.Provider = tronGridTRC20
+		if cfg.Tron.TRC20AnkrFallbackEnabled {
+			resolver, ok := tronAnkr.(tron.RangeResolver)
+			if !ok {
+				return nil, fmt.Errorf("Ankr TRON client does not implement range resolution")
+			}
+			trc20 = &tron.HybridProvider{Primary: tronGridTRC20, Fallback: tronAnkr, Resolver: resolver,
+				Options: tron.HybridOptions{FallbackEnabled: true, MaxWindows: cfg.Tron.TRC20FallbackMaxWindows, MaxWindowSpan: cfg.Tron.LogMaxSpan}}
+		}
+		prov = &tron.Dispatcher{EVM: prov, Tron: &tron.DatasetRouter{
+			Default: defaultTron, Transactions: tronGridTransactions, TRC20: trc20, Internal: tronAnkr,
+			ReceiptProvider: tronAnkr, TxDetailProvider: tronAnkr,
+		}}
 	}
 
 	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov}
@@ -210,6 +301,17 @@ func (i *Infra) StartMethodBackground(ctx context.Context, cfg *config.Config, l
 // UsageRecorder 每次 Provider 请求异步写入用量表（成本核算基础）。
 func UsageRecorder(st *store.Store, log *slog.Logger) provider.UsageHook {
 	return func(u model.UsageRow) {
+		// TRON's Ankr node client records the true logical call count but older
+		// call sites did not attach pricing. Normalize it here so every live
+		// request reaches provider_usage with an auditable estimate.
+		if u.Provider == "ankr" && u.UsageType != "trc20_enrichment_summary" && u.CostUSD <= 0 {
+			calls := u.MethodCalls
+			if calls <= 0 {
+				calls = 1
+			}
+			u.Credits = 700 * float64(calls)
+			u.CostUSD = 0.00007 * float64(calls)
+		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()

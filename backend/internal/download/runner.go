@@ -3,8 +3,10 @@ package download
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -17,14 +19,18 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
+	"github.com/blockchain-platform/blockchain-platform/internal/spool"
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
 var downloadMethodByDataset = map[string]string{
-	"transactions":    "ankr_getTransactionsByAddress",
-	"token_transfers": "ankr_getTokenTransfers",
-	"nft_transfers":   "ankr_getNftTransfers",
-	"logs":            "ankr_getLogs",
-	"balances":        "ankr_getAccountBalance",
+	"transactions":          "ankr_getTransactionsByAddress",
+	"token_transfers":       "ankr_getTokenTransfers",
+	"nft_transfers":         "ankr_getNftTransfers",
+	"logs":                  "ankr_getLogs",
+	"balances":              "ankr_getAccountBalance",
+	"internal_transactions": "ankr_getInternalTransactions",
 }
 
 type manifestMeta struct {
@@ -51,9 +57,9 @@ type manifestPart struct {
 	PageToken string `json:"page_token"`
 }
 
-func requestHash(sh model.Shard, chain, address, method string) string {
+func requestHash(sh model.Shard, chain, address, method, providerName string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|%s|%s|%s|%d|%d", "ankr", method, chain, address, sh.Dataset, sh.FromBlock, sh.ToBlock)
+	fmt.Fprintf(h, "%s|%s|%s|%s|%s|%d|%d", providerName, method, chain, address, sh.Dataset, sh.FromBlock, sh.ToBlock)
 	if sh.FromTimestamp != nil {
 		fmt.Fprintf(h, "|%d", sh.FromTimestamp.UnixMilli())
 	}
@@ -63,37 +69,91 @@ func requestHash(sh model.Shard, chain, address, method string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// runShard 执行一个 Shard：Ankr 串行翻页 → Raw 落盘 → 标准化 → ClickHouse → Checkpoint → Coverage。
+func (sc *Scheduler) sourceProviderForDataset(chain, dataset string) string {
+	if chain == "tron" {
+		return sc.cfg.Tron.ProviderForDataset(dataset)
+	}
+	return "ankr"
+}
+
+func downloadPriority(priority int) string {
+	if priority >= 100 {
+		return "manual"
+	}
+	return "background"
+}
+
+// tokenHash 日志/指标只展示 token hash，不落真实 token（§42）。
+func tokenHash(token string) string {
+	if token == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// asyncMode 双路径开关（§98 Feature Flags）：全部启用且组件就绪才走新引擎，否则保留旧同步链路。
+func (sc *Scheduler) asyncMode() bool {
+	return sc.cfg.Ankr.AsyncIngestEnabled && sc.cfg.Ankr.LocalSpoolEnabled && sc.spool != nil && sc.pipeline != nil
+}
+
+// runShard 执行一个 Shard（§19 Fetch Plane 唯一职责）：
+// 构造请求 → Provider Call → Response Guard → Durable Spool → Checkpoint → 下一页。
+// ClickHouse / Metadata / Activity / 对象存储全部移出 Fetch Critical Path（§4）。
 func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	defer sc.wg.Done()
+	// dispatchLoop reserves one weighted slot before starting the goroutine;
+	// release it on every return path, including errors and cancellation.
+	defer atomic.AddInt64(&sc.weighted, -1)
 	atomic.AddInt64(&sc.active, 1)
 	defer atomic.AddInt64(&sc.active, -1)
+	defer sc.tokens.releaseShard(sh.ID)
+	nonzeroTracked := false
+	defer func() {
+		if nonzeroTracked {
+			atomic.AddInt64(&sc.activeNonzero, -1)
+		}
+	}()
 
-	// 关键日志与用量记录需要 job_id / shard_id / trace 上下文
 	ctx = context.WithValue(ctx, "job_id", sh.JobID)
 	ctx = context.WithValue(ctx, "shard_id", sh.ID)
 
 	log := sc.log.With("job_id", sh.JobID, "shard_id", sh.ID, "dataset", sh.Dataset)
 	started := time.Now()
 
-	address := ""
-	subjects, _ := sc.store.SubjectsByJob(ctx, sh.JobID)
-	for _, s := range subjects {
-		if s.ID == sh.SubjectID {
-			address = s.Subject
-		}
-	}
+	address := sc.subjectAddress(ctx, sh.SubjectID)
 	job, err := sc.store.GetJob(ctx, sh.JobID)
 	if err != nil {
 		log.Error("get job failed", "err", err)
 		return
 	}
 	chain := job.Chain
+	var envelope *RangeEnvelope
+	if sh.Dataset == "transactions" && (sh.FromBlock != 0 || sh.ToBlock != 0) {
+		if sh.FromBlock < 0 || sh.ToBlock < sh.FromBlock || sh.ToBlock == int64(^uint64(0)>>1) {
+			_, _ = sc.store.FailShard(ctx, sh.ID, "invalid immutable range envelope", false)
+			return
+		}
+		e, eerr := NewRangeEnvelope(uint64(sh.FromBlock), uint64(sh.ToBlock)+1)
+		if eerr != nil {
+			_, _ = sc.store.FailShard(ctx, sh.ID, eerr.Error(), false)
+			return
+		}
+		envelope = &e
+	}
 
 	method := downloadMethodByDataset[sh.Dataset]
-	reqHash := requestHash(sh, chain, address, method)
+	providerName := sc.sourceProviderForDataset(chain, sh.Dataset)
+	if chain == "tron" {
+		if providerName == "trongrid" && sh.Dataset == "transactions" {
+			method = "trongrid_transactions"
+		} else {
+			method = map[string]string{"transactions": "tron_getblockbylimitnext", "token_transfers": "tron_eth_getLogs", "internal_transactions": "tron_gettransactioninfobyblocknum"}[sh.Dataset]
+		}
+	}
+	reqHash := requestHash(sh, chain, address, method, providerName)
 	manifest := manifestMeta{
-		RequestHash: reqHash, Provider: "ankr", Method: method, Chain: chain, Address: address,
+		RequestHash: reqHash, Provider: providerName, Method: method, Chain: chain, Address: address,
 		Dataset: sh.Dataset, FromBlock: sh.FromBlock, ToBlock: sh.ToBlock,
 		FromTimestamp: sh.FromTimestamp, ToTimestamp: sh.ToTimestamp, StartedAt: started, Parts: []manifestPart{},
 	}
@@ -102,21 +162,41 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	pageNo := sh.PageNo
 	rowsTotal := sh.DownloadedRows
 	bytesTotal := sh.DownloadedBytes
-	var minBlock, maxBlock int64
+	var wireTotal, decodedTotal int64
+	var pageGaps []int64
+	var lastBodyCompleted time.Time
+	var shardMinB, shardMaxB int64
+	var tronLastTimestamp time.Time
+	var tronLastTxID string
+	var tronPrimaryRows, tronFallbackRows, tronProviderSwitches int64
+	var tronActiveProvider string
+	if chain == "tron" && sh.PageState != nil {
+		if ms, ok := numberFromAny(sh.PageState["tron_last_timestamp_ms"]); ok && ms > 0 {
+			tronLastTimestamp = time.UnixMilli(ms).UTC()
+		}
+		if txID, ok := sh.PageState["tron_last_tx_id"].(string); ok {
+			tronLastTxID = txID
+		}
+		tronPrimaryRows, _ = numberFromAny(sh.PageState["primary_rows"])
+		tronFallbackRows, _ = numberFromAny(sh.PageState["fallback_rows"])
+		tronProviderSwitches, _ = numberFromAny(sh.PageState["provider_switches"])
+		tronActiveProvider, _ = sh.PageState["active_provider"].(string)
+	}
+	seenPageTokens := map[string]struct{}{}
+	if providerName == "trongrid" && (sh.Dataset == "transactions" || sh.Dataset == "token_transfers") && pageToken != "" {
+		seenPageTokens[pageToken] = struct{}{}
+	}
+	var tronRecoveryFrom *time.Time
+	var tronRecoveryBlock *uint64
+	tronCursorRecovered := false
 
-	// 范围完备性守卫（BUG-002 修复）：Ankr 对 transactions/token_transfers/nft_transfers
-	// 忽略块边界，实测按“最旧 → 最新”升序枚举整段索引（证据：DL-20260831-0019 十三页分片
-	// 自 109,998,276 连续升序至 119,154,061）。因此翻页停止条件必须与方向无关：
-	// 记录“是否见过 Provider 行 / 下边界以下行 / 上边界以上行 / 最后一页是否饱和”，
-	// 循环在（下界行 && 上界行均已出现 = 区间已被完整横跨）或 Provider 耗尽时停止；
-	// 若耗尽时既未横跨区间、又无区间内行、且末页仍饱和（可能被 Provider 截断），
-	// 则明确失败，禁止 0 行静默收敛。
+	// 范围完备性守卫（BUG-002 修复）
 	var guardSawAnyRow bool
 	var guardBelowSeen bool
 	var guardAboveSeen bool
 	var guardFinalPageSaturated bool
 
-	// V1.1：PagePolicy（§16-§18）——Resume 继承上次自适应状态
+	// PagePolicy：Resume 继承上次自适应状态（§31/§32）
 	pkey := sc.pagePolicy.Key(chain, sh.Dataset, "address", address)
 	if sh.PageSize > 0 {
 		if st := pageStateFromMap(sh.PageState); st != nil {
@@ -126,7 +206,17 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	}
 	currentSize := sh.PageSize
 	if currentSize <= 0 {
+		// §32：新任务从历史最佳 pageSize 启动（画像成熟后才生效）
+		if sc.cfg.Ankr.AdaptivePageEnabled {
+			if p, err := sc.store.GetPageProfile(ctx, chain, sh.Dataset, sh.Dataset); err == nil && p != nil && p.PagesObserved >= 5 {
+				sc.pagePolicy.Restore(pkey, &ankr.PagePolicyState{CurrentPageSize: p.PreferredPageSize, UpdatedAt: time.Now()})
+				sc.log.Debug("page profile preferred size applied", "dataset", sh.Dataset, "page_size", p.PreferredPageSize)
+			}
+		}
 		currentSize = sc.pagePolicy.Current(pkey, sh.Dataset)
+	}
+	if chain == "tron" && (currentSize <= 0 || currentSize > 200) {
+		currentSize = 200
 	}
 
 	for {
@@ -138,26 +228,41 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			log.Info("shard stopped by job control", "action", action)
 			return
 		}
+		// Backpressure（§71/§72）：Spool/CH/Provider 保护状态停止新页请求
+		if sc.bp != nil && !sc.bp.FetchAllowed() {
+			log.Warn("fetch paused by backpressure", "state", sc.bp.State().String(), "reason", sc.bp.Reason())
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
+			}
+			continue
+		}
 
 		req := provider.FetchRequest{
 			Chain: chain, Dataset: sh.Dataset, Address: address,
-			PageSize: currentSize, PageToken: pageToken,
+			PageSize: currentSize, PageToken: pageToken, Priority: downloadPriority(sh.Priority),
 		}
-		// 实测 Ankr 行为差异：
-		// - transactions / token_transfers / nft_transfers：带 toBlock 返回空、
-		//   fromBlock 被忽略；Ankr 实测按最旧 → 最新升序枚举整段索引
-		//   （证据见 DL-20260831-0019 分片：109,998,276 → 119,154,061 连续升序），
-		//   边界由客户端过滤，停止条件见循环底部（双侧横跨或 Provider 耗尽）。
-		// - logs：尊重 from/toBlock。
+		if sh.PageState != nil {
+			req.QueryMode, _ = sh.PageState["query_mode"].(string)
+		}
 		switch sh.Dataset {
-		case "transactions", "token_transfers", "nft_transfers":
-			// 不传块边界（时间边界也由客户端过滤）
 		case "balances":
 			req.FromBlock, req.ToBlock, req.FromTime, req.ToTime = nil, nil, nil, nil
 		default:
-			if !(sh.FromBlock == 0 && sh.ToBlock == 0 && sh.FromTimestamp == nil) {
+			// V1.1：实测 Ankr 尊重 block 边界（fromBlock 为枚举起点、toBlock 为终点），
+			// 多 Range 必须传边界（§4/§6）；客户端过滤 + 范围守卫保留为安全网。
+			if !(sh.FromBlock == 0 && sh.ToBlock == 0 && sh.FromTimestamp == nil) && !(chain == "tron" && sh.FromTimestamp != nil) {
 				f := uint64(sh.FromBlock)
 				t := uint64(sh.ToBlock)
+				if envelope != nil {
+					var rerr error
+					f, t, rerr = ToAnkrInclusiveRange(envelope.Start, envelope.End)
+					if rerr != nil {
+						_, _ = sc.store.FailShard(ctx, sh.ID, rerr.Error(), false)
+						return
+					}
+				}
 				req.FromBlock = &f
 				req.ToBlock = &t
 			}
@@ -167,19 +272,95 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			if sh.ToTimestamp != nil {
 				req.ToTime = sh.ToTimestamp
 			}
+			if chain == "tron" && tronRecoveryFrom != nil {
+				req.FromTime = tronRecoveryFrom
+			}
+			if chain == "tron" && tronRecoveryBlock != nil {
+				req.FromBlock = tronRecoveryBlock
+				req.FromTime = nil
+			}
 		}
 
+		// 全局内存预算（§47/§48）：按预测大小预留 decoded 内存，超预算阻塞 = 内存背压
+		estBytes := sc.predictPageBytes(chain, sh.Dataset, currentSize)
+		if sc.mem != nil {
+			sc.mem.Reserve(estBytes)
+		}
+
+		// Page Gap（§35）：上一页 BODY_COMPLETE → 本页请求发出
 		pageStart := time.Now()
+		if !lastBodyCompleted.IsZero() {
+			gap := pageStart.Sub(lastBodyCompleted).Seconds()
+			observability.AnkrPageGapSeconds.Observe(gap)
+			pageGaps = append(pageGaps, int64(gap*1000))
+		}
+		req.RequestID = fmt.Sprintf("%s-%d-%d", sh.ID, pageNo+1, time.Now().UnixNano())
 		res, dec, err := sc.fetchWithRetry(ctx, pkey, sh.Dataset, req)
 		if dec != nil && dec.SplitRange {
-			// §20/§43：最小 pageSize 仍反复失败 → 拆 Range；原 Shard 不能标 COMPLETE
+			if sc.mem != nil {
+				sc.mem.Release(estBytes)
+			}
+			if sc.cfg.Ankr.V14Enabled {
+				// §10/§11：V1.4 只允许 READY/PLANNED 拆分；FETCHING Range 不拆 →
+				// 标记 retryable 失败，由 resume/规划层在 PENDING 状态重新规划拆分。
+				msg := "[v14_split_requested_on_running_shard] READY-only adaptive split (§10): replan via resume"
+				sc.log.Warn(msg, "shard_id", sh.ID, "dataset", sh.Dataset)
+				_, _ = sc.store.FailShard(ctx, sh.ID, msg, true)
+				return
+			}
 			sc.log.Warn("split range on repeated min-page failures", "shard_id", sh.ID, "dataset", sh.Dataset, "range", fmt.Sprintf("%d-%d", sh.FromBlock, sh.ToBlock))
 			sc.splitShardRange(ctx, sh)
 			return
 		}
 		if err != nil {
+			if sc.mem != nil {
+				sc.mem.Release(estBytes)
+			}
+			if tron.IsFallbackTooExpensive(err) {
+				_ = sc.store.PauseShard(ctx, sh.ID)
+				_ = sc.store.SetJobStatusError(ctx, sh.JobID, model.JobPausedFallbackTooExpensive, err.Error())
+				log.Warn("TRON fallback range exceeds safety gate; task paused", "err", err)
+				return
+			}
+			if chain == "tron" && pageToken != "" && !tronCursorRecovered {
+				if pe, ok := err.(*provider.Error); ok && pe.Class == provider.ClassInvalidRequest {
+					if providerName == "ankr" {
+						if next, ok := numberFromAny(sh.PageState["tron_next_block"]); ok && next > 0 {
+							overlap := int64(sc.cfg.Tron.OverlapBlocks)
+							if overlap <= 0 {
+								overlap = 20
+							}
+							from := next - overlap
+							if from < 0 {
+								from = 0
+							}
+							block := uint64(from)
+							tronRecoveryBlock = &block
+						}
+						pageToken = ""
+						tronCursorRecovered = true
+						log.Warn("TRON Ankr block cursor invalid; rebuilding with overlap", "from_block", tronRecoveryBlock)
+						continue
+					}
+					overlap := sc.cfg.Tron.IncrementalOverlap
+					if overlap <= 0 {
+						overlap = 3 * time.Minute
+					}
+					if !tronLastTimestamp.IsZero() {
+						from := tronLastTimestamp.Add(-overlap)
+						tronRecoveryFrom = &from
+					}
+					pageToken = ""
+					tronCursorRecovered = true
+					log.Warn("TRON fingerprint invalid; rebuilding cursor with overlap", "from_timestamp", tronRecoveryFrom)
+					continue
+				}
+			}
 			retryable := false
 			errMsg := err.Error()
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				retryable = true
+			}
 			if pe, ok := err.(*provider.Error); ok {
 				if pe.Retryable {
 					retryable = true
@@ -198,22 +379,87 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			})
 			return
 		}
-		currentSize = req.PageSize
-		// 成功页反馈（§14）：连续快成功才升档（一次一级，降档后有 cooldown）
+		if chain == "tron" {
+			primaryRows, fallbackRows, activeProvider := tronRowSources(res.Rows)
+			tronPrimaryRows += primaryRows
+			tronFallbackRows += fallbackRows
+			if activeProvider != "" && tronActiveProvider != "" && activeProvider != tronActiveProvider {
+				tronProviderSwitches++
+			}
+			if activeProvider != "" {
+				tronActiveProvider = activeProvider
+			}
+			currentSize = res.RequestPageSize
+			if currentSize <= 0 || currentSize > 200 {
+				currentSize = 200
+			}
+		} else {
+			currentSize = req.PageSize
+		}
+		lastBodyCompleted = time.Now()
+		var invariant RangeInvariantResult
+		if envelope != nil {
+			invariant, err = ValidateTransactionRange(envelope.Start, envelope.End, res.Rows)
+			log.Info("ankr_page_provenance", "request_id", res.RequestID, "lease_owner", sh.LeaseOwner, "lease_epoch", sh.LeaseEpoch, "page_seq", pageNo+1, "attempt", res.AttemptNo, "range_start", envelope.Start, "range_end_exclusive", envelope.End, "request_from_block", res.RequestFromBlock, "request_to_block_inclusive", res.RequestToBlock, "request_page_size", res.RequestPageSize, "page_token_present", pageToken != "", "page_token_hash", tokenHash(pageToken), "response_rows", len(res.Rows), "response_min_block", invariant.MinBlock, "response_max_block", invariant.MaxBlock, "out_of_range_rows", invariant.OutOfRangeRows, "wire_bytes", res.WireBytes, "decoded_bytes", res.DecodedBytes, "started_at", res.StartedAt, "body_complete_at", res.BodyCompleteAt)
+			if err != nil {
+				observability.AnkrRangeViolation.WithLabelValues(chain, sh.Dataset).Inc()
+				observability.AnkrOutOfRangeRows.WithLabelValues(chain, sh.Dataset).Add(float64(invariant.OutOfRangeRows))
+				if sc.spool != nil {
+					_, _ = sc.spool.WriteQuarantine(spool.QuarantineMeta{JobID: sh.JobID, ShardID: sh.ID, Dataset: sh.Dataset, PageNo: pageNo + 1, Attempt: res.AttemptNo, RequestID: res.RequestID, LeaseEpoch: sh.LeaseEpoch, RangeStart: envelope.Start, RangeEndExclusive: envelope.End, RequestFromBlock: *res.RequestFromBlock, RequestToBlock: *res.RequestToBlock, RequestPageSize: res.RequestPageSize, PageTokenHash: tokenHash(pageToken), ResponseRows: len(res.Rows), ResponseMinBlock: invariant.MinBlock, ResponseMaxBlock: invariant.MaxBlock, OutOfRangeRows: invariant.OutOfRangeRows, StartedAt: res.StartedAt, BodyCompleteAt: res.BodyCompleteAt}, res.RawResponseBody)
+				}
+				_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+				return
+			}
+		}
+		if providerName == "trongrid" && (sh.Dataset == "transactions" || sh.Dataset == "token_transfers") {
+			if res.NextPageToken != "" {
+				if _, seen := seenPageTokens[res.NextPageToken]; seen {
+					err := fmt.Errorf("[pagination_loop] TronGrid fingerprint repeated for address stream")
+					_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+					return
+				}
+				seenPageTokens[res.NextPageToken] = struct{}{}
+			}
+		} else if chain != "tron" {
+			if err := sc.tokens.claim(res.NextPageToken, sh.ID, uint64(sh.FromBlock), uint64(sh.ToBlock)+1); err != nil {
+				observability.AnkrTokenCrossShard.WithLabelValues(chain, sh.Dataset).Inc()
+				_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+				return
+			}
+		}
+
+		// 内存预算修正：实际 decoded 大于预估时补预留（可能阻塞）
+		actualDecoded := res.DecodedBytes
+		// Release exactly what was reserved.  When the response is smaller than
+		// the prediction, releasing only actualDecoded leaks the prediction
+		// delta; repeated pages then exhaust the global byte budget and leave all
+		// subsequent shards blocked forever in byteBudget.Reserve.
+		reservedBytes := estBytes
+		if sc.mem != nil && actualDecoded > estBytes {
+			sc.mem.ReserveExtra(actualDecoded - estBytes)
+			reservedBytes = actualDecoded
+		}
+
 		var bodyEst int64
 		for _, r := range res.Rows {
 			bodyEst += int64(len(r))
 		}
-		nextSize := sc.pagePolicy.OnSuccess(pkey, sh.Dataset, int64(currentSize), bodyEst, time.Since(pageStart))
-		if nextSize != currentSize {
-			currentSize = nextSize
-			log.Debug("page size upgraded", "page_size", nextSize, "dataset", sh.Dataset)
+		if chain != "tron" {
+			nextSize := sc.pagePolicy.OnSuccess(pkey, sh.Dataset, int64(currentSize), bodyEst, time.Since(pageStart))
+			if nextSize != currentSize {
+				currentSize = nextSize
+				log.Debug("page size upgraded", "page_size", nextSize, "dataset", sh.Dataset)
+			}
 		}
 
 		// 客户端侧范围过滤（transactions/nft 不信任 Provider 边界）
 		preFilterCount := len(res.Rows)
 		filtered, belowSeenPage, aboveSeenPage := sc.filterRows(sh, res.Rows)
 		res.Rows = filtered
+		if len(res.Rows) > 0 && !nonzeroTracked {
+			atomic.AddInt64(&sc.activeNonzero, 1)
+			nonzeroTracked = true
+		}
 		if preFilterCount > 0 {
 			guardSawAnyRow = true
 		}
@@ -223,66 +469,163 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		if aboveSeenPage {
 			guardAboveSeen = true
 		}
-		// 该页返回行数达到请求页大小 → Provider 可能还有更多历史（枚举可能被截断）
 		if preFilterCount >= currentSize {
 			guardFinalPageSaturated = true
 		} else {
 			guardFinalPageSaturated = false
 		}
 
-		if len(res.Rows) > 0 {
-			now := time.Now()
-			partKey := fmt.Sprintf("raw/ankr/%s/%s/%s/%s/%s/part-%06d.json.gz",
-				chain, sh.Dataset, now.Format("2006"), now.Format("01"), reqHash, pageNo+1)
-			rawPart, _ := json.Marshal(map[string]any{"rows": res.Rows})
-			sum := sha256.Sum256(rawPart)
-			rstart := time.Now()
-			n, rerr := sc.raw.PutGzip(ctx, partKey, rawPart)
-			observability.RawWriteLatencyMs.WithLabelValues(sc.cfg.RawBucket).Observe(float64(time.Since(rstart).Milliseconds()))
-			if rerr != nil {
-				_, _ = sc.store.FailShard(ctx, sh.ID, "raw persist: "+rerr.Error(), true)
-				return
-			}
-			bytesTotal += n
-			manifest.Parts = append(manifest.Parts, manifestPart{
-				Key: partKey, SHA256: hex.EncodeToString(sum[:]), Rows: len(res.Rows), BytesGz: n, PageToken: pageToken,
-			})
+		wireTotal += res.WireBytes
+		decodedTotal += res.DecodedBytes
 
-			minB, maxB, ierr := sc.ingestRows(ctx, sh, res.Rows, chain, address)
-			if ierr != nil {
-				_, _ = sc.store.FailShard(ctx, sh.ID, "ingest: "+ierr.Error(), true)
-				return
+		// 本页行块范围（过滤后）
+		var minB, maxB int64
+		for _, raw := range res.Rows {
+			if bn, ok := ingest.RawBlockNumber(raw); ok && bn > 0 {
+				trackBlocks(&minB, &maxB, int64(bn))
 			}
-			if minBlock == 0 || (minB > 0 && minB < minBlock) {
-				minBlock = minB
+			if chain == "tron" {
+				if ts, ok := ingest.RawTimestamp(raw); ok && (tronLastTimestamp.IsZero() || ts.Before(tronLastTimestamp)) {
+					tronLastTimestamp = ts
+				}
+				if txID, ok := rawTransactionID(raw); ok {
+					tronLastTxID = txID
+				}
 			}
-			if maxB > maxBlock {
-				maxBlock = maxB
-			}
-			rowsTotal += int64(len(res.Rows))
+		}
+		if shardMinB == 0 || (minB > 0 && minB < shardMinB) {
+			shardMinB = minB
+		}
+		if maxB > shardMaxB {
+			shardMaxB = maxB
 		}
 
-		pageNo++
-		// Checkpoint：持久化与入库之后才推进（崩溃后可安全恢复；§18 保存 PagePolicy 状态）
-		if err := sc.store.CheckpointShard(ctx, sh.ID, res.NextPageToken, pageNo, currentSize, rowsTotal, bytesTotal, pageStateToMap(sc.pagePolicy.Snapshot(pkey))); err != nil {
-			log.Error("checkpoint failed", "err", err)
+		if sc.asyncMode() {
+			// ---- 新引擎：Durable Spool → Checkpoint → 异步 Ingest（§37/§40/§41）----
+			pageNo++
+			meta := spool.PageMeta{
+				JobID: sh.JobID, Dataset: sh.Dataset, ShardID: sh.ID, PageNo: pageNo,
+				BlockFrom: minB, BlockTo: maxB, PageSize: currentSize,
+				WireBytes: res.WireBytes, DecodedBytes: res.DecodedBytes,
+				QueryHash: reqHash, NextPageTokenHash: tokenHash(res.NextPageToken),
+				RequestStartedAt: pageStart, BodyCompletedAt: lastBodyCompleted, ReceivedAt: time.Now(),
+			}
+			rawPath, metaPath, werr := sc.spool.WritePage(meta, res.Rows)
+			if werr != nil {
+				if sc.mem != nil {
+					sc.mem.Release(reservedBytes)
+				}
+				_, _ = sc.store.FailShard(ctx, sh.ID, "spool write: "+werr.Error(), true)
+				return
+			}
+			if sc.mem != nil {
+				sc.mem.Release(reservedBytes)
+			}
+			rowsTotal += int64(len(res.Rows))
+			bytesTotal += res.DecodedBytes
+			pg := model.Page{
+				JobID: sh.JobID, ShardID: sh.ID, Dataset: sh.Dataset, PageNo: pageNo,
+				QueryHash: reqHash, PageSize: currentSize,
+				WireBytes: res.WireBytes, DecodedBytes: res.DecodedBytes,
+				RawPath: rawPath, RawSHA256: meta.SHA256, RowsFetched: len(res.Rows),
+				NextPageTokenHash: tokenHash(res.NextPageToken),
+				FromBlock:         minB, ToBlock: maxB,
+				FetchStartedAt: &pageStart, BodyCompletedAt: &lastBodyCompleted,
+			}
+			pageID, cerr2 := sc.store.PageDurableCheckpointCAS(ctx, pg, sh.LeaseEpoch, res.NextPageToken, pageNo, currentSize, rowsTotal, bytesTotal, tronPageState(sc.pagePolicy.Snapshot(pkey), chain, providerName, sh.Dataset, address, req.QueryMode, tronLastTimestamp, tronLastTxID, res.NextPageToken, res.RequestToBlock, tronPrimaryRows, tronFallbackRows, tronProviderSwitches, tronActiveProvider))
+			if cerr2 != nil {
+				if store.IsCheckpointRangeMismatch(cerr2) {
+					observability.AnkrCheckpointRangeMismatch.WithLabelValues(chain, sh.Dataset).Inc()
+				}
+				if leaseEpochMismatch(cerr2) {
+					// §33：epoch 不匹配 = 本 worker 已失去 Shard 所有权（reaper/其它 worker 接管）
+					observability.AnkrFetchLeaseEpochMismatchTotal.Inc()
+					log.Warn("lease epoch mismatch, stopping shard work (split-brain prevented)")
+					return
+				}
+				log.Error("page durable checkpoint failed", "err", cerr2)
+				_, _ = sc.store.FailShard(ctx, sh.ID, "checkpoint: "+cerr2.Error(), true)
+				return
+			}
+			pr := pageRef{
+				pageID: pageID, jobID: sh.JobID, shardID: sh.ID, dataset: sh.Dataset,
+				pageNo: pageNo, chain: chain, address: address, reqHash: reqHash,
+				rawPath: rawPath, metaPath: metaPath, meta: meta,
+				minB: minB, maxB: maxB, snapshotBlock: uint64(sh.ToBlock),
+			}
+			sc.pipeline.rememberPage(pr)
+			if !sc.pipeline.submit(ctx, pr) {
+				return // 停机：checkpoint 已持久，重启后重放
+			}
+			sc.log.Info("page durable", "page_no", pageNo, "rows", len(res.Rows),
+				"wire_bytes", res.WireBytes, "decoded_bytes", res.DecodedBytes,
+				"provider_latency_ms", time.Since(pageStart).Milliseconds())
+		} else {
+			// ---- 旧同步链路（Feature Flag 关闭时的基线，§98）----
+			if len(res.Rows) > 0 {
+				now := time.Now()
+				partKey := fmt.Sprintf("raw/%s/%s/%s/%s/%s/%s/part-%06d.json.gz",
+					providerName,
+					chain, sh.Dataset, now.Format("2006"), now.Format("01"), reqHash, pageNo+1)
+				rawPart, _ := json.Marshal(map[string]any{"rows": res.Rows})
+				sum := sha256.Sum256(rawPart)
+				rstart := time.Now()
+				n, rerr := sc.raw.PutGzip(ctx, partKey, rawPart)
+				observability.RawWriteLatencyMs.WithLabelValues(sc.cfg.RawBucket).Observe(float64(time.Since(rstart).Milliseconds()))
+				if rerr != nil {
+					if sc.mem != nil {
+						sc.mem.Release(reservedBytes)
+					}
+					_, _ = sc.store.FailShard(ctx, sh.ID, "raw persist: "+rerr.Error(), true)
+					return
+				}
+				bytesTotal += n
+				manifest.Parts = append(manifest.Parts, manifestPart{
+					Key: partKey, SHA256: hex.EncodeToString(sum[:]), Rows: len(res.Rows), BytesGz: n, PageToken: tokenHash(pageToken),
+				})
+				minB2, maxB2, ierr := sc.ingestRows(ctx, sh, res.Rows, chain, address)
+				if ierr != nil {
+					if sc.mem != nil {
+						sc.mem.Release(reservedBytes)
+					}
+					_, _ = sc.store.FailShard(ctx, sh.ID, "ingest: "+ierr.Error(), true)
+					return
+				}
+				if minB == 0 || (minB2 > 0 && minB2 < minB) {
+					minB = minB2
+				}
+				if maxB2 > maxB {
+					maxB = maxB2
+				}
+				rowsTotal += int64(len(res.Rows))
+			}
+			if sc.mem != nil {
+				sc.mem.Release(reservedBytes)
+			}
+			pageNo++
+			if err := sc.store.CheckpointShardCAS(ctx, sh.ID, sh.LeaseEpoch, res.NextPageToken, pageNo, currentSize, rowsTotal, bytesTotal, tronPageState(sc.pagePolicy.Snapshot(pkey), chain, providerName, sh.Dataset, address, req.QueryMode, tronLastTimestamp, tronLastTxID, res.NextPageToken, res.RequestToBlock, tronPrimaryRows, tronFallbackRows, tronProviderSwitches, tronActiveProvider)); err != nil {
+				if store.IsCheckpointRangeMismatch(err) {
+					observability.AnkrCheckpointRangeMismatch.WithLabelValues(chain, sh.Dataset).Inc()
+				}
+				if leaseEpochMismatch(err) {
+					observability.AnkrFetchLeaseEpochMismatchTotal.Inc()
+					log.Warn("lease epoch mismatch at checkpoint, stopping shard work")
+					return
+				}
+				log.Error("checkpoint failed", "err", err)
+			}
 		}
 
 		if !res.HasMore {
 			break
 		}
 		if guardBelowSeen && guardAboveSeen {
-			// 已同时见过下边界以下与上边界以上的数据行：无论 Provider 升序或降序
-			// 翻页，目标区间都已被完整横跨，后续页必在区间之外，停止。
 			break
 		}
 		pageToken = res.NextPageToken
 	}
 
-	// BUG-002 守卫：翻页结束后校验目标范围确实被覆盖（详见 rangeCoverageVerdict）。
-	// Provider 返回过数据行、区间内 0 行、从未横跨区间（下/上边界行只出现一侧）、
-	// 且最后一页仍饱和 —— 说明枚举可能被 Provider 在到达区间前截断，
-	// 此时绝不静默以 0 行 COMPLETED 收敛，而是明确失败（错误进入 shard.error 与审计）。
+	// BUG-002 守卫：翻页结束后校验目标范围确实被覆盖
 	if verdict := rangeCoverageVerdict(sh, guardSawAnyRow, guardBelowSeen, guardAboveSeen, rowsTotal, guardFinalPageSaturated); verdict != nil {
 		log.Error("range not reached by provider pagination; refusing silent 0-row completion",
 			"shard_id", sh.ID, "dataset", sh.Dataset,
@@ -299,19 +642,45 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		return
 	}
 
+	if sc.asyncMode() {
+		// ---- 新引擎：Fetch 完成 → FETCHED，等待 Finalizer 校验后 COMPLETE（§62）----
+		fetchDuration := time.Since(started).Milliseconds()
+		var gapAvg int64
+		if len(pageGaps) > 0 {
+			var sum int64
+			for _, g := range pageGaps {
+				sum += g
+			}
+			gapAvg = sum / int64(len(pageGaps))
+		}
+		if err := sc.store.SetShardFetchedCAS(ctx, sh.ID, sh.LeaseEpoch, pageNo-sh.PageNo, wireTotal, decodedTotal, fetchDuration, gapAvg); err != nil {
+			if leaseEpochMismatch(err) {
+				observability.AnkrFetchLeaseEpochMismatchTotal.Inc()
+				log.Warn("lease epoch mismatch at fetch completion, stopping shard work")
+				return
+			}
+			log.Error("set shard fetched failed", "err", err)
+			return
+		}
+		log.Info("shard fetch complete", "rows", rowsTotal, "pages", pageNo-sh.PageNo,
+			"wire_bytes", wireTotal, "decoded_bytes", decodedTotal,
+			"fetch_duration_ms", fetchDuration, "page_gap_avg_ms", gapAvg)
+		return
+	}
+
+	// ---- 旧同步链路收尾 ----
 	manifest.FinishedAt = time.Now()
-	manifestKey := fmt.Sprintf("raw/ankr/%s/%s/%s/%s/%s/manifest.json.gz",
-		chain, sh.Dataset, manifest.StartedAt.Format("2006"), manifest.StartedAt.Format("01"), reqHash)
+	manifestKey := fmt.Sprintf("raw/%s/%s/%s/%s/%s/%s/manifest.json.gz",
+		providerName, chain, sh.Dataset, manifest.StartedAt.Format("2006"), manifest.StartedAt.Format("01"), reqHash)
 	mb, _ := json.Marshal(manifest)
 	if _, err := sc.raw.PutGzip(ctx, manifestKey, mb); err != nil {
 		log.Warn("manifest write failed", "err", err)
 	}
-
 	if err := sc.store.CompleteShard(ctx, sh.ID, manifestKey, rowsTotal, bytesTotal); err != nil {
 		log.Error("complete shard failed", "err", err)
 		return
 	}
-	sc.commitCoverage(ctx, sh, chain, address, minBlock, maxBlock, rowsTotal, bytesTotal)
+	sc.commitCoverage(ctx, sh, chain, address, shardMinB, shardMaxB, rowsTotal, bytesTotal)
 	if err := sc.planner.ContinueShards(ctx, sh); err != nil {
 		log.Error("continue shards failed", "err", err)
 	}
@@ -323,11 +692,145 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	log.Info("shard completed", "rows", rowsTotal, "bytes", bytesTotal, "duration", time.Since(started))
 }
 
+func tronPageState(state *ankr.PagePolicyState, chain, providerName, dataset, address, queryMode string, lastTimestamp time.Time, lastTxID, nextPageToken string, requestToBlock *uint64, primaryRows, fallbackRows, providerSwitches int64, activeProvider string) map[string]any {
+	out := pageStateToMap(state)
+	// Query intent is provider-neutral checkpoint state. Infer it from the
+	// immutable request shape when restoring older shards that predate V4.
+	if chain == "tron" {
+		out["query_mode"] = queryMode
+		out["primary_rows"], out["fallback_rows"], out["provider_switches"] = primaryRows, fallbackRows, providerSwitches
+		if activeProvider != "" {
+			out["active_provider"] = activeProvider
+		}
+		if info, ok := tron.InspectHybridCursor(nextPageToken); ok {
+			out["tron_cursor_type"] = "hybrid"
+			out["active_provider"] = info.ActiveProvider
+			out["covered_start"], out["covered_end"] = info.CoveredStart, info.CoveredEnd
+			if info.ActiveProvider == "ankr" {
+				out["fallback_start_block"], out["fallback_end_block"] = info.FallbackStart, info.FallbackEnd
+			}
+		}
+	}
+	if chain == "tron" && !lastTimestamp.IsZero() {
+		if out == nil {
+			out = map[string]any{}
+		}
+		out["tron_last_timestamp_ms"] = lastTimestamp.UnixMilli()
+	}
+	if chain == "tron" && providerName == "trongrid" && !strings.HasPrefix(nextPageToken, "tron:hybrid:") {
+		if out == nil {
+			out = map[string]any{}
+		}
+		out["tron_provider"], out["tron_cursor_type"] = "trongrid", "fingerprint"
+		out["tron_dataset"], out["tron_address"] = dataset, address
+		out["tron_fingerprint"] = nextPageToken
+		if lastTxID != "" {
+			out["tron_last_tx_id"] = lastTxID
+		}
+	}
+	if chain == "tron" && providerName == "ankr" && strings.HasPrefix(nextPageToken, "ankr:block:") {
+		if payload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(nextPageToken, "ankr:block:")); err == nil {
+			var cursor struct {
+				Provider  string `json:"provider"`
+				Type      string `json:"type"`
+				NextBlock uint64 `json:"next_block"`
+				EndBlock  uint64 `json:"end_block"`
+				Span      uint64 `json:"span"`
+			}
+			if json.Unmarshal(payload, &cursor) == nil {
+				if out == nil {
+					out = map[string]any{}
+				}
+				out["tron_provider"], out["tron_cursor_type"] = cursor.Provider, cursor.Type
+				out["tron_next_block"], out["tron_scan_to_block"], out["tron_log_span"] = cursor.NextBlock, cursor.EndBlock, cursor.Span
+			}
+		}
+	}
+	if chain == "tron" && providerName == "ankr" && requestToBlock != nil {
+		if out == nil {
+			out = map[string]any{}
+		}
+		out["tron_provider"] = "ankr"
+		out["tron_cursor_type"] = "block"
+		out["tron_last_success_block"] = *requestToBlock
+	}
+	return out
+}
+
+func tronRowSources(rows []json.RawMessage) (primary, fallback int64, active string) {
+	for _, raw := range rows {
+		var row map[string]any
+		if json.Unmarshal(raw, &row) != nil {
+			continue
+		}
+		if strings.EqualFold(fmt.Sprint(row["_provider"]), "ankr") {
+			fallback++
+			active = "ankr"
+		} else {
+			primary++
+			active = "trongrid"
+		}
+	}
+	return
+}
+
+func numberFromAny(value any) (int64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	}
+	return 0, false
+}
+
+func rawTransactionID(raw json.RawMessage) (string, bool) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return "", false
+	}
+	for _, key := range []string{"txID", "transaction_id", "tx_id"} {
+		if value, ok := m[key].(string); ok && value != "" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// predictPageBytes 响应大小预测（§49）：page_size × avg_bytes_per_row（画像缺省用经验值）。
+func (sc *Scheduler) predictPageBytes(chain, dataset string, pageSize int) int64 {
+	perRow := int64(1024)
+	if p, err := sc.store.GetPageProfile(context.Background(), chain, dataset, dataset); err == nil && p != nil && p.AvgDecodedBytes > 0 && p.PagesObserved > 3 {
+		if p.AvgRows > 0 {
+			perRow = p.AvgDecodedBytes / int64(p.AvgRows)
+		}
+	}
+	if perRow < 256 {
+		perRow = 256
+	}
+	return int64(pageSize) * perRow
+}
+
 // jobControl 在每页之间检查 Job 状态（暂停/取消/上下文退出）。
 func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, error) {
 	job, err := sc.store.GetJob(ctx, sh.JobID)
 	if err != nil {
 		return "continue", err
+	}
+	subjectStatus, subjectErr := sc.store.SubjectStatus(ctx, sh.JobID, sh.SubjectID)
+	if subjectErr != nil {
+		return "continue", subjectErr
+	}
+	if subjectStatus == model.ItemPaused {
+		_ = sc.store.PauseShard(ctx, sh.ID)
+		return "paused", nil
+	}
+	if subjectStatus == model.ItemCompleted || subjectStatus == model.ItemSkipped {
+		_ = sc.store.CancelShard(ctx, sh.ID)
+		return "cancelled", nil
 	}
 	switch job.Status {
 	case model.JobPauseReq:
@@ -343,11 +846,14 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 				"type": "shard_status", "shard_id": sh.ID, "status": model.ShardCancelled, "ts": time.Now(),
 			})
 		}
+		// 任务取消：本地 Spool 可安全清理（已 Ingest 页面在 CH，未 Ingest 页面随任务丢弃）
+		if sc.spool != nil {
+			_ = sc.spool.RemoveShard(sh.JobID, sh.Dataset, sh.ID)
+		}
 		return "cancelled", nil
 	}
 	select {
 	case <-ctx.Done():
-		// 进程退出：暂停当前 Shard，恢复时继续
 		_ = sc.store.PauseShard(context.Background(), sh.ID)
 		return "ctx-done", nil
 	default:
@@ -355,20 +861,45 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 	return "continue", nil
 }
 
-// fetchWithRetry V1.1（§21/§27/§28）：
-//   - RateLimit / Upstream：指数退避 + 全抖动（429 优先 Retry-After，§26）
-//   - Timeout / ResponseTooLarge：PagePolicy 降一档 + 短抖动，重试同一逻辑页
-//   - 最小 pageSize 连续失败：返回 SplitRange 决策（由调用方拆 Range）
-//   - context.Canceled 禁止重试（§10）
+// fetchWithRetry 重试决策矩阵（§21/§27/§28）。
 func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, req provider.FetchRequest) (provider.FetchResult, *ankr.PageDecision, error) {
 	var lastErr error
 	var lastDec *ankr.PageDecision
-	for attempt := 0; attempt < 8; attempt++ {
+	maxAttempts := sc.cfg.Ankr.PageRetryMaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 8
+	}
+	// TronGrid owns its retry/backoff budget inside the HTTP client. The
+	// scheduler must not replay an exhausted fingerprint page a second time,
+	// otherwise one 429/timeout can multiply request cost and break quota math.
+	tronGridOwned := req.Chain == "tron" && sc.sourceProviderForDataset(req.Chain, dataset) == "trongrid" &&
+		(dataset == "transactions" || dataset == "token_transfers")
+	if tronGridOwned {
+		maxAttempts = 1
+	}
+	budget := time.Duration(sc.cfg.Ankr.PageRetryBudgetSeconds) * time.Second
+	budgetStart := time.Now()
+	exhaustedByBudget := false
+	for attempt := 0; retryBudgetOK(attempt, budgetStart, maxAttempts, budget); attempt++ {
+		attemptReq := req
+		attemptReq.AttemptNo = attempt + 1
+		attemptReq.RequestID = fmt.Sprintf("%s-a%d", req.RequestID, attempt+1)
 		actx := context.WithValue(ctx, "retry_attempt", attempt)
-		actx, cancel := context.WithTimeout(actx, sc.cfg.Ankr.RequestTimeout)
-		res, err := sc.prov.Fetch(actx, req)
+		requestTimeout := sc.cfg.Ankr.RequestTimeout
+		// A time-range fallback must first resolve both timestamps to TRON blocks.
+		// That work is bounded and cancellable, but can legitimately require more
+		// RPC round trips than one ordinary Ankr page request.
+		if tronGridOwned && dataset == "token_transfers" && req.FromTime != nil {
+			requestTimeout *= 3
+		}
+		actx, cancel := context.WithTimeout(actx, requestTimeout)
+		res, err := sc.prov.Fetch(actx, attemptReq)
 		cancel()
 		if err == nil {
+			if aerr := validateAttribution(attemptReq.RequestID, res.RequestID); aerr != nil {
+				observability.AnkrResponseAttributionMismatch.WithLabelValues(req.Chain, dataset).Inc()
+				return provider.FetchResult{}, nil, aerr
+			}
 			return res, nil, nil
 		}
 		lastErr = err
@@ -386,7 +917,6 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, r
 			return provider.FetchResult{}, &dec, nil
 		}
 		if dec.NextPageSize != req.PageSize {
-			// 降一档重试同一逻辑页（不推进 pageToken，§37）
 			req.PageSize = dec.NextPageSize
 			sc.log.Warn("page size reduced on retryable error",
 				"error_class", string(pe.Class), "dataset", dataset,
@@ -394,12 +924,15 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, r
 			observability.AnkrPageSizeGauge.WithLabelValues(pkey).Set(float64(req.PageSize))
 		}
 		if dec.ReduceRate && dec.RetryAfter > 0 {
-			// §26：429/-32090 优先遵守 Retry-After
 			dec.Backoff = dec.RetryAfter
 		}
 		backoff := dec.Backoff
 		if backoff <= 0 {
 			backoff = time.Duration(1<<uint(minInt(attempt, 5)))*time.Second + time.Duration(rand.Int63n(1000))*time.Millisecond
+		}
+		if !retryBudgetOK(attempt+1, budgetStart, maxAttempts, budget) {
+			exhaustedByBudget = true
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -407,31 +940,22 @@ func (sc *Scheduler) fetchWithRetry(ctx context.Context, pkey, dataset string, r
 		case <-time.After(backoff):
 		}
 	}
+	if exhaustedByBudget {
+		observability.AnkrFetchRetryBudgetExhaustedTotal.Inc()
+	}
 	return provider.FetchResult{}, lastDec, lastErr
 }
 
 // rangeCoverageVerdict 范围完备性守卫（BUG-002）。
-// 适用：transactions / token_transfers / nft_transfers 的带界请求（Ankr 实测忽略块边界，
-// 由客户端过滤；枚举为最旧 → 最新升序，停止条件与方向无关）。
-// 翻页结束后允许 0 行收敛的情形：
-//   - 区间内已写入行（rows>0）：区间内确有数据，已入库；
-//   - 已横跨区间（belowSeen && aboveSeen）：区间被完整遍历，0 行 = 区间内确无数据；
-//   - Provider 从未返回任何行（!sawAnyRow）：地址在该 Provider 无任何历史；
-//   - 最后一页未饱和（枚举已到 Provider 索引自然尽头）且未横跨：
-//     目标区间整体位于 Provider 索引之外（比地址最早数据更早或比最晚数据更新），
-//     0 行结果如实记录（不提交 Coverage）。
-//
-// 唯一失败情形：见过行、0 区间内行、从未横跨、最后一页仍饱和 —— 枚举可能在到达区间前
-// 被 Provider 截断，绝不静默以 0 行 COMPLETED 收敛，返回明确错误由调用方置 Shard 失败。
 func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen, aboveSeen bool, inRangeRows int64, finalPageSaturated bool) error {
 	bounded := sh.FromBlock > 0 || sh.ToBlock > 0 || sh.FromTimestamp != nil || sh.ToTimestamp != nil
 	if !bounded {
-		return nil // 全量扫描：Coverage 只记录实际观测跨度，不夸大
+		return nil
 	}
 	switch sh.Dataset {
 	case "transactions", "token_transfers", "nft_transfers":
 	default:
-		return nil // logs 尊重块边界、balances 为快照，不适用
+		return nil
 	}
 	if inRangeRows > 0 || (belowSeen && aboveSeen) || !sawAnyRow || !finalPageSaturated {
 		return nil
@@ -451,8 +975,6 @@ func rangeCoverageVerdict(sh model.Shard, sawAnyRow, belowSeen, aboveSeen bool, 
 }
 
 // filterRows 客户端侧范围过滤：块区间 + 时间区间。
-// 返回 (保留行, belowSeen, aboveSeen)：belowSeen=本页出现下边界以下行；
-// aboveSeen=本页出现上边界以上行。过滤与翻页方向无关，停止判定在调用方完成。
 func (sc *Scheduler) filterRows(sh model.Shard, rows []json.RawMessage) ([]json.RawMessage, bool, bool) {
 	belowSeen := false
 	aboveSeen := false
@@ -483,113 +1005,57 @@ func (sc *Scheduler) filterRows(sh model.Shard, rows []json.RawMessage) ([]json.
 	return out, belowSeen, aboveSeen
 }
 
-// ingestRows 标准化并批量写入 ClickHouse（返回观察到的最小/最大块）。
+// ingestRows 旧同步链路：标准化并批量写入 ClickHouse（新引擎由 pipeline 异步消费）。
 func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json.RawMessage, chain, address string) (int64, int64, error) {
-	var minB, maxB int64
+	batch, err := sc.buildRows(ctx, sh.Dataset, rows, chain, address, uint64(sh.ToBlock))
+	if err != nil {
+		return 0, 0, err
+	}
 	switch sh.Dataset {
 	case "transactions":
-		batch := make([]ingest.TxRow, 0, len(rows))
-		acts := make([]ingest.ActivityRow, 0, len(rows))
-		for _, raw := range rows {
-			r, err := ingest.NormalizeTransaction(raw, chain, "ankr")
-			if err != nil {
-				return 0, 0, err
-			}
-			// §16/§17：Fast Local Resolver —— 只读内存缓存，无外部网络，
-			// 解析不到写 unknown 并投递异步补全，绝不阻塞主下载链路。
-			sc.resolveMethod(ctx, chain, &r)
-			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
-			batch = append(batch, r)
-			dir, cp := directionOf(address, r.From, r.To)
-			acts = append(acts, ingest.ActivityRow{
-				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
-				ActivityType: "transaction", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
-				TxHash: r.TxHash, Dataset: "transactions", Provider: "ankr",
-			})
-		}
-		if err := sc.writer.WriteTransactions(ctx, batch); err != nil {
+		if err := sc.writer.WriteTransactions(ctx, batch.txs); err != nil {
 			return 0, 0, err
 		}
-		if len(acts) > 0 {
-			if err := sc.writer.WriteActivity(ctx, acts); err != nil {
+		if len(batch.acts) > 0 {
+			if err := sc.writer.WriteActivity(ctx, batch.acts); err != nil {
 				return 0, 0, err
 			}
 		}
-		return minB, maxB, nil
 	case "token_transfers":
-		batch := make([]ingest.TokenTransferRow, 0, len(rows))
-		acts := make([]ingest.ActivityRow, 0, len(rows))
-		for _, raw := range rows {
-			r, err := ingest.NormalizeTokenTransfer(raw, chain, "ankr")
-			if err != nil {
-				return 0, 0, err
-			}
-			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
-			batch = append(batch, r)
-			dir, cp := directionOf(address, r.From, r.To)
-			acts = append(acts, ingest.ActivityRow{
-				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
-				ActivityType: "transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
-				TxHash: r.TxHash, LogIndex: r.LogIndex, TokenAddress: r.TokenAddress,
-				TokenSymbol: r.TokenSymbol, TokenDecimals: r.TokenDecimals, AmountRaw: r.AmountRaw, Amount: r.Amount,
-				Dataset: "token_transfers", Provider: "ankr",
-			})
-		}
-		if err := sc.writer.WriteTokenTransfers(ctx, batch); err != nil {
+		if err := sc.writer.WriteTokenTransfers(ctx, batch.transfers); err != nil {
 			return 0, 0, err
 		}
-		// Enrichment is best-effort and batch-deduplicated. It must never change
-		// chain-fact coverage or make a completed transfer page fail.
-		if sc.tokenMeta != nil {
-			if err := sc.tokenMeta.ProcessPage(ctx, chain, "ankr_token_transfer", rows); err != nil {
-				sc.log.Warn("token metadata page enrichment failed", "err", err)
-			}
-		}
-		if len(acts) > 0 {
-			if err := sc.writer.WriteActivity(ctx, acts); err != nil {
+		if len(batch.acts) > 0 {
+			if err := sc.writer.WriteActivity(ctx, batch.acts); err != nil {
 				return 0, 0, err
 			}
 		}
-		return minB, maxB, nil
 	case "nft_transfers":
-		batch := make([]ingest.NftTransferRow, 0, len(rows))
-		for _, raw := range rows {
-			r, err := ingest.NormalizeNftTransfer(raw, chain, "ankr")
-			if err != nil {
-				return 0, 0, err
-			}
-			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
-			batch = append(batch, r)
+		if err := sc.writer.WriteNftTransfers(ctx, batch.nfts); err != nil {
+			return 0, 0, err
 		}
-		return minB, maxB, sc.writer.WriteNftTransfers(ctx, batch)
 	case "logs":
-		batch := make([]ingest.LogRow, 0, len(rows))
-		for _, raw := range rows {
-			r, err := ingest.NormalizeLog(raw, chain, "ankr")
-			if err != nil {
-				return 0, 0, err
-			}
-			// §29：topic0 → event name/signature（同样只读本地索引）
-			sc.resolveEvent(&r)
-			trackBlocks(&minB, &maxB, int64(r.BlockNumber))
-			batch = append(batch, r)
+		if err := sc.writer.WriteLogs(ctx, batch.logRows); err != nil {
+			return 0, 0, err
 		}
-		return minB, maxB, sc.writer.WriteLogs(ctx, batch)
 	case "balances":
-		batch := make([]ingest.BalanceRow, 0, len(rows))
-		for _, raw := range rows {
-			r, err := ingest.NormalizeBalance(raw, chain, address, uint64(sh.ToBlock), "ankr")
-			if err != nil {
+		if err := sc.writer.WriteBalances(ctx, batch.bals); err != nil {
+			return 0, 0, err
+		}
+	case "internal_transactions":
+		if err := sc.writer.WriteInternalTransfers(ctx, batch.internals); err != nil {
+			return 0, 0, err
+		}
+		if len(batch.acts) > 0 {
+			if err := sc.writer.WriteActivity(ctx, batch.acts); err != nil {
 				return 0, 0, err
 			}
-			batch = append(batch, r)
 		}
-		return 0, 0, sc.writer.WriteBalances(ctx, batch)
 	}
-	return minB, maxB, nil
+	return batch.minB, batch.maxB, nil
 }
 
-// resolveMethod 在入库前补齐 Method 轻量字段（§16）。
+// resolveMethod 在入库前补齐 Method 轻量字段。
 func (sc *Scheduler) resolveMethod(ctx context.Context, chain string, r *ingest.TxRow) {
 	if sc.methodResolver == nil {
 		return
@@ -599,14 +1065,13 @@ func (sc *Scheduler) resolveMethod(ctx context.Context, chain string, r *ingest.
 		TxHash: r.TxHash, Value: r.ValueRaw, ToIsNull: r.To == "",
 	})
 	if err != nil {
-		// 解析失败绝不能让交易入库失败（§36/§62-6）
 		sc.log.Debug("method resolve failed", "tx_hash", r.TxHash, "err", err)
 		return
 	}
 	r.ApplyMethod(res)
 }
 
-// resolveEvent 事件签名解析（§29）。
+// resolveEvent 事件签名解析。
 func (sc *Scheduler) resolveEvent(r *ingest.LogRow) {
 	if sc.methodRegistry == nil || len(r.Topics) == 0 {
 		return
@@ -657,10 +1122,9 @@ func pageStateToMap(st *ankr.PagePolicyState) map[string]any {
 	return m
 }
 
-// splitShardRange §20/§43：最小 pageSize 仍反复失败 → 拆成两半；原 Shard 不标 COMPLETE。
+// splitShardRange 最小 pageSize 仍反复失败 → 拆成两半；原 Shard 不标 COMPLETE。
 func (sc *Scheduler) splitShardRange(ctx context.Context, sh model.Shard) {
 	if sh.ToBlock-sh.FromBlock < 2 {
-		// 无法再拆（含 live/full 0..0）：标记可重试，等下次调度
 		_, _ = sc.store.FailShard(ctx, sh.ID, "range unsplittable, retry later", true)
 		return
 	}
@@ -669,6 +1133,7 @@ func (sc *Scheduler) splitShardRange(ctx context.Context, sh model.Shard) {
 		JobID: sh.JobID, SubjectID: sh.SubjectID, DatasetID: sh.DatasetID, Dataset: sh.Dataset,
 		FromTimestamp: sh.FromTimestamp, ToTimestamp: sh.ToTimestamp,
 		Status: model.ShardPending, Priority: sh.Priority, MaxRetries: sh.MaxRetries,
+		PageState: sh.PageState,
 	}
 	first, second := base, base
 	first.FromBlock, first.ToBlock = sh.FromBlock, mid
@@ -678,7 +1143,6 @@ func (sc *Scheduler) splitShardRange(ctx context.Context, sh model.Shard) {
 		_, _ = sc.store.FailShard(ctx, sh.ID, "split failed: "+err.Error(), true)
 		return
 	}
-	// 已完成页保留在 ClickHouse（幂等去重）；本 shard 不标 COMPLETE、不提交 Coverage
 	_ = sc.store.CancelShard(ctx, sh.ID)
 	sc.publish("events.shards."+sh.JobID, map[string]any{
 		"type": "shard_status", "shard_id": sh.ID, "status": model.ShardCancelled,
@@ -701,22 +1165,20 @@ func trackBlocks(minB, maxB *int64, b int64) {
 	}
 }
 
-// commitCoverage 数据全部持久化 + 校验之后才提交 Coverage（不允许提前标记 COMPLETE）。
+// commitCoverage 数据全部持久化 + 校验之后才提交 Coverage（不允许提前标记 COMPLETE，§7）。
 func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, address string, minBlock, maxBlock, rows, bytes int64) {
 	if rows == 0 {
-		// 未下载到任何行：不能证明该区间已覆盖，不提交（防止 Provider 边界异常导致误标）
 		sc.log.Info("coverage skipped (zero rows)", "shard_id", sh.ID, "dataset", sh.Dataset)
 		return
 	}
 	if sh.Dataset == "balances" {
-		if err := sc.store.AddCoverage(ctx, chain, address, "balances", "ankr", 0, sh.ToBlock, rows, bytes, sh.ToBlock); err != nil {
+		if err := sc.store.AddCoverage(ctx, chain, address, "balances", sc.sourceProviderForDataset(chain, sh.Dataset), 0, sh.ToBlock, rows, bytes, sh.ToBlock); err != nil {
 			sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)
 		}
 		return
 	}
 	from, to := sh.FromBlock, sh.ToBlock
 	if from == 0 && to == 0 {
-		// live/时间范围：只提交观察到的内部块（边界块保守保留，重复下载幂等去重）
 		if maxBlock-minBlock >= 2 {
 			from, to = minBlock+1, maxBlock-1
 		} else {
@@ -724,7 +1186,7 @@ func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, 
 			return
 		}
 	}
-	if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, "ankr", from, to, rows, bytes, sh.ToBlock); err != nil {
+	if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, rows, bytes, sh.ToBlock); err != nil {
 		sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)
 	}
 }
@@ -736,7 +1198,6 @@ func (sc *Scheduler) recompute(ctx context.Context, sh model.Shard) {
 	if err := sc.store.RecomputeSubject(ctx, sh.SubjectID); err != nil {
 		sc.log.Error("recompute subject failed", "err", err)
 	}
-	// V1.2：同步 workspace_addresses 统计与状态（§46）
 	if sc.meta != nil {
 		job, jerr := sc.store.GetJob(ctx, sh.JobID)
 		if jerr == nil {

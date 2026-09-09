@@ -50,7 +50,7 @@ func (m *MockProvider) Fetch(ctx context.Context, req provider.FetchRequest) (pr
 	if req.Dataset == "balances" {
 		rows := m.mockBalances(req.Chain, req.Address)
 		m.hook(ctx, req, "ankr_getAccountBalance", "ok", time.Since(start), len(rows))
-		return provider.FetchResult{Rows: rows, HasMore: false}, nil
+		return provider.FetchResult{Rows: rows, HasMore: false, RequestID: req.RequestID, RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock, RequestPageSize: req.PageSize, AttemptNo: req.AttemptNo, StartedAt: time.Now(), BodyCompleteAt: time.Now()}, nil
 	}
 
 	from, to := uint64(1), uint64(1000)
@@ -80,7 +80,7 @@ func (m *MockProvider) Fetch(ctx context.Context, req provider.FetchRequest) (pr
 		pTo = to
 	}
 	if pFrom > to {
-		return provider.FetchResult{Rows: nil, HasMore: false}, nil
+		return provider.FetchResult{Rows: nil, HasMore: false, RequestID: req.RequestID, RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock, RequestPageSize: req.PageSize, AttemptNo: req.AttemptNo, StartedAt: time.Now(), BodyCompleteAt: time.Now()}, nil
 	}
 	rows := m.mockRows(req, pFrom, pTo)
 	next := ""
@@ -95,7 +95,7 @@ func (m *MockProvider) Fetch(ctx context.Context, req provider.FetchRequest) (pr
 		return provider.FetchResult{}, ctx.Err()
 	case <-time.After(20 * time.Millisecond):
 	}
-	return provider.FetchResult{Rows: rows, NextPageToken: next, HasMore: hasMore}, nil
+	return provider.FetchResult{Rows: rows, NextPageToken: next, HasMore: hasMore, RequestID: req.RequestID, RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock, RequestPageSize: req.PageSize, AttemptNo: req.AttemptNo, StartedAt: time.Now(), BodyCompleteAt: time.Now()}, nil
 }
 
 func (m *MockProvider) hook(ctx context.Context, req provider.FetchRequest, method, status string, elapsed time.Duration, rows int) {

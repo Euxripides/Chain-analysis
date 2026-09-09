@@ -10,6 +10,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
 var addrRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
@@ -23,27 +24,76 @@ type MetaUpserter interface {
 }
 
 type Service struct {
-	Store         *store.Store
-	HeadFn        HeadFn
-	Meta          MetaUpserter
-	ValidateChain ChainValidator
+	Store                   *store.Store
+	HeadFn                  HeadFn
+	Meta                    MetaUpserter
+	ValidateChain           ChainValidator
+	TronProvider            string
+	TronDefaultProvider     string
+	TronDatasetProviders    map[string]string
+	TronMaxTxAutoScan       uint64
+	TronMaxInternalAutoScan uint64
 }
 
 func New(st *store.Store, headFn HeadFn) *Service {
 	return &Service{Store: st, HeadFn: headFn}
 }
 
+func (s *Service) tronProviderFor(dataset string) string {
+	if s.TronDatasetProviders != nil {
+		if p := strings.ToLower(strings.TrimSpace(s.TronDatasetProviders[dataset])); p != "" {
+			return p
+		}
+	}
+	if p := strings.ToLower(strings.TrimSpace(s.TronDefaultProvider)); p != "" {
+		return p
+	}
+	if p := strings.ToLower(strings.TrimSpace(s.TronProvider)); p != "" {
+		return p
+	}
+	return "ankr"
+}
+
+func (s *Service) tronNeedsAnkr(datasets []string) bool {
+	for _, dataset := range datasets {
+		if s.tronProviderFor(dataset) == "ankr" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) validateTronFullRange(chain string, datasets []string, spec RangeSpec) error {
+	if strings.EqualFold(chain, "tron") && (spec.Type == "" || spec.Type == "full") && s.tronNeedsAnkr(datasets) {
+		return errors.New("TRON datasets using Ankr require an explicit block or time range")
+	}
+	return nil
+}
+
 // NormalizeAndDedupeAddresses 校验 + 小写 + 去重（无效地址跳过，前端已做格式校验与计数展示）。
 func NormalizeAndDedupeAddresses(in []string) ([]string, error) {
+	return NormalizeAndDedupeAddressesForChain("", in)
+}
+
+func NormalizeAndDedupeAddressesForChain(chain string, in []string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	for _, a := range in {
-		a = strings.TrimSpace(strings.ToLower(a))
+		a = strings.TrimSpace(a)
 		if a == "" {
 			continue
 		}
-		if !addrRe.MatchString(a) {
-			continue
+		if strings.EqualFold(chain, "tron") {
+			var err error
+			a, err = tron.NormalizeTronAddress(a)
+			if err != nil {
+				continue
+			}
+		} else {
+			a = strings.ToLower(a)
+			if !addrRe.MatchString(a) {
+				continue
+			}
 		}
 		if !seen[a] {
 			seen[a] = true
@@ -60,6 +110,12 @@ func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec
 	r := model.DownloadJobRange{RangeType: spec.Type}
 	switch spec.Type {
 	case "full", "":
+		// Keep the legacy direct-call guard for services that only expose the
+		// historical global provider field. API callers configure dataset-level
+		// routing and are validated by validateTronFullRange before this method.
+		if strings.EqualFold(chain, "tron") && strings.EqualFold(s.TronProvider, "ankr") && s.TronDefaultProvider == "" && len(s.TronDatasetProviders) == 0 {
+			return r, errors.New("TRON with Ankr Node API requires an explicit block or time range")
+		}
 		r.RangeType = "full"
 		if s.HeadFn != nil {
 			head, err := s.HeadFn(ctx, chain)
@@ -112,6 +168,41 @@ func (s *Service) wantInterval(job *model.DownloadJob) (store.BlockInterval, boo
 	return store.BlockInterval{From: 0, To: 0}, false
 }
 
+func (s *Service) validateTronAutoScan(chain string, datasets []string, rng model.DownloadJobRange) error {
+	if !strings.EqualFold(chain, "tron") || !s.tronNeedsAnkr(datasets) {
+		return nil
+	}
+	var blocks uint64
+	switch rng.RangeType {
+	case "block":
+		if rng.FromBlock == nil || rng.ToBlock == nil || *rng.ToBlock < *rng.FromBlock {
+			return nil
+		}
+		blocks = uint64(*rng.ToBlock-*rng.FromBlock) + 1
+	case "time":
+		if rng.FromTimestamp == nil || rng.ToTimestamp == nil || !rng.ToTimestamp.After(*rng.FromTimestamp) {
+			return nil
+		}
+		// TRON targets roughly three-second blocks. This is an admission guard;
+		// the provider repeats the exact resolved-block check before acquisition.
+		seconds := uint64(rng.ToTimestamp.Sub(*rng.FromTimestamp).Seconds())
+		blocks = (seconds + 2) / 3
+	}
+	for _, item := range datasets {
+		switch item {
+		case "transactions":
+			if s.TronMaxTxAutoScan > 0 && blocks > s.TronMaxTxAutoScan {
+				return fmt.Errorf("TRON transactions scan estimates %d blocks; production auto-scan limit is %d", blocks, s.TronMaxTxAutoScan)
+			}
+		case "internal_transactions":
+			if s.TronMaxInternalAutoScan > 0 && blocks > s.TronMaxInternalAutoScan {
+				return fmt.Errorf("TRON internal scan estimates %d blocks; production auto-scan limit is %d", blocks, s.TronMaxInternalAutoScan)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset string, want store.BlockInterval, bounded bool) (SubjectDatasetCoverage, error) {
 	rows, err := s.Store.ListCoverage(ctx, chain, subject, dataset)
 	if err != nil {
@@ -148,7 +239,8 @@ func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset strin
 }
 
 func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePreviewResponse, error) {
-	subjects, err := NormalizeAndDedupeAddresses(req.Subjects)
+	chain := sanitizeChain(req.Chain)
+	subjects, err := NormalizeAndDedupeAddressesForChain(chain, req.Subjects)
 	if err != nil {
 		return nil, err
 	}
@@ -156,16 +248,21 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 	if err != nil {
 		return nil, err
 	}
-	chain := sanitizeChain(req.Chain)
 	if s.ValidateChain != nil {
 		if err := s.ValidateChain(chain); err != nil {
 			return nil, err
 		}
 	}
+	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
+		return nil, err
+	}
 	resp := &CoveragePreviewResponse{Chain: chain, Datasets: datasets, Items: []SubjectDatasetCoverage{}}
 	tmpJob := &model.DownloadJob{}
 	rng, err := s.ResolveRange(ctx, chain, req.Range)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.validateTronAutoScan(chain, datasets, rng); err != nil {
 		return nil, err
 	}
 	tmpJob.RangeType = rng.RangeType
@@ -194,13 +291,14 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 // Ensure 创建下载任务（Worker 端 Planner 负责 Coverage 缺口 → Shard 规划）。
 func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureResponse, error) {
 	if req.Concurrency != nil {
-		return nil, fmt.Errorf("numeric concurrency is not supported; use performance_mode")
+		return nil, errors.New("numeric concurrency is not accepted; use performance_mode safe, fast, or turbo")
 	}
 	performanceMode, err := model.ParsePerformanceMode(req.PerformanceMode)
 	if err != nil {
 		return nil, err
 	}
-	subjects, err := NormalizeAndDedupeAddresses(req.Subjects)
+	chain := sanitizeChain(req.Chain)
+	subjects, err := NormalizeAndDedupeAddressesForChain(chain, req.Subjects)
 	if err != nil {
 		return nil, err
 	}
@@ -208,11 +306,13 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
-	chain := sanitizeChain(req.Chain)
 	if s.ValidateChain != nil {
 		if err := s.ValidateChain(chain); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
+		return nil, err
 	}
 	priority := req.Priority
 	if priority <= 0 {
@@ -225,8 +325,14 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateTronAutoScan(chain, datasets, rng); err != nil {
+		return nil, err
+	}
 	now := time.Now()
-	day := now.UTC()
+	// Job numbers are formatted in the process business timezone, so the
+	// counting window must use that same local day. Using UTC here reused
+	// DL-YYYYMMDD-0001 between local midnight and UTC midnight.
+	day := now
 	n, err := s.Store.CountJobNoForDay(ctx, day)
 	if err != nil {
 		return nil, err
@@ -244,6 +350,11 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		Status:        model.JobCreated,
 		Priority:      priority,
 		Source:        req.Source,
+		Mode:          req.Mode,
+		RequestedMode: performanceMode,
+		EffectiveMode: performanceMode,
+		ModeReason:    "user_selected",
+		ModeChangedAt: now,
 		Chain:         chain,
 		RangeType:     rng.RangeType,
 		FromBlock:     rng.FromBlock,
@@ -252,9 +363,6 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		ToTimestamp:   rng.ToTimestamp,
 		Datasets:      datasets,
 		ReusePolicy:   req.ReusePolicy,
-		RequestedMode: performanceMode,
-		EffectiveMode: performanceMode,
-		ModeReason:    modeReason(req.PerformanceMode),
 		HeadBlock:     rng.HeadBlock,
 		ResolvedAt:    &resolvedAt,
 		Stats: map[string]any{
@@ -299,7 +407,6 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	}
 	s.Store.InsertAudit(ctx, nil, "dataset.ensure", "download_job", job.ID, map[string]any{
 		"subjects": len(subjects), "datasets": datasets, "chain": chain, "range_type": rng.RangeType,
-		"requested_mode": performanceMode,
 	})
 	jobID := job.ID
 	return &EnsureResponse{
@@ -308,13 +415,6 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		JobID:      &jobID,
 		Coverage:   preview.OverallRatio,
 	}, nil
-}
-
-func modeReason(raw string) string {
-	if strings.TrimSpace(raw) == "" {
-		return "system_default"
-	}
-	return "user_selected"
 }
 
 func sanitizeDatasets(in []string) ([]string, error) {

@@ -12,16 +12,21 @@ import (
 
 // PagePolicyState 每个 (chain|dataset|subject) 的自适应状态（§17），可序列化进 Checkpoint。
 type PagePolicyState struct {
-	CurrentPageSize        int       `json:"current_page_size"`
-	ConsecutiveSuccess     int       `json:"consecutive_success"`
-	ConsecutiveFastSuccess int       `json:"consecutive_fast_success"`
-	LastBodyBytes          int64     `json:"last_response_bytes"`
-	LastDurationMs         int64     `json:"last_duration_ms"`
-	TimeoutCount           int       `json:"timeout_count"`
-	TooLargeCount          int       `json:"too_large_count"`
-	LastFailedLevel        int       `json:"last_failed_page_level"`
-	CooldownRemaining      int       `json:"cooldown_remaining"`
-	UpdatedAt              time.Time `json:"updated_at"`
+	CurrentPageSize        int   `json:"current_page_size"`
+	ConsecutiveSuccess     int   `json:"consecutive_success"`
+	ConsecutiveFastSuccess int   `json:"consecutive_fast_success"`
+	LastBodyBytes          int64 `json:"last_response_bytes"`
+	LastDurationMs         int64 `json:"last_duration_ms"`
+	TimeoutCount           int   `json:"timeout_count"`
+	TooLargeCount          int   `json:"too_large_count"`
+	LastFailedLevel        int   `json:"last_failed_page_level"`
+	CooldownRemaining      int   `json:"cooldown_remaining"`
+	// 画像累计（§32）：timeout_rate / oversized_rate / 平均延迟
+	Successes     int64     `json:"successes"`
+	Failures      int64     `json:"failures"`
+	TotalTimeout  int64     `json:"total_timeouts"`
+	TotalTooLarge int64     `json:"total_too_large"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // PageDecision 一页失败后的控制器决策（§21 矩阵）。
@@ -117,6 +122,7 @@ func (p *PagePolicy) Restore(key string, st *PagePolicyState) {
 		return
 	}
 	cp := *st
+	cp.CurrentPageSize = clampLevel(p.levels, cp.CurrentPageSize)
 	cp.UpdatedAt = time.Now()
 	p.states[key] = &cp
 }
@@ -140,6 +146,7 @@ func (p *PagePolicy) OnSuccess(key, dataset string, pageSize, bodyBytes int64, d
 		s.CurrentPageSize = p.InitialSize(dataset)
 	}
 	s.ConsecutiveSuccess++
+	s.Successes++
 	fast := bodyBytes < a.PageUpMaxBodyBytes && duration < a.PageUpMaxDuration
 	if fast {
 		s.ConsecutiveFastSuccess++
@@ -176,7 +183,14 @@ func (p *PagePolicy) OnError(key, dataset string, pe *provider.Error, pageSize i
 	}
 	s.ConsecutiveSuccess = 0
 	s.ConsecutiveFastSuccess = 0
+	s.Failures++
 	s.UpdatedAt = time.Now()
+	if pe.Class == provider.ClassRequestTimeout {
+		s.TotalTimeout++
+	}
+	if pe.Class == provider.ClassResponseTooLarge {
+		s.TotalTooLarge++
+	}
 	d := PageDecision{NextPageSize: s.CurrentPageSize, RetryAfter: pe.RetryAfter}
 
 	switch pe.Class {
@@ -231,6 +245,14 @@ func (p *PagePolicy) OnError(key, dataset string, pe *provider.Error, pageSize i
 	case provider.ClassInvalidJSON, provider.ClassUpstream:
 		// 有限重试（§21），不动 pageSize
 		d.Backoff = 500 * time.Millisecond
+
+	case provider.ClassBodyTruncated:
+		// 传输层截断：短抖动重试同一逻辑页（§66），不动 pageSize
+		d.Backoff = 200 * time.Millisecond
+
+	case provider.ClassBodyIdleTimeout:
+		// Body Idle：Provider 拥塞或超大响应，短抖动重试（§22/§68）
+		d.Backoff = 300 * time.Millisecond
 	}
 
 	// 状态落定：CurrentPageSize 与决策同步（Checkpoint/Resume 依赖）
