@@ -84,6 +84,28 @@ func TestClientPaginationRetryAndUsage(t *testing.T) {
 	}
 }
 
+func TestCurrentBalancesReturnsNativeAndTRC20BaseUnits(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/accounts/T9ygmX26tszHxPiHvbPwjDb92UkfC4YXPU" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"success":true,"data":[{"balance":1200000,"trc20":[{"TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj":"1545196958"}]}]}`))
+	}))
+	defer server.Close()
+	c, err := New(Options{BaseURL: server.URL, RequestTimeout: 2 * time.Second, ConnectTimeout: time.Second, InitialConcurrency: 1, MaxConcurrency: 1}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.http = server.Client()
+	balances, err := c.CurrentBalances(context.Background(), "tron", "T9ygmX26tszHxPiHvbPwjDb92UkfC4YXPU")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(balances) != 2 || !balances[0].Native || balances[0].RawBalance != "1200000" || balances[1].TokenAddress != "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj" || balances[1].RawBalance != "1545196958" {
+		t.Fatalf("unexpected balances %#v", balances)
+	}
+}
+
 func TestClientTransactionsUsesFingerprintAddressIndex(t *testing.T) {
 	var gotPath string
 	var gotQuery = make(chan string, 1)
@@ -220,6 +242,44 @@ func TestClientTRC20ActivityBoundsUsesOldestAndNewestProbes(t *testing.T) {
 	}
 	if first.UnixMilli() != oldest || last.UnixMilli() != newest {
 		t.Fatalf("bounds=%d..%d want %d..%d", first.UnixMilli(), last.UnixMilli(), oldest, newest)
+	}
+	profile, err := c.TRC20ActivityProfile(context.Background(), testAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.First.UnixMilli() != oldest || profile.Latest.UnixMilli() != newest || profile.ExactRows != 1 || profile.HasMore {
+		t.Fatalf("unexpected exact profile: %+v", profile)
+	}
+}
+
+func TestMaxTRC20SampleDensityUsesBoundedTimeWindow(t *testing.T) {
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	samples := []time.Time{start, start.Add(12 * time.Hour), start.Add(24 * time.Hour)}
+	if got := maxTRC20SampleDensity(samples); got != 3 {
+		t.Fatalf("density=%v want 3 rows/day", got)
+	}
+	burst := []time.Time{start, start}
+	if got := maxTRC20SampleDensity(burst); got != 48 {
+		t.Fatalf("same-timestamp density=%v want one-hour-floor density 48", got)
+	}
+}
+
+func TestClientTRC20ActivityProfileDetectsEmptyAddress(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "data": []any{}, "meta": map[string]any{}})
+	}))
+	defer server.Close()
+	c, err := New(Options{BaseURL: server.URL, RequestTimeout: time.Second, InitialConcurrency: 2, NormalConcurrency: 2, MaxConcurrency: 2, DailyRequestBudget: 10}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.http = server.Client()
+	profile, err := c.TRC20ActivityProfile(context.Background(), testAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.Empty || profile.ExactRows != 0 || !profile.First.IsZero() || !profile.Latest.IsZero() {
+		t.Fatalf("unexpected empty profile: %+v", profile)
 	}
 }
 

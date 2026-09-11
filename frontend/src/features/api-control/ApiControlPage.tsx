@@ -404,10 +404,10 @@ function ProvidersTab({ filter }: { filter: string }) {
     mutationFn: (mode: PerformanceMode) => api.setAnkrPerformanceMode(mode),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ankr-fetch-runtime"] }),
   });
-  const connect = useMutation({
-    mutationFn: () =>
+  const connect = useMutation<{ authorization_url: string }, Error, boolean>({
+    mutationFn: (resetConnection = false) =>
       apiControlHttp<{ authorization_url: string }>(
-        "/provider-accounts/ankr/connect",
+        `/provider-accounts/ankr/connect${resetConnection ? "?reset_connection=true" : ""}`,
         { method: "POST", body: "{}" },
       ),
     onSuccess: (data) => window.location.assign(data.authorization_url),
@@ -486,7 +486,7 @@ function ProvidersTab({ filter }: { filter: string }) {
                   <button
                     className="ac-primary"
                     disabled={!a.configured || connect.isPending}
-                    onClick={() => connect.mutate()}
+                    onClick={() => connect.mutate(true)}
                   >
                     <Link2 size={14} />
                     连接 Ankr 官方账户
@@ -503,7 +503,7 @@ function ProvidersTab({ filter }: { filter: string }) {
                     <button
                       className="ac-muted-action"
                       disabled={connect.isPending}
-                      onClick={() => connect.mutate()}
+                      onClick={() => connect.mutate(true)}
                     >
                       重新授权
                     </button>

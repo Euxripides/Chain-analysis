@@ -3,6 +3,20 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep the investigation shell small. Heavy graph/table/chart/export
+        // engines are cached independently and loaded only by their routes.
+        manualChunks(id) {
+          if (id.includes('node_modules/echarts')) return 'charts'
+          if (id.includes('node_modules/ag-grid')) return 'data-grid'
+          if (id.includes('node_modules/xlsx')) return 'xlsx'
+          if (id.includes('node_modules/react') || id.includes('node_modules/@tanstack')) return 'react-vendor'
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',

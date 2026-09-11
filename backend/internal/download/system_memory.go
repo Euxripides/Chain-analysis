@@ -102,7 +102,12 @@ func (g *memoryGuard) Evaluate(s systemMemorySnapshot, rssHard, memWarn, memProt
 		g.oomBaseline = s.CgroupOOM
 		g.oomKillBaseline = s.CgroupOOMKill
 	}
-	swapGrowing := g.haveLast && (s.WorkerSwapBytes > g.last.WorkerSwapBytes || s.PSWAPIn > g.last.PSWAPIn || s.PSWAPOut > g.last.PSWAPOut)
+	// /proc/vmstat pswpin/pswpout are host-wide counters. Treating their
+	// movement as worker pressure means an unrelated process can permanently
+	// protect the downloader as soon as this process has any historical swap.
+	// Require the worker's own VmSwap to grow; keep the system counters only as
+	// telemetry so other workloads cannot trip this guard.
+	swapGrowing := g.haveLast && s.WorkerSwapBytes > g.last.WorkerSwapBytes
 	if swapGrowing {
 		g.swapGrowthConsecutive++
 	} else {

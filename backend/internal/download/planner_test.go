@@ -5,7 +5,50 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
+
+func TestTronIncrementalPlanningUsesAddressDatasetWatermark(t *testing.T) {
+	now := time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC)
+	through := now.Add(-2 * time.Hour)
+	job := &model.DownloadJob{Chain: "tron", RangeType: "full"}
+	planned, current := tronIncrementalPlanningJob(job, &store.AddressDatasetSyncState{CompleteThrough: through}, now)
+	if current {
+		t.Fatal("two-hour tail was incorrectly treated as current")
+	}
+	if got, want := *planned.FromTimestamp, through.Add(time.Millisecond); !got.Equal(want) {
+		t.Fatalf("tail starts at %s, want %s", got, want)
+	}
+	if got, want := *planned.ToTimestamp, now.Add(time.Minute); !got.Equal(want) {
+		t.Fatalf("tail ends at %s, want %s", got, want)
+	}
+	if planned.RangeType != "full" {
+		t.Fatalf("range type changed to %q", planned.RangeType)
+	}
+}
+
+func TestTronIncrementalPlanningKeepsNewAddressOnFullHistory(t *testing.T) {
+	job := &model.DownloadJob{Chain: "tron", RangeType: "full"}
+	planned, current := tronIncrementalPlanningJob(job, nil, time.Now())
+	if current || planned != job || planned.FromTimestamp != nil || planned.ToTimestamp != nil {
+		t.Fatal("new address must retain full-history planning")
+	}
+}
+
+func TestLocalTRONQuantilesRequireCompleteSyncWatermarkForFullHistory(t *testing.T) {
+	job := &model.DownloadJob{Chain: "tron", RangeType: "full", ReusePolicy: "prefer_local", Source: "chatgpt_mcp"}
+	if localTRONQuantilesTrusted(job, nil) {
+		t.Fatal("partial local rows without a sync watermark must not shape full-history shards")
+	}
+	if !localTRONQuantilesTrusted(job, &store.AddressDatasetSyncState{}) {
+		t.Fatal("a durable sync watermark should allow local quantile planning")
+	}
+	job.RangeType = "time"
+	if !localTRONQuantilesTrusted(job, nil) {
+		t.Fatal("explicit time ranges may use their bounded local distribution")
+	}
+}
 
 func TestTronTimeIntervalsAreContiguousNonOverlappingAndModeBounded(t *testing.T) {
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -82,6 +125,46 @@ func TestTronColdActivityIntervalsUseTurboParallelismAndRemainContiguous(t *test
 	}
 	if !intervals[len(intervals)-1].From.Equal(latest.Add(time.Millisecond)) {
 		t.Fatalf("catch-up starts=%s want %s", intervals[len(intervals)-1].From, latest.Add(time.Millisecond))
+	}
+}
+
+func TestTronProfileShardCountKeepsExactSparseHistorySmall(t *testing.T) {
+	first := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	latest := first.Add(300 * 24 * time.Hour)
+	job := &model.DownloadJob{EffectiveMode: "fast"}
+	profile := provider.TRC20ActivityProfile{First: first, Latest: latest, ExactRows: 120, PeakRowsPerDay: 50}
+	if got := tronProfileShardCount(job, profile); got != 1 {
+		t.Fatalf("exact sparse shards=%d want 1", got)
+	}
+}
+
+func TestTronProfileShardCountExpandsDenseColdHistory(t *testing.T) {
+	first := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	latest := first.Add(365 * 24 * time.Hour)
+	job := &model.DownloadJob{EffectiveMode: "turbo"}
+	profile := provider.TRC20ActivityProfile{First: first, Latest: latest, PeakRowsPerDay: 30_000, HasMore: true}
+	if got := tronProfileShardCount(job, profile); got != 127 {
+		t.Fatalf("dense shards=%d want 127", got)
+	}
+}
+
+func TestTronProfileShardCountDoesNotOvershardOrdinaryColdHistory(t *testing.T) {
+	first := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	latest := first.Add(365 * 24 * time.Hour)
+	job := &model.DownloadJob{EffectiveMode: "fast"}
+	profile := provider.TRC20ActivityProfile{First: first, Latest: latest, PeakRowsPerDay: 40, HasMore: true}
+	if got := tronProfileShardCount(job, profile); got != 16 {
+		t.Fatalf("ordinary shards=%d want fast baseline 16", got)
+	}
+}
+
+func TestTronParallelPlanningOnlyAcceptsIndependentTimeDatasets(t *testing.T) {
+	subjects := []model.Subject{{ID: "a"}, {ID: "b"}}
+	if !tronParallelPlanningEligible(&model.DownloadJob{Chain: "tron", Datasets: []string{"transactions", "token_transfers"}}, subjects) {
+		t.Fatal("TRON address streams should be eligible for bounded parallel planning")
+	}
+	if tronParallelPlanningEligible(&model.DownloadJob{Chain: "tron", Datasets: []string{"balances"}}, subjects) {
+		t.Fatal("mixed planner paths must remain sequential")
 	}
 }
 

@@ -66,9 +66,23 @@ func (b *Bus) Publish(ctx context.Context, subject string, payload any) {
 	if err != nil {
 		return
 	}
-	if _, err := b.js.Publish(subject, data); err != nil {
+	if err := b.PublishRaw(ctx, subject, data, ""); err != nil {
 		b.log.Warn("nats publish failed", "subject", subject, "err", err)
 	}
+}
+
+// PublishRaw publishes an already encoded envelope. eventID is forwarded as
+// Nats-Msg-Id so JetStream deduplicates outbox retries.
+func (b *Bus) PublishRaw(ctx context.Context, subject string, data []byte, eventID string) error {
+	if !b.Enabled() {
+		return ErrDisabled
+	}
+	msg := &nats.Msg{Subject: subject, Data: data, Header: nats.Header{}}
+	if eventID != "" {
+		msg.Header.Set(nats.MsgIdHdr, eventID)
+	}
+	_, err := b.js.PublishMsg(msg, nats.Context(ctx))
+	return err
 }
 
 // Subscribe 订阅主题（DeliverNew：只接收新事件）。回调携带消息主题。

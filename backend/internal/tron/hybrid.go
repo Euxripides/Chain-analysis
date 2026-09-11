@@ -96,6 +96,15 @@ func (h *HybridProvider) TRC20ActivityBounds(ctx context.Context, address string
 	return time.Time{}, time.Time{}, &provider.Error{Provider: h.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity bounds unsupported"}
 }
 
+func (h *HybridProvider) TRC20ActivityProfile(ctx context.Context, address string) (provider.TRC20ActivityProfile, error) {
+	if resolver, ok := h.Primary.(interface {
+		TRC20ActivityProfile(context.Context, string) (provider.TRC20ActivityProfile, error)
+	}); ok {
+		return resolver.TRC20ActivityProfile(ctx, address)
+	}
+	return provider.TRC20ActivityProfile{}, &provider.Error{Provider: h.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity profile unsupported"}
+}
+
 func (h *HybridProvider) Name() string { return "tron-trc20-hybrid" }
 
 func (h *HybridProvider) Capabilities() provider.Capabilities {

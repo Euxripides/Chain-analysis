@@ -24,6 +24,7 @@ test('download page renders its primary workflow without browser errors', async 
   const errors = captureBrowserErrors(page)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '地址数据下载' })).toBeVisible()
+  await page.getByText('高级条件（可选）').click()
   await expect(page.getByRole('button', { name: '+ 新建案件' })).toBeVisible()
   await expect(page.getByRole('button', { name: '+ 新建标签' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Coverage 预览' })).toBeDisabled()
@@ -44,9 +45,21 @@ test('download page rejects missing and reversed block ranges', async ({ page })
   await expect(page.getByRole('button', { name: '创建下载任务' })).toBeEnabled()
 })
 
+test('download page exposes TRON and preserves a valid Base58 address', async ({ page }, testInfo) => {
+  await page.goto('/')
+  const selector = page.getByRole('combobox', { name: '链' })
+  await selector.click()
+  await page.getByRole('option', { name: 'TRON' }).click()
+  await expect(selector).toContainText('TRON')
+  await page.getByLabel('调查地址').fill('TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE')
+  await expect(page.getByText('1 个有效')).toBeVisible()
+  await expect(page.getByRole('button', { name: '创建下载任务' })).toBeEnabled()
+  await screenshot(page, `${testInfo.project.name}-tron-download.png`)
+})
+
 test('chain selectors show branded icons and every selectable chain has a live RPC route', async ({ page, request }, testInfo) => {
   const errors = captureBrowserErrors(page)
-  for (const chain of ['bsc', 'eth', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']) {
+  for (const chain of ['bsc', 'eth', 'tron', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']) {
     const response = await request.get(`/api/v1/chains/${chain}/head`)
     expect(response.status(), `${chain} RPC head endpoint`).toBe(200)
     const payload = await response.json()
@@ -61,8 +74,8 @@ test('chain selectors show branded icons and every selectable chain has a live R
     await expect(selector.locator('.chain-logo')).toBeVisible()
     await selector.click()
     const options = page.getByRole('listbox', { name: '链选项' }).getByRole('option')
-    await expect(options).toHaveCount(7)
-    await expect(options.locator('.chain-logo')).toHaveCount(7)
+    await expect(options).toHaveCount(8)
+    await expect(options.locator('.chain-logo')).toHaveCount(8)
     await screenshot(page, `${testInfo.project.name}-${screenshotName}-chain-icons.png`)
     if (route === '/') {
       await page.keyboard.press('End')

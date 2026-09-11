@@ -1,0 +1,18 @@
+[Unit]
+Description=Blockchain Platform MCP Server
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/mcp
+ExecStart=/usr/bin/env node dist/server.js
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/mcp.log
+StandardError=append:/tmp/mcp.log
+
+[Install]
+WantedBy=default.target

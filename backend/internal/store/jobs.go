@@ -21,7 +21,7 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 	var stats []byte
 	var cb *string
 	err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Mode, &j.RequestedMode, &j.EffectiveMode, &j.ModeReason, &j.ModeChangedAt, &j.Chain, &j.RangeType,
-		&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.HeadBlock, &cb, &j.Error, &stats,
+		&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.RequestFingerprint, &j.HeadBlock, &cb, &j.Error, &stats,
 		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 }
 
 const jobCols = "id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, " +
-	"from_timestamp, to_timestamp, datasets, reuse_policy, head_block, created_by, error, stats, " +
+	"from_timestamp, to_timestamp, datasets, reuse_policy, COALESCE(request_fingerprint,''), head_block, created_by, error, stats, " +
 	"organization_id, workspace_id, project_id, resolved_at, created_at, updated_at"
 
 // CreateJobWithSubjects 创建 Job 与 Subject（四级模型前两级）。
@@ -95,10 +95,10 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 	}
 	_, err = tx.Exec(ctx, "INSERT INTO download_jobs "+
 		"(id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, from_timestamp, to_timestamp, "+
-		" datasets, reuse_policy, head_block, created_by, organization_id, workspace_id, project_id, resolved_at, stats) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::jsonb)",
+		" datasets, reuse_policy, request_fingerprint, head_block, created_by, organization_id, workspace_id, project_id, resolved_at, stats) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NULLIF($19,''),$20,$21,$22,$23,$24,$25,$26::jsonb)",
 		j.ID, j.JobNo, j.Status, j.Priority, j.Source, mode, j.RequestedMode, j.EffectiveMode, j.ModeReason, j.ModeChangedAt, j.Chain, j.RangeType, j.FromBlock, j.ToBlock,
-		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.HeadBlock, j.CreatedBy,
+		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.RequestFingerprint, j.HeadBlock, j.CreatedBy,
 		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.ResolvedAt, stats)
 	if err != nil {
 		return nil, fmt.Errorf("insert job: %w", err)
@@ -121,6 +121,44 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 		rows = append(rows, r)
 	}
 	return rows, tx.Commit(ctx)
+}
+
+// FindReusableJob returns an active or completed job with the same normalized
+// request. The exact legacy match lets deployments reuse jobs created before
+// request fingerprints were introduced.
+func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeType string, fromBlock, toBlock *int64, fromTime, toTime *time.Time, datasets, subjects []string) (*model.DownloadJob, error) {
+	rows, err := s.Pool.Query(ctx, "SELECT "+jobCols+` FROM download_jobs j
+		WHERE (j.status IN ('CREATED','PLANNING','QUEUED','RUNNING','PAUSE_REQUESTED','PAUSED','RESUMING','WAITING_USER_CONFIRMATION')
+			OR (j.status='COMPLETED' AND (j.range_type<>'full' OR NOT EXISTS (
+				SELECT 1 FROM unnest($10::text[]) requested_subject(subject)
+				CROSS JOIN unnest($8::text[]) requested_dataset(dataset)
+				WHERE NOT EXISTS (SELECT 1 FROM address_dataset_sync_state sync
+					WHERE sync.chain=$2 AND sync.subject=requested_subject.subject
+					AND sync.dataset=requested_dataset.dataset AND sync.complete_through>=now())
+			))))
+		AND (j.request_fingerprint=$1 OR (
+			j.request_fingerprint IS NULL AND j.chain=$2 AND j.range_type=$3
+			AND j.from_block IS NOT DISTINCT FROM $4 AND j.to_block IS NOT DISTINCT FROM $5
+			AND j.from_timestamp IS NOT DISTINCT FROM $6 AND j.to_timestamp IS NOT DISTINCT FROM $7
+			AND j.datasets @> $8::text[] AND j.datasets <@ $8::text[]
+			AND (SELECT COUNT(*) FROM download_subjects ds WHERE ds.job_id=j.id)=$9
+			AND NOT EXISTS (SELECT 1 FROM unnest($10::text[]) wanted(subject)
+				WHERE NOT EXISTS (SELECT 1 FROM download_subjects ds WHERE ds.job_id=j.id AND ds.subject=wanted.subject))
+		)) ORDER BY (j.request_fingerprint=$1) DESC NULLS LAST, j.created_at DESC LIMIT 1`,
+		fingerprint, chain, rangeType, fromBlock, toBlock, fromTime, toTime, datasets, len(subjects), subjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, nil
+	}
+	job, err := scanJob(rows)
+	if err == nil && job.RequestFingerprint == "" {
+		_, _ = s.Pool.Exec(ctx, "UPDATE download_jobs SET request_fingerprint=$2 WHERE id=$1 AND request_fingerprint IS NULL", job.ID, fingerprint)
+		job.RequestFingerprint = fingerprint
+	}
+	return job, err
 }
 
 func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, error) {
@@ -473,6 +511,8 @@ func (s *Store) LeaseShardsOrdered(ctx context.Context, worker string, n int, le
 		"WHERE (status='PENDING' OR (status='FAILED_RETRYABLE' AND updated_at < now() - make_interval(secs => least(retries*30, 300)))) "+
 		"AND NOT EXISTS (SELECT 1 FROM download_jobs j WHERE j.id = download_shards.job_id AND j.status NOT IN ('RUNNING','QUEUED','RESUMING')) "+
 		"AND NOT EXISTS (SELECT 1 FROM download_subjects su WHERE su.id = download_shards.subject_id AND su.status NOT IN ('PENDING','RUNNING')) "+
+		"AND NOT EXISTS (SELECT 1 FROM download_datasets ds WHERE ds.id = download_shards.dataset_id AND ds.status NOT IN ('PENDING','RUNNING')) "+
+		"AND NOT EXISTS (SELECT 1 FROM download_volume_guards vg WHERE vg.dataset_id = download_shards.dataset_id AND vg.state IN ('WAITING_USER_CONFIRMATION','ABORTED_BY_USER')) "+
 		leaseOrderSQL(mode)+
 		"LIMIT $1 "+
 		"FOR UPDATE SKIP LOCKED "+
@@ -745,10 +785,16 @@ func (s *Store) RecomputeDataset(ctx context.Context, datasetID string) error {
 	}
 	stats, _ := json.Marshal(map[string]any{"downloaded_rows": rows})
 	// V1.2：合并而不是覆盖 —— download_datasets.stats 同时承载 Count 预估/决策与 actuals 回写
-	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=$2, progress=$3, "+
+	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=CASE WHEN status IN ('WAITING_USER_CONFIRMATION','ABORTED_BY_USER') THEN status ELSE $2 END, progress=$3, "+
 		"stats = COALESCE(stats,'{}'::jsonb) || $4::jsonb, updated_at=now() WHERE id=$1",
 		datasetID, status, progress, stats)
-	return err
+	if err != nil {
+		return err
+	}
+	if status == model.ItemCompleted {
+		return s.recordCompletedFullSync(ctx, datasetID)
+	}
+	return nil
 }
 
 // RecomputeSubject 按 Dataset 权重汇总 Subject 进度。
@@ -872,7 +918,7 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	}
 	// 终态由 Recompute 决定；运行态不受 pause/cancel 影响
 	switch jobStatus {
-	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobPaused, model.JobPauseReq:
+	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobAbortedByUser, model.JobWaitingUserConfirmation, model.JobPaused, model.JobPauseReq:
 		return progress, nil
 	}
 	if status == model.JobCompleted || status == model.JobPartialFailed {

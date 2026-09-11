@@ -11,6 +11,14 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
+func normalizeWorkspaceAddress(chain, address string) string {
+	address = strings.TrimSpace(address)
+	if strings.EqualFold(strings.TrimSpace(chain), "tron") {
+		return address
+	}
+	return strings.ToLower(address)
+}
+
 // ---- Workspace addresses ----
 
 func (s *Store) UpsertWorkspaceAddress(ctx context.Context, wsID, orgID, chain, addr, displayName, primaryCaseID string) error {
@@ -27,7 +35,7 @@ func (s *Store) UpsertWorkspaceAddress(ctx context.Context, wsID, orgID, chain, 
 		"ON CONFLICT (workspace_id, chain, normalized_address) "+
 		"DO UPDATE SET address=EXCLUDED.address, display_name=COALESCE(EXCLUDED.display_name, workspace_addresses.display_name), "+
 		"primary_case_id=COALESCE(EXCLUDED.primary_case_id, workspace_addresses.primary_case_id), updated_at=now()",
-		orgID, wsID, chain, strings.ToLower(addr), strings.ToLower(addr), dn, pc)
+		orgID, wsID, chain, strings.TrimSpace(addr), normalizeWorkspaceAddress(chain, addr), dn, pc)
 	return err
 }
 
@@ -115,7 +123,7 @@ func (s *Store) GetWorkspaceAddress(ctx context.Context, wsID, chain, addr strin
 		"wa.transaction_count, wa.token_transfer_count, wa.nft_transfer_count, wa.log_count, wa.total_activity_count, "+
 		"COALESCE(wa.first_data_block,0), COALESCE(wa.last_data_block,0), wa.first_data_at, wa.last_data_at, wa.last_sync_at, wa.sync_status, wa.updated_at "+
 		"FROM workspace_addresses wa WHERE wa.workspace_id=$1 AND wa.chain=$2 AND wa.normalized_address=$3",
-		wsID, chain, strings.ToLower(addr))
+		wsID, chain, normalizeWorkspaceAddress(chain, addr))
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +156,7 @@ func (s *Store) SyncWorkspaceAddressStats(ctx context.Context, wsID, orgID, chai
 	var tx, tt, nft, logs, total int64
 	var firstBlock, lastBlock int64
 	rows, err := s.Pool.Query(ctx, "SELECT dataset, COALESCE(SUM(row_count),0), MIN(from_block), MAX(to_block) "+
-		"FROM dataset_coverage WHERE chain=$1 AND subject=$2 AND status='COMPLETE' GROUP BY dataset", chain, strings.ToLower(addr))
+		"FROM dataset_coverage WHERE chain=$1 AND subject=$2 AND status='COMPLETE' GROUP BY dataset", chain, normalizeWorkspaceAddress(chain, addr))
 	if err != nil {
 		return err
 	}
@@ -194,13 +202,13 @@ func (s *Store) UpdateWorkspaceAddressStats(ctx context.Context, wsID, chain, ad
 		"first_data_block=COALESCE($9, first_data_block), last_data_block=GREATEST(COALESCE(last_data_block,0), $10), "+
 		"last_sync_at=now(), sync_status=$11, updated_at=now() "+
 		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3",
-		wsID, chain, strings.ToLower(addr), tx, tt, nft, logs, total, firstBlockArg, lastBlock, syncStatus)
+		wsID, chain, normalizeWorkspaceAddress(chain, addr), tx, tt, nft, logs, total, firstBlockArg, lastBlock, syncStatus)
 	return err
 }
 
 func (s *Store) SetWorkspaceAddressSyncStatus(ctx context.Context, wsID, chain, addr, status string) error {
 	_, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET sync_status=$4, updated_at=now() "+
-		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3", wsID, chain, strings.ToLower(addr), status)
+		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3", wsID, chain, normalizeWorkspaceAddress(chain, addr), status)
 	return err
 }
 

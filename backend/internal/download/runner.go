@@ -616,6 +616,29 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			}
 		}
 
+		if chain == "tron" && (sh.Dataset == "transactions" || sh.Dataset == "token_transfers") {
+			limits := sc.volumeGuardThresholds()
+			cost := sc.cfg.Ankr.CostPerRequestUSD
+			if providerName == "trongrid" {
+				cost = 0
+			}
+			guard, triggered, guardErr := sc.store.RecordVolumeCommit(ctx, sh, pageNo, int64(len(res.Rows)), 1, cost, minB, maxB, len(res.Rows) >= currentSize && res.HasMore, limits)
+			if guardErr != nil {
+				log.Error("volume guard accounting failed", "err", guardErr)
+			} else if triggered {
+				_ = sc.store.PauseShard(ctx, sh.ID)
+				sc.publish("events.jobs."+sh.JobID, map[string]any{
+					"type": "VOLUME_GUARD_TRIGGERED", "job_id": sh.JobID, "subject_id": sh.SubjectID,
+					"dataset": sh.Dataset, "actual_rows": guard.ActualRows, "projected_rows_low": guard.ProjectedRowsLow,
+					"projected_rows_mid": guard.ProjectedRowsMid, "projected_rows_high": guard.ProjectedRowsHigh,
+					"confidence": guard.Confidence, "reason": guard.Reason, "risk_level": guard.RiskLevel, "ts": time.Now(),
+				})
+				log.Warn("TRON address volume guard triggered", "subject", address, "actual_rows", guard.ActualRows,
+					"projected_rows", guard.ProjectedRowsMid, "confidence", guard.Confidence, "risk", guard.RiskLevel)
+				return
+			}
+		}
+
 		if !res.HasMore {
 			break
 		}
@@ -832,6 +855,18 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 		_ = sc.store.CancelShard(ctx, sh.ID)
 		return "cancelled", nil
 	}
+	datasetStatus, datasetErr := sc.store.DatasetGuardState(ctx, sh.DatasetID)
+	if datasetErr != nil {
+		return "continue", datasetErr
+	}
+	if datasetStatus == model.ItemWaitingUserConfirmation {
+		_ = sc.store.PauseShard(ctx, sh.ID)
+		return "paused", nil
+	}
+	if datasetStatus == model.ItemAbortedByUser {
+		_ = sc.store.CancelShard(ctx, sh.ID)
+		return "cancelled", nil
+	}
 	switch job.Status {
 	case model.JobPauseReq:
 		if err := sc.store.PauseShard(ctx, sh.ID); err == nil {
@@ -859,6 +894,13 @@ func (sc *Scheduler) jobControl(ctx context.Context, sh model.Shard) (string, er
 	default:
 	}
 	return "continue", nil
+}
+
+func (sc *Scheduler) volumeGuardThresholds() model.VolumeGuardThresholds {
+	g := sc.cfg.Tron.VolumeGuard
+	return model.VolumeGuardThresholds{Enabled: g.Enabled, WarnRows: g.WarnRows, HardActualRows: g.HardActualRows,
+		HardProjectedRows: g.HardProjectedRows, ExtremeRows: g.ExtremeRows, SuperExtremeRows: g.SuperExtremeRows,
+		ProjectedConfidence: g.ProjectedConfidence, ExtremeConfidence: g.ExtremeConfidence}
 }
 
 // fetchWithRetry 重试决策矩阵（§21/§27/§28）。

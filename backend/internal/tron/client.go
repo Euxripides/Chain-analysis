@@ -216,48 +216,102 @@ type pageResponse struct {
 	} `json:"meta"`
 }
 
-// TRC20ActivityBounds returns the oldest and newest indexed TRC20 event times
-// without downloading the history. The bounds include Approval events when
-// present; that is conservative and guarantees no Transfer is excluded.
-func (c *Client) TRC20ActivityBounds(ctx context.Context, address string) (time.Time, time.Time, error) {
+// TRC20ActivityProfile returns conservative activity bounds plus a bounded
+// density sample. Both edge probes fetch at most one normal page and run in
+// parallel, so cold-address planning does not walk the pagination chain.
+func (c *Client) TRC20ActivityProfile(ctx context.Context, address string) (provider.TRC20ActivityProfile, error) {
 	address, err := NormalizeTronAddress(address)
 	if err != nil {
-		return time.Time{}, time.Time{}, err
+		return provider.TRC20ActivityProfile{}, err
 	}
 	type result struct {
-		time time.Time
-		err  error
+		times   []time.Time
+		hasMore bool
+		err     error
 	}
 	results := make(chan result, 2)
 	for _, order := range []string{"block_timestamp,asc", "block_timestamp,desc"} {
 		order := order
 		go func() {
-			t, fetchErr := c.trc20Boundary(ctx, address, order)
-			results <- result{time: t, err: fetchErr}
+			times, hasMore, fetchErr := c.trc20BoundaryPage(ctx, address, order, 200)
+			results <- result{times: times, hasMore: hasMore, err: fetchErr}
 		}()
 	}
-	oldest, newest := <-results, <-results
-	if oldest.err != nil {
-		return time.Time{}, time.Time{}, oldest.err
+	a, b := <-results, <-results
+	if a.err != nil {
+		return provider.TRC20ActivityProfile{}, a.err
 	}
-	if newest.err != nil {
-		return time.Time{}, time.Time{}, newest.err
+	if b.err != nil {
+		return provider.TRC20ActivityProfile{}, b.err
 	}
-	if oldest.time.After(newest.time) {
-		oldest, newest = newest, oldest
+	all := append(append([]time.Time(nil), a.times...), b.times...)
+	if len(all) == 0 {
+		return provider.TRC20ActivityProfile{Empty: true}, nil
 	}
-	return oldest.time, newest.time, nil
+	first, latest := all[0], all[0]
+	for _, ts := range all[1:] {
+		if ts.Before(first) {
+			first = ts
+		}
+		if ts.After(latest) {
+			latest = ts
+		}
+	}
+	peak := maxTRC20SampleDensity(a.times, b.times)
+	profile := provider.TRC20ActivityProfile{First: first, Latest: latest, PeakRowsPerDay: peak, HasMore: a.hasMore || b.hasMore}
+	if !profile.HasMore {
+		// Both probes contain the complete result set. They overlap, so either
+		// page (not their sum) is the exact conservative event count.
+		profile.ExactRows = max(len(a.times), len(b.times))
+	}
+	return profile, nil
 }
 
-func (c *Client) trc20Boundary(ctx context.Context, address, order string) (time.Time, error) {
+// TRC20ActivityBounds keeps the narrow compatibility contract used by older
+// planners while sharing the richer two-page profile implementation.
+func (c *Client) TRC20ActivityBounds(ctx context.Context, address string) (time.Time, time.Time, error) {
+	profile, err := c.TRC20ActivityProfile(ctx, address)
+	return profile.First, profile.Latest, err
+}
+
+func maxTRC20SampleDensity(samples ...[]time.Time) float64 {
+	peak := 0.0
+	for _, times := range samples {
+		if len(times) == 0 {
+			continue
+		}
+		lo, hi := times[0], times[0]
+		for _, ts := range times[1:] {
+			if ts.Before(lo) {
+				lo = ts
+			}
+			if ts.After(hi) {
+				hi = ts
+			}
+		}
+		days := hi.Sub(lo).Hours() / 24
+		if days < 1.0/24 { // one-hour floor prevents same-block bursts from exploding
+			days = 1.0 / 24
+		}
+		if density := float64(len(times)) / days; density > peak {
+			peak = density
+		}
+	}
+	return peak
+}
+
+func (c *Client) trc20BoundaryPage(ctx context.Context, address, order string, limit int) ([]time.Time, bool, error) {
 	if err := c.acquire(ctx); err != nil {
-		return time.Time{}, err
+		return nil, false, err
 	}
 	defer c.release()
 	if _, err := c.quota.allow(ctx, "manual"); err != nil {
-		return time.Time{}, err
+		return nil, false, err
 	}
-	q := url.Values{"limit": {"1"}, "only_confirmed": {"true"}, "order_by": {order}}
+	if limit < 1 || limit > 200 {
+		limit = 200
+	}
+	q := url.Values{"limit": {strconv.Itoa(limit)}, "only_confirmed": {"true"}, "order_by": {order}}
 	endpoint := c.baseURL + "/v1/accounts/" + url.PathEscape(address) + "/transactions/trc20?" + q.Encode()
 	started := time.Now()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -279,18 +333,22 @@ func (c *Client) trc20Boundary(ctx context.Context, address, order string) (time
 	if err == nil && status >= 200 && status < 300 {
 		err = json.Unmarshal(body, &parsed)
 	}
-	if err != nil || status < 200 || status >= 300 || !parsed.Success || len(parsed.Data) == 0 {
-		c.record(ctx, provider.FetchRequest{Chain: "tron", Dataset: "token_transfers", Address: address, PageSize: 1}, "trc20_boundary", started, status, 0, "error", string(provider.ClassProviderInvalid), 0, len(body))
-		return time.Time{}, &provider.Error{Provider: c.Name(), Class: provider.ClassProviderInvalid, Message: "TronGrid TRC20 activity boundary unavailable", HTTPStatus: status, Cause: err}
+	if err != nil || status < 200 || status >= 300 || !parsed.Success {
+		c.record(ctx, provider.FetchRequest{Chain: "tron", Dataset: "token_transfers", Address: address, PageSize: limit}, "trc20_boundary", started, status, 0, "error", string(provider.ClassProviderInvalid), 0, len(body))
+		return nil, false, &provider.Error{Provider: c.Name(), Class: provider.ClassProviderInvalid, Message: "TronGrid TRC20 activity boundary unavailable", HTTPStatus: status, Cause: err}
 	}
-	var row struct {
-		BlockTimestamp int64 `json:"block_timestamp"`
+	times := make([]time.Time, 0, len(parsed.Data))
+	for _, raw := range parsed.Data {
+		var row struct {
+			BlockTimestamp int64 `json:"block_timestamp"`
+		}
+		if err := json.Unmarshal(raw, &row); err != nil || row.BlockTimestamp <= 0 {
+			return nil, false, &provider.Error{Provider: c.Name(), Class: provider.ClassProviderInvalid, Message: "TronGrid TRC20 activity boundary is missing timestamp", Cause: err}
+		}
+		times = append(times, time.UnixMilli(row.BlockTimestamp).UTC())
 	}
-	if err := json.Unmarshal(parsed.Data[0], &row); err != nil || row.BlockTimestamp <= 0 {
-		return time.Time{}, &provider.Error{Provider: c.Name(), Class: provider.ClassProviderInvalid, Message: "TronGrid TRC20 activity boundary is missing timestamp", Cause: err}
-	}
-	c.record(ctx, provider.FetchRequest{Chain: "tron", Dataset: "token_transfers", Address: address, PageSize: 1}, "trc20_boundary", started, status, 0, "success", "", 1, len(body))
-	return time.UnixMilli(row.BlockTimestamp).UTC(), nil
+	c.record(ctx, provider.FetchRequest{Chain: "tron", Dataset: "token_transfers", Address: address, PageSize: limit}, "trc20_boundary", started, status, 0, "success", "", len(times), len(body))
+	return times, parsed.Meta.Fingerprint != "", nil
 }
 
 func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
@@ -893,6 +951,54 @@ func (c *Client) AccountState(ctx context.Context, address string) (AccountKind,
 	}
 	c.record(ctx, provider.FetchRequest{Chain: "tron", Dataset: "account"}, "account", started, resp.StatusCode, 0, "success", "", 1, len(bodyBytes))
 	return AccountEOA, nil
+}
+
+// CurrentBalances returns the latest TRX and TRC20 account state from
+// TronGrid. TRC20 amounts remain in base units so the API can apply its
+// canonical local token metadata before formatting them.
+func (c *Client) CurrentBalances(ctx context.Context, chain, address string) ([]provider.CurrentBalance, error) {
+	if chain != "tron" {
+		return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassUnsupported, Message: "current balances only support chain=tron"}
+	}
+	canonical, err := NormalizeTronAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/accounts/"+url.PathEscape(canonical), nil)
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("TronGrid account HTTP %d", resp.StatusCode)
+	}
+	var body struct {
+		Data []struct {
+			Balance json.Number         `json:"balance"`
+			TRC20   []map[string]string `json:"trc20"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(resp.Body, 4<<20))
+	decoder.UseNumber()
+	if err := decoder.Decode(&body); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if len(body.Data) == 0 {
+		return []provider.CurrentBalance{{Native: true, RawBalance: "0", AsOfTime: now}}, nil
+	}
+	native := body.Data[0].Balance.String()
+	if native == "" {
+		native = "0"
+	}
+	out := []provider.CurrentBalance{{Native: true, RawBalance: native, AsOfTime: now}}
+	for _, item := range body.Data[0].TRC20 {
+		for contract, raw := range item {
+			out = append(out, provider.CurrentBalance{TokenAddress: contract, RawBalance: raw, AsOfTime: now})
+		}
+	}
+	return out, nil
 }
 
 func (c *Client) ResolveAddressTypes(ctx context.Context, chain string, addresses []string) (map[string]bool, error) {

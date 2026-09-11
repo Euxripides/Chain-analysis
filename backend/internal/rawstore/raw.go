@@ -75,6 +75,32 @@ func (s *Store) Put(ctx context.Context, key string, data []byte, contentType st
 	return info.Size, nil
 }
 
+// PutNamed stores a durable artifact outside the raw-ingestion bucket while
+// keeping object-storage details behind the storage adapter.
+func (s *Store) PutNamed(ctx context.Context, bucket, key string, data []byte, contentType string) (int64, error) {
+	if err := s.EnsureNamedBucket(ctx, bucket); err != nil {
+		return 0, err
+	}
+	info, err := s.client.PutObject(ctx, bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return 0, fmt.Errorf("put %s/%s: %w", bucket, key, err)
+	}
+	return info.Size, nil
+}
+
+func (s *Store) OpenNamed(ctx context.Context, bucket, key string) (io.ReadCloser, int64, error) {
+	obj, err := s.client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, 0, err
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		obj.Close()
+		return nil, 0, err
+	}
+	return obj, info.Size, nil
+}
+
 // PutGzip JSON + gzip（不要长期保存裸 JSON）。
 func (s *Store) PutGzip(ctx context.Context, key string, data []byte) (int64, error) {
 	var buf bytes.Buffer

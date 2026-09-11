@@ -7,7 +7,7 @@ import (
 )
 
 func TestTerminalJobStatuses(t *testing.T) {
-	for _, status := range []string{model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled} {
+	for _, status := range []string{model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobAbortedByUser} {
 		if !isTerminalJob(status) {
 			t.Fatalf("terminal status %q was not recognized", status)
 		}

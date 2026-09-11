@@ -103,7 +103,14 @@ func (sc *Scheduler) accelerateTail(ctx context.Context, job *model.DownloadJob,
 	}
 	// 2) 拆分未启动的 PENDING 大 Range（§14：只拆尚未开始的明确 block range）
 	if sc.cfg.Ankr.RangeShardingEnabled && tailSplitAllowed(job) {
-		if n, err := sc.store.SplitPendingShardsForDataset(ctx, item.ID, 4, sc.cfg.Ankr.TailSplitWindowMin); err != nil {
+		var n int
+		var err error
+		if job.Chain == "tron" && (item.Dataset == "transactions" || item.Dataset == "token_transfers") {
+			n, err = sc.store.SplitPendingTimeShardsForDataset(ctx, item.ID, 4, 12*time.Hour)
+		} else {
+			n, err = sc.store.SplitPendingShardsForDataset(ctx, item.ID, 4, sc.cfg.Ankr.TailSplitWindowMin)
+		}
+		if err != nil {
 			sc.log.Warn("tail split failed", "dataset", item.Dataset, "err", err)
 		} else if n > 0 {
 			sc.log.Info("tail acceleration split pending ranges", "dataset", item.Dataset, "splits", n, "concurrency", target)

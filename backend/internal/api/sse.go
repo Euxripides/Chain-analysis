@@ -64,6 +64,9 @@ func (s *Server) startBusForwarder(log *slog.Logger) {
 		return
 	}
 	stop, err := s.deps.Bus.Subscribe("events.>", func(subject string, data []byte) {
+		if s.runtime != nil {
+			s.runtime.HandleJobEvent(context.Background(), subject, data)
+		}
 		idx := strings.LastIndex(subject, ".")
 		if idx < 0 {
 			return

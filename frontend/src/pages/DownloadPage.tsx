@@ -16,7 +16,13 @@ interface RangeSpec {
   to?: string
 }
 
-const ADDR_RE = /^0x[0-9a-fA-F]{40}$/
+const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/
+const TRON_ADDR_RE = /^T[1-9A-HJ-NP-Za-km-z]{33}$/
+
+function normalizeAddress(value: string, chain: string) {
+  const trimmed = value.trim()
+  return chain === 'tron' ? trimmed : trimmed.toLowerCase()
+}
 
 export default function DownloadPage() {
   const navigate = useNavigate()
@@ -47,13 +53,13 @@ export default function DownloadPage() {
   useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
 
   const addresses = useMemo(() => {
-    const lines = addressText.split(/[\n,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean)
+    const lines = addressText.split(/[\n,;\s]+/).map((value) => normalizeAddress(value, chain)).filter(Boolean)
     const uniq = [...new Set(lines)]
-    const valid = uniq.filter((a) => ADDR_RE.test(a))
+    const valid = uniq.filter((address) => chain === 'tron' ? TRON_ADDR_RE.test(address) : EVM_ADDR_RE.test(address))
     const dup = lines.length - uniq.length
     const bad = uniq.length - valid.length
     return { valid, dup, bad }
-  }, [addressText])
+  }, [addressText, chain])
 
   const rangeValid = useMemo(() => {
     if (rangeType === 'full') return true
@@ -78,7 +84,7 @@ export default function DownloadPage() {
         const meta: Record<string, { case_name: string; tags: string[] }> = {}
         const chains: Record<string, string> = {}
         if (lowerName.endsWith('.txt')) {
-          addrLines = String(reader.result ?? '').split(/[\r\n,;\s]+/).map((value) => value.trim().toLowerCase()).filter(Boolean)
+          addrLines = String(reader.result ?? '').split(/[\r\n,;\s]+/).map((value) => normalizeAddress(value, chain)).filter(Boolean)
         } else {
           // XLSX parser also handles quoted CSV correctly; load it only while importing.
           const XLSX = await import('xlsx')
@@ -89,17 +95,17 @@ export default function DownloadPage() {
           if (hasAddressHeader) {
             for (const raw of records) {
               const record = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key.trim().toLowerCase(), String(value ?? '').trim()]))
-              const addr = (record.address ?? '').toLowerCase()
+              const rowChain = (record.chain ?? '').toLowerCase()
+              const addr = normalizeAddress(record.address ?? '', rowChain || chain)
               if (!addr) continue
               addrLines.push(addr)
               const caseN = record.case ?? ''
               const tagList = (record.tags ?? '').split(/[|;；]/).map((value) => value.trim()).filter(Boolean)
               if (caseN || tagList.length) meta[addr] = { case_name: caseN, tags: tagList }
-              const rowChain = (record.chain ?? '').toLowerCase()
               if (rowChain && CHAINS.includes(rowChain)) chains[addr] = rowChain
             }
           } else {
-            addrLines = XLSX.utils.sheet_to_csv(ws).split(/[\r\n,;\s]+/).map((value) => value.trim().toLowerCase()).filter(Boolean)
+            addrLines = XLSX.utils.sheet_to_csv(ws).split(/[\r\n,;\s]+/).map((value) => normalizeAddress(value, chain)).filter(Boolean)
           }
         }
         setSubjectMeta((prev) => ({ ...prev, ...meta }))

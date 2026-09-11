@@ -2,9 +2,12 @@ package dataset
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -328,6 +331,37 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err := s.validateTronAutoScan(chain, datasets, rng); err != nil {
 		return nil, err
 	}
+	if req.ReusePolicy == "" {
+		req.ReusePolicy = "prefer_local"
+	}
+
+	// Metadata is independent from download scheduling and must still be linked
+	// when an identical download request reuses an existing job.
+	if s.Meta != nil {
+		for _, subj := range subjects {
+			caseName := req.CaseName
+			tags := req.Tags
+			if m, ok := req.SubjectMeta[subj]; ok {
+				caseName = m.CaseName
+				tags = m.Tags
+			}
+			if caseName != "" || len(tags) > 0 {
+				if err := s.Meta.EnsureLinked(ctx, chain, subj, caseName, tags, req.CreateMissingMeta); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	fingerprint := ""
+	if !strings.EqualFold(req.ReusePolicy, "refresh") {
+		fingerprint = downloadRequestFingerprint(chain, subjects, datasets, rng)
+		if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr != nil {
+			return nil, findErr
+		} else if existing != nil {
+			return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
+		}
+	}
 	now := time.Now()
 	// Job numbers are formatted in the process business timezone, so the
 	// counting window must use that same local day. Using UTC here reused
@@ -344,58 +378,62 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
+	if preview.OverallRatio >= 1 {
+		fingerprint := sha256.Sum256([]byte(chain + "\x00" + strings.Join(subjects, ",") + "\x00" + strings.Join(datasets, ",") + fmt.Sprint(rng.FromBlock, rng.ToBlock)))
+		return &EnsureResponse{Status: "ready", DatasetRef: "ds_" + hex.EncodeToString(fingerprint[:6]), Coverage: preview.OverallRatio}, nil
+	}
 
 	job := &model.DownloadJob{
-		JobNo:         jobNo,
-		Status:        model.JobCreated,
-		Priority:      priority,
-		Source:        req.Source,
-		Mode:          req.Mode,
-		RequestedMode: performanceMode,
-		EffectiveMode: performanceMode,
-		ModeReason:    "user_selected",
-		ModeChangedAt: now,
-		Chain:         chain,
-		RangeType:     rng.RangeType,
-		FromBlock:     rng.FromBlock,
-		ToBlock:       rng.ToBlock,
-		FromTimestamp: rng.FromTimestamp,
-		ToTimestamp:   rng.ToTimestamp,
-		Datasets:      datasets,
-		ReusePolicy:   req.ReusePolicy,
-		HeadBlock:     rng.HeadBlock,
-		ResolvedAt:    &resolvedAt,
+		JobNo:              jobNo,
+		Status:             model.JobCreated,
+		Priority:           priority,
+		Source:             req.Source,
+		Mode:               req.Mode,
+		RequestedMode:      performanceMode,
+		EffectiveMode:      performanceMode,
+		ModeReason:         "user_selected",
+		ModeChangedAt:      now,
+		Chain:              chain,
+		RangeType:          rng.RangeType,
+		FromBlock:          rng.FromBlock,
+		ToBlock:            rng.ToBlock,
+		FromTimestamp:      rng.FromTimestamp,
+		ToTimestamp:        rng.ToTimestamp,
+		Datasets:           datasets,
+		ReusePolicy:        req.ReusePolicy,
+		RequestFingerprint: fingerprint,
+		HeadBlock:          rng.HeadBlock,
+		ResolvedAt:         &resolvedAt,
 		Stats: map[string]any{
 			"coverage_before": preview.OverallRatio,
+			"request_source":  req.Source,
+			"ai_managed":      strings.EqualFold(req.Source, "chatgpt_mcp"),
+			"request_origin": func() string {
+				if strings.EqualFold(req.Source, "chatgpt_mcp") {
+					return "mcp"
+				}
+				return "system"
+			}(),
 		},
 	}
-	if job.ReusePolicy == "" {
-		job.ReusePolicy = "prefer_local"
-	}
 	// job_no 冲突（并发建任务）自动递增重试
-	// V1.2：Metadata 与下载解耦（§26/§77.5）——先落案件/标签，再创建任务
-	if s.Meta != nil {
-		for _, subj := range subjects {
-			caseName := req.CaseName
-			tags := req.Tags
-			if m, ok := req.SubjectMeta[subj]; ok {
-				caseName = m.CaseName
-				tags = m.Tags
-			}
-			if caseName != "" || len(tags) > 0 {
-				if err := s.Meta.EnsureLinked(ctx, chain, subj, caseName, tags, req.CreateMissingMeta); err != nil {
-					return nil, err
-				}
+	if _, err := s.Store.CreateJobWithSubjects(ctx, job, subjects); err != nil {
+		if fingerprint != "" && strings.Contains(err.Error(), "download_jobs_reusable_fingerprint_key") {
+			if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr == nil && existing != nil {
+				return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
 			}
 		}
-	}
-	if _, err := s.Store.CreateJobWithSubjects(ctx, job, subjects); err != nil {
 		if strings.Contains(err.Error(), "job_no_key") {
 			for attempt := 1; attempt <= 5; attempt++ {
 				job.JobNo = fmt.Sprintf("DL-%s-%04d", day.Format("20060102"), n+1+attempt)
 				if _, retryErr := s.Store.CreateJobWithSubjects(ctx, job, subjects); retryErr == nil {
 					err = nil
 					break
+				} else if fingerprint != "" && strings.Contains(retryErr.Error(), "download_jobs_reusable_fingerprint_key") {
+					if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr == nil && existing != nil {
+						return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
+					}
+					return nil, retryErr
 				} else if !strings.Contains(retryErr.Error(), "job_no_key") {
 					return nil, retryErr
 				}
@@ -415,6 +453,40 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 		JobID:      &jobID,
 		Coverage:   preview.OverallRatio,
 	}, nil
+}
+
+func (s *Service) reusedEnsureResponse(ctx context.Context, job *model.DownloadJob, fingerprint string) *EnsureResponse {
+	status := "planned"
+	coverage := 0.0
+	if job.Status == model.JobCompleted {
+		status = "ready"
+		coverage = 1
+	}
+	s.Store.InsertAudit(ctx, nil, "dataset.ensure.reused", "download_job", job.ID, map[string]any{"request_fingerprint": fingerprint, "status": job.Status})
+	id := job.ID
+	return &EnsureResponse{Status: status, DatasetRef: "ds_" + job.ID[:8], JobID: &id, Coverage: coverage}
+}
+
+func downloadRequestFingerprint(chain string, subjects, datasets []string, rng model.DownloadJobRange) string {
+	sortedSubjects := append([]string(nil), subjects...)
+	sortedDatasets := append([]string(nil), datasets...)
+	sort.Strings(sortedSubjects)
+	sort.Strings(sortedDatasets)
+	parts := []string{chain, rng.RangeType, strings.Join(sortedSubjects, ","), strings.Join(sortedDatasets, ",")}
+	if rng.FromBlock != nil {
+		parts = append(parts, fmt.Sprintf("fb:%d", *rng.FromBlock))
+	}
+	if rng.ToBlock != nil {
+		parts = append(parts, fmt.Sprintf("tb:%d", *rng.ToBlock))
+	}
+	if rng.FromTimestamp != nil {
+		parts = append(parts, "ft:"+rng.FromTimestamp.UTC().Format(time.RFC3339Nano))
+	}
+	if rng.ToTimestamp != nil {
+		parts = append(parts, "tt:"+rng.ToTimestamp.UTC().Format(time.RFC3339Nano))
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return hex.EncodeToString(sum[:])
 }
 
 func sanitizeDatasets(in []string) ([]string, error) {

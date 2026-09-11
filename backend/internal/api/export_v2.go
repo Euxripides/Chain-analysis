@@ -21,6 +21,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/compress/zstd"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
@@ -39,6 +40,23 @@ type exportV2Request struct {
 	ForceZip    bool     `json:"force_zip"`
 	// §47：Method 字段默认导出；Decoded Input 默认关闭（完整参数会显著增加文件体积）
 	IncludeDecodedInput bool `json:"include_decoded_input"`
+}
+
+func filterGPTActionExportToken(job *model.DownloadJob, rows []map[string]any) []map[string]any {
+	if job == nil || job.Stats == nil {
+		return rows
+	}
+	token := strings.ToUpper(strings.TrimSpace(fmt.Sprint(job.Stats["gpt_actions_token_filter"])))
+	if token == "" {
+		return rows
+	}
+	out := rows[:0]
+	for _, row := range rows {
+		if strings.EqualFold(fmt.Sprint(row["token_symbol"]), token) {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req exportV2Request) {
@@ -183,6 +201,7 @@ func (s *Server) writeSingleExport(ctx context.Context, job *model.DownloadJob, 
 	if err != nil {
 		return 0, "", err
 	}
+	rows = filterGPTActionExportToken(job, rows)
 	rows = dedupeExportRows(dataset, rows)
 	s.attachTokenMetadata(ctx, chain, rows)
 	if includeMeta {
@@ -303,6 +322,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 							}
 							continue
 						}
+						rows = filterGPTActionExportToken(job, rows)
 						buckets := make(map[string][]map[string]any, len(addresses))
 						for _, row := range rows {
 							for _, addr := range matchingExportSubjects(chain, addresses, row) {
@@ -326,6 +346,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 					}
 					rows, err := s.query.RowsForExportRange(pipelineCtx, task.ds, chain, task.addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
 					if err == nil {
+						rows = filterGPTActionExportToken(job, rows)
 						rows = dedupeExportRows(task.ds, rows)
 						s.attachTokenMetadata(pipelineCtx, chain, rows)
 						if includeMeta {
@@ -773,7 +794,7 @@ func (s *Server) writeParquetTo(ctx context.Context, w io.Writer, dataset string
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	pw := parquet.NewGenericWriter[parquetExportRow](w)
+	pw := parquet.NewGenericWriter[parquetExportRow](w, parquet.Compression(&zstd.Codec{}))
 	batch := make([]parquetExportRow, len(rows))
 	for i, row := range rows {
 		batch[i] = toParquetExportRow(dataset, row)

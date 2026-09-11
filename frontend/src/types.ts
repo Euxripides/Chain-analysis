@@ -72,6 +72,33 @@ export interface JobDetail {
   shards: Shard[]
   progress: Snapshot | null
   performance: PerformanceModeState
+  guards: VolumeGuard[]
+}
+
+export interface VolumeGuard {
+  job_id: string
+  subject_id: string
+  subject: string
+  dataset_id: string
+  dataset: string
+  state: string
+  reason: string
+  risk_level: 'NORMAL' | 'LARGE' | 'HUGE' | 'EXTREME' | 'SUPER_EXTREME'
+  actual_rows: number
+  projected_rows_low: number
+  projected_rows_mid: number
+  projected_rows_high: number
+  confidence: number
+  actual_provider_calls: number
+  projected_provider_calls: number
+  actual_cost_usd: number
+  projected_cost_usd: number
+  elapsed_seconds: number
+  projected_duration_seconds: number
+  completed_shards: number
+  total_shards: number
+  guard_override: boolean
+  guard_triggered_at?: string
 }
 
 export type PerformanceMode = 'safe' | 'fast' | 'turbo'
@@ -136,13 +163,14 @@ export interface ExportRow {
   created_at: string
 }
 
-export const CHAINS = ['bsc', 'eth', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']
+export const CHAINS = ['bsc', 'eth', 'tron', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']
 export const DATASETS = ['transactions', 'token_transfers', 'nft_transfers', 'logs', 'balances']
 
 export const STATUS_LABEL: Record<string, string> = {
   CREATED: '已创建', PLANNING: '规划中', QUEUED: '排队中', RUNNING: '运行中',
   PAUSE_REQUESTED: '暂停请求', PAUSED: '已暂停', RESUMING: '恢复中',
   CANCEL_REQUESTED: '取消请求', CANCELLED: '已取消',
+  WAITING_USER_CONFIRMATION: '等待人工确认', ABORTED_BY_USER: '已由用户放弃',
   COMPLETED: '已完成', PARTIAL_FAILED: '部分失败', FAILED: '失败',
   PENDING: '待处理', LEASED: '已租约', FAILED_RETRYABLE: '失败(重试)', FAILED_FINAL: '失败',
   SKIPPED: '已复用',

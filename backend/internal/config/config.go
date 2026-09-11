@@ -104,7 +104,8 @@ type AnkrConfig struct {
 }
 
 type TronConfig struct {
-	Enabled bool
+	Enabled     bool
+	VolumeGuard VolumeGuardConfig
 	// Provider is the legacy global fallback. Dataset-specific providers take
 	// precedence and keep the TRON routing decision local to each dataset.
 	Provider                        string
@@ -173,6 +174,19 @@ type TronConfig struct {
 	TRC20LocalIdentityEnabled       bool
 	TRC20PrefetchPages              int
 	TRC20PageQueueMax               int
+}
+
+type VolumeGuardConfig struct {
+	Enabled              bool
+	WarnRows             int64
+	HardActualRows       int64
+	HardProjectedRows    int64
+	ExtremeRows          int64
+	SuperExtremeRows     int64
+	ProjectedConfidence  float64
+	ExtremeConfidence    float64
+	PreflightMaxRequests int
+	PreflightTimeout     time.Duration
 }
 
 // ProviderForCapability keeps TRON node/enrichment capabilities independent
@@ -501,6 +515,13 @@ func parsePageLevels(s string) []int {
 func (c *Config) Validate() error {
 	a := &c.Ankr
 	if c.Tron.Enabled {
+		vg := c.Tron.VolumeGuard
+		if vg.Enabled && (vg.WarnRows <= 0 || vg.HardActualRows <= 0 || vg.HardProjectedRows <= vg.WarnRows ||
+			vg.ExtremeRows <= vg.HardProjectedRows || vg.SuperExtremeRows <= vg.ExtremeRows ||
+			vg.ProjectedConfidence <= 0 || vg.ProjectedConfidence > 1 || vg.ExtremeConfidence <= 0 || vg.ExtremeConfidence > 1 ||
+			vg.PreflightMaxRequests < 1 || vg.PreflightMaxRequests > 32 || vg.PreflightTimeout <= 0) {
+			return fmt.Errorf("TRON volume guard thresholds, confidence, preflight budget, and timeout are invalid")
+		}
 		defaultProvider := strings.ToLower(strings.TrimSpace(c.Tron.DefaultProvider))
 		if defaultProvider == "" {
 			defaultProvider = strings.ToLower(strings.TrimSpace(c.Tron.Provider))
@@ -762,7 +783,19 @@ func Load() *Config {
 		BackupsBucket:     env("BACKUPS_BUCKET", "blockchain-backups"),
 		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
 		Tron: TronConfig{
-			Enabled:  envBool("TRON_ENABLED", false),
+			Enabled: envBool("TRON_ENABLED", false),
+			VolumeGuard: VolumeGuardConfig{
+				Enabled:              envBool("TRON_VOLUME_GUARD_ENABLED", true),
+				WarnRows:             int64(envInt("TRON_VOLUME_WARN_ROWS", 1000000)),
+				HardActualRows:       int64(envInt("TRON_VOLUME_HARD_ACTUAL_ROWS", 2000000)),
+				HardProjectedRows:    int64(envInt("TRON_VOLUME_HARD_PROJECTED_ROWS", 5000000)),
+				ExtremeRows:          int64(envInt("TRON_VOLUME_EXTREME_ROWS", 10000000)),
+				SuperExtremeRows:     int64(envInt("TRON_VOLUME_SUPER_EXTREME_ROWS", 50000000)),
+				ProjectedConfidence:  envFloat("TRON_VOLUME_PROJECTED_CONFIDENCE", 0.80),
+				ExtremeConfidence:    envFloat("TRON_VOLUME_EXTREME_CONFIDENCE", 0.70),
+				PreflightMaxRequests: envInt("TRON_VOLUME_PREFLIGHT_MAX_REQUESTS", 32),
+				PreflightTimeout:     time.Duration(envInt("TRON_VOLUME_PREFLIGHT_TIMEOUT_SECONDS", 5)) * time.Second,
+			},
 			Provider: strings.ToLower(env("TRON_PROVIDER", "ankr")),
 			// V3 deliberately does not inherit TRON_PROVIDER=trongrid as a
 			// global switch. The legacy variable remains a compatibility hint for

@@ -9,6 +9,9 @@ const jobs = [
   { id: 'job-3', job_no: 'DL-20260902-0048', status: 'FAILED', priority: 1, source: 'ui', chain: 'polygon', range_type: 'block', datasets: ['logs'], reuse_policy: 'reuse', head_block: 0, error: 'provider timeout', stats: { done_shards: 3, total_shards: 16, downloaded_rows: 1240, api_requests: 123, api_cost_usd: .008, elapsed_seconds: 230, subjects: 1, failed_stage: '请求拉取' }, created_at: '2026-09-02T18:42:11Z', updated_at: '2026-09-02T18:48:43Z' },
 ]
 const jobDetail = { job: jobs[0], subjects: [{ id: 'subject-1', job_id: 'job-1', subject_type: 'address', subject: sampleAddress, status: 'RUNNING', progress: .63, stats: {} }], datasets: [{ id: 'dataset-1', job_id: 'job-1', subject_id: 'subject-1', dataset: 'token_transfers', status: 'RUNNING', progress: .63, weight: 1, stats: {} }], shards: Array.from({ length: 6 }, (_, index) => ({ id: `shard-${index}`, job_id: 'job-1', subject_id: 'subject-1', dataset_id: 'dataset-1', dataset: 'token_transfers', from_block: 41123145 + index * 5000, to_block: 41128144 + index * 5000, page_token: '', page_no: index + 1, status: index < 4 ? 'COMPLETED' : 'RUNNING', priority: 1, retries: 0, max_retries: 3, downloaded_rows: index < 4 ? 13054 : 0, downloaded_bytes: 1024, raw_object: index < 4 ? `raw/${index}.json` : '', error: '', updated_at: `2026-09-03T00:${45 + index}:43Z` })), progress: { job_id: 'job-1', status: 'RUNNING', progress: .63, downloaded_rows: 78324, downloaded_bytes: 12939428, api_requests: 2184, api_cost_usd: .0536, rows_per_sec: 153, bytes_per_sec: 1490000, coverage_hit_ratio: .678, elapsed_seconds: 512, eta_seconds: 301, total_shards: 24, done_shards: 15, ts: '2026-09-03T00:50:43Z' } }
+const secondAddress = '0x2222222222222222222222222222222222222222'
+jobDetail.subjects.push({ id: 'subject-2', job_id: 'job-1', subject_type: 'address', subject: secondAddress, status: 'COMPLETED', progress: 1, stats: { cursor_timestamp_ms: 1788768000000, cursor_checkpoint_at: '2026-09-07T08:00:00Z' } })
+jobDetail.datasets.push({ id: 'dataset-2', job_id: 'job-1', subject_id: 'subject-2', dataset: 'token_transfers', status: 'COMPLETED', progress: 1, weight: 1, stats: { downloaded_rows: 41667 } })
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/v1/cases', (route) => route.fulfill({ json: { cases: [{ id: 'case-1', name: '盘古' }] } }))
@@ -222,13 +225,22 @@ test('task operations table opens preview drawer and contextual batch actions', 
   expect(browserErrors).toEqual([])
 })
 
-test('task detail is pipeline-led and tabs expose shards and logs', async ({ page }, testInfo) => {
+test('task detail exposes per-address progress, shards, and logs', async ({ page }, testInfo) => {
   const browserErrors: string[] = []
   page.on('console', (message) => { if (message.type() === 'error') browserErrors.push(message.text()) })
   page.on('pageerror', (error) => browserErrors.push(error.message))
   await page.goto('/jobs/job-1')
   await expect(page.getByRole('heading', { name: 'DL-20260902-0050' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '执行 Pipeline' })).toBeVisible()
+  await page.getByRole('button', { name: '地址进度', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '地址下载进度' })).toBeVisible()
+  await expect(page.getByText(sampleAddress, { exact: true })).toBeVisible()
+  await expect(page.getByText(secondAddress, { exact: true })).toBeVisible()
+  await expect(page.getByText('41,667 行', { exact: true })).toBeVisible()
+  await expect(page.getByRole('progressbar', { name: '地址 2 下载进度' })).toHaveAttribute('aria-valuenow', '100')
+  if (testInfo.project.name === 'desktop') await page.screenshot({ path: 'test-results/ui-refactor/v3-address-progress-1440.png', fullPage: true })
+  if (testInfo.project.name === 'mobile') await page.screenshot({ path: 'test-results/ui-refactor/v3-address-progress-mobile.png', fullPage: true })
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   await page.getByRole('button', { name: 'Shards', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Shards' })).toBeVisible()
   await page.getByRole('button', { name: '概览', exact: true }).click()

@@ -42,14 +42,8 @@ INSERT INTO ankr_production_profiles (
     6442450944, 12884901888, 10000, 180, TRUE, 'v1.4.2', now(), 'v1.4.2-migration'
 ) ON CONFLICT (scope, chain, dataset) DO NOTHING;
 
-CREATE TABLE IF NOT EXISTS ankr_scheduler_state (
-    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
-    configured_mode TEXT NOT NULL DEFAULT 'fast' CHECK (configured_mode IN ('safe', 'fast', 'turbo')),
-    requested_mode TEXT NOT NULL DEFAULT 'fast' CHECK (requested_mode IN ('safe', 'fast', 'turbo')),
-    effective_mode TEXT NOT NULL DEFAULT 'fast' CHECK (effective_mode IN ('safe', 'fast', 'turbo')),
-    target_concurrency INT NOT NULL DEFAULT 32 CHECK (target_concurrency > 0 AND target_concurrency <= 48),
-    active_concurrency INT NOT NULL DEFAULT 0 CHECK (active_concurrency >= 0),
-    mode_reason TEXT NOT NULL DEFAULT 'system_default',
-    mode_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-INSERT INTO ankr_scheduler_state (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING;
+-- Do not create ankr_scheduler_state here. Migration 0015 owns that name for
+-- per-worker scheduler telemetry (worker_id primary key). Production mode
+-- controls live in ankr_performance_control, created by migration 0020. The
+-- former duplicate definition made both fresh installs and delayed migration
+-- application order-dependent.

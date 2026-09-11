@@ -8,6 +8,7 @@ const (
 	JobPlanning                   = "PLANNING"
 	JobQueued                     = "QUEUED"
 	JobRunning                    = "RUNNING"
+	JobWaitingUserConfirmation    = "WAITING_USER_CONFIRMATION"
 	JobPauseReq                   = "PAUSE_REQUESTED"
 	JobPaused                     = "PAUSED"
 	JobPausedFallbackTooExpensive = "PAUSED_FALLBACK_TOO_EXPENSIVE"
@@ -17,6 +18,7 @@ const (
 	JobCompleted                  = "COMPLETED"
 	JobPartialFailed              = "PARTIAL_FAILED"
 	JobFailed                     = "FAILED"
+	JobAbortedByUser              = "ABORTED_BY_USER"
 )
 
 // Shard 状态机
@@ -41,12 +43,14 @@ const (
 
 // Subject / Dataset 状态
 const (
-	ItemPending   = "PENDING"
-	ItemRunning   = "RUNNING"
-	ItemPaused    = "PAUSED"
-	ItemCompleted = "COMPLETED"
-	ItemFailed    = "FAILED"
-	ItemSkipped   = "SKIPPED"
+	ItemPending                 = "PENDING"
+	ItemRunning                 = "RUNNING"
+	ItemPaused                  = "PAUSED"
+	ItemWaitingUserConfirmation = "WAITING_USER_CONFIRMATION"
+	ItemAbortedByUser           = "ABORTED_BY_USER"
+	ItemCompleted               = "COMPLETED"
+	ItemFailed                  = "FAILED"
+	ItemSkipped                 = "SKIPPED"
 )
 
 var AllDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions"}
@@ -62,34 +66,35 @@ func ValidDataset(d string) bool {
 }
 
 type DownloadJob struct {
-	ID             string          `json:"id"`
-	JobNo          string          `json:"job_no"`
-	Status         string          `json:"status"`
-	Priority       int             `json:"priority"`
-	Source         string          `json:"source"`
-	Mode           string          `json:"mode"` // economy|balanced|turbo|benchmark（V1.1 §41-44）
-	RequestedMode  PerformanceMode `json:"requested_mode"`
-	EffectiveMode  PerformanceMode `json:"effective_mode"`
-	ModeReason     string          `json:"mode_reason"`
-	ModeChangedAt  time.Time       `json:"mode_changed_at"`
-	Chain          string          `json:"chain"`
-	RangeType      string          `json:"range_type"`
-	FromBlock      *int64          `json:"from_block"`
-	ToBlock        *int64          `json:"to_block"`
-	FromTimestamp  *time.Time      `json:"from_timestamp"`
-	ToTimestamp    *time.Time      `json:"to_timestamp"`
-	Datasets       []string        `json:"datasets"`
-	ReusePolicy    string          `json:"reuse_policy"`
-	HeadBlock      int64           `json:"head_block"`
-	CreatedBy      *string         `json:"created_by"`
-	OrganizationID *string         `json:"organization_id"`
-	WorkspaceID    *string         `json:"workspace_id"`
-	ProjectID      *string         `json:"project_id"`
-	ResolvedAt     *time.Time      `json:"resolved_at"`
-	Error          string          `json:"error"`
-	Stats          map[string]any  `json:"stats"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID                 string          `json:"id"`
+	JobNo              string          `json:"job_no"`
+	Status             string          `json:"status"`
+	Priority           int             `json:"priority"`
+	Source             string          `json:"source"`
+	Mode               string          `json:"mode"` // economy|balanced|turbo|benchmark（V1.1 §41-44）
+	RequestedMode      PerformanceMode `json:"requested_mode"`
+	EffectiveMode      PerformanceMode `json:"effective_mode"`
+	ModeReason         string          `json:"mode_reason"`
+	ModeChangedAt      time.Time       `json:"mode_changed_at"`
+	Chain              string          `json:"chain"`
+	RangeType          string          `json:"range_type"`
+	FromBlock          *int64          `json:"from_block"`
+	ToBlock            *int64          `json:"to_block"`
+	FromTimestamp      *time.Time      `json:"from_timestamp"`
+	ToTimestamp        *time.Time      `json:"to_timestamp"`
+	Datasets           []string        `json:"datasets"`
+	ReusePolicy        string          `json:"reuse_policy"`
+	RequestFingerprint string          `json:"-"`
+	HeadBlock          int64           `json:"head_block"`
+	CreatedBy          *string         `json:"created_by"`
+	OrganizationID     *string         `json:"organization_id"`
+	WorkspaceID        *string         `json:"workspace_id"`
+	ProjectID          *string         `json:"project_id"`
+	ResolvedAt         *time.Time      `json:"resolved_at"`
+	Error              string          `json:"error"`
+	Stats              map[string]any  `json:"stats"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 type Subject struct {

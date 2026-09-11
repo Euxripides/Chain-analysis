@@ -9,7 +9,7 @@ type Props = {
 }
 
 const chainNames: Record<string, string> = {
-  bsc: 'BSC', eth: 'ETH', polygon: 'POLYGON', arbitrum: 'ARBITRUM',
+  bsc: 'BSC', eth: 'ETH', tron: 'TRON', polygon: 'POLYGON', arbitrum: 'ARBITRUM',
   base: 'BASE', avalanche: 'AVALANCHE', optimism: 'OPTIMISM',
 }
 

@@ -7,12 +7,15 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/canvas"
+	"github.com/blockchain-platform/blockchain-platform/internal/capability"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
+	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
@@ -42,17 +45,20 @@ type Infra struct {
 	TokenBackfill *tokenmeta.BackfillRunner
 
 	// V1.5 RPC Infrastructure（§7）：业务只拿类型化服务，拿不到 Provider 与 Key。
-	Chains      *chain.Registry
-	RPCProvider rpc.Provider
-	RPCGateway  *rpc.Gateway
-	RPCBatcher  *rpc.Batcher
-	ChainRead   *chainread.Service
-	Head        *chainread.HeadService
-	Contract    *chainread.ContractService
-	AddressType *chainread.AddressTypeService
-	BalanceRead *chainread.BalanceService
-	LogsRead    *chainread.LogsService
-	Trace       *chaintrace.Service
+	Chains         *chain.Registry
+	RPCProvider    rpc.Provider
+	RPCGateway     *rpc.Gateway
+	RPCBatcher     *rpc.Batcher
+	ChainRead      *chainread.Service
+	Head           *chainread.HeadService
+	Contract       *chainread.ContractService
+	AddressType    *chainread.AddressTypeService
+	BalanceRead    *chainread.BalanceService
+	LogsRead       *chainread.LogsService
+	Trace          *chaintrace.Service
+	Capabilities   *capability.Registry
+	Investigations *investigation.Service
+	Canvases       *canvas.Service
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
@@ -196,7 +202,10 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		}}
 	}
 
-	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov}
+	capabilities := capability.NewRegistry()
+	capability.RegisterBuiltins(capabilities)
+	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov,
+		Capabilities: capabilities, Investigations: investigation.New(st.Pool), Canvases: canvas.New(st.Pool)}
 	if err := infra.initMethod(ctx, cfg, log); err != nil {
 		return nil, err
 	}
@@ -221,6 +230,11 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		infra.TokenBackfill = &tokenmeta.BackfillRunner{Service: infra.TokenMeta, BatchSize: cfg.TokenMetadata.BackfillBatchSize, Interval: cfg.TokenMetadata.WorkerInterval, BatchIdle: cfg.TokenMetadata.BatchIdle, MaxRetries: cfg.TokenMetadata.RPCMaxRetries, RPCWorkers: cfg.TokenMetadata.RPCWorkers, RPCMinInterval: cfg.TokenMetadata.RPCMinInterval, Log: log}
 	}
 	return infra, nil
+}
+
+// StartOutboxBackground bridges transactional domain events to JetStream.
+func (i *Infra) StartOutboxBackground(ctx context.Context, log *slog.Logger) {
+	go events.RunOutbox(ctx, i.Store.Pool, i.Bus, log)
 }
 
 func (i *Infra) StartTokenMetadataBackground(ctx context.Context, cfg *config.Config, log *slog.Logger, withWorkers bool) {

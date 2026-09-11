@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8">
+  <title>Ankr OAuth registration error</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b1020; color: #eef2ff; font-family: Consolas, "Cascadia Mono", monospace; }
+    .window { width: 1440px; min-height: 800px; padding: 44px 52px; background: linear-gradient(135deg, #10182e, #070a13); }
+    .bar { display: flex; gap: 10px; align-items: center; margin-bottom: 28px; color: #aeb9d6; font-size: 20px; }
+    .dot { width: 15px; height: 15px; border-radius: 50%; background: #ff5f57; }
+    .dot:nth-child(2) { background: #febc2e; }
+    .dot:nth-child(3) { background: #28c840; }
+    .title { margin-left: 12px; }
+    .line { font-size: 26px; line-height: 1.8; white-space: pre-wrap; }
+    .method { color: #8be9fd; } .url { color: #bd93f9; } .status { color: #ff6e6e; font-weight: 700; }
+    .label { color: #7dd3fc; } .value { color: #f8fafc; }
+    pre { margin: 22px 0 0; padding: 28px; border: 1px solid #334155; border-radius: 12px; background: #020617; color: #f8fafc; font-size: 25px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note { margin-top: 30px; color: #94a3b8; font: 18px/1.55 system-ui, sans-serif; }
+  </style>
+  <body>
+    <main class="window">
+      <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="title">Ankr Management MCP — dynamic client registration probe</span></div>
+      <div class="line"><span class="method">POST</span> <span class="url">https://mcp.ankr.com/register</span></div>
+      <div class="line"><span class="label">HTTP status:</span> <span class="status">400 Bad Request</span></div>
+      <div class="line"><span class="label">Content-Type:</span> <span class="value">application/json</span></div>
+      <pre>{
+  "error": "invalid_client_metadata",
+  "error_description": "redirect_uris must be a non-empty array of https (or dev-loopback) callback URLs whose origin is allowlisted, with no fragment or wildcard"
+}</pre>
+      <p class="note">Captured during the live registration probe for https://aurore.online/api/v1/api-control/provider-accounts/ankr/oauth/callback.</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,1337 @@
+{
+  "tools": [
+    {
+      "name": "get_address_overview",
+      "title": "Get address overview",
+      "description": "Use this first when the user asks to investigate or analyze a blockchain address. Returns transaction counts, activity time range, address type, native balance availability and high-level statistics. Do not use it alone to claim current token holdings.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_address_assets",
+      "title": "Get address assets",
+      "description": "Use this when investigating current fund retention or large token holdings. Inspect balance_source and is_current_balance: observed_net_flow is historical net flow, not a verified current on-chain balance. Never present unavailable USD valuation as zero.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_token_transfers",
+      "title": "List token transfers",
+      "description": "Use this for filtered, paginated ERC-20/BEP-20/TRC-20 transfer evidence. Prefer counterparties, flow summary or top flows for aggregate questions. Never page through a massive history; use export outside P0 when needed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "all",
+              "in",
+              "out"
+            ],
+            "default": "all",
+            "description": "Transfer direction relative to the investigated address."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "Complete counterparty address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100,
+            "description": "Maximum 500. Use large export instead of requesting huge result sets."
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "min_amount": {
+            "type": "string"
+          },
+          "max_amount": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_transactions",
+      "title": "List native transactions",
+      "description": "Use this for filtered, paginated top-level blockchain transactions, native value, status and contract method evidence. Do not use it as a substitute for token transfers or internal calls.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "all",
+              "in",
+              "out"
+            ],
+            "default": "all",
+            "description": "Transfer direction relative to the investigated address."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "Complete counterparty address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100,
+            "description": "Maximum 500. Use large export instead of requesting huge result sets."
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "min_value": {
+            "type": "string"
+          },
+          "max_value": {
+            "type": "string"
+          },
+          "method_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_internal_transactions",
+      "title": "List internal transactions",
+      "description": "Use this when the user needs contract-internal native value movements or call traces associated with an address. Results are paginated and evidence-bound.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "all",
+              "in",
+              "out"
+            ],
+            "default": "all",
+            "description": "Transfer direction relative to the investigated address."
+          },
+          "counterparty": {
+            "type": "string",
+            "description": "Complete counterparty address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100,
+            "description": "Maximum 500. Use large export instead of requesting huge result sets."
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          },
+          "min_value": {
+            "type": "string"
+          },
+          "max_value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_counterparties",
+      "title": "Analyze address counterparties",
+      "description": "Use this for funding sources, fund destinations, aggregation addresses, high-frequency counterparties, major inflows or outflows, and possible fund sinks. Prefer this over fetching large raw transaction datasets.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "all",
+              "in",
+              "out"
+            ],
+            "default": "all",
+            "description": "Transfer direction relative to the investigated address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "min_total_amount": {
+            "type": "string"
+          },
+          "min_tx_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": [
+              "tx_count",
+              "total_amount",
+              "net_flow",
+              "last_time"
+            ],
+            "default": "total_amount"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 50
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_flow_summary",
+      "title": "Get fund-flow summary",
+      "description": "Use this to compare cumulative inflow, outflow, net flow, counts, unique counterparties and activity times for one token. A positive historical net flow does not by itself prove current retention.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_top_flows",
+      "title": "Get largest fund flows",
+      "description": "Use this for the largest funding sources, largest destinations, largest transfers, or main fund exits. Use group_by=address for counterparties and group_by=transaction for individual transfers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "all",
+              "in",
+              "out"
+            ],
+            "default": "all",
+            "description": "Transfer direction relative to the investigated address."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "address",
+              "transaction"
+            ],
+            "default": "address"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 20
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_first_funding",
+      "title": "Get first funding source",
+      "description": "Use this to identify the earliest observed native funding, first gas source, or earliest token funding for an address. Treat it as earliest available platform evidence, subject to dataset coverage.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          }
+        },
+        "required": [
+          "chain",
+          "address"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_transaction_detail",
+      "title": "Get transaction detail",
+      "description": "Use this when the user provides a transaction hash or needs one transaction's status, method, decoded input, token transfers, internal transactions and logs. Do not infer a recurring distribution rule from one transaction.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "tx_hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete transaction hash without abbreviation."
+          }
+        },
+        "required": [
+          "chain",
+          "tx_hash"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "batch_get_address_overview",
+      "title": "Batch address overview",
+      "description": "Use after counterparty ranking to compare up to 200 complete addresses without repeated single-address calls.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+            },
+            "minItems": 1,
+            "maxItems": 200
+          }
+        },
+        "required": [
+          "chain",
+          "addresses"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "batch_get_address_assets",
+      "title": "Batch address assets",
+      "description": "Screen assets for up to 200 addresses. Inspect balance_source, is_current_balance and freshness before claiming current retention.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "min_balance": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chain",
+          "addresses"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_transaction_trace",
+      "title": "Get transaction trace",
+      "description": "Use for the internal contract-call hierarchy of one transaction. A trace is evidence for that transaction only.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "tx_hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete transaction hash without abbreviation."
+          }
+        },
+        "required": [
+          "chain",
+          "tx_hash"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_transaction_logs",
+      "title": "Get transaction logs",
+      "description": "Use for event-log evidence emitted by one transaction. Pair with decode and trace for contract behavior analysis.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "tx_hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete transaction hash without abbreviation."
+          }
+        },
+        "required": [
+          "chain",
+          "tx_hash"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "decode_transaction",
+      "title": "Decode transaction input",
+      "description": "Resolve the method selector and decoded input for one transaction through cached or bounded provider evidence.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "tx_hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete transaction hash without abbreviation."
+          }
+        },
+        "required": [
+          "chain",
+          "tx_hash"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_fund_paths",
+      "title": "Find bounded fund paths",
+      "description": "Use for multi-hop fund destinations. Provide either token or token_contract so amounts from different assets are never combined. Returns a context-safe graph capped at depth 5 and 500 nodes; use export for larger evidence sets.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "max_depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 3
+          },
+          "min_amount": {
+            "type": "string"
+          },
+          "max_nodes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "exclude_addresses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/properties/source"
+            },
+            "maxItems": 200
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Token symbol such as USDT; optional when token_contract is provided."
+          },
+          "token_contract": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete token contract address; optional when token is provided."
+          }
+        },
+        "required": [
+          "chain",
+          "source"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "build_address_network",
+      "title": "Build bounded address network",
+      "description": "Build a time- and single-token-bounded network from seed addresses. Provide either token or token_contract. Capped at depth 5 and 500 nodes for AI context safety.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "seed_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "max_depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 3
+          },
+          "min_total_amount": {
+            "type": "string"
+          },
+          "max_nodes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Token symbol such as USDT; optional when token_contract is provided."
+          },
+          "token_contract": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete token contract address; optional when token is provided."
+          }
+        },
+        "required": [
+          "chain",
+          "seed_addresses"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_large_export",
+      "title": "Create large evidence export",
+      "description": "Create an asynchronous export for data too large for chat. Prefer parquet+zstd for analysis or csv+zip for compatibility; returns a job_id immediately.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+          },
+          "data_types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "transactions",
+                "token_transfers",
+                "internal_transactions",
+                "logs"
+              ]
+            },
+            "minItems": 1
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol such as USDT or USDC."
+          },
+          "token_contract": {
+            "type": "string",
+            "description": "Complete token contract address."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+          },
+          "end_time": {
+            "$ref": "#/properties/start_time"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "parquet",
+              "csv"
+            ]
+          },
+          "compression": {
+            "type": "string",
+            "enum": [
+              "zstd",
+              "zip"
+            ]
+          }
+        },
+        "required": [
+          "chain",
+          "address",
+          "data_types",
+          "format",
+          "compression"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_export_status",
+      "title": "Get export status",
+      "description": "Poll an asynchronous export. A download URL is an artifact location, not evidence that the AI analyzed the file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "ensure_chain_data",
+      "title": "Ensure chain data through the system downloader",
+      "description": "Use before analysis when Coverage is incomplete. Reuses the platform's optimized Coverage→Planner→Worker download pipeline and downloads only missing ranges. Created jobs are isolated with source=chatgpt_mcp and ai_managed=true, distinct from user_download jobs. Returns immediately with a download_job_id when acquisition is needed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "bsc",
+              "ethereum",
+              "tron",
+              "polygon",
+              "arbitrum",
+              "optimism",
+              "base"
+            ],
+            "description": "Blockchain network. Use exactly one supported lowercase value."
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it."
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "datasets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "transactions",
+                "token_transfers",
+                "internal_transactions",
+                "logs"
+              ]
+            },
+            "minItems": 1
+          },
+          "range": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "block",
+                  "time"
+                ]
+              },
+              "from_block": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "to_block": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "from": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp, for example 2026-09-10T01:30:00Z."
+              },
+              "to": {
+                "$ref": "#/properties/range/properties/from"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "performance_mode": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "fast",
+              "turbo"
+            ],
+            "default": "fast"
+          }
+        },
+        "required": [
+          "chain",
+          "addresses",
+          "datasets",
+          "range"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_ai_download_status",
+      "title": "Get AI download task status",
+      "description": "Poll only download jobs created by ChatGPT/MCP. It cannot read ordinary user_download jobs. Wait for completed/ready before treating newly acquired coverage as available.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "download_job_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "download_job_id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

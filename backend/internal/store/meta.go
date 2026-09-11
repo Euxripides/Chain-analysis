@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -158,7 +157,7 @@ func (s *Store) DeleteTag(ctx context.Context, wsID, id string) error {
 // ---- Address links ----
 
 func (s *Store) AddCaseLink(ctx context.Context, wsID, chain, addr, caseID string) error {
-	addr = strings.ToLower(addr)
+	addr = normalizeWorkspaceAddress(chain, addr)
 	var valid bool
 	if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_addresses WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3) "+
 		"AND EXISTS(SELECT 1 FROM cases WHERE workspace_id=$1 AND id=$4)", wsID, chain, addr, caseID).Scan(&valid); err != nil {
@@ -173,7 +172,7 @@ func (s *Store) AddCaseLink(ctx context.Context, wsID, chain, addr, caseID strin
 }
 
 func (s *Store) RemoveCaseLink(ctx context.Context, wsID, chain, addr, caseID string) error {
-	addr = strings.ToLower(addr)
+	addr = normalizeWorkspaceAddress(chain, addr)
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -195,7 +194,7 @@ func (s *Store) RemoveCaseLink(ctx context.Context, wsID, chain, addr, caseID st
 }
 
 func (s *Store) AddTagLink(ctx context.Context, wsID, chain, addr, tagID string) error {
-	addr = strings.ToLower(addr)
+	addr = normalizeWorkspaceAddress(chain, addr)
 	var valid bool
 	if err := s.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_addresses WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3) "+
 		"AND EXISTS(SELECT 1 FROM tags WHERE workspace_id=$1 AND id=$4)", wsID, chain, addr, tagID).Scan(&valid); err != nil {
@@ -211,7 +210,7 @@ func (s *Store) AddTagLink(ctx context.Context, wsID, chain, addr, tagID string)
 
 func (s *Store) RemoveTagLink(ctx context.Context, wsID, chain, addr, tagID string) error {
 	_, err := s.Pool.Exec(ctx, "DELETE FROM address_tag_links WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3 AND tag_id=$4",
-		wsID, chain, strings.ToLower(addr), tagID)
+		wsID, chain, normalizeWorkspaceAddress(chain, addr), tagID)
 	return err
 }
 
@@ -219,7 +218,7 @@ func (s *Store) SetPrimaryCase(ctx context.Context, wsID, chain, addr, caseID st
 	tag, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET primary_case_id=$4, updated_at=now() "+
 		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3 AND EXISTS ("+
 		"SELECT 1 FROM address_case_links l WHERE l.workspace_id=$1 AND l.chain=$2 AND l.normalized_address=$3 AND l.case_id=$4)",
-		wsID, chain, strings.ToLower(addr), caseID)
+		wsID, chain, normalizeWorkspaceAddress(chain, addr), caseID)
 	if err != nil {
 		return err
 	}
@@ -232,7 +231,7 @@ func (s *Store) SetPrimaryCase(ctx context.Context, wsID, chain, addr, caseID st
 func (s *Store) SetDisplayName(ctx context.Context, wsID, chain, addr, name string) error {
 	tag, err := s.Pool.Exec(ctx, "UPDATE workspace_addresses SET display_name=$4, updated_at=now() "+
 		"WHERE workspace_id=$1 AND chain=$2 AND normalized_address=$3",
-		wsID, chain, strings.ToLower(addr), name)
+		wsID, chain, normalizeWorkspaceAddress(chain, addr), name)
 	if err != nil {
 		return err
 	}
@@ -245,7 +244,7 @@ func (s *Store) SetDisplayName(ctx context.Context, wsID, chain, addr, name stri
 func (s *Store) AddressCaseNames(ctx context.Context, wsID, chain, addr string) ([]string, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT c.name FROM address_case_links l JOIN cases c ON c.id = l.case_id "+
 		"WHERE l.workspace_id=$1 AND l.chain=$2 AND l.normalized_address=$3 ORDER BY c.name",
-		wsID, chain, strings.ToLower(addr))
+		wsID, chain, normalizeWorkspaceAddress(chain, addr))
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +263,7 @@ func (s *Store) AddressCaseNames(ctx context.Context, wsID, chain, addr string) 
 func (s *Store) AddressTagNames(ctx context.Context, wsID, chain, addr string) ([]string, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT t.name FROM address_tag_links l JOIN tags t ON t.id = l.tag_id "+
 		"WHERE l.workspace_id=$1 AND l.chain=$2 AND l.normalized_address=$3 ORDER BY t.name",
-		wsID, chain, strings.ToLower(addr))
+		wsID, chain, normalizeWorkspaceAddress(chain, addr))
 	if err != nil {
 		return nil, err
 	}

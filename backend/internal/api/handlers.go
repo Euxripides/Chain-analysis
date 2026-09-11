@@ -85,6 +85,7 @@ type jobDetail struct {
 	Shards      []model.Shard                  `json:"shards"`
 	Progress    map[string]any                 `json:"progress"`
 	Performance *model.PerformanceRuntimeState `json:"performance,omitempty"`
+	Guards      []model.VolumeGuard            `json:"guards"`
 
 	// V1.2（§85）：Planning API Cost 与 Acquisition API Cost 分账
 	PlanningAPIRequests   int64   `json:"planning_api_requests"`
@@ -144,6 +145,11 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		shards = []model.Shard{}
 	}
 	detail.Shards = shards
+	guards, _ := s.deps.Store.VolumeGuardsByJob(r.Context(), id)
+	if guards == nil {
+		guards = []model.VolumeGuard{}
+	}
+	detail.Guards = guards
 	detail.Progress = s.snapshotFor(r.Context(), id)
 	if runtimeState, runtimeErr := s.deps.Store.GetAnkrRuntimeState(r.Context()); runtimeErr == nil {
 		runtimeState.RequestedMode = job.RequestedMode
@@ -168,6 +174,75 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	s.controlJob(w, r, model.JobCancelReq, "cancel")
+}
+
+type volumeGuardActionRequest struct {
+	Subject string `json:"subject"`
+	Dataset string `json:"dataset"`
+}
+
+func (s *Server) handleGetVolumeGuards(w http.ResponseWriter, r *http.Request) {
+	guards, err := s.deps.Store.VolumeGuardsByJob(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"guards": guards})
+}
+
+func (s *Server) decodeVolumeGuardAction(w http.ResponseWriter, r *http.Request) (volumeGuardActionRequest, bool) {
+	var req volumeGuardActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "bad request: " + err.Error()})
+		return req, false
+	}
+	req.Subject = strings.TrimSpace(req.Subject)
+	req.Dataset = strings.ToLower(strings.TrimSpace(req.Dataset))
+	if req.Subject == "" || !model.ValidDataset(req.Dataset) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "valid subject and dataset required"})
+		return req, false
+	}
+	return req, true
+}
+
+func (s *Server) handleContinueVolumeGuard(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.decodeVolumeGuardAction(w, r)
+	if !ok {
+		return
+	}
+	jobID := chi.URLParam(r, "id")
+	guard, err := s.deps.Store.ContinueVolumeGuard(r.Context(), jobID, req.Subject, req.Dataset, auth.FromContext(r.Context()).Email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "guard unit not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		return
+	}
+	s.deps.Store.InsertAudit(r.Context(), nil, "volume_guard.approved", "download_dataset", guard.DatasetID, map[string]any{"job_id": jobID, "subject": req.Subject, "dataset": req.Dataset, "projection": guard.ApprovedProjection})
+	s.publishEvent("events.jobs."+jobID, map[string]any{"type": "VOLUME_GUARD_APPROVED", "job_id": jobID, "subject": req.Subject, "dataset": req.Dataset, "status": guard.State, "ts": time.Now()})
+	writeJSON(w, http.StatusOK, guard)
+}
+
+func (s *Server) handleAbortVolumeGuard(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.decodeVolumeGuardAction(w, r)
+	if !ok {
+		return
+	}
+	jobID := chi.URLParam(r, "id")
+	guard, err := s.deps.Store.AbortVolumeGuard(r.Context(), jobID, req.Subject, req.Dataset)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "guard unit not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		return
+	}
+	s.deps.Store.InsertAudit(r.Context(), nil, "volume_guard.aborted", "download_dataset", guard.DatasetID, map[string]any{"job_id": jobID, "subject": req.Subject, "dataset": req.Dataset, "coverage": "PARTIAL"})
+	s.publishEvent("events.jobs."+jobID, map[string]any{"type": "VOLUME_GUARD_ABORTED", "job_id": jobID, "subject": req.Subject, "dataset": req.Dataset, "status": guard.State, "coverage": "PARTIAL", "ts": time.Now()})
+	writeJSON(w, http.StatusOK, guard)
 }
 
 func (s *Server) handleSubjectControl(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +292,7 @@ func (s *Server) controlJob(w http.ResponseWriter, r *http.Request, target, acti
 		}
 	case "cancel":
 		switch job.Status {
-		case model.JobCompleted, model.JobCancelled, model.JobFailed, model.JobPartialFailed:
+		case model.JobCompleted, model.JobCancelled, model.JobFailed, model.JobPartialFailed, model.JobAbortedByUser:
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "job is " + job.Status})
 			return
 		}
@@ -396,7 +471,7 @@ func (s *Server) snapshotFor(ctx context.Context, jobID string) map[string]any {
 	}
 	end := time.Now()
 	switch job.Status {
-	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled:
+	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobAbortedByUser:
 		if !job.UpdatedAt.IsZero() {
 			end = job.UpdatedAt
 		}

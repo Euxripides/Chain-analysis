@@ -110,6 +110,16 @@ func (r *DatasetRouter) TRC20ActivityBounds(ctx context.Context, address string)
 	return time.Time{}, time.Time{}, &provider.Error{Provider: r.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity bounds unsupported"}
 }
 
+func (r *DatasetRouter) TRC20ActivityProfile(ctx context.Context, address string) (provider.TRC20ActivityProfile, error) {
+	p := r.providerFor("token_transfers")
+	if resolver, ok := p.(interface {
+		TRC20ActivityProfile(context.Context, string) (provider.TRC20ActivityProfile, error)
+	}); ok {
+		return resolver.TRC20ActivityProfile(ctx, address)
+	}
+	return provider.TRC20ActivityProfile{}, &provider.Error{Provider: r.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity profile unsupported"}
+}
+
 func (r *DatasetRouter) TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error) {
 	p := r.providerForCapability("tx_detail")
 	if f, ok := p.(provider.TxDetailFetcher); ok {
@@ -137,6 +147,15 @@ func (r *DatasetRouter) ResolveAddressTypes(ctx context.Context, chain string, a
 	return map[string]bool{}, nil
 }
 
+func (r *DatasetRouter) CurrentBalances(ctx context.Context, chain, address string) ([]provider.CurrentBalance, error) {
+	for _, p := range []provider.Provider{r.Transactions, r.Default, r.TRC20} {
+		if resolver, ok := p.(provider.CurrentBalanceResolver); ok {
+			return resolver.CurrentBalances(ctx, chain, address)
+		}
+	}
+	return nil, &provider.Error{Provider: r.Name(), Class: provider.ClassUnsupported, Message: "current balance lookup unsupported"}
+}
+
 func (d *Dispatcher) Name() string                                     { return d.EVM.Name() }
 func (d *Dispatcher) Capabilities() provider.Capabilities              { return d.EVM.Capabilities() }
 func (d *Dispatcher) Health(ctx context.Context) provider.HealthStatus { return d.EVM.Health(ctx) }
@@ -153,6 +172,14 @@ func (d *Dispatcher) TRC20ActivityBounds(ctx context.Context, address string) (t
 		return resolver.TRC20ActivityBounds(ctx, address)
 	}
 	return time.Time{}, time.Time{}, &provider.Error{Provider: d.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity bounds unsupported"}
+}
+func (d *Dispatcher) TRC20ActivityProfile(ctx context.Context, address string) (provider.TRC20ActivityProfile, error) {
+	if resolver, ok := d.Tron.(interface {
+		TRC20ActivityProfile(context.Context, string) (provider.TRC20ActivityProfile, error)
+	}); ok {
+		return resolver.TRC20ActivityProfile(ctx, address)
+	}
+	return provider.TRC20ActivityProfile{}, &provider.Error{Provider: d.Name(), Class: provider.ClassUnsupported, Message: "TRC20 activity profile unsupported"}
 }
 func (d *Dispatcher) TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error) {
 	if chain == "tron" && d.Tron != nil {
@@ -186,4 +213,16 @@ func (d *Dispatcher) ResolveAddressTypes(ctx context.Context, chain string, addr
 		return map[string]bool{}, nil
 	}
 	return f.ResolveAddressTypes(ctx, chain, addresses)
+}
+
+func (d *Dispatcher) CurrentBalances(ctx context.Context, chain, address string) ([]provider.CurrentBalance, error) {
+	if chain == "tron" && d.Tron != nil {
+		if resolver, ok := d.Tron.(provider.CurrentBalanceResolver); ok {
+			return resolver.CurrentBalances(ctx, chain, address)
+		}
+	}
+	if resolver, ok := d.EVM.(provider.CurrentBalanceResolver); ok {
+		return resolver.CurrentBalances(ctx, chain, address)
+	}
+	return nil, &provider.Error{Provider: d.Name(), Class: provider.ClassUnsupported, Message: "current balance lookup unsupported"}
 }

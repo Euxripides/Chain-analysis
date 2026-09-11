@@ -84,6 +84,16 @@ func (s *Service) StartOAuth(ctx context.Context) (string, error) {
 	return strings.TrimRight(s.cfg.IssuerURL, "/") + "/authorize?" + q.Encode(), nil
 }
 
+// RestartOAuth removes the complete saved MCP connection before beginning an
+// OAuth flow.  It is used for an upstream "saved connection not recognised"
+// response, where retrying an old dynamically registered client cannot work.
+func (s *Service) RestartOAuth(ctx context.Context) (string, error) {
+	if err := s.Disconnect(ctx); err != nil {
+		return "", fmt.Errorf("clear saved Ankr MCP connection: %w", err)
+	}
+	return s.StartOAuth(ctx)
+}
+
 func (s *Service) CompleteOAuth(ctx context.Context, state, code string) error {
 	if strings.TrimSpace(state) == "" || strings.TrimSpace(code) == "" {
 		return fmt.Errorf("OAuth callback is missing state or code")

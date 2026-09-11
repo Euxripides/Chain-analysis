@@ -37,6 +37,7 @@ func main() {
 	defer cancelBackground()
 	infra.StartMethodBackground(runCtx, cfg, log, false)
 	infra.StartRPCBackground(runCtx, cfg, log, false)
+	infra.StartOutboxBackground(runCtx, log)
 
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,
@@ -44,6 +45,7 @@ func main() {
 		TokenMeta: infra.TokenMeta, TokenBackfill: infra.TokenBackfill,
 		Head: infra.Head, AddressType: infra.AddressType, BalanceRead: infra.BalanceRead,
 		ChainRead: infra.ChainRead, Trace: infra.Trace, RPCGateway: infra.RPCGateway,
+		Capabilities: infra.Capabilities, Investigations: infra.Investigations, Canvases: infra.Canvases,
 	})
 	srv.StartForwarder()
 

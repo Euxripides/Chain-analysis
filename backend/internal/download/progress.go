@@ -327,7 +327,7 @@ func (sc *Scheduler) buildSnapshot(ctx context.Context, job *model.DownloadJob) 
 			snap.ETASeconds = (1 - float64(snap.Progress)) / rate
 		}
 	}
-	if job.Status == model.JobCompleted || job.Status == model.JobPartialFailed || job.Status == model.JobCancelled {
+	if job.Status == model.JobCompleted || job.Status == model.JobPartialFailed || job.Status == model.JobCancelled || job.Status == model.JobAbortedByUser {
 		snap.ETASeconds = 0
 	}
 	return snap, nil
@@ -389,7 +389,7 @@ func (sc *Scheduler) trc20EnrichmentMetrics(ctx context.Context, jobID string) T
 
 func isTerminalJob(status string) bool {
 	switch status {
-	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled:
+	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobAbortedByUser:
 		return true
 	}
 	return false

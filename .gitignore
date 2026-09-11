@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 .DS_Store
 tmp/
+backend/bin/
+mcp/node_modules/
+mcp/dist/

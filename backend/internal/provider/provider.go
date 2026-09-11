@@ -51,6 +51,18 @@ type FetchResult struct {
 	BodyCompleteAt    time.Time
 }
 
+// TRC20ActivityProfile is a cheap planning sample from the address index. It
+// deliberately carries a density estimate rather than a total-row promise:
+// TronGrid does not expose an exact count for paginated address history.
+type TRC20ActivityProfile struct {
+	First          time.Time
+	Latest         time.Time
+	ExactRows      int
+	PeakRowsPerDay float64
+	HasMore        bool
+	Empty          bool
+}
+
 // UsageHook 由 Worker 注入，记录每次 Provider 请求的用量与成本。
 type UsageHook func(u model.UsageRow)
 
@@ -59,6 +71,22 @@ type Capabilities struct {
 	Datasets          []string
 	MaxPageSize       int
 	SupportsTimeRange map[string]bool
+}
+
+// CurrentBalance is a provider-verified latest account balance. RawBalance is
+// kept as the authoritative base-unit integer; callers apply token metadata
+// before presenting a human-readable decimal value.
+type CurrentBalance struct {
+	TokenAddress string    `json:"token_address"`
+	RawBalance   string    `json:"raw_balance"`
+	Native       bool      `json:"native"`
+	AsOfTime     time.Time `json:"as_of_time"`
+}
+
+// CurrentBalanceResolver exposes a bounded latest-state lookup without
+// coupling API handlers to a concrete chain provider.
+type CurrentBalanceResolver interface {
+	CurrentBalances(context.Context, string, string) ([]CurrentBalance, error)
 }
 
 type HealthState string

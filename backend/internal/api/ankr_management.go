@@ -14,7 +14,11 @@ func (s *Server) handleAnkrManagementConnect(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Ankr Management MCP is unavailable"})
 		return
 	}
-	authorizationURL, err := s.ankrMgmt.StartOAuth(r.Context())
+	startOAuth := s.ankrMgmt.StartOAuth
+	if r.URL.Query().Get("reset_connection") == "true" {
+		startOAuth = s.ankrMgmt.RestartOAuth
+	}
+	authorizationURL, err := startOAuth(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error()})
 		return

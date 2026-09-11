@@ -118,7 +118,16 @@ func (s *Service) Status(ctx context.Context, refresh bool) Account {
 }
 
 func (s *Service) Disconnect(ctx context.Context) error {
+	// Ankr can invalidate a dynamically registered OAuth client independently of
+	// its issued bearer.  Keeping that client ID makes a later "re-authorize"
+	// attempt replay the invalid registration and loops back to Ankr's reconnect
+	// page.  A disconnect is therefore a complete local removal of the MCP
+	// connection, including its dynamic registration and pending PKCE states.
+	if _, err := s.pool.Exec(ctx, `DELETE FROM ankr_management_oauth_state`); err != nil {
+		return err
+	}
 	_, err := s.pool.Exec(ctx, `UPDATE ankr_management_connection SET token_ciphertext=NULL,token_nonce=NULL,token_expires_at=NULL,
+		client_id='',redirect_uri='',
 		account_address='',remaining_credits=NULL,balance_usd=NULL,plan='',raw_balance=NULL,connected_at=NULL,last_synced_at=NULL,
 		last_error='',updated_at=now() WHERE id=1`)
 	return err

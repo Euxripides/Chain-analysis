@@ -13,7 +13,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
+	"github.com/blockchain-platform/blockchain-platform/internal/advanced"
+	"github.com/blockchain-platform/blockchain-platform/internal/analysis"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
+	"github.com/blockchain-platform/blockchain-platform/internal/canvas"
+	"github.com/blockchain-platform/blockchain-platform/internal/capability"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
@@ -21,6 +25,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
+	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
@@ -28,7 +33,10 @@ import (
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
+	"github.com/blockchain-platform/blockchain-platform/internal/report"
+	"github.com/blockchain-platform/blockchain-platform/internal/semantic"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/subjectintel"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/update"
 )
@@ -43,31 +51,43 @@ type Deps struct {
 	Log   *slog.Logger
 
 	// V1.3 Method / ABI（§25/§52）
-	Registry      *method.Registry
-	MethodData    *method.ClickHouseStore
-	DeepDecode    *method.AnkrDeepResolver
-	TokenMeta     *tokenmeta.Service
-	TokenBackfill *tokenmeta.BackfillRunner
-	Head          *chainread.HeadService
-	AddressType   *chainread.AddressTypeService
-	BalanceRead   *chainread.BalanceService
-	ChainRead     *chainread.Service
-	Trace         *chaintrace.Service
-	RPCGateway    *rpc.Gateway
+	Registry       *method.Registry
+	MethodData     *method.ClickHouseStore
+	DeepDecode     *method.AnkrDeepResolver
+	TokenMeta      *tokenmeta.Service
+	TokenBackfill  *tokenmeta.BackfillRunner
+	Head           *chainread.HeadService
+	AddressType    *chainread.AddressTypeService
+	BalanceRead    *chainread.BalanceService
+	ChainRead      *chainread.Service
+	Trace          *chaintrace.Service
+	RPCGateway     *rpc.Gateway
+	Capabilities   *capability.Registry
+	Investigations *investigation.Service
+	Canvases       *canvas.Service
 }
 
 type Server struct {
-	deps     Deps
-	router   chi.Router
-	hub      *SSEHub
-	busStop  func()
-	svc      *dataset.Service
-	query    *query.Service
-	meta     *addressmeta.Service
-	explorer *explorer.Service
-	updates  *update.Service
-	detail   *method.DetailService
-	ankrMgmt *ankrmgmt.Service
+	deps           Deps
+	router         chi.Router
+	hub            *SSEHub
+	busStop        func()
+	svc            *dataset.Service
+	query          *query.Service
+	meta           *addressmeta.Service
+	explorer       *explorer.Service
+	updates        *update.Service
+	detail         *method.DetailService
+	ankrMgmt       *ankrmgmt.Service
+	capabilities   *capability.Registry
+	investigations *investigation.Service
+	canvases       *canvas.Service
+	runtime        *investigation.Runtime
+	analysis       *analysis.Service
+	semantic       *semantic.Service
+	advanced       *advanced.Service
+	reports        *report.Service
+	subjects       *subjectintel.Service
 }
 
 type chainAwareAddressTypeResolver struct {
@@ -86,7 +106,13 @@ func (r chainAwareAddressTypeResolver) ResolveAddressTypes(ctx context.Context, 
 }
 
 func New(deps Deps) *Server {
-	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH)}
+	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH), capabilities: deps.Capabilities, investigations: deps.Investigations, canvases: deps.Canvases}
+	if deps.Store != nil && deps.Raw != nil {
+		s.reports = report.New(deps.Store.Pool, deps.Raw)
+	}
+	if deps.Store != nil {
+		s.subjects = subjectintel.New(deps.Store.Pool)
+	}
 	if management, err := ankrmgmt.New(deps.Store.Pool, deps.Cfg.AnkrManagement); err == nil {
 		s.ankrMgmt = management
 	} else {
@@ -114,6 +140,18 @@ func New(deps Deps) *Server {
 	}
 	s.svc.TronMaxTxAutoScan = deps.Cfg.Tron.MaxTxAutoScan
 	s.svc.TronMaxInternalAutoScan = deps.Cfg.Tron.MaxInternalAutoScan
+	if deps.Investigations != nil {
+		s.analysis = analysis.New(s.query)
+		s.semantic = semantic.New(deps.Store.Pool, s.query)
+		s.advanced = advanced.New(deps.Store.Pool, s.query)
+		s.runtime = investigation.NewRuntime(deps.Investigations, s.svc.Ensure).WithAnalyzer(func(ctx context.Context, chain, address string) (any, error) {
+			return s.analysis.Analyze(ctx, chain, address)
+		}).WithSemanticAnalyzer(func(ctx context.Context, chain, address string) (any, error) {
+			return s.semantic.Rebuild(ctx, chain, address)
+		}).WithAdvancedAnalyzer(func(ctx context.Context, chain, address string) (any, error) {
+			return s.advanced.Rebuild(ctx, chain, address)
+		})
+	}
 	if deps.ChainRead != nil && deps.ChainRead.Chains() != nil {
 		s.svc.ValidateChain = func(chain string) error {
 			if chain == "tron" && !deps.Cfg.Tron.Enabled {
@@ -208,9 +246,32 @@ func (s *Server) buildRouter() {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
 	r.Get("/health/ready", s.handleReady)
+	r.Get("/openapi.json", s.handleActionsOpenAPI)
+	r.Get("/docs", s.handleActionsSwagger)
+	r.Get("/redoc", s.handleActionsRedoc)
 
 	r.Route("/api/v1", func(api chi.Router) {
+		s.registerActionRoutes(api)
 		api.Get("/me", s.handleMe)
+		api.Get("/system/architecture", s.handleArchitectureStatus)
+		api.Get("/capabilities", s.handleCapabilities)
+		api.Post("/investigations", s.handleCreateInvestigation)
+		api.Get("/investigations", s.handleListInvestigations)
+		api.Get("/investigations/{id}", s.handleGetInvestigation)
+		api.Get("/investigations/{id}/runtime", s.handleInvestigationRuntime)
+		api.Get("/investigations/{id}/artifacts", s.handleInvestigationArtifacts)
+		api.Get("/analysis/addresses/{chain}/{address}/flow-profile", s.handleAddressFlowProfile)
+		api.Get("/analysis/addresses/{chain}/{address}/semantic-events", s.handleAddressSemanticEvents)
+		api.Post("/analysis/addresses/{chain}/{address}/semantic-events/rebuild", s.handleRebuildAddressSemanticEvents)
+		api.Get("/analysis/addresses/{chain}/{address}/advanced", s.handleAddressAdvancedAnalysis)
+		api.Post("/analysis/addresses/{chain}/{address}/advanced/rebuild", s.handleRebuildAddressAdvancedAnalysis)
+		api.Post("/investigations/{id}/{action}", s.handleInvestigationAction)
+		api.Get("/investigations/{id}/reports", s.handleListInvestigationReports)
+		api.Post("/investigations/{id}/reports", s.handleGenerateInvestigationReport)
+		api.Get("/reports/{id}/download", s.handleDownloadInvestigationReport)
+		api.Get("/investigations/{id}/subjects", s.handleInvestigationSubjects)
+		api.Post("/investigations/{id}/subjects", s.handleInvestigationSubjects)
+		api.Post("/investigations/{id}/relationships", s.handleInvestigationRelationships)
 		api.Post("/datasets/ensure", s.handleEnsure)
 		api.Post("/datasets/coverage/preview", s.handleCoveragePreview)
 		api.Get("/download-jobs", s.handleListJobs)
@@ -218,6 +279,9 @@ func (s *Server) buildRouter() {
 		api.Post("/download-jobs/{id}/pause", s.handlePause)
 		api.Post("/download-jobs/{id}/resume", s.handleResume)
 		api.Post("/download-jobs/{id}/cancel", s.handleCancel)
+		api.Get("/download-jobs/{id}/guard", s.handleGetVolumeGuards)
+		api.Post("/download-jobs/{id}/guard/continue", s.handleContinueVolumeGuard)
+		api.Post("/download-jobs/{id}/guard/abort", s.handleAbortVolumeGuard)
 		api.Post("/download-jobs/{id}/subjects/{subjectID}/{action}", s.handleSubjectControl)
 		api.Get("/download-jobs/{id}/events", s.handleJobEvents)
 		api.Get("/providers/ankr/status", s.handleProviderStatus)
@@ -291,6 +355,13 @@ func (s *Server) buildRouter() {
 		api.Get("/cases", s.handleListCases)
 		api.Post("/cases", s.handleCreateCase)
 		api.Delete("/cases/{id}", s.handleDeleteCase)
+		api.Get("/cases/{id}/canvases", s.handleListCanvases)
+		api.Post("/cases/{id}/canvases", s.handleCreateCanvas)
+		api.Get("/canvases/{id}", s.handleGetCanvas)
+		api.Patch("/canvases/{id}", s.handleUpdateCanvas)
+		api.Post("/canvases/{id}/branch", s.handleBranchCanvas)
+		api.Get("/canvases/{id}/snapshots", s.handleListCanvasSnapshots)
+		api.Post("/canvases/{id}/snapshots", s.handleCreateCanvasSnapshot)
 		api.Get("/tags", s.handleListTags)
 		api.Post("/tags", s.handleCreateTag)
 		api.Delete("/tags/{id}", s.handleDeleteTag)
@@ -334,6 +405,9 @@ func (s *Server) buildRouter() {
 func (s *Server) Handler() http.Handler { return s.router }
 
 func (s *Server) StartForwarder() {
+	if s.runtime != nil {
+		s.runtime.Recover(context.Background())
+	}
 	s.startBusForwarder(s.deps.Log)
 }
 

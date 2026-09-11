@@ -270,6 +270,84 @@ func (s *Store) SplitPendingShardsForDataset(ctx context.Context, datasetID stri
 	return split, nil
 }
 
+// SplitPendingTimeShardsForDataset accelerates timestamp-bounded provider
+// streams such as TronGrid. Only untouched PENDING shards are split, so active
+// cursors and durable checkpoints remain valid.
+func (s *Store) SplitPendingTimeShardsForDataset(ctx context.Context, datasetID string, maxSplits int, minWindow time.Duration) (int, error) {
+	rows, err := s.Pool.Query(ctx, "SELECT id, from_timestamp, to_timestamp FROM download_shards "+
+		"WHERE dataset_id=$1 AND status='PENDING' AND from_timestamp IS NOT NULL AND to_timestamp IS NOT NULL "+
+		"AND to_timestamp - from_timestamp >= make_interval(secs => $3) ORDER BY to_timestamp - from_timestamp DESC LIMIT $2",
+		datasetID, maxSplits, minWindow.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	type candidate struct {
+		id       string
+		from, to time.Time
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.id, &c.from, &c.to); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+
+	split := 0
+	for _, c := range candidates {
+		first, second, ok := splitTimeInterval(c.from, c.to)
+		if !ok {
+			continue
+		}
+		tx, err := s.Pool.Begin(ctx)
+		if err != nil {
+			return split, err
+		}
+		tag, err := tx.Exec(ctx, "UPDATE download_shards SET status='CANCELLED', error=$2, updated_at=now() WHERE id=$1 AND status='PENDING'", c.id, TailSplitSupersededError)
+		if err != nil || tag.RowsAffected() == 0 {
+			_ = tx.Rollback(ctx)
+			if err != nil {
+				return split, err
+			}
+			continue
+		}
+		for _, interval := range [][2]time.Time{first, second} {
+			_, err = tx.Exec(ctx, "INSERT INTO download_shards "+
+				"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_size, page_state, status, priority, max_retries, work_score, tail_boost) "+
+				"SELECT $1, job_id, subject_id, dataset_id, dataset, from_block, to_block, $2, $3, page_size, page_state, 'PENDING', priority, max_retries, work_score/2, true FROM download_shards WHERE id=$4",
+				uuid.NewString(), interval[0], interval[1], c.id)
+			if err != nil {
+				_ = tx.Rollback(ctx)
+				return split, err
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return split, err
+		}
+		split++
+	}
+	return split, nil
+}
+
+func splitTimeInterval(from, to time.Time) (first, second [2]time.Time, ok bool) {
+	if !from.Before(to) || to.Sub(from) < time.Millisecond {
+		return first, second, false
+	}
+	mid := from.Add(to.Sub(from) / 2).UTC()
+	secondFrom := mid.Add(time.Millisecond)
+	if secondFrom.After(to) {
+		return first, second, false
+	}
+	return [2]time.Time{from, mid}, [2]time.Time{secondFrom, to}, true
+}
+
 // EstimateRowsPerBlock 从 Shard 画像估计密度（Tail ETA / Density-aware Sharding，§12）。
 func (s *Store) EstimateRowsPerBlock(ctx context.Context, chain, dataset string) (float64, error) {
 	var v float64

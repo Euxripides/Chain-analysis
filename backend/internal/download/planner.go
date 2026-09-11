@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -42,10 +44,9 @@ type gap struct {
 }
 
 type Planner struct {
-	store                     *store.Store
-	ch                        *clickhouse.Conn
-	log                       *slog.Logger
-	localTRC20IdentityEnabled bool
+	store *store.Store
+	ch    *clickhouse.Conn
+	log   *slog.Logger
 
 	// V1.2 Count Oracle 平面（nil = 完全关闭，Planner 行为与 V1.1 一致）。
 	oracle            countoracle.Oracle
@@ -82,8 +83,8 @@ func (p *Planner) budgetOpen() bool {
 	return time.Now().Before(p.planBudgetAt)
 }
 
-func NewPlanner(st *store.Store, ch *clickhouse.Conn, log *slog.Logger, localTRC20IdentityEnabled bool) *Planner {
-	return &Planner{store: st, ch: ch, log: log, localTRC20IdentityEnabled: localTRC20IdentityEnabled}
+func NewPlanner(st *store.Store, ch *clickhouse.Conn, log *slog.Logger, _ bool) *Planner {
+	return &Planner{store: st, ch: ch, log: log}
 }
 
 // ConfigureV12 Worker 启动时注入 Count Oracle 平面（§89 Shadow / §95 aware 由 oracle.Aware() 决定）。
@@ -148,6 +149,14 @@ func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
 		p.log.Info("multi-address LPT order applied", "job_id", job.ID, "subjects", len(subjects))
 	}
 	want, bounded := requestedBlockInterval(job)
+	if tronParallelPlanningEligible(job, subjects) {
+		if err := p.planTronSubjectsParallel(ctx, job, subjects, want, bounded); err != nil {
+			p.log.Error("parallel TRON planning failed", "job_id", job.ID, "err", err)
+			_ = p.store.SetJobStatusError(ctx, job.ID, model.JobFailed, err.Error())
+			return err
+		}
+		return p.store.SetJobStatus(ctx, job.ID, model.JobQueued)
+	}
 	for _, subj := range subjects {
 		for _, ds := range job.Datasets {
 			if err := p.planDataset(ctx, job, subj, ds, want, bounded); err != nil {
@@ -161,6 +170,44 @@ func (p *Planner) PlanJob(ctx context.Context, job *model.DownloadJob) error {
 		}
 	}
 	return p.store.SetJobStatus(ctx, job.ID, model.JobQueued)
+}
+
+func tronParallelPlanningEligible(job *model.DownloadJob, subjects []model.Subject) bool {
+	if job == nil || job.Chain != "tron" || len(subjects) < 2 {
+		return false
+	}
+	for _, ds := range job.Datasets {
+		if ds != "transactions" && ds != "token_transfers" {
+			return false
+		}
+	}
+	return true
+}
+
+// planTronSubjectsParallel overlaps the independent address-boundary probes.
+// The limit is intentionally below the production TRC20 pool so planning can
+// never consume every Provider slot before acquisition begins.
+func (p *Planner) planTronSubjectsParallel(ctx context.Context, job *model.DownloadJob, subjects []model.Subject, want store.BlockInterval, bounded bool) error {
+	g, groupCtx := errgroup.WithContext(ctx)
+	sem := make(chan struct{}, minInt(8, len(subjects)))
+	for _, subject := range subjects {
+		subject := subject
+		g.Go(func() error {
+			select {
+			case sem <- struct{}{}:
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+			}
+			defer func() { <-sem }()
+			for _, ds := range job.Datasets {
+				if err := p.planDataset(groupCtx, job, subject, ds, want, bounded); err != nil {
+					return fmt.Errorf("subject %s dataset %s: %w", subject.Subject, ds, err)
+				}
+			}
+			return p.store.RecomputeSubject(groupCtx, subject.ID)
+		})
+	}
+	return g.Wait()
 }
 
 func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj model.Subject, ds string, want store.BlockInterval, bounded bool) error {
@@ -344,6 +391,53 @@ func tronColdTimeIntervals(job *model.DownloadJob, now time.Time) []timeInterval
 }
 
 func tronColdActivityIntervals(job *model.DownloadJob, now, firstActivity, latestActivity time.Time) []timeInterval {
+	return tronActivityIntervals(job, now, firstActivity, latestActivity, tronActivityShardCap(job))
+}
+
+func tronActivityShardCap(job *model.DownloadJob) int {
+	mode := string(job.EffectiveMode)
+	if mode == "" {
+		mode = string(job.RequestedMode)
+	}
+	switch mode {
+	case "safe", "economy":
+		return 47
+	case "fast":
+		return 95
+	case "turbo":
+		return 127
+	default:
+		return 47
+	}
+}
+
+func tronProfileShardCount(job *model.DownloadJob, profile provider.TRC20ActivityProfile) int {
+	capShards := tronActivityShardCap(job)
+	if profile.ExactRows > 0 {
+		// Small exact histories should not pay more empty range probes than
+		// useful pages. Aim for about eight pages per active shard.
+		pages := (profile.ExactRows + 199) / 200
+		return maxInt(1, minInt(capShards, (pages+7)/8))
+	}
+	base := minInt(capShards, tronTimeShardCount(job))
+	if profile.PeakRowsPerDay <= 0 || profile.First.IsZero() || profile.Latest.Before(profile.First) {
+		return maxInt(1, base)
+	}
+	activeDays := math.Max(1, profile.Latest.Sub(profile.First).Hours()/24)
+	// Edge-page density is deliberately damped because bursty accounts are
+	// not uniformly dense. 20k projected rows per shard keeps hot histories
+	// parallel without turning ordinary sparse addresses into hundreds of
+	// one-page probes.
+	projectedRows := profile.PeakRowsPerDay * activeDays * 0.25
+	densityShards := int(math.Ceil(projectedRows / 20_000))
+	return minInt(capShards, maxInt(base, densityShards))
+}
+
+func tronProfiledActivityIntervals(job *model.DownloadJob, now time.Time, profile provider.TRC20ActivityProfile) []timeInterval {
+	return tronActivityIntervals(job, now, profile.First, profile.Latest, tronProfileShardCount(job, profile))
+}
+
+func tronActivityIntervals(job *model.DownloadJob, now, firstActivity, latestActivity time.Time, n int) []timeInterval {
 	base := tronTimeIntervals(job, now)
 	if len(base) == 0 {
 		return nil
@@ -356,19 +450,7 @@ func tronColdActivityIntervals(job *model.DownloadJob, now, firstActivity, lates
 	if latestActivity.After(start) && latestActivity.Before(end) {
 		activeEnd = latestActivity.UTC()
 	}
-	n := 47
-	mode := string(job.EffectiveMode)
-	if mode == "" {
-		mode = string(job.RequestedMode)
-	}
-	switch mode {
-	case "safe", "economy":
-		n = 47
-	case "fast":
-		n = 95
-	case "turbo":
-		n = 127
-	}
+	n = maxInt(1, n)
 	spanMillis := activeEnd.UnixMilli() - start.UnixMilli() + 1
 	const minShardMillis = int64((6 * time.Hour) / time.Millisecond)
 	if maxBySpan := int((spanMillis + minShardMillis - 1) / minShardMillis); n > maxBySpan {
@@ -390,7 +472,23 @@ func tronColdActivityIntervals(job *model.DownloadJob, now, firstActivity, lates
 }
 
 func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJob, subj model.Subject, item model.DatasetItem) error {
-	intervals := p.tronDataAwareTimeIntervals(ctx, job, subj.Subject, item.Dataset, time.Now())
+	planningJob := job
+	if job.RangeType == "full" && !strings.EqualFold(job.ReusePolicy, "refresh") && job.Source != "benchmark" {
+		state, err := p.store.GetAddressDatasetSyncState(ctx, job.Chain, subj.Subject, item.Dataset)
+		if err != nil {
+			return err
+		}
+		if state != nil {
+			incremental, alreadyCurrent := tronIncrementalPlanningJob(job, state, time.Now())
+			if alreadyCurrent {
+				observability.CoverageSavedRequests.Inc()
+				return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
+			}
+			planningJob = incremental
+			p.log.Info("TRON address dataset tail-only planning", "job_id", job.ID, "dataset", item.Dataset, "address", subj.Subject, "complete_through", state.CompleteThrough, "tail_from", *incremental.FromTimestamp, "tail_to", *incremental.ToTimestamp)
+		}
+	}
+	intervals := p.tronDataAwareTimeIntervals(ctx, planningJob, subj.Subject, item.Dataset, time.Now())
 	if len(intervals) == 0 {
 		return p.store.CreateShards(ctx, []model.Shard{p.baseShard(job, subj, item)})
 	}
@@ -408,25 +506,44 @@ func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJ
 	return p.store.CreateShards(ctx, shards)
 }
 
+func tronIncrementalPlanningJob(job *model.DownloadJob, state *store.AddressDatasetSyncState, now time.Time) (*model.DownloadJob, bool) {
+	if state == nil {
+		return job, false
+	}
+	from := state.CompleteThrough.UTC().Add(time.Millisecond)
+	to := now.UTC().Add(time.Minute)
+	if from.After(to) {
+		return nil, true
+	}
+	clone := *job
+	clone.FromTimestamp = &from
+	clone.ToTimestamp = &to
+	return &clone, false
+}
+
 func (p *Planner) tronDataAwareTimeIntervals(ctx context.Context, job *model.DownloadJob, address, dataset string, now time.Time) []timeInterval {
 	fallback := tronTimeIntervals(job, now)
-	if !p.localTRC20IdentityEnabled && dataset == "token_transfers" {
-		if resolver, ok := p.prov.(interface {
-			TRC20ActivityBounds(context.Context, string) (time.Time, time.Time, error)
-		}); ok {
-			probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-			first, latest, err := resolver.TRC20ActivityBounds(probeCtx, address)
-			cancel()
-			if err == nil && !first.IsZero() {
-				intervals := tronColdActivityIntervals(job, now, first, latest)
-				p.log.Info("TRON cold history bounded by indexed activity", "job_id", job.ID, "dataset", dataset, "address", address, "first_activity", first, "latest_activity", latest, "shards", len(intervals))
-				return intervals
-			}
-			p.log.Warn("TRON activity boundary probe failed; using genesis-safe cold plan", "job_id", job.ID, "address", address, "error", err)
-		}
-		return tronColdTimeIntervals(job, now)
+	if len(fallback) < 2 || (dataset != "token_transfers" && dataset != "transactions") {
+		return fallback
 	}
-	if p.ch == nil || len(fallback) < 2 || (dataset != "token_transfers" && dataset != "transactions") {
+	// ClickHouse can contain partial rows from interrupted or historical jobs
+	// even when no complete sync watermark exists. Quantiles from that partial
+	// population create severely skewed shards: an unobserved multi-year period
+	// collapses into one serial tail. Only a durable full-sync watermark makes
+	// local row quantiles trustworthy for full-history planning.
+	if job.RangeType == "full" && !strings.EqualFold(job.ReusePolicy, "refresh") && job.Source != "benchmark" {
+		state, err := p.store.GetAddressDatasetSyncState(ctx, job.Chain, address, dataset)
+		if err != nil || !localTRONQuantilesTrusted(job, state) {
+			if dataset == "token_transfers" {
+				return p.remoteTRC20ActivityIntervals(ctx, job, address, dataset, now)
+			}
+			return tronColdTimeIntervals(job, now)
+		}
+	}
+	if p.ch == nil {
+		if dataset == "token_transfers" {
+			return p.remoteTRC20ActivityIntervals(ctx, job, address, dataset, now)
+		}
 		return fallback
 	}
 	quantiles := make([]string, 0, len(fallback)-1)
@@ -437,9 +554,15 @@ func (p *Planner) tronDataAwareTimeIntervals(ctx context.Context, job *model.Dow
 	var count uint64
 	var boundaries []int64
 	if err := p.ch.DB().QueryRow(ctx, query, job.Chain, address, address).Scan(&count, &boundaries); err != nil {
+		if dataset == "token_transfers" {
+			return p.remoteTRC20ActivityIntervals(ctx, job, address, dataset, now)
+		}
 		return fallback
 	}
 	if count == 0 || len(boundaries) == 0 {
+		if dataset == "token_transfers" {
+			return p.remoteTRC20ActivityIntervals(ctx, job, address, dataset, now)
+		}
 		return tronColdTimeIntervals(job, now)
 	}
 	startMillis := fallback[0].From.UnixMilli()
@@ -461,6 +584,51 @@ func (p *Planner) tronDataAwareTimeIntervals(ctx context.Context, job *model.Dow
 	}
 	p.log.Info("TRON time shards balanced by local row quantiles", "job_id", job.ID, "dataset", dataset, "address", address, "local_rows", count, "shards", len(intervals))
 	return intervals
+}
+
+func localTRONQuantilesTrusted(job *model.DownloadJob, state *store.AddressDatasetSyncState) bool {
+	if job == nil {
+		return false
+	}
+	if job.RangeType == "full" && !strings.EqualFold(job.ReusePolicy, "refresh") && job.Source != "benchmark" {
+		return state != nil
+	}
+	return true
+}
+
+func (p *Planner) remoteTRC20ActivityIntervals(ctx context.Context, job *model.DownloadJob, address, dataset string, now time.Time) []timeInterval {
+	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if resolver, ok := p.prov.(interface {
+		TRC20ActivityProfile(context.Context, string) (provider.TRC20ActivityProfile, error)
+	}); ok {
+		profile, err := resolver.TRC20ActivityProfile(probeCtx, address)
+		if err == nil && profile.Empty {
+			fallback := tronTimeIntervals(job, now)
+			if len(fallback) > 0 {
+				p.log.Info("TRON cold address has no indexed activity", "job_id", job.ID, "dataset", dataset, "address", address)
+				return []timeInterval{{From: fallback[0].From, To: fallback[len(fallback)-1].To}}
+			}
+		}
+		if err == nil && !profile.First.IsZero() {
+			intervals := tronProfiledActivityIntervals(job, now, profile)
+			p.log.Info("TRON cold history profiled by indexed activity", "job_id", job.ID, "dataset", dataset, "address", address,
+				"first_activity", profile.First, "latest_activity", profile.Latest, "exact_rows", profile.ExactRows,
+				"peak_rows_per_day", profile.PeakRowsPerDay, "shards", len(intervals))
+			return intervals
+		}
+		p.log.Warn("TRON activity profile failed; using genesis-safe cold plan", "job_id", job.ID, "address", address, "error", err)
+		return tronColdTimeIntervals(job, now)
+	}
+	if resolver, ok := p.prov.(interface {
+		TRC20ActivityBounds(context.Context, string) (time.Time, time.Time, error)
+	}); ok {
+		first, latest, err := resolver.TRC20ActivityBounds(probeCtx, address)
+		if err == nil && !first.IsZero() {
+			return tronColdActivityIntervals(job, now, first, latest)
+		}
+	}
+	return tronColdTimeIntervals(job, now)
 }
 
 func (p *Planner) baseShard(job *model.DownloadJob, subj model.Subject, item model.DatasetItem) model.Shard {

@@ -11,7 +11,7 @@ import { fmtDuration, statusLabel, type Job } from '../types'
 import { copyText } from '../utils/clipboard'
 import { datasetLabel } from '../utils/field-labels'
 
-const terminal = new Set(['COMPLETED', 'CANCELLED', 'FAILED', 'PARTIAL_FAILED'])
+const terminal = new Set(['COMPLETED', 'CANCELLED', 'FAILED', 'PARTIAL_FAILED', 'ABORTED_BY_USER'])
 const statusViews = [
   ['all', '全部任务'], ['RUNNING', '运行中'], ['COMPLETED', '已完成'], ['FAILED', '失败'], ['PARTIAL_FAILED', '异常'],
 ] as const

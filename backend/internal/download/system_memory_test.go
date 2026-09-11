@@ -38,6 +38,27 @@ func TestMemoryGuardRequiresSustainedSwapGrowth(t *testing.T) {
 	}
 }
 
+func TestMemoryGuardIgnoresOtherProcessSwapActivity(t *testing.T) {
+	g := &memoryGuard{}
+	base := systemMemorySnapshot{
+		WorkerSwapBytes:     16 << 20,
+		VMMemAvailableBytes: 20 << 30,
+		PSWAPIn:             100,
+		PSWAPOut:            200,
+	}
+	if state, _ := g.Evaluate(base, 12<<30, 6<<30, 4<<30, 2); state != stateNormal {
+		t.Fatalf("baseline state=%v", state)
+	}
+	for i := int64(1); i <= 4; i++ {
+		sample := base
+		sample.PSWAPIn += i
+		sample.PSWAPOut += i
+		if state, reason := g.Evaluate(sample, 12<<30, 6<<30, 4<<30, 2); state != stateNormal {
+			t.Fatalf("system-only swap activity state=%v reason=%q", state, reason)
+		}
+	}
+}
+
 func TestMemoryGuardOOMIncrement(t *testing.T) {
 	g := &memoryGuard{}
 	base := systemMemorySnapshot{VMMemAvailableBytes: 20 << 30, CgroupOOM: 3}
