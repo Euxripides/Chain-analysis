@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -105,7 +107,8 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status, code := iam.StatusForError(err)
-		if status >= 500 {
+		// 客户端主动断开（浏览器导航、SSE 取消）不是服务端故障，不按 ERROR 记录。
+		if status >= 500 && !errors.Is(err, context.Canceled) {
 			// 内部错误必须留下可诊断的 cause，但绝不回显给客户端（§21.3）。
 			s.deps.Log.Error("login failed", "err", err, "identifier_digest", iam.SubjectDigest(identifier),
 				"audience", audience, "request_id", meta.RequestID)

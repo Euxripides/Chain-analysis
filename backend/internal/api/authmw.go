@@ -180,7 +180,9 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
 					// 由 require() 返回 401 而不是静默降级为兼容头。
 					s.iam.Sessions().ClearCookies(w, aud)
 				default:
-					s.deps.Log.Error("session authenticate failed", "err", err, "audience", aud)
+					if !errors.Is(err, context.Canceled) {
+						s.deps.Log.Error("session authenticate failed", "err", err, "audience", aud)
+					}
 				}
 			}
 		}

@@ -1,3 +1,11 @@
+# 目标态：两个应用 + 共享包（docs/dual-system-development-plan.md §6.1）。
+# 现状：应用通过 Vite alias / tsconfig paths 解析 @chain/*，依赖仍从 frontend/node_modules 解析。
+# 正式切换 workspace 链接前必须验证：共享包无反向依赖、两个应用与旧 SPA 均可独立构建。
+# 见 docs/adr/AD-010。
+packages:
+  - "apps/*"
+  - "packages/*"
+
 allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
