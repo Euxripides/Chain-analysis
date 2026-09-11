@@ -1,0 +1,15 @@
+{
+  "test_id": "AUDIT-001..005",
+  "title": "审计事件、哈希链、登录记录",
+  "executed_at": "2026-09-12T03:28:40.219313+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "所有业务/授权事件入 audit_events_v2；audit 与 login 两条链可完整校验；失败登录也记录且账号脱敏",
+  "actual": "audit 链 checked=11 valid=true；login 链 checked=5 valid=true；bad_password/unknown_account 均入库且 subject_masked 含掩码",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/A-AUDIT-01/screenshot.png",
+    "acceptance-evidence/dual-system-v1/tests/A-LOGIN-01/screenshot.png"
+  ],
+  "notes": ""
+}

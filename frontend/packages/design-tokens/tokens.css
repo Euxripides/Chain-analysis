@@ -1,0 +1,116 @@
+/*
+ * 设计令牌 —— docs/dual-system-development-plan.md §7.2 / §17.2
+ * 主题：证据控制台（Evidence Console）。两套系统共用同一套令牌。
+ */
+:root {
+  /* 品牌与结构色 */
+  --c-graphite: #101828;
+  --c-cobalt: #175cd3;
+  --c-cobalt-strong: #0f47a8;
+  --c-cobalt-soft: #e8f1fd;
+  --c-ice: #f3f7fc;
+  --c-slate: #667085;
+  --c-amber: #d97706;          /* Evidence Amber：待复核 / 证据边界 / 风险 */
+  --c-amber-soft: #fdf3e4;
+  --c-green: #067647;          /* Verified Green：已验证 / 健康 / 完成 */
+  --c-green-soft: #e6f5ee;
+
+  /* 表面与边框 */
+  --c-surface: #ffffff;
+  --c-surface-muted: #f8fafd;
+  --c-surface-sunken: #eef2f8;
+  --c-border: #d8e0ec;
+  --c-border-strong: #b6c2d4;
+
+  /* 状态语义 */
+  --c-danger: #b42318;
+  --c-danger-soft: #fdeceb;
+  --c-neutral: #475467;
+  --c-neutral-soft: #f0f2f5;
+  --c-focus: #175cd3;
+
+  /* 排版：中文 Noto Sans SC，拉丁/标题 IBM Plex Sans，地址/哈希/金额 IBM Plex Mono */
+  --font-sans: "IBM Plex Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-22: 1.375rem;
+  --fs-28: 1.75rem;
+
+  /* 间距（4px 基线） */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  /* 圆角与阴影 */
+  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.10);
+  --shadow-lg: 0 24px 64px rgba(16, 24, 40, 0.22);
+
+  /* 层级 */
+  --z-sticky: 20;
+  --z-rail: 30;
+  --z-dialog: 1000;
+  --z-toast: 1100;
+
+  /* 动效 */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-14);
+  color: var(--c-graphite);
+  background: var(--c-ice);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+/* 所有数字使用 tabular numerals（§7.2） */
+.num, table td, table th, .amount, .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono { font-family: var(--font-mono); }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+
+a { color: var(--c-cobalt); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { font: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* 长内容表格容器：移动端只允许表格自身横向滚动，页面不产生横向滚动（§27 UX-002） */
+.table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

@@ -1,0 +1,21 @@
+# 用户层系统（Investigator Console）。
+# 灰度期监听 127.0.0.1:3001，由 Nginx 以 /app-v2/ 前缀对外。
+# 只读静态产物，不连接数据库，不读取任何密钥。
+[Unit]
+Description=Blockchain Platform user console (Investigator Console, 127.0.0.1:3001)
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/user-console/vite.config.ts --host 127.0.0.1 --port 3001 --strictPort
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=0
+StandardOutput=append:/tmp/user-console.log
+StandardError=append:/tmp/user-console.log
+
+[Install]
+WantedBy=default.target

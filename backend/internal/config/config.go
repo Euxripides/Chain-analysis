@@ -442,6 +442,7 @@ type Config struct {
 	TokenMetadata     TokenMetadataConfig
 	RPC               RPCConfig
 	AnkrManagement    AnkrManagementConfig
+	Auth              AuthConfig
 
 	// V1.2（§12/§16/§69/§33/§121）：Chainbase Count Oracle 平面 + 全局并发。
 	Chainbase   ChainbaseConfig
@@ -450,6 +451,25 @@ type Config struct {
 
 	// V1.3：Count Provider Port（§2/§76/§84/§97）。
 	CountProvider CountProviderConfig
+}
+
+// AuthConfig 是 §6.3 / §28.4 的认证与会话策略。
+//
+// 生产环境必须设置 AUTH_MODE=session，应用将不再接受任何客户端自报身份头。
+type AuthConfig struct {
+	Mode               string // session | hybrid | legacy
+	CookieSecure       bool
+	CookiePrefix       string // 部署在 TLS 终止后可设置为 __Host-
+	CookieDomain       string
+	SessionIdleTTL     time.Duration
+	SessionAbsoluteTTL time.Duration
+	MaxFailedLogins    int
+	LockDuration       time.Duration
+	LoginRatePerMinute int
+	MinPasswordLength  int
+	RequireAdminMFA    bool
+	TrustedProxies     []string
+	BootstrapEmail     string
 }
 
 // AnkrManagementConfig controls the account-scoped Management MCP connection.
@@ -465,6 +485,14 @@ type AnkrManagementConfig struct {
 }
 
 // splitList 解析逗号分隔配置。
+// defaultAuthMode 让生产环境默认使用最严格模式。
+func defaultAuthMode(appEnv string) string {
+	if appEnv == "production" {
+		return "session"
+	}
+	return "hybrid"
+}
+
 func splitList(value string) []string {
 	var out []string
 	for _, part := range strings.Split(value, ",") {
@@ -782,6 +810,22 @@ func Load() *Config {
 		ExportBucket:      env("EXPORT_BUCKET", "blockchain-exports"),
 		BackupsBucket:     env("BACKUPS_BUCKET", "blockchain-backups"),
 		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
+		Auth: AuthConfig{
+			// 未配置时按环境决定：production 强制 session，其它环境 hybrid 便于平滑迁移。
+			Mode:               env("AUTH_MODE", defaultAuthMode(env("APP_ENV", "development"))),
+			CookieSecure:       envBool("AUTH_COOKIE_SECURE", env("APP_ENV", "development") == "production"),
+			CookiePrefix:       env("AUTH_COOKIE_PREFIX", ""),
+			CookieDomain:       env("AUTH_COOKIE_DOMAIN", ""),
+			SessionIdleTTL:     time.Duration(envInt("AUTH_SESSION_IDLE_TTL_SECONDS", 43200)) * time.Second,
+			SessionAbsoluteTTL: time.Duration(envInt("AUTH_SESSION_ABSOLUTE_TTL_SECONDS", 604800)) * time.Second,
+			MaxFailedLogins:    envInt("AUTH_MAX_FAILED_LOGINS", 10),
+			LockDuration:       time.Duration(envInt("AUTH_LOCK_DURATION_SECONDS", 900)) * time.Second,
+			LoginRatePerMinute: envInt("AUTH_LOGIN_RATE_PER_MINUTE", 20),
+			MinPasswordLength:  envInt("AUTH_MIN_PASSWORD_LENGTH", 12),
+			RequireAdminMFA:    envBool("AUTH_REQUIRE_ADMIN_MFA", false),
+			TrustedProxies:     splitList(env("AUTH_TRUSTED_PROXIES", "127.0.0.1/32,::1/128")),
+			BootstrapEmail:     env("AUTH_BOOTSTRAP_EMAIL", ""),
+		},
 		Tron: TronConfig{
 			Enabled: envBool("TRON_ENABLED", false),
 			VolumeGuard: VolumeGuardConfig{

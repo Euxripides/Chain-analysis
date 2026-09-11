@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/advanced"
 	"github.com/blockchain-platform/blockchain-platform/internal/analysis"
+	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/canvas"
 	"github.com/blockchain-platform/blockchain-platform/internal/capability"
@@ -25,12 +27,14 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
+	"github.com/blockchain-platform/blockchain-platform/internal/iam"
 	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
+	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/report"
@@ -88,6 +92,14 @@ type Server struct {
 	advanced       *advanced.Service
 	reports        *report.Service
 	subjects       *subjectintel.Service
+
+	// §6.3/§6.5：身份、授权与审计底座。
+	cfg            *config.Config
+	iam            *iam.Service
+	policy         *policy.Engine
+	audit          *audit.Writer
+	authMode       auth.Mode
+	trustedProxies []*net.IPNet
 }
 
 type chainAwareAddressTypeResolver struct {
@@ -152,6 +164,7 @@ func New(deps Deps) *Server {
 			return s.advanced.Rebuild(ctx, chain, address)
 		})
 	}
+	s.wireIdentityAndAudit(deps)
 	if deps.ChainRead != nil && deps.ChainRead.Chains() != nil {
 		s.svc.ValidateChain = func(chain string) error {
 			if chain == "tron" && !deps.Cfg.Tron.Enabled {
@@ -238,8 +251,10 @@ func (s *Server) buildRouter() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(s.corsMiddleware())
+	r.Use(s.requestMetaMiddleware)
 	r.Use(s.logMiddleware())
-	r.Use(auth.Middleware)
+	r.Use(s.identityMiddleware)
+	r.Use(s.auditCaptureMiddleware)
 
 	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
@@ -395,6 +410,21 @@ func (s *Server) buildRouter() {
 		api.Post("/admin/methods/backfill/{id}/{action}", s.handleControlBackfill)
 		api.Post("/admin/methods/signatures", s.handleCreateSignature)
 		api.Post("/admin/contracts/{chain}/{address}/abi", s.handleUploadABI)
+	})
+
+	// §21.4 认证 API（新系统入口）。
+	r.Route("/api/auth/v1", func(ar chi.Router) {
+		s.registerAuthV1(ar)
+	})
+
+	// §21.5 用户层 API（Investigator Console）。
+	r.Route("/api/v2", func(ur chi.Router) {
+		s.registerUserV2(ur)
+	})
+
+	// §21.6 后台管理 API（Admin Console）。管理接口默认拒绝：每个端点都必须声明权限。
+	r.Route("/api/admin/v1", func(ar chi.Router) {
+		s.registerAdminV1(ar)
 	})
 
 	// 短期下载票据：校验后经 API 流式传输，支持 HTTP Range。

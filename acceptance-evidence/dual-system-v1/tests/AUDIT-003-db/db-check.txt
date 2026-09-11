@@ -1,0 +1,32 @@
+# AUDIT-003 / AUDIT-004 数据库层负向验证（在部署实例上直接执行 psql）
+# 实例：192.168.31.152, database=blockchain_platform, 时间：2026-09-12 灰度验证
+
+$ psql -c "UPDATE audit_events_v2 SET result='success', action='tampered' WHERE seq=1"
+ERROR:  audit table audit_events_v2 is append-only; UPDATE is not permitted (set app.audit_maintenance=on for an approved retention job)
+CONTEXT:  PL/pgSQL function audit_append_only_guard() line 9 at RAISE
+
+$ psql -c "DELETE FROM audit_events_v2 WHERE seq=1"
+ERROR:  audit table audit_events_v2 is append-only; DELETE is not permitted (set app.audit_maintenance=on for an approved retention job)
+CONTEXT:  PL/pgSQL function audit_append_only_guard() line 9 at RAISE
+
+$ psql -c "UPDATE login_events SET subject_masked='x' WHERE seq=1"
+ERROR:  audit table login_events is append-only; UPDATE is not permitted (set app.audit_maintenance=on for an approved retention job)
+CONTEXT:  PL/pgSQL function audit_append_only_guard() line 9 at RAISE
+
+$ psql -c "UPDATE audit_chain_heads SET last_seq=0 WHERE chain='audit'"      # head 当时为 2
+ERROR:  audit chain audit last_seq must not decrease (2 -> 0)
+CONTEXT:  PL/pgSQL function audit_chain_heads_monotonic() line 7 at RAISE
+
+$ psql -c "UPDATE audit_chain_heads SET last_hash='deadbeef' WHERE chain='audit'"
+ERROR:  audit chain audit head hash must not be replaced at the same seq
+CONTEXT:  PL/pgSQL function audit_chain_heads_monotonic() line 11 at RAISE
+
+$ psql -c "BEGIN; SET LOCAL app.audit_maintenance='on'; UPDATE audit_chain_heads SET last_seq=last_seq WHERE chain='audit'; COMMIT;"
+COMMIT
+# 受控逃生舱可用：保留期删除/归档流程必须走该开关并经过 admin:deletion:approve 审批
+
+# 哈希链校验（应用层复算，由 admin:audit:verify 授权触发）
+$ curl -X POST /api/admin/v1/audit/verify -d '{"chain":"audit"}'
+{"checked":11,"valid":true,"reason":"","head_hash":"...","errors":[]}
+$ curl -X POST /api/admin/v1/audit/verify -d '{"chain":"login"}'
+{"checked":5,"valid":true,"reason":"","head_hash":"...","errors":[]}

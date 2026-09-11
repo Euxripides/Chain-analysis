@@ -1,9 +1,30 @@
-# 链上分析平台 V1 —— Ankr 数据下载器
+## 双系统（用户层 + 后台管理）
 
-> Coverage-aware Blockchain Dataset Platform（具备本地覆盖感知能力的链上数据平台）
-> 文档：见 docx/ 目录《链上分析平台_V1_Ankr下载器_总体架构与Ubuntu环境部署.md》
+本仓库正在从单一工程型 SPA 迁移为两套系统，共用同一套可信数据、任务、证据与审计底座。
+计划见 [docs/dual-system-development-plan.md](docs/dual-system-development-plan.md)。
 
-V1 范围：平台总体框架 + 数据下载（地址下载、任务调度、本地数据复用、暂停/恢复/取消、SSE 实时进度、CSV/XLSX 导出）。
+| 入口 | 说明 | 灰度地址 |
+|---|---|---|
+| 旧工作台 | 迁移期保留的工程界面 | `/` |
+| 用户层系统（Investigator Console） | 案件、调查、数据工具、协作 | `/app-v2/` |
+| 后台管理系统（Admin Console） | 身份权限、任务控制、数据治理、审计 | `/admin/` |
+
+已落地的能力与尚未实现的能力都记录在
+[acceptance-evidence/dual-system-v1/final-report.md](acceptance-evidence/dual-system-v1/final-report.md)，
+未实现的页面在界面上显式标注目标 Sprint，不使用占位数据。
+
+关键文档：
+
+- [docs/adr/README.md](docs/adr/README.md) —— 架构决策记录（AD-001 ～ AD-010）
+- [docs/implementation/current-surface-inventory.md](docs/implementation/current-surface-inventory.md) —— 路由、权限、迁移、页面清单（脚本生成）
+- [docs/implementation/dual-system-runbook.md](docs/implementation/dual-system-runbook.md) —— 部署、初始化、审计链运维与回滚
+
+部署：
+
+```bash
+python3 scripts/deploy_dual_system.py --yes     # 编译 + 迁移 + 构建 + 重启 + 冒烟
+./backend/bin/admin-init -email admin@local     # 首次初始化管理员密码（不写默认密码）
+```
 
 ## 架构
 

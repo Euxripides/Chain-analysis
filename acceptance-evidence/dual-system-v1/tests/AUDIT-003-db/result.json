@@ -1,0 +1,14 @@
+{
+  "test_id": "AUDIT-003-db",
+  "title": "审计表 append-only（数据库层负向）",
+  "executed_at": "2026-09-12T03:28:40.219313+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "UPDATE/DELETE 审计行被拒绝；链头不得回退或替换哈希",
+  "actual": "UPDATE/DELETE 均报 ERROR: audit table ... is append-only；链头回退报 last_seq must not decrease；维护模式逃生舱可用",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/AUDIT-003-db/db-check.txt"
+  ],
+  "notes": "输出见 final-report.md 第 3.3 节"
+}

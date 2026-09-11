@@ -1,0 +1,14 @@
+{
+  "test_id": "ADMIN-001..005",
+  "title": "后台管理系统真实页面",
+  "executed_at": "2026-09-12T03:28:40.223316+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "总览/用户/角色/登录记录/审计页面数据与接口一致；未实现页面显式标注；用户层会话无法进入后台",
+  "actual": "全部通过；卡片数值与接口响应逐项一致",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/A-HOME-01/screenshot.png"
+  ],
+  "notes": ""
+}

@@ -1,0 +1,14 @@
+{
+  "test_id": "AGENTS-DIALOG",
+  "title": "提示信息只允许弹窗呈现",
+  "executed_at": "2026-09-12T03:28:40.222312+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "页面正文不存在 role=alert / .banner / .notice / .callout / .toast-inline",
+  "actual": "对 /app-v2/home、/app-v2/cases、/app-v2/search 扫描结果为空数组",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/AGENTS-DIALOG/"
+  ],
+  "notes": ""
+}

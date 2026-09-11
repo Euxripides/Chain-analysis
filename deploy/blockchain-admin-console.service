@@ -1,0 +1,21 @@
+# 后台管理系统（Admin Console）。
+# 灰度期监听 127.0.0.1:3002，由 Nginx 以 /admin/ 前缀对外。
+# 只读静态产物，不连接数据库，不读取任何密钥。
+[Unit]
+Description=Blockchain Platform admin console (Admin Console, 127.0.0.1:3002)
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/admin-console/vite.config.ts --host 127.0.0.1 --port 3002 --strictPort
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=0
+StandardOutput=append:/tmp/admin-console.log
+StandardError=append:/tmp/admin-console.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+{
+  "test_id": "AUTH-001..010",
+  "title": "本地账户登录、会话、受众隔离、CSRF",
+  "executed_at": "2026-09-12T03:28:40.217313+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "登录成功并下发 HttpOnly Cookie；伪造 X-User-* 无效；用户层会话不能调用后台 API；写操作需 CSRF",
+  "actual": "run-iam-e2e.sh 全部 PASS：登录 200、伪造头 401、跨受众 401、无 CSRF 403、有 CSRF 200",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/run-iam-e2e.sh",
+    "acceptance-evidence/dual-system-v1/tests/U-AUTH-01/screenshot.png"
+  ],
+  "notes": ""
+}

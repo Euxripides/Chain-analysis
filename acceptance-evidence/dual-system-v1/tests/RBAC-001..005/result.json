@@ -1,0 +1,14 @@
+{
+  "test_id": "RBAC-001..005",
+  "title": "权限声明、后台端点授权与能力边界",
+  "executed_at": "2026-09-12T03:28:40.218312+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "双系统新增 35 条路由全部声明权限键；未实现能力返回 501 而不是伪装可用",
+  "actual": "run-iam-e2e.sh：5 个后台端点 200、未实现端点 501、不存在端点 404；catalog 与 0041 种子由单元测试强一致",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/run-iam-e2e.sh"
+  ],
+  "notes": ""
+}

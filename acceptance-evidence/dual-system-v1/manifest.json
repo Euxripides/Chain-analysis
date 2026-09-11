@@ -1,0 +1,37 @@
+{
+  "deliverable": "dual-system-v1",
+  "status": "gray-rollout",
+  "generated_at": "2026-09-12T03:28:40.224320+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "plan_reference": "docs/dual-system-development-plan.md",
+  "sprints_covered": [
+    "Sprint 1（完成）",
+    "Sprint 2（核心完成，OIDC/MFA 明确未实现）",
+    "Sprint 3 底座（提前落地）"
+  ],
+  "totals": {
+    "api_tests_pass": 32,
+    "api_tests_fail": 0,
+    "browser_tests_pass": 24,
+    "browser_tests_fail": 0
+  },
+  "defects_found_and_fixed": 10,
+  "known_limitations": [
+    "OIDC 登录 NOT_IMPLEMENTED（接口 501）",
+    "MFA/TOTP NOT_IMPLEMENTED（接口 501）",
+    "对象级 ABAC PARTIAL",
+    "每日哈希锚点写入 MinIO PARTIAL",
+    "独立非 owner 应用数据库角色 NOT_IMPLEMENTED",
+    "OpenAPI 文件与 CI 生成校验 PARTIAL",
+    "案件/调查/图谱/Explorer/下载/报告 的 v2 页面 NOT_IMPLEMENTED"
+  ],
+  "files": {
+    "final_report": "acceptance-evidence/dual-system-v1/final-report.md",
+    "inventory": "docs/implementation/current-surface-inventory.md",
+    "adr_index": "docs/adr/README.md",
+    "api_test_script": "acceptance-evidence/dual-system-v1/tests/run-iam-e2e.sh",
+    "browser_test": "frontend/tests/dual-system.spec.ts",
+    "browser_config": "frontend/playwright.dual.config.ts",
+    "deploy_script": "scripts/deploy_dual_system.py"
+  }
+}

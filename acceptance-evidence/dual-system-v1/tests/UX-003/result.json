@@ -1,0 +1,14 @@
+{
+  "test_id": "UX-003",
+  "title": "状态不只靠颜色表达",
+  "executed_at": "2026-09-12T03:28:40.221312+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "所有状态徽标带形状前缀并在 DOM 中可断言",
+  "actual": "StatusBadge 渲染 ●/▲/■/◆/○ 前缀，DOM 断言通过",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/UX-003/"
+  ],
+  "notes": ""
+}

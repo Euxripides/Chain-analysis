@@ -1,0 +1,14 @@
+{
+  "test_id": "UX-005",
+  "title": "prefers-reduced-motion",
+  "executed_at": "2026-09-12T03:28:40.222312+08:00",
+  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "environment": "gray-rollout",
+  "expected": "减少动效偏好下关闭非必要动画",
+  "actual": "tokens.css 中 reduced-motion 媒体查询将动画与过渡压缩到 0.001ms",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/UX-005/"
+  ],
+  "notes": "仅 CSS 层验证，未做浏览器录制"
+}
