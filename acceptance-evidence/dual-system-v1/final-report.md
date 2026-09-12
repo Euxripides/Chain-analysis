@@ -93,25 +93,33 @@ ADMIN_PASSWORD=<初始化密码> bash acceptance-evidence/dual-system-v1/tests/r
 结果：PASS=32 FAIL=0
 ```
 
-| ID | 场景 | 结果 |
+> ⚠️ **重要更正（本报告先前版本的错误）**
+>
+> 本节先前用 `AUTH-001..010`、`RBAC-001..005`、`AUDIT-001..005` 标注自有冒烟检查，
+> 但这些编号与 `docs/dual-system-development-plan.md` §27 的同名 Test ID **并非一一对应**，
+> 会造成"文档验收已通过"的错误印象。脚本已修正：只有语义与 §27 一致时才使用文档编号，
+> 其余改为 `SMOKE-nn`。**全量 65 个 Test ID 的真实对照见
+> [section27-conformance.md](section27-conformance.md)：PASS 10 / PARTIAL 19 / NOT_RUN 25 / NOT_IMPLEMENTED 11。**
+
+脚本自身的检查结果（`PASS=32 FAIL=0`）真实有效，但应读作"本轮自主冒烟全绿"，
+而不是"§27 验收通过"。其中与 §27 语义一致的项：
+
+| §27 Test ID | 场景 | 结果 |
 |---|---|---|
-| AUTH-001 | admin 登录成功、HttpOnly Cookie | PASS |
-| AUTH-002 | `GET /session` 返回真实受众/角色/权限（163 条权限中 >100 条） | PASS |
-| AUTH-003 | 无会话访问 `/api/admin/v1/overview` → 401 | PASS |
-| AUTH-004 | 伪造 `X-User-*` 头 → 401（`AUTH_MODE=session`） | PASS |
-| AUTH-005 | 伪造 `X-User-*` 访问 `/api/v1/me` → `source=anonymous` | PASS |
-| AUTH-006 | 用户层会话访问后台 API → 401 | PASS |
-| AUTH-007 | 用户层会话访问 `/api/v2` → 200 | PASS |
-| AUTH-008 | 写操作缺少 CSRF 头 → 403 | PASS |
-| AUTH-009 | 写操作携带正确 CSRF 头 → 200 | PASS |
-| AUTH-010 | 未登记的权限键一律拒绝（`permission_not_declared`） | PASS |
-| RBAC-001..005 | 后台 5 个端点按权限放行；未实现端点 501；不存在端点 404 | PASS |
-| AUDIT-001 | 业务/授权拒绝事件入 audit_events_v2 | PASS |
-| AUDIT-002 | audit 链校验：`checked=11 valid=true` | PASS |
-| AUDIT-003 | login 链校验：`checked=5 valid=true` | PASS |
-| AUDIT-004 | 链头序号与哈希 | PASS |
-| AUDIT-005 | 登录记录覆盖 `bad_password` / `unknown_account`，账号以掩码入库，响应不回显口令 | PASS |
-| SEC-001 | `return_to=https://evil.example/steal` 被中和为 `/home` | PASS |
+| AUTH-001 | 登录成功 + HttpOnly Cookie | PASS |
+| AUTH-002 | 错误密码：统一错误 + 内部原因码 + 账号掩码 | PASS |
+| AUTH-003 | 不存在账号：与错误密码同外观 | PARTIAL（未做时序样本对比） |
+| AUTH-009 | 伪造 `X-User-*` 头 → 401；`/api/v1/me` 为 anonymous | PASS |
+| AUTH-010 | 不可信转发头不覆盖 client IP | PASS（单元测试） |
+| AUTH-012 | 开放重定向被中和为 `/home` | PASS |
+| RBAC-008 | 用户层会话访问后台 API → 401 | PARTIAL（未覆盖 API Key/scope 路径） |
+| AUDIT-001 | 业务/授权拒绝事件入 `audit_events_v2` | PARTIAL（未逐项对照动作矩阵） |
+| AUDIT-002 | 响应不回显口令 | PARTIAL（未做全量 secret 扫描） |
+| AUDIT-004 | audit 链 `checked=101 valid=true`；login 链 `checked=111 valid=true` | PASS |
+| SEC-001 | 缺 CSRF 头 403、携带正确头 200 | PASS |
+
+其余为自有冒烟检查（`SMOKE-01..11`）：会话读取、受众/角色/权限数量、未认证 401、
+后台 5 个端点按权限放行、未实现端点 501、不存在端点 404。
 
 ### 3.2 浏览器真实交互（本机 Playwright + SSH 隧道指向部署实例）
 
@@ -123,16 +131,16 @@ user-desktop :  12 passed
 user-mobile  :  12 passed
 ```
 
-| ID | 场景 | 结果 |
+| §27 Test ID | 场景 | 结果 |
 |---|---|---|
-| UX-001 | 弹窗焦点陷阱、ESC 关闭、关闭后焦点回到触发元素、无残留遮罩 | PASS |
-| UX-002 | 390×844 无页面级横向滚动；移动端弹窗宽度不溢出 | PASS |
-| UX-003 | 状态标签带形状前缀（不只靠颜色） | PASS（DOM 断言 + 截图） |
-| UX-004 | 表格分页窗口渲染（>100 行不一次性插入 DOM） | PASS（实现 + 代码审查） |
-| UX-005 | `prefers-reduced-motion` 关闭动画 | PASS（CSS 层面实现） |
-| AGENTS | 页面正文无 `[role=alert]`/`.banner`/`.notice`/`.callout` | PASS |
-| DATA | 工作台/总览卡片数字与接口响应逐项一致 | PASS |
-| ADMIN-005 | 用户层会话无法进入后台（前端重定向 + 服务端 401） | PASS |
+| UX-001 | 弹窗焦点陷阱、ESC 关闭、关闭后焦点回到触发元素、无残留遮罩 | **PASS** |
+| UX-002 | 390×844 无页面级横向滚动；弹窗不溢出 | **PARTIAL**（仅 1440 与 390 两个断点，未测 768/1024） |
+| UX-003 | 状态标签带形状前缀（不只靠颜色） | **PARTIAL**（未做 4.5:1 对比度计算与 axe 扫描） |
+| UX-004 | 表格不一次性渲染 10k 行 | **PARTIAL**（实现 100 行窗口渲染，未用 10k 数据跑 profiler） |
+| UX-005 | `prefers-reduced-motion` 关闭动画 | **PASS** |
+| USER-011 | 手机端调查查看 | **PARTIAL**（用户层 5 个页面通过，调查详情页尚未实现） |
+| —（AGENTS.md 约束） | 页面正文无 `[role=alert]`/`.banner`/`.notice`/`.callout` | PASS |
+| —（数据真实性） | 工作台/总览卡片数字与接口响应逐项一致 | PASS |
 
 证据截图：`acceptance-evidence/dual-system-v1/tests/*/screenshot.png`
 
@@ -146,6 +154,10 @@ UPDATE audit_chain_heads (回退)        -> ERROR: last_seq must not decrease (2
 UPDATE audit_chain_heads (换哈希)      -> ERROR: head hash must not be replaced
 SET LOCAL app.audit_maintenance='on'  -> 维护模式可用（受控逃生舱）
 ```
+
+### 3.3b §27 全量对照
+
+见 [section27-conformance.md](section27-conformance.md)：**PASS 10 / PARTIAL 19 / NOT_RUN 25 / NOT_IMPLEMENTED 11（合计 65）**。
 
 ### 3.4 构建与单元测试
 

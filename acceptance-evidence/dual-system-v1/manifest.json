@@ -10,8 +10,13 @@
     "Sprint 3 底座（提前落地）"
   ],
   "totals": {
-    "api_tests_pass": 32,
-    "api_tests_fail": 0,
+    "section27_test_ids_total": 65,
+    "section27_pass": 10,
+    "section27_partial": 19,
+    "section27_not_run": 25,
+    "section27_not_implemented": 11,
+    "self_smoke_api_checks_pass": 32,
+    "self_smoke_api_checks_fail": 0,
     "browser_tests_pass": 24,
     "browser_tests_fail": 0
   },
@@ -32,6 +37,8 @@
     "api_test_script": "acceptance-evidence/dual-system-v1/tests/run-iam-e2e.sh",
     "browser_test": "frontend/tests/dual-system.spec.ts",
     "browser_config": "frontend/playwright.dual.config.ts",
-    "deploy_script": "scripts/deploy_dual_system.py"
-  }
+    "deploy_script": "scripts/deploy_dual_system.py",
+    "section27_conformance": "acceptance-evidence/dual-system-v1/section27-conformance.md"
+  },
+  "scope_statement": "本交付物覆盖 Sprint 1（完成）、Sprint 2（核心完成）、Sprint 3（部分）。Sprint 4-7 未开始；§27 的 65 个 Test ID 中 PASS 10、PARTIAL 19、NOT_RUN 25、NOT_IMPLEMENTED 11。先前版本曾用 §27 同名前缀标注自有冒烟检查，已更正为 SMOKE-nn，权威对照见 acceptance-evidence/dual-system-v1/section27-conformance.md。"
 }

@@ -9,15 +9,22 @@
 | 用户层系统（Investigator Console） | 案件、调查、数据工具、协作 | `/app-v2/` |
 | 后台管理系统（Admin Console） | 身份权限、任务控制、数据治理、审计 | `/admin/` |
 
-已落地的能力与尚未实现的能力都记录在
-[acceptance-evidence/dual-system-v1/final-report.md](acceptance-evidence/dual-system-v1/final-report.md)，
-未实现的页面在界面上显式标注目标 Sprint，不使用占位数据。
+**当前进度：Sprint 1（完成）+ Sprint 2（核心）+ Sprint 3（部分），约 20% 的计划工作量；
+Sprint 4–7 未开始。** 逐项对照见
+[docs/implementation/dual-system-progress.md](docs/implementation/dual-system-progress.md)，
+§27 的 65 个 Test ID 结果见
+[acceptance-evidence/dual-system-v1/section27-conformance.md](acceptance-evidence/dual-system-v1/section27-conformance.md)
+（PASS 10 / PARTIAL 19 / NOT_RUN 25 / NOT_IMPLEMENTED 11）。
+
+未实现的页面在界面上显式标注目标 Sprint，不使用占位数据填充。
 
 关键文档：
 
 - [docs/adr/README.md](docs/adr/README.md) —— 架构决策记录（AD-001 ～ AD-010）
 - [docs/implementation/current-surface-inventory.md](docs/implementation/current-surface-inventory.md) —— 路由、权限、迁移、页面清单（脚本生成）
+- [docs/implementation/dual-system-progress.md](docs/implementation/dual-system-progress.md) —— 对照计划的逐项进度与缺口
 - [docs/implementation/dual-system-runbook.md](docs/implementation/dual-system-runbook.md) —— 部署、初始化、审计链运维与回滚
+- [acceptance-evidence/dual-system-v1/section27-conformance.md](acceptance-evidence/dual-system-v1/section27-conformance.md) —— §27 全部 65 个 Test ID 的真实结果
 
 部署：
 
