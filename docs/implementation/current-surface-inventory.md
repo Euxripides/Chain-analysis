@@ -1,6 +1,6 @@
 # 当前系统面清单（Current Surface Inventory）
 
-> 生成时间：2026-09-12 03:27 +0800  
+> 生成时间：2026-09-12 23:12 +0800  
 > 生成方式：`python3 scripts/generate_surface_inventory.py --with-db`（全部取自仓库真实文件与部署实例）  
 > 依据：docs/dual-system-development-plan.md §28.1 第 3 步
 
@@ -8,22 +8,21 @@
 
 ## 1. 后端路由
 
-共 181 条，其中双系统新增路由 **35** 条全部声明了权限键（覆盖率 71%）；`/api/v1` 为兼容层，尚未逐条声明（见 §28.2 迁移映射）。
+共 256 条，其中双系统新增路由 **110** 条全部声明了权限键（覆盖率 89%）；`/api/v1` 为兼容层，尚未逐条声明（见 §28.2 迁移映射）。
 
 | Method | Path | Permission |
 |---|---|---|
-| GET | `/api/admin/v1/alerts` | `admin:alert:read` |
 | GET | `/api/admin/v1/audit/chains` | `admin:audit:verify` |
 | GET | `/api/admin/v1/audit/events` | `admin:audit:read` |
 | GET | `/api/admin/v1/audit/events/{id}` | `admin:audit:read` |
 | POST | `/api/admin/v1/audit/export` | `admin:audit:export` |
 | POST | `/api/admin/v1/audit/verify` | `admin:audit:verify` |
-| GET | `/api/admin/v1/backups` | `admin:backup:read` |
-| GET | `/api/admin/v1/config/settings` | `admin:config:read` |
+| GET | `/api/admin/v1/jobs` | `admin:job:list` |
+| POST | `/api/admin/v1/jobs/{id}/commands/{command}` | `admin:job:control` |
+| GET | `/api/admin/v1/jobs/{id}/diagnostics` | `admin:job:read` |
 | GET | `/api/admin/v1/login-events` | `admin:login-event:read` |
 | GET | `/api/admin/v1/overview` | `admin:dashboard:read` |
 | GET | `/api/admin/v1/permissions` | `admin:permission:read` |
-| GET | `/api/admin/v1/provider/accounts` | `admin:provider:read` |
 | GET | `/api/admin/v1/roles` | `admin:role:read` |
 | GET | `/api/admin/v1/roles/{id}/permissions` | `admin:role:read` |
 | GET | `/api/admin/v1/sessions` | `admin:session:read` |
@@ -176,18 +175,94 @@
 | GET | `/api/v1/transactions/{chain}/{tx_hash}/trace` | (legacy / 未声明) |
 | POST | `/api/v1/updates/preview` | (legacy / 未声明) |
 | POST | `/api/v1/updates/{id}/confirm` | (legacy / 未声明) |
+| GET | `/api/v2/canvases/{id}` | `canvas:read` |
+| PATCH | `/api/v2/canvases/{id}` | `canvas:update` |
+| POST | `/api/v2/canvases/{id}/branches` | `canvas:branch` |
+| GET | `/api/v2/canvases/{id}/snapshots` | `canvas:snapshot` |
+| POST | `/api/v2/canvases/{id}/snapshots` | `canvas:snapshot:create` |
 | GET | `/api/v2/cases` | `case:list` |
+| POST | `/api/v2/cases` | `case:create` |
+| GET | `/api/v2/cases/{id}` | `case:read` |
+| PATCH | `/api/v2/cases/{id}` | `case:update` |
+| GET | `/api/v2/cases/{id}/activity` | `case:activity:read` |
+| POST | `/api/v2/cases/{id}/commands/{command}` | `case:state:update` |
+| GET | `/api/v2/cases/{id}/comments` | `comment:list` |
+| POST | `/api/v2/cases/{id}/comments` | `comment:create` |
+| GET | `/api/v2/cases/{id}/members` | `case:member:list` |
+| POST | `/api/v2/cases/{id}/members` | `case:member:manage` |
+| DELETE | `/api/v2/cases/{id}/members/{identity_id}` | `case:member:manage` |
+| GET | `/api/v2/cases/{id}/reports` | `report:list` |
+| POST | `/api/v2/cases/{id}/reports` | `report:create` |
+| GET | `/api/v2/cases/{id}/subjects` | `subject:list` |
+| POST | `/api/v2/cases/{id}/subjects` | `subject:create` |
+| DELETE | `/api/v2/cases/{id}/subjects/{subject_id}` | `subject:remove` |
 | GET | `/api/v2/dashboard` | `dashboard:read` |
+| POST | `/api/v2/downloads` | `download:create` |
+| POST | `/api/v2/downloads/preview` | `download:create` |
+| GET | `/api/v2/evidence/{id}` | `evidence:read` |
+| POST | `/api/v2/evidence/{id}/commands/dispute` | `evidence:review` |
+| POST | `/api/v2/evidence/{id}/commands/supersede` | `evidence:review` |
+| POST | `/api/v2/evidence/{id}/commands/verify` | `evidence:review` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/activity` | `explorer:read` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/assets` | `explorer:read` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/counterparties` | `explorer:read` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/flow-profile` | `explorer:read` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/overview` | `explorer:read` |
+| GET | `/api/v2/explorer/addresses/{chain}/{address}/semantic` | `explorer:read` |
+| GET | `/api/v2/explorer/transactions/{chain}/{hash}` | `explorer:read` |
+| GET | `/api/v2/explorer/transactions/{chain}/{hash}/logs` | `explorer:read` |
+| GET | `/api/v2/explorer/transactions/{chain}/{hash}/trace` | `explorer:read` |
+| GET | `/api/v2/exports` | `export:list` |
+| POST | `/api/v2/exports` | `export:create` |
+| GET | `/api/v2/exports/download/{ticket}` | `export:download` |
+| GET | `/api/v2/exports/{id}` | `export:read` |
+| POST | `/api/v2/exports/{id}/download-ticket` | `export:download` |
+| GET | `/api/v2/findings/{id}` | `finding:read` |
+| PATCH | `/api/v2/findings/{id}` | `finding:update` |
+| POST | `/api/v2/findings/{id}/commands/confirm` | `finding:review` |
+| POST | `/api/v2/findings/{id}/commands/reject` | `finding:review` |
+| POST | `/api/v2/findings/{id}/commands/supersede` | `finding:review` |
+| GET | `/api/v2/inbox` | `inbox:read` |
 | GET | `/api/v2/investigations` | `investigation:list` |
+| POST | `/api/v2/investigations` | `investigation:create` |
+| POST | `/api/v2/investigations/preview` | `investigation:create` |
+| GET | `/api/v2/investigations/{id}` | `investigation:read` |
+| GET | `/api/v2/investigations/{id}/canvases` | `canvas:list` |
+| POST | `/api/v2/investigations/{id}/canvases` | `canvas:create` |
+| POST | `/api/v2/investigations/{id}/commands/cancel` | `investigation:cancel` |
+| POST | `/api/v2/investigations/{id}/commands/pause` | `investigation:pause` |
+| POST | `/api/v2/investigations/{id}/commands/resume` | `investigation:resume` |
+| POST | `/api/v2/investigations/{id}/commands/retry` | `investigation:retry` |
+| POST | `/api/v2/investigations/{id}/commands/start` | `investigation:start` |
+| POST | `/api/v2/investigations/{id}/commands/submit-review` | `investigation:submit_review` |
+| GET | `/api/v2/investigations/{id}/evidence` | `evidence:list` |
+| GET | `/api/v2/investigations/{id}/findings` | `finding:list` |
+| GET | `/api/v2/investigations/{id}/runtime` | `investigation:read` |
 | GET | `/api/v2/jobs` | `job:list:self` |
+| GET | `/api/v2/jobs/{id}` | `job:read` |
+| POST | `/api/v2/jobs/{id}/commands/{command}` | `job:control` |
+| GET | `/api/v2/jobs/{id}/events` | `job:read` |
 | GET | `/api/v2/me/preferences` | `profile:read` |
 | PATCH | `/api/v2/me/preferences` | `profile:update:self` |
 | GET | `/api/v2/me/profile` | `profile:read` |
 | PATCH | `/api/v2/me/profile` | `profile:update:self` |
+| GET | `/api/v2/meta/chains` | `explorer:read` |
+| GET | `/api/v2/meta/datasets` | `download:create` |
 | GET | `/api/v2/notifications` | `notification:list` |
 | POST | `/api/v2/notifications/read-all` | `notification:update` |
+| POST | `/api/v2/notifications/{id}/open` | `notification:list` |
 | POST | `/api/v2/notifications/{id}/read` | `notification:update` |
+| GET | `/api/v2/reports` | `report:list` |
+| GET | `/api/v2/reports/download/{ticket}` | `report:download` |
+| GET | `/api/v2/reports/{id}` | `report:read` |
+| POST | `/api/v2/reports/{id}/commands/approve` | `report:review` |
+| POST | `/api/v2/reports/{id}/commands/archive` | `report:review` |
+| POST | `/api/v2/reports/{id}/commands/reject` | `report:review` |
+| POST | `/api/v2/reports/{id}/commands/sign` | `report:sign` |
+| POST | `/api/v2/reports/{id}/commands/submit` | `report:create` |
+| POST | `/api/v2/reports/{id}/download-ticket` | `report:download` |
 | GET | `/api/v2/search` | `search:read` |
+| GET | `/api/v2/workspace-members` | `case:member:list` |
 | GET | `/docs` | (legacy / 未声明) |
 | GET | `/health/live` | (legacy / 未声明) |
 | GET | `/health/ready` | (legacy / 未声明) |
@@ -196,7 +271,7 @@
 
 ## 2. 权限目录
 
-共 **163** 个权限键，命名规则 `resource:action`（§4.2）。Go 侧 `internal/policy/catalog.go` 与 SQL 侧 `0041_rbac.sql` 由单元测试强校验一致。
+共 **176** 个权限键，命名规则 `resource:action`（§4.2）。Go 侧 `internal/policy/catalog.go` 与 SQL 侧 `0041_rbac.sql` 由单元测试强校验一致。
 
 | Key | Category | 说明 | Risk | 敏感 |
 |---|---|---|---|---|
@@ -228,11 +303,13 @@
 | `admin:deletion:read` | admin.data | 查看删除请求 | medium | 否 |
 | `admin:deletion:request` | admin.data | 发起删除请求 | critical | 否 |
 | `admin:export:delete` | admin.data | 删除导出对象 | critical | 否 |
+| `admin:export:list` | admin.data | 列出全局导出 | medium | 是 |
 | `admin:export:read` | admin.data | 查看全部导出 | medium | 是 |
 | `admin:flag:read` | admin.system | 查看功能开关 | low | 否 |
 | `admin:flag:update` | admin.system | 修改功能开关 | high | 否 |
 | `admin:job:cancel` | admin.data | 取消任意任务 | critical | 否 |
 | `admin:job:control` | admin.data | 控制全局任务 | high | 否 |
+| `admin:job:list` | admin.data | 列出全局任务 | low | 否 |
 | `admin:job:read` | admin.data | 查看全局任务 | low | 否 |
 | `admin:job:retry` | admin.data | 重试任意任务 | high | 否 |
 | `admin:killswitch:engage` | admin.control | 启用 Kill Switch | critical | 否 |
@@ -304,10 +381,12 @@
 | `download:delete` | download | 删除下载任务数据 | high | 否 |
 | `download:preview` | download | 预览 Coverage 与影响 | low | 否 |
 | `download:read` | download | 查看下载任务 | low | 否 |
+| `download:refresh` | download | 显式刷新并新增 Provider 取数 | high | 否 |
 | `download:reuse` | download | 复用已有 Coverage 数据 | low | 否 |
 | `evidence:create` | evidence | 添加证据 | low | 否 |
 | `evidence:delete` | evidence | 移除证据 | high | 否 |
 | `evidence:download` | evidence | 下载证据文件 | medium | 是 |
+| `evidence:list` | evidence | 列出证据 | low | 否 |
 | `evidence:read` | evidence | 查看证据元数据 | low | 否 |
 | `evidence:review` | evidence | 复核证据状态 | high | 否 |
 | `evidence:sensitive:read` | evidence | 读取敏感证据正文 | critical | 是 |
@@ -331,13 +410,19 @@
 | `investigation:create` | investigation | 创建调查任务 | low | 否 |
 | `investigation:delete` | investigation | 删除调查 | high | 否 |
 | `investigation:list` | investigation | 列出调查任务 | low | 否 |
+| `investigation:pause` | investigation | 暂停调查 | medium | 否 |
 | `investigation:read` | investigation | 查看调查任务 | low | 否 |
+| `investigation:resume` | investigation | 恢复调查 | medium | 否 |
+| `investigation:retry` | investigation | 重试调查 | medium | 否 |
 | `investigation:run` | investigation | 启动/暂停/继续调查 | medium | 否 |
+| `investigation:start` | investigation | 启动调查 | medium | 否 |
+| `investigation:submit_review` | investigation | 提交调查复核 | medium | 否 |
 | `investigation:update` | investigation | 修改调查参数 | medium | 否 |
 | `job:admin` | job | 全局任务控制 | high | 否 |
 | `job:control` | job | 控制任务 | medium | 否 |
 | `job:diagnose` | job | 查看任务诊断信息 | medium | 否 |
 | `job:list:self` | job | 列出本人任务 | low | 否 |
+| `job:list:workspace` | job | 列出工作区内任务 | low | 否 |
 | `job:read` | job | 查看任务 | low | 否 |
 | `job:retry` | job | 重试任务 | medium | 否 |
 | `notification:list` | notification | 列出通知 | low | 否 |
@@ -354,6 +439,7 @@
 | `report:download` | report | 下载报告 | medium | 是 |
 | `report:list` | report | 列出报告 | low | 否 |
 | `report:read` | report | 查看报告 | low | 否 |
+| `report:review` | report | 复核报告 | high | 否 |
 | `report:sign` | report | 签署报告 | critical | 否 |
 | `search:global` | explorer | 使用全局搜索 | low | 否 |
 | `search:read` | explorer | 执行全局搜索 | low | 否 |
@@ -361,6 +447,8 @@
 | `session:self:revoke` | self | 撤销自己的会话 | medium | 否 |
 | `subject:create` | case | 新增案件对象 | medium | 否 |
 | `subject:list` | case | 查看案件对象 | low | 否 |
+| `subject:remove` | case | 移除案件对象 | high | 否 |
+| `subject:update` | case | 修改案件对象 | medium | 否 |
 | `token:read` | explorer | 查看 Token 元数据 | low | 否 |
 | `transaction:read` | explorer | 查看交易详情 | low | 否 |
 
@@ -371,19 +459,32 @@
 ```text
 *
 /
+/addresses/:chain/:address
+/canvases/:canvasId
 /cases
+/cases/:caseId/:tab
+/cases/new
 /downloads
+/downloads/new
 /explorer
-/findings
+/exports
 /graph
 /home
 /inbox
 /investigations
+/investigations/:id/evidence/:evidenceId
+/investigations/:id/findings
+/investigations/:id/workbench
+/investigations/new
 /jobs
+/jobs/:jobId
 /login
+/notifications
 /profile
 /reports
+/reports/:id
 /search
+/transactions/:chain/:hash
 ```
 
 ### admin-console
@@ -391,17 +492,14 @@
 ```text
 *
 /
-/alerts
 /audit
-/backups
-/cost
 /data-quality
 /jobs
+/jobs/:jobId
 /login
 /login-events
+/organizations
 /overview
-/provider
-/requests
 /risk
 /roles
 /sessions
@@ -458,6 +556,17 @@
 0041_rbac.sql
 0042_audit_v2.sql
 0043_audit_append_only.sql
+0044_tenant_scope.sql
+0045_session_family.sql
+0046_session_device_fk.sql
+0047_case_collaboration.sql
+0048_s4_permission_fix.sql
+0049_s5_explorer_download_jobs.sql
+0050_s5_job_identity_scope.sql
+0051_s6_control_governance.sql
+0052_s6_data_governance.sql
+0053_s6_permission_grants.sql
+0054_s6_append_only_hardening.sql
 ```
 
 ### ClickHouse
@@ -476,26 +585,9 @@
 
 ```text
 deploy/blockchain-admin-console.service
+deploy/blockchain-api.service
 deploy/blockchain-mcp.service
 deploy/blockchain-user-console.service
-```
-
-## 6. 部署实例数据库快照
-
-```text
-### 已应用迁移（最近 8 条）
-postgres/0043_audit_append_only.sql  2026-09-11 19:00:13.274543+00
-postgres/0042_audit_v2.sql  2026-09-11 18:51:52.465936+00
-postgres/0041_rbac.sql  2026-09-11 18:51:52.418654+00
-postgres/0040_iam.sql  2026-09-11 18:51:52.352545+00
-postgres/0039_full_download_incremental_idempotency.sql  2026-09-10 08:38:36.336953+00
-postgres/0038_address_dataset_sync_state.sql  2026-09-10 08:35:24.369165+00
-postgres/0037_download_job_idempotency.sql  2026-09-10 07:44:46.27928+00
-postgres/0036_gpt_actions_api_keys.sql  2026-09-09 17:09:56.73805+00
-### 双系统新增表行数
-identities=1 sessions=90 login_events=82 audit_events_v2=62 roles=9 permissions=163 bindings=1
-### 审计链头
-audit seq=62 head=6459ddd98c9e81b6
-login seq=82 head=38f98ec0ba782063
-（快照时间：2026-09-12 灰度验证结束时；行数为验收过程产生的真实数据）
+deploy/blockchain-vite.service
+deploy/blockchain-worker.service
 ```

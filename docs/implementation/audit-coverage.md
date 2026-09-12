@@ -34,20 +34,19 @@
 
 | 权限键 | 端点 |
 |---|---|
-| `admin:alert:read` | `GET /api/admin/v1/alerts` |
 | `admin:audit:export` | `POST /api/admin/v1/audit/export` |
 | `admin:audit:read` | `GET /api/admin/v1/audit/events`, `GET /api/admin/v1/audit/events/{id}` |
 | `admin:audit:verify` | `GET /api/admin/v1/audit/chains`, `POST /api/admin/v1/audit/verify` |
-| `admin:backup:read` | `GET /api/admin/v1/backups` |
-| `admin:config:read` | `GET /api/admin/v1/config/settings` |
 | `admin:dashboard:read` | `GET /api/admin/v1/overview` |
+| `admin:job:control` | `POST /api/admin/v1/jobs/{id}/commands/{command}` |
+| `admin:job:list` | `GET /api/admin/v1/jobs` |
+| `admin:job:read` | `GET /api/admin/v1/jobs/{id}/diagnostics` |
 | `admin:login-event:read` | `GET /api/admin/v1/login-events` |
 | `admin:member:manage` | `DELETE /api/admin/v1/users/{id}/roles/{binding}`, `POST /api/admin/v1/users/{id}/roles` |
 | `admin:member:read` | `GET /api/admin/v1/members`, `GET /api/admin/v1/users/{id}/roles` |
 | `admin:org:manage` | `PATCH /api/admin/v1/organizations/{id}` |
 | `admin:org:read` | `GET /api/admin/v1/organizations`, `GET /api/admin/v1/organizations/{id}` |
 | `admin:permission:read` | `GET /api/admin/v1/permissions` |
-| `admin:provider:read` | `GET /api/admin/v1/provider/accounts` |
 | `admin:role:read` | `GET /api/admin/v1/roles`, `GET /api/admin/v1/roles/{id}/permissions` |
 | `admin:session:read` | `GET /api/admin/v1/sessions` |
 | `admin:session:revoke` | `POST /api/admin/v1/sessions/{id}/commands/revoke` |
@@ -58,18 +57,64 @@
 | `admin:user:update` | `PATCH /api/admin/v1/users/{id}` |
 | `admin:workspace:manage` | `PATCH /api/admin/v1/workspaces/{id}`, `POST /api/admin/v1/workspaces` |
 | `admin:workspace:read` | `GET /api/admin/v1/workspaces` |
+| `canvas:branch` | `POST /api/v2/canvases/{id}/branches` |
+| `canvas:create` | `POST /api/v2/investigations/{id}/canvases` |
+| `canvas:list` | `GET /api/v2/investigations/{id}/canvases` |
+| `canvas:read` | `GET /api/v2/canvases/{id}` |
+| `canvas:snapshot` | `GET /api/v2/canvases/{id}/snapshots` |
+| `canvas:snapshot:create` | `POST /api/v2/canvases/{id}/snapshots` |
+| `canvas:update` | `PATCH /api/v2/canvases/{id}` |
+| `case:activity:read` | `GET /api/v2/cases/{id}/activity` |
+| `case:create` | `POST /api/v2/cases` |
 | `case:list` | `GET /api/v2/cases` |
+| `case:member:list` | `GET /api/v2/cases/{id}/members`, `GET /api/v2/workspace-members` |
+| `case:member:manage` | `DELETE /api/v2/cases/{id}/members/{identity_id}`, `POST /api/v2/cases/{id}/members` |
 | `case:read` | `GET /api/v2/cases/{id}` |
+| `case:state:update` | `POST /api/v2/cases/{id}/commands/{command}` |
+| `case:update` | `PATCH /api/v2/cases/{id}` |
+| `comment:create` | `POST /api/v2/cases/{id}/comments` |
+| `comment:list` | `GET /api/v2/cases/{id}/comments` |
 | `dashboard:read` | `GET /api/v2/dashboard` |
+| `download:create` | `GET /api/v2/meta/datasets`, `POST /api/v2/downloads`, `POST /api/v2/downloads/preview` |
+| `evidence:list` | `GET /api/v2/investigations/{id}/evidence` |
+| `evidence:read` | `GET /api/v2/evidence/{id}` |
+| `evidence:review` | `POST /api/v2/evidence/{id}/commands/dispute`, `POST /api/v2/evidence/{id}/commands/supersede`, `POST /api/v2/evidence/{id}/commands/verify` |
+| `explorer:read` | `GET /api/v2/explorer/addresses/{chain}/{address}/activity`, `GET /api/v2/explorer/addresses/{chain}/{address}/assets`, `GET /api/v2/explorer/addresses/{chain}/{address}/counterparties`, `GET /api/v2/explorer/addresses/{chain}/{address}/flow-profile`, `GET /api/v2/explorer/addresses/{chain}/{address}/overview`, `GET /api/v2/explorer/addresses/{chain}/{address}/semantic`, `GET /api/v2/explorer/transactions/{chain}/{hash}`, `GET /api/v2/explorer/transactions/{chain}/{hash}/logs`, `GET /api/v2/explorer/transactions/{chain}/{hash}/trace`, `GET /api/v2/meta/chains` |
+| `export:create` | `POST /api/v2/exports` |
+| `export:download` | `GET /api/v2/exports/download/{ticket}`, `POST /api/v2/exports/{id}/download-ticket` |
+| `export:list` | `GET /api/v2/exports` |
+| `export:read` | `GET /api/v2/exports/{id}` |
+| `finding:list` | `GET /api/v2/investigations/{id}/findings` |
+| `finding:read` | `GET /api/v2/findings/{id}` |
+| `finding:review` | `POST /api/v2/findings/{id}/commands/confirm`, `POST /api/v2/findings/{id}/commands/reject`, `POST /api/v2/findings/{id}/commands/supersede` |
+| `finding:update` | `PATCH /api/v2/findings/{id}` |
+| `inbox:read` | `GET /api/v2/inbox` |
+| `investigation:cancel` | `POST /api/v2/investigations/{id}/commands/cancel` |
+| `investigation:create` | `POST /api/v2/investigations`, `POST /api/v2/investigations/preview` |
 | `investigation:list` | `GET /api/v2/investigations` |
-| `investigation:read` | `GET /api/v2/investigations/{id}` |
+| `investigation:pause` | `POST /api/v2/investigations/{id}/commands/pause` |
+| `investigation:read` | `GET /api/v2/investigations/{id}`, `GET /api/v2/investigations/{id}/runtime` |
+| `investigation:resume` | `POST /api/v2/investigations/{id}/commands/resume` |
+| `investigation:retry` | `POST /api/v2/investigations/{id}/commands/retry` |
+| `investigation:start` | `POST /api/v2/investigations/{id}/commands/start` |
+| `investigation:submit_review` | `POST /api/v2/investigations/{id}/commands/submit-review` |
+| `job:control` | `POST /api/v2/jobs/{id}/commands/{command}` |
 | `job:list:self` | `GET /api/v2/jobs` |
-| `job:read` | `GET /api/v2/jobs/{id}` |
-| `notification:list` | `GET /api/v2/notifications` |
+| `job:read` | `GET /api/v2/jobs/{id}`, `GET /api/v2/jobs/{id}/events` |
+| `notification:list` | `GET /api/v2/notifications`, `POST /api/v2/notifications/{id}/open` |
 | `notification:update` | `POST /api/v2/notifications/read-all`, `POST /api/v2/notifications/{id}/read` |
 | `profile:read` | `GET /api/v2/me/preferences`, `GET /api/v2/me/profile` |
 | `profile:update:self` | `PATCH /api/v2/me/preferences`, `PATCH /api/v2/me/profile` |
+| `report:create` | `POST /api/v2/cases/{id}/reports`, `POST /api/v2/reports/{id}/commands/submit` |
+| `report:download` | `GET /api/v2/reports/download/{ticket}`, `POST /api/v2/reports/{id}/download-ticket` |
+| `report:list` | `GET /api/v2/cases/{id}/reports`, `GET /api/v2/reports` |
+| `report:read` | `GET /api/v2/reports/{id}` |
+| `report:review` | `POST /api/v2/reports/{id}/commands/approve`, `POST /api/v2/reports/{id}/commands/archive`, `POST /api/v2/reports/{id}/commands/reject` |
+| `report:sign` | `POST /api/v2/reports/{id}/commands/sign` |
 | `search:read` | `GET /api/v2/search` |
+| `subject:create` | `POST /api/v2/cases/{id}/subjects` |
+| `subject:list` | `GET /api/v2/cases/{id}/subjects` |
+| `subject:remove` | `DELETE /api/v2/cases/{id}/subjects/{subject_id}` |
 
 ### 兼容层兜底
 
@@ -86,6 +131,7 @@
 | `admin:apikey:read` |
 | `admin:audit:export` |
 | `admin:audit:read` |
+| `admin:export:list` |
 | `admin:export:read` |
 | `admin:login-event:read` |
 | `admin:request:read` |
