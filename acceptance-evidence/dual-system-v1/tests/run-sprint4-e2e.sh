@@ -245,8 +245,20 @@ check DATA "报告文件与 DB size_bytes 一致" "$([ "$(wc -c < "$EVIDENCE_DIR
 check RUNTIME "API 日志无 panic/fatal" "$(grep -cE 'panic|fatal' /tmp/api.log 2>/dev/null | head -1 || true)" "0"
 check RUNTIME "API 日志包含 Sprint 4 调查命令" "$([ "$(grep -c '/api/v2/investigations/' /tmp/api.log 2>/dev/null || echo 0)" -gt 0 ] && echo yes || echo no)" "yes"
 # 后台审计链 + 权限负向 API
-AUDIT_OK=$(curl -s -b "$JA" -H "X-CSRF-Token: $CSRFA" -H 'Content-Type: application/json' -X POST -d '{"chain":"audit"}' "$BASE/api/admin/v1/audit/verify" | jget 'd["data"]["valid"] if "data" in d else d')
-check AUDIT-001 "审计哈希链校验 valid=true" "$AUDIT_OK" "True"
+# 审计链完整性：valid 只说明"实际被校验到的区间"自洽，链路是否完整由 integrity_status 表达。
+# 存在已封存不可恢复缺口时，integrity_status=sealed_incident 且 prefix_status=sealed_unrecoverable；
+# 未封存缺口（undeclared_gap）与边界冲突（boundary_conflict）都必须显式声明，不能被当作通过。
+AUDIT_JSON=$(curl -s -b "$JA" -H "X-CSRF-Token: $CSRFA" -H 'Content-Type: application/json' -X POST -d '{"chain":"audit"}' "$BASE/api/admin/v1/audit/verify")
+AUDIT_OK=$(echo "$AUDIT_JSON" | jget 'd["data"]["valid"] if "data" in d else d')
+check AUDIT-001 "审计哈希链可验证区间 valid=true" "$AUDIT_OK" "True"
+AUDIT_INTEG=$(echo "$AUDIT_JSON" | jget 'd["data"]["integrity_status"] if "data" in d else "missing"')
+case "$AUDIT_INTEG" in
+  intact|sealed_incident) INTEG_DECLARED=declared ;;
+  *) INTEG_DECLARED="undeclared:$AUDIT_INTEG" ;;
+esac
+check AUDIT-001 "审计链完整性状态已明确声明（intact 或已封存缺口）" "$INTEG_DECLARED" "declared"
+AUDIT_FROM=$(echo "$AUDIT_JSON" | jget 'd["data"]["verified_from_seq"] if "data" in d else 0')
+check AUDIT-001 "审计链校验声明了可信起点 seq" "$([ -n "$AUDIT_FROM" ] && [ "$AUDIT_FROM" -ge 1 ] && echo yes || echo no)" "yes"
 for action in case.create investigation:create investigation:start finding:review report:create report:approve report:download; do
   N=$($PG "select count(*) from audit_events_v2 where action='$action' and organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f'")
   check AUDIT-001 "关键动作已落审计：$action" "$([ "${N:-0}" -gt 0 ] && echo yes || echo no)" "yes"

@@ -580,8 +580,17 @@ if is_uuid "$BIG_JOB"; then
 else
   nv AUTHZ "BIG_JOB 不存在，未能验证他人 self scope 任务负向"
 fi
+# 审计链完整性：valid 只说明"实际被校验到的区间"自洽；链路是否完整由 integrity_status 表达。
 AUDIT_VERIFY=$(admin_api "$JA" "$ADMIN_TOKEN" POST /api/admin/v1/audit/verify '{"chain":"audit"}')
-check AUDIT "审计链 valid=true" "$(echo "$AUDIT_VERIFY" | jget 'd["data"]["valid"]')" "True"
+check AUDIT "审计链可验证区间 valid=true" "$(echo "$AUDIT_VERIFY" | jget 'd["data"]["valid"]')" "True"
+S5_INTEG=$(echo "$AUDIT_VERIFY" | jget 'd["data"]["integrity_status"]')
+case "$S5_INTEG" in
+  intact|sealed_incident) S5_INTEG_OK=declared ;;
+  *) S5_INTEG_OK="undeclared:$S5_INTEG" ;;
+esac
+check AUDIT "审计链完整性状态已明确声明（intact 或已封存缺口）" "$S5_INTEG_OK" "declared"
+S5_FROM=$(echo "$AUDIT_VERIFY" | jget 'd["data"]["verified_from_seq"]')
+check AUDIT "审计链校验声明了可信起点 seq" "$([ -n "$S5_FROM" ] && [ "$S5_FROM" -ge 1 ] && echo yes || echo no)" "yes"
 S5_ACTIONS=$($PG "select count(*) from audit_events_v2 where action in ('download.create','download.reuse','download.refresh','job.pause','job.resume','job.cancel','job.retry','export.create','export.download_ticket','export.download','canvas.create','canvas.update','canvas.evidence_ref.denied')")
 check AUDIT "S5 关键动作审计事件已落库" "$([ "${S5_ACTIONS:-0}" -gt 0 ] && echo "$S5_ACTIONS" || echo 0)" "$([ "${S5_ACTIONS:-0}" -gt 0 ] && echo "$S5_ACTIONS" || echo 0)"
 LOG_PANIC=$($PG "select count(*) from audit_events_v2") # 占位：日志扫描由 Playwright/部署步骤单独验证

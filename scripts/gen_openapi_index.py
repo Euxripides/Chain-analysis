@@ -34,6 +34,7 @@ REGIONS = {
             "sprint6_provider.go",
             "sprint6_governance.go",
             "sprint6_obs.go",
+            "sprint6_audit_integrity.go",
         ],
         "后台管理 API（§21.6）",
     ),

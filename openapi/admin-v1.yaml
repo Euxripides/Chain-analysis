@@ -167,6 +167,68 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/anchors:
+    get:
+      operationId: adminAuditAnchorList
+      tags: [admin-v1]
+      x-required-permission: admin:audit:verify
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+    post:
+      operationId: adminAuditAnchorCreate
+      tags: [admin-v1]
+      x-required-permission: admin:audit:seal
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/anchors/{chain}/{date}/object:
+    get:
+      operationId: adminAuditAnchorObject
+      tags: [admin-v1]
+      x-required-permission: admin:audit:verify
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
   /api/admin/v1/audit/chains:
     get:
       operationId: adminAuditChains
@@ -297,6 +359,153 @@ paths:
       operationId: adminAuditExportDownload
       tags: [admin-v1]
       x-required-permission: admin:audit:export
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity:
+    get:
+      operationId: adminAuditIntegrity
+      tags: [admin-v1]
+      x-required-permission: admin:audit:verify
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/incidents:
+    get:
+      operationId: adminAuditIntegrityIncidents
+      tags: [admin-v1]
+      x-required-permission: admin:audit:verify
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/incidents/requests:
+    post:
+      operationId: adminAuditIntegrityRequest
+      tags: [admin-v1]
+      x-required-permission: admin:audit:seal
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/incidents/requests/{id}/approve:
+    post:
+      operationId: adminAuditIntegrityApprove
+      tags: [admin-v1]
+      x-required-permission: admin:approval:decide
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/incidents/requests/{id}/execute:
+    post:
+      operationId: adminAuditIntegrityExecute
+      tags: [admin-v1]
+      x-required-permission: admin:audit:seal
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/incidents/requests/{id}/reject:
+    post:
+      operationId: adminAuditIntegrityReject
+      tags: [admin-v1]
+      x-required-permission: admin:approval:decide
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/audit/integrity/preview:
+    post:
+      operationId: adminAuditIntegrityPreview
+      tags: [admin-v1]
+      x-required-permission: admin:audit:verify
       responses:
         '200':
           description: 成功（响应体模型待补充）

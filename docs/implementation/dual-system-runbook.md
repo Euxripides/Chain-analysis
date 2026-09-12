@@ -154,6 +154,52 @@ curl -s -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
 链损坏时返回 `valid=false` 与 `broken_at_seq` / `reason`。**不要**手工改行来"修复"，
 应导出证据并按事故流程处理。
 
+返回值语义（ADR-018）：
+
+- `valid` 只描述**实际被校验到的区间**（`verified_from_seq`..`to_seq`）是否自洽；
+- `integrity_status` 表达链路是否完整：`intact` / `sealed_incident` / `undeclared_gap` / `boundary_conflict`；
+- `prefix_status` 表达前缀状态：`intact` / `sealed_unrecoverable` / `unsealed_gap`。
+
+**`valid=true` 不等于链路完整**，必须同时看 `integrity_status`。
+
+### 4.1 存在不可恢复缺口时的处置流程
+
+当 `integrity_status=undeclared_gap`（观测到缺口但未封存）时，按以下顺序处理：
+
+```bash
+# 1) 只读检测：确认缺口区间、幸存起点与封存尾哈希，不写任何行
+curl -s -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+     -X POST -d '{"chain":"audit"}' http://127.0.0.1:8080/api/admin/v1/audit/integrity/preview
+
+# 2) 发起封存（admin:audit:seal，需要 step-up 与原因）→ 生成待审批请求
+curl -s -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+     -X POST -d '{"chain":"audit","reason":"...","step_up_password":"..."}' \
+     http://127.0.0.1:8080/api/admin/v1/audit/integrity/incidents/requests
+
+# 3) 由**另一名**具备 admin:approval:decide 的人员批准（请求人不能自审批）
+curl -s -b "$JAR2" -H "X-CSRF-Token: $CSRF2" -H 'Content-Type: application/json' \
+     -X POST -d '{"note":"..."}' \
+     http://127.0.0.1:8080/api/admin/v1/audit/integrity/incidents/requests/<id>/approve
+
+# 4) 发起人执行封存（再次 step-up）
+curl -s -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+     -X POST -d '{"step_up_password":"..."}' \
+     http://127.0.0.1:8080/api/admin/v1/audit/integrity/incidents/requests/<id>/execute
+
+# 5) 生成边界之后的当日锚点，并逐项验证
+curl -s -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+     -X POST -d '{"chain":"audit","reason":"..."}' http://127.0.0.1:8080/api/admin/v1/audit/anchors
+curl -s -b "$JAR" http://127.0.0.1:8080/api/admin/v1/audit/anchors?chain=audit
+curl -s -b "$JAR" http://127.0.0.1:8080/api/admin/v1/audit/integrity?chain=audit
+```
+
+硬性约束：
+
+- **禁止**回填或伪造缺口区间内的 `audit_events_v2` 行（校验器会判定 `boundary_conflict`）；
+- **禁止**修改或删除 `audit_chain_anchors` 既有行（0055 起数据库层拒绝）；
+- 封存后的 `integrity_status` 永远不是 `intact`；运维报告不得把它描述为"链完整"；
+- 边界行不可删除也不可改写；需要重新审计时只能新增事件，不能改历史。
+
 受控维护（保留期删除、归档重放）：
 ```sql
 BEGIN;

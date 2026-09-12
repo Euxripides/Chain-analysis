@@ -268,6 +268,10 @@ func (i *Infra) StartAuditBackground(ctx context.Context, env string, log *slog.
 		log.Warn("audit archive runs without object storage; anchors will only be recorded in PostgreSQL")
 	}
 	archiver := audit.NewArchiver(i.Store.Pool, store, env, log)
+	if i.Raw != nil {
+		// 锚点在 0055 起不可改写，因此归档器需要能回读对象以证明归档件未被替换。
+		archiver = archiver.WithObjectGetter(i.Raw)
+	}
 	audit.RegisterReporter(observability.NewAuditReporter())
 	go audit.RunScheduler(ctx, archiver, log, audit.DefaultSchedulerOptions())
 }

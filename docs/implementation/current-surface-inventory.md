@@ -1,6 +1,6 @@
 # 当前系统面清单（Current Surface Inventory）
 
-> 生成时间：2026-09-12 23:12 +0800  
+> 生成时间：2026-09-12 23:35 +0800  
 > 生成方式：`python3 scripts/generate_surface_inventory.py --with-db`（全部取自仓库真实文件与部署实例）  
 > 依据：docs/dual-system-development-plan.md §28.1 第 3 步
 
@@ -271,7 +271,7 @@
 
 ## 2. 权限目录
 
-共 **176** 个权限键，命名规则 `resource:action`（§4.2）。Go 侧 `internal/policy/catalog.go` 与 SQL 侧 `0041_rbac.sql` 由单元测试强校验一致。
+共 **177** 个权限键，命名规则 `resource:action`（§4.2）。Go 侧 `internal/policy/catalog.go` 与 SQL 侧 `0041_rbac.sql` 由单元测试强校验一致。
 
 | Key | Category | 说明 | Risk | 敏感 |
 |---|---|---|---|---|
@@ -285,6 +285,7 @@
 | `admin:approval:read` | admin.control | 查看审批请求 | medium | 否 |
 | `admin:audit:export` | admin.security | 导出审计日志 | critical | 是 |
 | `admin:audit:read` | admin.security | 查看审计日志 | medium | 是 |
+| `admin:audit:seal` | admin.security | 封存审计链完整性缺口边界 | critical | 否 |
 | `admin:audit:verify` | admin.security | 校验审计哈希链 | medium | 否 |
 | `admin:backup:create` | admin.system | 创建备份 | high | 否 |
 | `admin:backup:read` | admin.system | 查看备份 | medium | 否 |
@@ -493,6 +494,7 @@
 *
 /
 /audit
+/audit/integrity
 /data-quality
 /jobs
 /jobs/:jobId
@@ -567,6 +569,7 @@
 0052_s6_data_governance.sql
 0053_s6_permission_grants.sql
 0054_s6_append_only_hardening.sql
+0055_s6_audit_integrity_boundary.sql
 ```
 
 ### ClickHouse

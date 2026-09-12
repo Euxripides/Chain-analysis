@@ -69,8 +69,11 @@ d=json.load(sys.stdin)
 if not d.get('success'):
     print('  FAIL  $chain 链校验请求失败:', json.dumps(d.get('error'), ensure_ascii=False)); sys.exit(1)
 r=d['data']
-print('  %s  %-46s checked=%s valid=%s reason=%s' % ('PASS ' if r['valid'] else 'FAIL ', '$chain 哈希链校验', r['checked'], r['valid'], r['reason'] or '-'))
-sys.exit(0 if r['valid'] else 1)
+# valid 只描述"实际被校验到的区间"；链路是否完整必须由 integrity_status 明确声明。
+integ=r.get('integrity_status') or 'missing'
+ok=r['valid'] and integ in ('intact','sealed_incident')
+print('  %s  %-46s checked=%s valid=%s integrity=%s reason=%s' % ('PASS ' if ok else 'FAIL ', '$chain 哈希链校验', r['checked'], r['valid'], integ, r['reason'] or '-'))
+sys.exit(0 if ok else 1)
 " || FAIL=$((FAIL+1))
   [ "$chain" = "audit" ] && { echo "$RES" | grep -q '"valid":true' && PASS=$((PASS+1)) || true; }
   [ "$chain" = "login" ] && { echo "$RES" | grep -q '"valid":true' && PASS=$((PASS+1)) || true; }

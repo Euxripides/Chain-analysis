@@ -132,6 +132,7 @@ var Catalog = map[string]Permission{
 	"admin:audit:read":                  {"admin:audit:read", "admin.security", "查看审计日志", RiskMedium, true},
 	"admin:audit:export":                {"admin:audit:export", "admin.security", "导出审计日志", RiskCritical, true},
 	"admin:audit:verify":                {"admin:audit:verify", "admin.security", "校验审计哈希链", RiskMedium, false},
+	"admin:audit:seal":                  {"admin:audit:seal", "admin.security", "封存审计链完整性缺口边界", RiskCritical, false},
 	"admin:apikey:read":                 {"admin:apikey:read", "admin.security", "查看 API/MCP 密钥", RiskHigh, true},
 	"admin:apikey:create":               {"admin:apikey:create", "admin.security", "创建 API/MCP 密钥", RiskCritical, false},
 	"admin:apikey:revoke":               {"admin:apikey:revoke", "admin.security", "吊销 API/MCP 密钥", RiskCritical, false},

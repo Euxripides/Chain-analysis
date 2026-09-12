@@ -3,14 +3,20 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // VerifyChainResult 是 §27 AUDIT-004 的校验输出。
+//
+// Sprint 6 审计修复新增完整性边界字段：一条链即使存在已封存的不可恢复缺口，
+// 其边界之后的区间仍然必须可逐行验证。valid 只描述「实际被校验到的区间」是否自洽，
+// 是否完整则由 integrity_status / prefix_status 明确表达，二者不可互相替代。
 type VerifyChainResult struct {
 	Chain       string   `json:"chain"`
 	FromSeq     int64    `json:"from_seq"`
@@ -21,6 +27,13 @@ type VerifyChainResult struct {
 	Reason      string   `json:"reason"`
 	HeadHash    string   `json:"head_hash"`
 	Errors      []string `json:"errors"`
+
+	// 完整性边界（Sprint 6 审计修复）
+	IntegrityStatus   string             `json:"integrity_status"`
+	PrefixStatus      string             `json:"prefix_status"`
+	VerifiedFromSeq   int64              `json:"verified_from_seq"`
+	SealedBoundary    *SealedBoundaryRef `json:"sealed_boundary,omitempty"`
+	IntegrityWarnings []string           `json:"integrity_warnings"`
 }
 
 type scanner interface {
@@ -165,23 +178,92 @@ func ChainTables() []string {
 	return []string{chainReaders[ChainAudit].table, chainReaders[ChainLogin].table}
 }
 
-// VerifyChain 从头重算指定区间的哈希链。校验同时覆盖两种情况：
-//  1. 事件载荷（由权威列重建）被改写；
-//  2. 链被插入、删除或乱序。
+// VerifyChain 重算指定区间的哈希链，并识别/尊重完整性事件边界。
+//
+// 边界语义（Sprint 6 审计修复）：
+//   - 无缺口：integrity_status=intact、prefix_status=intact，行为与 S3 版完全一致。
+//   - 有缺口且已封存：integrity_status=sealed_incident、prefix_status=sealed_unrecoverable，
+//     实际校验自 trusted_from_seq 起，并以该事件记录的 sealed_tail_hash 作为首行 prev_hash，
+//     因此边界之后的链与「被销毁的最后一条事件的哈希」仍然密码学衔接。
+//   - 有缺口但未封存：integrity_status=undeclared_gap、valid=false（不合法状态，必须封存）。
+//   - 声明边界与实际数据矛盾（缺口区间出现行、封存尾哈希不匹配、可信起点缺失）：
+//     integrity_status=boundary_conflict、valid=false。这是反回填控制：任何向已封存缺口
+//     写入行的尝试都会被判定为冲突，而不是被静默接受。
+//
+// 注意：valid 只描述「实际被校验到的区间」是否自洽；链路是否完整由 integrity_status /
+// prefix_status 明确表达。封存之后本函数永不返回 intact。
 func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq, toSeq int64) (VerifyChainResult, error) {
 	reader, ok := chainReaders[chain]
 	if !ok {
 		return VerifyChainResult{}, fmt.Errorf("unknown chain %q", chain)
 	}
-	res := VerifyChainResult{Chain: chain, Valid: true, Errors: []string{}}
+	res := VerifyChainResult{
+		Chain: chain, Valid: true, Errors: []string{}, IntegrityWarnings: []string{},
+		IntegrityStatus: IntegrityIntact, PrefixStatus: PrefixIntact,
+	}
 	if fromSeq <= 0 {
 		fromSeq = 1
 	}
 	res.FromSeq = fromSeq
 	res.ToSeq = toSeq
+	res.VerifiedFromSeq = fromSeq
+
+	incident, err := LoadIncident(ctx, pool, chain)
+	if err != nil {
+		return res, err
+	}
+
+	startSeq := fromSeq
+	prevHash := ""
+	if incident != nil {
+		res.SealedBoundary = incident.BoundaryRef()
+		res.IntegrityStatus = IntegritySealedIncident
+		res.PrefixStatus = PrefixSealedUnrecoverable
+
+		// 反回填：已封存缺口区间内不允许存在任何行。
+		var rowsInside int64
+		if err := pool.QueryRow(ctx, fmt.Sprintf(
+			`SELECT count(*) FROM %s WHERE chain = $1 AND seq BETWEEN $2 AND $3`, reader.table),
+			chain, incident.GapFromSeq, incident.GapToSeq).Scan(&rowsInside); err != nil {
+			return res, err
+		}
+		if rowsInside > 0 {
+			res.IntegrityStatus = IntegrityBoundaryConflict
+			return res.broken(incident.TrustedFromSeq, "sealed_gap_contains_rows",
+				fmt.Sprintf("已封存缺口 seq %d..%d 内出现 %d 行，边界声明与实际数据矛盾（禁止回填历史审计行）",
+					incident.GapFromSeq, incident.GapToSeq, rowsInside)), nil
+		}
+
+		// 新链可信起点必须存在，且其 prev_hash 必须等于封存尾哈希。
+		var actualTail string
+		tailErr := pool.QueryRow(ctx, fmt.Sprintf(
+			`SELECT prev_hash FROM %s WHERE chain = $1 AND seq = $2`, reader.table),
+			chain, incident.TrustedFromSeq).Scan(&actualTail)
+		if errors.Is(tailErr, pgx.ErrNoRows) {
+			res.IntegrityStatus = IntegrityBoundaryConflict
+			return res.broken(incident.TrustedFromSeq, "trusted_start_row_missing",
+				fmt.Sprintf("新链可信起点 seq %d 不存在，边界声明失效", incident.TrustedFromSeq)), nil
+		}
+		if tailErr != nil {
+			return res, tailErr
+		}
+		if actualTail != incident.SealedTailHash {
+			res.IntegrityStatus = IntegrityBoundaryConflict
+			return res.broken(incident.TrustedFromSeq, "sealed_tail_hash_mismatch",
+				fmt.Sprintf("seq %d 的 prev_hash 与封存尾哈希不一致，幸存区间不是被销毁链尾的延续",
+					incident.TrustedFromSeq)), nil
+		}
+		if startSeq < incident.TrustedFromSeq {
+			startSeq = incident.TrustedFromSeq
+			res.IntegrityWarnings = append(res.IntegrityWarnings, fmt.Sprintf(
+				"请求区间自 seq %d 起，但 seq %d..%d 已封存为不可恢复缺口，实际校验自 seq %d 起",
+				fromSeq, incident.GapFromSeq, incident.GapToSeq, incident.TrustedFromSeq))
+		}
+	}
+	res.VerifiedFromSeq = startSeq
 
 	query := reader.query
-	args := []any{chain, fromSeq}
+	args := []any{chain, startSeq}
 	if toSeq > 0 {
 		query += " AND seq <= $3"
 		args = append(args, toSeq)
@@ -194,16 +276,24 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 	}
 	defer rows.Close()
 
-	prevHash := ""
-	if fromSeq > 1 {
-		if err := pool.QueryRow(ctx,
-			fmt.Sprintf(`SELECT event_hash FROM %s WHERE chain = $1 AND seq = $2`, reader.table),
-			chain, fromSeq-1).Scan(&prevHash); err != nil {
+	if startSeq > 1 {
+		if incident != nil && startSeq == incident.TrustedFromSeq {
+			// 用保留的封存尾哈希作为起点：这是新旧链唯一可用的密码学衔接证据。
+			prevHash = incident.SealedTailHash
+		} else if err := pool.QueryRow(ctx, fmt.Sprintf(
+			`SELECT event_hash FROM %s WHERE chain = $1 AND seq = $2`, reader.table),
+			chain, startSeq-1).Scan(&prevHash); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				res.IntegrityStatus = IntegrityUndeclaredGap
+				res.PrefixStatus = PrefixUnsealedGap
+				return res.broken(startSeq, "sequence_gap",
+					fmt.Sprintf("seq %d 之前的事件行缺失，且未封存完整性边界", startSeq)), nil
+			}
 			return res, fmt.Errorf("read predecessor hash: %w", err)
 		}
 	}
 
-	expectedSeq := fromSeq
+	expectedSeq := startSeq
 	for rows.Next() {
 		seq, rowPrev, rowHash, payload, err := reader.build(rows)
 		if err != nil {
@@ -247,4 +337,183 @@ func (r VerifyChainResult) broken(seq int64, reason, message string) VerifyChain
 	r.BrokenAtSeq = &at
 	r.Errors = append(r.Errors, message)
 	return r
+}
+
+// BoundaryRef 生成校验结果中使用的边界精简引用。
+func (i Incident) BoundaryRef() *SealedBoundaryRef {
+	return &SealedBoundaryRef{
+		IncidentRef:    i.IncidentRef,
+		Chain:          i.Chain,
+		GapFromSeq:     i.GapFromSeq,
+		GapToSeq:       i.GapToSeq,
+		GapEventCount:  i.GapEventCount,
+		TrustedFromSeq: i.TrustedFromSeq,
+		SealedTailHash: i.SealedTailHash,
+		EvidenceHash:   i.EvidenceHash,
+		SealedAt:       i.SealedAt,
+		Statement: fmt.Sprintf(
+			"链 %s 的 seq %d..%d 已封存为不可恢复缺口（%d 条事件）；旧链在该处不连续，新链可信起点为 seq %d，其 sealed_tail_hash 为被销毁的最后一条事件的 event_hash。",
+			i.Chain, i.GapFromSeq, i.GapToSeq, i.GapEventCount, i.TrustedFromSeq),
+	}
+}
+
+// ---- 每日锚点逐项验证（§27.6 AUDIT-004 的锚点一致性） ----
+
+const anchorSelect = `SELECT chain, anchor_date::text, from_seq, to_seq, head_hash, event_count,
+       object_ref, content_hash FROM audit_chain_anchors WHERE chain = $1 ORDER BY anchor_date`
+
+// VerifyAnchors 对一条链的全部每日锚点逐项给出结论。
+//
+// 三种处置：
+//   - verified：锚点区间完全位于可信起点之后，整段复算通过且末行 event_hash == 锚点 head_hash；
+//   - sealed_unrecoverable：锚点区间完全落在已封存缺口内，事件行不可恢复，
+//     此时仍核对锚点行与其 MinIO 归档对象哈希（证明保留证据未被替换）；
+//   - spans_boundary / broken：跨越边界或复算失败，一律如实标注，不降级为通过。
+func VerifyAnchors(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, chain string) ([]AnchorVerification, error) {
+	if pool == nil {
+		return nil, errors.New("audit store unavailable")
+	}
+	incident, err := LoadIncident(ctx, pool, chain)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pool.Query(ctx, anchorSelect, chain)
+	if err != nil {
+		return nil, err
+	}
+	type rawAnchor struct {
+		date                                  string
+		from, to, count                       int64
+		head, objectRef, contentHash          string
+	}
+	pending := []rawAnchor{}
+	for rows.Next() {
+		var it rawAnchor
+		var chainCol string
+		if err := rows.Scan(&chainCol, &it.date, &it.from, &it.to, &it.head, &it.count,
+			&it.objectRef, &it.contentHash); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		pending = append(pending, it)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	out := make([]AnchorVerification, 0, len(pending))
+	for _, it := range pending {
+		v := AnchorVerification{
+			Chain: chain, AnchorDate: it.date, FromSeq: it.from, ToSeq: it.to,
+			HeadHash: it.head, EventCount: it.count, ObjectRef: it.objectRef, ContentHash: it.contentHash,
+		}
+		v.ArchiveObjectHash, v.ArchiveIntact = ReadArchiveHash(ctx, getter, it.objectRef, it.contentHash)
+		switch {
+		case incident != nil && it.to <= incident.GapToSeq:
+			v.Disposition = AnchorSealedUnrecoverable
+			v.IncidentRef = incident.IncidentRef
+			v.Reason = fmt.Sprintf(
+				"锚点区间 [%d,%d] 完全落在已封存缺口 [%d,%d] 内：事件行不可恢复，head_hash 无法再用事件行复算；锚点行与 MinIO 归档对象原样保留（归档一致性=%t）",
+				it.from, it.to, incident.GapFromSeq, incident.GapToSeq, v.ArchiveIntact)
+		case incident != nil && it.from < incident.TrustedFromSeq && it.to >= incident.TrustedFromSeq:
+			v.Disposition = AnchorSpansBoundary
+			v.IncidentRef = incident.IncidentRef
+			v.Reason = fmt.Sprintf("锚点区间 [%d,%d] 跨越完整性边界 seq %d，无法整段复算",
+				it.from, it.to, incident.TrustedFromSeq)
+		default:
+			res, err := VerifyChain(ctx, pool, chain, it.from, it.to)
+			if err != nil {
+				return nil, err
+			}
+			v.Checked = res.Checked
+			v.RecomputedHead = res.HeadHash
+			derivation, err := AnchorHeadMatches(ctx, pool, chain, it.from, it.to, it.head)
+			if err != nil {
+				return nil, err
+			}
+			v.HeadHashDerivation = derivation
+			switch {
+			case !res.Valid:
+				v.Disposition = AnchorBroken
+				v.Reason = fmt.Sprintf("锚点区间复算失败：%s（broken_at_seq=%v）", res.Reason, res.BrokenAtSeq)
+			case derivation == "":
+				v.Disposition = AnchorBroken
+				v.Reason = "锚点 head_hash 与区间事件既不符合链头哈希、也不符合历史 max(event_hash) 派生"
+			case res.Checked != it.count:
+				v.Disposition = AnchorBroken
+				v.Reason = fmt.Sprintf("锚点 event_count=%d 与复算条数 %d 不一致", it.count, res.Checked)
+			case derivation == DerivationChainHead:
+				v.Verified = true
+				v.Disposition = AnchorVerified
+			default:
+				v.Verified = true
+				v.Disposition = AnchorVerifiedLegacy
+				v.Reason = "锚点 head_hash 与区间事件一致，但采用 0055 之前的 max(event_hash) 派生方式；锚点行不可改写，已按该派生方式复核通过"
+			}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// ---- 完整性报告 ----
+
+// BuildIntegrityReport 汇总一条链的观测缺口、封存事件、链校验与锚点逐项结论。
+func BuildIntegrityReport(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, chain string) (IntegrityReport, error) {
+	observed, err := DetectGap(ctx, pool, chain)
+	if err != nil {
+		return IntegrityReport{}, err
+	}
+	incident, err := LoadIncident(ctx, pool, chain)
+	if err != nil {
+		return IntegrityReport{}, err
+	}
+	verification, err := VerifyChain(ctx, pool, chain, 0, 0)
+	if err != nil {
+		return IntegrityReport{}, err
+	}
+	anchors, err := VerifyAnchors(ctx, pool, getter, chain)
+	if err != nil {
+		return IntegrityReport{}, err
+	}
+	rep := IntegrityReport{
+		Chain: chain, Observed: observed, Incident: incident,
+		IntegrityStatus: verification.IntegrityStatus, PrefixStatus: verification.PrefixStatus,
+		ChainVerification: verification, Anchors: anchors, AsOf: time.Now().UTC(),
+	}
+	for _, a := range anchors {
+		switch a.Disposition {
+		case AnchorVerified:
+			rep.AnchorsVerified++
+		case AnchorVerifiedLegacy:
+			rep.AnchorsLegacy++
+		case AnchorSealedUnrecoverable:
+			rep.AnchorsSealed++
+		default:
+			rep.AnchorsUnexplained++
+		}
+	}
+	rep.AllAnchorsAccounted = rep.AnchorsUnexplained == 0
+	rep.TruthStatement = integrityStatement(rep)
+	return rep, nil
+}
+
+func integrityStatement(r IntegrityReport) string {
+	verdict := map[bool]string{true: "通过", false: "失败"}[r.ChainVerification.Valid]
+	if r.IntegrityStatus == IntegrityIntact {
+		return fmt.Sprintf("链 %s 无缺口：seq %d..%d 全部逐行复算%s（checked=%d），锚点 %d 项全部验证通过。",
+			r.Chain, r.ChainVerification.VerifiedFromSeq, r.ChainVerification.ToSeq, verdict,
+			r.ChainVerification.Checked, r.AnchorsVerified)
+	}
+	if r.Incident == nil {
+		return fmt.Sprintf("链 %s 存在未封存缺口（观测最小 seq=%d）：integrity_status=%s，必须封存完整性边界后才能给出可信结论。",
+			r.Chain, r.Observed.FirstSurvivingSeq, r.IntegrityStatus)
+	}
+	inc := r.Incident
+	return fmt.Sprintf("链 %s 存在不可恢复缺口 seq %d..%d（%d 条事件，封存事件 %s）：旧链在该处不连续，且不允许伪造或回填。可验证区间为 seq %d..%d，逐行复算%s（checked=%d）；锚点 %d 项已验证、%d 项因落在封存缺口内标记为不可恢复（锚点与归档对象原样保留）。边界之后的链与每日锚点仍逐项可信。",
+		r.Chain, inc.GapFromSeq, inc.GapToSeq, inc.GapEventCount, inc.IncidentRef,
+		r.ChainVerification.VerifiedFromSeq, r.ChainVerification.ToSeq, verdict,
+		r.ChainVerification.Checked, r.AnchorsVerified, r.AnchorsSealed)
 }

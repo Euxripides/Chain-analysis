@@ -50,6 +50,9 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	r.Post("/audit/verify", s.require("admin:audit:verify", s.handleAdminAuditVerify))
 	r.Post("/audit/export", s.require("admin:audit:export", s.handleNotImplementedV2("audit.export")))
 
+	// Sprint 6 审计修复：完整性事件边界（缺口检测 / 封存 / 边界之后逐项验证）。
+	s.registerAdminAuditIntegrityRoutes(r)
+
 	// Sprint 5：全局任务与固定诊断链（A-JOB-01/02）。
 	r.Get("/jobs", s.require("admin:job:list", s.handleAdminJobsList))
 	r.Get("/jobs/{id}/diagnostics", s.require("admin:job:read", s.handleAdminJobDiagnostics))

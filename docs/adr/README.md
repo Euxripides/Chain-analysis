@@ -21,3 +21,5 @@
 | [AD-009](AD-009-dialog-only-notifications.md) | 提示信息只允许通过弹窗呈现 | Accepted | AGENTS.md、§7.3 |
 | [AD-010](AD-010-frontend-workspace-via-aliases.md) | 未启用 pnpm workspace 链接的过渡方案 | Accepted (临时) | §6.1、§28.3 |
 | [ADR-016](ADR-016-s4-migration-runtime-oidc.md) | S4 迁移编号、runtime 失败可见性与 OIDC 禁用策略 | Accepted | §22.1、§28.6、§32 |
+| [ADR-017](ADR-017-s6-control-plane-and-runtime-role.md) | S6 控制面契约、权限键映射与运行期降权 | Accepted | §19、§21.6、§25、§28.8 |
+| [ADR-018](ADR-018-audit-integrity-incident-boundary.md) | 审计完整性事件边界：不可恢复缺口的封存与逐项验证 | Accepted | §6.6.5、§27.6 AUDIT-003/004、AD-004、AD-005 |

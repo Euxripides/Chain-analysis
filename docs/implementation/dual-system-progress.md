@@ -1,7 +1,9 @@
 # 双系统开发进度对照（对照 dual-system-development-plan.md 全量）
 
-> 结论：**Sprint 1 / 2 / 3 / 4 / 5 / 6 均已完成**（Sprint 6 见 `docs/implementation/sprint6-report.md`；
-> AUDIT-004 的每日锚点一致性为 NOT_VERIFIED，原因见该报告 §6 的事件记录）。
+> 结论：**Sprint 1 / 2 / 3 / 4 / 5 / 6 均已完成**（Sprint 6 见 `docs/implementation/sprint6-report.md`）。
+> Sprint 6 的审计修复阻断项已闭环：不可恢复缺口的**不可变完整性事件边界**已实现并部署，
+> AUDIT-004 不再有 NOT_VERIFIED 项（见 `docs/adr/ADR-018-audit-integrity-incident-boundary.md`
+> 与该报告 §6bis）。
 >
 > - Sprint 2 的 OIDC 已完成 adapter + httptest 隔离测试（AUTH-011 协议负向覆盖）；
 >   没有真实 IdP，`/api/auth/v1/methods` 仍返回 `oidc:false`，`/oidc/*` 返回 501，
@@ -13,9 +15,11 @@
 >   （13 个跨项目守卫 skip）；S1–S4 回归全绿。详见 `docs/implementation/sprint5-report.md`。
 > - RBAC-007（Canvas 跨案件 Evidence）与 RBAC-004（无 evidence 权限读取正文）
 >   已由 S5 套件实际验证，不再是 BLOCKED。
-> - Sprint 6：API E2E PASS 111 / FAIL 0 / NOT_VERIFIED 1；Playwright 8 PASS / 0 FAIL；
+> - Sprint 6：API E2E PASS 152 / FAIL 0 / **NOT_VERIFIED 0**；Playwright 8 PASS / 0 FAIL；
 >   ADMIN-001..010 全部通过；AUDIT-003 用例暴露并修复了真实 append-only 缺口（TRUNCATE），
 >   详见 `docs/implementation/sprint6-report.md` §6。
+>   套件状态判定已同时要求 FAIL=0 与 NOT_VERIFIED=0（`run-sprint6-e2e.sh` 的 result.json
+>   写入 `criteria: fail==0 and not_verified==0 and pass>0`），不再存在"有未验证项仍报 PASS"的路径。
 >
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
 > 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`e639707`（S5）
@@ -30,7 +34,7 @@
 | S3 | RBAC、租户与审计 v2 | 8 | 8 | 0 | 0 | **100%** |
 | S4 | 用户案件与调查闭环 | 8 | 8 | 0 | 0 | **100%** |
 | S5 | Explorer、下载、任务、导出、图谱 | 8 | 8 | 0 | 0 | **100%** |
-| S6 | 后台控制、治理与可观测性 | 9 | 9 | 0 | 0 | **100%**（AUDIT-004 锚点一致性 NOT_VERIFIED） |
+| S6 | 后台控制、治理与可观测性 | 9 | 9 | 0 | 0 | **100%**（含审计修复阻断项：缺口已封存，NOT_VERIFIED 0） |
 | S7 | 硬化、真实数据验收与切流 | 8 | 0 | 0 | 8 | 0%（未开始） |
 
 ### Sprint 1（摘要）
@@ -132,12 +136,14 @@
 | S6-FE-01 | 完成 | Provider/详情/路由/性能/API Key、请求审计、成本、预算页面 |
 | S6-FE-02 | 完成 | 告警、控制面、Kill Switch（四步双人流程）、配置、功能开关、备份恢复、保留、版本页面 |
 | S6-OBS-01 | 完成 | `/observability` 总览/SLO/告警/指标 + §25.1 结构化日志字段 + 12 个新指标 |
-| S6-QA-01 | 完成 | `run-sprint6-e2e.sh` PASS 111 / FAIL 0 / NOT_VERIFIED 1；Playwright 8 PASS / 0 FAIL；ADMIN-001..010 全通过 |
+| S6-QA-01 | 完成 | `run-sprint6-e2e.sh` PASS 152 / FAIL 0 / NOT_VERIFIED 0；Playwright 8 PASS / 0 FAIL；ADMIN-001..010 全通过；AUDIT-003/004 覆盖边界破坏性操作拒绝、缺口封存与边界之后逐项验证 |
+| S6-AUDIT-FIX-01 | 完成 | 不可恢复缺口的不可变完整性事件边界（迁移 0055 + ADR-018）：缺口检测/双人审批封存/边界后链与锚点逐项验证/运行角色对边界证据全破坏性操作拒绝 |
 
 ## 4. 下一步（进入 S7）
 
-1. **S7 必须优先处理**：AUDIT-004 的链边界方案（当前 audit 链存在不可恢复缺口）、
-   应用账号与 owner/超级用户的彻底分离、PG/CH/MinIO 物理备份与 RPO/RTO 演练。
+1. **S7 必须优先处理**：应用账号与 owner/超级用户的彻底分离（应用账号目前仍是 owner，
+   ADR-017 §5 / S7-SEC-01）、PG/CH/MinIO 物理备份与 RPO/RTO 演练。
+   （原「AUDIT-004 的链边界方案」已由 Sprint 6 审计修复阻断项完成，见 ADR-018。）
 2. **S7 常规**：威胁矩阵/SBOM/依赖扫描、性能分层、全 §27、灰度与切流、手册与 RELEASE-DECISION。
 3. **S2 遗留**：MFA/TOTP；真实 IdP 接入后的 AUTH-011 live 验收。S6 的 step-up 为密码重认证（ADR-017）。
 4. **S6 遗留**：A-DATA-02/03（数据质量/存储）、A-RISK-01（风险事件）仍为显式占位页；

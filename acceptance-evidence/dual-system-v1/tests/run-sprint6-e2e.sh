@@ -401,47 +401,130 @@ NEW_ROWS=$(sql "select count(*) from audit_events_v2")
 if [ "$NEW_ROWS" -gt "$BEFORE_ROWS" ]; then WRITE_OK=yes; else WRITE_OK=no; fi
 check "AUDIT-003h" "受限角色下审计写入仍然成功" "$WRITE_OK" "yes"
 
+# 完整性事件边界的破坏性操作必须全部被拒绝（Sprint 6 审计修复的核心安全属性）。
+denied() { # denied <sql>：只有明确拒绝才算 denied
+  local out
+  out=$($PG "$1" 2>&1)
+  case "$out" in
+    *"permission denied"*|*"must be owner"*|*"not permitted"*|*"restrict_violation"*|*"immutable"*) echo denied ;;
+    *) echo "allowed:"$(echo "$out" | tr '\n' ' ' | cut -c1-100) ;;
+  esac
+}
+INTEG_PRIV=$(sql "select string_agg(t||':'||has_table_privilege('blockchain_app',t,'INSERT')::text||'/'||has_table_privilege('blockchain_app',t,'SELECT')::text||'/'||has_table_privilege('blockchain_app',t,'UPDATE')::text||'/'||has_table_privilege('blockchain_app',t,'DELETE')::text||'/'||has_table_privilege('blockchain_app',t,'TRUNCATE')::text, ' ' order by t) from unnest(array['audit_integrity_incidents','audit_integrity_incident_anchors','audit_integrity_incident_events']) as t")
+EXPECT_INTEG_PRIV="audit_integrity_incident_anchors:true/true/false/false/false audit_integrity_incident_events:true/true/false/false/false audit_integrity_incidents:true/true/false/false/false"
+check "AUDIT-003i" "边界三表运行角色权限矩阵正确" "$INTEG_PRIV" "$EXPECT_INTEG_PRIV"
+check "AUDIT-003j" "运行角色 UPDATE 边界事件被拒绝" "$(denied "set role blockchain_app; update audit_integrity_incidents set reason='tampered' where chain='audit'")" "denied"
+check "AUDIT-003k" "运行角色 DELETE 边界事件被拒绝" "$(denied "set role blockchain_app; delete from audit_integrity_incidents where chain='audit'")" "denied"
+check "AUDIT-003l" "运行角色 TRUNCATE 边界事件被拒绝" "$(denied "set role blockchain_app; truncate audit_integrity_incidents")" "denied"
+check "AUDIT-003m" "运行角色 DROP 边界表被拒绝" "$(denied "set role blockchain_app; drop table audit_integrity_incident_events")" "denied"
+check "AUDIT-003n" "运行角色改写边界哈希证据被拒绝" "$(denied "set role blockchain_app; update audit_integrity_incident_events set event_hash='deadbeef'")" "denied"
+check "AUDIT-003o" "运行角色改动边界引用锚点被拒绝" "$(denied "set role blockchain_app; update audit_integrity_incident_anchors set head_hash='deadbeef'")" "denied"
+check "AUDIT-003p" "既有每日锚点不可改写（UPDATE 被拒绝）" "$(denied "set role blockchain_app; update audit_chain_anchors set head_hash='deadbeef' where chain='audit'")" "denied"
+check "AUDIT-003q" "既有每日锚点不可删除（DELETE 被拒绝）" "$(denied "set role blockchain_app; delete from audit_chain_anchors where chain='audit'")" "denied"
+check "AUDIT-003r" "运行角色清空锚点表被拒绝（TRUNCATE）" "$(denied "set role blockchain_app; truncate audit_chain_anchors")" "denied"
+check "AUDIT-003s" "运行角色仍可读取边界记录（正向对照）" "$(sql "set role blockchain_app; select count(*) >= 0 from audit_integrity_incidents" | tail -1)" "t"
+
 ## ==================== AUDIT-004 ====================
-echo "---- AUDIT-004 Hash chain 校验与篡改可检测 ----"
+# 完整性事件边界：缺口检测 → 双人审批封存 → 边界之后逐项验证 → 反回填控制。
+# 本段不伪造历史、不回填缺口、不改写既有锚点；所有断言都直接对照数据库真实数据。
+echo "---- AUDIT-004 完整性边界：缺口检测、封存、边界之后逐项验证 ----"
 FIRST_SEQ=$(sql "select min(seq) from audit_events_v2 where chain='audit'")
 HEAD_SEQ=$(sql "select last_seq from audit_chain_heads where chain='audit'")
-check "AUDIT-004a" "链校验器返回结构化结果（valid/checked/broken_at_seq）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"audit"}' | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print('ok' if all(k in d for k in ('valid','checked','broken_at_seq','reason')) else 'missing')" 2>/dev/null)" "ok"
-# 前缀缺失（历史事件被清空）必须被检出，且定位到缺口边界。
-PREFIX=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"audit"}')
-check "AUDIT-004b" "缺失的历史前缀被检出（valid=false）" "$(echo "$PREFIX" | jget "d['data']['valid']")" "False"
-check "AUDIT-004c" "缺口定位到当前最早一条事件 seq" "$(echo "$PREFIX" | jget "d['data']['broken_at_seq']")" "$FIRST_SEQ"
-# 缺口之后的可用区间必须自洽：从 FIRST_SEQ+1 起逐行重算必须全部通过。
-WINDOW_FROM=$((FIRST_SEQ+1))
-WINDOW=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify "{\"chain\":\"audit\",\"from_seq\":$WINDOW_FROM,\"to_seq\":$HEAD_SEQ}")
-check "AUDIT-004d" "幸存区间逐行哈希一致（valid=true）" "$(echo "$WINDOW" | jget "d['data']['valid']")" "True"
-W_CHECKED=$(echo "$WINDOW" | jget "d['data']['checked']")
-if [ -n "$W_CHECKED" ] && [ "$W_CHECKED" -gt 0 ]; then WOK=yes; else WOK=no; fi
-check "AUDIT-004e" "幸存区间校验样本量 > 0" "$WOK" "yes"
-HEAD_PAIR=$(sql "select last_seq||'|'||last_hash from audit_chain_heads where chain='audit'")
+OBS_TAIL=$(sql "select prev_hash from audit_events_v2 where chain='audit' and seq=$FIRST_SEQ")
+GAP_FROM=1
+GAP_TO=$((FIRST_SEQ-1))
+GAP_COUNT=$(sql "select count(*) from audit_events_v2 where chain='audit' and seq between $GAP_FROM and $GAP_TO")
+
+PREVIEW=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/preview '{"chain":"audit"}')
+check "AUDIT-004a" "缺口检测返回结构化观测并定位真实缺口区间" "$(echo "$PREVIEW" | jget "'%s-%s' % (d['data']['observed']['gap_from_seq'], d['data']['observed']['gap_to_seq'])")" "$GAP_FROM-$GAP_TO"
+check "AUDIT-004b" "封存尾哈希等于幸存首行的 prev_hash（旧链尾唯一保留证据）" "$(echo "$PREVIEW" | jget "d['data']['observed']['sealed_tail_hash']")" "$OBS_TAIL"
+check "AUDIT-004c" "缺口区间内不存在任何事件行（未回填历史）" "$GAP_COUNT" "0"
+ALREADY_SEALED=$(echo "$PREVIEW" | jget "d['data']['already_sealed']")
+
+INCIDENT_REF="INC-AUDIT-GAP-$GAP_FROM-$GAP_TO"
+if [ "$ALREADY_SEALED" = "True" ]; then
+  # 幂等路径：边界已封存时不得重复写入，请求端点必须如实返回 already_sealed。
+  REQ=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/incidents/requests "{\"chain\":\"audit\",\"reason\":\"AUDIT-004 复跑：确认边界不可重复封存\",\"step_up_password\":\"$ADMIN_PW\"}")
+  check "AUDIT-004d" "已封存边界不可重复封存（幂等，already_sealed=true）" "$(echo "$REQ" | jget "d['data']['already_sealed']")" "True"
+  check "AUDIT-004e" "重复封存不产生第二条边界事件行" "$(sql "select count(*) from audit_integrity_incidents where chain='audit'")" "1"
+else
+  # 负向：缺少 step-up 密码必须被拒绝。
+  check "AUDIT-004d" "缺少 step-up 的封存请求被拒绝（403）" "$(adm_code "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/incidents/requests "{\"chain\":\"audit\",\"reason\":\"负向：无 step-up\"}")" "403"
+  REQ=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/incidents/requests "{\"chain\":\"audit\",\"reason\":\"AUDIT-004 验收：封存不可恢复审计缺口边界\",\"step_up_password\":\"$ADMIN_PW\"}")
+  SEAL_APPROVAL=$(echo "$REQ" | jget "d['data']['approval']['id']")
+  check "AUDIT-004e" "封存请求进入待审批状态（双人审批）" "$(echo "$REQ" | jget "d['data']['approval']['status']")" "pending"
+  check "AUDIT-004e2" "封存请求绑定的缺口与真实观测一致" "$(echo "$REQ" | jget "d['data']['incident_ref']")" "$INCIDENT_REF"
+  # 负向：发起人不能自行审批。
+  check "AUDIT-004f" "发起人自行审批封存被拒绝（403）" "$(adm_code "$JA" "$CS_A" POST "/api/admin/v1/audit/integrity/incidents/requests/$SEAL_APPROVAL/approve" '{"note":"负向：自审批"}')" "403"
+  # 负向：未审批即执行必须被拒绝（412）。
+  check "AUDIT-004g" "未通过审批即执行封存被拒绝（412）" "$(adm_code "$JA" "$CS_A" POST "/api/admin/v1/audit/integrity/incidents/requests/$SEAL_APPROVAL/execute" "{\"step_up_password\":\"$ADMIN_PW\"}")" "412"
+  check "AUDIT-004h" "第二名审批人批准封存（双人约束成立）" "$(adm "$JP" "$CS_P" POST "/api/admin/v1/audit/integrity/incidents/requests/$SEAL_APPROVAL/approve" '{"note":"AUDIT-004 验收：第二名审批人批准封存"}' | jget "d['data']['status']")" "approved"
+  EXEC=$(adm "$JA" "$CS_A" POST "/api/admin/v1/audit/integrity/incidents/requests/$SEAL_APPROVAL/execute" "{\"step_up_password\":\"$ADMIN_PW\",\"reason\":\"AUDIT-004 验收：执行边界封存\"}")
+  check "AUDIT-004i" "双人审批后封存成功并返回不可变事件" "$(echo "$EXEC" | jget "d['data']['incident']['incident_ref']")" "$INCIDENT_REF"
+fi
+
+# 封存结果必须真实落库，且哈希证据完整。
+check "AUDIT-004j" "边界事件落库（chain/kind/缺口/可信起点）" "$(sql "select chain||'|'||kind||'|'||gap_from_seq||'|'||gap_to_seq||'|'||trusted_from_seq from audit_integrity_incidents where incident_ref='$INCIDENT_REF'")" "audit|unrecoverable_gap|$GAP_FROM|$GAP_TO|$FIRST_SEQ"
+check "AUDIT-004k" "边界证据哈希与封存尾哈希均为 64 位十六进制" "$(sql "select (length(evidence_hash)=64 and length(sealed_tail_hash)=64 and evidence_hash ~ '^[0-9a-f]{64}$')::text from audit_integrity_incidents where incident_ref='$INCIDENT_REF'")" "true"
+check "AUDIT-004k2" "边界创建/审批事件链已落库且带哈希链接" "$(sql "select count(*)>=2 and bool_and(length(event_hash)=64) from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
+check "AUDIT-004k3" "边界事件链序号连续且 prev_hash 首尾相接" "$(sql "select (count(*)=max(seq) and count(*) filter (where prev_hash='')=1)::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
+check "AUDIT-004k4" "边界引用了保留的旧锚点（原样保留、未改写）" "$(sql "select count(*) > 0 from audit_integrity_incident_anchors a join audit_integrity_incidents i on i.id=a.incident_id where i.incident_ref='$INCIDENT_REF' and a.chain='audit' and a.head_hash=(select head_hash from audit_chain_anchors where chain='audit' and anchor_date=a.anchor_date)")" "t"
+
+# 封存后：全链校验必须声明缺口，绝不能伪装为完整。
+VERIFY=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"audit"}')
+check "AUDIT-004l" "封存后 integrity_status=sealed_incident（不是 intact）" "$(echo "$VERIFY" | jget "d['data']['integrity_status']")" "sealed_incident"
+check "AUDIT-004m" "prefix_status=sealed_unrecoverable（旧链不连续已声明）" "$(echo "$VERIFY" | jget "d['data']['prefix_status']")" "sealed_unrecoverable"
+check "AUDIT-004n" "实际校验起点等于新链可信起点" "$(echo "$VERIFY" | jget "d['data']['verified_from_seq']")" "$FIRST_SEQ"
+check "AUDIT-004o" "边界之后逐行复算通过（valid=true）" "$(echo "$VERIFY" | jget "d['data']['valid']")" "True"
 CUR_SEQ=$(sql "select max(seq) from audit_events_v2 where chain='audit'")
+EXPECT_CHECKED=$((CUR_SEQ-FIRST_SEQ+1))
+W_CHECKED=$(echo "$VERIFY" | jget "d['data']['checked']")
+if [ -n "$W_CHECKED" ] && [ "$W_CHECKED" -gt 0 ]; then WOK=yes; else WOK=no; fi
+check "AUDIT-004p" "边界之后复算条数 > 0" "$WOK" "yes"
+check "AUDIT-004q" "缺口区间仍无任何行（未回填历史审计行）" "$(sql "select count(*) from audit_events_v2 where chain='audit' and seq between $GAP_FROM and $GAP_TO")" "0"
+check "AUDIT-004r" "控制链 login 无缺口，integrity_status=intact（边界机制非全局放行）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['integrity_status']")" "intact"
+check "AUDIT-004r2" "控制链 login 全链可验证（valid=true）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['valid']")" "True"
+check "AUDIT-004s" "边界校验不带出未解释告警以外的错误" "$(echo "$VERIFY" | jget "'none' if d['data']['errors']==[] else d['data']['errors']")" "none"
+
+# 链头与最后一条事件必须仍然自洽。
+HEAD_PAIR=$(sql "select last_seq||'|'||last_hash from audit_chain_heads where chain='audit'")
 HEAD_HASH=$(echo "$HEAD_PAIR" | cut -d'|' -f2)
 HEAD_SEQ_DB=$(echo "$HEAD_PAIR" | cut -d'|' -f1)
 ROW_HASH=$(sql "select event_hash from audit_events_v2 where chain='audit' and seq=$CUR_SEQ")
-check "AUDIT-004f-0" "链头 seq 与库中最大 seq 一致" "$HEAD_SEQ_DB" "$CUR_SEQ"
+check "AUDIT-004t" "链头 seq 与库中最大 seq 一致" "$HEAD_SEQ_DB" "$CUR_SEQ"
 if [ "$ROW_HASH" = "$HEAD_HASH" ]; then HEAD_OK=match; else HEAD_OK=mismatch; fi
-check "AUDIT-004f" "链头 last_hash 与最后一条事件 event_hash 一致" "$HEAD_OK" "match"
-ANCHOR=$(sql "select anchor_date||'|'||to_seq||'|'||head_hash from audit_chain_anchors where chain='audit' order by anchor_date desc limit 1")
-if [ -z "$ANCHOR" ]; then
-  nv "AUDIT-004g" "尚无每日锚点行，锚点一致性未验证"
-else
-  ANCHOR_SEQ=$(echo "$ANCHOR" | cut -d'|' -f2)
-  ANCHOR_HASH=$(echo "$ANCHOR" | cut -d'|' -f3)
-  ANCHOR_ACTUAL=$(sql "select coalesce(event_hash,'') from audit_events_v2 where chain='audit' and seq=$ANCHOR_SEQ")
-  if [ -z "$ANCHOR_ACTUAL" ]; then
-    nv "AUDIT-004g" "锚点区间 (to_seq=$ANCHOR_SEQ) 的事件行已不在库中，锚点哈希一致性未验证"
-  else
-    if [ "$ANCHOR_ACTUAL" = "$ANCHOR_HASH" ]; then AM=match; else AM=mismatch; fi
-    check "AUDIT-004g" "每日锚点 head_hash 与该 seq 事件一致" "$AM" "match"
-  fi
-fi
+check "AUDIT-004u" "链头 last_hash 与最后一条事件 event_hash 一致" "$HEAD_OK" "match"
+
+## ---- 每日锚点逐项验证（边界前 / 边界后分别处置） ----
+ANCHOR_DATE=$(date -u +%F)
+ANCHOR_CREATE=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/anchors "{\"chain\":\"audit\",\"date\":\"$ANCHOR_DATE\",\"reason\":\"AUDIT-004 验收：生成边界后的当日锚点\"}")
+ANCH_FROM=$(sql "select from_seq from audit_chain_anchors where chain='audit' and anchor_date='$ANCHOR_DATE'")
+check "AUDIT-004v" "边界后当日锚点存在" "$([ -n "$ANCH_FROM" ] && echo yes || echo no)" "yes"
+check "AUDIT-004v2" "当日锚点区间不跨越已封存边界（自可信起点开始）" "$([ "$ANCH_FROM" -ge "$FIRST_SEQ" ] && echo yes || echo no)" "yes"
+
+ANCHORS=$(adm "$JA" "$CS_A" GET "/api/admin/v1/audit/anchors?chain=audit")
+check "AUDIT-004w" "边界后锚点整段复算通过（verified=true）" "$(echo "$ANCHORS" | jget "d['data']['items'][-1]['verified']")" "True"
+check "AUDIT-004w2" "边界后锚点 head_hash 与复算结果一致" "$(echo "$ANCHORS" | jget "d['data']['items'][-1]['head_hash']==d['data']['items'][-1]['recomputed_head_hash']")" "True"
+check "AUDIT-004w3" "边界后锚点复算条数等于其声明事件数" "$(echo "$ANCHORS" | jget "d['data']['items'][-1]['checked']==d['data']['items'][-1]['event_count']")" "True"
+check "AUDIT-004x" "边界前锚点标记为封存不可恢复并引用边界事件" "$(echo "$ANCHORS" | jget "'%s|%s' % (d['data']['items'][0]['disposition'], d['data']['items'][0]['incident_ref'])")" "sealed_unrecoverable|$INCIDENT_REF"
+check "AUDIT-004x2" "保留锚点的归档对象哈希与记录一致（未被替换）" "$(echo "$ANCHORS" | jget "d['data']['items'][0]['archive_intact']")" "True"
+check "AUDIT-004x3" "所有锚点均可归因（unexplained=0）" "$(echo "$ANCHORS" | jget "d['data']['unexplained']")" "0"
+ANCHOR_OBJ=$(adm "$JA" "$CS_A" GET "/api/admin/v1/audit/anchors/audit/$ANCHOR_DATE/object")
+check "AUDIT-004x4" "归档对象可回读且 SHA-256 与锚点 content_hash 一致" "$(echo "$ANCHOR_OBJ" | jget "d['data']['intact']")" "True"
+check "AUDIT-004x5" "归档对象 manifest 含 chain/区间/head_hash（可独立复算）" "$(echo "$ANCHOR_OBJ" | jget "'ok' if all(k in d['data']['manifest'] for k in ('chain','from_seq','to_seq','head_hash','algorithm')) else 'missing'")" "ok"
+
+# 边界完整性报告：一次性给出观测、封存事件、链校验与锚点结论。
+REPORT=$(adm "$JA" "$CS_A" GET "/api/admin/v1/audit/integrity?chain=audit")
+check "AUDIT-004y" "完整性报告声明缺口并给出可信起点" "$(echo "$REPORT" | jget "'%s|%s' % (d['data']['integrity_status'], d['data']['chain_verification']['verified_from_seq'])")" "sealed_incident|$FIRST_SEQ"
+check "AUDIT-004y2" "完整性报告如实陈述不可恢复事实" "$(echo "$REPORT" | jget "'ok' if '不可恢复缺口' in d['data']['truth_statement'] and '不连续' in d['data']['truth_statement'] else 'missing'")" "ok"
+
+# 反回填控制：向已封存缺口写入行必然被判定为边界冲突（用只读查询证明规则存在且当前无违反）。
+check "AUDIT-004z" "反回填控制生效（缺口区间行数=0，冲突计数为 0）" "$(echo "$REPORT" | jget "d['data']['observed']['rows_inside_sealed_gap']")" "0"
+check "AUDIT-004z2" "边界事件不可改写（运行角色 UPDATE 被拒绝）" "$(denied "set role blockchain_app; update audit_integrity_incidents set gap_to_seq=0")" "denied"
 
 # 篡改演练：临时停用 append-only 触发器 → 改写一条事件 → 用真实校验器复算 → 还原。
 # trap 保证任何分支都会还原，不把数据库留在被篡改状态。
+WINDOW_FROM=$FIRST_SEQ
 TAMPER_SEQ=$HEAD_SEQ
 TAMPER_ORIG=$(sql "select action from audit_events_v2 where chain='audit' and seq=$TAMPER_SEQ")
 restore_tamper() {
@@ -452,11 +535,12 @@ trap 'restore_tamper; rm -f "$JA" "$JP" "$JU" "$JV" "$JB"' EXIT
 sql "ALTER TABLE audit_events_v2 DISABLE TRIGGER audit_events_v2_append_only" >/dev/null
 sql "UPDATE audit_events_v2 SET action='tampered-by-s6-drill' WHERE chain='audit' AND seq=$TAMPER_SEQ" >/dev/null
 TAMPER_VERIFY=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify "{\"chain\":\"audit\",\"from_seq\":$WINDOW_FROM,\"to_seq\":$HEAD_SEQ}")
-check "AUDIT-004h" "改写事件后幸存区间校验失败" "$(echo "$TAMPER_VERIFY" | jget "d['data']['valid']")" "False"
-check "AUDIT-004i" "校验器定位到被改写的 seq" "$(echo "$TAMPER_VERIFY" | jget "d['data']['broken_at_seq']")" "$TAMPER_SEQ"
+check "AUDIT-004T-a" "改写事件后边界之后区间校验失败" "$(echo "$TAMPER_VERIFY" | jget "d['data']['valid']")" "False"
+check "AUDIT-004T-b" "校验器定位到被改写的 seq" "$(echo "$TAMPER_VERIFY" | jget "d['data']['broken_at_seq']")" "$TAMPER_SEQ"
 restore_tamper
 RESTORED=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify "{\"chain\":\"audit\",\"from_seq\":$WINDOW_FROM,\"to_seq\":$HEAD_SEQ}")
-check "AUDIT-004j" "还原后幸存区间校验重新通过" "$(echo "$RESTORED" | jget "d['data']['valid']")" "True"
+check "AUDIT-004T-c" "还原后边界之后区间校验重新通过" "$(echo "$RESTORED" | jget "d['data']['valid']")" "True"
+check "AUDIT-004T-d" "还原后 integrity_status 仍为 sealed_incident（缺口不会被掩盖）" "$(echo "$RESTORED" | jget "d['data']['integrity_status']")" "sealed_incident"
 trap 'rm -f "$JA" "$JP" "$JU" "$JV" "$JB"' EXIT
 
 ## ==================== S6-OBS-01 ====================
@@ -507,11 +591,19 @@ chmod 600 "$EVIDENCE_DIR/ids.env"
 python3 - "$EVIDENCE_DIR/result.json" "$PASS" "$FAIL" "$NV" "$S6_BUILD_SHA" <<'PY'
 import json,sys,datetime
 path,p,f,nv,sha=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5]
+# 状态判定必须同时要求 FAIL=0 与 NOT_VERIFIED=0：
+# 只要还有任何一项未能验证，套件就不能报告 PASS（不允许把 NOT_VERIFIED 表述为通过）。
+blocking = f > 0 or nv > 0
 data={"suite":"run-sprint6-e2e.sh","build_sha":sha,"pass":p,"fail":f,"not_verified":nv,
-      "status":"PASS" if f==0 and p>0 else "FAIL","finished_at":datetime.datetime.now().astimezone().isoformat()}
+      "blocking_failures":f,"blocking_not_verified":nv,
+      "criteria":"fail==0 and not_verified==0 and pass>0",
+      "status":"PASS" if (f==0 and nv==0 and p>0) else "FAIL",
+      "finished_at":datetime.datetime.now().astimezone().isoformat()}
+if blocking:
+    print("STATUS=FAIL：存在未通过或未验证项（fail=%d not_verified=%d）" % (f, nv), file=sys.stderr)
 json.dump(data,open(path,"w",encoding="utf-8"),ensure_ascii=False,indent=2)
 print("result.json written:",data)
 PY
 
 echo "==== Sprint 6 E2E 结束 $(date -Is) PASS=$PASS FAIL=$FAIL NOT_VERIFIED=$NV ===="
-[ "$FAIL" -eq 0 ] || exit 1
+[ "$FAIL" -eq 0 ] && [ "$NV" -eq 0 ] || exit 1

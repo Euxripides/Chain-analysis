@@ -72,6 +72,7 @@ def collect_router_paths() -> dict[str, set[str]]:
         "adminS6Provider": API_DIR / "sprint6_provider.go",
         "adminS6Governance": API_DIR / "sprint6_governance.go",
         "adminS6Obs": API_DIR / "sprint6_obs.go",
+        "adminS6AuditIntegrity": API_DIR / "sprint6_audit_integrity.go",
     }
     prefixes = {
         "auth": "/api/auth/v1",
@@ -83,6 +84,7 @@ def collect_router_paths() -> dict[str, set[str]]:
         "adminS6Provider": "/api/admin/v1",
         "adminS6Governance": "/api/admin/v1",
         "adminS6Obs": "/api/admin/v1",
+        "adminS6AuditIntegrity": "/api/admin/v1",
     }
 
     def add(full: str, method: str) -> None:

@@ -33,6 +33,7 @@ const RolesPage = lazy(() => import("./pages/RolesPage"));
 const SessionsPage = lazy(() => import("./pages/SessionsPage"));
 const LoginEventsPage = lazy(() => import("./pages/LoginEventsPage"));
 const AuditPage = lazy(() => import("./pages/AuditPage"));
+const AuditIntegrityPage = lazy(() => import("./pages/AuditIntegrityPage"));
 const OrganizationsPage = lazy(() => import("./pages/OrganizationsPage"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
 const JobsPage = lazy(() => import("./pages/JobsPage"));
@@ -111,6 +112,7 @@ const navGroups = (): NavGroup[] => {
       label: "安全与审计",
       items: [
         { to: "/audit", label: "审计日志", icon: <ShieldCheck size={16} /> },
+        { to: "/audit/integrity", label: "完整性边界", icon: <ShieldCheck size={16} /> },
         { to: "/alerts", label: "告警中心", icon: <AlertTriangle size={16} /> },
         { to: "/risk", label: "风险事件", icon: <AlertTriangle size={16} /> },
         { to: "/settings", label: "系统配置", icon: <SlidersHorizontal size={16} /> },
@@ -198,6 +200,7 @@ function Shell() {
           <Route path="/sessions" element={<Guard permission="admin:session:read"><SessionsPage /></Guard>} />
           <Route path="/login-events" element={<Guard permission="admin:login-event:read"><LoginEventsPage /></Guard>} />
           <Route path="/audit" element={<Guard permission="admin:audit:read"><AuditPage /></Guard>} />
+          <Route path="/audit/integrity" element={<Guard permission="admin:audit:verify"><AuditIntegrityPage /></Guard>} />
           <Route path="/jobs" element={<Guard permission="admin:job:list"><JobsPage /></Guard>} />
           <Route path="/jobs/:jobId" element={<Guard permission="admin:job:read"><JobDetailPage /></Guard>} />
           {s6Routes.map((entry) => (

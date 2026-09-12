@@ -396,6 +396,24 @@ export interface ChainStatus {
   last_hash: string;
 }
 
+/** 已封存的完整性边界（Sprint 6 审计修复）。 */
+export interface SealedBoundaryRef {
+  incident_ref: string;
+  chain: string;
+  gap_from_seq: number;
+  gap_to_seq: number;
+  gap_event_count: number;
+  trusted_from_seq: number;
+  sealed_tail_hash: string;
+  evidence_hash: string;
+  sealed_at: string;
+  statement: string;
+}
+
+/**
+ * valid 只描述「实际被校验到的区间」是否自洽；
+ * integrity_status / prefix_status 才表达链路是否完整，二者不可互相替代。
+ */
 export interface VerifyChainResult {
   chain: string;
   from_seq: number;
@@ -406,4 +424,9 @@ export interface VerifyChainResult {
   reason: string;
   head_hash: string;
   errors: string[];
+  integrity_status: "intact" | "sealed_incident" | "undeclared_gap" | "boundary_conflict";
+  prefix_status: "intact" | "sealed_unrecoverable" | "unsealed_gap";
+  verified_from_seq: number;
+  sealed_boundary?: SealedBoundaryRef;
+  integrity_warnings: string[];
 }
