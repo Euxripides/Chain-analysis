@@ -466,7 +466,7 @@ fi
 # 封存结果必须真实落库，且哈希证据完整。
 check "AUDIT-004j" "边界事件落库（chain/kind/缺口/可信起点）" "$(sql "select chain||'|'||kind||'|'||gap_from_seq||'|'||gap_to_seq||'|'||trusted_from_seq from audit_integrity_incidents where incident_ref='$INCIDENT_REF'")" "audit|unrecoverable_gap|$GAP_FROM|$GAP_TO|$FIRST_SEQ"
 check "AUDIT-004k" "边界证据哈希与封存尾哈希均为 64 位十六进制" "$(sql "select (length(evidence_hash)=64 and length(sealed_tail_hash)=64 and evidence_hash ~ '^[0-9a-f]{64}$')::text from audit_integrity_incidents where incident_ref='$INCIDENT_REF'")" "true"
-check "AUDIT-004k2" "边界创建/审批事件链已落库且带哈希链接" "$(sql "select count(*)>=2 and bool_and(length(event_hash)=64) from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
+check "AUDIT-004k2" "边界创建/审批事件链已落库且带哈希链接" "$(sql "select (count(*)>=2 and bool_and(length(event_hash)=64))::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
 check "AUDIT-004k3" "边界事件链序号连续且 prev_hash 首尾相接" "$(sql "select (count(*)=max(seq) and count(*) filter (where prev_hash='')=1)::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
 check "AUDIT-004k4" "边界引用了保留的旧锚点（原样保留、未改写）" "$(sql "select count(*) > 0 from audit_integrity_incident_anchors a join audit_integrity_incidents i on i.id=a.incident_id where i.incident_ref='$INCIDENT_REF' and a.chain='audit' and a.head_hash=(select head_hash from audit_chain_anchors where chain='audit' and anchor_date=a.anchor_date)")" "t"
 
@@ -481,17 +481,21 @@ EXPECT_CHECKED=$((CUR_SEQ-FIRST_SEQ+1))
 W_CHECKED=$(echo "$VERIFY" | jget "d['data']['checked']")
 if [ -n "$W_CHECKED" ] && [ "$W_CHECKED" -gt 0 ]; then WOK=yes; else WOK=no; fi
 check "AUDIT-004p" "边界之后复算条数 > 0" "$WOK" "yes"
+check "AUDIT-004p2" "复算条数等于校验区间长度（逐行、无跳号）" "$(echo "$VERIFY" | jget "d['data']['checked']==d['data']['to_seq']-d['data']['verified_from_seq']+1")" "True"
 check "AUDIT-004q" "缺口区间仍无任何行（未回填历史审计行）" "$(sql "select count(*) from audit_events_v2 where chain='audit' and seq between $GAP_FROM and $GAP_TO")" "0"
 check "AUDIT-004r" "控制链 login 无缺口，integrity_status=intact（边界机制非全局放行）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['integrity_status']")" "intact"
 check "AUDIT-004r2" "控制链 login 全链可验证（valid=true）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['valid']")" "True"
 check "AUDIT-004s" "边界校验不带出未解释告警以外的错误" "$(echo "$VERIFY" | jget "'none' if d['data']['errors']==[] else d['data']['errors']")" "none"
 
 # 链头与最后一条事件必须仍然自洽。
-HEAD_PAIR=$(sql "select last_seq||'|'||last_hash from audit_chain_heads where chain='audit'")
-HEAD_HASH=$(echo "$HEAD_PAIR" | cut -d'|' -f2)
+# 单条语句读取：验收过程本身会持续写入审计事件，分两次查询会读到不同的链头（曾真实出现）。
+# 一条 SELECT 在同一个快照内完成，才能构成有效断言。
+HEAD_PAIR=$(sql "select h.last_seq||'|'||h.last_hash||'|'||coalesce(e.event_hash,'')||'|'||(select max(seq) from audit_events_v2 where chain='audit') from audit_chain_heads h left join audit_events_v2 e on e.chain=h.chain and e.seq=h.last_seq where h.chain='audit'")
 HEAD_SEQ_DB=$(echo "$HEAD_PAIR" | cut -d'|' -f1)
-ROW_HASH=$(sql "select event_hash from audit_events_v2 where chain='audit' and seq=$CUR_SEQ")
-check "AUDIT-004t" "链头 seq 与库中最大 seq 一致" "$HEAD_SEQ_DB" "$CUR_SEQ"
+HEAD_HASH=$(echo "$HEAD_PAIR" | cut -d'|' -f2)
+ROW_HASH=$(echo "$HEAD_PAIR" | cut -d'|' -f3)
+CUR_SEQ=$(echo "$HEAD_PAIR" | cut -d'|' -f4)
+check "AUDIT-004t" "链头 seq 与库中最大 seq 一致（同一快照）" "$HEAD_SEQ_DB" "$CUR_SEQ"
 if [ "$ROW_HASH" = "$HEAD_HASH" ]; then HEAD_OK=match; else HEAD_OK=mismatch; fi
 check "AUDIT-004u" "链头 last_hash 与最后一条事件 event_hash 一致" "$HEAD_OK" "match"
 
