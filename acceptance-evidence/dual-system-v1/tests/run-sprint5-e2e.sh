@@ -38,8 +38,8 @@ mkdir -p "$EVIDENCE_DIR" "$FILES_DIR"
 (cd "$PROJECT/backend" && go build -o bin/objectprobe ./cmd/objectprobe && go build -o bin/parquetprobe ./cmd/parquetprobe) || { echo "验收工具编译失败"; exit 3; }
 
 PASS=0; FAIL=0; NV=0
-J1=$(mktemp); J2=$(mktemp); J3=$(mktemp); J4=$(mktemp); JA=$(mktemp)
-trap 'rm -f "$J1" "$J2" "$J3" "$J4" "$JA"' EXIT
+J1=$(mktemp); J2=$(mktemp); J3=$(mktemp); J4=$(mktemp); J5=$(mktemp); JA=$(mktemp)
+trap 'rm -f "$J1" "$J2" "$J3" "$J4" "$J5" "$JA"' EXIT
 
 check() { # check <ID> <描述> <实际> <期望>
   if [ "$3" = "$4" ]; then
@@ -88,11 +88,13 @@ LOGIN_INV=$(login "$J1" "$INV_EMAIL" "$INV_PW"); CSRF1=$(csrf cs_user_session_cs
 LOGIN_ANA=$(login "$J2" "$ANA_EMAIL" "$ANA_PW"); CSRF2=$(csrf cs_user_session_csrf "$J2")
 LOGIN_REV=$(login "$J3" "$REV_EMAIL" "$REV_PW"); CSRF3=$(csrf cs_user_session_csrf "$J3")
 LOGIN_VIEW=$(login "$J4" "$VIEW_EMAIL" "$VIEW_PW"); CSRF4=$(csrf cs_user_session_csrf "$J4")
+LOGIN_AUD=$(login "$J5" "$AUD_EMAIL" "$AUD_PW"); CSRF5=$(csrf cs_user_session_csrf "$J5")
 ADMIN_TOKEN=$(login "$JA" "$ADMIN_EMAIL" "$ADMIN_PW" admin >/dev/null; csrf cs_admin_session_csrf "$JA")
 check SETUP "investigator 登录" "$(echo "$LOGIN_INV" | jget 'd["success"]')" "True"
 check SETUP "analyst 登录" "$(echo "$LOGIN_ANA" | jget 'd["success"]')" "True"
 check SETUP "reviewer 登录" "$(echo "$LOGIN_REV" | jget 'd["success"]')" "True"
 check SETUP "viewer 登录" "$(echo "$LOGIN_VIEW" | jget 'd["success"]')" "True"
+check SETUP "auditor 登录" "$(echo "$LOGIN_AUD" | jget 'd["success"]')" "True"
 
 echo
 echo "== 基线：Provider usage / jobs / shards =="
@@ -556,6 +558,19 @@ else
 fi
 
 echo
+fi
+
+echo
+echo "== RBAC-004 无 evidence 权限读取正文：拒绝并记录敏感审计 =="
+RBAC4_EID=$($PG "select id from investigation_evidence order by created_at desc limit 1")
+if is_uuid "$RBAC4_EID"; then
+  RBAC4_HTTP=$(api_code "$J5" "$CSRF5" GET "/api/v2/evidence/$RBAC4_EID")
+  check RBAC-004 "auditor 无 evidence:read 读取正文 -> 403" "$RBAC4_HTTP" "403"
+  sleep 1
+  RBAC4_AUDIT=$($PG "select count(*) from audit_events_v2 where action='authorization.denied' and actor_email='$AUD_EMAIL' and permission_key='evidence:read' and result='deny'")
+  check RBAC-004 "拒绝写入 authorization.denied（permission_key=evidence:read）" "$([ "${RBAC4_AUDIT:-0}" -gt 0 ] && echo yes || echo no)" "yes"
+else
+  nv RBAC-004 "没有可引用的 Evidence 夹具，权限负向未验证"
 fi
 
 echo "== AUDIT/权限负向与运行态 =="

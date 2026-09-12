@@ -209,7 +209,8 @@ echo
 echo "== USER-009 全局搜索：只返回有权对象 + 类型分组 =="
 SEARCH=$(curl -s -b "$J1" "$BASE/api/v2/search?q=$CASE_NAME")
 check USER-009 "搜索命中本人案件" "$(echo "$SEARCH" | jget 'any(i["type"]=="case" and i["id"]=="'"$CID"'" for i in d["data"]["items"])')" "True"
-check USER-009 "搜索结果声明类型分组" "$(echo "$SEARCH" | jget '",".join(sorted(d["data"]["scopes"]))')" "case,investigation"
+# S5 起 /search 扩展了 job/report/address/transaction 类型；S4 期望 case+investigation 必须存在。
+check USER-009 "搜索结果声明类型分组" "$(echo "$SEARCH" | jget '"case" in d["data"]["scopes"] and "investigation" in d["data"]["scopes"]')" "True"
 CROSS=$(curl -s -b "$J1" "$BASE/api/v2/search?q=FIXTURE-PRIMARY")
 check USER-009 "跨工作区案件不会出现在搜索结果" "$(echo "$CROSS" | jget 'any(i["id"]=="ae8326ed-a6dc-414c-821f-b9a2973fc258" for i in d["data"]["items"])')" "False"
 

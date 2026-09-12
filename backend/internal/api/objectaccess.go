@@ -43,6 +43,28 @@ func (s *Server) requireObject(w http.ResponseWriter, r *http.Request, resourceT
 	}
 }
 
+// scopedObject 在 requireObject 通过后，把授权得到的 workspace 写回 Principal。
+//
+// S3 的 access.Guard 支持“工作区级绑定读取该工作区对象”，但 S4 casework 的
+// SQL 仍以会话默认 workspace 过滤；RBAC-003 回归因此失败。这里统一把对象
+// 授权 scope 注入本次请求的 Principal，后续二次查询即使用正确 workspace。
+func (s *Server) scopedObject(w http.ResponseWriter, r *http.Request, resourceType, id string) bool {
+	scope, ok := s.requireObject(w, r, resourceType, id)
+	if !ok {
+		return false
+	}
+	if scope.WorkspaceID == "" {
+		return true
+	}
+	p := PrincipalFrom(r.Context())
+	if p.WorkspaceID == scope.WorkspaceID {
+		return true
+	}
+	p.WorkspaceID = scope.WorkspaceID
+	*r = *r.WithContext(withPrincipal(r.Context(), p))
+	return true
+}
+
 // auditObjectDeny 记录跨租户访问尝试（§6.6.1 "越权尝试与策略决策"）。
 func (s *Server) auditObjectDeny(r *http.Request, resourceType, id, reason string) {
 	if s.audit == nil {

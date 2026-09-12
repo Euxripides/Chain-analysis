@@ -65,7 +65,7 @@ func (s *Server) handleUserUpdateCase(w http.ResponseWriter, r *http.Request) {
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req casework.UpdateCaseRequest
@@ -85,7 +85,7 @@ func (s *Server) handleUserCaseCommand(w http.ResponseWriter, r *http.Request) {
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req casework.CaseCommandRequest
@@ -102,7 +102,7 @@ func (s *Server) handleUserCaseMembers(w http.ResponseWriter, r *http.Request) {
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	items, err := s.casework.ListMembers(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -117,7 +117,7 @@ func (s *Server) handleUserCaseMemberAdd(w http.ResponseWriter, r *http.Request)
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req struct {
@@ -140,7 +140,7 @@ func (s *Server) handleUserCaseMemberRemove(w http.ResponseWriter, r *http.Reque
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	if err := s.casework.RemoveMember(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), chi.URLParam(r, "identity_id")); err != nil {
@@ -154,7 +154,7 @@ func (s *Server) handleUserCaseSubjects(w http.ResponseWriter, r *http.Request) 
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	items, err := s.casework.ListSubjects(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -169,7 +169,7 @@ func (s *Server) handleUserCaseSubjectAdd(w http.ResponseWriter, r *http.Request
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req casework.CaseSubject
@@ -189,7 +189,7 @@ func (s *Server) handleUserCaseSubjectRemove(w http.ResponseWriter, r *http.Requ
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	if err := s.casework.RemoveSubject(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), chi.URLParam(r, "subject_id")); err != nil {
@@ -203,7 +203,7 @@ func (s *Server) handleUserCaseActivity(w http.ResponseWriter, r *http.Request) 
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	items, next, err := s.casework.ListActivity(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), r.URL.Query().Get("cursor"), 0)
@@ -218,7 +218,7 @@ func (s *Server) handleUserCaseComments(w http.ResponseWriter, r *http.Request) 
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	items, next, err := s.casework.ListComments(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), r.URL.Query().Get("cursor"), 0)
@@ -233,7 +233,7 @@ func (s *Server) handleUserCaseCommentAdd(w http.ResponseWriter, r *http.Request
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req struct {
@@ -326,7 +326,7 @@ func (s *Server) handleUserInvestigationDetailV2(w http.ResponseWriter, r *http.
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	item, err := s.casework.GetInvestigationV2(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -341,7 +341,7 @@ func (s *Server) handleUserInvestigationRuntime(w http.ResponseWriter, r *http.R
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	view, err := s.casework.InvestigationRuntime(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -372,7 +372,7 @@ func (s *Server) handleUserInvestigationLifecycle(w http.ResponseWriter, r *http
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	var req casework.ReviewCommandRequest
@@ -410,7 +410,7 @@ func (s *Server) handleUserInvestigationSubmitReview(w http.ResponseWriter, r *h
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	var req struct {
@@ -430,7 +430,7 @@ func (s *Server) handleUserInvestigationFindings(w http.ResponseWriter, r *http.
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	items, next, err := s.casework.ListFindings(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"),
@@ -446,7 +446,7 @@ func (s *Server) handleUserInvestigationEvidence(w http.ResponseWriter, r *http.
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
 		return
 	}
 	items, err := s.casework.ListEvidence(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), r.URL.Query().Get("status"), 0)
@@ -568,7 +568,7 @@ func (s *Server) handleUserCaseReports(w http.ResponseWriter, r *http.Request) {
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	items, err := s.casework.ListReports(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"), "", r.URL.Query().Get("status"), 0)
@@ -583,7 +583,7 @@ func (s *Server) handleUserCaseReportCreate(w http.ResponseWriter, r *http.Reque
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	var req struct {
@@ -617,7 +617,7 @@ func (s *Server) handleUserReportDetail(w http.ResponseWriter, r *http.Request) 
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "report", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "report", chi.URLParam(r, "id")) {
 		return
 	}
 	item, err := s.casework.GetReport(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -662,7 +662,7 @@ func (s *Server) handleUserReportTicket(w http.ResponseWriter, r *http.Request) 
 	if !s.caseworkReady(w, r) {
 		return
 	}
-	if _, ok := s.requireObject(w, r, "report", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "report", chi.URLParam(r, "id")) {
 		return
 	}
 	ticket, err := s.casework.CreateReportTicket(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
@@ -745,7 +745,7 @@ func (s *Server) handleUserNotificationOpen(w http.ResponseWriter, r *http.Reque
 	// USER-010：跳转前必须重新做对象级授权。无权时统一 404，避免通过通知枚举对象。
 	switch item.ObjectType {
 	case "case", "investigation", "report":
-		if _, ok := s.requireObject(w, r, item.ObjectType, item.ObjectID); !ok {
+		if !s.scopedObject(w, r, item.ObjectType, item.ObjectID) {
 			return
 		}
 	case "finding", "evidence":
@@ -754,7 +754,7 @@ func (s *Server) handleUserNotificationOpen(w http.ResponseWriter, r *http.Reque
 			respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "通知对象不存在或无权访问", nil)
 			return
 		}
-		if _, ok := s.requireObject(w, r, "investigation", invID); !ok {
+		if !s.scopedObject(w, r, "investigation", invID) {
 			return
 		}
 	default:

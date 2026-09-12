@@ -266,7 +266,7 @@ func (s *Server) handleUserPreferencesUpdate(w http.ResponseWriter, r *http.Requ
 // handleUserCaseDetail 演示两道防线：requireObject 判权限与租户归属，
 // 随后的 SQL 再带 organization_id 条件，任一防线失效都不会返回跨租户数据。
 func (s *Server) handleUserCaseDetail(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
 	if s.casework == nil {
