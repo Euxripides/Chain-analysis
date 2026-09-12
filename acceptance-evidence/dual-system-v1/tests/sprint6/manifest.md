@@ -3,10 +3,17 @@
 - 生成时间：2026-09-12
 - **部署代码提交：`7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01`（`7dba1eb`）**
 - 部署口令：`20260912-235409`
-- `backend/bin/api` SHA-256 = `59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6`（前缀 `59ac3cfd`）
-- `backend/bin/worker` SHA-256 = `ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63`（前缀 `ac98ce5d`）
+- 已部署 api：`/home/euripides/projects/blockchain-platform/backend/bin/api`
+  SHA-256 = `59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6`（前缀 `59ac3cfd`）
+- 已部署 worker：`/home/euripides/projects/blockchain-platform/backend/bin/worker`
+  SHA-256 = `ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63`（前缀 `ac98ce5d`）
+- 服务管理：systemd **用户单元** `blockchain-api.service` / `blockchain-worker.service`
+  （不是 `chainsight-*`；`systemctl --user status blockchain-api blockchain-worker`）
+- 注意：顶层遗留目录 `blockchain-platform/bin/`（`api`=`33440571…`、`worker`=`7c2f26b7…`）
+  不是部署产物、不被任何单元引用。详见 `../sprint6-reverify-20260912/REVERIFY.md`。
 - 迁移：0051 / 0052 / 0053 / 0054 / **0055** 已应用（见 `runtime-verification.txt`）
 - API E2E：**PASS 159 / FAIL 0 / NOT_VERIFIED 0**（`result.json`，`status=PASS`）
+- API E2E 独立复跑（2026-09-12 23:11，同一 PID 2619250 / 同一二进制）：**PASS 159 / FAIL 0 / NOT_VERIFIED 0**
 - Playwright（admin-desktop，含 390×844 移动宽度用例）：**9 PASS / 0 FAIL**（18 skipped 为设计内跳过）
 - 构建可复现：`469fb61` 与 `7dba1eb` 两次部署得到**完全相同**的 `bin/api` / `bin/worker` 哈希
 
@@ -36,6 +43,9 @@
 | `screenshots/audit-integrity.png` | 230524 | 新的完整性边界页面（桌面 1440×900，真实数据，fullPage） | `1b42a94fda577543…` |
 | `screenshots/audit-integrity-mobile.png` | 182819 | 同一页面（移动 390×844，无横向溢出） | `316d4e3108c9661f…` |
 | `screenshots/*.png`（其余 15 个） | — | S6 既有页面截图，本次未改动 | 见 git 历史 |
+| `../sprint6-reverify-20260912/result.json` | 328 | 独立复核复跑 API E2E：PASS 159 / FAIL 0 / NOT_VERIFIED 0 | `e9ee96f695f04a0a…` |
+| `../sprint6-reverify-20260912/run.log` | 27064 | 独立复核复跑逐条日志（记录监听 PID 与 `/proc/exe` 哈希） | `a85fa2850a39549d…` |
+| `../sprint6-reverify-20260912/REVERIFY.md` | — | 部署映射独立复核：路径/单元名消歧 + 三重溯源链 | 见文件 |
 
 ## 审计修复阻断项的关键证据（在 `runtime-verification.txt` 中可直接核对）
 

@@ -28,15 +28,33 @@ e0d0b9f test(s6): fix audit-004 harness races and boolean casts
 
 | 项 | 值 |
 |---|---|
+| 部署目录（VM `dataserver` / 192.168.31.152） | `/home/euripides/projects/blockchain-platform` |
 | 部署方式 | `py -3.12 scripts/deploy_dual_system.py --yes`（Windows；Linux/macOS 为 `python3`） |
+| 服务管理方式 | **systemd 用户单元**（`systemctl --user`），不是系统单元 |
+| 服务单元名 | `blockchain-api.service`（:8080）、`blockchain-worker.service`（:8081） |
 | **部署代码提交** | `7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01` |
-| `backend/bin/api` SHA-256 | `59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6` |
-| `backend/bin/worker` SHA-256 | `ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63` |
+| 已部署 api 绝对路径 / SHA-256 | `/home/euripides/projects/blockchain-platform/backend/bin/api` = `59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6` |
+| 已部署 worker 绝对路径 / SHA-256 | `/home/euripides/projects/blockchain-platform/backend/bin/worker` = `ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63` |
 | 校验方式 | 在验收机用同步后的同一份源码重新 `go build`，产物哈希与已部署二进制**完全一致** |
 | 构建可复现性 | `469fb61` 与 `7dba1eb` 两次独立部署产出**完全相同**的 api/worker 哈希（后端源码在两提交间未变） |
 | 后台前端 | `frontend/apps/admin-console/dist` 34 个资源（17 个 S6 页面各自成 chunk，含新的 `AuditIntegrityPage`） |
 | 迁移 | `0051`、`0052`、`0053`、`0054`、**`0055_s6_audit_integrity_boundary`** |
 | E2E `build_sha` | `7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01` |
+
+> **路径与单元名消歧（2026-09-12 独立复核补充）**
+>
+> 上表的哈希只对 `backend/bin/` 下的绝对路径成立。VM 上另存在一个**顶层遗留目录**
+> `/home/euripides/projects/blockchain-platform/bin/`，其中的 `api`/`worker` 是 2026-09-08~09
+> 更早手工构建的产物（`bin/api` = `33440571…`、`bin/worker` = `7c2f26b7…`），
+> **未被 systemd、部署脚本或任何配置引用**，也不是本次验收的部署产物。
+> 它之所以存在，是因为 `deploy_dual_system.py` 的 `SKIP_DIRS` 含 `bin`（不同步任何 `bin` 目录）、
+> 且编译输出固定写到 `backend/bin/`——所以顶层 `bin/` 只保留历史产物、从不被刷新。
+> 核对二进制时请使用上表的绝对路径。
+>
+> 同理，服务不在 `chainsight-api` / `chainsight-worker` 单元下（这两个名字不存在）；
+> 查状态请用 `systemctl --user status blockchain-api blockchain-worker`。
+>
+> 完整复核见 `../sprint6-reverify-20260912/REVERIFY.md`。
 
 ### commit → 部署 SHA 映射
 
