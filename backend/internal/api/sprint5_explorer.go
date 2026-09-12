@@ -446,6 +446,7 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 	req := explorer.QueryRequest{
 		Chain: sub.Chain, Addresses: []string{sub.Normalized}, Dataset: "activity",
 		Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")), Limit: limit,
+		Light: r.URL.Query().Get("full") == "1",
 		Filters: explorer.Filter{
 			Direction: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("direction"))),
 			Token:     strings.TrimSpace(r.URL.Query().Get("token")),

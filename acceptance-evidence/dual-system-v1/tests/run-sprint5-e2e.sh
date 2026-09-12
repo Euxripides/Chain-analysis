@@ -632,7 +632,7 @@ import json, sys, os, subprocess
 path, p, f, n = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
 data = {
     "suite": "run-sprint5-e2e.sh",
-    "build_sha": "working-tree",
+    "build_sha": os.environ.get("S5_BUILD_SHA", "working-tree"),
     "pass": p, "fail": f, "not_verified": n,
     "status": "PASS" if f == 0 and p > 0 else "FAIL",
 }

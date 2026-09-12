@@ -83,6 +83,9 @@ type QueryRequest struct {
 	Filters   Filter   `json:"filters"`
 	Cursor    string   `json:"cursor"`
 	Limit     int      `json:"limit"`
+	// Light 只跳过逐行 Contract/Case/Tag 富化，用于客户端“加载全部”性能路径；
+	// 不改变数据来源和行数，字段仍来自本地 ClickHouse（§30.1）。
+	Light bool `json:"-"`
 }
 
 type Result struct {
@@ -116,7 +119,9 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 	if err != nil {
 		return nil, err
 	}
-	s.enrich(ctx, req.Chain, req.Addresses, rows)
+	if !req.Light {
+		s.enrich(ctx, req.Chain, req.Addresses, rows)
+	}
 	next := ""
 	if len(rows) == req.Limit {
 		last := rows[len(rows)-1]

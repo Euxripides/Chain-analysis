@@ -980,6 +980,8 @@ export default function AddressDetailPage() {
             cursor: cursorValue || undefined,
             direction: direction || undefined,
             token: token || undefined,
+            // 全量视图跳过逐行元数据富化，仅保留本地索引原始列，避免 50 页被 Contract/Case 查询拖慢。
+            full: 1,
           },
         });
         const items = response.data?.items ?? [];
