@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,6 +35,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
@@ -263,6 +266,7 @@ func (s *Server) buildRouter() {
 	r.Use(s.corsMiddleware())
 	r.Use(s.requestMetaMiddleware)
 	r.Use(s.logMiddleware())
+	r.Use(s.metricsMiddleware())
 	r.Use(s.identityMiddleware)
 	r.Use(s.auditCaptureMiddleware)
 
@@ -463,10 +467,86 @@ func (s *Server) logMiddleware() func(http.Handler) http.Handler {
 			start := time.Now()
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
-			s.deps.Log.Info("http", "method", r.Method, "path", r.URL.Path,
-				"status", ww.Status(), "duration_ms", time.Since(start).Milliseconds())
+			// §25.1 结构化字段：service / environment / route_template / request_id / trace_id /
+			// actor_id / organization_id / workspace_id / error_code。普通应用日志不复制请求体。
+			meta := metaFrom(r.Context())
+			actor := actorFrom(r.Context())
+			routeTemplate := chi.RouteContext(r.Context()).RoutePattern()
+			if routeTemplate == "" {
+				routeTemplate = unmatchedRouteTemplate(r.URL.Path)
+			}
+			s.deps.Log.Info("http",
+				"service", "api", "environment", s.cfg.Env, "build_sha", os.Getenv("BUILD_SHA"),
+				"method", r.Method, "path", r.URL.Path, "route_template", routeTemplate,
+				"status", ww.Status(), "duration_ms", time.Since(start).Milliseconds(),
+				"request_id", meta.RequestID, "trace_id", meta.TraceID,
+				"actor_id", actor.IdentityID, "organization_id", actor.OrganizationID,
+				"workspace_id", actor.WorkspaceID, "error_code", errorCodeForStatus(ww.Status()))
 		})
 	}
+}
+
+// errorCodeForStatus 把 HTTP 状态映射为稳定错误码标签（不泄露内部细节）。
+func errorCodeForStatus(status int) string {
+	switch {
+	case status >= 500:
+		return "INTERNAL_ERROR"
+	case status == 429:
+		return "RATE_LIMITED"
+	case status == 403:
+		return "AUTHZ_FORBIDDEN"
+	case status == 401:
+		return "UNAUTHENTICATED"
+	case status >= 400:
+		return "VALIDATION_INVALID_ARGUMENT"
+	}
+	return ""
+}
+
+// metricsMiddleware 采集 §25.2 的 API 层指标：请求速率、错误率、延迟直方图与 inflight。
+// route_template 使用 chi 的路由模板（不是原始路径），避免高基数标签。
+func (s *Server) metricsMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			observability.HTTPInflight.Inc()
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+			observability.HTTPInflight.Dec()
+			routeTemplate := chi.RouteContext(r.Context()).RoutePattern()
+			if routeTemplate == "" {
+				// 未匹配路由按前缀归一，避免把扫描路径写成独立时间序列。
+				routeTemplate = unmatchedRouteTemplate(r.URL.Path)
+			}
+			audience := "unknown"
+			switch {
+			case strings.HasPrefix(r.URL.Path, "/api/admin/"):
+				audience = "admin"
+			case strings.HasPrefix(r.URL.Path, "/api/v2/"), strings.HasPrefix(r.URL.Path, "/api/auth/"):
+				audience = "user"
+			}
+			observability.RecordHTTP(routeTemplate, r.Method, ww.Status(), audience, time.Since(start))
+		})
+	}
+}
+
+// unmatchedRouteTemplate 归一化未匹配路径，保持标签基数可控。
+func unmatchedRouteTemplate(path string) string {
+	switch {
+	case path == "":
+		return "unmatched"
+	case strings.HasPrefix(path, "/api/admin/v1/"):
+		return "/api/admin/v1/unmatched"
+	case strings.HasPrefix(path, "/api/v2/"):
+		return "/api/v2/unmatched"
+	case strings.HasPrefix(path, "/api/v1/"):
+		return "/api/v1/unmatched"
+	case strings.HasPrefix(path, "/api/auth/v1/"):
+		return "/api/auth/v1/unmatched"
+	case strings.HasPrefix(path, "/api/"):
+		return "/api/unmatched"
+	}
+	return "static"
 }
 
 func (s *Server) corsMiddleware() func(http.Handler) http.Handler {

@@ -68,14 +68,27 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config invalid: %w", err)
 	}
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	// 迁移用连接账号（表 owner）：只在启动阶段使用。
+	owner, err := store.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
-	if err := migrations.ApplyPostgres(ctx, st.Pool); err != nil {
+	if err := migrations.ApplyPostgres(ctx, owner.Pool); err != nil {
 		return nil, err
 	}
-	log.Info("postgres ready")
+	// 运行期降权：DB_RUNTIME_ROLE 非空时，业务语句统一按受限角色执行（§27.6 AUDIT-003）。
+	st := owner
+	if cfg.DatabaseRuntimeRole != "" {
+		runtime, err := store.NewWithRuntimeRole(ctx, cfg.DatabaseURL, cfg.DatabaseRuntimeRole)
+		if err != nil {
+			return nil, err
+		}
+		st = runtime
+		owner.Close()
+		log.Info("postgres ready", "runtime_role", cfg.DatabaseRuntimeRole)
+	} else {
+		log.Warn("postgres ready without runtime role separation", "hint", "set DB_RUNTIME_ROLE=blockchain_app")
+	}
 	usageHook := UsageRecorder(st, log)
 
 	ch, err := clickhouse.New(ctx, cfg.ClickHouseURL)

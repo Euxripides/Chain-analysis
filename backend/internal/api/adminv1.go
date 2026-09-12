@@ -55,11 +55,14 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	r.Get("/jobs/{id}/diagnostics", s.require("admin:job:read", s.handleAdminJobDiagnostics))
 	r.Post("/jobs/{id}/commands/{command}", s.require("admin:job:control", s.handleAdminJobCommand))
 
-	// 显式未实现的后台能力，避免"页面存在即认为已完成"。
-	r.Get("/provider/accounts", s.require("admin:provider:read", s.handleNotImplementedV2("admin.provider.accounts")))
-	r.Get("/alerts", s.require("admin:alert:read", s.handleNotImplementedV2("admin.alert.list")))
-	r.Get("/config/settings", s.require("admin:config:read", s.handleNotImplementedV2("admin.config.settings")))
-	r.Get("/backups", s.require("admin:backup:read", s.handleNotImplementedV2("admin.backup.list")))
+	// Sprint 6：控制面、Provider 治理、配置与开关、数据治理、可观测性（§28.8）。
+	// 权限键沿用 policy.Catalog（AD-003）；计划文档 §21.6 中 admin:kill_switch:update 等
+	// 写法对应这里的 admin:killswitch:engage/release，映射见 docs/adr/ADR-017。
+	s.registerAdminIdentityRoutes(r)
+	s.registerAdminControlRoutes(r)
+	s.registerAdminProviderRoutes(r)
+	s.registerAdminGovernanceRoutes(r)
+	s.registerAdminObservabilityRoutes(r)
 }
 
 // ---- 运营总览 ----

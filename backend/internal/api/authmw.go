@@ -18,6 +18,37 @@ import (
 
 type principalCtxKey struct{}
 type requestMetaCtxKey struct{}
+
+// actorCtxKey 保存一个可变主体槽位：identityMiddleware 在下游填充，
+// logMiddleware / metricsMiddleware 在上游读取，用于 §25.1 的 actor_id 字段。
+type actorCtxKey struct{}
+
+type actorHolder struct {
+	Principal principalSnapshot
+}
+
+// principalSnapshot 是日志用主体的最小快照（避免日志持有整个授权上下文）。
+type principalSnapshot struct {
+	IdentityID     string
+	OrganizationID string
+	WorkspaceID    string
+}
+
+// actorFrom 读取日志用主体快照。
+func actorFrom(ctx context.Context) principalSnapshot {
+	if h, ok := ctx.Value(actorCtxKey{}).(*actorHolder); ok && h != nil {
+		return h.Principal
+	}
+	return principalSnapshot{}
+}
+
+// recordActor 由 identityMiddleware 调用，把主体写入槽位。
+func recordActor(ctx context.Context, p policy.Principal) {
+	if h, ok := ctx.Value(actorCtxKey{}).(*actorHolder); ok && h != nil {
+		h.Principal = principalSnapshot{IdentityID: p.IdentityID, OrganizationID: p.OrganizationID, WorkspaceID: p.WorkspaceID}
+	}
+}
+
 type routePermCtxKey struct{}
 type sessionReuseCtxKey struct{}
 
@@ -105,7 +136,9 @@ func (s *Server) requestMetaMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("X-Request-Id", meta.RequestID)
 		w.Header().Set("X-Trace-Id", meta.TraceID)
-		next.ServeHTTP(w, r.WithContext(withRequestMeta(r.Context(), meta)))
+		ctx := withRequestMeta(r.Context(), meta)
+		ctx = context.WithValue(ctx, actorCtxKey{}, &actorHolder{})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -174,6 +207,7 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
 				case err == nil:
 					p := principalFromSession(ctx, sess, s.policy)
 					ctx = withPrincipal(ctx, p)
+					recordActor(ctx, p)
 					ctx = auth.WithUser(ctx, userFromPrincipal(p))
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return

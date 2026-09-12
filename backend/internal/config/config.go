@@ -421,28 +421,31 @@ type GlobalConcurrencyConfig struct {
 }
 
 type Config struct {
-	Env               string
-	Timezone          string
-	LogLevel          string
-	HTTPPort          int
-	DatabaseURL       string
-	ClickHouseURL     string
-	MinioEndpoint     string
-	MinioSecure       bool
-	MinioAccessKey    string
-	MinioSecretKey    string
-	NatsURL           string
-	RawBucket         string
-	ExportBucket      string
-	BackupsBucket     string
-	WorkerMetricsPort int
-	Ankr              AnkrConfig
-	Tron              TronConfig
-	Method            MethodConfig
-	TokenMetadata     TokenMetadataConfig
-	RPC               RPCConfig
-	AnkrManagement    AnkrManagementConfig
-	Auth              AuthConfig
+	Env         string
+	Timezone    string
+	LogLevel    string
+	HTTPPort    int
+	DatabaseURL string
+	// DatabaseRuntimeRole 非空时，API/Worker/MCP 的每个数据库连接都会先 SET ROLE 到该角色，
+	// 从而把运行期权限与迁移/运维权限分离（§27.6 AUDIT-003：应用 DB 角色拒绝危险操作）。
+	DatabaseRuntimeRole string
+	ClickHouseURL       string
+	MinioEndpoint       string
+	MinioSecure         bool
+	MinioAccessKey      string
+	MinioSecretKey      string
+	NatsURL             string
+	RawBucket           string
+	ExportBucket        string
+	BackupsBucket       string
+	WorkerMetricsPort   int
+	Ankr                AnkrConfig
+	Tron                TronConfig
+	Method              MethodConfig
+	TokenMetadata       TokenMetadataConfig
+	RPC                 RPCConfig
+	AnkrManagement      AnkrManagementConfig
+	Auth                AuthConfig
 
 	// V1.2（§12/§16/§69/§33/§121）：Chainbase Count Oracle 平面 + 全局并发。
 	Chainbase   ChainbaseConfig
@@ -806,21 +809,22 @@ func envFloat(key string, def float64) float64 {
 
 func Load() *Config {
 	return &Config{
-		Env:               env("APP_ENV", "development"),
-		Timezone:          env("APP_TIMEZONE", "Asia/Bangkok"),
-		LogLevel:          env("API_LOG_LEVEL", "info"),
-		HTTPPort:          envInt("API_HTTP_PORT", 8080),
-		DatabaseURL:       env("DATABASE_URL", "postgres://blockchain:change_me_pg_2026@127.0.0.1:5433/blockchain_platform?sslmode=disable"),
-		ClickHouseURL:     env("CLICKHOUSE_URL", "clickhouse://blockchain:change_me_ch_2026@127.0.0.1:9000/blockchain"),
-		MinioEndpoint:     env("MINIO_ENDPOINT", "127.0.0.1:9001"),
-		MinioSecure:       envBool("MINIO_SECURE", false),
-		MinioAccessKey:    env("MINIO_ROOT_USER", "blockchain_admin"),
-		MinioSecretKey:    env("MINIO_ROOT_PASSWORD", "change_me_minio_2026"),
-		NatsURL:           env("NATS_URL", "nats://127.0.0.1:4222"),
-		RawBucket:         env("RAW_BUCKET", "blockchain-raw"),
-		ExportBucket:      env("EXPORT_BUCKET", "blockchain-exports"),
-		BackupsBucket:     env("BACKUPS_BUCKET", "blockchain-backups"),
-		WorkerMetricsPort: envInt("WORKER_METRICS_PORT", 8081),
+		Env:                 env("APP_ENV", "development"),
+		Timezone:            env("APP_TIMEZONE", "Asia/Bangkok"),
+		LogLevel:            env("API_LOG_LEVEL", "info"),
+		HTTPPort:            envInt("API_HTTP_PORT", 8080),
+		DatabaseURL:         env("DATABASE_URL", "postgres://blockchain:change_me_pg_2026@127.0.0.1:5433/blockchain_platform?sslmode=disable"),
+		DatabaseRuntimeRole: env("DB_RUNTIME_ROLE", ""),
+		ClickHouseURL:       env("CLICKHOUSE_URL", "clickhouse://blockchain:change_me_ch_2026@127.0.0.1:9000/blockchain"),
+		MinioEndpoint:       env("MINIO_ENDPOINT", "127.0.0.1:9001"),
+		MinioSecure:         envBool("MINIO_SECURE", false),
+		MinioAccessKey:      env("MINIO_ROOT_USER", "blockchain_admin"),
+		MinioSecretKey:      env("MINIO_ROOT_PASSWORD", "change_me_minio_2026"),
+		NatsURL:             env("NATS_URL", "nats://127.0.0.1:4222"),
+		RawBucket:           env("RAW_BUCKET", "blockchain-raw"),
+		ExportBucket:        env("EXPORT_BUCKET", "blockchain-exports"),
+		BackupsBucket:       env("BACKUPS_BUCKET", "blockchain-backups"),
+		WorkerMetricsPort:   envInt("WORKER_METRICS_PORT", 8081),
 		Auth: AuthConfig{
 			// 未配置时按环境决定：production 强制 session，其它环境 hybrid 便于平滑迁移。
 			Mode:               env("AUTH_MODE", defaultAuthMode(env("APP_ENV", "development"))),

@@ -27,21 +27,21 @@ type Event struct {
 	SessionID      string
 	DeviceID       string
 
-	Action         string
-	Category       string
-	ResourceType   string
-	ResourceID     string
-	CaseID         string
+	Action          string
+	Category        string
+	ResourceType    string
+	ResourceID      string
+	CaseID          string
 	InvestigationID string
-	JobID          string
-	ReportID       string
+	JobID           string
+	ReportID        string
 
-	HTTPMethod   string
-	Route        string
-	RequestID    string
-	TraceID      string
+	HTTPMethod         string
+	Route              string
+	RequestID          string
+	TraceID            string
 	IdempotencyKeyHash string
-	ClientVersion string
+	ClientVersion      string
 
 	Result       string // allow | deny | success | failure | error
 	HTTPStatus   int
@@ -98,20 +98,22 @@ func (w *Writer) Write(ctx context.Context, e Event) error {
 	if !w.Enabled() {
 		return nil
 	}
+	started := time.Now()
 	tx, err := w.pool.Begin(ctx)
 	if err != nil {
+		recordWrite(ChainAudit, err, time.Since(started))
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := w.WriteTx(ctx, tx, e); err != nil {
-		recordWrite(ChainAudit, err)
+		recordWrite(ChainAudit, err, time.Since(started))
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		recordWrite(ChainAudit, err)
+		recordWrite(ChainAudit, err, time.Since(started))
 		return err
 	}
-	recordWrite(ChainAudit, nil)
+	recordWrite(ChainAudit, nil, time.Since(started))
 	return nil
 }
 
@@ -212,7 +214,7 @@ func (w *Writer) WriteTx(ctx context.Context, tx DB, e Event) error {
 		nullText(e.PeerIP), nullText(e.ClientIP), e.ProxyChain, e.UserAgent, e.DataSource, e.ContentHash, e.ObjectRef,
 		prevHash, eventHash,
 	)
-	recordWrite(ChainAudit, err)
+	recordWrite(ChainAudit, err, 0)
 	return err
 }
 
