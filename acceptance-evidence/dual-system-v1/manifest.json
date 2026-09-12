@@ -2,7 +2,7 @@
   "deliverable": "dual-system-v1",
   "status": "gray-rollout",
   "generated_at": "2026-09-12T17:13:32.745764+08:00",
-  "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
+  "build_sha": "3e87311",
   "plan_reference": "docs/dual-system-development-plan.md",
   "sprints_covered": [
     "Sprint 1（完成，S1-API-01/ FE-03/ OPS-01 部分）",
