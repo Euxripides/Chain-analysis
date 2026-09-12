@@ -16,3 +16,4 @@ tmp/
 backend/bin/
 mcp/node_modules/
 mcp/dist/
+frontend/.tmp/
