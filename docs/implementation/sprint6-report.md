@@ -13,15 +13,19 @@ Sprint 6 的 9 个任务（S6-DB-01、S6-BE-01..04、S6-FE-01/02、S6-OBS-01、S
 
 | 验收项 | 结果 | 证据 |
 |---|---|---|
-| API E2E（`run-sprint6-e2e.sh`） | **PASS 111 / FAIL 0 / NOT_VERIFIED 1** | `tests/sprint6/result.json`、`run.log` |
+| API E2E（`run-sprint6-e2e.sh`） | **PASS 115 / FAIL 0 / NOT_VERIFIED 1** | `tests/sprint6/result.json`、`run.log` |
 | Playwright（`dual-system-sprint6.spec.ts`） | **8 PASS / 0 FAIL** | `tests/sprint6/playwright-full.log` |
 | ADMIN-001 至 ADMIN-010 | 10/10 真实通过 | 见 §4 对照表 |
 | AUDIT-002 / AUDIT-003 / AUDIT-004 | 2 PASS + 1 PASS + 部分通过（见 §6 事件） | 同上 |
 | OpenAPI 契约检查 | 契约 178 = 后端路由 178，错误模型完整 | `python3 scripts/check_openapi.py` |
 | 后端单元/集成测试 | `go test ./...` 全绿 | 见 §7 |
+| S1–S5 回归 | RBAC 29/0/2、Sprint1–2 21/0/0、**S4/S5 各 1 项失败且均为审计链 valid** | `tests/sprint6/regression-*.log` |
 
 **唯一 NOT_VERIFIED**：每日锚点（`audit_chain_anchors.head_hash`）与其覆盖区间事件行的一致性
 无法验证，因为该区间的事件行在 §6 记录的事件中已被清空。这是**如实标注**，不是跳过。
+
+**S1–S5 回归的 1 项失败同样来自该事件**：S4 的 `AUDIT-001` 与 S5 的 `AUDIT` 断言「审计链 `valid=true`」，
+在链前缀缺失后校验器正确返回 `valid=false`。除该项外 S1–S5 全部通过（详见证据 `regression-*.log`）。
 
 ---
 
@@ -183,7 +187,10 @@ DiffList / JsonBlock / 表单控件）。
 | ADMIN-010 | 功能开关灰度 | PASS | 50% 灰度成功；确定性分桶试算；评估记录落库；回滚后同一用户不再命中；审计落库 |
 | AUDIT-002 | 日志秘密扫描 | PASS | 验收日志 0 处明文；审计表 detail/before/after 无 `sk_*`/密码；密钥轮换只存引用与指纹；运行日志 0 处明文 |
 | AUDIT-003 | 修改/删除审计事件 | PASS | 运行角色 `blockchain_app`：UPDATE/DELETE/TRUNCATE/DROP 全部拒绝，SELECT/INSERT 正常，受限角色下审计写入仍成功 |
-| AUDIT-004 | Hash chain | **部分通过** | 篡改检测与定位、幸存区间逐行一致、链头一致性均 PASS；**每日锚点一致性 NOT_VERIFIED**（原因见 §6） |
+| AUDIT-004 | Hash chain | **部分通过** | 篡改检测与定位（AUDIT-004h/i）、幸存区间逐行一致（004d/e）、链头一致性（004f）均 PASS；**每日锚点一致性 NOT_VERIFIED**（原因见 §6） |
+| ALERT-TRACE | 从告警定位到 request/provider/shard/checkpoint/object | PASS | 告警详情返回六层关联链，逐层标注命中与否与原因；真实 Provider 请求可回查到 provider/method/trace |
+| RBAC-S6 | 审计员只读 / 用户受众越权 | PASS | 审计员写操作全部 403、只读端点 200；用户受众会话访问后台 401；auditor 角色不持有任何 S6 写权限（DB） |
+| RUNTIME | 迁移、治理表、运行期降权、删除开关 | PASS | 0051–0054 已应用；16 张治理表齐全；`governance.deletion.execution_enabled=false` |
 
 ---
 

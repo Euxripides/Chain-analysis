@@ -1,0 +1,17 @@
+code_sha=working-tree
+deployed_api_sha256=879258213e78d2383aef78525ec170eb8a67d2a5c86308eb74f42e4d541762fd
+deployed_worker_sha256=5510ab144f731c08ab1c50005407474c3c995b66cb20c37a2b5fdb4864606b45
+admin_console_dist=33 assets
+schema_migrations_max=postgres/0054_s6_append_only_hardening.sql
+s6_migrations=postgres/0051_s6_control_governance.sql,postgres/0052_s6_data_governance.sql,postgres/0053_s6_permission_grants.sql,postgres/0054_s6_append_only_hardening.sql
+services=active active active active
+health={"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+routes=admin:200 user:200 nginx_admin:200
+runtime_role=DB_RUNTIME_ROLE=blockchain_app
+runtime_role_truncate_priv=f
+audit_events=366
+audit_chain_head=audit seq=2709
+governance_deletion_enabled=false
+s6_tables=16
+secret_scan_api_log=0
+panic_fatal=0
