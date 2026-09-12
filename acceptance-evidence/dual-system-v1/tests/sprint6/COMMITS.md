@@ -16,41 +16,51 @@ dd1286f docs(s6): refresh audit coverage and surface inventory
 9b883d0 docs(s6): map sprint 6 commits to the deployed artifact hash
 ```
 
-- Sprint 6 审计修复阻断项提交：
+- Sprint 6 审计修复阻断项提交（按顺序）：
 
 ```text
 469fb61 fix(s6): seal unrecoverable audit gap behind an immutable integrity boundary
 e0d0b9f test(s6): fix audit-004 harness races and boolean casts
-1b54b04 docs(s6): acceptance evidence for the audit integrity boundary
+7dba1eb docs(s6): acceptance evidence for the audit integrity boundary
 ```
 
 ## 部署产物（验收环境）
 
 | 项 | 值 |
 |---|---|
-| 部署方式 | `py -3.12 scripts/deploy_dual_system.py --yes` |
-| **部署代码提交** | `469fb61c6a12acec77dfe6631a2276c368645019` |
+| 部署方式 | `py -3.12 scripts/deploy_dual_system.py --yes`（Windows；Linux/macOS 为 `python3`） |
+| **部署代码提交** | `7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01` |
 | `backend/bin/api` SHA-256 | `59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6` |
 | `backend/bin/worker` SHA-256 | `ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63` |
 | 校验方式 | 在验收机用同步后的同一份源码重新 `go build`，产物哈希与已部署二进制**完全一致** |
+| 构建可复现性 | `469fb61` 与 `7dba1eb` 两次独立部署产出**完全相同**的 api/worker 哈希（后端源码在两提交间未变） |
 | 后台前端 | `frontend/apps/admin-console/dist` 34 个资源（17 个 S6 页面各自成 chunk，含新的 `AuditIntegrityPage`） |
 | 迁移 | `0051`、`0052`、`0053`、`0054`、**`0055_s6_audit_integrity_boundary`** |
-| E2E `build_sha` | `469fb61c6a12acec77dfe6631a2276c368645019` |
+| E2E `build_sha` | `7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01` |
 
 ### commit → 部署 SHA 映射
 
 | commit | 内容 | 是否改变部署产物 | 部署产物 SHA-256 |
 |---|---|---|---|
-| `469fb61` | 审计完整性事件边界（迁移 0055 + 后端 + 前端 + 验收脚本） | **是**（`bin/api` / `bin/worker` / admin-console dist） | `59ac3cfd…`（api）、`ac98ce5d…`（worker） |
-| `e0d0b9f` | 修复 AUDIT-004 验收脚本的布尔转换与链头竞态 | 否（仅测试脚本） | 同上，未重新编译 |
-| 证据/文档提交 | `manifest.md` / `COMMITS.md` / 报告 / 证据文件 / Playwright 用例 | 否（不含后端与前端运行时源码改动） | 同上，未重新编译 |
+| `469fb61` | 审计完整性事件边界（迁移 0055 + 后端 + 前端 + 验收脚本） | **是** | `59ac3cfd…`（api）、`ac98ce5d…`（worker） |
+| `e0d0b9f` | 修复 AUDIT-004 验收脚本的布尔转换与链头竞态 | 否（仅测试脚本） | 同上 |
+| `7dba1eb` | 验收证据、报告 §6bis、ADR-018、Playwright `AUDIT-004/UI` 用例、`.gitignore` 证据日志例外 | 否（无后端/前端运行时源码改动） | 同上（已重新部署验证，产物哈希不变） |
 
-结论：**验收环境上运行的 `bin/api`/`bin/worker` 由 `469fb61` 的源码构建**；
-后续提交只包含测试与证据，未改变部署产物（`runtime-verification.txt` 中的 SHA-256 可直接核对）。
+结论：**验收环境当前运行的 `bin/api` / `bin/worker` 由 `7dba1eb` 的源码构建**，
+其源码与 `469fb61` 的后端源码逐字节相同，因此哈希不变。
+`runtime-verification.txt` 中同时记录 `code_sha` 与两个二进制哈希，可直接核对。
 
-## 验收结论
+## 验收结论（在 `7dba1eb` 的部署产物上重新执行）
 
-- API E2E：**PASS 159 / FAIL 0 / NOT_VERIFIED 0**（`result.json`，`status=PASS`）
-- Playwright（admin-desktop，含移动宽度用例）：**9 PASS / 0 FAIL**
-- S1–S5 回归：RBAC 29/0/2、Sprint1–2 21/0/0、**S4 81/0/0**、**S5 106/0/0**
-- NOT_VERIFIED：**0**（Sprint 6 首次交付中的唯一 NOT_VERIFIED 已由完整性事件边界消除）
+| 套件 | 结果 |
+|---|---|
+| API E2E `run-sprint6-e2e.sh` | **PASS 159 / FAIL 0 / NOT_VERIFIED 0**，`status=PASS` |
+| Playwright `dual-system-sprint6.spec.ts`（admin-desktop） | **9 PASS / 0 FAIL** |
+| RBAC 回归 | PASS 29 / FAIL 0 / BLOCKED 2 |
+| Sprint 1–2 回归 | PASS 21 / FAIL 0 / BLOCKED 0 |
+| Sprint 4 回归 | **PASS 81 / FAIL 0 / NOT_VERIFIED 0** |
+| Sprint 5 回归 | **PASS 106 / FAIL 0 / NOT_VERIFIED 0** |
+
+- NOT_VERIFIED：**0**。Sprint 6 首次交付中的唯一 NOT_VERIFIED（每日锚点与其区间事件行的一致性）
+  已由完整性事件边界消除（见 `docs/adr/ADR-018-audit-integrity-incident-boundary.md`）。
+- S4 / S5 首次交付时各有 1 项审计链 `valid=true` 失败，本轮两套件均为 0 失败。

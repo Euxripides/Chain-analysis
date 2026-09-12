@@ -1,4 +1,4 @@
-==== Sprint 5 E2E 开始 2026-09-12T22:41:27+07:00 ====
+==== Sprint 5 E2E 开始 2026-09-12T22:56:50+07:00 ====
 
 == SETUP：登录夹具账号 ==
   PASS SETUP        investigator 登录
@@ -8,7 +8,7 @@
   PASS SETUP        auditor 登录
 
 == 基线：Provider usage / jobs / shards ==
-baseline usage=414514 null_job_usage=18012 jobs=2400 shards=28366
+baseline usage=414616 null_job_usage=18098 jobs=2403 shards=28369
   PASS SETUP        取得已覆盖的本地区间夹具（Coverage HIT）
 coverage hit fixture: chain=tron subject=TU585SoBMd3hp9WaLc7yctSbR9fSmXsm32 range=35054587..76966457
   PASS SETUP        取得增量缺口夹具（Coverage Gap）
@@ -39,7 +39,7 @@ coverage gap fixture: chain=tron subject=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird rang
   PASS USER-003     缺口预览 provider_work_required=true
   PASS USER-003     创建缺口任务返回 HTTP 200/201
   PASS USER-003     创建缺口任务返回 job_id
-gap create http=201 job=e31fc5ca-d738-4351-9092-57377094eddc reused=False
+gap create http=201 job=2498d2d5-014b-4ebb-9768-65b07d56b339 reused=False
   PASS USER-003     Planner 已生成 Shard
   PASS USER-003     所有 Shard 只在缺口区间内，不重复已覆盖块
   PASS USER-003     地址级进度行存在
@@ -104,7 +104,7 @@ big amount sample chain=bsc block=119769999 address=0x172fcd41e0913e95784454622d
 == DATA-006 Worker Kill-9：保留成功游标和成功页，恢复无幽灵任务 ==
   PASS DATA-006     创建 Kill-9 测试任务
   PASS DATA-006     Worker 已成功完成至少一页
-worker MainPID before kill=2561873
+worker MainPID before kill=2619256
   PASS DATA-006     Worker 进程被 Kill-9 并由 systemd 恢复
   PASS DATA-006     任务未被吞掉（无幽灵任务）
   PASS DATA-006     成功页数与游标不回退（逐 shard page_no/rows 不减少）
@@ -137,6 +137,6 @@ worker MainPID before kill=2561873
   PASS AUDIT        审计链校验声明了可信起点 seq
   PASS AUDIT        S5 关键动作审计事件已落库
   PASS RUNTIME      API 日志无 panic/fatal
-ids.env written: chain=tron address=TU585SoBMd3hp9WaLc7yctSbR9fSmXsm32 tx=434d47c619d321e32e3adab998455f94d3d9fbaeef18fa476319babfbee459b3 job=e31fc5ca-d738-4351-9092-57377094eddc canvas=3dc687c2-726f-462d-8f91-0277576a494d 10k=tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/28979
+ids.env written: chain=tron address=TU585SoBMd3hp9WaLc7yctSbR9fSmXsm32 tx=195fb1d3356dabeb997b2435eb111087943d5825c9929383cdc052e836c6801e job=2498d2d5-014b-4ebb-9768-65b07d56b339 canvas=9a44312b-794f-4893-af0a-fa2dc86904c6 10k=tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/28979
 
-==== Sprint 5 E2E 结束 2026-09-12T22:46:35+07:00 PASS=106 FAIL=0 NOT_VERIFIED=0 ====
+==== Sprint 5 E2E 结束 2026-09-12T23:01:26+07:00 PASS=106 FAIL=0 NOT_VERIFIED=0 ====

@@ -10,15 +10,15 @@ Running 27 tests using 1 worker
   -   7 [user-desktop] › tests/dual-system-sprint6.spec.ts:187:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-002/UI 页面与弹窗中不出现密钥明文
   -   8 [user-desktop] › tests/dual-system-sprint6.spec.ts:197:3 › S6-FE 后台 Sprint 6 页面 › S6-OBS-01 可观测性页面展示 P0 告警、SLO 与吞吐拆分
   -   9 [user-desktop] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用
-  ✓  10 [admin-desktop] › tests/dual-system-sprint6.spec.ts:80:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示 (10.3s)
-  ✓  11 [admin-desktop] › tests/dual-system-sprint6.spec.ts:93:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-02 移动/平板宽度下 S6 页面无横向溢出且 Dialog 可关闭 (2.0s)
+  ✓  10 [admin-desktop] › tests/dual-system-sprint6.spec.ts:80:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示 (10.0s)
+  ✓  11 [admin-desktop] › tests/dual-system-sprint6.spec.ts:93:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-02 移动/平板宽度下 S6 页面无横向溢出且 Dialog 可关闭 (1.8s)
   ✓  12 [admin-desktop] › tests/dual-system-sprint6.spec.ts:112:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-003/004 Provider 连接测试与密钥摘要均为真实交互 (2.5s)
   ✓  13 [admin-desktop] › tests/dual-system-sprint6.spec.ts:132:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-006 Kill Switch 影响预览为真实数据且审批规则可见 (1.8s)
-  ✓  14 [admin-desktop] › tests/dual-system-sprint6.spec.ts:145:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-010 功能开关页面可试算并展示评估记录 (1.3s)
-  ✓  15 [admin-desktop] › tests/dual-system-sprint6.spec.ts:158:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-004/UI 完整性边界页面展示缺口声明与逐项验证，并可只读检测 (2.7s)
-  ✓  16 [admin-desktop] › tests/dual-system-sprint6.spec.ts:187:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-002/UI 页面与弹窗中不出现密钥明文 (1.9s)
-  ✓  17 [admin-desktop] › tests/dual-system-sprint6.spec.ts:197:3 › S6-FE 后台 Sprint 6 页面 › S6-OBS-01 可观测性页面展示 P0 告警、SLO 与吞吐拆分 (1.8s)
-  ✓  18 [admin-desktop] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用 (1.5s)
+  ✓  14 [admin-desktop] › tests/dual-system-sprint6.spec.ts:145:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-010 功能开关页面可试算并展示评估记录 (1.1s)
+  ✓  15 [admin-desktop] › tests/dual-system-sprint6.spec.ts:158:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-004/UI 完整性边界页面展示缺口声明与逐项验证，并可只读检测 (2.3s)
+  ✓  16 [admin-desktop] › tests/dual-system-sprint6.spec.ts:187:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-002/UI 页面与弹窗中不出现密钥明文 (2.2s)
+  ✓  17 [admin-desktop] › tests/dual-system-sprint6.spec.ts:197:3 › S6-FE 后台 Sprint 6 页面 › S6-OBS-01 可观测性页面展示 P0 告警、SLO 与吞吐拆分 (2.1s)
+  ✓  18 [admin-desktop] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用 (1.6s)
   -  19 [user-mobile] › tests/dual-system-sprint6.spec.ts:80:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示
   -  20 [user-mobile] › tests/dual-system-sprint6.spec.ts:93:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-02 移动/平板宽度下 S6 页面无横向溢出且 Dialog 可关闭
   -  21 [user-mobile] › tests/dual-system-sprint6.spec.ts:112:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-003/004 Provider 连接测试与密钥摘要均为真实交互
@@ -30,4 +30,4 @@ Running 27 tests using 1 worker
   -  27 [user-mobile] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用
 
   18 skipped
-  9 passed (33.6s)
+  9 passed (32.7s)

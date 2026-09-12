@@ -5,6 +5,7 @@
 > 环境：Ubuntu VM `192.168.31.152`（Nginx `127.0.0.1:8088`，API `:8080`，Worker `:8081`，PostgreSQL/ClickHouse/MinIO/NATS 为 Docker Compose 依赖）
 > 迁移：`0051_s6_control_governance`、`0052_s6_data_governance`、`0053_s6_permission_grants`、`0054_s6_append_only_hardening`、`0055_s6_audit_integrity_boundary`
 > 审计修复阻断项：见 §6 与 §6bis；决策记录见 `docs/adr/ADR-018-audit-integrity-incident-boundary.md`
+> 部署代码提交：`7dba1eb`（`bin/api` SHA-256 `59ac3cfd…`；映射表见 `acceptance-evidence/dual-system-v1/tests/sprint6/COMMITS.md`）
 
 ---
 

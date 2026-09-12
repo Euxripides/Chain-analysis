@@ -1,4 +1,5 @@
-code_sha=469fb61c6a12acec77dfe6631a2276c368645019
+code_sha=7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01
+deploy_stamp=20260912-235409
 deployed_api_sha256=59ac3cfd24d0932e0ff77259400b1ebcefa7fcc659e020fd1d306659e976c2e6
 deployed_worker_sha256=ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63
 admin_console_dist=34 assets
@@ -17,12 +18,13 @@ integrity_approval=f72ca54a-554b-438c-9edf-2a403b76254d
 integrity_events=1:requested@admin@local -> 2:approved@fixture-platform_admin@fixture.local -> 3:detected@admin@local -> 4:sealed@admin@local
 integrity_retained_anchors=audit/2026-09-11 [1,92] sealed_unrecoverable archive_intact=true
 gap_rows_present=0
-audit_events=816
-audit_chain_head=audit seq=3159
-login_chain_head=login seq=2142
+audit_events=993
+audit_chain_head=audit seq=3336
+login_chain_head=login seq=2234
 anchors=audit/2026-09-11 [1,92]; audit/2026-09-12 [2344,2921]; login/2026-09-11 [1,109]; login/2026-09-12 [110,2035]
 governance_deletion_enabled=false
 s6_tables=16
 integrity_tables=3
 secret_scan_api_log=0
 panic_fatal=0
+s6_e2e=PASS=159 FAIL=0 NOT_VERIFIED=0 status=PASS

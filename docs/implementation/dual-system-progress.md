@@ -23,6 +23,7 @@
 >
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
 > 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`e639707`（S5）
+> S6 审计修复阻断项部署提交：`7dba1eb`（`bin/api` `59ac3cfd…`；见 `tests/sprint6/COMMITS.md`）
 > Sprint 6 基线：见 `docs/implementation/sprint6-report.md` 头部与 commit 记录
 
 ## 1. Sprint 任务完成度

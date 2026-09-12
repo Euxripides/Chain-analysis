@@ -1,10 +1,10 @@
-==== Sprint 6 E2E 开始 2026-09-12T22:49:27+07:00 build=469fb61c6a12acec77dfe6631a2276c368645019 ====
+==== Sprint 6 E2E 开始 2026-09-12T22:55:12+07:00 build=7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01 ====
   PASS         SETUP        Owner/平台管理员/审计员/普通用户 会话建立    ok
   PASS SETUP        Owner/平台管理员/审计员/普通用户 会话建立
 ---- ADMIN-001 创建用户并绑定工作区角色 ----
   PASS         ADMIN-001a   创建用户返回 UUID                                      uuid
-  PASS         ADMIN-001b   一次性初始密码只返回一次                         once
   PASS ADMIN-001a   创建用户返回 UUID
+  PASS         ADMIN-001b   一次性初始密码只返回一次                         once
   PASS ADMIN-001b   一次性初始密码只返回一次
   PASS         ADMIN-001c   DB 中 identity 已建立                                    1
   PASS ADMIN-001c   DB 中 identity 已建立
@@ -14,7 +14,7 @@
   PASS ADMIN-001e   有效权限按角色来源返回（viewer > 0 项）
   PASS         ADMIN-001f   绑定 scope 落到工作区                                 workspace
   PASS ADMIN-001f   绑定 scope 落到工作区
-  PASS         ADMIN-001g   新账号可登录并建立会话                            s6-1789228168@fixture.local
+  PASS         ADMIN-001g   新账号可登录并建立会话                            s6-1789228513@fixture.local
   PASS ADMIN-001g   新账号可登录并建立会话
   PASS         ADMIN-001h   创建用户写入审计                                     yes
   PASS ADMIN-001h   创建用户写入审计
@@ -214,8 +214,8 @@
   PASS         AUDIT-004a   缺口检测返回结构化观测并定位真实缺口区间 1-2343
   PASS AUDIT-004a   缺口检测返回结构化观测并定位真实缺口区间
   PASS         AUDIT-004b   封存尾哈希等于幸存首行的 prev_hash（旧链尾唯一保留证据） 3db79aeb77ce12ae8ccab3540891a7ff241bfc34af8f4a9dcdfd283578686ad1
-  PASS         AUDIT-004c   缺口区间内不存在任何事件行（未回填历史） 0
   PASS AUDIT-004b   封存尾哈希等于幸存首行的 prev_hash（旧链尾唯一保留证据）
+  PASS         AUDIT-004c   缺口区间内不存在任何事件行（未回填历史） 0
   PASS AUDIT-004c   缺口区间内不存在任何事件行（未回填历史）
   PASS         AUDIT-004d   已封存边界不可重复封存（幂等，already_sealed=true） True
   PASS AUDIT-004d   已封存边界不可重复封存（幂等，already_sealed=true）
@@ -257,7 +257,7 @@
   PASS AUDIT-004r2  控制链 login 全链可验证（valid=true）
   PASS         AUDIT-004s   边界校验不带出未解释告警以外的错误          none
   PASS AUDIT-004s   边界校验不带出未解释告警以外的错误
-  PASS         AUDIT-004t   链头 seq 与库中最大 seq 一致（同一快照）      3146
+  PASS         AUDIT-004t   链头 seq 与库中最大 seq 一致（同一快照）      3199
   PASS AUDIT-004t   链头 seq 与库中最大 seq 一致（同一快照）
   PASS         AUDIT-004u   链头 last_hash 与最后一条事件 event_hash 一致     match
   PASS AUDIT-004u   链头 last_hash 与最后一条事件 event_hash 一致
@@ -291,7 +291,7 @@
   PASS AUDIT-004z2  边界事件不可改写（运行角色 UPDATE 被拒绝）
   PASS         AUDIT-004T-a 改写事件后边界之后区间校验失败                False
   PASS AUDIT-004T-a 改写事件后边界之后区间校验失败
-  PASS         AUDIT-004T-b 校验器定位到被改写的 seq                           3142
+  PASS         AUDIT-004T-b 校验器定位到被改写的 seq                           3195
   PASS AUDIT-004T-b 校验器定位到被改写的 seq
   PASS         AUDIT-004T-c 还原后边界之后区间校验重新通过                True
   PASS AUDIT-004T-c 还原后边界之后区间校验重新通过
@@ -334,5 +334,5 @@
   PASS RUNTIME-c    API 日志无 panic/fatal
   PASS         RUNTIME-d    保留/删除执行默认关闭                              false
   PASS RUNTIME-d    保留/删除执行默认关闭
-result.json written: {'suite': 'run-sprint6-e2e.sh', 'build_sha': '469fb61c6a12acec77dfe6631a2276c368645019', 'pass': 159, 'fail': 0, 'not_verified': 0, 'blocking_failures': 0, 'blocking_not_verified': 0, 'criteria': 'fail==0 and not_verified==0 and pass>0', 'status': 'PASS', 'finished_at': '2026-09-12T22:49:44.204375+07:00'}
-==== Sprint 6 E2E 结束 2026-09-12T22:49:44+07:00 PASS=159 FAIL=0 NOT_VERIFIED=0 ====
+result.json written: {'suite': 'run-sprint6-e2e.sh', 'build_sha': '7dba1eb35a03a4dba68f49f1a75f30f6c2a56e01', 'pass': 159, 'fail': 0, 'not_verified': 0, 'blocking_failures': 0, 'blocking_not_verified': 0, 'criteria': 'fail==0 and not_verified==0 and pass>0', 'status': 'PASS', 'finished_at': '2026-09-12T22:55:28.612488+07:00'}
+==== Sprint 6 E2E 结束 2026-09-12T22:55:28+07:00 PASS=159 FAIL=0 NOT_VERIFIED=0 ====

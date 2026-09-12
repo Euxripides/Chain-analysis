@@ -1,4 +1,4 @@
-==== Sprint 4 E2E 开始 2026-09-12T22:40:47+07:00 build=no-git ====
+==== Sprint 4 E2E 开始 2026-09-12T22:56:10+07:00 build=no-git ====
 == SETUP：登录 investigator / reviewer / viewer / owner ==
   PASS SETUP      investigator 用户层登录
   PASS SETUP      reviewer 用户层登录
