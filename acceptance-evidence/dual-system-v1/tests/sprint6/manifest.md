@@ -73,3 +73,8 @@ runtime_role_integrity_priv=
 
 本轮加入例外规则 `!acceptance-evidence/**/*.log`，上述日志现已入库，
 可用表格中的 SHA-256 直接核对；`git check-ignore` 对该目录的 `.log` 已不再命中。
+
+此外新增 `.gitattributes` 规则 `acceptance-evidence/** -text`。
+本机 `core.autocrlf=true`，若不声明 `-text`，在 Windows 上重新检出会把 LF 换成 CRLF，
+使表格中的 SHA-256 无法复现。已核对：这些证据文件在 git 对象库中的字节数与工作区一致
+（`git cat-file -s` 与文件大小逐项相同），因此表中哈希对任何平台都成立。
