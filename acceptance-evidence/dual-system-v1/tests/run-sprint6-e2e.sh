@@ -468,6 +468,10 @@ check "AUDIT-004j" "边界事件落库（chain/kind/缺口/可信起点）" "$(s
 check "AUDIT-004k" "边界证据哈希与封存尾哈希均为 64 位十六进制" "$(sql "select (length(evidence_hash)=64 and length(sealed_tail_hash)=64 and evidence_hash ~ '^[0-9a-f]{64}$')::text from audit_integrity_incidents where incident_ref='$INCIDENT_REF'")" "true"
 check "AUDIT-004k2" "边界创建/审批事件链已落库且带哈希链接" "$(sql "select (count(*)>=2 and bool_and(length(event_hash)=64))::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
 check "AUDIT-004k3" "边界事件链序号连续且 prev_hash 首尾相接" "$(sql "select (count(*)=max(seq) and count(*) filter (where prev_hash='')=1)::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
+# 双人审批的持久证据：封存审批必须已执行，且请求人与审批人不是同一主体。
+check "AUDIT-004k5" "封存审批已执行且请求人≠审批人" "$(sql "select a.status||'|'||(a.decided_by<>a.requested_by)::text from approval_requests a join audit_integrity_incidents i on i.approval_request_id=a.id where i.incident_ref='$INCIDENT_REF'")" "executed|true"
+check "AUDIT-004k6" "边界审批与封存由两个不同主体完成" "$(sql "select (count(distinct actor_email)=2)::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF' and event in ('approved','sealed')")" "true"
+check "AUDIT-004k7" "边界事件链签名了 approved 与 sealed 两个阶段" "$(sql "select (count(*) filter (where event='approved')=1 and count(*) filter (where event='sealed')=1)::text from audit_integrity_incident_events where incident_ref='$INCIDENT_REF'")" "true"
 check "AUDIT-004k4" "边界引用了保留的旧锚点（原样保留、未改写）" "$(sql "select count(*) > 0 from audit_integrity_incident_anchors a join audit_integrity_incidents i on i.id=a.incident_id where i.incident_ref='$INCIDENT_REF' and a.chain='audit' and a.head_hash=(select head_hash from audit_chain_anchors where chain='audit' and anchor_date=a.anchor_date)")" "t"
 
 # 封存后：全链校验必须声明缺口，绝不能伪装为完整。

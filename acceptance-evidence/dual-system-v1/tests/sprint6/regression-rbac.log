@@ -1,0 +1,51 @@
+== 准备：登录各角色 ==
+  PASS     SETUP      Owner 登录（后台受众）               200
+  PASS     SETUP      Owner 登录（用户层受众）            200
+  PASS     SETUP      viewer 登录（用户层）                 200
+  PASS     SETUP      analyst 登录（用户层）                200
+  PASS     SETUP      investigator 登录（用户层）           200
+  viewer=49d4c0c9-b62f-49e9-b647-122de6f1a429 analyst=17397e0e-bdb1-44e8-b5fa-2602296bfdd7
+
+== RBAC-001 Viewer 无法执行高权限操作 ==
+  PASS     RBAC-001   viewer 调用需 admin:session:revoke 的写操作 401
+  PASS     RBAC-001   viewer 权限集合不含任何 admin:*      False
+  PASS     RBAC-001   viewer 调用 /api/v2/dashboard 正常（有 dashboard:read） 200
+
+== RBAC-002 猜测其他组织的对象 ID ==
+  PASS     RBAC-002   owner 可读本组织案件（用户层会话） 200
+  PASS     RBAC-002   viewer(acme) 读默认组织案件 -> 404（不泄露存在性） 404
+  PASS     RBAC-002   owner 读 acme 组织案件 -> 404（反向同样拒绝） 404
+  PASS     RBAC-002   viewer 读本组织案件 -> 200             200
+  PASS     RBAC-002   不存在的 UUID 与越权返回同一状态码 404
+  PASS     RBAC-002   越权尝试已写入审计（authorization.object_denied） yes
+  PASS     RBAC-002   deny_reason 标记为 cross_organization     True
+
+== RBAC-003 工作区角色只作用于目标工作区 ==
+  PASS     RBAC-003   授予 acme-other 工作区级 analyst 绑定 True
+  PASS     RBAC-003   analyst 读 acme-lab 案件 -> 404（未绑定该工作区） 404
+  PASS     RBAC-003   analyst 读 acme-other 案件 -> 200（已绑定） 200
+
+== RBAC-004 无证据权限读取正文 ==
+  BLOCKED  RBAC-004   evidence 端点读取正文被拒            依赖 S4/S5 的 evidence 端点（当前未实现）
+  PASS     RBAC-004   敏感读取（GET）产生审计事件      yes
+
+== RBAC-005 移除最后一个 Owner 必须被拒绝 ==
+  PASS     RBAC-005   撤销最后一个 owner 绑定 -> 422       422
+  PASS     RBAC-005   owner 绑定仍然有效（未被误删）   200
+
+== RBAC-006 角色变更后旧会话的授权必须随之变化 ==
+  PASS     RBAC-006   analyst 变更前可列案件                200
+  PASS     RBAC-006   撤销后旧会话在 5 秒内失去权限（实测 0s） within_sla
+  PASS     RBAC-006   同一会话的权限集合已同步收敛   False
+  PASS     RBAC-006   重新授予后 5 秒内恢复权限（实测 0s） within_sla
+== RBAC-007 Canvas 引用跨案件 Evidence ==
+  BLOCKED  RBAC-007   跨案件证据引用保存被拒            依赖 S5 的 canvas/evidence 端点（当前未实现）
+
+== RBAC-008 API Client / 受众隔离 ==
+  PASS     RBAC-008   用户层会话访问后台 API -> 401       401
+  PASS     RBAC-008   用户层会话访问后台会话列表 -> 401 401
+  PASS     RBAC-008   investigator 无 admin 权限（用户层受众） False
+  PASS     RBAC-008   无凭证访问后台 -> 401                 401
+
+==================== 结果 ====================
+PASS=29 FAIL=0 BLOCKED=2

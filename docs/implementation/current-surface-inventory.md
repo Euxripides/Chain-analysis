@@ -1,6 +1,6 @@
 # 当前系统面清单（Current Surface Inventory）
 
-> 生成时间：2026-09-12 23:35 +0800  
+> 生成时间：2026-09-12 23:53 +0800  
 > 生成方式：`python3 scripts/generate_surface_inventory.py --with-db`（全部取自仓库真实文件与部署实例）  
 > 依据：docs/dual-system-development-plan.md §28.1 第 3 步
 

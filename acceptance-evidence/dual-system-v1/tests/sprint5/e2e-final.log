@@ -1,0 +1,140 @@
+==== Sprint 5 E2E 开始 2026-09-12T20:46:28+07:00 ====
+
+== SETUP：登录夹具账号 ==
+  PASS SETUP        investigator 登录
+  PASS SETUP        analyst 登录
+  PASS SETUP        reviewer 登录
+  PASS SETUP        viewer 登录
+  PASS SETUP        auditor 登录
+
+== 基线：Provider usage / jobs / shards ==
+baseline usage=413878 null_job_usage=17441 jobs=2390 shards=28356
+  PASS SETUP        取得已覆盖的本地区间夹具（Coverage HIT）
+coverage hit fixture: chain=tron subject=TU585SoBMd3hp9WaLc7yctSbR9fSmXsm32 range=35054587..76966457
+  PASS SETUP        取得增量缺口夹具（Coverage Gap）
+coverage gap fixture: chain=tron subject=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird range=78014482..78878131 local_rows=476448
+
+== USER-002 Coverage HIT：0 Provider 请求、0 新 Shard ==
+  PASS USER-002     preview overall_ratio=1
+  PASS USER-002     preview provider_work_required=false
+  PASS USER-002     create status=ready
+  PASS USER-002     create created=false
+  PASS USER-002     create reused=false
+  PASS USER-002     create job_id 为空（未新建任务）
+  PASS USER-002     Coverage HIT preview/create 未产生 Provider 调用（按 trace 实证）
+  PASS USER-002     download_jobs 前后不变
+  PASS USER-002     download_shards 前后不变
+
+== USER-002 扩展到调查创建：Coverage HIT 不触发 Provider ==
+  PASS USER-002     创建 S5 案件夹具
+  PASS USER-002     Coverage HIT 创建调查成功
+  PASS USER-002     Coverage HIT 调查本地复用收敛（waiting_review/completed）
+  PASS USER-002     ensure_data 走本地索引复用（reuse=indexed，不进入 Provider 路径）
+  PASS USER-002     run checkpoint data_reused=true
+  PASS USER-002     调查创建后 download_jobs 不变
+  PASS USER-002     调查创建后 download_shards 不变
+
+== USER-003 增量只补缺口 + 暂停/恢复保留 paging cursor 与地址进度 ==
+  PASS USER-003     缺口预览 ratio<1
+  PASS USER-003     缺口预览 provider_work_required=true
+  PASS USER-003     创建缺口任务返回 HTTP 200/201
+  PASS USER-003     创建缺口任务返回 job_id
+gap create http=201 job=6662dd72-4efe-40e6-a6d6-859d8ab4c426 reused=False
+  PASS USER-003     Planner 已生成 Shard
+  PASS USER-003     所有 Shard 只在缺口区间内，不重复已覆盖块
+  PASS USER-003     地址级进度行存在
+  PASS USER-003     成功分页游标已落库
+  PASS USER-003     pause 收敛为 PAUSED
+  PASS USER-003     暂停后 checkpoint 不再后退/丢失
+  PASS USER-003     resume 从成功游标继续，不从头重下
+
+== USER-009 全局搜索：全类型 + 权限/作用域裁剪 ==
+  PASS USER-009     报告夹具生成成功
+  PASS USER-009     搜索命中案件类型
+  PASS USER-009     搜索命中调查类型
+  PASS USER-009     搜索命中任务类型（workspace scope）
+  PASS USER-009     viewer 在 self scope 下不可见他人任务（负向）
+  PASS USER-009     搜索命中报告类型
+  PASS USER-009     搜索命中地址类型（TRON Base58 不被 EVM 正则拒绝）
+  PASS USER-009     搜索命中交易类型
+  PASS USER-009     未指定 type 时返回多类型分组（至少 case+investigation）
+
+== USER-007 Canvas 并发保存 + RBAC-007 跨案件 Evidence 引用 ==
+  PASS USER-007     Canvas 创建成功
+  PASS USER-007     第一次保存成功且 revision 递增
+  PASS USER-007     第二客户端 stale 保存 -> 412
+  PASS USER-007     412 返回字段级 diff
+  PASS USER-007     stale 请求未覆盖服务端数据
+  PASS RBAC-007     Canvas 引用跨案件 Evidence -> 422
+  PASS RBAC-007     返回跨案件 evidence id
+  PASS RBAC-007     拒绝后未写入 Canvas
+  PASS RBAC-007     拒绝事件写入审计
+
+== DATA-001/003/004/005：>2^53 金额、四种格式、ZIP manifest、Range ==
+  PASS DATA-001     找到 >2^53 的原始金额样本
+big amount sample chain=bsc block=119769999 address=0x172fcd41e0913e95784454622d1c3724f546f849 raw=247763038695932807808 decimals=18
+  PASS DATA-001     刷新创建单区块下载任务
+  PASS DATA-001     单区块任务收敛到 COMPLETED
+  PASS DATA-001     Provider 真实取数（provider_usage>0）
+  PASS DATA-003     CSV 导出并下载成功
+  PASS DATA-003     CSV 可解析且包含完整原始金额
+  PASS DATA-003     CSV 文件 SHA-256 与 DB 一致
+  PASS DATA-003     XLSX 导出并下载成功
+  PASS DATA-003     XLSX 可解析且包含完整原始金额
+  PASS DATA-003     XLSX 文件 SHA-256 与 DB 一致
+  PASS DATA-003     JSONL 导出并下载成功
+  PASS DATA-003     JSONL 可解析且包含完整原始金额
+  PASS DATA-003     JSONL 文件 SHA-256 与 DB 一致
+  PASS DATA-003     Parquet 导出并下载成功
+  PASS DATA-003     Parquet magic/footer 结构有效
+  PASS DATA-003     Parquet 真实解析行数>0 且含完整原始金额
+  PASS DATA-003     Parquet 文件 SHA-256 与 DB 一致
+  PASS DATA-004     ZIP 导出并下载成功
+  PASS DATA-004     ZIP manifest/条目/路径穿越校验通过
+  PASS DATA-004     ZIP 条目内包含完整原始金额
+  PASS DATA-004     ZIP 文件 SHA-256 与 DB 一致
+  PASS DATA-005     HEAD 返回 200
+  PASS DATA-005     HEAD Accept-Ranges=bytes
+  PASS DATA-005     HEAD ETag 等于文件 SHA-256
+  PASS DATA-005     Range 请求返回 206
+  PASS DATA-005     Content-Range 首尾正确
+  PASS DATA-005     Range 分片与完整文件前 100 字节 SHA-256 一致
+  PASS DATA-005     同一张票据重复使用 -> 410
+
+== DATA-006 Worker Kill-9：保留成功游标和成功页，恢复无幽灵任务 ==
+  PASS DATA-006     创建 Kill-9 测试任务
+  PASS DATA-006     Worker 已成功完成至少一页
+worker MainPID before kill=2294814
+  PASS DATA-006     Worker 进程被 Kill-9 并由 systemd 恢复
+  PASS DATA-006     任务未被吞掉（无幽灵任务）
+  PASS DATA-006     成功页数与游标不回退（逐 shard page_no/rows 不减少）
+  PASS DATA-006     Shard 集合无重复/无丢失
+
+== DATA-007 NATS 重启：Outbox 补发、消费者幂等 ==
+  PASS DATA-007     NATS 不可用时事件仍事务性写入 outbox
+  PASS DATA-007     NATS 恢复后 Outbox 补发并标记 published_at
+  PASS DATA-007     补发无遗留错误
+  PASS DATA-007     Outbox 幂等键唯一（同 aggregate 仅 1 条）
+
+== DATA-008 MinIO 对象缺失：不宣称完成，留下可操作线索 ==
+  PASS DATA-008     已备份导出对象用于故障注入
+  PASS DATA-008     对象已真实从 MinIO 删除（stat exit=3）
+  PASS DATA-008     详情返回 object_missing=true 且 download_available=false
+  PASS DATA-008     对象缺失时拒绝创建下载票据
+  PASS DATA-008     返回可操作的 DATA_OBJECT_MISSING
+  PASS DATA-008     失败写入审计线索（action=notify_admin）
+  PASS DATA-008     对象恢复后详情恢复可下载
+
+
+== RBAC-004 无 evidence 权限读取正文：拒绝并记录敏感审计 ==
+  PASS RBAC-004     auditor 无 evidence:read 读取正文 -> 403
+  PASS RBAC-004     拒绝写入 authorization.denied（permission_key=evidence:read）
+== AUDIT/权限负向与运行态 ==
+  PASS AUTHZ        viewer 调用任务控制 -> 403
+  PASS AUTHZ        viewer 不能读取他人 self scope 任务详情（负向 404）
+  PASS AUDIT        审计链 valid=true
+  PASS AUDIT        S5 关键动作审计事件已落库
+  PASS RUNTIME      API 日志无 panic/fatal
+ids.env written: chain=tron address=TU585SoBMd3hp9WaLc7yctSbR9fSmXsm32 tx=18af74c02b8c296b2d11eff8dbc97f3b70707c827196c67da0f8b9d4da93a6e8 job=6662dd72-4efe-40e6-a6d6-859d8ab4c426 canvas=be578ad1-13fe-4c6d-b326-e4a14c353628 10k=tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/28979
+
+==== Sprint 5 E2E 结束 2026-09-12T20:51:13+07:00 PASS=104 FAIL=0 NOT_VERIFIED=0 ====

@@ -1,0 +1,33 @@
+
+Running 27 tests using 1 worker
+
+  ✓   1 [user-desktop] › tests/dual-system-sprint5.spec.ts:113:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情 (11.0s)
+  ✓   2 [user-desktop] › tests/dual-system-sprint5.spec.ts:147:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab (2.9s)
+  ✓   3 [user-desktop] › tests/dual-system-sprint5.spec.ts:171:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog (2.5s)
+  ✓   4 [user-desktop] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE (2.1s)
+  ✓   5 [user-desktop] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖 (12.7s)
+  -   6 [user-desktop] › tests/dual-system-sprint5.spec.ts:306:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出
+  ✓   7 [user-desktop] › tests/dual-system-sprint5.spec.ts:326:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸 (1.9s)
+  ✓   8 [user-desktop] › tests/dual-system-sprint5.spec.ts:371:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互 (16.5s)
+  -   9 [user-desktop] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染
+  -  10 [admin-desktop] › tests/dual-system-sprint5.spec.ts:113:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情
+  -  11 [admin-desktop] › tests/dual-system-sprint5.spec.ts:147:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab
+  -  12 [admin-desktop] › tests/dual-system-sprint5.spec.ts:171:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog
+  -  13 [admin-desktop] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE
+  -  14 [admin-desktop] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖
+  -  15 [admin-desktop] › tests/dual-system-sprint5.spec.ts:306:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出
+  -  16 [admin-desktop] › tests/dual-system-sprint5.spec.ts:326:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸
+  -  17 [admin-desktop] › tests/dual-system-sprint5.spec.ts:371:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互
+  ✓  18 [admin-desktop] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染 (15.5s)
+  ✓  19 [user-mobile] › tests/dual-system-sprint5.spec.ts:113:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情 (11.5s)
+  ✓  20 [user-mobile] › tests/dual-system-sprint5.spec.ts:147:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab (2.0s)
+  ✓  21 [user-mobile] › tests/dual-system-sprint5.spec.ts:171:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog (2.5s)
+  ✓  22 [user-mobile] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE (2.6s)
+  ✓  23 [user-mobile] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖 (12.9s)
+  ✓  24 [user-mobile] › tests/dual-system-sprint5.spec.ts:306:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出 (2.9s)
+  -  25 [user-mobile] › tests/dual-system-sprint5.spec.ts:326:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸
+  -  26 [user-mobile] › tests/dual-system-sprint5.spec.ts:371:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互
+  -  27 [user-mobile] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染
+
+  13 skipped
+  14 passed (1.7m)

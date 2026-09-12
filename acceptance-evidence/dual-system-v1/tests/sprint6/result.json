@@ -1,9 +1,12 @@
 {
   "suite": "run-sprint6-e2e.sh",
-  "build_sha": "post-deploy-87925821",
-  "pass": 115,
+  "build_sha": "469fb61c6a12acec77dfe6631a2276c368645019",
+  "pass": 159,
   "fail": 0,
-  "not_verified": 1,
+  "not_verified": 0,
+  "blocking_failures": 0,
+  "blocking_not_verified": 0,
+  "criteria": "fail==0 and not_verified==0 and pass>0",
   "status": "PASS",
-  "finished_at": "2026-09-12T22:10:00.455872+07:00"
+  "finished_at": "2026-09-12T22:49:44.204375+07:00"
 }

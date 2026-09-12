@@ -67,6 +67,7 @@ const S6_PAGES: Array<{ path: string; title: string }> = [
   { path: "/data/retention", title: "保留与删除" },
   { path: "/system/version", title: "版本与迁移" },
   { path: "/observability", title: "可观测性" },
+  { path: "/audit/integrity", title: "完整性事件边界" },
 ];
 
 test.describe("S6-FE 后台 Sprint 6 页面", () => {
@@ -76,7 +77,7 @@ test.describe("S6-FE 后台 Sprint 6 页面", () => {
     await uiLogin(page, ADMIN_EMAIL!, ADMIN_PASSWORD!);
   });
 
-  test("S6-FE-01 十六个 Sprint 6 页面均渲染真实数据且无内联提示", async ({ page }) => {
+  test("S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示", async ({ page }) => {
     for (const entry of S6_PAGES) {
       await page.goto("/admin" + entry.path, { waitUntil: "domcontentloaded" });
       await expect(page.getByText(entry.title, { exact: false }).first()).toBeVisible({ timeout: 20_000 });
@@ -152,6 +153,35 @@ test.describe("S6-FE 后台 Sprint 6 页面", () => {
       await closeDialog(page);
     }
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("AUDIT-004/UI 完整性边界页面展示缺口声明与逐项验证，并可只读检测", async ({ page }) => {
+    await page.goto("/admin/audit/integrity", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("完整性事件边界", { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    // 页面必须如实声明"存在已封存缺口"，而不是显示成全链完整。
+    await expect(page.getByText("存在已封存缺口", { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("封存不可恢复", { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    // Evidence Rail 必须写明不可恢复性与禁止回填，避免运维误读为"链完整"。
+    await expect(page.getByText(/不可恢复：无基备/).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/禁止。缺口区间保持为空/).first()).toBeVisible({ timeout: 20_000 });
+    await expectNoInlineNotices(page);
+    await expectNoHorizontalOverflow(page);
+
+    // 只读缺口检测：必须产生真实 Dialog，且内容来自真实数据。
+    const detect = page.getByRole("button", { name: /检测缺口/ }).first();
+    await expect(detect).toBeVisible({ timeout: 20_000 });
+    await detect.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
+    await expect(dialog).toContainText(/seq 1 → 2343|检测到不可恢复缺口/, { timeout: 20_000 });
+    await closeDialog(page);
+
+    // 移动宽度同样不得溢出或出现内联提示。
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/admin/audit/integrity", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("完整性事件边界", { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    await expectNoHorizontalOverflow(page);
+    await expectNoInlineNotices(page);
   });
 
   test("AUDIT-002/UI 页面与弹窗中不出现密钥明文", async ({ page }) => {

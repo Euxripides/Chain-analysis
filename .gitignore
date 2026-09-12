@@ -8,6 +8,8 @@ frontend/playwright-report/
 backend/blockchain-platform-api
 backend/blockchain-platform-worker
 *.log
+# 例外：验收证据日志是刻意保留的可核验产物（manifest.md 逐项列出 SHA-256），必须入库。
+!acceptance-evidence/**/*.log
 *.tsbuildinfo
 __pycache__/
 *.pyc
