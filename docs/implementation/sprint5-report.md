@@ -1,7 +1,7 @@
 # Sprint 5 实施与验收报告（Explorer / 下载 / 任务 / 导出 / 图谱 / 后台任务）
 
 > 计划：`docs/dual-system-development-plan.md` §28.7（S5-BE/FE/ADMIN/QA）、§27.7 证据规范、§28.10 输出模板。
-> 分支：`feat/dual-system-iam-foundation`；代码提交：`244f63b`（本轮功能提交 `e9638b6` + 性能修正 `244f63b`）。
+> 分支：`feat/dual-system-iam-foundation`；代码提交：`e639707`（本轮功能提交 `e9638b6`、性能修正 `244f63b`、作用域修复 `e639707`）。
 > 环境：Ubuntu VM `192.168.31.152`，Nginx `127.0.0.1:8088`（`/app-v2`、`/admin`），API `127.0.0.1:8080`，Worker `:8081`，PostgreSQL/ClickHouse/MinIO/NATS 为 Docker Compose 依赖。
 > 迁移：`0049_s5_explorer_download_jobs.sql`、`0050_s5_job_identity_scope.sql` 已应用。
 > 本轮结论：**S5 八项任务全部完成；API E2E PASS 104 / FAIL 0 / NOT_VERIFIED 0；Playwright S5 适用用例 14 PASS / 0 FAIL（13 个跨项目守卫 skip）；S1–S4 全量回归 PASS。本轮不进入 Sprint 6。**
@@ -195,7 +195,7 @@
 | 套件 | 结果 | 说明 |
 |---|---|---|
 | `run-sprint4-e2e.sh` | PASS 79 / FAIL 0 / NOT_VERIFIED 0 | 更新了 USER-009 对 S5 类型扩展的断言（仍要求 case+investigation） |
-| `run-sprint5-e2e.sh` | PASS 104 / FAIL 0 / NOT_VERIFIED 0 | build_sha=`244f63b` |
+| `run-sprint5-e2e.sh` | PASS 104 / FAIL 0 / NOT_VERIFIED 0 | build_sha=`e639707` |
 | `run-rbac-e2e.sh` | PASS 29 / FAIL 0 / BLOCKED 2 | RBAC-004/007 已由 S5 套件实际验证；S3 脚本保留历史 BLOCKED 标注 |
 | `run-sprint12-e2e.sh` | PASS 19 / FAIL 0 / BLOCKED 1 | BLOCKED=MFA 未实现 |
 | `run-iam-e2e.sh` | PASS 32 / FAIL 0 | 认证/会话/开放重定向 |

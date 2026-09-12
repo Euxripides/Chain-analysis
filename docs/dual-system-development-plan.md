@@ -2330,7 +2330,7 @@ docs/adr/*
 
 > **执行状态（2026-09-12）：已完成。** 交付与逐项证据见
 > `docs/implementation/sprint5-report.md`：API E2E PASS 104 / FAIL 0 / NOT_VERIFIED 0
-> （build_sha=244f63b），Playwright 适用 14 PASS / 0 FAIL，S1–S4 回归全绿；
+> （build_sha=e639707），Playwright 适用 14 PASS / 0 FAIL，S1–S4 回归全绿；
 > 迁移编号 0049/0050；RBAC-004/007、USER-012、UX-004 已在本轮闭合。
 
 目标：把现有核心数据能力完整迁入用户系统，同时提升后台诊断能力。

@@ -1,5 +1,5 @@
 == Sprint 5 部署后运行态核对 2026-09-12T20:43:36+07:00 ==
-code_sha=244f63b
+code_sha=e639707
 api_sha256=a621b7edde94fe7b47903a1056afc5facdb08e566cec70d0d38f64c0503b173f
 worker_sha256=f63f325f3a796a4420fb89a21559789f38535ea5dba39a9c0efdafa36c537d9a
 schema_migrations:

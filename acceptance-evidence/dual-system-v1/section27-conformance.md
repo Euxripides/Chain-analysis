@@ -25,7 +25,7 @@
 > `frontend/tests/dual-system-sprint4.spec.ts`（桌面+移动 PASS 4）、
 > `docs/implementation/sprint4-report.md`。
 >
-> **2026-09-12 更新（Sprint 5 验收，build_sha=244f63b）**：USER-002/003/007/009/011/012、
+> **2026-09-12 更新（Sprint 5 验收，build_sha=e639707）**：USER-002/003/007/009/011/012、
 > DATA-001 至 DATA-008、UX-004、RBAC-004、RBAC-007 转 PASS。
 > 证据：`tests/run-sprint5-e2e.sh`（PASS 104 / FAIL 0 / NOT_VERIFIED 0）、
 > `frontend/tests/dual-system-sprint5.spec.ts`（适用 14 PASS / 0 FAIL，13 个项目守卫 skip）、
@@ -128,7 +128,7 @@ Sprint 5 完成后，剩余 `NOT_RUN` / `NOT_IMPLEMENTED` 的原因：
 4. **RBAC-008**：用户层会话/无凭证访问后台已 PASS；API Key/scope 路径未覆盖，保持 PARTIAL。
 
 Sprint 5 验收只声明以下结果：
-- `run-sprint5-e2e.sh`：PASS 104 / FAIL 0 / NOT_VERIFIED 0（build_sha=`244f63b`）；
+- `run-sprint5-e2e.sh`：PASS 104 / FAIL 0 / NOT_VERIFIED 0（build_sha=`e639707`）；
 - Playwright `dual-system-sprint5.spec.ts`：适用 14 PASS / 0 FAIL / 13 个项目守卫 skip；
 - 回归：`run-sprint4-e2e.sh` 79/0/0、`run-rbac-e2e.sh` 29/0/2（历史 BLOCKED 标注）、
   `run-sprint12-e2e.sh` 19/0/1、`run-iam-e2e.sh` 32/0、`dual-system-quality.spec.ts` 27/27；

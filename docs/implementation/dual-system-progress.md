@@ -14,7 +14,7 @@
 >   已由 S5 套件实际验证，不再是 BLOCKED。
 >
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
-> 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`244f63b`
+> 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`e639707`
 
 ## 1. Sprint 任务完成度
 
@@ -81,7 +81,7 @@
 | S5-FE-02 | 完成 | 下载表单、Jobs、Job Detail 三层进度、Exports 中心；SSE 实测连接 |
 | S5-FE-03 | 完成 | Fund Flow SVG、Lens、Evidence Rail、Canvas revision 412+字段级 diff、移动列表视图 |
 | S5-ADMIN-01 | 完成 | 跨组织任务列表 + 固定七层诊断链（DownloadJob→…→ClickHouseCoverage） |
-| S5-QA-01 | 完成 | `run-sprint5-e2e.sh`：PASS 104 / FAIL 0 / NOT_VERIFIED 0（build_sha=244f63b）；Playwright 14 PASS / 0 FAIL / 13 project skip；S1–S4 回归全绿 |
+| S5-QA-01 | 完成 | `run-sprint5-e2e.sh`：PASS 104 / FAIL 0 / NOT_VERIFIED 0（build_sha=e639707）；Playwright 14 PASS / 0 FAIL / 13 project skip；S1–S4 回归全绿 |
 
 ## 2. §27 测试计划完成度（Sprint 5 后）
 
