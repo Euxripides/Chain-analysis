@@ -1,0 +1,22 @@
+== Sprint 5 最终部署后核对 2026-09-12T20:52:53+07:00 ==
+code_sha=e639707 docs_sha=f6b5972
+api_sha256=a621b7edde94fe7b47903a1056afc5facdb08e566cec70d0d38f64c0503b173f
+worker_sha256=f63f325f3a796a4420fb89a21559789f38535ea5dba39a9c0efdafa36c537d9a
+health={"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+
+services=active,active,active,active
+entries=app-v2:200 admin:200
+smoke_search=True 30
+smoke_chains=8
+smoke_jobs=True
+smoke_coverage_hit=0.2946195338398099 True
+active_jobs=24
+audit_events=2309
+audit_chain=True 2309 2309
+panic_fatal=0
+minio=200
+clickhouse=200
+deploy-postgres-1 Up 3 days (healthy)
+deploy-clickhouse-1 Up 3 days (healthy)
+deploy-nats-1 Up 2 minutes
+deploy-minio-1 Up 3 days

@@ -251,6 +251,7 @@ ssh euripides@192.168.31.152 \
 - `.../sprint5/playwright-full.log`：14 PASS / 0 FAIL / 13 skip。
 - `.../sprint5/screenshots/`：搜索、地址（桌面/移动）、下载、任务详情、Canvas（桌面/移动）、后台任务与诊断。
 - `.../sprint5/runtime-verification.txt`：服务状态、迁移、表计数、审计链 valid、MinIO/ClickHouse 健康、无 panic。
+- `.../sprint5/postdeploy-verification.txt`：最终提交树部署后的核对输出（code_sha=e639707、API/Worker SHA-256、health=ready、双入口 200、审计链 2309/2309、panic_fatal=0）。其中 `active_jobs=24` 均为 2026-09-10 前既有的暂停/排队验收任务，不是 S5 E2E 残留。
 
 ## 9. 未验证 / 后续项
 
