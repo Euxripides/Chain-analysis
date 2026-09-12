@@ -29,6 +29,20 @@ python3 scripts/deploy_dual_system.py --yes --skip-migrate      # 只发代码
   （需要夹具密码 + `admin-init -force` 的 Owner 密码 + `deploy/.env` 中的 ClickHouse 密码）。
 - 浏览器验收：`frontend/tests/dual-system-sprint4.spec.ts`，用 `E2E_CHROMIUM_PATH` 指向系统 Chromium。
 
+## 1.15 Sprint 5 新增路由与验收入口
+
+- 用户层：`/api/v2/explorer/*`（overview/assets/activity/counterparties/semantic/flow-profile、
+  交易详情/Logs/local Trace）、`/api/v2/meta/chains|datasets`、`/api/v2/downloads/preview|create`、
+  `/api/v2/jobs*`（含 SSE Last-Event-ID）、`/api/v2/exports*`（60 秒一次性票据、HEAD/Range）、
+  `/api/v2/investigations/{id}/canvases`、`/api/v2/canvases/*`、`/api/v2/search` 六类型扩展。
+- 后台：`/api/admin/v1/jobs`、`/api/admin/v1/jobs/{id}/diagnostics`（固定七层诊断链）。
+- 迁移：`0049_s5_explorer_download_jobs.sql`（job_event_log/票据一次性/S5 权限）、
+  `0050_s5_job_identity_scope.sql`（created_by_identity，修复 legacy users FK 缺陷）。
+- 验收脚本：`acceptance-evidence/dual-system-v1/tests/run-sprint5-e2e.sh`（PASS 104 / FAIL 0 /
+  NOT_VERIFIED 0）与 `frontend/tests/dual-system-sprint5.spec.ts`（桌面/移动/后台）。
+- 证据目录：`acceptance-evidence/dual-system-v1/tests/sprint5/`（result.json、run.log、
+  files/、screenshots/、runtime-verification.txt）。
+
 ## 1.2 OIDC 当前状态
 
 未接入真实 IdP 时保持生产禁用：

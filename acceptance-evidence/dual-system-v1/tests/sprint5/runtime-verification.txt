@@ -1,8 +1,8 @@
-== 2026-09-12T19:54:31+07:00 ==
-host: dataserver
-api HEAD: 41a56f50dc833185631baa5dbbc56e4139ba843059725d47f2f362f103aa7ccf
-worker HEAD: f63f325f3a796a4420fb89a21559789f38535ea5dba39a9c0efdafa36c537d9a
-schema_migrations tail:
+== Sprint 5 部署后运行态核对 2026-09-12T20:43:36+07:00 ==
+code_sha=244f63b
+api_sha256=a621b7edde94fe7b47903a1056afc5facdb08e566cec70d0d38f64c0503b173f
+worker_sha256=f63f325f3a796a4420fb89a21559789f38535ea5dba39a9c0efdafa36c537d9a
+schema_migrations:
 postgres/0050_s5_job_identity_scope.sql
 postgres/0049_s5_explorer_download_jobs.sql
 postgres/0048_s4_permission_fix.sql
@@ -14,23 +14,47 @@ active
 health:
 {"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
 
-public entry:
+routes:
 app-v2=200 admin=200
-s5 tables:
-job_event_log=13616
-export_tickets_used=56
-canvas_with_refs=44
-s5 audit actions:
-canvas.create=22
-canvas.evidence_ref.denied=10
-canvas.update=26
-download.create=21
-download.refresh=10
-export.create=45
-export.download=56
-export.download_failed=16
-export.download_ticket=56
-job.cancel=20
-job.pause=10
-job.resume=10
-minio exports object count:
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>ChainSight 后台管理</title>
+    <script type="module" crossorigin src="/admin/assets/index-DmKfn_Lh.js"></script>
+    <link rel="modulepreload" crossorigin href="/admin/assets/react-vendor-wR17Am5Y.js">
+    <link rel="stylesheet" crossorigin href="/admin/assets/index-DDF0WoWa.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+app-v2=200 admin=200
+s5_tables:
+job_event_log=16200
+export_tickets_used=84
+canvas_with_refs=48
+s5_audit_actions:
+canvas.create=30
+canvas.evidence_ref.denied=14
+canvas.update=37
+canvas.update.conflict=31
+download.create=29
+download.create.coverage_hit=29
+download.refresh=14
+export.create=65
+export.download=84
+export.download_failed=24
+export.download_ticket=84
+export.reuse=3
+job.cancel=28
+job.pause=14
+job.resume=14
+audit_chain_verify:
+{"success":true,"data":{"chain":"audit","from_seq":1,"to_seq":2263,"checked":2263,"valid":true,"broken_at_seq":null,"reason":"","head_hash":"7d6994c924f23b318e583024b2c015efccf8922160d79a4ef4bc636d522ffbb1","errors":[]},"meta":{"request_id":"36664a49-64f4-4014-b4cb-d243a919d870","trace_id":"eabfa80d-3c35-4110-a0e7-3fd5f309a65f","server_time":"2026-09-12T13:43:37.055Z","next_cursor":null},"error":null}
+
+api_log_panic_fatal=0
+minio_health=200
+clickhouse=200
