@@ -21,6 +21,28 @@ python3 scripts/deploy_dual_system.py --yes --skip-migrate      # 只发代码
 **注意**：`/etc/nginx/sites-enabled/blockchain-platform.conf` 在本环境是普通文件而非软链接，
 只改 `sites-available` 不会生效。脚本已同时写入两处。
 
+## 1.1 Sprint 4 新增路由与验收入口
+
+- 用户层：`/api/v2/cases/*`（案件/成员/对象/动态/评论）、`/api/v2/investigations/*`（预览/命令/runtime/findings/evidence）、
+  `/api/v2/reports/*`（审批/签署/下载票据）、`/api/v2/notifications`、`/api/v2/inbox`。
+- 验收脚本：`acceptance-evidence/dual-system-v1/tests/run-sprint4-e2e.sh`
+  （需要夹具密码 + `admin-init -force` 的 Owner 密码 + `deploy/.env` 中的 ClickHouse 密码）。
+- 浏览器验收：`frontend/tests/dual-system-sprint4.spec.ts`，用 `E2E_CHROMIUM_PATH` 指向系统 Chromium。
+
+## 1.2 OIDC 当前状态
+
+未接入真实 IdP 时保持生产禁用：
+
+```bash
+curl -s http://127.0.0.1:8080/api/auth/v1/methods        # 期望 "oidc":false
+curl -s -o /dev/null -w '%{http_code}
+' http://127.0.0.1:8080/api/auth/v1/oidc/start  # 期望 501
+```
+
+adapter 已实现 state/nonce/PKCE/RS256/JWKS 校验并有 httptest 隔离测试；没有真实 IdP 时
+**不得**把隔离测试当作 AUTH-011 live 验收。配置 `AUTH_OIDC_ENABLED=true` +
+`AUTH_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URL` 后才会启用；生产要求 https issuer。
+
 ## 2. 首次初始化管理员密码
 
 ```bash

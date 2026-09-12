@@ -1,6 +1,6 @@
 {
   "environment": "gray-rollout (production-like single node)",
-  "generated_at": "2026-09-12T03:28:40.216314+08:00",
+  "generated_at": "2026-09-12T17:13:32.745764+08:00",
   "git": {
     "branch": "feat/dual-system-iam-foundation",
     "head_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3"
@@ -27,7 +27,13 @@
       "cs_user_session",
       "cs_admin_session"
     ],
-    "csrf_header": "X-CSRF-Token"
+    "csrf_header": "X-CSRF-Token",
+    "oidc": {
+      "mode": "disabled_without_idp",
+      "methods_oidc": false,
+      "start_http": 501,
+      "code": "OIDC_NOT_CONFIGURED"
+    }
   },
   "services": [
     "blockchain-api.service",
@@ -35,6 +41,8 @@
     "blockchain-mcp.service",
     "blockchain-vite.service",
     "blockchain-user-console.service",
-    "blockchain-admin-console.service"
-  ]
+    "blockchain-admin-console.service",
+    "sprint4: case/investigation/review/report endpoints"
+  ],
+  "postgres_migrations_highest": "0048_s4_permission_fix.sql"
 }

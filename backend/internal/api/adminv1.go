@@ -690,9 +690,9 @@ func (s *Server) handleAdminAuditVerify(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body struct {
-		Chain  string `json:"chain"`
-		FromSeq int64 `json:"from_seq"`
-		ToSeq   int64 `json:"to_seq"`
+		Chain   string `json:"chain"`
+		FromSeq int64  `json:"from_seq"`
+		ToSeq   int64  `json:"to_seq"`
 	}
 	_ = decodeJSON(r, &body)
 	if body.Chain == "" {
@@ -786,4 +786,3 @@ func parseTimeQuery(r *http.Request, key string) *time.Time {
 	}
 	return nil
 }
-

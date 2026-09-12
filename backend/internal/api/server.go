@@ -21,6 +21,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/canvas"
 	"github.com/blockchain-platform/blockchain-platform/internal/capability"
+	"github.com/blockchain-platform/blockchain-platform/internal/casework"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
@@ -32,10 +33,10 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
-	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/report"
@@ -100,6 +101,8 @@ type Server struct {
 	policy         *policy.Engine
 	audit          *audit.Writer
 	guard          *access.Guard
+	casework       *casework.Service
+	oidc           *iam.OIDCAdapter
 	authMode       auth.Mode
 	trustedProxies []*net.IPNet
 }
@@ -167,6 +170,11 @@ func New(deps Deps) *Server {
 		})
 	}
 	s.wireIdentityAndAudit(deps)
+	if deps.Store != nil {
+		s.casework = casework.New(deps.Store.Pool, s.audit, deps.Raw, s.reports).
+			WithInvestigation(deps.Investigations, s.runtime).
+			WithCoverage(s.svc.Preview)
+	}
 	if deps.ChainRead != nil && deps.ChainRead.Chains() != nil {
 		s.svc.ValidateChain = func(chain string) error {
 			if chain == "tron" && !deps.Cfg.Tron.Enabled {

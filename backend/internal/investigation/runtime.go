@@ -286,62 +286,92 @@ func (r *Runtime) executeAnalysis(ctx context.Context, runID string) {
 	stageID, flowStepID, semanticStageID, semanticStepID, advancedStageID, advancedStepID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
 	tx, e := r.service.pool.Begin(ctx)
 	if e != nil {
+		r.markExecutionFailure(ctx, runID, invID, stepID, fmt.Errorf("begin final transaction: %w", e))
 		return
 	}
+	committed := false
 	defer func() { _ = tx.Rollback(ctx) }()
+	fail := func(stage string, err error) bool {
+		if err == nil {
+			return false
+		}
+		r.markExecutionFailure(ctx, runID, invID, stepID, fmt.Errorf("%s: %w", stage, err))
+		return true
+	}
 	_, e = tx.Exec(ctx, `UPDATE investigation_steps SET status='completed',output=$2,output_hash=$3,algorithm_version='basic-flow-v1.0',finished_at=now() WHERE id=$1`, stepID, out, hex.EncodeToString(sum[:]))
-	if e != nil {
+	if fail("complete address_profile step", e) {
 		return
 	}
 	_, e = tx.Exec(ctx, `UPDATE investigation_stages SET status='completed',finished_at=now() WHERE run_id=$1 AND ordinal=2`, runID)
-	if e != nil {
+	if fail("complete triage stage", e) {
 		return
 	}
 	_, e = tx.Exec(ctx, `INSERT INTO investigation_stages(id,run_id,name,ordinal,status,started_at,finished_at) VALUES($1,$2,'fund_flow',3,'completed',now(),now()) ON CONFLICT(run_id,ordinal) DO NOTHING`, stageID, runID)
-	if e != nil {
+	if fail("insert fund_flow stage", e) {
 		return
 	}
 	_, e = tx.Exec(ctx, `INSERT INTO investigation_steps(id,run_id,stage_id,ordinal,action,capability,capability_version,status,input,output,output_hash,algorithm_version,started_at,finished_at) SELECT $1,$2,id,3,'flow_stats','analysis.flow_stats','1.0','completed','{}',$3,$4,'basic-flow-v1.0',now(),now() FROM investigation_stages WHERE run_id=$2 AND ordinal=3 ON CONFLICT(run_id,ordinal) DO NOTHING`, flowStepID, runID, out, hex.EncodeToString(sum[:]))
-	if e != nil {
+	if fail("insert flow_stats step", e) {
 		return
 	}
 	if e = materializeAnalysis(ctx, tx, invID, chain, address, out, hex.EncodeToString(sum[:])); e != nil {
+		fail("materialize analysis artifacts", e)
 		return
 	}
 	if len(semanticOut) > 0 {
 		semanticSum := sha256.Sum256(semanticOut)
 		_, e = tx.Exec(ctx, `INSERT INTO investigation_stages(id,run_id,name,ordinal,status,started_at,finished_at) VALUES($1,$2,'semantic_protocol',4,'completed',now(),now()) ON CONFLICT(run_id,ordinal) DO NOTHING`, semanticStageID, runID)
-		if e != nil {
+		if fail("insert semantic stage", e) {
 			return
 		}
 		_, e = tx.Exec(ctx, `INSERT INTO investigation_steps(id,run_id,stage_id,ordinal,action,capability,capability_version,status,input,output,output_hash,algorithm_version,started_at,finished_at) SELECT $1,$2,id,4,'decode_protocol_semantics','protocol.semantic.decode','1.0','completed','{}',$3,$4,'protocol-semantic-v1.0',now(),now() FROM investigation_stages WHERE run_id=$2 AND ordinal=4 ON CONFLICT(run_id,ordinal) DO NOTHING`, semanticStepID, runID, semanticOut, hex.EncodeToString(semanticSum[:]))
-		if e != nil {
+		if fail("insert semantic step", e) {
 			return
 		}
 	}
 	if len(advancedOut) > 0 {
 		advancedSum := sha256.Sum256(advancedOut)
 		_, e = tx.Exec(ctx, `INSERT INTO investigation_stages(id,run_id,name,ordinal,status,started_at,finished_at) VALUES($1,$2,'advanced_investigation',5,'completed',now(),now()) ON CONFLICT(run_id,ordinal) DO NOTHING`, advancedStageID, runID)
-		if e != nil {
+		if fail("insert advanced stage", e) {
 			return
 		}
 		_, e = tx.Exec(ctx, `INSERT INTO investigation_steps(id,run_id,stage_id,ordinal,action,capability,capability_version,status,input,output,output_hash,algorithm_version,started_at,finished_at) SELECT $1,$2,id,5,'detect_advanced_patterns','analysis.advanced_patterns','1.0','completed','{}',$3,$4,'advanced-investigation-v1.0',now(),now() FROM investigation_stages WHERE run_id=$2 AND ordinal=5 ON CONFLICT(run_id,ordinal) DO NOTHING`, advancedStepID, runID, advancedOut, hex.EncodeToString(advancedSum[:]))
-		if e != nil {
+		if fail("insert advanced step", e) {
 			return
 		}
 		if e = materializeAdvanced(ctx, tx, invID, advancedOut, hex.EncodeToString(advancedSum[:])); e != nil {
+			fail("materialize advanced artifacts", e)
 			return
 		}
 	}
 	_, e = tx.Exec(ctx, `UPDATE investigation_runs SET status='waiting',checkpoint=jsonb_set(jsonb_set(jsonb_set(checkpoint,'{phase2_complete}','true'::jsonb,true),'{phase4_semantic_complete}',to_jsonb($2::boolean),true),'{phase5_advanced_complete}',to_jsonb($3::boolean),true),updated_at=now() WHERE id=$1`, runID, len(semanticOut) > 0, len(advancedOut) > 0)
-	if e != nil {
+	if fail("update run checkpoint", e) {
 		return
 	}
-	_, e = tx.Exec(ctx, `UPDATE investigations SET status='waiting_review',revision=revision+1,updated_at=now(),state=jsonb_set(state,'{phase2_complete}','true'::jsonb,true) WHERE id=$1 AND status NOT IN ('cancelled','completed')`, invID)
-	if e != nil {
+	// USER-004：暂停必须赢过后台运行的收尾。只在 still running 时进入 waiting_review，
+	// 否则用户 pause 后会被后台任务悄悄改回待复核。
+	_, e = tx.Exec(ctx, `UPDATE investigations SET status='waiting_review',revision=revision+1,updated_at=now(),state=jsonb_set(state,'{phase2_complete}','true'::jsonb,true) WHERE id=$1 AND status='running'`, invID)
+	if fail("set waiting_review", e) {
 		return
 	}
-	_ = tx.Commit(ctx)
+	if e = tx.Commit(ctx); e != nil {
+		r.markExecutionFailure(ctx, runID, invID, stepID, fmt.Errorf("commit final transaction: %w", e))
+		return
+	}
+	committed = true
+	_ = committed
+}
+
+// markExecutionFailure 把后台 runtime 的错误落到 step/run/investigation，
+// 避免出现「step 永远 running、查不到原因」的静默失败。
+func (r *Runtime) markExecutionFailure(ctx context.Context, runID, investigationID, stepID string, cause error) {
+	message := "runtime execution failed"
+	if cause != nil {
+		message = cause.Error()
+	}
+	_, _ = r.service.pool.Exec(context.Background(), `UPDATE investigation_steps SET status='failed',error=$2,finished_at=now() WHERE id=$1::uuid`, stepID, message)
+	_, _ = r.service.pool.Exec(context.Background(), `UPDATE investigation_runs SET status='failed',finished_at=now(),updated_at=now() WHERE id=$1::uuid`, runID)
+	_, _ = r.service.pool.Exec(context.Background(), `UPDATE investigations SET status='failed',revision=revision+1,updated_at=now(),state=jsonb_set(state,'{runtime_error}',to_jsonb($2::text),true) WHERE id=$1::uuid AND status IN ('running','waiting_data')`, investigationID, message)
 }
 
 // materializeAnalysis turns a capability result into durable control-plane
@@ -382,13 +412,26 @@ func materializeAnalysis(ctx context.Context, tx pgx.Tx, investigationID, chain,
 		return err
 	}
 	patch.UpsertNodes = append(patch.UpsertNodes, contract.GraphNode{ID: "address:" + chain + ":" + address, Type: "ADDRESS", Subject: &contract.SubjectRef{Type: "address", Chain: chain, Value: address}, Label: "调查核心地址", Properties: map[string]any{"transaction_count": result.TransactionCount, "unique_counterparties": result.UniqueCounterparties}, Version: contract.Version})
+	evidenceIDs := make([]string, 0, len(result.Edges))
 	for index, edge := range result.Edges {
-		evidenceID := uuid.NewString()
-		provenance := contract.Provenance{SourceType: "indexed_token_transfers", SourceRefs: edge.Evidence, Processor: "analysis.flow_stats", Version: result.AlgorithmVersion, ObservedAt: now}
-		provenanceJSON, _ := json.Marshal(provenance)
-		if _, err := tx.Exec(ctx, `INSERT INTO investigation_evidence(id,investigation_id,evidence_type,title,source_refs,content_hash,provenance) VALUES($1,$2,'transaction_bundle',$3,$4,$5,$6)`, evidenceID, investigationID, fmt.Sprintf("%s %s %s", edge.Direction, edge.Asset, edge.Counterparty), mustJSON(edge.Evidence), outputHash, provenanceJSON); err != nil {
+		evidenceTitle := fmt.Sprintf("%s %s %s", edge.Direction, edge.Asset, edge.Counterparty)
+		var evidenceID string
+		// S4-BE-03：复核链需要 finding↔evidence 关联，且同一 run 重放不得产生重复证据。
+		err := tx.QueryRow(ctx, `SELECT id::text FROM investigation_evidence
+            WHERE investigation_id=$1 AND evidence_type='transaction_bundle' AND title=$2 AND content_hash=$3 LIMIT 1`,
+			investigationID, evidenceTitle, outputHash).Scan(&evidenceID)
+		if err == pgx.ErrNoRows {
+			evidenceID = uuid.NewString()
+			provenance := contract.Provenance{SourceType: "indexed_token_transfers", SourceRefs: edge.Evidence, Processor: "analysis.flow_stats", Version: result.AlgorithmVersion, ObservedAt: now}
+			provenanceJSON, _ := json.Marshal(provenance)
+			if _, err := tx.Exec(ctx, `INSERT INTO investigation_evidence(id,investigation_id,evidence_type,title,source_refs,content_hash,provenance) VALUES($1,$2,'transaction_bundle',$3,$4,$5,$6)`,
+				evidenceID, investigationID, evidenceTitle, mustJSON(edge.Evidence), outputHash, provenanceJSON); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
+		evidenceIDs = append(evidenceIDs, evidenceID)
 		counterpartyID := "address:" + chain + ":" + edge.Counterparty
 		patch.UpsertNodes = append(patch.UpsertNodes, contract.GraphNode{ID: counterpartyID, Type: "ADDRESS", Subject: &contract.SubjectRef{Type: "address", Chain: chain, Value: edge.Counterparty}, Properties: map[string]any{"relation": edge.Direction}, Version: contract.Version})
 		source, target := "address:"+chain+":"+address, counterpartyID
@@ -402,8 +445,21 @@ func materializeAnalysis(ctx context.Context, tx pgx.Tx, investigationID, chain,
 		return err
 	}
 	properties := map[string]any{"transaction_count": result.TransactionCount, "unique_counterparties": result.UniqueCounterparties, "evidence_boundary": result.EvidenceBoundary, "first_funder": result.FirstFunder, "top_outbound_by_asset": result.CashoutCandidates, "graph_patch_revision": patch.Revision}
-	if _, err := tx.Exec(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,properties,algorithm,algorithm_version) VALUES($1,$2,'direct_flow_summary','一跳资金关系已完成',$3,1,'confirmed',$4,'analysis.flow_stats',$5)`, uuid.NewString(), investigationID, fmt.Sprintf("已聚合 %d 笔代币转账，识别 %d 个直接对手方。", result.TransactionCount, result.UniqueCounterparties), mustJSON(properties), result.AlgorithmVersion); err != nil {
+	var findingID string
+	var err error
+	err = tx.QueryRow(ctx, `SELECT id::text FROM investigation_findings WHERE investigation_id=$1 AND finding_type='direct_flow_summary' LIMIT 1`, investigationID).Scan(&findingID)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,nature,properties,algorithm,algorithm_version)
+            VALUES($1,$2,'direct_flow_summary','一跳资金关系已完成',$3,1,'confirmed','CONFIRMED',$4,'analysis.flow_stats',$5) RETURNING id::text`,
+			uuid.NewString(), investigationID, fmt.Sprintf("已聚合 %d 笔代币转账，识别 %d 个直接对手方。", result.TransactionCount, result.UniqueCounterparties), mustJSON(properties), result.AlgorithmVersion).Scan(&findingID)
+	}
+	if err != nil {
 		return err
+	}
+	for _, evidenceID := range evidenceIDs {
+		if _, err := tx.Exec(ctx, `INSERT INTO finding_evidence_links(finding_id,evidence_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, findingID, evidenceID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -433,20 +489,42 @@ func materializeAdvanced(ctx context.Context, tx pgx.Tx, investigationID string,
 	}
 	provenanceBase := contract.Provenance{SourceType: "indexed_token_transfers", Processor: "analysis.advanced_patterns", Version: result.AlgorithmVersion, ObservedAt: time.Now().UTC()}
 	for _, signal := range result.Signals {
-		evidenceID := uuid.NewString()
-		provenance := provenanceBase
-		provenance.SourceRefs = signal.Evidence
-		provenanceJSON, _ := json.Marshal(provenance)
-		if _, err := tx.Exec(ctx, `INSERT INTO investigation_evidence(id,investigation_id,evidence_type,title,source_refs,content_hash,provenance) VALUES($1,$2,'deterministic_pattern',$3,$4,$5,$6)`, evidenceID, investigationID, signal.Type, mustJSON(signal.Evidence), outputHash, provenanceJSON); err != nil {
+		evidenceID := ""
+		err := tx.QueryRow(ctx, `SELECT id::text FROM investigation_evidence
+            WHERE investigation_id=$1 AND evidence_type='deterministic_pattern' AND title=$2 AND content_hash=$3 LIMIT 1`,
+			investigationID, signal.Type, outputHash).Scan(&evidenceID)
+		if err == pgx.ErrNoRows {
+			evidenceID = uuid.NewString()
+			provenance := provenanceBase
+			provenance.SourceRefs = signal.Evidence
+			provenanceJSON, _ := json.Marshal(provenance)
+			if _, err := tx.Exec(ctx, `INSERT INTO investigation_evidence(id,investigation_id,evidence_type,title,source_refs,content_hash,provenance) VALUES($1,$2,'deterministic_pattern',$3,$4,$5,$6)`, evidenceID, investigationID, signal.Type, mustJSON(signal.Evidence), outputHash, provenanceJSON); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		properties := map[string]any{"metrics": signal.Metrics, "nature": signal.Nature, "evidence_ids": []string{evidenceID}, "data_version": result.DataVersion, "evidence_boundary": result.EvidenceBoundary}
-		if _, err := tx.Exec(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,properties,algorithm,algorithm_version) VALUES($1,$2,$3,$4,$5,$6,'candidate',$7,'analysis.advanced_patterns',$8)`, uuid.NewString(), investigationID, strings.ToLower(signal.Type), signal.Type, signal.Summary, signal.Confidence, mustJSON(properties), result.AlgorithmVersion); err != nil {
+		var findingID string
+		err = tx.QueryRow(ctx, `SELECT id::text FROM investigation_findings WHERE investigation_id=$1 AND finding_type=$2 AND title=$3 LIMIT 1`,
+			investigationID, strings.ToLower(signal.Type), signal.Type).Scan(&findingID)
+		if err == pgx.ErrNoRows {
+			err = tx.QueryRow(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,nature,properties,algorithm,algorithm_version)
+                VALUES($1,$2,$3,$4,$5,$6,'candidate','INFERRED',$7,'analysis.advanced_patterns',$8) RETURNING id::text`,
+				uuid.NewString(), investigationID, strings.ToLower(signal.Type), signal.Type, signal.Summary, signal.Confidence, mustJSON(properties), result.AlgorithmVersion).Scan(&findingID)
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO finding_evidence_links(finding_id,evidence_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, findingID, evidenceID); err != nil {
 			return err
 		}
 	}
 	properties := map[string]any{"asset_flows": result.AssetFlows, "related_wallets": result.RelatedWallets, "basis_status": "NET_FLOW_ONLY", "limitations": result.Limitations, "evidence_boundary": result.EvidenceBoundary, "data_version": result.DataVersion}
-	_, err := tx.Exec(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,properties,algorithm,algorithm_version) VALUES($1,$2,'net_asset_flow','代币净流量已计算（非利润结论）','已计算各资产流入、流出与净流量；缺少成本基础和历史价格时不生成获利金额。',1,'confirmed',$3,'analysis.advanced_patterns',$4)`, uuid.NewString(), investigationID, mustJSON(properties), result.AlgorithmVersion)
+	_, err := tx.Exec(ctx, `INSERT INTO investigation_findings(id,investigation_id,finding_type,title,summary,confidence,status,nature,properties,algorithm,algorithm_version)
+        SELECT $1,$2,'net_asset_flow','代币净流量已计算（非利润结论）','已计算各资产流入、流出与净流量；缺少成本基础和历史价格时不生成获利金额。',1,'confirmed','CONFIRMED',$3,'analysis.advanced_patterns',$4
+        WHERE NOT EXISTS (SELECT 1 FROM investigation_findings f WHERE f.investigation_id=$2 AND f.finding_type='net_asset_flow')`,
+		uuid.NewString(), investigationID, mustJSON(properties), result.AlgorithmVersion)
 	return err
 }
 

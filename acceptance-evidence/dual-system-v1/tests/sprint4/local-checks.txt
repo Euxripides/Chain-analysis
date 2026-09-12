@@ -1,0 +1,32 @@
+== Sprint 4 本地静态与单元检查（2026-09-12） ==
+
+$ cd backend && go test ./...
+exit=0
+packages ok: 35
+packages FAIL: 0
+
+$ go test ./internal/iam -run OIDC -v
+--- PASS: TestOIDCHappyPath
+--- PASS: TestOIDCRejectsTamperedState
+--- PASS: TestOIDCRejectsWrongNonce
+--- PASS: TestOIDCRejectsTamperedIDToken
+--- PASS: TestOIDCRejectsExpiredToken
+--- PASS: TestOIDCDisabledKeepsProductionClosed
+--- PASS: TestOIDCRejectsNoneAlg
+PASS
+
+$ ./frontend/node_modules/.bin/tsc -p apps/user-console/tsconfig.json --noEmit
+TSC_OK
+
+$ npm run build:user && npm run build:admin
+vite build user-console: OK（18 chunks, CaseDetailPage/FindingsPage/ReportDetailPage 等）
+vite build admin-console: OK
+
+$ python3 scripts/gen_openapi_index.py && python3 scripts/check_openapi.py
+契约与实现一致，错误模型完整。
+契约路径 94（完整级 14 / 索引级 80）；后端路由 94；错误码全部登记。
+
+说明：
+- local-checks 不替代 §27 的 VM 真实服务验收；VM 证据见 run-final.txt / playwright-final.txt /
+  deployment-state.txt / oidc-disabled.txt。
+- AUTH-011 live IdP 未验证，已标 NOT_VERIFIED。

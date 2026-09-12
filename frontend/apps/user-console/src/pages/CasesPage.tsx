@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { ApiError, useAuth } from "@chain/api-client";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, DataTable, EntityLink, PageHeader, RelativeTime, StatusBadge, statusToneFor } from "@chain/ui";
+import { useAsync } from "../sprint4/common";
 
 interface CaseRow {
   id: string;
@@ -8,70 +9,98 @@ interface CaseRow {
   name: string;
   description: string;
   status: string;
-  color: string;
-  created_at: string;
+  classification: string;
+  priority: string;
+  revision: number;
   updated_at: string;
+  member_count?: number;
+  open_findings?: number;
 }
 
-/** §18.4 案件概览（列表部分）。案件详情与状态命令在 S4 补齐。 */
+/** §18.1 U-CASE-01：案件中心。筛选/排序条件进入 URL 查询，数据全部来自 /api/v2/cases。 */
 export default function CasesPage() {
-  const { client } = useAuth();
-  const [rows, setRows] = useState<CaseRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await client.get<CaseRow[]>("/api/v2/cases", { query: { limit: 200 } });
-      setRows(res.data ?? []);
-      setTotal(res.meta.total ?? res.data?.length ?? 0);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.userMessage : "无法加载案件列表");
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const navigate = useNavigate();
+  const [status, setStatus] = useState("all");
+  const [q, setQ] = useState("");
+  const [appliedQ, setAppliedQ] = useState("");
+  const { data, loading, error, reload } = useAsync<CaseRow[]>("/api/v2/cases", [status, appliedQ], {
+    limit: 200,
+    status: status === "all" ? undefined : status,
+    q: appliedQ || undefined,
+  });
+  const rows = data ?? [];
 
   return (
     <>
       <PageHeader
         title="案件中心"
-        subtitle={`当前工作区共 ${total} 个案件 · 数据源 postgres:cases`}
+        subtitle={`共 ${rows.length} 个案件 · 数据源 postgres:cases`}
         actions={
-          <button type="button" className="btn btn--sm" disabled title="案件创建在 S4 开放">
-            新建案件（S4）
+          <button type="button" className="btn btn--primary btn--sm" onClick={() => navigate("/cases/new")}>
+            新建案件
           </button>
         }
       />
-      <Card flush>
+      <Card
+        flush
+        actions={
+          <span className="toolbar">
+            <select className="select" aria-label="状态筛选" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="all">全部状态</option>
+              <option value="draft">draft</option>
+              <option value="active">active</option>
+              <option value="under_review">under_review</option>
+              <option value="closed">closed</option>
+              <option value="archived">archived</option>
+            </select>
+            <input
+              className="input"
+              aria-label="搜索案件"
+              placeholder="名称 / 编号"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setAppliedQ(q.trim());
+              }}
+            />
+            <button type="button" className="btn btn--sm" onClick={() => setAppliedQ(q.trim())}>
+              搜索
+            </button>
+          </span>
+        }
+      >
         <DataTable<CaseRow>
           loading={loading}
           error={error}
-          onRetry={load}
+          onRetry={reload}
           rows={rows}
           rowKey={(row) => row.id}
           columns={[
-            { key: "no", header: "案件编号", width: "160px", render: (r) => <span className="mono">{r.case_no || "—"}</span> },
+            { key: "no", header: "案件编号", width: "150px", render: (r) => <span className="mono">{r.case_no || "—"}</span> },
             {
               key: "name",
               header: "名称",
               render: (r) => (
                 <span>
-                  <strong>{r.name}</strong>
-                  {r.description ? <div style={{ color: "var(--c-slate)", fontSize: "var(--fs-12)" }}>{r.description}</div> : null}
+                  <a
+                    href={`/app-v2/cases/${r.id}/overview`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(`/cases/${r.id}/overview`);
+                    }}
+                  >
+                    <strong>{r.name}</strong>
+                  </a>
+                  {r.description ? <div className="s4-list__sub">{r.description}</div> : null}
                 </span>
               ),
             },
-            { key: "status", header: "状态", width: "120px", render: (r) => <StatusBadge tone={statusToneFor(r.status)}>{r.status}</StatusBadge> },
+            { key: "status", header: "状态", width: "110px", render: (r) => <StatusBadge tone={statusToneFor(r.status)}>{r.status}</StatusBadge> },
+            { key: "class", header: "密级", width: "110px", render: (r) => <span>{r.classification || "—"}</span> },
+            { key: "priority", header: "优先级", width: "100px", render: (r) => <span>{r.priority || "—"}</span> },
+            { key: "revision", header: "revision", width: "90px", render: (r) => <span className="mono">r{r.revision}</span> },
             { key: "id", header: "案件 ID", width: "190px", render: (r) => <EntityLink value={r.id} /> },
-            { key: "updated", header: "最近更新", width: "140px", render: (r) => <RelativeTime value={r.updated_at} /> },
+            { key: "updated", header: "最近更新", width: "130px", render: (r) => <RelativeTime value={r.updated_at} /> },
           ]}
         />
       </Card>

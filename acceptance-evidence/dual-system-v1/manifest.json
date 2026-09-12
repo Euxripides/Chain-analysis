@@ -1,20 +1,21 @@
 {
   "deliverable": "dual-system-v1",
   "status": "gray-rollout",
-  "generated_at": "2026-09-12T03:28:40.224320+08:00",
+  "generated_at": "2026-09-12T17:13:32.745764+08:00",
   "build_sha": "d7b6feec6579f243b66e8fceb6cc1569b0a67de3",
   "plan_reference": "docs/dual-system-development-plan.md",
   "sprints_covered": [
-    "Sprint 1（完成）",
-    "Sprint 2（核心完成，OIDC/MFA NOT_IMPLEMENTED）",
-    "Sprint 3（完成，RBAC-007 BLOCKED）"
+    "Sprint 1（完成，S1-API-01/ FE-03/ OPS-01 部分）",
+    "Sprint 2（核心完成；OIDC adapter+隔离测试完成、live IdP NOT_VERIFIED；MFA NOT_IMPLEMENTED）",
+    "Sprint 3（完成，RBAC-007 被测端点属 S5）",
+    "Sprint 4（完成：案件/调查/复核/报告闭环；USER-007 Canvas 与 USER-009 类型搜索按 S4/S5 边界 PARTIAL）"
   ],
   "totals": {
     "section27_test_ids_total": 65,
-    "section27_pass": 27,
-    "section27_partial": 7,
+    "section27_pass": 34,
+    "section27_partial": 8,
     "section27_not_run": 19,
-    "section27_not_implemented": 12,
+    "section27_not_implemented": 4,
     "iam_smoke_checks_pass": 32,
     "iam_smoke_checks_fail": 0,
     "rbac_negative_checks_pass": 29,
@@ -29,17 +30,25 @@
     "static_contract_checks": [
       "scripts/check_openapi.py",
       "frontend/scripts/check-token-contrast.mjs"
-    ]
+    ],
+    "sprint4_api_checks_pass": 79,
+    "sprint4_api_checks_fail": 0,
+    "sprint4_api_not_verified": 0,
+    "sprint4_browser_checks_pass": 4,
+    "sprint4_browser_checks_fail": 0,
+    "oidc_isolated_tests_pass": 7,
+    "oidc_isolated_tests_fail": 0,
+    "sprint4_migrations_applied": "0047, 0048"
   },
-  "defects_found_and_fixed": 10,
+  "defects_found_and_fixed": 16,
   "known_limitations": [
-    "OIDC 登录 NOT_IMPLEMENTED（接口 501）",
-    "MFA/TOTP NOT_IMPLEMENTED（接口 501）",
-    "对象级 ABAC PARTIAL",
-    "每日哈希锚点写入 MinIO PARTIAL",
-    "独立非 owner 应用数据库角色 NOT_IMPLEMENTED",
-    "OpenAPI 文件与 CI 生成校验 PARTIAL",
-    "案件/调查/图谱/Explorer/下载/报告 的 v2 页面 NOT_IMPLEMENTED"
+    "MFA/TOTP NOT_IMPLEMENTED（/mfa/verify 501）",
+    "OIDC live IdP 验收 NOT_VERIFIED：当前 oidc:false，/oidc/* 501；adapter+httptest 隔离测试 7/7 PASS",
+    "USER-007 Canvas 并发保存/diff Dialog 属 S5（S4 已验案件/报告 revision 冲突 412）",
+    "USER-009 地址/交易/报告类型搜索属 S5（S4 已验案件/调查类型与跨租户裁剪）",
+    "S5-S7 功能（Explorer v2/下载 v2/导出/图谱/后台控制/治理/硬化）未开始",
+    "OpenAPI v2/admin 仍为 index-only；TS 代码生成未做",
+    "性能/恢复/备份演练与权限覆盖报告未做"
   ],
   "files": {
     "final_report": "acceptance-evidence/dual-system-v1/final-report.md",
@@ -58,7 +67,19 @@
     "migration_reentrancy": "scripts/test_migration_reentrancy.sh",
     "audit_coverage": "docs/implementation/audit-coverage.md",
     "openapi_contracts": "openapi/",
-    "openapi_checker": "scripts/check_openapi.py"
+    "openapi_checker": "scripts/check_openapi.py",
+    "sprint4_report": "docs/implementation/sprint4-report.md",
+    "sprint4_api_test_script": "acceptance-evidence/dual-system-v1/tests/run-sprint4-e2e.sh",
+    "sprint4_browser_test": "frontend/tests/dual-system-sprint4.spec.ts",
+    "sprint4_evidence_dir": "acceptance-evidence/dual-system-v1/tests/sprint4/",
+    "sprint4_api_result": "acceptance-evidence/dual-system-v1/tests/sprint4/run-final.txt",
+    "sprint4_browser_result": "acceptance-evidence/dual-system-v1/tests/sprint4/playwright-final.txt",
+    "sprint4_deployment_state": "acceptance-evidence/dual-system-v1/tests/sprint4/deployment-state.txt",
+    "oidc_disabled_evidence": "acceptance-evidence/dual-system-v1/tests/sprint4/oidc-disabled.txt",
+    "case_collaboration_migration": "backend/migrations/postgres/0047_case_collaboration.sql",
+    "s4_permission_migration": "backend/migrations/postgres/0048_s4_permission_fix.sql",
+    "adr_016": "docs/adr/ADR-016-s4-migration-runtime-oidc.md",
+    "sprint4_local_checks": "acceptance-evidence/dual-system-v1/tests/sprint4/local-checks.txt"
   },
-  "scope_statement": "Sprint 1/2/3 已完成并补齐遗留验收：双前端 + 服务端会话（含令牌族重放检测）+ RBAC + 租户强约束 + 不可抵赖审计 + 观测告警 + OpenAPI 契约守卫 + 无障碍/对比度守卫。Sprint 4-7 未开始。§27 的 65 个 Test ID：PASS 27 / PARTIAL 7 / NOT_RUN 19 / NOT_IMPLEMENTED 12。剩余 NOT_IMPLEMENTED 主要是 OIDC/MFA 与 S4-S7 的功能。"
+  "scope_statement": "Sprint 1–4 已完成并补齐遗留验收：双前端 + 服务端会话（含令牌族重放检测）+ RBAC + 租户强约束 + 不可抵赖审计 + 观测告警 + 案件/调查/Finding/Evidence/报告审批闭环 + OIDC adapter（无真实 IdP，生产禁用）。Sprint 4 API E2E PASS 79 / FAIL 0，Playwright 桌面+移动 PASS 4 / FAIL 0；§27 65 个 Test ID：PASS 34 / PARTIAL 8 / NOT_RUN 19 / NOT_IMPLEMENTED 4。Sprint 5 未开始。"
 }

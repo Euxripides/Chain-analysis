@@ -1,7 +1,10 @@
 // Package dataset：Dataset Service —— 所有业务统一入口（Coverage 检查 → 只下载缺口）。
 package dataset
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type RangeSpec struct {
 	Type      string     `json:"type"` // full | block | time
@@ -62,4 +65,49 @@ type EnsureResponse struct {
 	DatasetRef string  `json:"dataset_ref"`
 	JobID      *string `json:"job_id"`
 	Coverage   float64 `json:"coverage"`
+}
+
+// RangeSpecFromMap 把 v2 API 的 JSON range 对象转换为 RangeSpec。
+// 只接受文档允许的字段；无法解析时返回零值，由 ResolveRange/Preview 统一报错。
+func RangeSpecFromMap(m map[string]any) RangeSpec {
+	out := RangeSpec{}
+	if m == nil {
+		return out
+	}
+	if v, ok := m["type"].(string); ok {
+		out.Type = v
+	}
+	if v, ok := numberToInt64(m["from_block"]); ok {
+		out.FromBlock = &v
+	}
+	if v, ok := numberToInt64(m["to_block"]); ok {
+		out.ToBlock = &v
+	}
+	if v, ok := m["from"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			out.From = &t
+		}
+	}
+	if v, ok := m["to"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			out.To = &t
+		}
+	}
+	return out
+}
+
+func numberToInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	default:
+		return 0, false
+	}
 }

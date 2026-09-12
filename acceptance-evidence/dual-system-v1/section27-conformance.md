@@ -16,18 +16,26 @@
 > SEC-002/003/004、UX-002/003、DATA-010 由 PARTIAL/NOT_RUN 转为 PASS，
 > 见 `tests/run-sprint12-e2e.sh`（PASS 21）、`tests/dual-system-quality.spec.ts`、
 > `scripts/test_migration_reentrancy.sh`。
-> 仅在实现过程中发现并修复的真实缺陷就有 6 个：令牌族缺失、限流器 && 短路、
-> 设备外键阻塞删除、导航类名未生效、琥珀色对比度不足、legacy 写操作无审计。
-> 下方统计已同步。
+>
+> **2026-09-12 更新（Sprint 4 验收）**：USER-001/004/005/006/008/010、AUDIT-001
+> 转 PASS；USER-007（Canvas 并发保存）与 USER-009（地址/交易/报告类型搜索）按
+> S4/S5 边界保持 PARTIAL；AUTH-011 完成 adapter + httptest 隔离测试，但无真实 IdP，
+> live 验收标 NOT_VERIFIED、整体保持 PARTIAL。
+> 证据：`tests/run-sprint4-e2e.sh`（PASS 79 / FAIL 0）、
+> `frontend/tests/dual-system-sprint4.spec.ts`（桌面+移动 PASS 4）、
+> `docs/implementation/sprint4-report.md`。
+> 本轮发现并修复的真实缺陷：后台分析失败静默留 running（占位符错误导致
+> advanced materialize 永久失败）、成功 Dialog 阻塞页面跳转、prompt 返回值带
+> `input:` 前缀导致对象类型判断错误、证据列表 DOM 过大、viewer 缺 notification:list。
 
 ## 统计
 
 | 状态 | 数量 | 含义 |
 |---|---|---|
-| PASS | 27 | 已执行且达到 §27 预期结果 |
-| PARTIAL | 7 | 部分达成，缺项已在备注中写明 |
+| PASS | 34 | 已执行且达到 §27 预期结果 |
+| PARTIAL | 8 | 部分达成，缺项已在备注中写明 |
 | NOT_RUN | 19 | 未执行（多为对应功能尚未实现，不标 PASS） |
-| NOT_IMPLEMENTED | 12 | 功能本身未实现 |
+| NOT_IMPLEMENTED | 4 | 功能本身未实现（AUTH-004、RBAC-007 等） |
 | **合计** | **65** | |
 
 ## 明细
@@ -44,7 +52,7 @@
 | AUTH-008 | 新设备登录 | **PASS** | run-sprint12-e2e.sh：iPhone UA 解析为 device_type=mobile；device/os/browser/ip/hash/user_agent 字段齐全；首次见到该设备时 is_new_device=true |
 | AUTH-009 | 伪造 X-User-Role | **PASS** | AUTH_MODE=session 下伪造头返回 401；/api/v1/me 为 anonymous |
 | AUTH-010 | 伪造转发 IP | **PASS** | 单测 TestResolveClientIPIgnoresUntrustedForwarding；AUTH_TRUSTED_PROXIES 之外一律丢弃 |
-| AUTH-011 | OIDC state/nonce/PKCE 错误 | **NOT_IMPLEMENTED** | /api/auth/v1/oidc/* 返回 501 |
+| AUTH-011 | OIDC state/nonce/PKCE 错误 | **PARTIAL** | adapter 完成：state HMAC、PKCE S256、nonce、iss/aud/exp、RS256/JWKS 校验，`iam/oidc_test.go` 隔离测试覆盖 happy/tampered state/wrong nonce/tampered signature/expired/alg=none。**无真实 IdP，live 验收 NOT_VERIFIED**；当前生产/灰度 `oidc:false`，`/oidc/*` 501 OIDC_NOT_CONFIGURED |
 | AUTH-012 | 开放重定向尝试 | **PASS** | return_to=https://evil.example 被中和为 /home；含 /admin、/app-v2 前缀剥离 |
 | RBAC-001 | Viewer 创建案件 | **PASS** | run-rbac-e2e.sh：viewer 调用高权限写操作 401；权限集合不含任何 admin:*；同时具备 dashboard:read 属正向对照 |
 | RBAC-002 | 猜测其他组织案件 UUID | **PASS** | run-rbac-e2e.sh：跨组织读对象 404（与不存在 UUID 返回同一状态码，不泄露存在性）；审计记录 authorization.object_denied + deny_reason=cross_organization |
@@ -54,17 +62,17 @@
 | RBAC-006 | 角色修改后旧 Session | **PASS** | run-rbac-e2e.sh：撤销全部绑定后旧会话 0 秒内 403、权限集合同步收敛；重新授予后 0 秒内恢复（SLA ≤5s） |
 | RBAC-007 | Canvas 引用跨案件 Evidence | **NOT_IMPLEMENTED** | canvas/evidence 端点属 S5；对象级 ABAC 的框架（access.Guard）已就绪但缺少被测对象类型 |
 | RBAC-008 | API Client 访问后台 | **PARTIAL** | 已验：用户层会话访问后台 API/会话列表均 401；investigator 无任何 admin 权限；无凭证 401。**未覆盖 API Key / scope 路径** |
-| USER-001 | 新建案件 | **NOT_IMPLEMENTED** | S4 范围，页面标注目标 Sprint |
+| USER-001 | 新建案件 | **PASS** | run-sprint4-e2e.sh：POST /api/v2/cases + DB cases/case_members/case_activity + audit v2 + 列表复现一致；Playwright 桌面/移动新建案件真实交互通过 |
 | USER-002 | 创建调查并 Coverage HIT | **NOT_IMPLEMENTED** | S5 范围 |
 | USER-003 | 创建调查并补齐缺口 | **NOT_IMPLEMENTED** | S5 范围 |
-| USER-004 | 暂停/恢复调查 | **NOT_IMPLEMENTED** | S5 范围 |
-| USER-005 | Finding 复核 | **NOT_IMPLEMENTED** | S4 范围 |
-| USER-006 | 证据版本替代 | **NOT_IMPLEMENTED** | S4 范围 |
-| USER-007 | Canvas 并发保存 | **NOT_IMPLEMENTED** | S5 范围 |
-| USER-008 | 报告审批下载 | **NOT_IMPLEMENTED** | S4 范围 |
-| USER-009 | 全局搜索 | **PARTIAL** | 已实现案件/调查两类搜索且服务端按工作区裁剪；**地址/交易/报告类型未实现** |
-| USER-010 | 通知跳转 | **NOT_IMPLEMENTED** | S4 范围 |
-| USER-011 | 手机调查查看 | **PARTIAL** | 用户层 5 个页面在 390px 下通过 UX 断言；调查详情页尚不存在 |
+| USER-004 | 暂停/恢复调查 | **PASS** | run-sprint4-e2e.sh：start→paused→resume→waiting_review；暂停后后台未推进、run 数≤1、checkpoint.data_reused=true；本地索引复用 0 Provider 费用 |
+| USER-005 | Finding 复核 | **PASS** | run-sprint4-e2e.sh + Playwright：viewer 确认被 403；reviewer verify Evidence 后 confirm Finding→confirmed；finding_evidence_links 至少 1 条 verified；finding:review 审计落库 |
+| USER-006 | 证据版本替代 | **PASS** | run-sprint4-e2e.sh：supersede 生成 version=2 新行并关联 supersedes_id；原行 status=superseded 且 content_hash 不变 |
+| USER-007 | Canvas 并发保存 | **PARTIAL** | S4 范围 revision 冲突已实测：案件 PATCH stale→412、报告 stale status_revision→412 且不覆盖；Canvas 并发保存与 diff Dialog 属 S5，仍待实现 |
+| USER-008 | 报告审批下载 | **PASS** | run-sprint4-e2e.sh + Playwright：Investigator 生成/提交→Reviewer approved→signed；report_approvals 绑定 revision+hash；60s 一次性票据下载 200、重复使用 410、文件 SHA-256 与 DB/API 一致；重新生成产生新 revision 不覆盖旧 artifact |
+| USER-009 | 全局搜索 | **PARTIAL** | S4：案件/调查按工作区裁剪、类型分组正确、跨工作区对象不返回（run-sprint4-e2e.sh/Playwright PASS）；地址/交易/报告类型属 S5 Explorer，仍待补 |
+| USER-010 | 通知跳转 | **PASS** | run-sprint4-e2e.sh + Playwright：submit-review 产生 reviewer 通知；open 返回可访问目标；他人打开同通知 404 且要求 notification:list 权限；Inbox 显示已处理复核项 |
+| USER-011 | 手机调查查看 | **PARTIAL** | S4 新增案件/工作台/Findings/Evidence/报告页在 user-mobile project 通过真实交互与无横向滚动断言；S5 的 Canvas/Explorer/下载页尚不存在，待补 |
 | USER-012 | 键盘完成核心流程 | **NOT_RUN** | 只验证了弹窗焦点陷阱与 ESC，未做完整键盘流程走查 |
 | ADMIN-001 | （§27.4 管理闭环） | **NOT_RUN** | 见文档 §27.4 明细；本批次仅覆盖后台只读页面 |
 | ADMIN-002 | — | **NOT_RUN** | 同上 |
@@ -86,7 +94,7 @@
 | DATA-008 | MinIO 对象缺失 | **NOT_RUN** | S6/S7 范围 |
 | DATA-009 | 备份恢复演练 | **NOT_RUN** | S7-DR-01 范围 |
 | DATA-010 | Schema migration 中断 | **PASS** | scripts/test_migration_reentrancy.sh：首次迁移、重复执行幂等、注入真实失败后单文件整体回滚且无半成品记录、旧表仍可读、清理后可重入，10/10 通过 |
-| AUDIT-001 | 用户操作清单逐项执行 | **PARTIAL** | 生成 `docs/implementation/audit-coverage.md`：16 个认证事件常量中 10 个真有调用点、36 个审计权限键、10 个敏感权限；补齐了 legacy 写操作审计盲区。**页面访问与查询遥测仍 NOT_IMPLEMENTED** |
+| AUDIT-001 | 用户操作清单逐项执行 | **PASS** | S4 用户操作清单逐项执行：case.create/update/state、subject/member/comment、investigation:create/start、finding:review、evidence:review、report:create/review/download、notification 等均有 audit_events_v2；可按 Trace 串联；审计链 valid=true（run-sprint4-e2e.sh PASS 79）。S5–S7 新增动作会扩展该矩阵 |
 | AUDIT-002 | 日志秘密扫描 | **PASS** | run-sprint12-e2e.sh：对 API 响应、服务端日志与 4 张数据库表做明文口令扫描，命中 0 |
 | AUDIT-003 | 修改/删除审计事件 | **PASS** | 触发器实测拒绝 UPDATE/DELETE，见 AUDIT-003-db/db-check.txt |
 | AUDIT-004 | Hash chain | **PASS** | audit 链 checked=101、login 链 checked=111，均 valid=true；每日锚点写入 MinIO 未实现 |
@@ -102,11 +110,17 @@
 
 ## 未执行项的外部阻塞说明（§27.7 要求）
 
-绝大多数 `NOT_RUN` 的原因是**被测功能尚未开发**（Sprint 4–7 范围），而不是环境阻塞：
-案件、调查、Finding/Evidence、Canvas、Explorer v2、下载 v2、导出、报告、通知、
-Provider/配置/备份管理、Kill Switch、保留与删除策略。
+Sprint 4 完成后，剩余 `NOT_RUN` / `NOT_IMPLEMENTED` 的原因分为两类：
 
-真正属于「已实现但本轮未验证」的只有：AUTH-003 时序对比、AUTH-005 token family 重放、
-AUTH-006/007 撤销生效时限、AUTH-008 字段逐项断言、RBAC-002/003/005/007 负向用例、
-RBAC-006 authz_version、DATA-001/010、AUDIT-001/002、SEC-002/003/004、UX-002(768/1024)、UX-003、UX-004。
-这些是**下一步最该补的验收**，而不是可以忽略的细节。
+1. **被测功能尚未开发**（S5–S7 范围）：Canvas/Explorer v2、下载 v2、导出、图谱、
+   Provider/配置/备份管理、Kill Switch、保留与删除、性能与恢复演练。
+   这些不能标 PASS，也不能用页面存在或 HTTP 200 冒充。
+2. **功能已实现但本轮未验证**：UX-004 的 10k 量级长表、USER-012 的完整键盘流程、
+   AUTH-011 的真实 IdP live 验收（当前只有 adapter + httptest 隔离测试）。
+   AUTH-011 明确标记 `PARTIAL` + `NOT_VERIFIED(live)`，生产保持 `oidc:false`。
+
+Sprint 4 验收只声明以下结果：
+- `run-sprint4-e2e.sh`：PASS 79 / FAIL 0 / NOT_VERIFIED 0；
+- Playwright `dual-system-sprint4.spec.ts`：user-desktop + user-mobile 共 4/4 PASS；
+- 权威证据目录：`acceptance-evidence/dual-system-v1/tests/sprint4/`、
+  `frontend/test-results/`（失败 trace 仅在有失败时产生）。

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -35,11 +36,132 @@ func (s *Server) registerAuthV1(r chi.Router) {
 		pr.Patch("/devices/{id}", s.handleAuthUpdateDevice)
 		pr.Post("/password/change", s.handleAuthChangePassword)
 
-		// OIDC 适配器位置已预留，但未实现前必须显式返回未启用，不得伪装为可用能力。
-		pr.Get("/oidc/start", s.handleNotImplemented("OIDC_NOT_CONFIGURED"))
-		pr.Get("/oidc/callback", s.handleNotImplemented("OIDC_NOT_CONFIGURED"))
+		// OIDC Authorization Code + PKCE。未完整配置（尤其生产无真实 IdP）时必须 501，
+		// 不得把本地密码登录伪装成 OIDC，也不得伪造 live 验收（AD-004 / AUTH-011）。
+		pr.Get("/oidc/start", s.handleAuthOIDCStart)
+		pr.Get("/oidc/callback", s.handleAuthOIDCCallback)
 		pr.Post("/mfa/verify", s.handleNotImplemented("MFA_NOT_IMPLEMENTED"))
 	})
+}
+
+// handleAuthOIDCStart 生成 state/nonce/PKCE 并重定向到 IdP；未配置时显式 501。
+func (s *Server) handleAuthOIDCStart(w http.ResponseWriter, r *http.Request) {
+	if s.oidc == nil || !s.oidc.Enabled() {
+		respondError(w, r, http.StatusNotImplemented, "OIDC_NOT_CONFIGURED", "OIDC 未配置，当前部署保持禁用", nil)
+		return
+	}
+	audience := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("audience")))
+	if audience == "" {
+		audience = requestedAudience(r)
+	}
+	if audience == "" {
+		audience = iam.AudienceUser
+	}
+	if audience != iam.AudienceUser && audience != iam.AudienceAdmin {
+		validationError(w, r, "audience 取值非法", []fieldError{{Field: "audience", Code: "invalid_value", Message: "只允许 user 或 admin"}})
+		return
+	}
+	returnTo := sanitizeReturnToDefault(r.URL.Query().Get("return_to"), defaultNextFor(audience))
+	req, err := s.oidc.BeginAuthorization(returnTo, audience)
+	if err != nil {
+		s.deps.Log.Error("oidc start failed", "err", err)
+		respondError(w, r, http.StatusServiceUnavailable, "OIDC_UNAVAILABLE", "OIDC 服务暂不可用", nil)
+		return
+	}
+	http.Redirect(w, r, req.URL, http.StatusFound)
+}
+
+// handleAuthOIDCCallback 校验 state/PKCE/ID Token，并按“已验证邮箱匹配既有 identity”建立 Session。
+// 本实现不做身份自动开通：未知邮箱/未验证邮箱一律拒绝，避免 IdP 账户静默获得租户身份。
+func (s *Server) handleAuthOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	if s.oidc == nil || !s.oidc.Enabled() {
+		s.oidcDenied(w, r, "oidc_not_configured")
+		return
+	}
+	if errCode := strings.TrimSpace(r.URL.Query().Get("error")); errCode != "" {
+		s.recordOIDCFailure(r, "", "idp_"+errCode)
+		s.oidcDenied(w, r, "idp_denied")
+		return
+	}
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	if code == "" || state == "" {
+		s.recordOIDCFailure(r, "", "missing_code_or_state")
+		s.oidcDenied(w, r, "oidc_state_invalid")
+		return
+	}
+	result, err := s.oidc.HandleCallback(r.Context(), code, state)
+	if err != nil {
+		s.recordOIDCFailure(r, "", "oidc_callback_failed")
+		s.deps.Log.Warn("oidc callback rejected", "err", err)
+		s.oidcDenied(w, r, "oidc_callback_failed")
+		return
+	}
+	if !result.EmailVerified {
+		s.recordOIDCFailure(r, result.Email, "email_not_verified")
+		s.oidcDenied(w, r, "oidc_email_unverified")
+		return
+	}
+	identity, err := s.iam.Repo().GetIdentityByEmail(r.Context(), result.Email)
+	if err != nil {
+		s.recordOIDCFailure(r, result.Email, "identity_not_provisioned")
+		s.oidcDenied(w, r, "oidc_identity_not_provisioned")
+		return
+	}
+	if identity.Status != "active" {
+		s.recordOIDCFailure(r, result.Email, "identity_"+identity.Status)
+		s.oidcDenied(w, r, "oidc_identity_disabled")
+		return
+	}
+	meta := metaFrom(r.Context())
+	created, err := s.iam.Sessions().Create(r.Context(), iam.SessionRequest{
+		Audience: result.Audience, IdentityID: identity.ID, OrganizationID: identity.OrganizationID,
+		WorkspaceID: s.iam.DefaultWorkspace(r.Context(), identity.OrganizationID),
+		AuthMethod:  "oidc", IP: meta.IP, UserAgent: meta.UserAgent, ClientHints: iam.ClientHints(r.Header),
+		EntryHost: meta.Host, Scheme: meta.Scheme,
+	})
+	if err != nil {
+		s.deps.Log.Error("oidc session create failed", "err", err)
+		s.oidcDenied(w, r, "oidc_session_failed")
+		return
+	}
+	s.iam.Sessions().SetCookies(w, result.Audience, created.Token, created.CSRF)
+	_ = iam.RecordLoginEvent(r.Context(), s.iam.Repo().Pool(), s.cfg.Env, iam.LoginEvent{
+		EventType: iam.EventLoginSuccess, Result: "success", IdentityID: identity.ID,
+		SubjectEmail: identity.Email, OrganizationID: identity.OrganizationID,
+		WorkspaceID: created.Session.WorkspaceID, Audience: result.Audience, AuthMethod: "oidc",
+		IdentityProvider: "oidc", SessionID: created.Session.ID,
+		IP: meta.IP, UserAgent: meta.UserAgent, RiskLevel: "low",
+		Detail: map[string]any{"subject": result.Subject, "return_to": result.ReturnTo},
+	})
+	target := result.ReturnTo
+	if result.Audience == iam.AudienceAdmin {
+		target = "/admin" + sanitizeReturnToDefault(target, "/overview")
+	} else {
+		target = "/app-v2" + sanitizeReturnToDefault(target, "/home")
+	}
+	http.Redirect(w, r, target, http.StatusFound)
+}
+
+func (s *Server) recordOIDCFailure(r *http.Request, email, reason string) {
+	if s.iam == nil {
+		return
+	}
+	meta := metaFrom(r.Context())
+	_ = iam.RecordLoginEvent(r.Context(), s.iam.Repo().Pool(), s.cfg.Env, iam.LoginEvent{
+		EventType: iam.EventLoginFailure, Result: "failure", ReasonCode: reason,
+		SubjectEmail: email, AuthMethod: "oidc", IdentityProvider: "oidc",
+		IP: meta.IP, UserAgent: meta.UserAgent, RiskLevel: "medium",
+		Detail: map[string]any{"source": "oidc_callback"},
+	})
+}
+
+func (s *Server) oidcDenied(w http.ResponseWriter, r *http.Request, reason string) {
+	target := "/app-v2/login?oidc_error=" + url.QueryEscape(reason)
+	if requestedAudience(r) == iam.AudienceAdmin || strings.HasPrefix(r.URL.Path, "/admin") {
+		target = "/admin/login?oidc_error=" + url.QueryEscape(reason)
+	}
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func (s *Server) handleNotImplemented(code string) http.HandlerFunc {
@@ -66,9 +188,15 @@ func (s *Server) authReady(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (s *Server) handleAuthMethods(w http.ResponseWriter, r *http.Request) {
+	oidcEnabled := false
+	if s.oidc != nil && s.oidc.Enabled() {
+		if enabled, err := s.oidc.Methods(r.Context()); err == nil {
+			oidcEnabled = enabled
+		}
+	}
 	respondOK(w, r, map[string]any{
 		"local":        s.iam != nil,
-		"oidc":         false,
+		"oidc":         oidcEnabled,
 		"mfa_required": s.cfg != nil && s.cfg.Auth.RequireAdminMFA,
 		"audiences":    []string{iam.AudienceUser, iam.AudienceAdmin},
 	})
@@ -140,13 +268,13 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respondOK(w, r, map[string]any{
-		"state":        "authenticated",
-		"user":         userSummary(result.Session),
-		"roles":        result.Roles,
-		"audience":     audience,
-		"next":         sanitizeReturnToDefault(next, defaultNextFor(audience)),
-		"csrf_token":   result.CSRF,
-		"session_id":   result.Session.ID,
+		"state":                "authenticated",
+		"user":                 userSummary(result.Session),
+		"roles":                result.Roles,
+		"audience":             audience,
+		"next":                 sanitizeReturnToDefault(next, defaultNextFor(audience)),
+		"csrf_token":           result.CSRF,
+		"session_id":           result.Session.ID,
 		"must_change_password": result.Session.Identity.MustChangePassword,
 	})
 }
@@ -240,20 +368,20 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		csrf = c.Value
 	}
 	respondOK(w, r, map[string]any{
-		"user":        userSummary(sess),
-		"email":       sess.Identity.Email,
-		"display_name": sess.Identity.DisplayName,
-		"organization_id": sess.OrganizationID,
-		"workspace_id":    sess.WorkspaceID,
-		"audience":        audience,
-		"session_id":      sess.ID,
-		"roles":           p.Roles,
-		"permissions":     p.Permissions,
-		"expires_at":      sess.ExpiresAt.UTC().Format(time.RFC3339),
-		"absolute_expires_at": sess.AbsoluteExpires.UTC().Format(time.RFC3339),
+		"user":                 userSummary(sess),
+		"email":                sess.Identity.Email,
+		"display_name":         sess.Identity.DisplayName,
+		"organization_id":      sess.OrganizationID,
+		"workspace_id":         sess.WorkspaceID,
+		"audience":             audience,
+		"session_id":           sess.ID,
+		"roles":                p.Roles,
+		"permissions":          p.Permissions,
+		"expires_at":           sess.ExpiresAt.UTC().Format(time.RFC3339),
+		"absolute_expires_at":  sess.AbsoluteExpires.UTC().Format(time.RFC3339),
 		"must_change_password": sess.Identity.MustChangePassword,
-		"mfa_satisfied":   sess.MFASatisfied,
-		"csrf_token":      csrf,
+		"mfa_satisfied":        sess.MFASatisfied,
+		"csrf_token":           csrf,
 	})
 }
 

@@ -1,0 +1,27 @@
+== OIDC isolated tests ==
+=== RUN   TestOIDCHappyPath
+--- PASS: TestOIDCHappyPath (0.13s)
+=== RUN   TestOIDCRejectsTamperedState
+--- PASS: TestOIDCRejectsTamperedState (0.01s)
+=== RUN   TestOIDCRejectsWrongNonce
+--- PASS: TestOIDCRejectsWrongNonce (0.21s)
+=== RUN   TestOIDCRejectsTamperedIDToken
+--- PASS: TestOIDCRejectsTamperedIDToken (0.18s)
+=== RUN   TestOIDCRejectsExpiredToken
+--- PASS: TestOIDCRejectsExpiredToken (0.05s)
+=== RUN   TestOIDCDisabledKeepsProductionClosed
+--- PASS: TestOIDCDisabledKeepsProductionClosed (0.00s)
+=== RUN   TestOIDCRejectsNoneAlg
+--- PASS: TestOIDCRejectsNoneAlg (0.10s)
+PASS
+ok  	github.com/blockchain-platform/blockchain-platform/internal/iam	1.247s
+
+== methods ==
+{"success":true,"data":{"audiences":["user","admin"],"local":true,"mfa_required":false,"oidc":false},"meta":{"request_id":"dd10a6c0-ed34-4b9c-b512-12631c624fed","trace_id":"a5cf771f-8781-4a54-819f-2e1a93dbfb50","server_time":"2026-09-12T09:12:50.213Z","next_cursor":null},"error":null}
+
+== /oidc/start ==
+http=501
+{"success":false,"data":null,"meta":{"request_id":"125c67de-173e-48ca-88db-053e0dfcf757","trace_id":"a6b96963-bb1f-4de8-8308-a449fc1d7ae1","server_time":"2026-09-12T09:12:50.220Z","next_cursor":null},"error":{"code":"OIDC_NOT_CONFIGURED","message":"OIDC 未配置，当前部署保持禁用","field_errors":[],"retryable":false}}
+
+== env (non-secret flags) ==
+APP_ENV=development

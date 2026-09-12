@@ -64,6 +64,23 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 		RequireAdminMFA:    deps.Cfg.Auth.RequireAdminMFA,
 	}, s.audit)
 
+	oidcCfg := deps.Cfg.Auth.OIDC
+	if oidcCfg.Enabled {
+		candidate := iam.OIDCConfig{
+			Enabled: true, Issuer: oidcCfg.Issuer, ClientID: oidcCfg.ClientID,
+			ClientSecret: oidcCfg.ClientSecret, RedirectURL: oidcCfg.RedirectURL, Scopes: oidcCfg.Scopes,
+		}
+		adapter := iam.NewOIDCAdapter(candidate, nil)
+		if !adapter.Enabled() {
+			deps.Log.Error("OIDC config is incomplete; OIDC login stays disabled", "env", deps.Cfg.Env)
+		} else if deps.Cfg.Env == "production" && !strings.HasPrefix(candidate.Issuer, "https://") {
+			// 生产环境禁止明文 issuer；配置无效时保持禁用而不是降级为不安全登录。
+			deps.Log.Error("OIDC issuer must use https in production; OIDC login stays disabled", "issuer", candidate.Issuer)
+		} else {
+			s.oidc = adapter
+		}
+	}
+
 	if err := s.assertSessionMode(); err != nil {
 		// fail closed：不崩溃，但强制降级到最严格模式并留下高优先级错误日志。
 		deps.Log.Error("insecure auth configuration rejected; forcing session-only mode", "err", err.Error())

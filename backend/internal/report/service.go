@@ -42,9 +42,17 @@ type Report struct {
 }
 
 func (s *Service) Generate(ctx context.Context, investigationID string) (Report, error) {
-	var goal, status string
+	return s.GenerateFor(ctx, investigationID, "")
+}
+
+// GenerateFor 生成新的不可变报告 revision。generatedBy 来自服务端会话，绝不接受客户端。
+// 0044 起 investigation_reports 的 organization_id/workspace_id 为 NOT NULL，
+// 因此生成时从 investigation 推导作用域并一并写入。
+func (s *Service) GenerateFor(ctx context.Context, investigationID, generatedBy string) (Report, error) {
+	var goal, status, organizationID, workspaceID string
+	var caseID *string
 	var subjectRaw []byte
-	if err := s.pool.QueryRow(ctx, `SELECT goal,status,subject FROM investigations WHERE id=$1`, investigationID).Scan(&goal, &status, &subjectRaw); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT goal,status,subject,organization_id::text,workspace_id::text,case_id::text FROM investigations WHERE id=$1`, investigationID).Scan(&goal, &status, &subjectRaw, &organizationID, &workspaceID, &caseID); err != nil {
 		return Report{}, err
 	}
 	var subject map[string]any
@@ -82,7 +90,10 @@ func (s *Service) Generate(ctx context.Context, investigationID string) (Report,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var created time.Time
-	err = tx.QueryRow(ctx, `INSERT INTO investigation_reports(id,investigation_id,revision,format,object_key,content_hash,size_bytes,metadata) VALUES($1,$2,$3,'markdown',$4,$5,$6,$7) RETURNING generated_at`, id, investigationID, revision, key, hash, size, meta).Scan(&created)
+	err = tx.QueryRow(ctx, `INSERT INTO investigation_reports
+		(id,investigation_id,revision,format,object_key,content_hash,size_bytes,metadata,organization_id,workspace_id,case_id,generated_by,status)
+		VALUES($1,$2,$3,'markdown',$4,$5,$6,$7,$8::uuid,$9::uuid,$10::uuid,NULLIF($11,'')::uuid,'generated') RETURNING generated_at`,
+		id, investigationID, revision, key, hash, size, meta, organizationID, workspaceID, caseID, generatedBy).Scan(&created)
 	if err != nil {
 		return Report{}, err
 	}
@@ -113,6 +124,42 @@ func (s *Service) List(ctx context.Context, investigationID string) ([]Report, e
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// Verify 重新读取对象并校验 SHA-256 / 长度；artifact 与 DB 元数据不一致时拒绝审批。
+func (s *Service) Verify(ctx context.Context, id string) (Report, error) {
+	reader, report, err := s.Open(ctx, id)
+	if err != nil {
+		return Report{}, err
+	}
+	defer reader.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, reader)
+	if err != nil {
+		return Report{}, err
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if got != report.ContentHash {
+		return Report{}, fmt.Errorf("report %s content hash mismatch", id)
+	}
+	if report.SizeBytes > 0 && n != report.SizeBytes {
+		return Report{}, fmt.Errorf("report %s size mismatch", id)
+	}
+	return report, nil
+}
+
+// ReadAll 读取完整 artifact（报告体积受控，Range/HEAD 由 HTTP 层处理）。
+func (s *Service) ReadAll(ctx context.Context, id string) ([]byte, Report, error) {
+	reader, report, err := s.Open(ctx, id)
+	if err != nil {
+		return nil, Report{}, err
+	}
+	defer reader.Close()
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, Report{}, err
+	}
+	return body, report, nil
 }
 
 func (s *Service) Open(ctx context.Context, id string) (io.ReadCloser, Report, error) {

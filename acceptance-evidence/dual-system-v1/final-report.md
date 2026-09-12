@@ -237,3 +237,19 @@ ssh euripides@192.168.31.152 \
 3. 落地 `openapi/*.yaml`、lint 与生成 diff 检查。
 4. 为 `audit_events_v2` / `login_events` 建立按月分区与每日锚点写入。
 5. 进入 Sprint 4：案件与调查闭环页面。
+
+---
+
+## 附录：Sprint 4 验收结论（2026-09-12）
+
+- Sprint 4「用户案件与调查闭环」已完成：S4-DB-01、S4-BE-01..04、S4-FE-01..03、S4-QA-01。
+- 真实流程：Investigator 创建案件/发起调查（Coverage HIT 本地复用）→ Reviewer verify Evidence 并 confirm Finding
+  → Investigator 生成/提交报告 → Reviewer approve/sign → 一次性票据下载并校验 SHA-256。
+- API E2E：`acceptance-evidence/dual-system-v1/tests/sprint4/run-final.txt`：PASS 79 / FAIL 0 / NOT_VERIFIED 0。
+- 浏览器：`.../playwright-final.txt`：user-desktop + user-mobile 4/4 PASS。
+- 数据层：PostgreSQL（0047/0048 已应用）、ClickHouse（Evidence tx_hash 存在）、MinIO（报告 artifact 存在且 size 一致）、
+  审计链 valid=true（checked=1330）。
+- OIDC：adapter + httptest 隔离测试 7/7 PASS；无真实 IdP，`oidc:false`、`/oidc/*` 501，live 验收 **NOT_VERIFIED**。
+- 详细任务级输出与缺陷清单见 `docs/implementation/sprint4-report.md`；
+  进度与 §27 对照见 `docs/implementation/dual-system-progress.md` 与 `section27-conformance.md`。
+- Sprint 5 未开始。

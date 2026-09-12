@@ -24,16 +24,69 @@ func (s *Server) registerUserV2(r chi.Router) {
 	r.Get("/me/preferences", s.require("profile:read", s.handleUserPreferences))
 	r.Patch("/me/preferences", s.require("profile:update:self", s.handleUserPreferencesUpdate))
 
-	r.Get("/notifications", s.require("notification:list", s.handleNotImplementedV2("notification.list")))
-	r.Post("/notifications/{id}/read", s.require("notification:update", s.handleNotImplementedV2("notification.read")))
-	r.Post("/notifications/read-all", s.require("notification:update", s.handleNotImplementedV2("notification.read_all")))
+	r.Get("/notifications", s.require("notification:list", s.handleUserNotifications))
+	r.Post("/notifications/{id}/read", s.require("notification:update", s.handleUserNotificationRead))
+	r.Post("/notifications/read-all", s.require("notification:update", s.handleUserNotificationsReadAll))
+	r.Post("/notifications/{id}/open", s.require("notification:list", s.handleUserNotificationOpen))
 
 	// 现有调查/下载/导出能力已经可用，先以兼容读路由暴露，页面迁移随后进行。
 	// 列表查询在 SQL 层强制作用域；详情路由逐对象执行二次授权（§28.5 S3-BE-01）。
 	r.Get("/cases", s.require("case:list", s.handleUserCases))
+	r.Post("/cases", s.require("case:create", s.handleUserCreateCase))
 	r.Get("/cases/{id}", s.require("case:read", s.handleUserCaseDetail))
-	r.Get("/investigations", s.require("investigation:list", s.handleUserInvestigations))
-	r.Get("/investigations/{id}", s.require("investigation:read", s.handleUserInvestigationDetail))
+	r.Patch("/cases/{id}", s.require("case:update", s.handleUserUpdateCase))
+	r.Post("/cases/{id}/commands/{command}", s.require("case:state:update", s.handleUserCaseCommand))
+	r.Get("/cases/{id}/members", s.require("case:member:list", s.handleUserCaseMembers))
+	r.Post("/cases/{id}/members", s.require("case:member:manage", s.handleUserCaseMemberAdd))
+	r.Delete("/cases/{id}/members/{identity_id}", s.require("case:member:manage", s.handleUserCaseMemberRemove))
+	r.Get("/cases/{id}/subjects", s.require("subject:list", s.handleUserCaseSubjects))
+	r.Post("/cases/{id}/subjects", s.require("subject:create", s.handleUserCaseSubjectAdd))
+	r.Delete("/cases/{id}/subjects/{subject_id}", s.require("subject:remove", s.handleUserCaseSubjectRemove))
+	r.Get("/cases/{id}/activity", s.require("case:activity:read", s.handleUserCaseActivity))
+	r.Get("/cases/{id}/comments", s.require("comment:list", s.handleUserCaseComments))
+	r.Post("/cases/{id}/comments", s.require("comment:create", s.handleUserCaseCommentAdd))
+	r.Get("/cases/{id}/reports", s.require("report:list", s.handleUserCaseReports))
+	r.Post("/cases/{id}/reports", s.require("report:create", s.handleUserCaseReportCreate))
+	r.Get("/workspace-members", s.require("case:member:list", s.handleUserWorkspaceMembers))
+
+	r.Get("/investigations", s.require("investigation:list", s.handleUserInvestigationListV2))
+	r.Post("/investigations", s.require("investigation:create", s.handleUserCreateInvestigation))
+	r.Post("/investigations/preview", s.require("investigation:create", s.handleUserInvestigationPreview))
+	r.Get("/investigations/{id}", s.require("investigation:read", s.handleUserInvestigationDetailV2))
+	r.Get("/investigations/{id}/runtime", s.require("investigation:read", s.handleUserInvestigationRuntime))
+	r.Get("/investigations/{id}/findings", s.require("finding:list", s.handleUserInvestigationFindings))
+	r.Get("/investigations/{id}/evidence", s.require("evidence:list", s.handleUserInvestigationEvidence))
+	r.Post("/investigations/{id}/commands/start", s.require("investigation:start", s.handleUserInvestigationStart))
+	r.Post("/investigations/{id}/commands/pause", s.require("investigation:pause", s.handleUserInvestigationPause))
+	r.Post("/investigations/{id}/commands/resume", s.require("investigation:resume", s.handleUserInvestigationResume))
+	r.Post("/investigations/{id}/commands/cancel", s.require("investigation:cancel", s.handleUserInvestigationCancel))
+	r.Post("/investigations/{id}/commands/retry", s.require("investigation:retry", s.handleUserInvestigationRetry))
+	r.Post("/investigations/{id}/commands/submit-review", s.require("investigation:submit_review", s.handleUserInvestigationSubmitReview))
+
+	r.Get("/findings/{id}", s.require("finding:read", s.handleUserFindingDetail))
+	r.Patch("/findings/{id}", s.require("finding:update", s.handleUserFindingPatch))
+	r.Post("/findings/{id}/commands/confirm", s.require("finding:review", s.handleUserFindingConfirm))
+	r.Post("/findings/{id}/commands/reject", s.require("finding:review", s.handleUserFindingReject))
+	r.Post("/findings/{id}/commands/supersede", s.require("finding:review", s.handleUserFindingSupersede))
+
+	r.Get("/evidence/{id}", s.require("evidence:read", s.handleUserEvidenceDetail))
+	r.Post("/evidence/{id}/commands/verify", s.require("evidence:review", s.handleUserEvidenceVerify))
+	r.Post("/evidence/{id}/commands/dispute", s.require("evidence:review", s.handleUserEvidenceDispute))
+	r.Post("/evidence/{id}/commands/supersede", s.require("evidence:review", s.handleUserEvidenceSupersede))
+
+	r.Get("/reports", s.require("report:list", s.handleUserReports))
+	r.Get("/reports/{id}", s.require("report:read", s.handleUserReportDetail))
+	r.Post("/reports/{id}/commands/submit", s.require("report:create", s.handleUserReportSubmit))
+	r.Post("/reports/{id}/commands/approve", s.require("report:review", s.handleUserReportApprove))
+	r.Post("/reports/{id}/commands/reject", s.require("report:review", s.handleUserReportReject))
+	r.Post("/reports/{id}/commands/sign", s.require("report:sign", s.handleUserReportSign))
+	r.Post("/reports/{id}/commands/archive", s.require("report:review", s.handleUserReportArchive))
+	r.Post("/reports/{id}/download-ticket", s.require("report:download", s.handleUserReportTicket))
+	r.Get("/reports/download/{ticket}", s.require("report:download", s.handleUserReportDownload))
+	r.Head("/reports/download/{ticket}", s.require("report:download", s.handleUserReportDownload))
+
+	r.Get("/inbox", s.require("inbox:read", s.handleUserInbox))
+
 	r.Get("/jobs", s.require("job:list:self", s.handleUserJobs))
 	r.Get("/jobs/{id}", s.require("job:read", s.handleUserJobDetail))
 }
@@ -151,16 +204,16 @@ func (s *Server) handleUserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondOK(w, r, map[string]any{
-		"id":                  identity.ID,
-		"email":               identity.Email,
-		"display_name":        identity.DisplayName,
-		"status":              identity.Status,
-		"roles":               p.Roles,
-		"organization_id":     identity.OrganizationID,
+		"id":                   identity.ID,
+		"email":                identity.Email,
+		"display_name":         identity.DisplayName,
+		"status":               identity.Status,
+		"roles":                p.Roles,
+		"organization_id":      identity.OrganizationID,
 		"must_change_password": identity.MustChangePassword,
-		"mfa_required":        identity.MFARequired,
-		"last_login_at":       identity.LastLoginAt,
-		"created_at":          identity.CreatedAt,
+		"mfa_required":         identity.MFARequired,
+		"last_login_at":        identity.LastLoginAt,
+		"created_at":           identity.CreatedAt,
 	})
 }
 
@@ -193,11 +246,11 @@ func (s *Server) handleUserProfileUpdate(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleUserPreferences(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, r, map[string]any{
-		"timezone":     "Asia/Bangkok",
-		"language":     "zh-CN",
-		"number_format": "tabulated",
+		"timezone":       "Asia/Bangkok",
+		"language":       "zh-CN",
+		"number_format":  "tabulated",
 		"reduced_motion": false,
-		"note":         "偏好持久化在 S4 迁移中加入 user_preferences 表；当前返回服务端默认真实值。",
+		"note":           "偏好持久化在 S4 迁移中加入 user_preferences 表；当前返回服务端默认真实值。",
 	})
 }
 
@@ -214,22 +267,16 @@ func (s *Server) handleUserCaseDetail(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
 		return
 	}
-	p := PrincipalFrom(r.Context())
-	var id, orgID, wsID, caseNo, name, desc, status, color string
-	var createdAt, updatedAt time.Time
-	err := s.deps.Store.Pool.QueryRow(r.Context(), `
-        SELECT id, organization_id, workspace_id, case_no, name, description, status, color, created_at, updated_at
-        FROM cases WHERE id = $1 AND organization_id = $2`, chi.URLParam(r, "id"), p.OrganizationID).
-		Scan(&id, &orgID, &wsID, &caseNo, &name, &desc, &status, &color, &createdAt, &updatedAt)
-	if err != nil {
-		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "案件不存在或无权访问", nil)
+	if s.casework == nil {
+		respondError(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY", "案件服务未初始化", nil)
 		return
 	}
-	respondOK(w, r, map[string]any{
-		"id": id, "organization_id": orgID, "workspace_id": wsID, "case_no": caseNo,
-		"name": name, "description": desc, "status": status, "color": color,
-		"created_at": createdAt, "updated_at": updatedAt,
-	})
+	item, err := s.casework.GetCase(r.Context(), s.caseworkActor(r), chi.URLParam(r, "id"))
+	if err != nil {
+		s.writeCaseworkError(w, r, err)
+		return
+	}
+	respondOK(w, r, item)
 }
 
 func (s *Server) handleUserInvestigationDetail(w http.ResponseWriter, r *http.Request) {
@@ -282,37 +329,17 @@ func (s *Server) handleUserJobDetail(w http.ResponseWriter, r *http.Request) {
 // handleUserCases / handleUserInvestigations / handleUserJobs 复用既有控制面数据，
 // 但强制注入服务端解析出的 workspace 作用域（前端不能提交 tenant ID）。
 func (s *Server) handleUserCases(w http.ResponseWriter, r *http.Request) {
-	p := PrincipalFrom(r.Context())
-	if s.deps.Store == nil {
-		respondError(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY", "控制面存储不可用", nil)
+	if s.casework == nil {
+		respondError(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY", "案件服务未初始化", nil)
 		return
 	}
-	limit, offset := pagination(r)
-	rows, err := s.deps.Store.Pool.Query(r.Context(), `
-        SELECT id, case_no, name, description, status, color, created_at, updated_at
-        FROM cases WHERE organization_id = $1 AND workspace_id = $2
-        ORDER BY updated_at DESC LIMIT $3 OFFSET $4`, p.OrganizationID, p.WorkspaceID, limit, offset)
+	items, next, total, err := s.casework.ListCases(r.Context(), s.caseworkActor(r),
+		r.URL.Query().Get("status"), r.URL.Query().Get("q"), r.URL.Query().Get("cursor"), 0)
 	if err != nil {
-		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取案件失败", nil)
+		s.writeCaseworkError(w, r, err)
 		return
 	}
-	defer rows.Close()
-	items := []map[string]any{}
-	for rows.Next() {
-		var id, caseNo, name, desc, status, color string
-		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&id, &caseNo, &name, &desc, &status, &color, &createdAt, &updatedAt); err != nil {
-			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取案件失败", nil)
-			return
-		}
-		items = append(items, map[string]any{
-			"id": id, "case_no": caseNo, "name": name, "description": desc,
-			"status": status, "color": color, "created_at": createdAt, "updated_at": updatedAt,
-		})
-	}
-	var total int
-	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM cases WHERE organization_id = $1 AND workspace_id = $2`, p.OrganizationID, p.WorkspaceID).Scan(&total)
-	respondList(w, r, items, total, nil)
+	respondList(w, r, items, total, next)
 }
 
 func (s *Server) handleUserInvestigations(w http.ResponseWriter, r *http.Request) {

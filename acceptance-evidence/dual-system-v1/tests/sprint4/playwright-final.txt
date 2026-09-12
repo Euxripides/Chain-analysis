@@ -1,0 +1,8 @@
+
+Running 4 tests using 1 worker
+
+[1/4] [user-desktop] › tests/dual-system-sprint4.spec.ts:106:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+[2/4] [user-desktop] › tests/dual-system-sprint4.spec.ts:274:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+[3/4] [user-mobile] › tests/dual-system-sprint4.spec.ts:106:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+[4/4] [user-mobile] › tests/dual-system-sprint4.spec.ts:274:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+  4 passed (2.2m)

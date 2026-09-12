@@ -470,6 +470,17 @@ type AuthConfig struct {
 	RequireAdminMFA    bool
 	TrustedProxies     []string
 	BootstrapEmail     string
+	OIDC               OIDCConfig
+}
+
+// OIDCConfig 只在完整配置且显式启用时生效；生产环境没有真实 IdP 时必须保持禁用。
+type OIDCConfig struct {
+	Enabled      bool
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Scopes       []string
 }
 
 // AnkrManagementConfig controls the account-scoped Management MCP connection.
@@ -825,6 +836,14 @@ func Load() *Config {
 			RequireAdminMFA:    envBool("AUTH_REQUIRE_ADMIN_MFA", false),
 			TrustedProxies:     splitList(env("AUTH_TRUSTED_PROXIES", "127.0.0.1/32,::1/128")),
 			BootstrapEmail:     env("AUTH_BOOTSTRAP_EMAIL", ""),
+			OIDC: OIDCConfig{
+				Enabled:      envBool("AUTH_OIDC_ENABLED", false),
+				Issuer:       strings.TrimSpace(env("AUTH_OIDC_ISSUER", "")),
+				ClientID:     strings.TrimSpace(env("AUTH_OIDC_CLIENT_ID", "")),
+				ClientSecret: strings.TrimSpace(env("AUTH_OIDC_CLIENT_SECRET", "")),
+				RedirectURL:  strings.TrimSpace(env("AUTH_OIDC_REDIRECT_URL", "")),
+				Scopes:       splitList(env("AUTH_OIDC_SCOPES", "openid,email,profile")),
+			},
 		},
 		Tron: TronConfig{
 			Enabled: envBool("TRON_ENABLED", false),

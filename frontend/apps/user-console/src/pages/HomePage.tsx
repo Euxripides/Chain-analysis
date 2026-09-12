@@ -88,15 +88,24 @@ export default function HomePage() {
             ) : (
               <div className="toolbar">
                 {data.quick_actions.map((action) => {
-                  const isLegacy = ["download.create", "investigation.create", "report.create", "search.global"].includes(action.key);
-                  return isLegacy ? (
-                    <a key={action.key} className="btn btn--sm" href={action.href.startsWith("/admin") ? action.href : "/"}>
-                      {action.label}
-                      <span className="badge badge--neutral" style={{ marginLeft: 6 }}>
-                        旧工作台
-                      </span>
-                    </a>
-                  ) : (
+                  if (action.key === "download.create") {
+                    return (
+                      <a key={action.key} className="btn btn--sm" href="/">
+                        {action.label}
+                        <span className="badge badge--neutral" style={{ marginLeft: 6 }}>
+                          S5
+                        </span>
+                      </a>
+                    );
+                  }
+                  if (action.href.startsWith("/admin")) {
+                    return (
+                      <a key={action.key} className="btn btn--sm" href={action.href}>
+                        {action.label}
+                      </a>
+                    );
+                  }
+                  return (
                     <Link key={action.key} className="btn btn--sm" to={action.href}>
                       {action.label}
                     </Link>

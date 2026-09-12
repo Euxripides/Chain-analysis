@@ -18,6 +18,17 @@ import { AuthProvider, useAuth } from "@chain/api-client";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CasesPage = lazy(() => import("./pages/CasesPage"));
+const CaseNewPage = lazy(() => import("./pages/CaseNewPage"));
+const CaseDetailPage = lazy(() => import("./pages/CaseDetailPage"));
+const InvestigationsPage = lazy(() => import("./pages/InvestigationsPage"));
+const InvestigationNewPage = lazy(() => import("./pages/InvestigationNewPage"));
+const InvestigationWorkbenchPage = lazy(() => import("./pages/InvestigationWorkbenchPage"));
+const FindingsPage = lazy(() => import("./pages/FindingsPage"));
+const EvidenceDetailPage = lazy(() => import("./pages/EvidenceDetailPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage"));
+const InboxPage = lazy(() => import("./pages/InboxPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
@@ -36,7 +47,6 @@ const navGroups: (permissions: string[]) => NavGroup[] = () => [
       { to: "/cases", label: "案件中心", icon: <FolderOpen size={16} /> },
       { to: "/investigations", label: "调查任务", icon: <SlidersHorizontal size={16} /> },
       { to: "/graph", label: "资金图谱", icon: <Network size={16} /> },
-      { to: "/findings", label: "Findings / Evidence", icon: <FileText size={16} /> },
     ],
   },
   {
@@ -52,6 +62,7 @@ const navGroups: (permissions: string[]) => NavGroup[] = () => [
     items: [
       { to: "/inbox", label: "待我处理", icon: <Inbox size={16} /> },
       { to: "/reports", label: "报告中心", icon: <FileText size={16} /> },
+      { to: "/notifications", label: "通知", icon: <FileText size={16} /> },
     ],
   },
   {
@@ -64,13 +75,15 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/home": "dashboard:read",
   "/search": "search:read",
   "/cases": "case:list",
+  "/cases/new": "case:create",
   "/investigations": "investigation:list",
+  "/investigations/new": "investigation:create",
   "/graph": "canvas:list",
-  "/findings": "finding:list",
   "/explorer": "explorer:read",
   "/downloads": "download:create",
   "/jobs": "job:list:self",
-  "/inbox": "notification:list",
+  "/inbox": "inbox:read",
+  "/notifications": "notification:list",
   "/reports": "report:list",
   "/profile": "profile:read",
 };
@@ -129,15 +142,22 @@ function Shell() {
           <Route path="/home" element={<Guard permission="dashboard:read"><HomePage /></Guard>} />
           <Route path="/search" element={<Guard permission="search:read"><SearchPage /></Guard>} />
           <Route path="/cases" element={<Guard permission="case:list"><CasesPage /></Guard>} />
+          <Route path="/cases/new" element={<Guard permission="case:create"><CaseNewPage /></Guard>} />
+          <Route path="/cases/:caseId/:tab" element={<Guard permission="case:read"><CaseDetailPage /></Guard>} />
+          <Route path="/investigations" element={<Guard permission="investigation:list"><InvestigationsPage /></Guard>} />
+          <Route path="/investigations/new" element={<Guard permission="investigation:create"><InvestigationNewPage /></Guard>} />
+          <Route path="/investigations/:id/workbench" element={<Guard permission="investigation:read"><InvestigationWorkbenchPage /></Guard>} />
+          <Route path="/investigations/:id/findings" element={<Guard permission="finding:list"><FindingsPage /></Guard>} />
+          <Route path="/investigations/:id/evidence/:evidenceId" element={<Guard permission="evidence:read"><EvidenceDetailPage /></Guard>} />
+          <Route path="/reports" element={<Guard permission="report:list"><ReportsPage /></Guard>} />
+          <Route path="/reports/:id" element={<Guard permission="report:read"><ReportDetailPage /></Guard>} />
+          <Route path="/inbox" element={<Guard permission="inbox:read"><InboxPage /></Guard>} />
+          <Route path="/notifications" element={<Guard permission="notification:list"><NotificationsPage /></Guard>} />
           <Route path="/profile" element={<Guard permission="profile:read"><ProfilePage /></Guard>} />
-          <Route path="/investigations" element={<Placeholder permission="investigation:list" title="调查任务" sprint="S4" />} />
           <Route path="/graph" element={<Placeholder permission="canvas:list" title="资金图谱" sprint="S5" />} />
-          <Route path="/findings" element={<Placeholder permission="finding:list" title="Findings / Evidence" sprint="S4" />} />
           <Route path="/explorer" element={<Placeholder permission="explorer:read" title="地址与交易查询" sprint="S5" />} />
           <Route path="/downloads" element={<Placeholder permission="download:create" title="数据下载" sprint="S5" />} />
           <Route path="/jobs" element={<Placeholder permission="job:list:self" title="任务中心" sprint="S5" />} />
-          <Route path="/inbox" element={<Placeholder permission="notification:list" title="待我处理" sprint="S4" />} />
-          <Route path="/reports" element={<Placeholder permission="report:list" title="报告中心" sprint="S4" />} />
           <Route path="*" element={<Placeholder title="页面不存在" />} />
         </Routes>
       </Suspense>

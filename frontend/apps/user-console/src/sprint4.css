@@ -1,0 +1,44 @@
+/* Sprint 4：案件/调查/复核页面的少量布局类。提示性内容一律走 Dialog，不在此定义横幅。 */
+.s4-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--c-border); }
+.s4-tab { padding: 8px 12px; border-bottom: 2px solid transparent; color: var(--c-slate); font-size: var(--fs-13); white-space: nowrap; }
+.s4-tab:hover { color: var(--c-cobalt); text-decoration: none; }
+.s4-tab.is-active { color: var(--c-cobalt); border-bottom-color: var(--c-cobalt); font-weight: 600; }
+
+.s4-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; }
+.s4-kv__row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.s4-kv dt { color: var(--c-slate); font-size: var(--fs-11); text-transform: uppercase; letter-spacing: .05em; }
+.s4-kv dd { margin: 0; font-size: var(--fs-13); overflow-wrap: anywhere; }
+
+.s4-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-5); align-items: start; }
+.s4-grid > * { min-width: 0; }
+.s4-button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.s4-list { display: flex; flex-direction: column; }
+.s4-list__item { padding: 12px 16px; border-bottom: 1px solid var(--c-border); display: flex; gap: 12px; align-items: flex-start; }
+.s4-list__item:last-child { border-bottom: 0; }
+.s4-list__main { flex: 1; min-width: 0; }
+.s4-list__title { font-weight: 600; overflow-wrap: anywhere; }
+.s4-list__sub { color: var(--c-slate); font-size: var(--fs-12); overflow-wrap: anywhere; }
+.s4-list__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.s4-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.s4-form-grid .field--wide { grid-column: 1 / -1; }
+.s4-sticky-actions { position: sticky; bottom: 0; padding: var(--sp-4) 0; background: var(--c-ice); display: flex; gap: 8px; justify-content: flex-end; }
+
+.s4-step { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--c-border); }
+.s4-step__status { width: 18px; flex: none; text-align: center; }
+.s4-step__body { min-width: 0; flex: 1; }
+.s4-step__meta { color: var(--c-slate); font-size: var(--fs-11); overflow-wrap: anywhere; }
+
+.s4-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-4); }
+
+@media (max-width: 960px) {
+  .s4-grid { grid-template-columns: 1fr; }
+  .s4-form-grid { grid-template-columns: 1fr; }
+  .evidence-rail { width: auto; }
+}
+
+@media (max-width: 640px) {
+  .s4-list__item { flex-direction: column; }
+  .page-head__actions { width: 100%; }
+  .page-head__actions .btn { flex: 1 1 auto; }
+}

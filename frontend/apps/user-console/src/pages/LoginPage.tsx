@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Field, useDialog } from "@chain/ui";
 import { ApiError, useAuth } from "@chain/api-client";
 
@@ -12,6 +12,26 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [oidcEnabled, setOidcEnabled] = useState(false);
+  const [params] = useSearchParams();
+
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/auth/v1/methods", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (alive) setOidcEnabled(Boolean(body?.data?.oidc));
+      })
+      .catch(() => undefined);
+    const oidcError = params.get("oidc_error");
+    if (oidcError) {
+      dialog.notify("error", "组织账号登录未完成", null, [{ label: "原因码", value: oidcError }]);
+    }
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,6 +98,17 @@ export default function LoginPage() {
           <button className="btn btn--primary" type="submit" disabled={submitting}>
             {submitting ? "正在登录…" : "登录"}
           </button>
+          {oidcEnabled ? (
+            <button
+              className="btn btn--primary"
+              type="button"
+              onClick={() => {
+                window.location.href = `/api/auth/v1/oidc/start?audience=user&return_to=${encodeURIComponent("/home")}`;
+              }}
+            >
+              使用组织账号登录
+            </button>
+          ) : null}
         </form>
         <div className="auth-card__foot">
           <button

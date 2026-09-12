@@ -1605,6 +1605,10 @@ HTTP 规则：200 查询/同步更新；201 创建；202 异步接受；204 无�
 
 现有最高 PostgreSQL 迁移为 `0039`。新增迁移从 `0040` 开始，全部 additive；部署过程不删除现有列或表。
 
+> **实际编号说明（2026-09-12）**：Sprint 3 已占用 0044（tenant scope）、0045（session family）、
+> 0046（session device FK）；Sprint 4 协作/审批迁移实际为 `0047_case_collaboration.sql`，
+> 权限补齐为 `0048_s4_permission_fix.sql`。下表的语义不变，仅编号顺延，详见 ADR-016。
+
 ### 22.1 迁移清单
 
 | 迁移 | 内容 | 回滚策略 |
@@ -2300,6 +2304,11 @@ docs/adr/*
 验收：管理 endpoint 权限声明覆盖率 100%；审计业务事件可按 Trace 还原；应用账号不能更新/删除审计事件；最后 Owner 约束有效。
 
 ### 28.6 Sprint 4（第 7–8 周）：用户案件与调查闭环
+
+> **执行状态（2026-09-12）：已完成。** 交付与验收见
+> `docs/implementation/sprint4-report.md`；USER-007（Canvas 并发 diff）与
+> USER-009（地址/交易/报告类型搜索）按 S4/S5 边界保留 PARTIAL，不进入 S5 实施。
+> 迁移编号因 0044–0046 已被 Sprint 3 使用而顺延为 0047/0048，见 ADR-016。
 
 目标：用户能够从案件创建完成至 Evidence/报告复核。
 

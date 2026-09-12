@@ -22,12 +22,12 @@ var (
 
 // Config 是认证策略。字段来自环境变量，便于按环境收紧。
 type Config struct {
-	Environment         string
-	MaxFailedLogins     int
-	LockDuration        time.Duration
-	LoginRatePerMinute  int
-	MinPasswordLength   int
-	RequireAdminMFA     bool
+	Environment        string
+	MaxFailedLogins    int
+	LockDuration       time.Duration
+	LoginRatePerMinute int
+	MinPasswordLength  int
+	RequireAdminMFA    bool
 }
 
 func DefaultConfig() Config {
@@ -66,9 +66,9 @@ type LoginResult struct {
 type Service struct {
 	repo     *Repo
 	sessions *SessionManager
-	cfg     Config
-	audit   *audit.Writer
-	limiter *loginLimiter
+	cfg      Config
+	audit    *audit.Writer
+	limiter  *loginLimiter
 }
 
 func NewService(repo *Repo, sessions *SessionManager, cfg Config, writer *audit.Writer) *Service {
@@ -97,10 +97,10 @@ func (s *Service) RetryAfterSeconds(identifier, clientIP string) int {
 	return s.limiter.retryAfter(key)
 }
 
-func (s *Service) Repo() *Repo                { return s.repo }
-func (s *Service) Sessions() *SessionManager  { return s.sessions }
-func (s *Service) Config() Config             { return s.cfg }
-func (s *Service) Audit() *audit.Writer       { return s.audit }
+func (s *Service) Repo() *Repo               { return s.repo }
+func (s *Service) Sessions() *SessionManager { return s.sessions }
+func (s *Service) Config() Config            { return s.cfg }
+func (s *Service) Audit() *audit.Writer      { return s.audit }
 
 // Login 执行完整登录流程并记录登录事件（成功与失败都记录）。
 //
@@ -261,6 +261,11 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		DurationMS: int(time.Since(start).Milliseconds()),
 	})
 	return LoginResult{Session: created.Session, Token: created.Token, CSRF: created.CSRF, Roles: created.Session.Roles}, nil
+}
+
+// DefaultWorkspace 暴露默认工作区解析，供 OIDC 等非密码登录路径复用同一策略。
+func (s *Service) DefaultWorkspace(ctx context.Context, orgID string) string {
+	return s.defaultWorkspace(ctx, orgID)
 }
 
 func (s *Service) defaultWorkspace(ctx context.Context, orgID string) string {

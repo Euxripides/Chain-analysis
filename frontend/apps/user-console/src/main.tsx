@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "@chain/design-tokens/tokens.css";
 import "@chain/ui/ui.css";
+import "./sprint4.css";
 import { DialogProvider } from "@chain/ui";
 import { App } from "./App";
 

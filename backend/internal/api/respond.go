@@ -115,6 +115,6 @@ func validationError(w http.ResponseWriter, r *http.Request, message string, fie
 	writeEnvelope(w, http.StatusBadRequest, envelope{
 		Success: false,
 		Meta:    metaFor(r.Context()),
-		Error: &apiError{Code: "VALIDATION_INVALID_ARGUMENT", Message: message, FieldErrors: fields},
+		Error:   &apiError{Code: "VALIDATION_INVALID_ARGUMENT", Message: message, FieldErrors: fields},
 	})
 }

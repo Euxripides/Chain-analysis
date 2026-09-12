@@ -1,0 +1,33 @@
+== date ==
+2026-09-12T16:12:56+07:00
+
+== services ==
+active
+active
+active
+active
+active
+active
+
+== health ==
+{"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+
+== nginx entrypoints ==
+user_console=200
+admin_console=200
+
+== migrations ==
+postgres/0048_s4_permission_fix.sql
+postgres/0047_case_collaboration.sql
+postgres/0046_session_device_fk.sql
+postgres/0045_session_family.sql
+
+== minio buckets ==
+blockchain-backups
+blockchain-exports
+blockchain-raw
+blockchain-reports
+
+== audit chain (owner) ==
+{"success":true,"data":{"chain":"audit","from_seq":1,"to_seq":1330,"checked":1330,"valid":true,"broken_at_seq":null,"reason":"","head_hash":"6607736691fc0bdf57a9174673eeb331eba4a955d055b865cbb97742b6c7cdd2","errors":[]},"meta":{"request_id":"ee4fcfec-e4af-4b0d-9ab3-3e9bfc8f6c63","trace_id":"b6bdf782-d440-4b51-af13-0f3c3cb2bfc6","server_time":"2026-09-12T09:12:56.676Z","next_cursor":null},"error":null}
+

@@ -16,7 +16,11 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:18088",
-    channel: process.env.E2E_BROWSER_CHANNEL ?? "msedge",
+    // VM 上只有系统 Chromium 时用 E2E_CHROMIUM_PATH 指定可执行文件；否则维持 msedge。
+    channel: process.env.E2E_BROWSER_CHANNEL ?? (process.env.E2E_CHROMIUM_PATH ? undefined : "msedge"),
+    launchOptions: process.env.E2E_CHROMIUM_PATH
+      ? { executablePath: process.env.E2E_CHROMIUM_PATH }
+      : undefined,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ignoreHTTPSErrors: true,
