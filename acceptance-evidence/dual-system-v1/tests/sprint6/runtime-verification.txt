@@ -28,3 +28,4 @@ integrity_tables=3
 secret_scan_api_log=0
 panic_fatal=0
 s6_e2e=PASS=159 FAIL=0 NOT_VERIFIED=0 status=PASS
+worker_chain_broken_after_seal=0

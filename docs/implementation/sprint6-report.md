@@ -375,6 +375,12 @@ gap_rows_present = 0（缺口区间始终为空）
 | UI | 后台页面 `/audit/integrity`（完整性事件边界）：状态卡片、封存事件详情、保留锚点表、每日锚点逐项验证表、边界之后逐行复算、Evidence Rail 事实陈述；桌面 1440×900 与移动 390×844 均无横向溢出、无内联提示（Playwright `AUDIT-004/UI`） |
 | 运行时 | 归档器边界感知（锚点区间不跨越边界）、`ON CONFLICT DO NOTHING` + 回读复核、`WithObjectGetter` 注入对象读取；定时校验在封存后不再报 broken |
 
+运维信号：封存前 worker 每次校验都会写 `audit chain is broken ... sequence_gap`（本环境共 5 次，
+最后一次 22:36:11），封存后不再出现——`runtime-verification.txt` 中的
+`worker_chain_broken_after_seal=0` 即为该断言的机器可读形式。
+"链有已封存缺口" 现在是**一次性的、可查询的事实**（`GET /audit/integrity`），
+而不是每小时重复的、无法处置的错误日志。
+
 ## 7. 测试与验证
 
 ### 本机

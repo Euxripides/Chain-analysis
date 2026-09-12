@@ -32,7 +32,7 @@
 | `regression-sprint5.log` | 7872 | S5 回归：**PASS 106 / FAIL 0 / NOT_VERIFIED 0**（S6 时的 1 项审计链失败已消除） | `a4d650c0671681df…` |
 | `result.json` | 328 | API E2E 结果：PASS 159 / FAIL 0 / NOT_VERIFIED 0，`status=PASS` | `3cdee12a76245ed8…` |
 | `run.log` | 27064 | API E2E 完整逐条日志（每条 PASS 均对应 API/DB/文件/运行时断言） | `bcdb1fc86ee5abde…` |
-| `runtime-verification.txt` | 2010 | 部署后运行时核对：服务/健康/迁移/运行期降权/边界状态/秘密扫描 | `e352d2bff19e09d8…` |
+| `runtime-verification.txt` | 2043 | 部署后运行时核对：服务/健康/迁移/运行期降权/边界状态/秘密扫描/封存后告警计数 | `944f285d3a8ad83d…` |
 | `screenshots/audit-integrity.png` | 230524 | 新的完整性边界页面（桌面 1440×900，真实数据，fullPage） | `1b42a94fda577543…` |
 | `screenshots/audit-integrity-mobile.png` | 182819 | 同一页面（移动 390×844，无横向溢出） | `316d4e3108c9661f…` |
 | `screenshots/*.png`（其余 15 个） | — | S6 既有页面截图，本次未改动 | 见 git 历史 |
@@ -49,6 +49,7 @@ integrity_retained_anchors=audit/2026-09-11 [1,92] sealed_unrecoverable archive_
 gap_rows_present=0
 anchors=audit/2026-09-11 [1,92]; audit/2026-09-12 [2344,2921]; login/2026-09-11 [1,109]; login/2026-09-12 [110,2035]
 runtime_role_audit_truncate_priv=false
+worker_chain_broken_after_seal=0
 runtime_role_integrity_priv=
   audit_chain_anchors=true/true/false/false/false
   audit_integrity_incident_anchors=true/true/false/false/false
