@@ -11,17 +11,25 @@
   ],
   "totals": {
     "section27_test_ids_total": 65,
-    "section27_pass": 15,
-    "section27_partial": 17,
-    "section27_not_run": 22,
-    "section27_not_implemented": 11,
+    "section27_pass": 27,
+    "section27_partial": 7,
+    "section27_not_run": 19,
+    "section27_not_implemented": 12,
     "iam_smoke_checks_pass": 32,
     "iam_smoke_checks_fail": 0,
     "rbac_negative_checks_pass": 29,
     "rbac_negative_checks_fail": 0,
     "rbac_blocked": 2,
-    "browser_tests_pass": 28,
-    "browser_tests_fail": 0
+    "sprint12_leftover_checks_pass": 21,
+    "sprint12_leftover_checks_fail": 0,
+    "migration_reentrancy_checks_pass": 10,
+    "migration_reentrancy_checks_fail": 0,
+    "browser_tests_pass": 69,
+    "browser_tests_fail": 0,
+    "static_contract_checks": [
+      "scripts/check_openapi.py",
+      "frontend/scripts/check-token-contrast.mjs"
+    ]
   },
   "defects_found_and_fixed": 10,
   "known_limitations": [
@@ -44,7 +52,13 @@
     "section27_conformance": "acceptance-evidence/dual-system-v1/section27-conformance.md",
     "rbac_test_script": "acceptance-evidence/dual-system-v1/tests/run-rbac-e2e.sh",
     "tenant_migration": "backend/migrations/postgres/0044_tenant_scope.sql",
-    "alerts": "deploy/monitoring/dual-system-alerts.yaml"
+    "alerts": "deploy/monitoring/dual-system-alerts.yaml",
+    "sprint12_test_script": "acceptance-evidence/dual-system-v1/tests/run-sprint12-e2e.sh",
+    "quality_spec": "frontend/tests/dual-system-quality.spec.ts",
+    "migration_reentrancy": "scripts/test_migration_reentrancy.sh",
+    "audit_coverage": "docs/implementation/audit-coverage.md",
+    "openapi_contracts": "openapi/",
+    "openapi_checker": "scripts/check_openapi.py"
   },
-  "scope_statement": "Sprint 1/2/3 已完成：双前端 + 服务端会话 + RBAC + 租户强约束 + 不可抵赖审计 + 观测告警。Sprint 4-7 未开始。§27 的 65 个 Test ID：PASS 15 / PARTIAL 17 / NOT_RUN 22 / NOT_IMPLEMENTED 11。"
+  "scope_statement": "Sprint 1/2/3 已完成并补齐遗留验收：双前端 + 服务端会话（含令牌族重放检测）+ RBAC + 租户强约束 + 不可抵赖审计 + 观测告警 + OpenAPI 契约守卫 + 无障碍/对比度守卫。Sprint 4-7 未开始。§27 的 65 个 Test ID：PASS 27 / PARTIAL 7 / NOT_RUN 19 / NOT_IMPLEMENTED 12。剩余 NOT_IMPLEMENTED 主要是 OIDC/MFA 与 S4-S7 的功能。"
 }

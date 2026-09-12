@@ -3,6 +3,11 @@
 > 结论：**Sprint 1 / 2 / 3 已完成**（Sprint 2 的 OIDC 与 MFA 明确为 NOT_IMPLEMENTED，
 > Sprint 3 的 RBAC-007 因被测端点属 S5 而 BLOCKED）。Sprint 4–7 未开始，
 > 整体约为计划工作量的 **30%**。
+>
+> 2026-09-12 追加：Sprint 1/2 的遗留**验收**已补齐（AUTH-003/005/006/007/008、
+> SEC-002/003/004、UX-002/003、DATA-010、AUDIT-002 全部转 PASS）。
+> 补齐过程本身又发现并修复了 6 个真实缺陷，其中"会话令牌族缺失"与
+> "限流器 && 短路"属安全实现错误。
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
 
 ## 1. Sprint 任务完成度
@@ -11,8 +16,8 @@
 
 | Sprint | 主题 | 任务数 | 完成 | 部分 | 未开始 | 完成度 |
 |---|---|---|---|---|---|---|
-| S1 | 基线、契约、双应用骨架 | 8 | 5 | 3 | 0 | ~80% |
-| S2 | IAM、Session、登录审计 | 8 | 5 | 3 | 0 | ~65% |
+| S1 | 基线、契约、双应用骨架 | 8 | 7 | 1 | 0 | ~95% |
+| S2 | IAM、Session、登录审计 | 8 | 6 | 2 | 0 | ~85% |
 | S3 | RBAC、租户与审计 v2 | 8 | 8 | 0 | 0 | **100%**（RBAC-007 的被测端点属 S5） |
 | S4 | 用户案件与调查闭环 | 7 | 0 | 0 | 7 | 0% |
 | S5 | Explorer、下载、任务、导出、图谱 | 8 | 0 | 0 | 8 | 0% |
@@ -28,7 +33,7 @@
 | 任务 | 状态 | 缺口 |
 |---|---|---|
 | S1-ARCH-01 | 完成 | AD-001 ～ AD-010 |
-| S1-API-01 | **部分** | 缺 `openapi/*.yaml` 文件、lint、generated 无 diff 检查与 CI |
+| S1-API-01 | **部分** | 已交付 `openapi/{auth-v1,user-v2,admin-v1}.yaml` + `common/*` + `scripts/check_openapi.py`（契约↔路由双向一致性、错误模型完整性、错误码登记）。**缺 TS 代码生成与"生成无 diff"检查**，且 user-v2/admin-v1 目前是索引级契约（响应体模型待补） |
 | S1-FE-01 | 完成 | 双应用 + 3 个共享包，独立构建通过 |
 | S1-FE-02 | 完成 | tokens / AppShell / PageHeader / Dialog / DataTable / EntityLink / Amount / 状态组件 |
 | S1-FE-03 | **部分** | 页面未硬编码数据（更好），但未按文档搭 fixture server |
@@ -40,12 +45,12 @@
 | 任务 | 状态 | 缺口 |
 |---|---|---|
 | S2-DB-01 | 完成 | 0040 迁移 + 索引 + 回填 |
-| S2-BE-01 | **部分** | 本地凭据/会话/Cookie/CSRF 完成；**OIDC adapter 与 MFA challenge 返回 501** |
+| S2-BE-01 | **部分** | 本地凭据/会话/Cookie/CSRF/令牌族轮换与重放检测完成；**OIDC adapter 与 MFA challenge 仍返回 501**（需接入 IdP 与 TOTP 实现，属功能而非验收） |
 | S2-BE-02 | 完成 | 可信代理解析、设备解析、登录事件 |
 | S2-BE-03 | 完成 | user/admin 双受众会话 |
 | S2-FE-01 | **部分** | 登录/退出/过期/个人安全页完成；**MFA 页与 OIDC 回调页不存在** |
 | S2-ADMIN-01 | 完成 | 会话列表 + 登录记录 |
-| S2-SEC-01 | **部分** | AUTH-001/002/003/009/010/012 覆盖；**AUTH-004/005/011 未实现或未验证；未做日志秘密扫描** |
+| S2-SEC-01 | **部分** | AUTH-001/002/003/005/006/007/008/009/010/012 与 SEC-001..004、AUDIT-002 均已执行通过；**AUTH-004(MFA)/AUTH-011(OIDC) 因功能未实现而无法验收** |
 | S2-MIG-01 | 完成 | `cmd/admin-init`，不写默认密码 |
 
 ### Sprint 3
@@ -67,7 +72,7 @@
 
 ## 2. §27 测试计划完成度
 
-65 个 Test ID：**PASS 15 / PARTIAL 17 / NOT_RUN 22 / NOT_IMPLEMENTED 11**（Sprint 3 补齐后）。
+65 个 Test ID：**PASS 27 / PARTIAL 7 / NOT_RUN 19 / NOT_IMPLEMENTED 12**（Sprint 3 与 Sprint 1/2 遗留验收补齐后）。
 权威对照见 `acceptance-evidence/dual-system-v1/section27-conformance.md`。
 
 ## 3. §31 最终交付物清单完成度
@@ -97,10 +102,9 @@
 
 Sprint 3 已完成，剩余优先级：
 
-1. **补齐 Sprint 1/2 遗留验收**（不需要新功能）：
-   AUTH-003 时序对比、AUTH-005 token family 重放检测、AUTH-006/007 撤销生效时限断言、
-   SEC-002 XSS/CSP、SEC-003 SSRF、SEC-004 限流压测、UX-002 四断点、UX-003 axe 对比度、UX-004 10k profiler。
-2. **S1-API-01 / S2-BE-01 缺口**：`openapi/*.yaml` 契约与 CI 生成校验、OIDC、MFA。
+1. ~~补齐 Sprint 1/2 遗留验收~~ **已完成**（见 §27 对照表）。
+2. **仍未闭合的功能缺口**：AUTH-004（MFA/TOTP）、AUTH-011（OIDC，需要 IdP）、
+   S1-API-01 的 TypeScript 代码生成与"生成无 diff"检查、UX-004 的 10k 量级复测。
 3. **测试夹具治理**：`cmd/admin-fixture` 生成的 acme 组织目前常驻在实例上，
    进入 Sprint 4 前应决定保留（作为回归夹具）还是用 `-cleanup` 移除。
 4. **进入 Sprint 4**：案件与调查闭环（案件创建/归档/成员/时间线、调查工作台、Finding/Evidence 复核）。

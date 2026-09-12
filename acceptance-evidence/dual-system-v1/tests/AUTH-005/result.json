@@ -1,0 +1,15 @@
+{
+  "test_id": "AUTH-005",
+  "title": "refresh 令牌轮换与重放检测",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "旧 token 再用触发 family revoke",
+  "actual": "0045 引入会话令牌族；refresh 生成新会话行、旧行标记 rotated；旧令牌重放返回 AUTHN_SESSION_REUSE 且新令牌同时失效；session_reuse_events 落库",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt",
+    "backend/migrations/postgres/0045_session_family.sql"
+  ],
+  "notes": "实现过程中发现原 Rotate 只是原位改 token_hash，完全没有重放检测能力"
+}

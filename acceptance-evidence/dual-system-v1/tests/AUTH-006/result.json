@@ -1,0 +1,14 @@
+{
+  "test_id": "AUTH-006",
+  "title": "退出后当前会话立即失效",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "401",
+  "actual": "logout 后同一令牌立即 401",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": ""
+}

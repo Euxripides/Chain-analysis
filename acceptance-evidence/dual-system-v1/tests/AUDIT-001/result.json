@@ -1,0 +1,14 @@
+{
+  "test_id": "AUDIT-001",
+  "title": "用户操作清单逐项执行",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "关键事件 100% 记录，可按 Trace 串联",
+  "actual": "生成审计覆盖报告：16 个认证事件常量中 10 个真有调用点、36 个审计权限键、10 个敏感权限；补齐 legacy 写操作审计盲区",
+  "status": "PARTIAL",
+  "evidence_paths": [
+    "docs/implementation/audit-coverage.md"
+  ],
+  "notes": "页面访问与查询遥测仍为 NOT_IMPLEMENTED（user_activity_events 表已建、无写入方）"
+}

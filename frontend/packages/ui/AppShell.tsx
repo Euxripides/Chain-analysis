@@ -51,11 +51,6 @@ export function AppShell({
   const dialog = useDialog();
   const navigate = useNavigate();
 
-  const markActive = ({ isActive }: { isActive: boolean }) => ({
-    className: "shell__link",
-    "aria-current": isActive ? ("page" as const) : undefined,
-  });
-
   const confirmLogout = async () => {
     const answer = await dialog.confirm({
       kind: "confirm",
@@ -96,7 +91,18 @@ export function AppShell({
           <div className="shell__group" key={group.label || index}>
             {group.label && !collapsed ? <span className="shell__group-label">{group.label}</span> : null}
             {group.items.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.to === "/"} {...markActive} title={item.label}>
+              /* 必须用 NavLink 的 className 函数形式。曾经的写法是 {...markActive}，
+                 而 markActive 是一个函数——展开函数对象得不到任何属性，className
+                 实际为空字符串，导航链接退化成全局 a{color:cobalt}，在深色侧栏上
+                 对比度只有 2.96:1，且丢失 hover / 选中态样式。
+                 NavLink 会自动为当前路由设置 aria-current="page"，无需手写。 */
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                title={item.label}
+                className={({ isActive }) => `shell__link${isActive ? " is-active" : ""}`}
+              >
                 {item.icon}
                 {!collapsed ? <span>{item.label}</span> : null}
                 {!collapsed && item.badge ? <span className="badge badge--info" style={{ marginLeft: "auto" }}>{item.badge}</span> : null}

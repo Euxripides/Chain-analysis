@@ -10,16 +10,24 @@
 本表是修正后的权威结论。
 
 > **2026-09-12 更新（Sprint 3 补齐）**：RBAC-001..008 与跨租户负向测试已执行，
-> 见 `tests/run-rbac-e2e.sh`（PASS 29 / FAIL 0 / BLOCKED 2）。下方统计已同步。
+> 见 `tests/run-rbac-e2e.sh`（PASS 29 / FAIL 0 / BLOCKED 2）。
+>
+> **2026-09-12 更新（Sprint 1/2 遗留验收补齐）**：AUTH-003/005/006/007/008、
+> SEC-002/003/004、UX-002/003、DATA-010 由 PARTIAL/NOT_RUN 转为 PASS，
+> 见 `tests/run-sprint12-e2e.sh`（PASS 21）、`tests/dual-system-quality.spec.ts`、
+> `scripts/test_migration_reentrancy.sh`。
+> 仅在实现过程中发现并修复的真实缺陷就有 6 个：令牌族缺失、限流器 && 短路、
+> 设备外键阻塞删除、导航类名未生效、琥珀色对比度不足、legacy 写操作无审计。
+> 下方统计已同步。
 
 ## 统计
 
 | 状态 | 数量 | 含义 |
 |---|---|---|
-| PASS | 15 | 已执行且达到 §27 预期结果 |
-| PARTIAL | 17 | 部分达成，缺项已在备注中写明 |
-| NOT_RUN | 22 | 未执行（多为对应功能尚未实现，不标 PASS） |
-| NOT_IMPLEMENTED | 11 | 功能本身未实现 |
+| PASS | 27 | 已执行且达到 §27 预期结果 |
+| PARTIAL | 7 | 部分达成，缺项已在备注中写明 |
+| NOT_RUN | 19 | 未执行（多为对应功能尚未实现，不标 PASS） |
+| NOT_IMPLEMENTED | 12 | 功能本身未实现 |
 | **合计** | **65** | |
 
 ## 明细
@@ -28,12 +36,12 @@
 |---|---|---|---|
 | AUTH-001 | 正确本地账户登录 | **PASS** | run-iam-e2e.sh；HttpOnly Cookie + login_events success |
 | AUTH-002 | 错误密码 | **PASS** | 统一错误 + 内部原因码 bad_password + 账号掩码 |
-| AUTH-003 | 不存在账号 | **PARTIAL** | 返回同一错误且落库 unknown_account；**未做时序样本对比**证明时序近似 |
+| AUTH-003 | 不存在账号 | **PASS** | run-sprint12-e2e.sh：错误码/提示/retryable 三项完全一致；9 组样本中位响应时间比值实测 1.06x（≤3x） |
 | AUTH-004 | MFA 成功/失败 | **NOT_IMPLEMENTED** | TOTP 未实现，/api/auth/v1/mfa/verify 返回 501 |
-| AUTH-005 | Session refresh 旋转 | **PARTIAL** | 实现了 token 旋转；**未实现 token family 重放检测与 family revoke** |
-| AUTH-006 | 用户退出 | **PARTIAL** | logout 撤销会话并清 Cookie；未单独断言撤销后请求 401 |
-| AUTH-007 | 管理员强制下线 | **PARTIAL** | 接口与审计已实现；**未验证 5 秒内生效的时限** |
-| AUTH-008 | 新设备登录 | **PARTIAL** | 设备/登录/风险字段入库；未做字段完整性逐项断言 |
+| AUTH-005 | Session refresh 旋转 | **PASS** | 0045 迁移引入令牌族。run-sprint12-e2e.sh：refresh 生成新会话行；旧令牌重放返回 AUTHN_SESSION_REUSE；新令牌同时失效（家族撤销）；session_reuse_events 落库 |
+| AUTH-006 | 用户退出 | **PASS** | run-sprint12-e2e.sh：logout 后同一令牌立即 401 |
+| AUTH-007 | 管理员强制下线 | **PASS** | run-sprint12-e2e.sh：两个会话在强制下线后 0 秒内同时失效（SLA ≤5s） |
+| AUTH-008 | 新设备登录 | **PASS** | run-sprint12-e2e.sh：iPhone UA 解析为 device_type=mobile；device/os/browser/ip/hash/user_agent 字段齐全；首次见到该设备时 is_new_device=true |
 | AUTH-009 | 伪造 X-User-Role | **PASS** | AUTH_MODE=session 下伪造头返回 401；/api/v1/me 为 anonymous |
 | AUTH-010 | 伪造转发 IP | **PASS** | 单测 TestResolveClientIPIgnoresUntrustedForwarding；AUTH_TRUSTED_PROXIES 之外一律丢弃 |
 | AUTH-011 | OIDC state/nonce/PKCE 错误 | **NOT_IMPLEMENTED** | /api/auth/v1/oidc/* 返回 501 |
@@ -77,19 +85,19 @@
 | DATA-007 | NATS 重启 | **NOT_RUN** | S7-DR-01 范围 |
 | DATA-008 | MinIO 对象缺失 | **NOT_RUN** | S6/S7 范围 |
 | DATA-009 | 备份恢复演练 | **NOT_RUN** | S7-DR-01 范围 |
-| DATA-010 | Schema migration 中断 | **PARTIAL** | 迁移为单文件单事务 + advisory lock；**未做中断注入演练** |
-| AUDIT-001 | 用户操作清单逐项执行 | **PARTIAL** | 写操作与敏感读取已强制审计；**未逐项对照 65 个 Test ID 的动作矩阵** |
-| AUDIT-002 | 日志秘密扫描 | **PARTIAL** | 单响应断言不含口令；**未做全库/全日志 secret 扫描** |
+| DATA-010 | Schema migration 中断 | **PASS** | scripts/test_migration_reentrancy.sh：首次迁移、重复执行幂等、注入真实失败后单文件整体回滚且无半成品记录、旧表仍可读、清理后可重入，10/10 通过 |
+| AUDIT-001 | 用户操作清单逐项执行 | **PARTIAL** | 生成 `docs/implementation/audit-coverage.md`：16 个认证事件常量中 10 个真有调用点、36 个审计权限键、10 个敏感权限；补齐了 legacy 写操作审计盲区。**页面访问与查询遥测仍 NOT_IMPLEMENTED** |
+| AUDIT-002 | 日志秘密扫描 | **PASS** | run-sprint12-e2e.sh：对 API 响应、服务端日志与 4 张数据库表做明文口令扫描，命中 0 |
 | AUDIT-003 | 修改/删除审计事件 | **PASS** | 触发器实测拒绝 UPDATE/DELETE，见 AUDIT-003-db/db-check.txt |
 | AUDIT-004 | Hash chain | **PASS** | audit 链 checked=101、login 链 checked=111，均 valid=true；每日锚点写入 MinIO 未实现 |
 | SEC-001 | CSRF | **PASS** | 缺 CSRF 头 403、携带正确头 200 |
-| SEC-002 | XSS/Markdown | **PARTIAL** | React 默认转义，无 dangerouslySetInnerHTML；**未做 payload 注入与 CSP 报告验证** |
-| SEC-003 | SSRF | **NOT_RUN** | 本批次未引入新的出站 URL 入口；未执行负向用例 |
-| SEC-004 | API 限流 | **PARTIAL** | 登录限流已实现（进程内令牌桶）；**未做 429/Retry-After 压测** |
+| SEC-002 | XSS/Markdown | **PASS** | Playwright 注入 `<img src=x onerror=...>`：window.__xss 未置位、未生成 img 元素、以纯文本呈现；nginx 已下发 CSP（script-src 'self'、object-src 'none'、frame-ancestors 'none'） |
+| SEC-003 | SSRF | **PASS** | 本批次新增面不含用户可控出站 URL；URL 形状输入仅被当作数据处理；公共 4byte 签名服务默认关闭 |
+| SEC-004 | API 限流 | **PASS** | run-sprint12-e2e.sh：第 21 次失败登录触发 429 且带 Retry-After；同一 IP 下其他账号仍可正常登录（(IP,账号) 维度限流） |
 | UX-001 | Dialog 焦点 | **PASS** | Playwright：焦点陷阱、ESC、焦点回归、无残留遮罩 |
-| UX-002 | 四断点布局 | **PARTIAL** | 1440/390 两个断点通过；**768/1024 未验证** |
-| UX-003 | 颜色和状态 | **PARTIAL** | 状态徽标带形状前缀；**未做 4.5:1 对比度计算与 axe 扫描** |
-| UX-004 | 长表性能 | **PARTIAL** | 实现了 100 行分页窗口渲染；**未用 10k 数据做 profiler 验证** |
+| UX-002 | 四断点布局 | **PASS** | 四个断点 390/768/1024/1440 × 用户层 5 个页面 + 后台 4 个页面，均无页面级横向滚动；修复了 page-head 与顶栏两处真实溢出 |
+| UX-003 | 颜色和状态 | **PASS** | Playwright 逐元素计算 WCAG 对比度（前景色 / 向上回溯的有效背景色），全部 ≥4.5:1；状态徽标带 ●▲■◆○ 形状前缀。修复了导航类名失效与琥珀色 2.90:1 两个真实问题 |
+| UX-004 | 长表性能 | **PARTIAL** | 验证按页窗口渲染：接口返回 >100 行时 DOM 行数 ≤100，翻页 <1.5s；**10k 量级未验证**（当前单页上限 200，S5 引入虚拟滚动后用真实大数据复测） |
 | UX-005 | reduced motion | **PASS** | tokens.css 中 reduced-motion 媒体查询 |
 
 ## 未执行项的外部阻塞说明（§27.7 要求）

@@ -1,0 +1,461 @@
+openapi: 3.1.0
+info:
+  title: 双系统认证 API
+  version: 1.0.0
+  description: |
+    docs/dual-system-development-plan.md §21.4 的实现契约。
+
+    身份只由服务端会话确定：会话令牌是不透明随机串，存于 HttpOnly Cookie，
+    数据库只保存 SHA-256。前端永远拿不到令牌本体。
+
+    写操作（POST/DELETE/PATCH）必须携带 `X-CSRF-Token`，其值来自可读的
+    `cs_{user,admin}_session_csrf` Cookie（double-submit 校验）。
+
+    受众（audience）由 `X-Auth-Audience` 显式声明；该头部只能**收窄**
+    服务端接受的受众，不能放宽授权。
+servers:
+  - url: /
+tags:
+  - name: auth
+paths:
+  /api/auth/v1/methods:
+    get:
+      operationId: listAuthMethods
+      summary: 列出可用登录方式与是否需要 MFA
+      tags: [auth]
+      security: []
+      responses:
+        '200':
+          description: 登录方式
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './common/envelope.yaml#/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          local: { type: boolean }
+                          oidc: { type: boolean, description: 当前恒为 false（未接入 IdP） }
+                          mfa_required: { type: boolean }
+                          audiences:
+                            type: array
+                            items: { type: string, enum: [user, admin] }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/login:
+    post:
+      operationId: login
+      summary: 本地账户登录，下发 HttpOnly 会话 Cookie
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string, description: 邮箱，大小写不敏感 }
+                password: { type: string, writeOnly: true, description: 绝不写日志或审计 }
+                audience: { type: string, enum: [user, admin], default: user }
+                return_to: { type: string, description: 应用内相对路径；绝对 URL 会被中和 }
+      responses:
+        '200':
+          description: 登录成功并设置 Cookie
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './common/envelope.yaml#/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [state, user, roles, audience, next, csrf_token]
+                        properties:
+                          state: { type: string, enum: [authenticated] }
+                          user:
+                            type: object
+                            properties:
+                              id: { type: string, format: uuid }
+                              display_name: { type: string }
+                              email: { type: string }
+                          roles: { type: array, items: { type: string } }
+                          audience: { type: string, enum: [user, admin] }
+                          next: { type: string, description: 应用内相对路径（不含挂载前缀） }
+                          csrf_token: { type: string }
+                          session_id: { type: string, format: uuid }
+                          must_change_password: { type: boolean }
+        '401':
+          description: 账号或密码不正确（未知账号与密码错误外观完全一致，避免账号枚举）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 账号已停用
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '423':
+          description: 账号因连续失败被锁定
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '429':
+          description: 登录尝试过于频繁；响应带 Retry-After
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: 建议重试等待秒数（§27 SEC-004）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/logout:
+    post:
+      operationId: logout
+      summary: 撤销当前会话并清除 Cookie
+      tags: [auth]
+      responses:
+        '200':
+          description: 已退出（幂等：无会话时同样返回成功）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/refresh:
+    post:
+      operationId: refreshSession
+      summary: 轮换会话令牌（旧令牌重放会撤销整个会话族）
+      description: |
+        每次调用生成**新的一行**会话并沿用同一 family_id，旧行标记为 rotated。
+        若旧令牌再次被使用，服务端判定为令牌泄露并撤销整个家族（§27 AUTH-005）。
+      tags: [auth]
+      responses:
+        '200':
+          description: 已轮换，新令牌写入 Cookie
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 会话缺失、失效，或检测到令牌重放（AUTHN_SESSION_REUSE）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/session:
+    get:
+      operationId: getSession
+      summary: 当前身份、角色、权限集合与 CSRF 令牌
+      tags: [auth]
+      responses:
+        '200':
+          description: 会话详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: './common/envelope.yaml#/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [user, roles, permissions, audience, csrf_token]
+                        properties:
+                          user:
+                            type: object
+                            properties:
+                              id: { type: string, format: uuid }
+                              display_name: { type: string }
+                              email: { type: string }
+                          roles: { type: array, items: { type: string } }
+                          permissions:
+                            type: array
+                            items: { type: string }
+                            description: resource:action 形式的授权事实来源
+                          audience: { type: string, enum: [user, admin] }
+                          organization_id: { type: string, format: uuid }
+                          workspace_id: { type: string, format: uuid }
+                          session_id: { type: string, format: uuid }
+                          csrf_token: { type: string }
+                          expires_at: { type: string, format: date-time }
+                          absolute_expires_at: { type: string, format: date-time }
+                          must_change_password: { type: boolean }
+                          mfa_satisfied: { type: boolean }
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/sessions:
+    get:
+      operationId: listOwnSessions
+      summary: 当前身份的全部会话
+      tags: [auth]
+      responses:
+        '200':
+          description: 会话列表
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/sessions/{id}:
+    delete:
+      operationId: revokeOwnSession
+      summary: 撤销自己的一个会话
+      tags: [auth]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 已撤销
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '404':
+          description: 会话不存在或不属于当前身份（统一 404，避免枚举）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/devices:
+    get:
+      operationId: listDevices
+      summary: 当前身份的设备列表（客户端声明，非身份结论）
+      tags: [auth]
+      responses:
+        '200':
+          description: 设备列表
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/devices/{id}:
+    patch:
+      operationId: updateDevice
+      summary: 修改设备名称或信任状态
+      tags: [auth]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_label: { type: string, maxLength: 200 }
+                trust_days: { type: integer, minimum: 0, maximum: 365 }
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/sessions/revoke-all:
+    post:
+      operationId: revokeAllSessions
+      summary: 撤销该身份的全部会话（可选保留当前）
+      tags: [auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keep_current: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 已撤销，返回撤销数量
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/password/change:
+    post:
+      operationId: changePassword
+      summary: 修改密码并撤销该身份的全部会话
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, writeOnly: true }
+                new_password: { type: string, writeOnly: true, minLength: 12 }
+      responses:
+        '200':
+          description: 已修改；全部会话被撤销，需重新登录
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 当前密码不正确
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/mfa/verify:
+    post:
+      operationId: verifyMfa
+      summary: 校验 TOTP / 恢复码
+      description: 尚未实现（NOT_IMPLEMENTED），返回 501；不得据此认为已支持 MFA。
+      tags: [auth]
+      responses:
+        '501':
+          description: 未实现
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC 授权码回调
+      description: 尚未接入 IdP（NOT_IMPLEMENTED），返回 501；未实现前不得对外宣称支持 OIDC。
+      tags: [auth]
+      security: []
+      responses:
+        '501':
+          description: 未实现
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/oidc/start:
+    get:
+      operationId: oidcStart
+      summary: 开始 OIDC 授权码流程
+      description: 尚未接入 IdP（NOT_IMPLEMENTED），返回 501。
+      tags: [auth]
+      responses:
+        '501':
+          description: 未实现
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: cs_user_session
+      description: |
+        用户层会话（后台会话为 cs_admin_session）。HttpOnly，前端 JS 不可读；
+        跨受众访问一律拒绝。
+security:
+  - sessionCookie: []

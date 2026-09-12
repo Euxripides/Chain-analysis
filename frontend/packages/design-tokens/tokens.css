@@ -10,8 +10,12 @@
   --c-cobalt-soft: #e8f1fd;
   --c-ice: #f3f7fc;
   --c-slate: #667085;
-  --c-amber: #d97706;          /* Evidence Amber：待复核 / 证据边界 / 风险 */
+  --c-amber: #d97706;          /* Evidence Amber：待复核 / 证据边界 / 风险（用于边框、图标、强调） */
   --c-amber-soft: #fdf3e4;
+  /* 文本专用琥珀色：#d97706 在 #fdf3e4 上对比度仅 2.90:1，不满足 WCAG AA 4.5:1。
+     同一个色相压暗到 #b45309 后为 4.54:1，视觉上仍是"琥珀/待复核"语义，
+     但可以安全用于正文与徽标文字。对比度由双系统质量用例强制校验。 */
+  --c-amber-text: #b45309;
   --c-green: #067647;          /* Verified Green：已验证 / 健康 / 完成 */
   --c-green-soft: #e6f5ee;
 

@@ -1,0 +1,42 @@
+== 准备完成：Owner 后台会话 + 用户层会话 ==
+
+== AUTH-005 refresh 轮换 + 旧令牌重放触发会话族撤销 ==
+  PASS     AUTH-005   初次登录                                         200
+  PASS     AUTH-005   轮换前旧令牌可用                             200
+  PASS     AUTH-005   refresh 下发了不同的新令牌                  yes
+  PASS     AUTH-005   旧令牌重放被识别（AUTHN_SESSION_REUSE）    AUTHN_SESSION_REUSE
+  PASS     AUTH-005   重放后整个会话族被撤销（新令牌同时失效） 401
+
+== AUTH-006 退出后当前会话立即失效 ==
+  PASS     AUTH-006   退出前会话可用                                200
+  PASS     AUTH-006   退出后同一令牌立即 401                      401
+
+== AUTH-007 管理员强制下线在 5 秒内生效（全部会话） ==
+  PASS     AUTH-007   两个会话都可用                                200200
+  PASS     AUTH-007   强制下线后全部会话 5 秒内失效（实测 0s） within_sla
+
+== AUTH-008 新设备登录：设备/风险字段完整 ==
+  PASS     AUTH-008   移动端 UA 被解析为 device_type=mobile         mobile
+  PASS     AUTH-008   设备/IP/哈希字段齐全                         complete
+  PASS     AUTH-008   新设备被标记（is_new_device=true）           True
+
+== SEC-003 SSRF：用户输入不得被当作出站请求目标 ==
+  PASS     SEC-003    URL 形状输入仅被当作数据（未触发服务端请求） yes
+  PASS     SEC-003    公共 4byte 签名服务默认关闭（无外网出站） 1
+
+== AUDIT-002 秘密扫描：响应与审计中不得出现明文口令 ==
+  PASS     AUDIT-002  API/日志中无明文口令出现                   0
+  PASS     AUDIT-002  数据库 4 张表扫描无明文口令（命中 0 处） 0
+== SEC-004 API 限流：429 + Retry-After，且不误伤其他用户 ==
+  PASS     SEC-004    连续失败登录触发 429                         yes
+  PASS     SEC-004    429 响应带 Retry-After 且为正整数            yes
+  PASS     SEC-004    限流不影响其他账号（无共享 bucket）    200
+
+== AUTH-003 不存在账号 vs 错误密码：外观与时序近似 ==
+  PASS     AUTH-003   两种失败的错误码与提示完全一致        AUTHN_INVALID_CREDENTIALS 账号或密码不正确 False
+           第 1 轮有效样本：错误密码=9/9  不存在账号=9/9  中位数=0.0625s / 0.0729s
+           中位响应时间比值 = 1.17x（阈值 3.0x）
+  PASS     AUTH-003   中位响应时间比值 ≤ 3x（实测 1.17x）    within
+
+==================== 结果 ====================
+PASS=21 FAIL=0 BLOCKED=0

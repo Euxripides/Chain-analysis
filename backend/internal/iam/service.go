@@ -66,9 +66,9 @@ type LoginResult struct {
 type Service struct {
 	repo     *Repo
 	sessions *SessionManager
-	cfg      Config
-	audit    *audit.Writer
-	limiter  *rateLimiter
+	cfg     Config
+	audit   *audit.Writer
+	limiter *loginLimiter
 }
 
 func NewService(repo *Repo, sessions *SessionManager, cfg Config, writer *audit.Writer) *Service {
@@ -84,7 +84,17 @@ func NewService(repo *Repo, sessions *SessionManager, cfg Config, writer *audit.
 	if cfg.MinPasswordLength <= 0 {
 		cfg.MinPasswordLength = 12
 	}
-	return &Service{repo: repo, sessions: sessions, cfg: cfg, audit: writer, limiter: newRateLimiter(cfg.LoginRatePerMinute)}
+	return &Service{repo: repo, sessions: sessions, cfg: cfg, audit: writer, limiter: newLoginLimiter(cfg.LoginRatePerMinute)}
+}
+
+// RetryAfterSeconds 暴露账号维度的限流窗口剩余时间，供 HTTP 层设置 Retry-After 头。
+// 必须使用与 Login 完全相同的桶键（IP + 规范化邮箱），否则读到的永远是空桶。
+func (s *Service) RetryAfterSeconds(identifier, clientIP string) int {
+	if s == nil || s.limiter == nil {
+		return 60
+	}
+	key := strings.Join([]string{clientIP, NormalizeEmail(identifier)}, "|")
+	return s.limiter.retryAfter(key)
 }
 
 func (s *Service) Repo() *Repo                { return s.repo }
@@ -118,14 +128,25 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		})
 	}
 
-	// 频率限制：按 IP + 账号双维度计数，避免单账号被暴力破解也避免单 IP 撒网。
-	key := strings.Join([]string{in.IP.ClientIP, email}, "|")
-	if !s.limiter.allow(key) && !s.limiter.allow("ip|"+in.IP.ClientIP) {
+	// 频率限制：账号维度为主、IP 维度为兜底。
+	//
+	// 语义必须是"任一维度超限即阻断"（||）。早期实现写成
+	// `!allow(account) && !allow(ip)`，两个条件是短路关系，实际要两个桶同时耗尽
+	// 才会阻断 —— 单 IP 撒网会一直放行，而两个桶又互相抵消。
+	//
+	// 只在**失败**后消耗配额：正常用户的成功登录不应占用额度，
+	// 否则一个 NAT 出口后的多人会因为彼此的手误互相影响（§27 SEC-004
+	// "正常用户不受越权共享 bucket 影响"）。
+	accountKey := strings.Join([]string{in.IP.ClientIP, email}, "|")
+	ipKey := "ip|" + in.IP.ClientIP
+	if blocked, retryAfter := s.limiter.blocked(accountKey, ipKey); blocked {
+		_ = retryAfter
 		record(EventLoginBlocked, "blocked", ReasonRateLimited, "medium", "")
 		return LoginResult{}, ErrRateLimited
 	}
 
 	if email == "" || in.Password == "" {
+		s.limiter.consume(accountKey, ipKey)
 		record(EventLoginFailure, "failure", ReasonBadPassword, "low", "")
 		return LoginResult{}, ErrInvalidCredentials
 	}
@@ -134,6 +155,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if errors.Is(err, ErrIdentityNotFound) {
 		// 等价开销：对固定假哈希做一次校验，避免通过响应时间枚举账号。
 		_, _, _ = VerifyPassword(dummyHash, in.Password)
+		s.limiter.consume(accountKey, ipKey)
 		record(EventLoginFailure, "failure", ReasonUnknownAccount, "medium", "")
 		return LoginResult{}, ErrInvalidCredentials
 	}
@@ -168,6 +190,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 
 	ok, params, err := VerifyPassword(hash, in.Password)
 	if err != nil || !ok {
+		s.limiter.consume(accountKey, ipKey)
 		locked, _ := s.repo.MarkLoginFailure(ctx, identity.ID, s.cfg.MaxFailedLogins, s.cfg.LockDuration)
 		risk := "low"
 		reason := ReasonBadPassword
@@ -221,6 +244,8 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if err := s.repo.MarkLoginSuccess(ctx, identity.ID, in.IP.ClientIP); err != nil {
 		return LoginResult{}, err
 	}
+	// 成功登录后清空该账号的失败额度，避免"手误若干次 + 正常登录"把额度耗光。
+	s.limiter.reset(accountKey)
 
 	risk := "low"
 	if isNewDevice {
@@ -339,8 +364,9 @@ var dummyHash = func() string {
 	return h
 }()
 
-// ---- 频率限制（进程内令牌桶，登录专用；分布式限流由 Nginx/网关承担）----
+// ---- 频率限制（进程内固定窗口计数，登录专用；分布式限流由 Nginx/网关承担）----
 
+// rateLimiter 是单维度固定窗口计数器。
 type rateLimiter struct {
 	mu       sync.Mutex
 	capacity int
@@ -350,47 +376,139 @@ type rateLimiter struct {
 }
 
 type bucket struct {
-	used     int
-	resetAt  time.Time
+	used    int
+	resetAt time.Time
 }
 
-func newRateLimiter(perMinute int) *rateLimiter {
-	if perMinute <= 0 {
-		perMinute = 20
+func newRateLimiter(perWindow int, window time.Duration) *rateLimiter {
+	if perWindow <= 0 {
+		perWindow = 20
 	}
-	return &rateLimiter{
-		capacity: perMinute,
-		window:   time.Minute,
-		buckets:  map[string]*bucket{},
-		lastGC:   time.Now(),
-	}
+	return &rateLimiter{capacity: perWindow, window: window, buckets: map[string]*bucket{}, lastGC: time.Now()}
 }
 
-func (l *rateLimiter) allow(key string) bool {
+func (l *rateLimiter) gc(now time.Time) {
+	if now.Sub(l.lastGC) <= 5*time.Minute {
+		return
+	}
+	for k, b := range l.buckets {
+		if now.After(b.resetAt) {
+			delete(l.buckets, k)
+		}
+	}
+	l.lastGC = now
+}
+
+// exceeded 只读检查，不消耗配额。
+func (l *rateLimiter) exceeded(key string) (bool, int) {
 	if l == nil || key == "" {
-		return true
+		return false, 0
 	}
 	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if now.Sub(l.lastGC) > 5*time.Minute {
-		for k, b := range l.buckets {
-			if now.After(b.resetAt) {
-				delete(l.buckets, k)
-			}
-		}
-		l.lastGC = now
+	l.gc(now)
+	b, ok := l.buckets[key]
+	if !ok || now.After(b.resetAt) {
+		return false, 0
 	}
+	if b.used >= l.capacity {
+		secs := int(time.Until(b.resetAt).Seconds()) + 1
+		if secs < 1 {
+			secs = 1
+		}
+		return true, secs
+	}
+	return false, 0
+}
+
+// consume 记一次失败尝试。
+func (l *rateLimiter) consume(key string) {
+	if l == nil || key == "" {
+		return
+	}
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.gc(now)
 	b, ok := l.buckets[key]
 	if !ok || now.After(b.resetAt) {
 		l.buckets[key] = &bucket{used: 1, resetAt: now.Add(l.window)}
-		return true
-	}
-	if b.used >= l.capacity {
-		return false
+		return
 	}
 	b.used++
-	return true
+}
+
+func (l *rateLimiter) reset(key string) {
+	if l == nil || key == "" {
+		return
+	}
+	l.mu.Lock()
+	delete(l.buckets, key)
+	l.mu.Unlock()
+}
+
+// loginLimiter 组合两个维度：
+//   - account：同一个 (IP, 账号) 组合的失败次数，主控制，默认 20/分钟；
+//   - ip：同一个来源 IP 的失败次数，兜底防止撒网，容量放宽 5 倍且不低于 100，
+//     避免同一 NAT 出口后的正常用户被他人拖累。
+type loginLimiter struct {
+	account *rateLimiter
+	ip      *rateLimiter
+}
+
+func newLoginLimiter(perMinute int) *loginLimiter {
+	if perMinute <= 0 {
+		perMinute = 20
+	}
+	ipCapacity := perMinute * 5
+	if ipCapacity < 100 {
+		ipCapacity = 100
+	}
+	return &loginLimiter{
+		account: newRateLimiter(perMinute, time.Minute),
+		ip:      newRateLimiter(ipCapacity, time.Minute),
+	}
+}
+
+// blocked 返回是否应阻断本次尝试，以及建议的 Retry-After 秒数。
+func (l *loginLimiter) blocked(accountKey, ipKey string) (bool, int) {
+	if l == nil {
+		return false, 0
+	}
+	if over, retry := l.account.exceeded(accountKey); over {
+		return true, retry
+	}
+	if over, retry := l.ip.exceeded(ipKey); over {
+		return true, retry
+	}
+	return false, 0
+}
+
+func (l *loginLimiter) consume(accountKey, ipKey string) {
+	if l == nil {
+		return
+	}
+	l.account.consume(accountKey)
+	l.ip.consume(ipKey)
+}
+
+func (l *loginLimiter) reset(accountKey string) {
+	if l == nil {
+		return
+	}
+	l.account.reset(accountKey)
+}
+
+// retryAfter 返回该账号维度剩余等待秒数，供 Retry-After 头使用。
+func (l *loginLimiter) retryAfter(accountKey string) int {
+	if l == nil {
+		return 60
+	}
+	if _, retry := l.account.exceeded(accountKey); retry > 0 {
+		return retry
+	}
+	return 60
 }
 
 // IsAuthError 帮助 HTTP 层把认证错误映射为稳定错误码。

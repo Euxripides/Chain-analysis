@@ -25,6 +25,22 @@ const (
 
 var ErrSessionInvalid = errors.New("session invalid")
 
+// ErrSessionReuse 表示客户端出示了一个已被 rotation 淘汰的令牌。
+// 这通常意味着令牌泄露（攻击者与合法用户各持一份），必须按安全事件处理：
+// 撤销整个家族，双方都被迫重新登录。与 ErrSessionInvalid（过期/普通撤销）区分开，
+// 以便 API 层写审计、返回不同的用户提示。
+var ErrSessionReuse = errors.New("session token reuse detected")
+
+// 会话撤销原因。重放检测依赖 'rotated' 与其他原因的区分，不要随意改名。
+const (
+	RevokeReasonRotated        = "rotated"
+	RevokeReasonLogout         = "logout"
+	RevokeReasonSelfRevoked    = "self_revoked"
+	RevokeReasonSelfRevokedAll = "self_revoked_all"
+	RevokeReasonAdmin          = "revoked_by_admin"
+	RevokeReasonPasswordChange = "password_changed"
+)
+
 // SessionConfig 由环境变量注入；默认值对本地开发可用，生产必须显式设置 Cookie 安全属性。
 type SessionConfig struct {
 	UserCookieName  string
@@ -37,9 +53,7 @@ type SessionConfig struct {
 	Domain          string
 	Path            string
 	// NamePrefix 支持 __Host- 前缀（要求 Secure + Path=/ + 无 Domain）。
-	NamePrefix      string
-	// RefreshGrace 允许旧令牌在轮换后的宽限期内继续使用，用于抵御并发请求竞态。
-	RefreshGrace    time.Duration
+	NamePrefix string
 }
 
 func DefaultSessionConfig() SessionConfig {
@@ -51,8 +65,7 @@ func DefaultSessionConfig() SessionConfig {
 		AbsoluteTTL:     7 * 24 * time.Hour,
 		Secure:          false,
 		SameSite:        http.SameSiteLaxMode,
-		Path:            "/",
-		RefreshGrace:    30 * time.Second,
+		Path: "/",
 	}
 }
 
@@ -91,6 +104,9 @@ type Session struct {
 	AbsoluteExpires time.Time         `json:"absolute_expires_at"`
 	RevokedAt       *time.Time        `json:"revoked_at,omitempty"`
 	RevokedReason   string            `json:"revoked_reason,omitempty"`
+	FamilyID        string            `json:"family_id,omitempty"`
+	ParentID        string            `json:"parent_id,omitempty"`
+	ReplacedBy      string            `json:"replaced_by,omitempty"`
 	CSRFHash        string            `json:"-"`
 	Identity        Identity          `json:"identity"`
 	Roles           []string          `json:"roles"`
@@ -111,6 +127,10 @@ type SessionRequest struct {
 	DeviceInfo     DeviceInfo
 	EntryHost      string
 	Scheme         string
+	// FamilyID 为空时新建一个令牌族；refresh 轮换时传入原家族 ID。
+	FamilyID string
+	// ParentID 指向被本次轮换淘汰的会话。
+	ParentID string
 }
 
 // SessionManager 负责会话的创建、校验、续期和撤销。
@@ -179,20 +199,26 @@ func (m *SessionManager) Create(ctx context.Context, req SessionRequest) (Create
 		req.IP.ProxyChain = []string{}
 	}
 
-	var id string
-	err = m.repo.Pool().QueryRow(ctx, `
+	// 会话 ID 由服务端生成：family_id 需要指向家族首个会话，
+	// 用一条 INSERT 同时落 id 与 family_id，避免"先插入再回填"的中间态。
+	id := uuid.NewString()
+	familyID := req.FamilyID
+	if familyID == "" {
+		familyID = id
+	}
+	_, err = m.repo.Pool().Exec(ctx, `
         INSERT INTO sessions (
-            identity_id, organization_id, workspace_id, audience, token_hash, csrf_hash,
-            auth_method, mfa_satisfied, user_agent, client_hints, device,
+            id, family_id, parent_id, identity_id, organization_id, workspace_id, audience,
+            token_hash, csrf_hash, auth_method, mfa_satisfied, user_agent, client_hints, device,
             peer_ip, client_ip, proxy_chain, expires_at, absolute_expires_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::inet,$13::inet,$14,$15,$16)
-        RETURNING id`,
-		req.IdentityID, req.OrganizationID, nullIfEmpty(req.WorkspaceID), req.Audience,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,
+                  $15::inet,$16::inet,$17,$18,$19)`,
+		id, familyID, nullIfEmpty(req.ParentID), req.IdentityID, req.OrganizationID,
+		nullIfEmpty(req.WorkspaceID), req.Audience,
 		hashToken(token), hashToken(csrf), req.AuthMethod, req.MFASatisfied,
 		truncate(req.UserAgent, 512), string(hintsJSON), string(deviceJSON),
 		nullIfEmpty(req.IP.PeerIP), nullIfEmpty(req.IP.ClientIP), req.IP.ProxyChain,
-		now.Add(m.cfg.IdleTTL), now.Add(m.cfg.AbsoluteTTL),
-	).Scan(&id)
+		now.Add(m.cfg.IdleTTL), now.Add(m.cfg.AbsoluteTTL))
 	if err != nil {
 		return Created{}, fmt.Errorf("create session: %w", err)
 	}
@@ -206,7 +232,8 @@ func (m *SessionManager) Create(ctx context.Context, req SessionRequest) (Create
 		return Created{}, err
 	}
 	sess := Session{
-		ID: id, IdentityID: req.IdentityID, OrganizationID: req.OrganizationID,
+		ID: id, FamilyID: familyID, ParentID: req.ParentID,
+		IdentityID: req.IdentityID, OrganizationID: req.OrganizationID,
 		WorkspaceID: req.WorkspaceID, Audience: req.Audience, AuthMethod: req.AuthMethod,
 		MFASatisfied: req.MFASatisfied, UserAgent: req.UserAgent,
 		PeerIP: req.IP.PeerIP, ClientIP: req.IP.ClientIP,
@@ -237,7 +264,17 @@ func (m *SessionManager) Authenticate(ctx context.Context, token, audience strin
 		return Session{}, ErrSessionInvalid
 	}
 	now := time.Now().UTC()
-	if sess.RevokedAt != nil || now.After(sess.ExpiresAt) || now.After(sess.AbsoluteExpires) {
+	if sess.RevokedAt != nil {
+		// 被 rotation 淘汰的令牌再次出现 = 重放。此时不能只返回 401：
+		// 无法判断当前持有者是不是合法用户，必须撤销整个家族。
+		if sess.RevokedReason == RevokeReasonRotated {
+			// 连同会话信息一起返回：调用方需要 family_id / identity_id
+			// 才能撤销整个家族并写入可追溯的安全审计。
+			return sess, ErrSessionReuse
+		}
+		return Session{}, ErrSessionInvalid
+	}
+	if now.After(sess.ExpiresAt) || now.After(sess.AbsoluteExpires) {
 		return Session{}, ErrSessionInvalid
 	}
 	if sess.Identity.Status != StatusActive && sess.Identity.Status != StatusInvited {
@@ -275,7 +312,8 @@ func (m *SessionManager) loadByToken(ctx context.Context, tokenHash string) (Ses
 	var workspaceID *string
 	var deviceID *string
 	err := m.repo.Pool().QueryRow(ctx, `
-        SELECT s.id, s.identity_id, s.organization_id, s.workspace_id, s.audience, s.auth_method,
+        SELECT s.id, s.family_id::text, COALESCE(s.parent_id::text,''), COALESCE(s.replaced_by::text,''),
+               s.identity_id, s.organization_id, s.workspace_id, s.audience, s.auth_method,
                s.mfa_satisfied, s.device_id, s.user_agent, s.device, s.client_hints,
                COALESCE(host(s.peer_ip), ''), COALESCE(host(s.client_ip), ''),
                s.created_at, s.last_seen_at, s.expires_at, s.absolute_expires_at,
@@ -286,7 +324,8 @@ func (m *SessionManager) loadByToken(ctx context.Context, tokenHash string) (Ses
                EXISTS (SELECT 1 FROM credentials c WHERE c.identity_id = i.id AND c.kind = 'password' AND c.revoked_at IS NULL)
         FROM sessions s JOIN identities i ON i.id = s.identity_id
         WHERE s.token_hash = $1`, tokenHash).
-		Scan(&sess.ID, &sess.IdentityID, &sess.OrganizationID, &workspaceID, &sess.Audience, &sess.AuthMethod,
+		Scan(&sess.ID, &sess.FamilyID, &sess.ParentID, &sess.ReplacedBy,
+			&sess.IdentityID, &sess.OrganizationID, &workspaceID, &sess.Audience, &sess.AuthMethod,
 			&sess.MFASatisfied, &deviceID, &sess.UserAgent, &deviceRaw, &hintsRaw,
 			&sess.PeerIP, &sess.ClientIP,
 			&sess.CreatedAt, &sess.LastSeenAt, &sess.ExpiresAt, &sess.AbsoluteExpires,
@@ -363,32 +402,76 @@ func (m *SessionManager) ClearCookies(w http.ResponseWriter, audience string) {
 	}
 }
 
-// Rotate 轮换会话令牌：旧令牌立即失效，新令牌（与配套 CSRF）返回给调用方写入 Cookie。
-// 满足 §21.4 "旋转 Session token，检测重放"。
+// Rotate 轮换会话令牌（refresh token rotation）。
+//
+// 语义（§21.4 / §27.1 AUTH-005）：
+//   - 每次 refresh 生成**新的一行**会话，沿用同一 family_id，并记录 parent_id；
+//   - 旧行标记 revoked_reason='rotated'、replaced_by=<新会话 ID>；
+//   - 旧令牌此后一旦被使用，Authenticate 返回 ErrSessionReuse，
+//     由 RevokeFamily 撤销整个家族 —— 合法用户与攻击者同时被强制重新登录。
+//
+// 这样"轮换"才真正具备泄露检测能力：仅仅改同一行的 token_hash 只能让旧令牌 401，
+// 无法区分"过期"与"令牌被复制"。
 func (m *SessionManager) Rotate(ctx context.Context, sess Session) (Created, error) {
-	token, err := NewToken()
+	created, err := m.Create(ctx, SessionRequest{
+		Audience:       sess.Audience,
+		IdentityID:     sess.IdentityID,
+		OrganizationID: sess.OrganizationID,
+		WorkspaceID:    sess.WorkspaceID,
+		AuthMethod:     sess.AuthMethod,
+		MFASatisfied:   sess.MFASatisfied,
+		UserAgent:      sess.UserAgent,
+		IP:             ClientIP{PeerIP: sess.PeerIP, ClientIP: sess.ClientIP, ProxyChain: []string{}},
+		DeviceInfo:     DeviceInfo{},
+		FamilyID:       sess.FamilyID,
+		ParentID:       sess.ID,
+	})
 	if err != nil {
 		return Created{}, err
 	}
-	csrf, err := NewToken()
+	if _, err := m.repo.Pool().Exec(ctx, `
+        UPDATE sessions
+        SET revoked_at = now(), revoked_reason = $2, replaced_by = $3,
+            rotated_at = now(), rotation_count = rotation_count + 1
+        WHERE id = $1 AND revoked_at IS NULL`,
+		sess.ID, RevokeReasonRotated, created.Session.ID); err != nil {
+		return Created{}, fmt.Errorf("retire rotated session: %w", err)
+	}
+	return created, nil
+}
+
+// RevokeFamily 撤销整个令牌族，返回被撤销的会话数。
+// 由重放检测与"退出全部设备"共用。
+func (m *SessionManager) RevokeFamily(ctx context.Context, familyID, reason, byID string) (int64, error) {
+	if familyID == "" {
+		return 0, nil
+	}
+	tag, err := m.repo.Pool().Exec(ctx, `UPDATE sessions
+        SET revoked_at = now(), revoked_reason = $2, revoked_by = $3
+        WHERE family_id = $1 AND revoked_at IS NULL`, familyID, reason, nullIfEmpty(byID))
 	if err != nil {
-		return Created{}, err
+		return 0, err
 	}
-	now := time.Now().UTC()
-	newExpiry := now.Add(m.cfg.IdleTTL)
-	if newExpiry.After(sess.AbsoluteExpires) {
-		newExpiry = sess.AbsoluteExpires
+	return tag.RowsAffected(), nil
+}
+
+// RecordReuseEvent 记录一次令牌重放，供后台"风险事件"页与告警使用。
+func (m *SessionManager) RecordReuseEvent(ctx context.Context, sess Session, revoked int64, ip ClientIP, userAgent, requestID, traceID string) error {
+	if m.repo.Pool() == nil {
+		return nil
 	}
-	_, err = m.repo.Pool().Exec(ctx, `UPDATE sessions
-        SET token_hash = $2, csrf_hash = $3, last_seen_at = now(), expires_at = $4
-        WHERE id = $1 AND revoked_at IS NULL`, sess.ID, hashToken(token), hashToken(csrf), newExpiry)
-	if err != nil {
-		return Created{}, fmt.Errorf("rotate session: %w", err)
-	}
-	sess.CSRFHash = hashToken(csrf)
-	sess.ExpiresAt = newExpiry
-	sess.LastSeenAt = now
-	return Created{Session: sess, Token: token, CSRF: csrf}, nil
+	_, err := m.repo.Pool().Exec(ctx, `
+        INSERT INTO session_reuse_events (
+            family_id, identity_id, organization_id, presented_session_id,
+            revoked_at, revoked_reason, replaced_by, sessions_revoked,
+            client_ip, peer_ip, user_agent, request_id, trace_id, detail)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::inet,$10::inet,$11,$12,$13,$14::jsonb)`,
+		sess.FamilyID, sess.IdentityID, nullIfEmpty(sess.OrganizationID), sess.ID,
+		sess.RevokedAt, sess.RevokedReason, nullIfEmpty(sess.ReplacedBy), revoked,
+		nullIfEmpty(ip.ClientIP), nullIfEmpty(ip.PeerIP), truncate(userAgent, 512),
+		truncate(requestID, 128), truncate(traceID, 128),
+		fmt.Sprintf(`{"replaced_by":"%s","detected_by":"authenticate"}`, sess.ReplacedBy))
+	return err
 }
 
 // DeviceRow 是设备列表读取视图。

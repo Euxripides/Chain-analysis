@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/iam"
+	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 )
 
 // registerAuthV1 挂载 §21.4 认证 API。
@@ -107,6 +109,15 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status, code := iam.StatusForError(err)
+		// §21.3 / §27 SEC-004：429 必须带 Retry-After，客户端才能正确退避；
+		// 缺少该头会让调用方直接重试，反而放大冲击。
+		if status == http.StatusTooManyRequests {
+			retryAfter := s.iam.RetryAfterSeconds(identifier, meta.IP.ClientIP)
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			respondError(w, r, status, authErrCode(status, code), authErrMessage(code),
+				map[string]any{"retry_after_seconds": retryAfter})
+			return
+		}
 		// 客户端主动断开（浏览器导航、SSE 取消）不是服务端故障，不按 ERROR 记录。
 		if status >= 500 && !errors.Is(err, context.Canceled) {
 			// 内部错误必须留下可诊断的 cause，但绝不回显给客户端（§21.3）。
@@ -206,8 +217,18 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	if v := strings.TrimSpace(r.Header.Get("X-Auth-Audience")); v == iam.AudienceAdmin {
 		audience = iam.AudienceAdmin
 	}
-	sess, ok := s.currentSession(w, r, audience)
+	if reuse, _ := r.Context().Value(sessionReuseCtxKey{}).(bool); reuse {
+		respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_REUSE",
+			"检测到会话令牌重复使用，该会话族的全部设备已被强制下线，请重新登录", nil)
+		return
+	}
+	sess, reuse, ok := s.currentSessionDetailed(w, r, audience)
 	if !ok {
+		if reuse {
+			respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_REUSE",
+				"检测到会话令牌重复使用，该会话族的全部设备已被强制下线，请重新登录", nil)
+			return
+		}
 		respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_MISSING", "未登录", nil)
 		return
 	}
@@ -394,8 +415,18 @@ func (s *Server) requireSession(w http.ResponseWriter, r *http.Request) (iam.Ses
 	if v := strings.TrimSpace(r.Header.Get("X-Auth-Audience")); v == iam.AudienceAdmin {
 		audience = iam.AudienceAdmin
 	}
-	sess, ok := s.currentSession(w, r, audience)
+	if reuse, _ := r.Context().Value(sessionReuseCtxKey{}).(bool); reuse {
+		respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_REUSE",
+			"检测到会话令牌重复使用，该会话族的全部设备已被强制下线，请重新登录", nil)
+		return iam.Session{}, false
+	}
+	sess, reuse, ok := s.currentSessionDetailed(w, r, audience)
 	if !ok {
+		if reuse {
+			respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_REUSE",
+				"检测到会话令牌重复使用，该会话族的全部设备已被强制下线，请重新登录", nil)
+			return iam.Session{}, false
+		}
 		respondError(w, r, http.StatusUnauthorized, "AUTHN_SESSION_MISSING", "未登录", nil)
 		return iam.Session{}, false
 	}
@@ -413,11 +444,64 @@ func (s *Server) requireSession(w http.ResponseWriter, r *http.Request) (iam.Ses
 // audience 优先由调用方/头部决定；对自助类认证端点（/api/auth/v1/*）允许回退到
 // 另一种受众的 Cookie，因为用户层与后台共用同一套自助接口。
 // 后台 API（/api/admin/v1/*）不允许回退：用户层会话无法调用后台（§3.3）。
+// handleTokenReuse 处理令牌重放：撤销整个家族、写安全审计、记录风险事件。
+//
+// 返回被撤销的会话数，便于调用方与审计串联。
+func (s *Server) handleTokenReuse(ctx context.Context, sess iam.Session, audience string) int64 {
+	meta := metaFrom(ctx)
+	revoked, err := s.iam.Sessions().RevokeFamily(ctx, sess.FamilyID, "token_reuse_detected", "")
+	if err != nil {
+		s.deps.Log.Error("revoke family failed", "err", err, "family", sess.FamilyID)
+	}
+	if err := s.iam.Sessions().RecordReuseEvent(ctx, sess, revoked, meta.IP, meta.UserAgent, meta.RequestID, meta.TraceID); err != nil {
+		s.deps.Log.Error("record reuse event failed", "err", err, "family", sess.FamilyID)
+	}
+	_ = iam.RecordLoginEvent(ctx, s.iam.Repo().Pool(), s.cfg.Env, iam.LoginEvent{
+		EventType: "auth.session.reuse_detected", Result: "blocked",
+		ReasonCode: "token_reuse", RiskLevel: "critical",
+		IdentityID: sess.IdentityID, OrganizationID: sess.OrganizationID,
+		Audience: audience, SessionID: sess.ID, DeviceID: sess.DeviceID,
+		DeviceInfo: iam.ParseUserAgent(meta.UserAgent), UserAgent: meta.UserAgent,
+		IP: meta.IP, EntryHost: meta.Host, Scheme: meta.Scheme,
+		RequestID: meta.RequestID, TraceID: meta.TraceID,
+		Detail: map[string]any{
+			"family_id": sess.FamilyID, "sessions_revoked": revoked,
+			"replaced_by": sess.ReplacedBy, "revoked_reason": sess.RevokedReason,
+		},
+	})
+	if s.audit != nil {
+		p := policy.Principal{
+			IdentityID: sess.IdentityID, Email: sess.Identity.Email,
+			OrganizationID: sess.OrganizationID, SessionID: sess.ID, Audience: audience,
+			Authenticated: true, Roles: sess.Roles,
+		}
+		ev := auditEventFor(r0(ctx), p, meta, "auth.session.reuse_detected", "security", "session", sess.ID, "deny",
+			map[string]any{"family_id": sess.FamilyID, "sessions_revoked": revoked, "replaced_by": sess.ReplacedBy})
+		ev.RiskLevel = "critical"
+		ev.PolicyDecision = "deny"
+		ev.DenyReason = "token_reuse"
+		if err := s.audit.Write(ctx, ev); err != nil {
+			s.deps.Log.Error("audit reuse event failed", "err", err)
+		}
+	}
+	s.deps.Log.Warn("session token reuse detected",
+		"family_id", sess.FamilyID, "identity_id", sess.IdentityID,
+		"sessions_revoked", revoked, "client_ip", meta.IP.ClientIP)
+	return revoked
+}
+
 func (s *Server) currentSession(w http.ResponseWriter, r *http.Request, audience string) (iam.Session, bool) {
+	sess, _, ok := s.currentSessionDetailed(w, r, audience)
+	return sess, ok
+}
+
+// currentSessionDetailed 在 currentSession 基础上额外告知"是否发生了令牌重放"。
+func (s *Server) currentSessionDetailed(w http.ResponseWriter, r *http.Request, audience string) (iam.Session, bool, bool) {
 	if s.iam == nil {
-		return iam.Session{}, false
+		return iam.Session{}, false, false
 	}
 	cfg := s.iam.Sessions().Config()
+	reuse := false
 	tryAudience := func(aud string) (iam.Session, bool) {
 		c, err := r.Cookie(cfg.CookieName(aud))
 		if err != nil || c.Value == "" {
@@ -425,13 +509,21 @@ func (s *Server) currentSession(w http.ResponseWriter, r *http.Request, audience
 		}
 		sess, err := s.iam.Sessions().Authenticate(r.Context(), c.Value, aud)
 		if err != nil {
+			if errors.Is(err, iam.ErrSessionReuse) {
+				// 重放：撤销家族、写审计，并且**不**回退到其它受众继续解析。
+				reuse = true
+				s.handleTokenReuse(r.Context(), sess, aud)
+			}
 			s.iam.Sessions().ClearCookies(w, aud)
 			return iam.Session{}, false
 		}
 		return sess, true
 	}
 	if sess, ok := tryAudience(audience); ok {
-		return sess, true
+		return sess, reuse, true
+	}
+	if reuse {
+		return iam.Session{}, true, false
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/auth/") && !strings.HasPrefix(r.URL.Path, "/api/admin/") && requestedAudience(r) == "" {
 		other := iam.AudienceUser
@@ -439,10 +531,10 @@ func (s *Server) currentSession(w http.ResponseWriter, r *http.Request, audience
 			other = iam.AudienceAdmin
 		}
 		if sess, ok := tryAudience(other); ok {
-			return sess, true
+			return sess, true, true
 		}
 	}
-	return iam.Session{}, false
+	return iam.Session{}, reuse, false
 }
 
 func userSummary(sess iam.Session) map[string]any {
@@ -490,6 +582,13 @@ func sanitizeReturnToDefault(v, fallback string) string {
 }
 
 // authErrCode 把 iam 的稳定错误码映射到 §21.3 的 AUTHN_/AUTHZ_ 前缀。
+// r0 构造一个仅用于审计字段填充的空请求（重放发生在中间件之外，
+// 没有原始 *http.Request 可复用；真实来源信息全部来自 RequestMeta）。
+func r0(_ context.Context) *http.Request {
+	req, _ := http.NewRequest(http.MethodPost, "/api/auth/v1/refresh", nil)
+	return req
+}
+
 func defaultNextFor(audience string) string {
 	if audience == iam.AudienceAdmin {
 		return "/overview"

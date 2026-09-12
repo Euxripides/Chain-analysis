@@ -1,0 +1,14 @@
+{
+  "test_id": "UX-002b",
+  "title": "四断点布局",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "无非预期横向滚动/遮挡/布局跳动",
+  "actual": "390/768/1024/1440 四个断点 × 用户层 5 页 + 后台 4 页，均无页面级横向滚动",
+  "status": "PASS",
+  "evidence_paths": [
+    "frontend/tests/dual-system-quality.spec.ts"
+  ],
+  "notes": "修复两处真实溢出：page-head 子项缺少 min-width:0；窄屏顶栏不换行"
+}

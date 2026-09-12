@@ -1,0 +1,14 @@
+{
+  "test_id": "DATA-010",
+  "title": "Schema migration 中断",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "可重入，不破坏旧服务读取",
+  "actual": "首次迁移成功；重复执行幂等；注入真实失败后单文件整体回滚、无半成品记录、旧表仍可读；清理后可重入（10/10）",
+  "status": "PASS",
+  "evidence_paths": [
+    "scripts/test_migration_reentrancy.sh"
+  ],
+  "notes": "首次注入用同名表制造冲突无效（表与约束不在同一命名空间），改为注入必然抛错的临时迁移文件"
+}

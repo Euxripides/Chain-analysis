@@ -1,0 +1,44 @@
+# 统一响应信封（§21.3）。成功与失败共用同一外壳，客户端只需解一层。
+Envelope:
+  type: object
+  required: [success, data, meta, error]
+  properties:
+    success: { type: boolean }
+    data: {}
+    meta:
+      $ref: '#/Meta'
+    error:
+      nullable: true
+      description: 成功时为 null。
+
+Meta:
+  type: object
+  required: [request_id, trace_id, server_time, next_cursor]
+  properties:
+    request_id:
+      type: string
+      description: 每个请求生成；用于把用户报错与日志、审计串联。
+    trace_id:
+      type: string
+      description: 可跨服务传递；审计事件按它还原完整链路。
+    server_time:
+      type: string
+      format: date-time
+      description: UTC ISO 8601。
+    data_version: { type: string }
+    next_cursor:
+      nullable: true
+      type: string
+    total: { type: integer }
+
+Pagination:
+  type: object
+  properties:
+    limit:
+      type: integer
+      default: 50
+      maximum: 200
+      minimum: 1
+    cursor:
+      type: string
+      description: 不透明游标；客户端不得解析其内容。

@@ -1,0 +1,14 @@
+{
+  "test_id": "SEC-004",
+  "title": "API 限流",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "429、Retry-After、正常用户不受共享 bucket 影响",
+  "actual": "第 21 次失败登录触发 429 且带 Retry-After；同一 IP 下其他账号仍可正常登录",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": "发现并修复：限流器写成 !allow(account) && !allow(ip)，两维度互相抵消，实际几乎不会触发"
+}

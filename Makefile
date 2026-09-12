@@ -31,6 +31,12 @@ frontend-dev:
 test:
 	cd backend && go test ./...
 
+# Sprint 1/2 遗留验收引入的契约守卫，CI 应逐步接入同一条命令。
+check: test
+	python3 scripts/check_openapi.py
+	cd frontend && node scripts/check-token-contrast.mjs
+	@echo "所有静态契约检查通过"
+
 bench:
 	cd backend && go test -bench=. -benchmem ./internal/...
 

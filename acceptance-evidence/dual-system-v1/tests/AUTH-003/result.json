@@ -1,0 +1,14 @@
+{
+  "test_id": "AUTH-003",
+  "title": "不存在账号与错误密码的外观及时序近似",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "错误码/提示一致；中位响应时间比值 ≤3x",
+  "actual": "错误码、提示、retryable 三项完全一致；9/9 有效样本，中位 0.0620s vs 0.0674s，比值 1.09x",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": "样本被 429/423 污染时丢弃并等窗口重置重采；仍不足则标 BLOCKED，不拿脏样本下结论"
+}

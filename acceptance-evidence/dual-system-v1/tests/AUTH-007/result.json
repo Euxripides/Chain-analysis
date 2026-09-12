@@ -1,0 +1,14 @@
+{
+  "test_id": "AUTH-007",
+  "title": "管理员强制下线 5 秒内对全部会话生效",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "5 秒内所有目标请求失效",
+  "actual": "两个会话在 0 秒内同时失效",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": ""
+}

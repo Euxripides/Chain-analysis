@@ -1,0 +1,15 @@
+{
+  "test_id": "S1-API-01",
+  "title": "OpenAPI 契约与一致性校验",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "契约可解析、operationId 唯一、错误模型完整",
+  "actual": "auth-v1 完整级契约 14 条路径；user-v2/admin-v1 索引级 42 条；check_openapi.py 双向一致性 + 错误码登记校验全部通过",
+  "status": "PARTIAL",
+  "evidence_paths": [
+    "openapi/",
+    "scripts/check_openapi.py"
+  ],
+  "notes": "缺 TypeScript 代码生成与生成无 diff 检查；user-v2/admin-v1 的响应体模型待补"
+}

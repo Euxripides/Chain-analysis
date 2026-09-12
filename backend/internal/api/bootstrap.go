@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -82,15 +83,99 @@ func poolOf(deps Deps) *pgxpool.Pool {
 }
 
 // auditCaptureMiddleware 捕获响应状态与耗时，用于写业务审计（§6.6.3 结果字段）。
+//
+// 两条覆盖路径：
+//  1. 新路由（/api/v2、/api/admin/v1、/api/auth/v1）通过 require() 声明权限键，
+//     审计动作就是权限键，语义精确；
+//  2. 兼容层 /api/v1 的历史写操作没有权限声明。早期实现因此**完全不审计**，
+//     形成"调查/报告/导出写操作无迹可查"的真实盲区（§6.5 要求覆盖业务写操作）。
+//     这里对 legacy 的非幂等请求按路径补一条审计，动作名使用 `legacy:<method> <path>`，
+//     并标记 contract_level=legacy，便于后续迁移时区分与收敛。
 func (s *Server) auditCaptureMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		if s.audit != nil && declaredPermission(r.Context()) != "" {
+		if s.audit == nil {
+			return
+		}
+		if declaredPermission(r.Context()) != "" {
 			s.auditBusiness(r, rec.status, time.Since(start), rec.written)
+			return
+		}
+		if isLegacyMutation(r) {
+			s.auditLegacyMutation(r, rec.status, time.Since(start))
 		}
 	})
+}
+
+// isLegacyMutation 只对 /api/v1 下会改变状态的方法补审计；
+// GET/HEAD/OPTIONS 属于读取，旧接口数量多且噪声大，留给各接口迁移后再逐条声明。
+func isLegacyMutation(r *http.Request) bool {
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+		return false
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	// 下载票据本身是短时令牌换取文件，审计已在签发与校验处单独记录，避免重复。
+	if strings.HasPrefix(r.URL.Path, "/api/v1/download/") {
+		return false
+	}
+	return true
+}
+
+// auditLegacyMutation 记录一条兼容层写操作审计。
+func (s *Server) auditLegacyMutation(r *http.Request, status int, duration time.Duration) {
+	p := PrincipalFrom(r.Context())
+	meta := metaFrom(r.Context())
+	result := "success"
+	if status >= 500 {
+		result = "error"
+	} else if status >= 400 {
+		result = "failure"
+	}
+	action := "legacy:" + r.Method + " " + legacyActionPath(r.URL.Path)
+	ev := auditEventFor(r, p, meta, action, "legacy", resourceFromPath(r.URL.Path), "", result,
+		map[string]any{"contract_level": "legacy", "raw_path": r.URL.Path})
+	ev.HTTPStatus = status
+	ev.DurationMS = int(duration.Milliseconds())
+	ev.RiskLevel = "medium"
+	if err := s.audit.Write(r.Context(), ev); err != nil {
+		s.deps.Log.Error("audit legacy mutation failed", "err", err, "path", r.URL.Path)
+	}
+}
+
+// legacyActionPath 把路径中的 UUID 替换成占位符，避免审计动作名基数爆炸
+// （否则每个任务 ID 都会生成一个新的 action 值）。
+func legacyActionPath(path string) string {
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/"), "/")
+	for i, part := range parts {
+		if looksLikeUUID(part) {
+			parts[i] = "{id}"
+		}
+	}
+	return "/" + strings.Join(parts, "/")
+}
+
+func looksLikeUUID(v string) bool {
+	if len(v) != 36 {
+		return false
+	}
+	for i, c := range v {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type statusRecorder struct {

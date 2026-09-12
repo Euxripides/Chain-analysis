@@ -1,0 +1,15 @@
+{
+  "test_id": "UX-003b",
+  "title": "颜色和状态",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "4.5:1；状态不只靠颜色",
+  "actual": "逐元素计算 WCAG 对比度全部 ≥4.5:1；状态徽标带形状前缀",
+  "status": "PASS",
+  "evidence_paths": [
+    "frontend/tests/dual-system-quality.spec.ts",
+    "frontend/scripts/check-token-contrast.mjs"
+  ],
+  "notes": "发现并修复：导航链接类名从未生效（2.96:1）；琥珀色 2.90:1"
+}

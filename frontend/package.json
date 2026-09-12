@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:tokens": "node scripts/check-token-contrast.mjs",
+    "build:user": "vite build --config apps/user-console/vite.config.ts",
+    "build:admin": "vite build --config apps/admin-console/vite.config.ts",
+    "gen:audit-coverage": "cd .. && python3 scripts/gen_audit_coverage.py"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",

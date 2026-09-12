@@ -19,6 +19,7 @@ import (
 type principalCtxKey struct{}
 type requestMetaCtxKey struct{}
 type routePermCtxKey struct{}
+type sessionReuseCtxKey struct{}
 
 // RequestMeta 保存本次请求的追踪与来源信息，供审计与错误响应复用。
 type RequestMeta struct {
@@ -176,6 +177,13 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
 					ctx = auth.WithUser(ctx, userFromPrincipal(p))
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
+				case errors.Is(err, iam.ErrSessionReuse):
+					// 令牌重放：撤销整个会话族并写审计。这里必须处理，
+					// 否则只有走 currentSessionDetailed 的少数端点会检测到，
+					// 普通业务请求会静默退化成"未登录"。
+					s.handleTokenReuse(ctx, sess, aud)
+					ctx = context.WithValue(ctx, sessionReuseCtxKey{}, true)
+					s.iam.Sessions().ClearCookies(w, aud)
 				case errors.Is(err, iam.ErrSessionInvalid):
 					// 过期/已撤销：清理 Cookie，继续走未认证路径，
 					// 由 require() 返回 401 而不是静默降级为兼容头。

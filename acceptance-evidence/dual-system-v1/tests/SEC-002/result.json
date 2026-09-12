@@ -1,0 +1,14 @@
+{
+  "test_id": "SEC-002",
+  "title": "XSS / Markdown 注入",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "payload 被转义，无执行；CSP 报告",
+  "actual": "注入 img onerror 载荷后 window.__xss 未置位、未生成 img、以纯文本呈现；nginx 已下发 CSP",
+  "status": "PASS",
+  "evidence_paths": [
+    "frontend/tests/dual-system-quality.spec.ts"
+  ],
+  "notes": "CSP：script-src self、object-src none、frame-ancestors none"
+}

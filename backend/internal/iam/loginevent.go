@@ -230,10 +230,15 @@ type LoginEventRow struct {
 	SessionID    string         `json:"session_id,omitempty"`
 	DeviceID     string         `json:"device_id,omitempty"`
 	IsNewDevice  bool           `json:"is_new_device"`
-	DeviceLabel  string         `json:"device_label"`
-	DeviceType   string         `json:"device_type"`
-	OSName       string         `json:"os_name"`
-	BrowserName  string         `json:"browser_name"`
+	DeviceLabel    string       `json:"device_label"`
+	DeviceType     string       `json:"device_type"`
+	DeviceVendor   string       `json:"device_vendor"`
+	DeviceModel    string       `json:"device_model"`
+	OSName         string       `json:"os_name"`
+	OSVersion      string       `json:"os_version"`
+	BrowserName    string       `json:"browser_name"`
+	BrowserVersion string       `json:"browser_version"`
+	UserAgent      string       `json:"user_agent"`
 	PeerIP       string         `json:"peer_ip"`
 	ClientIP     string         `json:"client_ip"`
 	EntryHost    string         `json:"entry_host"`
@@ -292,7 +297,8 @@ func QueryLoginEvents(ctx context.Context, pool *pgxpool.Pool, f LoginEventFilte
         SELECT id, seq, occurred_at, event_type, result, reason_code, risk_level,
                COALESCE(identity_id::text, ''), subject_masked, audience, auth_method,
                COALESCE(session_id::text, ''), COALESCE(device_id::text, ''), is_new_device,
-               device_label, device_type, os_name, browser_name,
+               device_label, device_type, device_vendor, device_model, os_name, os_version,
+               browser_name, browser_version, user_agent,
                COALESCE(host(peer_ip), ''), COALESCE(host(client_ip), ''), entry_host, request_id, detail,
                event_hash, prev_hash
         FROM login_events WHERE `+clause+
@@ -307,7 +313,9 @@ func QueryLoginEvents(ctx context.Context, pool *pgxpool.Pool, f LoginEventFilte
 		var detailRaw []byte
 		if err := rows.Scan(&r.ID, &r.Seq, &r.OccurredAt, &r.EventType, &r.Result, &r.ReasonCode, &r.RiskLevel,
 			&r.IdentityID, &r.SubjectMasked, &r.Audience, &r.AuthMethod,
-			&r.SessionID, &r.DeviceID, &r.IsNewDevice, &r.DeviceLabel, &r.DeviceType, &r.OSName, &r.BrowserName,
+			&r.SessionID, &r.DeviceID, &r.IsNewDevice, &r.DeviceLabel, &r.DeviceType,
+			&r.DeviceVendor, &r.DeviceModel, &r.OSName, &r.OSVersion,
+			&r.BrowserName, &r.BrowserVersion, &r.UserAgent,
 			&r.PeerIP, &r.ClientIP, &r.EntryHost, &r.RequestID, &detailRaw, &r.EventHash, &r.PrevHash); err != nil {
 			return nil, 0, err
 		}

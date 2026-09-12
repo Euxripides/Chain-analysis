@@ -1,0 +1,14 @@
+{
+  "test_id": "SEC-003",
+  "title": "SSRF",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "localhost/private/metadata/redirect 被拒绝",
+  "actual": "本批次新增面不含用户可控出站 URL；URL 形状输入仅被当作数据；公共签名服务默认关闭",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": "未引入新的出站请求入口，本条为：作用域内无 SSRF 面 + 现有入口已核对"
+}

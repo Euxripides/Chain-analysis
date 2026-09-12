@@ -1,0 +1,14 @@
+{
+  "test_id": "UX-004",
+  "title": "长表性能",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "10k 数据不渲染 10k DOM 行",
+  "actual": "接口返回 >100 行时 DOM 行数 ≤100；翻页 <1.5s",
+  "status": "PARTIAL",
+  "evidence_paths": [
+    "frontend/tests/dual-system-quality.spec.ts"
+  ],
+  "notes": "10k 量级未验证：当前单页上限 200 行，S5 引入虚拟滚动后用真实大数据复测"
+}

@@ -1,0 +1,14 @@
+{
+  "test_id": "AUDIT-002d",
+  "title": "日志秘密扫描",
+  "executed_at": "2026-09-12T15:17:57.548396+08:00",
+  "build_sha": "f781c564753ffae3330937ec12f8429f81a6d364",
+  "environment": "gray-rollout",
+  "expected": "password/token/key/cookie 0 明文",
+  "actual": "对 API 响应、服务端日志与 4 张数据库表扫描，命中 0",
+  "status": "PASS",
+  "evidence_paths": [
+    "acceptance-evidence/dual-system-v1/tests/sprint12/result.txt"
+  ],
+  "notes": ""
+}
