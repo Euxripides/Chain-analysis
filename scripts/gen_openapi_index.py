@@ -23,7 +23,20 @@ API = ROOT / "backend" / "internal" / "api"
 
 REGIONS = {
     "user-v2": ("/api/v2", ["userv2.go"], "用户层系统 API（§21.5）"),
-    "admin-v1": ("/api/admin/v1", ["adminv1.go", "adminorg.go"], "后台管理 API（§21.6）"),
+    "admin-v1": (
+        "/api/admin/v1",
+        [
+            "adminv1.go",
+            "adminorg.go",
+            # Sprint 6：后台路由按领域拆分，生成器必须一并扫描，否则契约会落后于实现。
+            "sprint6_identity.go",
+            "sprint6_control.go",
+            "sprint6_provider.go",
+            "sprint6_governance.go",
+            "sprint6_obs.go",
+        ],
+        "后台管理 API（§21.6）",
+    ),
 }
 
 

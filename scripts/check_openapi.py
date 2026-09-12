@@ -32,11 +32,7 @@ API_DIR = ROOT / "backend" / "internal" / "api"
 
 # 已实现但暂未写契约的端点。新增条目必须写明原因与目标 Sprint，否则视为遗漏。
 ALLOWLIST: dict[str, str] = {
-    "/api/admin/v1/alerts": "占位端点，返回 501，S6 落地时一并写契约",
-    "/api/admin/v1/provider/accounts": "占位端点，返回 501，S6",
-    "/api/admin/v1/config/settings": "占位端点，返回 501，S6",
-    "/api/admin/v1/backups": "占位端点，返回 501，S6",
-    "/api/admin/v1/audit/export": "占位端点，返回 501，S6",
+    # Sprint 6 已把原先的 501 占位端点全部落地并写入契约，因此这里不再保留管理侧豁免。
     "/api/v2/notifications": "占位端点，返回 501，S4",
     "/api/v2/notifications/{id}/read": "占位端点，返回 501，S4",
     "/api/v2/notifications/read-all": "占位端点，返回 501，S4",
@@ -70,8 +66,24 @@ def collect_router_paths() -> dict[str, set[str]]:
         "v2": API_DIR / "userv2.go",
         "admin": API_DIR / "adminv1.go",
         "adminorg": API_DIR / "adminorg.go",
+        # Sprint 6 起，后台路由按领域拆到 sprint6_*.go；这些文件同样挂在 /api/admin/v1 下。
+        "adminS6Identity": API_DIR / "sprint6_identity.go",
+        "adminS6Control": API_DIR / "sprint6_control.go",
+        "adminS6Provider": API_DIR / "sprint6_provider.go",
+        "adminS6Governance": API_DIR / "sprint6_governance.go",
+        "adminS6Obs": API_DIR / "sprint6_obs.go",
     }
-    prefixes = {"auth": "/api/auth/v1", "v2": "/api/v2", "admin": "/api/admin/v1", "adminorg": "/api/admin/v1"}
+    prefixes = {
+        "auth": "/api/auth/v1",
+        "v2": "/api/v2",
+        "admin": "/api/admin/v1",
+        "adminorg": "/api/admin/v1",
+        "adminS6Identity": "/api/admin/v1",
+        "adminS6Control": "/api/admin/v1",
+        "adminS6Provider": "/api/admin/v1",
+        "adminS6Governance": "/api/admin/v1",
+        "adminS6Obs": "/api/admin/v1",
+    }
 
     def add(full: str, method: str) -> None:
         # 把 chi 的 {id} 参数统一成 OpenAPI 风格

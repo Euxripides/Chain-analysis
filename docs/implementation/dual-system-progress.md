@@ -1,6 +1,7 @@
 # 双系统开发进度对照（对照 dual-system-development-plan.md 全量）
 
-> 结论：**Sprint 1 / 2 / 3 / 4 / 5 均已完成**。Sprint 6 未开始。
+> 结论：**Sprint 1 / 2 / 3 / 4 / 5 / 6 均已完成**（Sprint 6 见 `docs/implementation/sprint6-report.md`；
+> AUDIT-004 的每日锚点一致性为 NOT_VERIFIED，原因见该报告 §6 的事件记录）。
 >
 > - Sprint 2 的 OIDC 已完成 adapter + httptest 隔离测试（AUTH-011 协议负向覆盖）；
 >   没有真实 IdP，`/api/auth/v1/methods` 仍返回 `oidc:false`，`/oidc/*` 返回 501，
@@ -12,9 +13,13 @@
 >   （13 个跨项目守卫 skip）；S1–S4 回归全绿。详见 `docs/implementation/sprint5-report.md`。
 > - RBAC-007（Canvas 跨案件 Evidence）与 RBAC-004（无 evidence 权限读取正文）
 >   已由 S5 套件实际验证，不再是 BLOCKED。
+> - Sprint 6：API E2E PASS 111 / FAIL 0 / NOT_VERIFIED 1；Playwright 8 PASS / 0 FAIL；
+>   ADMIN-001..010 全部通过；AUDIT-003 用例暴露并修复了真实 append-only 缺口（TRUNCATE），
+>   详见 `docs/implementation/sprint6-report.md` §6。
 >
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
-> 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`e639707`
+> 代码基线：`2131c8c`、`6cdc318`、`f781c56`、`3e87311`、`3771763`、`e9638b6`、`e639707`（S5）
+> Sprint 6 基线：见 `docs/implementation/sprint6-report.md` 头部与 commit 记录
 
 ## 1. Sprint 任务完成度
 
@@ -25,7 +30,7 @@
 | S3 | RBAC、租户与审计 v2 | 8 | 8 | 0 | 0 | **100%** |
 | S4 | 用户案件与调查闭环 | 8 | 8 | 0 | 0 | **100%** |
 | S5 | Explorer、下载、任务、导出、图谱 | 8 | 8 | 0 | 0 | **100%** |
-| S6 | 后台控制、治理与可观测性 | 9 | 0 | 0 | 9 | 0%（未开始） |
+| S6 | 后台控制、治理与可观测性 | 9 | 9 | 0 | 0 | **100%**（AUDIT-004 锚点一致性 NOT_VERIFIED） |
 | S7 | 硬化、真实数据验收与切流 | 8 | 0 | 0 | 8 | 0%（未开始） |
 
 ### Sprint 1（摘要）
@@ -116,10 +121,24 @@
 | 证据 | 性能分层结果 / 容量预测 / RPO-RTO 演练 | **未完成**（S7） |
 | 证据 | `RELEASE-DECISION.md` | **未完成**（S7） |
 
-## 4. 下一步（不进入 S6 实施，仅登记）
+### Sprint 6（本轮）
+| 任务 | 状态 | 交付与证据 |
+|---|---|---|
+| S6-DB-01 | 完成 | 0051/0052/0053/0054；一次性库 0001→0053 全量 + 重放幂等验证 |
+| S6-BE-01 | 完成 | `/api/admin/v1` 控制面（control/kill-switch/approvals/performance/身份补齐），统一权限 + preview/command + If-Match + step-up + 审计 |
+| S6-BE-02 | 完成 | Provider 描述符/连接测试/断开影响/密钥轮换（只存摘要）、路由策略与历史、请求审计、成本与预算 |
+| S6-BE-03 | 完成 | 告警生命周期（含六层关联链）、功能开关（确定性灰度 + 评估记录）、配置版本（diff/rollback） |
+| S6-BE-04 | 完成 | 保留预览、删除请求双人审批（执行默认关闭 412）、配置快照备份与校验、恢复预览/请求、审计导出（manifest+SHA-256+回读校验） |
+| S6-FE-01 | 完成 | Provider/详情/路由/性能/API Key、请求审计、成本、预算页面 |
+| S6-FE-02 | 完成 | 告警、控制面、Kill Switch（四步双人流程）、配置、功能开关、备份恢复、保留、版本页面 |
+| S6-OBS-01 | 完成 | `/observability` 总览/SLO/告警/指标 + §25.1 结构化日志字段 + 12 个新指标 |
+| S6-QA-01 | 完成 | `run-sprint6-e2e.sh` PASS 111 / FAIL 0 / NOT_VERIFIED 1；Playwright 8 PASS / 0 FAIL；ADMIN-001..010 全通过 |
 
-1. **S6**：后台控制、Provider/路由/性能/成本、告警、Kill Switch、配置/Flag、保留与备份元数据；
-   补 ADMIN-001..010、AUDIT-002..004。
-2. **S7**：威胁/SBOM/性能/DR、全 §27、灰度与切流、手册与 RELEASE-DECISION。
-3. **S2 遗留**：MFA/TOTP；真实 IdP 接入后的 AUTH-011 live 验收。
-4. **治理**：S1-API-01 TS 生成、UX-004 的浅富化路径在生产大表上的压测、测试夹具保留到 S7 后清理。
+## 4. 下一步（进入 S7）
+
+1. **S7 必须优先处理**：AUDIT-004 的链边界方案（当前 audit 链存在不可恢复缺口）、
+   应用账号与 owner/超级用户的彻底分离、PG/CH/MinIO 物理备份与 RPO/RTO 演练。
+2. **S7 常规**：威胁矩阵/SBOM/依赖扫描、性能分层、全 §27、灰度与切流、手册与 RELEASE-DECISION。
+3. **S2 遗留**：MFA/TOTP；真实 IdP 接入后的 AUTH-011 live 验收。S6 的 step-up 为密码重认证（ADR-017）。
+4. **S6 遗留**：A-DATA-02/03（数据质量/存储）、A-RISK-01（风险事件）仍为显式占位页；
+   功能开关尚未接入请求路径自动评估。

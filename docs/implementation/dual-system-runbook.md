@@ -43,6 +43,59 @@ python3 scripts/deploy_dual_system.py --yes --skip-migrate      # 只发代码
 - 证据目录：`acceptance-evidence/dual-system-v1/tests/sprint5/`（result.json、run.log、
   files/、screenshots/、runtime-verification.txt）。
 
+## 1.16 Sprint 6 新增路由与运行期降权
+
+后台入口（`/admin`，权限见 `backend/internal/policy/catalog.go`）：
+
+```text
+/observability            可观测性总览 / SLO / 告警 / 指标
+/providers                 Provider 账户（测试连接、断开影响、密钥摘要与轮换）
+/providers/routing         路由策略（优先级、fallback、限流、熔断阈值、灰度）
+/runtime/performance       性能控制（requested/effective/reason + preview/apply/rollback）
+/api-keys                  API / MCP Key（创建/轮换/吊销，明文只出现一次）
+/requests                  请求审计（cursor 分页 + Trace 关联）
+/costs  /budgets           成本与预算（十进制字符串金额、阈值动作、If-Match）
+/alerts                    告警中心（P0–P3、关联链、认领/抑制/解决）
+/control                   实时控制面（状态轨、队列、熔断、自动保护开关）
+/control/kill-switch       Kill Switch（预览 → 提交 → 双人审批 → 执行 → 健康检查 → 恢复）
+/data/retention            保留策略与删除请求（实际删除默认关闭）
+/system/backups            备份、校验与恢复演练
+/system/version            build SHA、schema 迁移与组件矩阵
+/settings  /feature-flags  配置版本（diff/回滚）与功能开关（灰度/试算/回滚）
+```
+
+对应 API 前缀：`/api/admin/v1/{control,runtime,providers,routing-policies,api-keys,requests,costs,budgets,alerts,settings,feature-flags,retention-policies,deletion-requests,backups,restores,system,observability}`。
+
+### 运行期降权（必须保持开启）
+
+`deploy/.env` 中的 `DB_RUNTIME_ROLE=blockchain_app` 让 API/Worker 的每条数据库连接执行
+`SET ROLE` 到受限角色，从数据库层拒绝审计表的 UPDATE/DELETE 与全库 TRUNCATE（0054）。
+缺失该变量时启动日志会打印 WARN，且 AUDIT-003 不再成立。
+
+```bash
+grep '^DB_RUNTIME_ROLE=' deploy/.env            # 期望 blockchain_app
+docker exec -e PGPASSWORD=$POSTGRES_PASSWORD deploy-postgres-1 \
+  psql -U blockchain -d blockchain_platform -Atc \
+  "select has_table_privilege('blockchain_app','audit_events_v2','TRUNCATE')"   # 期望 f
+```
+
+### step-up（二次身份确认）
+
+高风险命令（Kill Switch、密钥轮换、Turbo 模式、删除/恢复、审计导出、secret 配置）要求请求体带
+`step_up_password`（当前账号密码）。这是**密码重认证**，不是 MFA（MFA 仍为 NOT_IMPLEMENTED）。
+
+### Sprint 6 验收复现
+
+```bash
+ssh euripides@192.168.31.152 \
+  'cd ~/projects/blockchain-platform && set -a && . deploy/.env && set +a && \
+   . /tmp/s6-e2e-env.sh && export S6_BUILD_SHA=<sha> && \
+   bash acceptance-evidence/dual-system-v1/tests/run-sprint6-e2e.sh'
+```
+
+`/tmp/s6-e2e-env.sh` 需导出 `ADMIN_PASSWORD`（Owner）、`PLATFORM_ADMIN_PASSWORD`、
+`AUDITOR_PASSWORD`、`VIEWER_PASSWORD`（后三者为 `cmd/admin-fixture` 生成的一次性密码）。
+
 ## 1.2 OIDC 当前状态
 
 未接入真实 IdP 时保持生产禁用：
