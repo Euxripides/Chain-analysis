@@ -5,6 +5,7 @@
 Description=Blockchain Platform admin console (Admin Console, 127.0.0.1:3002)
 After=network-online.target blockchain-api.service
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -13,7 +14,6 @@ WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
 ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/admin-console/vite.config.ts --host 127.0.0.1 --port 3002 --strictPort
 Restart=on-failure
 RestartSec=5s
-StartLimitIntervalSec=0
 StandardOutput=append:/tmp/admin-console.log
 StandardError=append:/tmp/admin-console.log
 

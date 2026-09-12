@@ -4,6 +4,8 @@ package observability
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 )
 
 var (
@@ -313,3 +315,114 @@ var (
 	AnkrParserQueueBytes        = promauto.NewGauge(prometheus.GaugeOpts{Name: "ankr_parser_queue_bytes", Help: "Parser queue estimated bytes"})
 	AnkrSpoolPendingBytes       = promauto.NewGauge(prometheus.GaugeOpts{Name: "ankr_spool_pending_bytes", Help: "Spool pending bytes"})
 )
+
+// ============================================================
+// 双系统指标（docs/dual-system-development-plan.md §28.5 S3-OBS-01）
+// 权限拒绝、审计写入失败、Outbox 积压、审计链状态。
+//
+// 标签基数受控：permission 来自有限权限目录，reason 为固定原因码集合，
+// 不会因对象 ID 产生高基数。
+// ============================================================
+
+var (
+	AuthzDecisions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_authz_decisions_total",
+		Help: "授权判定次数，按结果与来源分类（result=allow|deny）。",
+	}, []string{"result", "source"})
+
+	AuthzDenied = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_authz_denied_total",
+		Help: "授权拒绝次数，按权限键与拒绝原因分类。",
+	}, []string{"permission", "reason"})
+
+	AuditWrites = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_audit_writes_total",
+		Help: "审计写入结果。failed 必须告警：审计失败时高风险操作会 fail closed。",
+	}, []string{"chain", "result"})
+
+	OutboxPending = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "cs_outbox_pending_events",
+		Help: "未投递的事务 Outbox 事件数。",
+	})
+
+	OutboxOldestAge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "cs_outbox_oldest_pending_age_seconds",
+		Help: "最老的未投递 Outbox 事件年龄（秒）。持续增长表示消费者停摆。",
+	})
+
+	AuditChainSeq = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "cs_audit_chain_last_seq",
+		Help: "审计链当前链头序号。",
+	}, []string{"chain"})
+
+	AuditChainVerify = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_audit_chain_verify_total",
+		Help: "审计链校验结果。invalid 必须告警（可能意味着篡改）。",
+	}, []string{"chain", "result"})
+
+	AuditArchiveRuns = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_audit_archive_runs_total",
+		Help: "每日审计锚点归档结果。",
+	}, []string{"result"})
+
+	TenantScopeDenied = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "cs_tenant_scope_denied_total",
+		Help: "跨租户对象访问被拒次数，按资源类型与原因分类（§27 RBAC-002/003）。",
+	}, []string{"resource", "reason"})
+)
+
+// ReasonForAuthz 把拒绝原因映射为有限的标签值，防止标签爆炸。
+func ReasonForAuthz(reason string) string {
+	switch reason {
+	case "missing_permission", "unauthenticated", "audience_mismatch",
+		"csrf_failed", "permission_not_declared", "cross_organization", "cross_workspace",
+		"object_not_found", "workspace_scope_mismatch":
+		return reason
+	default:
+		return "other"
+	}
+}
+
+func RecordAuthzDecision(result, source string) {
+	AuthzDecisions.WithLabelValues(result, source).Inc()
+}
+
+func RecordAuthzDenied(permission, reason string) {
+	AuthzDenied.WithLabelValues(permission, ReasonForAuthz(reason)).Inc()
+}
+
+func RecordTenantScopeDenied(resource, reason string) {
+	TenantScopeDenied.WithLabelValues(resource, ReasonForAuthz(reason)).Inc()
+}
+
+// AuditReporter 把 audit 包的后台任务结果写进 Prometheus。
+// audit 包只依赖 audit.Reporter 接口，方向是"调用方注入"，不存在包级反向依赖。
+type AuditReporter struct{}
+
+func (AuditReporter) SetOutboxStats(pending int64, oldestAgeSeconds float64) {
+	OutboxPending.Set(float64(pending))
+	OutboxOldestAge.Set(oldestAgeSeconds)
+}
+
+func (AuditReporter) RecordChainVerify(chain string, valid bool) {
+	result := "valid"
+	if !valid {
+		result = "invalid"
+	}
+	AuditChainVerify.WithLabelValues(chain, result).Inc()
+}
+
+func (AuditReporter) RecordArchiveRun(err error) {
+	if err != nil {
+		AuditArchiveRuns.WithLabelValues("failed").Inc()
+		return
+	}
+	AuditArchiveRuns.WithLabelValues("ok").Inc()
+}
+
+func (AuditReporter) SetChainSeq(chain string, seq int64) {
+	AuditChainSeq.WithLabelValues(chain).Set(float64(seq))
+}
+
+// NewAuditReporter 返回可注入 audit 包的报告器。
+func NewAuditReporter() audit.Reporter { return AuditReporter{} }

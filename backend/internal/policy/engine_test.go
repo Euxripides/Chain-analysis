@@ -1,6 +1,11 @@
 package policy
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestCatalogKeysAreNamespaced(t *testing.T) {
 	for k, def := range Catalog {
@@ -79,5 +84,53 @@ func TestRiskAndSensitiveMetadata(t *testing.T) {
 	}
 	if !IsAdminPermission("admin:user:read") || IsAdminPermission("case:read") {
 		t.Error("admin namespace detection is wrong")
+	}
+}
+
+// 回归：Engine.Load 的 SQL 必须认可 workspace 作用域绑定。
+// 曾经只匹配 scope_type='organization'，导致工作区级角色拿不到任何权限，
+// 对象级授权因此永远走不到（返回 403 而不是 404）。
+func TestLoadQueryAcceptsWorkspaceScopedBindings(t *testing.T) {
+	src, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)
+	if !strings.Contains(body, "b.scope_type = 'workspace'") {
+		t.Fatal("Engine.Load 必须包含 workspace 作用域绑定，否则工作区级角色无法生效")
+	}
+	if strings.Contains(body, `AND ($2::uuid IS NULL OR (b.scope_type = 'organization' AND b.scope_id = $2::uuid))`) {
+		t.Fatal("Engine.Load 仍在按组织作用域裁剪，会屏蔽工作区级绑定")
+	}
+}
+
+// 回归：缓存键是 identityID|organizationID，Invalidate 必须按前缀清理。
+// 该缺陷曾让撤销后的旧会话继续持有权限，直到 30 秒 TTL 到期（违反 RBAC-006）。
+func TestInvalidateClearsAllOrganizationsForIdentity(t *testing.T) {
+	e := NewEngine(nil, time.Minute)
+	e.cache["user-1|org-a"] = cacheEntry{permissions: []string{"case:read"}}
+	e.cache["user-1|org-b"] = cacheEntry{permissions: []string{"case:read"}}
+	e.cache["user-2|org-a"] = cacheEntry{permissions: []string{"case:read"}}
+
+	e.Invalidate("user-1")
+
+	if _, ok := e.cache["user-1|org-a"]; ok {
+		t.Error("org-a 的缓存未被清除，撤销无法在 5 秒内生效")
+	}
+	if _, ok := e.cache["user-1|org-b"]; ok {
+		t.Error("org-b 的缓存未被清除")
+	}
+	if _, ok := e.cache["user-2|org-a"]; !ok {
+		t.Error("不得误删其他身份的缓存")
+	}
+}
+
+func TestInvalidateAllClearsEverything(t *testing.T) {
+	e := NewEngine(nil, time.Minute)
+	e.cache["a|o"] = cacheEntry{}
+	e.cache["b|o"] = cacheEntry{}
+	e.InvalidateAll()
+	if len(e.cache) != 0 {
+		t.Fatalf("InvalidateAll 未清空缓存：%d 条残留", len(e.cache))
 	}
 }

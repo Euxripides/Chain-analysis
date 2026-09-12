@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import {
   Activity,
   AlertTriangle,
+  Building2,
   Database,
   FileSearch,
   Gauge,
@@ -24,6 +25,7 @@ const RolesPage = lazy(() => import("./pages/RolesPage"));
 const SessionsPage = lazy(() => import("./pages/SessionsPage"));
 const LoginEventsPage = lazy(() => import("./pages/LoginEventsPage"));
 const AuditPage = lazy(() => import("./pages/AuditPage"));
+const OrganizationsPage = lazy(() => import("./pages/OrganizationsPage"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
 
 /** §3.2 后台导航。 */
@@ -38,6 +40,7 @@ const navGroups = (): NavGroup[] => [
   {
     label: "组织与权限",
     items: [
+      { to: "/organizations", label: "组织与工作区", icon: <Building2 size={16} /> },
       { to: "/users", label: "用户与成员", icon: <Users size={16} /> },
       { to: "/roles", label: "角色与权限", icon: <ShieldCheck size={16} /> },
       { to: "/sessions", label: "登录与会话", icon: <KeyRound size={16} /> },
@@ -120,6 +123,7 @@ function Shell() {
           <Route path="/login" element={<Navigate to="/overview" replace />} />
           <Route path="/overview" element={<Guard permission="admin:dashboard:read"><OverviewPage /></Guard>} />
           <Route path="/system" element={<Guard permission="admin:system:read"><SystemHealthPage /></Guard>} />
+          <Route path="/organizations" element={<Guard permission="admin:org:read"><OrganizationsPage /></Guard>} />
           <Route path="/users" element={<Guard permission="admin:user:read"><UsersPage /></Guard>} />
           <Route path="/roles" element={<Guard permission="admin:role:read"><RolesPage /></Guard>} />
           <Route path="/sessions" element={<Guard permission="admin:session:read"><SessionsPage /></Guard>} />

@@ -1,0 +1,20 @@
+# Worker 进程。承载下载调度，以及 §28.5 S3-BE-02 的审计后台任务：
+#   审计链定时校验 / 每日锚点归档到 MinIO / Outbox 积压指标采集。
+[Unit]
+Description=Blockchain Platform Worker (Go, 127.0.0.1:8081)
+After=network-online.target docker.service blockchain-api.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+WorkingDirectory=/home/euripides/projects/blockchain-platform/backend
+ExecStart=/home/euripides/projects/blockchain-platform/backend/bin/worker
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/worker.log
+StandardError=append:/tmp/worker.log
+
+[Install]
+WantedBy=default.target

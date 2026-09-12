@@ -12,6 +12,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/iam"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 )
 
@@ -262,7 +263,9 @@ func (s *Server) require(permission string, next http.HandlerFunc) http.HandlerF
 			return
 		}
 		decision := s.decide(r, p, permission)
+		observability.RecordAuthzDecision(boolLabel(decision.Allowed), "route")
 		if !decision.Allowed {
+			observability.RecordAuthzDenied(permission, decision.Reason)
 			writeErrorCode(w, http.StatusForbidden, "permission_denied", "当前身份没有该操作的权限", map[string]any{
 				"permission": permission, "reason": decision.Reason,
 			})
@@ -278,6 +281,13 @@ func (s *Server) require(permission string, next http.HandlerFunc) http.HandlerF
 		}
 		next(w, r)
 	}
+}
+
+func boolLabel(ok bool) string {
+	if ok {
+		return "allow"
+	}
+	return "deny"
 }
 
 func (s *Server) decide(r *http.Request, p policy.Principal, permission string) policy.Decision {

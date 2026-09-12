@@ -6,9 +6,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/access"
+
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
 	"github.com/blockchain-platform/blockchain-platform/internal/iam"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 )
 
@@ -38,6 +41,8 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 	}
 	repo := iam.NewRepo(deps.Store.Pool)
 	s.policy = policy.NewEngine(deps.Store.Pool, 30*time.Second)
+	s.guard = access.NewGuard(access.NewResolver(deps.Store.Pool), 30*time.Second)
+	audit.RegisterAuditMetrics(observability.AuditWrites)
 	s.iam = iam.NewService(repo, iam.NewSessionManager(repo, iam.SessionConfig{
 		UserCookieName:  "cs_user_session",
 		AdminCookieName: "cs_admin_session",

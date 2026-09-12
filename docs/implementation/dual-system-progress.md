@@ -1,7 +1,8 @@
 # 双系统开发进度对照（对照 dual-system-development-plan.md 全量）
 
-> 结论：**没有全部完成。** 交付的是 14 周 7 个 Sprint 中的 **Sprint 1（完成）+ Sprint 2（核心）+ Sprint 3（部分）**，
-> 折合约 **20% 的计划工作量**。Sprint 4–7 未开始。
+> 结论：**Sprint 1 / 2 / 3 已完成**（Sprint 2 的 OIDC 与 MFA 明确为 NOT_IMPLEMENTED，
+> Sprint 3 的 RBAC-007 因被测端点属 S5 而 BLOCKED）。Sprint 4–7 未开始，
+> 整体约为计划工作量的 **30%**。
 > 生成时间：2026-09-12 · 分支 `feat/dual-system-iam-foundation`
 
 ## 1. Sprint 任务完成度
@@ -12,7 +13,7 @@
 |---|---|---|---|---|---|---|
 | S1 | 基线、契约、双应用骨架 | 8 | 5 | 3 | 0 | ~80% |
 | S2 | IAM、Session、登录审计 | 8 | 5 | 3 | 0 | ~65% |
-| S3 | RBAC、租户与审计 v2 | 8 | 2 | 3 | 3 | ~35% |
+| S3 | RBAC、租户与审计 v2 | 8 | 8 | 0 | 0 | **100%**（RBAC-007 的被测端点属 S5） |
 | S4 | 用户案件与调查闭环 | 7 | 0 | 0 | 7 | 0% |
 | S5 | Explorer、下载、任务、导出、图谱 | 8 | 0 | 0 | 8 | 0% |
 | S6 | 后台控制、治理与可观测性 | 9 | 0 | 0 | 9 | 0% |
@@ -51,13 +52,13 @@
 | 任务 | 状态 | 缺口 |
 |---|---|---|
 | S3-DB-01 | 完成 | 0041/0042（163 权限、9 角色、审计 v2） |
-| S3-BE-01 | **部分** | TenantContext/PolicyEngine/路由声明完成；**service 层二次授权未做** |
-| S3-BE-02 | **部分** | 审计 v2 + 哈希链完成；**Outbox 消费、每日 archive/verifier 未接** |
-| S3-BE-03 | **未开始** | cases/investigations/canvases/jobs/exports/reports 的 org/workspace 强约束 |
-| S3-ADMIN-01 | **部分** | 用户/角色权限页完成；**组织与工作区管理页未做** |
+| S3-BE-01 | 完成 | `internal/access` 对象级二次授权 + TenantContext + PolicyEngine + 路由声明；v2 详情路由逐对象校验，列表查询在 SQL 层带租户条件 |
+| S3-BE-02 | 完成 | 审计 v2 + 哈希链 + 事务 Outbox + 定时校验器 + 每日锚点归档到 MinIO `blockchain-audit`（`internal/audit/{archive,scheduler}.go`） |
+| S3-BE-03 | 完成 | `0044_tenant_scope.sql`：6 张表租户列收敛为 NOT NULL、新增 reports 作用域列、7 个复合索引、`data_asset_registry` 数据资产登记；已在生产库克隆体上演练回填 |
+| S3-ADMIN-01 | 完成 | 组织 / 工作区 / 成员角色页面 + API（`/api/admin/v1/{organizations,workspaces,members,users/{id}/roles}`） |
 | S3-ADMIN-02 | 完成 | 审计列表/详情/登录关联 |
-| S3-QA-01 | **未开始** | RBAC-001～008 与跨租户负向测试 |
-| S3-OBS-01 | **未开始** | 权限拒绝、审计失败、outbox lag 指标与告警 |
+| S3-QA-01 | 完成 | `run-rbac-e2e.sh`：RBAC-001..008，PASS 29 / FAIL 0 / BLOCKED 2（2 项被测端点属 S4/S5） |
+| S3-OBS-01 | 完成 | `cs_authz_*` / `cs_audit_*` / `cs_outbox_*` / `cs_tenant_scope_denied_total` 指标 + `deploy/monitoring/dual-system-alerts.yaml`（7 条告警） |
 
 ### Sprint 4–7
 全部未开始。对应功能（案件、调查、Finding/Evidence、Canvas、Explorer v2、下载、导出、
@@ -66,7 +67,7 @@
 
 ## 2. §27 测试计划完成度
 
-65 个 Test ID：**PASS 10 / PARTIAL 19 / NOT_RUN 25 / NOT_IMPLEMENTED 11**。
+65 个 Test ID：**PASS 15 / PARTIAL 17 / NOT_RUN 22 / NOT_IMPLEMENTED 11**（Sprint 3 补齐后）。
 权威对照见 `acceptance-evidence/dual-system-v1/section27-conformance.md`。
 
 ## 3. §31 最终交付物清单完成度
@@ -94,9 +95,12 @@
 
 按"先安全后功能"的文档约束，建议顺序：
 
-1. **补齐已实现能力的验收**（不需要新功能，性价比最高）：
-   AUTH-003 时序、AUTH-005 token family 重放、AUTH-006/007 撤销时限、
-   RBAC-002/003/005/007 跨租户负向、SEC-002/003/004、UX-002 四断点、UX-003 axe、UX-004 10k profiler。
-2. **S3 收尾**：S3-BE-03 租户强约束、S3-QA-01、S3-OBS-01、组织/工作区页面。
-3. **S1-API-01 / S2-BE-01 缺口**：OpenAPI 契约与 CI、OIDC、MFA。
-4. **进入 Sprint 4**：案件与调查闭环。
+Sprint 3 已完成，剩余优先级：
+
+1. **补齐 Sprint 1/2 遗留验收**（不需要新功能）：
+   AUTH-003 时序对比、AUTH-005 token family 重放检测、AUTH-006/007 撤销生效时限断言、
+   SEC-002 XSS/CSP、SEC-003 SSRF、SEC-004 限流压测、UX-002 四断点、UX-003 axe 对比度、UX-004 10k profiler。
+2. **S1-API-01 / S2-BE-01 缺口**：`openapi/*.yaml` 契约与 CI 生成校验、OIDC、MFA。
+3. **测试夹具治理**：`cmd/admin-fixture` 生成的 acme 组织目前常驻在实例上，
+   进入 Sprint 4 前应决定保留（作为回归夹具）还是用 `-cleanup` 移除。
+4. **进入 Sprint 4**：案件与调查闭环（案件创建/归档/成员/时间线、调查工作台、Finding/Evidence 复核）。

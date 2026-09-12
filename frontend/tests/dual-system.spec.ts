@@ -167,9 +167,12 @@ test.describe("后台管理系统（Admin Console）", () => {
     await expect(page.locator("table").first()).toContainText("admin@local");
 
     // 用户详情以弹窗展示，不跳转到新页面。
-    await page.locator("table tbody tr").first().getByRole("button").first().click();
+    // 列表按创建时间倒序，测试夹具账号会排在前面，因此按邮箱精确定位。
+    const adminRow = page.locator("table tbody tr").filter({ hasText: "admin@local" }).first();
+    await adminRow.getByRole("button").first().click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("admin@local");
     await expect(dialog).toContainText("owner");
     await dialog.getByRole("button", { name: "关闭对话框" }).click();
     await expect(dialog).toBeHidden();
@@ -208,6 +211,45 @@ test.describe("后台管理系统（Admin Console）", () => {
     await expect(result).toContainText("校验条数");
     await result.getByRole("button", { name: "知道了" }).click();
     await expect(page.locator(".dialog-backdrop")).toHaveCount(0);
+  });
+
+  test("ADMIN-006 组织与工作区页面展示真实租户数据（S3-ADMIN-01）", async ({ page }) => {
+    const orgsResponse = page.waitForResponse(
+      (r) => r.url().includes("/api/admin/v1/organizations") && r.status() === 200,
+      { timeout: 20_000 },
+    );
+    await loginAs(page, "admin");
+    await page.goto("/admin/organizations", { waitUntil: "domcontentloaded" });
+    const body = await (await orgsResponse).json();
+    expect(body.success).toBe(true);
+    expect((body.data as unknown[]).length).toBeGreaterThan(0);
+
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("组织与工作区");
+    // 组织列表必须来自接口：逐个比对名称与 slug。
+    for (const org of body.data as Array<{ name: string; slug: string }>) {
+      await expect(page.locator("table").first()).toContainText(org.name);
+      await expect(page.locator("table").first()).toContainText(org.slug);
+    }
+    // 组织 / 工作区 / 成员三张表都必须真实渲染（不是空壳）。
+    await expect(page.locator("table")).toHaveCount(3);
+    await expect(page.locator("table").nth(1).locator("tbody tr").first()).toBeVisible();
+    await expect(page.locator(".metric").first()).toBeVisible();
+  });
+
+  test("ADMIN-007 撤销角色变更走弹窗确认，不使用原生 prompt", async ({ page }) => {
+    const nativeDialogs: string[] = [];
+    page.on("dialog", async (d) => {
+      nativeDialogs.push(d.type());
+      await d.dismiss();
+    });
+    await loginAs(page, "admin");
+    await page.goto("/admin/organizations", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "管理角色" }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText("角色绑定");
+    // AGENTS.md：确认与输入必须是应用内弹窗，不得触发浏览器原生对话框。
+    expect(nativeDialogs, "不应出现 window.prompt/confirm 等原生对话框").toEqual([]);
+    await page.getByRole("dialog").getByRole("button", { name: "关闭对话框" }).click();
   });
 
   test("边界：未实现的后台页面显式标注 NOT_IMPLEMENTED，不伪造数据", async ({ page }) => {

@@ -133,13 +133,16 @@ def main() -> int:
         run(client, f"cd {shlex.quote(REMOTE)}/backend && {GO_BIN}/go build -o bin/api ./cmd/api && {GO_BIN}/go build -o bin/worker ./cmd/worker && {GO_BIN}/go build -o bin/admin-init ./cmd/admin-init && ls -l bin/api bin/worker bin/admin-init")
 
         print("\n== 3. 安装 systemd 用户单元与 Nginx 站点 ==")
-        run(
-            client,
-            f"mkdir -p ~/.config/systemd/user && "
-            f"cp -f {shlex.quote(REMOTE)}/deploy/blockchain-user-console.service ~/.config/systemd/user/ && "
-            f"cp -f {shlex.quote(REMOTE)}/deploy/blockchain-admin-console.service ~/.config/systemd/user/ && "
-            f"systemctl --user daemon-reload",
+        # 全部单元都从仓库安装，避免"仓库里的定义"与"机器上的定义"漂移
+        # （此前 worker 单元只存在于机器上，升级二进制时被漏重启）。
+        units = [
+            "blockchain-api.service", "blockchain-worker.service", "blockchain-vite.service",
+            "blockchain-mcp.service", "blockchain-user-console.service", "blockchain-admin-console.service",
+        ]
+        install = " && ".join(
+            f"cp -f {shlex.quote(REMOTE)}/deploy/{u} ~/.config/systemd/user/" for u in units
         )
+        run(client, f"mkdir -p ~/.config/systemd/user && {install} && systemctl --user daemon-reload")
         # 注意：该环境下 /etc/nginx/sites-enabled/blockchain-platform.conf 是普通文件而非
         # 指向 sites-available 的符号链接，因此必须同时写入两处，否则站点不会生效。
         nginx_stage = run(
@@ -169,10 +172,12 @@ def main() -> int:
         print("\n== 6. 重启服务 ==")
         if nginx_stage == 0:
             run(client, "sudo -n systemctl reload nginx", check=False)
+        # 后端二进制一旦重建，api 与 worker 都必须重启，否则 worker 会静默运行旧代码。
         run(
             client,
             "systemctl --user enable --now blockchain-user-console.service blockchain-admin-console.service; "
-            "systemctl --user restart blockchain-user-console.service blockchain-admin-console.service blockchain-api.service",
+            "systemctl --user restart blockchain-api.service blockchain-worker.service "
+            "blockchain-user-console.service blockchain-admin-console.service",
         )
         print('  等待 API 就绪（启动会探测 Provider 能力，最多 90 秒）…')
         run(

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/access"
 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/advanced"
 	"github.com/blockchain-platform/blockchain-platform/internal/analysis"
@@ -98,6 +99,7 @@ type Server struct {
 	iam            *iam.Service
 	policy         *policy.Engine
 	audit          *audit.Writer
+	guard          *access.Guard
 	authMode       auth.Mode
 	trustedProxies []*net.IPNet
 }

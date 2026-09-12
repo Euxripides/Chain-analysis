@@ -65,8 +65,12 @@
 
 /* ---------- PageHeader ---------- */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; min-width: 0; }
-.page-head__title { font-size: var(--fs-22); }
-.page-head__sub { color: var(--c-slate); font-size: var(--fs-13); margin-top: 2px; }
+/* 弹性子项默认 min-width:auto：副标题里的长标识（如数据源串、哈希）会把
+   整页撑出横向滚动。必须显式收敛并允许在任意位置换行。 */
+.page-head > * { min-width: 0; }
+.page-head__title { font-size: var(--fs-22); overflow-wrap: anywhere; }
+.page-head__sub { color: var(--c-slate); font-size: var(--fs-13); margin-top: 2px; overflow-wrap: anywhere; }
+.page-head__actions { flex-wrap: wrap; }
 .page-head__actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
 /* ---------- Card / Panel ---------- */
@@ -75,7 +79,7 @@
   box-shadow: var(--shadow-sm); overflow: hidden;
 }
 .card__head { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--c-border); display: flex; align-items: center; gap: var(--sp-3); }
-.card__title { font-size: var(--fs-14); font-weight: 600; }
+.card__title { font-size: var(--fs-14); font-weight: 600; overflow-wrap: anywhere; }
 .card__body { padding: var(--sp-5); min-width: 0; }
 .card__body--flush { padding: 0; }
 
@@ -83,7 +87,8 @@
 .metric { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-md); padding: var(--sp-4) var(--sp-5); }
 .metric__label { font-size: var(--fs-12); color: var(--c-slate); }
 .metric__value { font-size: var(--fs-28); font-weight: 600; line-height: 1.15; margin-top: var(--sp-1); font-variant-numeric: tabular-nums; }
-.metric__hint { font-size: var(--fs-11); color: var(--c-slate); margin-top: var(--sp-1); }
+.metric__hint { font-size: var(--fs-11); color: var(--c-slate); margin-top: var(--sp-1); overflow-wrap: anywhere; }
+.metric__value { overflow-wrap: anywhere; }
 
 /* ---------- Button ---------- */
 .btn {

@@ -1,0 +1,21 @@
+# API 进程。承载 REST/SSE、认证授权、审计写入与业务审计哈希链。
+# 注意：AUTH_MODE 必须是 session（生产）；配置见 deploy/.env。
+[Unit]
+Description=Blockchain Platform API (Go, 127.0.0.1:8080)
+After=network-online.target docker.service
+Wants=network-online.target
+# StartLimitIntervalSec 属于 [Unit]，放进 [Service] 会被 systemd 忽略并告警。
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+WorkingDirectory=/home/euripides/projects/blockchain-platform/backend
+ExecStart=/home/euripides/projects/blockchain-platform/backend/bin/api
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/api.log
+StandardError=append:/tmp/api.log
+
+[Install]
+WantedBy=default.target

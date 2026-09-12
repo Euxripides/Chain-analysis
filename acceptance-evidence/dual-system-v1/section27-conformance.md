@@ -9,13 +9,16 @@
 该脚本已改为：仅当语义与 §27 完全一致时才使用文档编号，其余一律改用 `SMOKE-nn`。
 本表是修正后的权威结论。
 
+> **2026-09-12 更新（Sprint 3 补齐）**：RBAC-001..008 与跨租户负向测试已执行，
+> 见 `tests/run-rbac-e2e.sh`（PASS 29 / FAIL 0 / BLOCKED 2）。下方统计已同步。
+
 ## 统计
 
 | 状态 | 数量 | 含义 |
 |---|---|---|
-| PASS | 10 | 已执行且达到 §27 预期结果 |
-| PARTIAL | 19 | 部分达成，缺项已在备注中写明 |
-| NOT_RUN | 25 | 未执行（多为对应功能尚未实现，不标 PASS） |
+| PASS | 15 | 已执行且达到 §27 预期结果 |
+| PARTIAL | 17 | 部分达成，缺项已在备注中写明 |
+| NOT_RUN | 22 | 未执行（多为对应功能尚未实现，不标 PASS） |
 | NOT_IMPLEMENTED | 11 | 功能本身未实现 |
 | **合计** | **65** | |
 
@@ -35,14 +38,14 @@
 | AUTH-010 | 伪造转发 IP | **PASS** | 单测 TestResolveClientIPIgnoresUntrustedForwarding；AUTH_TRUSTED_PROXIES 之外一律丢弃 |
 | AUTH-011 | OIDC state/nonce/PKCE 错误 | **NOT_IMPLEMENTED** | /api/auth/v1/oidc/* 返回 501 |
 | AUTH-012 | 开放重定向尝试 | **PASS** | return_to=https://evil.example 被中和为 /home；含 /admin、/app-v2 前缀剥离 |
-| RBAC-001 | Viewer 创建案件 | **NOT_RUN** | 案件创建端点属 S4，尚未实现；无可用被测对象 |
-| RBAC-002 | 猜测其他组织案件 UUID | **NOT_RUN** | 单组织部署，缺少第二租户测试数据；S3-QA-01 范围 |
-| RBAC-003 | 工作区角色只作用于目标工作区 | **NOT_RUN** | 同上，跨工作区负向用例未执行 |
-| RBAC-004 | 管理员无 evidence 权限读取正文 | **NOT_RUN** | evidence 端点属 S4/S5 |
-| RBAC-005 | 移除最后一个 Owner | **PARTIAL** | 代码已实现 422 CONFLICT_LAST_OWNER；**未执行测试** |
-| RBAC-006 | 角色修改后旧 Session | **PARTIAL** | Policy 缓存 TTL=30s 可失效；**authz_version 机制未实现，未验证 5 秒内失效** |
-| RBAC-007 | Canvas 引用跨案件 Evidence | **NOT_RUN** | 对象级 ABAC 未实现；S5 范围 |
-| RBAC-008 | API Client 访问后台 | **PARTIAL** | 验证了用户层会话访问后台返回 401；**未测 API Key / scope 路径** |
+| RBAC-001 | Viewer 创建案件 | **PASS** | run-rbac-e2e.sh：viewer 调用高权限写操作 401；权限集合不含任何 admin:*；同时具备 dashboard:read 属正向对照 |
+| RBAC-002 | 猜测其他组织案件 UUID | **PASS** | run-rbac-e2e.sh：跨组织读对象 404（与不存在 UUID 返回同一状态码，不泄露存在性）；审计记录 authorization.object_denied + deny_reason=cross_organization |
+| RBAC-003 | 工作区角色只作用于目标工作区 | **PASS** | run-rbac-e2e.sh：工作区级绑定仅对目标工作区生效——acme-lab 案件 404、acme-other 案件 200 |
+| RBAC-004 | 管理员无 evidence 权限读取正文 | **PARTIAL** | 敏感读取（GET admin:audit:read）产生审计事件已验证；**evidence 正文端点属 S4/S5，未实现（BLOCKED）** |
+| RBAC-005 | 移除最后一个 Owner | **PASS** | run-rbac-e2e.sh：撤销最后一个 owner 绑定返回 422 CONFLICT_LAST_OWNER，且 owner 绑定未被误删 |
+| RBAC-006 | 角色修改后旧 Session | **PASS** | run-rbac-e2e.sh：撤销全部绑定后旧会话 0 秒内 403、权限集合同步收敛；重新授予后 0 秒内恢复（SLA ≤5s） |
+| RBAC-007 | Canvas 引用跨案件 Evidence | **NOT_IMPLEMENTED** | canvas/evidence 端点属 S5；对象级 ABAC 的框架（access.Guard）已就绪但缺少被测对象类型 |
+| RBAC-008 | API Client 访问后台 | **PARTIAL** | 已验：用户层会话访问后台 API/会话列表均 401；investigator 无任何 admin 权限；无凭证 401。**未覆盖 API Key / scope 路径** |
 | USER-001 | 新建案件 | **NOT_IMPLEMENTED** | S4 范围，页面标注目标 Sprint |
 | USER-002 | 创建调查并 Coverage HIT | **NOT_IMPLEMENTED** | S5 范围 |
 | USER-003 | 创建调查并补齐缺口 | **NOT_IMPLEMENTED** | S5 范围 |

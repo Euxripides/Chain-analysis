@@ -5,6 +5,7 @@
 Description=Blockchain Platform user console (Investigator Console, 127.0.0.1:3001)
 After=network-online.target blockchain-api.service
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -13,7 +14,6 @@ WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
 ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/user-console/vite.config.ts --host 127.0.0.1 --port 3001 --strictPort
 Restart=on-failure
 RestartSec=5s
-StartLimitIntervalSec=0
 StandardOutput=append:/tmp/user-console.log
 StandardError=append:/tmp/user-console.log
 

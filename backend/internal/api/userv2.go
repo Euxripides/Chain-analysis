@@ -29,9 +29,13 @@ func (s *Server) registerUserV2(r chi.Router) {
 	r.Post("/notifications/read-all", s.require("notification:update", s.handleNotImplementedV2("notification.read_all")))
 
 	// 现有调查/下载/导出能力已经可用，先以兼容读路由暴露，页面迁移随后进行。
+	// 列表查询在 SQL 层强制作用域；详情路由逐对象执行二次授权（§28.5 S3-BE-01）。
 	r.Get("/cases", s.require("case:list", s.handleUserCases))
+	r.Get("/cases/{id}", s.require("case:read", s.handleUserCaseDetail))
 	r.Get("/investigations", s.require("investigation:list", s.handleUserInvestigations))
+	r.Get("/investigations/{id}", s.require("investigation:read", s.handleUserInvestigationDetail))
 	r.Get("/jobs", s.require("job:list:self", s.handleUserJobs))
+	r.Get("/jobs/{id}", s.require("job:read", s.handleUserJobDetail))
 }
 
 func (s *Server) handleNotImplementedV2(feature string) http.HandlerFunc {
@@ -54,9 +58,9 @@ func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 	pool := s.deps.Store.Pool
 
 	var caseCount, invCount, jobActive, reportCount int
-	_ = pool.QueryRow(ctx, `SELECT count(*) FROM cases WHERE workspace_id = $1 AND status <> 'archived'`, p.WorkspaceID).Scan(&caseCount)
-	_ = pool.QueryRow(ctx, `SELECT count(*) FROM investigations WHERE workspace_id = $1`, p.WorkspaceID).Scan(&invCount)
-	_ = pool.QueryRow(ctx, `SELECT count(*) FROM download_jobs WHERE workspace_id = $1 AND status IN ('RUNNING','PENDING','PAUSED')`, p.WorkspaceID).Scan(&jobActive)
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM cases WHERE organization_id = $1 AND workspace_id = $2 AND status <> 'archived'`, p.OrganizationID, p.WorkspaceID).Scan(&caseCount)
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM investigations WHERE organization_id = $1 AND workspace_id = $2`, p.OrganizationID, p.WorkspaceID).Scan(&invCount)
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM download_jobs WHERE organization_id = $1 AND workspace_id = $2 AND status IN ('RUNNING','PENDING','PAUSED')`, p.OrganizationID, p.WorkspaceID).Scan(&jobActive)
 	_ = pool.QueryRow(ctx, `SELECT count(*) FROM investigation_reports WHERE organization_id = $1`, p.OrganizationID).Scan(&reportCount)
 
 	respondOK(w, r, map[string]any{
@@ -202,6 +206,79 @@ func (s *Server) handleUserPreferencesUpdate(w http.ResponseWriter, r *http.Requ
 		"偏好持久化尚未实现（缺少 user_preferences 表）", map[string]any{"feature": "profile.preferences.write"})
 }
 
+// ---- 对象详情：先做对象级二次授权，再取数据 ----
+
+// handleUserCaseDetail 演示两道防线：requireObject 判权限与租户归属，
+// 随后的 SQL 再带 organization_id 条件，任一防线失效都不会返回跨租户数据。
+func (s *Server) handleUserCaseDetail(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireObject(w, r, "case", chi.URLParam(r, "id")); !ok {
+		return
+	}
+	p := PrincipalFrom(r.Context())
+	var id, orgID, wsID, caseNo, name, desc, status, color string
+	var createdAt, updatedAt time.Time
+	err := s.deps.Store.Pool.QueryRow(r.Context(), `
+        SELECT id, organization_id, workspace_id, case_no, name, description, status, color, created_at, updated_at
+        FROM cases WHERE id = $1 AND organization_id = $2`, chi.URLParam(r, "id"), p.OrganizationID).
+		Scan(&id, &orgID, &wsID, &caseNo, &name, &desc, &status, &color, &createdAt, &updatedAt)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "案件不存在或无权访问", nil)
+		return
+	}
+	respondOK(w, r, map[string]any{
+		"id": id, "organization_id": orgID, "workspace_id": wsID, "case_no": caseNo,
+		"name": name, "description": desc, "status": status, "color": color,
+		"created_at": createdAt, "updated_at": updatedAt,
+	})
+}
+
+func (s *Server) handleUserInvestigationDetail(w http.ResponseWriter, r *http.Request) {
+	scope, ok := s.requireObject(w, r, "investigation", chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	var id, goal, status string
+	var caseID *string
+	var createdAt, updatedAt time.Time
+	err := s.deps.Store.Pool.QueryRow(r.Context(), `
+        SELECT id, coalesce(goal,''), status, case_id::text, created_at, updated_at
+        FROM investigations WHERE id = $1 AND organization_id = $2`,
+		chi.URLParam(r, "id"), PrincipalFrom(r.Context()).OrganizationID).
+		Scan(&id, &goal, &status, &caseID, &createdAt, &updatedAt)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "调查不存在或无权访问", nil)
+		return
+	}
+	respondOK(w, r, map[string]any{
+		"id": id, "goal": goal, "status": status, "case_id": caseID,
+		"organization_id": scope.OrganizationID, "workspace_id": scope.WorkspaceID,
+		"created_at": createdAt, "updated_at": updatedAt,
+	})
+}
+
+func (s *Server) handleUserJobDetail(w http.ResponseWriter, r *http.Request) {
+	scope, ok := s.requireObject(w, r, "job", chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	var id, dataset, status string
+	var createdAt, updatedAt time.Time
+	err := s.deps.Store.Pool.QueryRow(r.Context(), `
+        SELECT id, dataset, status, created_at, updated_at
+        FROM download_jobs WHERE id = $1 AND organization_id = $2`,
+		chi.URLParam(r, "id"), PrincipalFrom(r.Context()).OrganizationID).
+		Scan(&id, &dataset, &status, &createdAt, &updatedAt)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "任务不存在或无权访问", nil)
+		return
+	}
+	respondOK(w, r, map[string]any{
+		"id": id, "dataset": dataset, "status": status,
+		"organization_id": scope.OrganizationID, "workspace_id": scope.WorkspaceID,
+		"created_at": createdAt, "updated_at": updatedAt,
+	})
+}
+
 // handleUserCases / handleUserInvestigations / handleUserJobs 复用既有控制面数据，
 // 但强制注入服务端解析出的 workspace 作用域（前端不能提交 tenant ID）。
 func (s *Server) handleUserCases(w http.ResponseWriter, r *http.Request) {
@@ -213,7 +290,8 @@ func (s *Server) handleUserCases(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	rows, err := s.deps.Store.Pool.Query(r.Context(), `
         SELECT id, case_no, name, description, status, color, created_at, updated_at
-        FROM cases WHERE workspace_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`, p.WorkspaceID, limit, offset)
+        FROM cases WHERE organization_id = $1 AND workspace_id = $2
+        ORDER BY updated_at DESC LIMIT $3 OFFSET $4`, p.OrganizationID, p.WorkspaceID, limit, offset)
 	if err != nil {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取案件失败", nil)
 		return
@@ -233,7 +311,7 @@ func (s *Server) handleUserCases(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	var total int
-	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM cases WHERE workspace_id = $1`, p.WorkspaceID).Scan(&total)
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM cases WHERE organization_id = $1 AND workspace_id = $2`, p.OrganizationID, p.WorkspaceID).Scan(&total)
 	respondList(w, r, items, total, nil)
 }
 
@@ -246,7 +324,8 @@ func (s *Server) handleUserInvestigations(w http.ResponseWriter, r *http.Request
 	limit, offset := pagination(r)
 	rows, err := s.deps.Store.Pool.Query(r.Context(), `
         SELECT id, coalesce(goal,''), status, created_at, updated_at
-        FROM investigations WHERE workspace_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`, p.WorkspaceID, limit, offset)
+        FROM investigations WHERE organization_id = $1 AND workspace_id = $2
+        ORDER BY updated_at DESC LIMIT $3 OFFSET $4`, p.OrganizationID, p.WorkspaceID, limit, offset)
 	if err != nil {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取调查任务失败", nil)
 		return
@@ -263,7 +342,7 @@ func (s *Server) handleUserInvestigations(w http.ResponseWriter, r *http.Request
 		items = append(items, map[string]any{"id": id, "goal": goal, "status": status, "created_at": createdAt, "updated_at": updatedAt})
 	}
 	var total int
-	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM investigations WHERE workspace_id = $1`, p.WorkspaceID).Scan(&total)
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM investigations WHERE organization_id = $1 AND workspace_id = $2`, p.OrganizationID, p.WorkspaceID).Scan(&total)
 	respondList(w, r, items, total, nil)
 }
 
@@ -276,7 +355,8 @@ func (s *Server) handleUserJobs(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	rows, err := s.deps.Store.Pool.Query(r.Context(), `
         SELECT id, dataset, status, created_at, updated_at
-        FROM download_jobs WHERE workspace_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`, p.WorkspaceID, limit, offset)
+        FROM download_jobs WHERE organization_id = $1 AND workspace_id = $2
+        ORDER BY updated_at DESC LIMIT $3 OFFSET $4`, p.OrganizationID, p.WorkspaceID, limit, offset)
 	if err != nil {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务失败", nil)
 		return
@@ -293,7 +373,7 @@ func (s *Server) handleUserJobs(w http.ResponseWriter, r *http.Request) {
 		items = append(items, map[string]any{"id": id, "dataset": dataset, "status": status, "created_at": createdAt, "updated_at": updatedAt})
 	}
 	var total int
-	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM download_jobs WHERE workspace_id = $1`, p.WorkspaceID).Scan(&total)
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM download_jobs WHERE organization_id = $1 AND workspace_id = $2`, p.OrganizationID, p.WorkspaceID).Scan(&total)
 	respondList(w, r, items, total, nil)
 }
 

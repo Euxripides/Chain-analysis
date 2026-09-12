@@ -1,0 +1,19 @@
+# 旧 SPA 开发服务器（灰度期保留，/ 入口）。
+# 计划要求在切流验收完成后下线，见 docs/implementation/dual-system-progress.md。
+[Unit]
+Description=Blockchain Platform frontend Vite dev server (port 3000)
+After=network-online.target blockchain-api.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js --host 0.0.0.0
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/vite.log
+StandardError=append:/tmp/vite.log
+
+[Install]
+WantedBy=default.target

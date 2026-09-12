@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/canvas"
 	"github.com/blockchain-platform/blockchain-platform/internal/capability"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
@@ -18,6 +19,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/investigation"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
@@ -235,6 +237,26 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 // StartOutboxBackground bridges transactional domain events to JetStream.
 func (i *Infra) StartOutboxBackground(ctx context.Context, log *slog.Logger) {
 	go events.RunOutbox(ctx, i.Store.Pool, i.Bus, log)
+}
+
+// StartAuditBackground 启动 §28.5 S3-BE-02 要求的审计后台任务：
+// 定时复算哈希链、按日生成锚点并归档到 MinIO 审计桶、采集 Outbox 积压指标。
+//
+// 只在 worker 进程启动：归档属于后台批处理，放在 API 进程会随 API 重启而抖动，
+// 且多副本同时跑会产生重复归档（虽有幂等保护，但没必要）。
+func (i *Infra) StartAuditBackground(ctx context.Context, env string, log *slog.Logger) {
+	if i.Store == nil || i.Store.Pool == nil {
+		return
+	}
+	var store audit.ObjectPutter
+	if i.Raw != nil {
+		store = i.Raw
+	} else {
+		log.Warn("audit archive runs without object storage; anchors will only be recorded in PostgreSQL")
+	}
+	archiver := audit.NewArchiver(i.Store.Pool, store, env, log)
+	audit.RegisterReporter(observability.NewAuditReporter())
+	go audit.RunScheduler(ctx, archiver, log, audit.DefaultSchedulerOptions())
 }
 
 func (i *Infra) StartTokenMetadataBackground(ctx context.Context, cfg *config.Config, log *slog.Logger, withWorkers bool) {

@@ -1,0 +1,100 @@
+# 双系统告警规则（docs/dual-system-development-plan.md §28.5 S3-OBS-01）
+#
+# 三项指标是 Sprint 3 验收的观测面：
+#   1. 权限拒绝异常升高 → 可能是权限配置错误，也可能是横向越权尝试；
+#   2. 审计写入失败   → 审计是 fail-closed 的，失败必须立刻处置；
+#   3. Outbox 积压    → 事件投递停摆，下游投影与通知会滞后。
+#
+# 加载方式（Prometheus）：
+#   rule_files:
+#     - /etc/prometheus/rules/dual-system-alerts.yaml
+groups:
+  - name: dual-system-authorization
+    interval: 1m
+    rules:
+      - alert: AuthorizationDeniedSpike
+        expr: sum(rate(cs_authz_denied_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: iam
+        annotations:
+          summary: "权限拒绝速率异常（>1/s 持续 10 分钟）"
+          description: >-
+            当前值 {{ $value }}/s。请按 reason 拆分：大量 cross_organization /
+            cross_workspace 通常意味着越权探测或租户绑定配错。
+          runbook: docs/implementation/dual-system-runbook.md#5-常见故障
+
+      - alert: CrossTenantAccessAttempt
+        expr: increase(cs_tenant_scope_denied_total{reason=~"cross_organization|cross_workspace"}[15m]) > 5
+        labels:
+          severity: critical
+          component: iam
+        annotations:
+          summary: "检测到跨租户对象访问尝试"
+          description: >-
+            15 分钟内 {{ $value }} 次越权尝试（resource={{ $labels.resource }}，
+            reason={{ $labels.reason }}）。审计中已记录 authorization.object_denied，
+            可按 Trace ID 串联完整会话。
+          runbook: docs/implementation/dual-system-runbook.md#5-常见故障
+
+  - name: dual-system-audit
+    interval: 1m
+    rules:
+      - alert: AuditWriteFailures
+        expr: increase(cs_audit_writes_total{result="failed"}[10m]) > 0
+        labels:
+          severity: critical
+          component: audit
+        annotations:
+          summary: "审计写入失败"
+          description: >-
+            审计链 {{ $labels.chain }} 写入失败。审计是 fail-closed 的：
+            高风险操作会连带失败，用户会看到可重试错误。优先检查 PostgreSQL
+            连接与 audit_events_v2 的 append-only 触发器是否被绕过。
+          runbook: docs/implementation/dual-system-runbook.md#4-审计链
+
+      - alert: AuditChainIntegrityBroken
+        expr: increase(cs_audit_chain_verify_total{result="invalid"}[1h]) > 0
+        labels:
+          severity: critical
+          component: audit
+        annotations:
+          summary: "审计哈希链校验失败"
+          description: >-
+            链 {{ $labels.chain }} 复算不通过，可能被篡改。不要手工修改数据，
+            立即导出证据并启动事故流程。
+          runbook: docs/implementation/dual-system-runbook.md#4-审计链
+
+      - alert: AuditArchiveFailing
+        expr: increase(cs_audit_archive_runs_total{result="failed"}[6h]) > 2
+        labels:
+          severity: warning
+          component: audit
+        annotations:
+          summary: "每日审计锚点归档连续失败"
+          description: "6 小时内失败超过 2 次，检查 MinIO blockchain-audit 桶与对象锁配置。"
+
+  - name: dual-system-outbox
+    interval: 1m
+    rules:
+      - alert: OutboxBacklogGrowing
+        expr: cs_outbox_oldest_pending_age_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: events
+        annotations:
+          summary: "Outbox 最老事件超过 5 分钟未投递"
+          description: >-
+            当前 oldest={{ $value }}s，pending={{ with query "cs_outbox_pending_events" }}{{ . | first | value }}{{ end }}。
+            事件消费者可能停摆，下游投影与通知会滞后。
+
+      - alert: OutboxConsumerStalled
+        expr: cs_outbox_pending_events > 1000
+        for: 15m
+        labels:
+          severity: critical
+          component: events
+        annotations:
+          summary: "Outbox 积压超过 1000 条且持续增长"

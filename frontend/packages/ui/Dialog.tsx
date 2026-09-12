@@ -39,6 +39,8 @@ export interface DialogRequest {
   actions?: DialogAction[];
   /** 危险操作需要输入确认词。 */
   confirmWord?: string;
+  /** 需要用户输入一个值时使用（替代原生 window.prompt）。 */
+  input?: { label: string; placeholder?: string; defaultValue?: string; pattern?: RegExp; patternHint?: string };
   onResolve?: (value: string | null) => void;
 }
 
@@ -46,6 +48,14 @@ interface DialogContextValue {
   open: (req: DialogRequest) => Promise<string | null>;
   notify: (kind: DialogKind, title: string, body?: React.ReactNode, details?: DialogRequest["details"]) => void;
   confirm: (req: Omit<DialogRequest, "kind"> & { kind?: DialogKind }) => Promise<string | null>;
+  /** 单值输入弹窗；用户取消时 resolve(null)。 */
+  prompt: (req: {
+    title: string;
+    body?: React.ReactNode;
+    input: NonNullable<DialogRequest["input"]>;
+    submitLabel?: string;
+    kind?: DialogKind;
+  }) => Promise<string | null>;
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
@@ -56,6 +66,13 @@ export function useDialog(): DialogContextValue {
     throw new Error("useDialog 必须在 <DialogProvider> 内使用");
   }
   return ctx;
+}
+
+/** 从 prompt() 的返回值中取出用户输入；未输入或取消时返回 null。 */
+export function dialogInputValue(result: string | null): string | null {
+  if (!result || !result.startsWith("input:")) return null;
+  const v = result.slice("input:".length).trim();
+  return v === "" ? null : v;
 }
 
 export function DialogProvider({ children }: { children: React.ReactNode }) {
@@ -86,6 +103,17 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
         void open({ kind, title, body, details, actions: [{ label: "知道了", variant: "primary", result: "ok" }] });
       },
       confirm: (req) => open({ kind: req.kind ?? "confirm", actions: req.actions ?? defaultConfirmActions(), ...req }),
+      prompt: (req) =>
+        open({
+          kind: req.kind ?? "info",
+          title: req.title,
+          body: req.body,
+          input: req.input,
+          actions: [
+            { label: "取消", result: "", variant: "default" },
+            { label: req.submitLabel ?? "确定", result: "ok", variant: "primary" },
+          ],
+        }),
     }),
     [open],
   );
@@ -117,11 +145,15 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
   const [word, setWord] = useState("");
+  const [inputValue, setInputValue] = useState(request.input?.defaultValue ?? "");
   const [busy, setBusy] = useState(false);
 
   const actions = request.actions ?? [{ label: "关闭", variant: "primary", result: "ok" }];
   const requiresWord = Boolean(request.confirmWord);
   const wordOk = !requiresWord || word.trim() === request.confirmWord;
+  const needsInput = Boolean(request.input);
+  const inputOk =
+    !needsInput || !request.input?.pattern || request.input.pattern.test(inputValue.trim());
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement;
@@ -206,6 +238,33 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
               ))}
             </dl>
           ) : null}
+          {needsInput ? (
+            <div className="field" style={{ marginTop: "var(--sp-4)" }}>
+              <label className="field__label" htmlFor="dialog-input">
+                {request.input!.label}
+              </label>
+              <input
+                id="dialog-input"
+                className="input"
+                autoComplete="off"
+                aria-invalid={!inputOk}
+                placeholder={request.input!.placeholder}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inputOk) {
+                    e.preventDefault();
+                    onResolve(`input:${inputValue.trim()}`);
+                  }
+                }}
+              />
+              {!inputOk && request.input!.patternHint ? (
+                <span className="field__hint" style={{ color: "var(--c-danger)" }}>
+                  {request.input!.patternHint}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {requiresWord ? (
             <div className="field" style={{ marginTop: "var(--sp-4)" }}>
               <label className="field__label" htmlFor="dialog-confirm-word">
@@ -227,14 +286,15 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
               key={action.label}
               type="button"
               className={`btn${action.variant === "primary" ? " btn--primary" : action.variant === "danger" ? " btn--danger" : ""}`}
-              disabled={busy || (requiresWord && action.variant !== "default" && !wordOk)}
+              disabled={busy || (requiresWord && action.variant !== "default" && !wordOk) || (needsInput && action.variant !== "default" && !inputOk)}
               onClick={() => {
                 if (action.variant === "default") {
                   onResolve(action.result ?? null);
                   return;
                 }
                 setBusy(true);
-                onResolve(action.result ?? action.label);
+                // 输入类弹窗把用户输入编码进结果，调用方用 toDialogInput 解出。
+                onResolve(needsInput ? `input:${inputValue.trim()}` : (action.result ?? action.label));
               }}
             >
               {action.label}

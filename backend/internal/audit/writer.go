@@ -104,9 +104,15 @@ func (w *Writer) Write(ctx context.Context, e Event) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := w.WriteTx(ctx, tx, e); err != nil {
+		recordWrite(ChainAudit, err)
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		recordWrite(ChainAudit, err)
+		return err
+	}
+	recordWrite(ChainAudit, nil)
+	return nil
 }
 
 // WriteTx 在调用方事务内写入，保证业务变更与审计同时提交或同时回滚。
@@ -206,6 +212,7 @@ func (w *Writer) WriteTx(ctx context.Context, tx DB, e Event) error {
 		nullText(e.PeerIP), nullText(e.ClientIP), e.ProxyChain, e.UserAgent, e.DataSource, e.ContentHash, e.ObjectRef,
 		prevHash, eventHash,
 	)
+	recordWrite(ChainAudit, err)
 	return err
 }
 

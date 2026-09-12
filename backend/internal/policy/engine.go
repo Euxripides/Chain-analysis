@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,9 +72,20 @@ func NewEngine(pool *pgxpool.Pool, ttl time.Duration) *Engine {
 }
 
 // Invalidate 在角色、成员关系或账号状态变化后清除缓存，使撤销在数秒内生效。
+//
+// 注意：缓存键是 "identityID|organizationID"，因此必须按前缀删除。
+// 曾错误地写成 delete(e.cache, identityID)，实际什么也没删掉，
+// 导致角色变更要等 TTL（30 秒）才生效，违反 §27 RBAC-006 的"5 秒内失效"。
 func (e *Engine) Invalidate(identityID string) {
+	if e == nil {
+		return
+	}
 	e.mu.Lock()
-	delete(e.cache, identityID)
+	for k := range e.cache {
+		if k == identityID || strings.HasPrefix(k, identityID+"|") {
+			delete(e.cache, k)
+		}
+	}
 	e.mu.Unlock()
 }
 
@@ -98,6 +110,14 @@ func (e *Engine) Load(ctx context.Context, identityID, organizationID string) ([
 	}
 	e.mu.RUnlock()
 
+	// §4.2：作用域可以是 organization 或 workspace。
+	//
+	// 这里刻意**不**按工作区过滤，而是返回"该身份在本组织内被授予的全部动作"，
+	// 原因是有意的两层分工：
+	//   - policy.Engine 回答"能不能做这类操作"（动作级）；
+	//   - access.Guard  回答"能不能碰这一个对象"（对象级，按工作区绑定收窄）。
+	// 若在这一层就按工作区裁剪，工作区级绑定会连动作权限都拿不到，
+	// 结果是 403 而不是对象级的 404，既不可用也泄露了"对象存在但无权"的差异。
 	rows, err := e.pool.Query(ctx, `
         SELECT DISTINCT rp.permission_key, ro.key
         FROM member_role_bindings b
@@ -106,10 +126,17 @@ func (e *Engine) Load(ctx context.Context, identityID, organizationID string) ([
         WHERE b.identity_id = $1
           AND b.revoked_at IS NULL
           AND (b.expires_at IS NULL OR b.expires_at > now())
-          AND ($2::uuid IS NULL OR (b.scope_type = 'organization' AND b.scope_id = $2::uuid))
           AND EXISTS (
               SELECT 1 FROM organization_memberships m
               WHERE m.identity_id = b.identity_id AND m.organization_id = $2::uuid AND m.status = 'active'
+          )
+          AND (
+              b.scope_type = 'self'
+              OR (b.scope_type = 'organization' AND b.scope_id = $2::uuid)
+              OR (b.scope_type = 'workspace' AND b.scope_id IN (
+                      SELECT w.id FROM workspaces w WHERE w.organization_id = $2::uuid))
+              OR (b.scope_type = 'case' AND b.scope_id IN (
+                      SELECT c.id FROM cases c WHERE c.organization_id = $2::uuid))
           )`, identityID, nullUUID(organizationID))
 	if err != nil {
 		return nil, nil, fmt.Errorf("load permissions: %w", err)

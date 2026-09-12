@@ -129,6 +129,9 @@ func main() {
 	infra.StartRPCBackground(runCtx, cfg, log, true)
 	sched.SetTokenMetadata(infra.TokenMeta)
 	infra.StartTokenMetadataBackground(runCtx, cfg, log, true)
+	// §28.5 S3-BE-02：审计链定时校验 + 每日锚点归档 + Outbox 积压指标。
+	// （Outbox 投递继续由 API 进程负责，避免同一职责出现在两个进程里。）
+	infra.StartAuditBackground(runCtx, cfg.Env, log)
 	if svc.Enabled() {
 		go svc.Run(runCtx)
 	}

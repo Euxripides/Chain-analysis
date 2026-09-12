@@ -6,18 +6,21 @@
   "plan_reference": "docs/dual-system-development-plan.md",
   "sprints_covered": [
     "Sprint 1（完成）",
-    "Sprint 2（核心完成，OIDC/MFA 明确未实现）",
-    "Sprint 3 底座（提前落地）"
+    "Sprint 2（核心完成，OIDC/MFA NOT_IMPLEMENTED）",
+    "Sprint 3（完成，RBAC-007 BLOCKED）"
   ],
   "totals": {
     "section27_test_ids_total": 65,
-    "section27_pass": 10,
-    "section27_partial": 19,
-    "section27_not_run": 25,
+    "section27_pass": 15,
+    "section27_partial": 17,
+    "section27_not_run": 22,
     "section27_not_implemented": 11,
-    "self_smoke_api_checks_pass": 32,
-    "self_smoke_api_checks_fail": 0,
-    "browser_tests_pass": 24,
+    "iam_smoke_checks_pass": 32,
+    "iam_smoke_checks_fail": 0,
+    "rbac_negative_checks_pass": 29,
+    "rbac_negative_checks_fail": 0,
+    "rbac_blocked": 2,
+    "browser_tests_pass": 28,
     "browser_tests_fail": 0
   },
   "defects_found_and_fixed": 10,
@@ -38,7 +41,10 @@
     "browser_test": "frontend/tests/dual-system.spec.ts",
     "browser_config": "frontend/playwright.dual.config.ts",
     "deploy_script": "scripts/deploy_dual_system.py",
-    "section27_conformance": "acceptance-evidence/dual-system-v1/section27-conformance.md"
+    "section27_conformance": "acceptance-evidence/dual-system-v1/section27-conformance.md",
+    "rbac_test_script": "acceptance-evidence/dual-system-v1/tests/run-rbac-e2e.sh",
+    "tenant_migration": "backend/migrations/postgres/0044_tenant_scope.sql",
+    "alerts": "deploy/monitoring/dual-system-alerts.yaml"
   },
-  "scope_statement": "本交付物覆盖 Sprint 1（完成）、Sprint 2（核心完成）、Sprint 3（部分）。Sprint 4-7 未开始；§27 的 65 个 Test ID 中 PASS 10、PARTIAL 19、NOT_RUN 25、NOT_IMPLEMENTED 11。先前版本曾用 §27 同名前缀标注自有冒烟检查，已更正为 SMOKE-nn，权威对照见 acceptance-evidence/dual-system-v1/section27-conformance.md。"
+  "scope_statement": "Sprint 1/2/3 已完成：双前端 + 服务端会话 + RBAC + 租户强约束 + 不可抵赖审计 + 观测告警。Sprint 4-7 未开始。§27 的 65 个 Test ID：PASS 15 / PARTIAL 17 / NOT_RUN 22 / NOT_IMPLEMENTED 11。"
 }

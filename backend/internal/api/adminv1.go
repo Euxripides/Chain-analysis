@@ -20,6 +20,9 @@ import (
 //   - 管理会话与管理权限缺一不可（require 内部同时校验 audience 与权限）。
 //   - 所有管理写操作进入 audit_events_v2，且默认要求二次确认字段。
 func (s *Server) registerAdminV1(r chi.Router) {
+	// 组织、工作区、成员角色（S3-ADMIN-01）。
+	s.registerAdminOrgRoutes(r)
+
 	// 运营总览
 	r.Get("/overview", s.require("admin:dashboard:read", s.handleAdminOverview))
 	r.Get("/system/health", s.require("admin:system:read", s.handleAdminSystemHealth))
@@ -729,6 +732,9 @@ func (s *Server) isPlatformScope(r *http.Request) bool {
 func (s *Server) policyEngineInvalidate(identityID string) {
 	if s.policy != nil {
 		s.policy.Invalidate(identityID)
+	}
+	if s.guard != nil {
+		s.guard.Invalidate(identityID)
 	}
 }
 
