@@ -40,14 +40,22 @@ type exportV2Request struct {
 	ForceZip    bool     `json:"force_zip"`
 	// §47：Method 字段默认导出；Decoded Input 默认关闭（完整参数会显著增加文件体积）
 	IncludeDecodedInput bool `json:"include_decoded_input"`
+	// 服务端注入的租户/操作者作用域；不从 JSON 读取（§21.2）。
+	OrgID  string `json:"-"`
+	WSID   string `json:"-"`
+	UserID string `json:"-"`
 }
 
 func filterGPTActionExportToken(job *model.DownloadJob, rows []map[string]any) []map[string]any {
 	if job == nil || job.Stats == nil {
 		return rows
 	}
-	token := strings.ToUpper(strings.TrimSpace(fmt.Sprint(job.Stats["gpt_actions_token_filter"])))
-	if token == "" {
+	raw, ok := job.Stats["gpt_actions_token_filter"]
+	if !ok || raw == nil {
+		return rows
+	}
+	token := strings.ToUpper(strings.TrimSpace(fmt.Sprint(raw)))
+	if token == "" || token == "<NIL>" {
 		return rows
 	}
 	out := rows[:0]
@@ -72,6 +80,11 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 		}
 		if job.Status != model.JobCompleted && job.Status != model.JobPaused && job.Status != model.JobPausedFallbackTooExpensive {
 			writeJSON(w, 409, map[string]any{"error": "job export requires a completed or paused job"})
+			return
+		}
+		if req.OrgID != "" && (job.OrganizationID == nil || job.WorkspaceID == nil ||
+			*job.OrganizationID != req.OrgID || *job.WorkspaceID != req.WSID) {
+			writeJSON(w, 404, map[string]any{"error": "job not found"})
 			return
 		}
 		jobID = &req.JobID
@@ -146,20 +159,30 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 			WHERE job_id=$1 AND status='COMPLETED' AND format=$2 AND zip=$3
 			  AND query_snapshot=$4::jsonb AND object_ref<>''
 			  AND COALESCE(finished_at,updated_at) >= $5
+			  AND organization_id=$6 AND workspace_id=$7
 			ORDER BY finished_at DESC NULLS LAST, updated_at DESC LIMIT 1`,
-			req.JobID, format, zipIt, snapshot, job.UpdatedAt).Scan(&existingID); err == nil {
+			req.JobID, format, zipIt, snapshot, job.UpdatedAt, req.OrgID, req.WSID).Scan(&existingID); err == nil {
 			if existing, getErr := s.deps.Store.GetExport(r.Context(), existingID); getErr == nil && existing != nil {
 				writeJSON(w, http.StatusOK, existing)
 				return
 			}
 		}
 	}
-	orgID, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
-		return
+	orgID, wsID := req.OrgID, req.WSID
+	if orgID == "" || wsID == "" {
+		var err error
+		orgID, wsID, err = s.deps.Store.DefaultOrgWorkspace(r.Context())
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
 	}
-	exp, err := s.deps.Store.CreateExportV2(r.Context(), wsID, orgID, nil, jobID, strings.Join(datasets, "+"), format, zipIt, snapshot)
+	var createdBy *string
+	if req.UserID != "" {
+		u := req.UserID
+		createdBy = &u
+	}
+	exp, err := s.deps.Store.CreateExportV2(r.Context(), wsID, orgID, createdBy, jobID, strings.Join(datasets, "+"), format, zipIt, snapshot)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return

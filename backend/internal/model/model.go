@@ -87,14 +87,16 @@ type DownloadJob struct {
 	RequestFingerprint string          `json:"-"`
 	HeadBlock          int64           `json:"head_block"`
 	CreatedBy          *string         `json:"created_by"`
-	OrganizationID     *string         `json:"organization_id"`
-	WorkspaceID        *string         `json:"workspace_id"`
-	ProjectID          *string         `json:"project_id"`
-	ResolvedAt         *time.Time      `json:"resolved_at"`
-	Error              string          `json:"error"`
-	Stats              map[string]any  `json:"stats"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	// S5：新 IAM 系统的创建者 identity；legacy created_by 仍保留给旧任务/用户表。
+	CreatedByIdentity *string        `json:"created_by_identity,omitempty"`
+	OrganizationID    *string        `json:"organization_id"`
+	WorkspaceID       *string        `json:"workspace_id"`
+	ProjectID         *string        `json:"project_id"`
+	ResolvedAt        *time.Time     `json:"resolved_at"`
+	Error             string         `json:"error"`
+	Stats             map[string]any `json:"stats"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
 }
 
 type Subject struct {

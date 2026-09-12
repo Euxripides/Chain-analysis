@@ -222,8 +222,9 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	if err != nil {
 		return err
 	}
-	// V1.1 Benchmark 任务强制全量重跑（固定 target_block 对比，不命中 Coverage 复用）
-	if job.Source == "benchmark" {
+	// V1.1 Benchmark 任务强制全量重跑（固定 target_block 对比，不命中 Coverage 复用）；
+	// S5：显式 refresh 同样必须跳过本地 Coverage 复用，否则“强制重下”会被静默吞掉。
+	if job.Source == "benchmark" || strings.EqualFold(job.ReusePolicy, "refresh") {
 		covered = nil
 	}
 	if ds == "balances" {

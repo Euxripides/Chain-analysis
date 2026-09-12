@@ -205,13 +205,13 @@ func (s *Service) StartInvestigation(ctx context.Context, actor Actor, investiga
 	if err := tx.Commit(ctx); err != nil {
 		return InvestigationView{}, err
 	}
-	s.scheduleAnalysis(investigationID, subjectChain, subjectValue, reqRaw)
+	s.scheduleAnalysis(investigationID, subjectChain, subjectValue, reqRaw, actor.Principal.IdentityID)
 	return s.GetInvestigationV2(ctx, actor, investigationID)
 }
 
 // scheduleAnalysis 把兼容分析放入后台队列。1.5s 的 admission delay 是队列语义：
 // 给客户端一个确定的 pause 窗口，而不是让 HTTP 请求同步等待分析完成。
-func (s *Service) scheduleAnalysis(investigationID, chain, value string, reqRaw []byte) {
+func (s *Service) scheduleAnalysis(investigationID, chain, value string, reqRaw []byte, actorIdentity string) {
 	if s.runtime == nil {
 		return
 	}
@@ -248,7 +248,7 @@ func (s *Service) scheduleAnalysis(investigationID, chain, value string, reqRaw 
 				return
 			}
 		}
-		if _, err := s.runtime.Start(ctx, investigationID); err != nil {
+		if _, err := s.runtime.Start(ctx, investigationID, actorIdentity); err != nil {
 			s.markRuntimeFailed(investigationID, err.Error())
 		}
 	}()
@@ -296,7 +296,7 @@ func (s *Service) ResumeInvestigation(ctx context.Context, actor Actor, investig
 	if err := tx.Commit(ctx); err != nil {
 		return InvestigationView{}, err
 	}
-	s.scheduleAnalysis(investigationID, chain, value, reqRaw)
+	s.scheduleAnalysis(investigationID, chain, value, reqRaw, actor.Principal.IdentityID)
 	return s.GetInvestigationV2(ctx, actor, investigationID)
 }
 
@@ -396,7 +396,7 @@ func (s *Service) RetryInvestigation(ctx context.Context, actor Actor, investiga
 	if err := tx.Commit(ctx); err != nil {
 		return InvestigationView{}, err
 	}
-	s.scheduleAnalysis(investigationID, chain, value, reqRaw)
+	s.scheduleAnalysis(investigationID, chain, value, reqRaw, actor.Principal.IdentityID)
 	return v, nil
 }
 

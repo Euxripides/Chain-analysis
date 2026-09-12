@@ -131,16 +131,17 @@ func (s *Server) handleInvestigationAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if (action == "start" || action == "retry") && s.runtime != nil {
-		go func(id string) {
+		actorIdentity := PrincipalFrom(r.Context()).IdentityID
+		go func(id, actor string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
-			if _, runtimeErr := s.runtime.Start(ctx, id); runtimeErr != nil {
+			if _, runtimeErr := s.runtime.Start(ctx, id, actor); runtimeErr != nil {
 				s.deps.Log.Error("investigation background runtime failed", "investigation_id", id, "err", runtimeErr)
 				failureCtx, failureCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer failureCancel()
 				s.investigations.MarkRuntimeFailed(failureCtx, id, runtimeErr)
 			}
-		}(inv.ID)
+		}(inv.ID, actorIdentity)
 		writeJSON(w, http.StatusAccepted, map[string]any{"investigation": inv, "runtime": map[string]any{"status": "accepted"}})
 		return
 	}

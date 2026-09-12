@@ -27,6 +27,8 @@ const LoginEventsPage = lazy(() => import("./pages/LoginEventsPage"));
 const AuditPage = lazy(() => import("./pages/AuditPage"));
 const OrganizationsPage = lazy(() => import("./pages/OrganizationsPage"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
+const JobsPage = lazy(() => import("./pages/JobsPage"));
+const JobDetailPage = lazy(() => import("./pages/JobDetailPage"));
 
 /** §3.2 后台导航。 */
 const navGroups = (): NavGroup[] => [
@@ -129,7 +131,8 @@ function Shell() {
           <Route path="/sessions" element={<Guard permission="admin:session:read"><SessionsPage /></Guard>} />
           <Route path="/login-events" element={<Guard permission="admin:login-event:read"><LoginEventsPage /></Guard>} />
           <Route path="/audit" element={<Guard permission="admin:audit:read"><AuditPage /></Guard>} />
-          <Route path="/jobs" element={<Placeholder permission="admin:job:read" title="全局任务控制" sprint="S5" />} />
+          <Route path="/jobs" element={<Guard permission="admin:job:list"><JobsPage /></Guard>} />
+          <Route path="/jobs/:jobId" element={<Guard permission="admin:job:read"><JobDetailPage /></Guard>} />
           <Route path="/storage" element={<Placeholder permission="admin:storage:read" title="导出与对象存储" sprint="S6" />} />
           <Route path="/data-quality" element={<Placeholder permission="admin:coverage:read" title="Coverage 与数据质量" sprint="S6" />} />
           <Route path="/provider" element={<Placeholder permission="admin:provider:read" title="Provider 账户" sprint="S6" />} />

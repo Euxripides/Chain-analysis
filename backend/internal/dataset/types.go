@@ -15,16 +15,21 @@ type RangeSpec struct {
 }
 
 type EnsureRequest struct {
-	Source          string    `json:"source"`
-	Priority        int       `json:"priority"`
-	Mode            string    `json:"mode"` // economy|balanced|turbo（V1.1 §41-44）
-	PerformanceMode string    `json:"performance_mode"`
-	Concurrency     *int      `json:"concurrency,omitempty"`
-	Subjects        []string  `json:"subjects"`
-	Chain           string    `json:"chain"`
-	Datasets        []string  `json:"datasets"`
-	Range           RangeSpec `json:"range"`
-	ReusePolicy     string    `json:"reuse_policy"`
+	// 租户与操作者由 API 层从服务端会话注入，绝不接受客户端 JSON（§6.4）。
+	OrganizationID    string    `json:"-"`
+	WorkspaceID       string    `json:"-"`
+	CreatedBy         string    `json:"-"`
+	CreatedByIdentity string    `json:"-"`
+	Source            string    `json:"source"`
+	Priority          int       `json:"priority"`
+	Mode              string    `json:"mode"` // economy|balanced|turbo（V1.1 §41-44）
+	PerformanceMode   string    `json:"performance_mode"`
+	Concurrency       *int      `json:"concurrency,omitempty"`
+	Subjects          []string  `json:"subjects"`
+	Chain             string    `json:"chain"`
+	Datasets          []string  `json:"datasets"`
+	Range             RangeSpec `json:"range"`
+	ReusePolicy       string    `json:"reuse_policy"`
 
 	// V1.2：案件/标签（§22/§23）
 	CaseName          string                 `json:"case_name"`
@@ -65,6 +70,10 @@ type EnsureResponse struct {
 	DatasetRef string  `json:"dataset_ref"`
 	JobID      *string `json:"job_id"`
 	Coverage   float64 `json:"coverage"`
+	// 调用方可据此区分三种结果，不用猜 job_id 是否存在（§18.10）。
+	Created              bool `json:"created"`
+	Reused               bool `json:"reused"`
+	ProviderWorkRequired bool `json:"provider_work_required"`
 }
 
 // RangeSpecFromMap 把 v2 API 的 JSON range 对象转换为 RangeSpec。

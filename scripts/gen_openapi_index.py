@@ -62,7 +62,21 @@ def parse_routes(files: list[str], prefix: str):
                 }
             )
     # 同一路径多方法时按方法排序，保证输出稳定
-    return sorted(out, key=lambda r: (r["path"], r["method"]))
+    out = sorted(out, key=lambda r: (r["path"], r["method"]))
+    # operationId 必须全局唯一（§21.1）。同 handler 服务多方法时追加方法名，
+    # 避免 YAML 重复 key 或重复 operationId 让后一个方法悄悄消失。
+    seen: dict[str, int] = {}
+    for r in out:
+        base = r["operationId"]
+        if base in seen:
+            candidate = base + r["method"][0] + r["method"][1:].lower()
+            n = 2
+            while candidate in seen:
+                candidate = f"{base}{r['method'].lower()}{n}"
+                n += 1
+            r["operationId"] = candidate
+        seen[r["operationId"]] = seen.get(r["operationId"], 0) + 1
+    return out
 
 
 def render(name: str, title: str, routes) -> str:
@@ -91,37 +105,41 @@ def render(name: str, title: str, routes) -> str:
         "      name: cs_user_session",
         "paths:",
     ]
+    grouped: dict[str, list] = {}
     for r in routes:
-        lines.append(f"  {r['path']}:")
-        lines.append(f"    {r['method'].lower()}:")
-        lines.append(f"      operationId: {r['operationId']}")
-        lines.append(f"      tags: [{name}]")
-        if r["permission"]:
-            # 权限键是路由与授权引擎的契约，必须在契约里可见（§28.5 验收要求 100% 覆盖）。
-            lines.append(f"      x-required-permission: {r['permission']}")
-        lines.append("      responses:")
-        if r["not_implemented"]:
-            lines.append("        '501':")
-            lines.append("          description: 该能力尚未实现（NOT_IMPLEMENTED）")
+        grouped.setdefault(r["path"], []).append(r)
+    for path, methods in grouped.items():
+        lines.append(f"  {path}:")
+        for r in methods:
+            lines.append(f"    {r['method'].lower()}:")
+            lines.append(f"      operationId: {r['operationId']}")
+            lines.append(f"      tags: [{name}]")
+            if r["permission"]:
+                # 权限键是路由与授权引擎的契约，必须在契约里可见（§28.5 验收要求 100% 覆盖）。
+                lines.append(f"      x-required-permission: {r['permission']}")
+            lines.append("      responses:")
+            if r["not_implemented"]:
+                lines.append("        '501':")
+                lines.append("          description: 该能力尚未实现（NOT_IMPLEMENTED）")
+                lines.append("          content:")
+                lines.append("            application/json:")
+                lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
+            else:
+                lines.append("        '200':")
+                lines.append("          description: 成功（响应体模型待补充）")
+                lines.append("          content:")
+                lines.append("            application/json:")
+                lines.append("              schema: { $ref: './common/envelope.yaml#/Envelope' }")
+            lines.append("        '401':")
+            lines.append("          description: 未认证或会话失效")
             lines.append("          content:")
             lines.append("            application/json:")
             lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
-        else:
-            lines.append("        '200':")
-            lines.append("          description: 成功（响应体模型待补充）")
+            lines.append("        '403':")
+            lines.append("          description: 缺少所需权限")
             lines.append("          content:")
             lines.append("            application/json:")
-            lines.append("              schema: { $ref: './common/envelope.yaml#/Envelope' }")
-        lines.append("        '401':")
-        lines.append("          description: 未认证或会话失效")
-        lines.append("          content:")
-        lines.append("            application/json:")
-        lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
-        lines.append("        '403':")
-        lines.append("          description: 缺少所需权限")
-        lines.append("          content:")
-        lines.append("            application/json:")
-        lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
+            lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
     return "\n".join(lines) + "\n"
 
 

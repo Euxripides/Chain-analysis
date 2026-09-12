@@ -87,8 +87,48 @@ func (s *Server) registerUserV2(r chi.Router) {
 
 	r.Get("/inbox", s.require("inbox:read", s.handleUserInbox))
 
-	r.Get("/jobs", s.require("job:list:self", s.handleUserJobs))
-	r.Get("/jobs/{id}", s.require("job:read", s.handleUserJobDetail))
+	// ---- Sprint 5：Explorer / 下载 / 任务 / 导出 / Canvas（§28.7）----
+	// Explorer v2：所有 Tab 返回统一 envelope（来源/口径/Coverage），cursor 由服务端生成。
+	r.Get("/explorer/addresses/{chain}/{address}/overview", s.require("explorer:read", s.handleExplorerOverview))
+	r.Get("/explorer/addresses/{chain}/{address}/assets", s.require("explorer:read", s.handleExplorerAssets))
+	r.Get("/explorer/addresses/{chain}/{address}/activity", s.require("explorer:read", s.handleExplorerActivity))
+	r.Get("/explorer/addresses/{chain}/{address}/counterparties", s.require("explorer:read", s.handleExplorerCounterparties))
+	r.Get("/explorer/addresses/{chain}/{address}/semantic", s.require("explorer:read", s.handleExplorerSemantic))
+	r.Get("/explorer/addresses/{chain}/{address}/flow-profile", s.require("explorer:read", s.handleExplorerFlowProfile))
+
+	// v2 元数据：链/Dataset 选项来自服务端 registry。
+	r.Get("/meta/chains", s.require("explorer:read", s.handleUserChains))
+	r.Get("/meta/datasets", s.require("download:create", s.handleUserDatasets))
+	r.Get("/explorer/transactions/{chain}/{hash}", s.require("explorer:read", s.handleExplorerTransaction))
+	r.Get("/explorer/transactions/{chain}/{hash}/logs", s.require("explorer:read", s.handleExplorerTransactionLogs))
+	r.Get("/explorer/transactions/{chain}/{hash}/trace", s.require("explorer:read", s.handleExplorerTransactionTrace))
+
+	// 下载 v2：preview/create 分离；默认 prefer_local 复用本地，refresh 需要显式权限。
+	r.Post("/downloads/preview", s.require("download:create", s.handleDownloadPreview))
+	r.Post("/downloads", s.require("download:create", s.handleDownloadCreate))
+
+	// 任务 v2：列表/详情/控制/SSE（Last-Event-ID 重放）。
+	r.Get("/jobs", s.require("job:list:self", s.handleUserJobsV2))
+	r.Get("/jobs/{id}", s.require("job:read", s.handleUserJobDetailV2))
+	r.Post("/jobs/{id}/commands/{command}", s.require("job:control", s.handleUserJobCommand))
+	r.Get("/jobs/{id}/events", s.require("job:read", s.handleUserJobEvents))
+
+	// 导出 v2：异步创建、cursor 列表、60 秒一次性票据下载。
+	r.Get("/exports/download/{ticket}", s.require("export:download", s.handleExportV2Download))
+	r.Head("/exports/download/{ticket}", s.require("export:download", s.handleExportV2Download))
+	r.Get("/exports", s.require("export:list", s.handleExportsV2List))
+	r.Post("/exports", s.require("export:create", s.handleExportV2Create))
+	r.Get("/exports/{id}", s.require("export:read", s.handleExportV2Detail))
+	r.Post("/exports/{id}/download-ticket", s.require("export:download", s.handleExportV2Ticket))
+
+	// Canvas v2：revision 冲突返回字段级 diff；跨案件 Evidence 引用在保存前拒绝。
+	r.Get("/investigations/{id}/canvases", s.require("canvas:list", s.handleInvestigationCanvasesV2))
+	r.Post("/investigations/{id}/canvases", s.require("canvas:create", s.handleInvestigationCanvasesV2))
+	r.Get("/canvases/{id}", s.require("canvas:read", s.handleCanvasV2Get))
+	r.Patch("/canvases/{id}", s.require("canvas:update", s.handleCanvasV2Update))
+	r.Post("/canvases/{id}/branches", s.require("canvas:branch", s.handleCanvasV2Branch))
+	r.Get("/canvases/{id}/snapshots", s.require("canvas:snapshot", s.handleCanvasV2Snapshots))
+	r.Post("/canvases/{id}/snapshots", s.require("canvas:snapshot:create", s.handleCanvasV2Snapshots))
 }
 
 func (s *Server) handleNotImplementedV2(feature string) http.HandlerFunc {
@@ -152,44 +192,6 @@ func buildQuickActions(p policy.Principal) []map[string]any {
 		}
 	}
 	return out
-}
-
-// handleUserSearch 提供最小可用的全局搜索：本地案件与调查名称/编号。
-// 完整的多类型搜索（地址/交易/任务/报告）在 S5-FE-01 分批补齐。
-func (s *Server) handleUserSearch(w http.ResponseWriter, r *http.Request) {
-	p := PrincipalFrom(r.Context())
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len(q) < 2 {
-		validationError(w, r, "搜索词至少 2 个字符", []fieldError{{Field: "q", Code: "too_short", Message: "至少 2 个字符"}})
-		return
-	}
-	if s.deps.Store == nil {
-		respondError(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY", "控制面存储不可用", nil)
-		return
-	}
-	like := "%" + strings.ToLower(q) + "%"
-	rows, err := s.deps.Store.Pool.Query(r.Context(), `
-        SELECT 'case' AS kind, id::text, name AS title, coalesce(case_no,'') AS subtitle
-        FROM cases WHERE workspace_id = $1 AND (lower(name) LIKE $2 OR lower(coalesce(case_no,'')) LIKE $2)
-        UNION ALL
-        SELECT 'investigation', id::text, coalesce(goal,''), ''
-        FROM investigations WHERE workspace_id = $1 AND lower(coalesce(goal,'')) LIKE $2
-        LIMIT 25`, p.WorkspaceID, like)
-	if err != nil {
-		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "搜索失败", nil)
-		return
-	}
-	defer rows.Close()
-	items := []map[string]any{}
-	for rows.Next() {
-		var kind, id, title, subtitle string
-		if err := rows.Scan(&kind, &id, &title, &subtitle); err != nil {
-			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "搜索失败", nil)
-			return
-		}
-		items = append(items, map[string]any{"type": kind, "id": id, "title": title, "subtitle": subtitle})
-	}
-	respondList(w, r, map[string]any{"query": q, "items": items, "scopes": []string{"case", "investigation"}}, len(items), nil)
 }
 
 func (s *Server) handleUserProfile(w http.ResponseWriter, r *http.Request) {

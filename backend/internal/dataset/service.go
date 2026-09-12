@@ -163,6 +163,48 @@ func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec
 	return r, nil
 }
 
+// ResolveRangeLocal 与 ResolveRange 相同，但对 full 范围不调用 HeadFn。
+//
+// v2 preview/create 的 Coverage HIT 判定必须完全不产生 Provider 请求；
+// 链头探测只发生在本地缺口确实需要新建下载任务时（§28.7 验收）。
+func (s *Service) ResolveRangeLocal(chain string, spec RangeSpec) (model.DownloadJobRange, error) {
+	r := model.DownloadJobRange{RangeType: spec.Type}
+	switch spec.Type {
+	case "full", "":
+		if strings.EqualFold(chain, "tron") && strings.EqualFold(s.TronProvider, "ankr") && s.TronDefaultProvider == "" && len(s.TronDatasetProviders) == 0 {
+			return r, errors.New("TRON with Ankr Node API requires an explicit block or time range")
+		}
+		r.RangeType = "full"
+	case "block":
+		if spec.FromBlock == nil || spec.ToBlock == nil {
+			return r, errors.New("block range requires from_block and to_block")
+		}
+		if *spec.FromBlock > *spec.ToBlock {
+			return r, errors.New("from_block > to_block")
+		}
+		if *spec.FromBlock < 0 || *spec.ToBlock < 0 {
+			return r, errors.New("block range cannot be negative")
+		}
+		r.FromBlock = spec.FromBlock
+		r.ToBlock = spec.ToBlock
+	case "time":
+		if spec.From == nil || spec.To == nil {
+			return r, errors.New("time range requires from and to")
+		}
+		if spec.From.After(*spec.To) {
+			return r, errors.New("from > to")
+		}
+		r.FromTimestamp = spec.From
+		r.ToTimestamp = spec.To
+		zero := int64(0)
+		r.FromBlock = &zero
+		r.ToBlock = &zero
+	default:
+		return r, fmt.Errorf("unsupported range type: %s", spec.Type)
+	}
+	return r, nil
+}
+
 // wantInterval 返回请求区间（时间区间以未知块表示，比率按已覆盖计算）。
 func (s *Service) wantInterval(job *model.DownloadJob) (store.BlockInterval, bool) {
 	if job.RangeType == "block" && job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock >= *job.FromBlock {
@@ -242,6 +284,15 @@ func (s *Service) coverageFor(ctx context.Context, chain, subject, dataset strin
 }
 
 func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePreviewResponse, error) {
+	return s.previewWithPolicy(ctx, req, false)
+}
+
+// PreviewLocal 只读本地索引，不探测链头，供 v2 下载预览与 Coverage HIT 判定使用。
+func (s *Service) PreviewLocal(ctx context.Context, req EnsureRequest) (*CoveragePreviewResponse, error) {
+	return s.previewWithPolicy(ctx, req, true)
+}
+
+func (s *Service) previewWithPolicy(ctx context.Context, req EnsureRequest, localOnly bool) (*CoveragePreviewResponse, error) {
 	chain := sanitizeChain(req.Chain)
 	subjects, err := NormalizeAndDedupeAddressesForChain(chain, req.Subjects)
 	if err != nil {
@@ -261,9 +312,15 @@ func (s *Service) Preview(ctx context.Context, req EnsureRequest) (*CoveragePrev
 	}
 	resp := &CoveragePreviewResponse{Chain: chain, Datasets: datasets, Items: []SubjectDatasetCoverage{}}
 	tmpJob := &model.DownloadJob{}
-	rng, err := s.ResolveRange(ctx, chain, req.Range)
-	if err != nil {
-		return nil, err
+	var rng model.DownloadJobRange
+	var err2 error
+	if localOnly {
+		rng, err2 = s.ResolveRangeLocal(chain, req.Range)
+	} else {
+		rng, err2 = s.ResolveRange(ctx, chain, req.Range)
+	}
+	if err2 != nil {
+		return nil, err2
 	}
 	if err := s.validateTronAutoScan(chain, datasets, rng); err != nil {
 		return nil, err
@@ -317,6 +374,18 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
 		return nil, err
 	}
+	if req.OrganizationID == "" || req.WorkspaceID == "" {
+		orgID, wsID, scopeErr := s.Store.DefaultOrgWorkspace(ctx)
+		if scopeErr != nil {
+			return nil, fmt.Errorf("resolve tenant scope: %w", scopeErr)
+		}
+		if req.OrganizationID == "" {
+			req.OrganizationID = orgID
+		}
+		if req.WorkspaceID == "" {
+			req.WorkspaceID = wsID
+		}
+	}
 	priority := req.Priority
 	if priority <= 0 {
 		priority = 100
@@ -355,8 +424,8 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 
 	fingerprint := ""
 	if !strings.EqualFold(req.ReusePolicy, "refresh") {
-		fingerprint = downloadRequestFingerprint(chain, subjects, datasets, rng)
-		if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr != nil {
+		fingerprint = scopedDownloadFingerprint(req.OrganizationID, req.WorkspaceID, downloadRequestFingerprint(chain, subjects, datasets, rng))
+		if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects, req.OrganizationID, req.WorkspaceID); findErr != nil {
 			return nil, findErr
 		} else if existing != nil {
 			return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
@@ -378,14 +447,34 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
-	if preview.OverallRatio >= 1 {
+	// 显式 refresh 必须跳过 Coverage 命中短路，否则“强制重下”会被本地完成数据吞掉。
+	if !strings.EqualFold(req.ReusePolicy, "refresh") && preview.OverallRatio >= 1 {
 		fingerprint := sha256.Sum256([]byte(chain + "\x00" + strings.Join(subjects, ",") + "\x00" + strings.Join(datasets, ",") + fmt.Sprint(rng.FromBlock, rng.ToBlock)))
-		return &EnsureResponse{Status: "ready", DatasetRef: "ds_" + hex.EncodeToString(fingerprint[:6]), Coverage: preview.OverallRatio}, nil
+		return &EnsureResponse{Status: "ready", DatasetRef: "ds_" + hex.EncodeToString(fingerprint[:6]), Coverage: preview.OverallRatio, ProviderWorkRequired: false}, nil
 	}
 
+	var createdBy *string
+	if req.CreatedBy != "" {
+		createdBy = &req.CreatedBy
+	} else if req.CreatedByIdentity != "" {
+		// legacy 外键 users(id)：能从 identities.legacy_user_id 推导时保留兼容值，
+		// 推导不到则留 NULL，真正的用户作用域走 created_by_identity。
+		var legacy *string
+		_ = s.Store.Pool.QueryRow(ctx, `SELECT legacy_user_id::text FROM identities WHERE id=$1`, req.CreatedByIdentity).Scan(&legacy)
+		createdBy = legacy
+	}
+	var createdByIdentity *string
+	if req.CreatedByIdentity != "" {
+		v := req.CreatedByIdentity
+		createdByIdentity = &v
+	}
 	job := &model.DownloadJob{
 		JobNo:              jobNo,
 		Status:             model.JobCreated,
+		CreatedBy:          createdBy,
+		CreatedByIdentity:  createdByIdentity,
+		OrganizationID:     &req.OrganizationID,
+		WorkspaceID:        &req.WorkspaceID,
 		Priority:           priority,
 		Source:             req.Source,
 		Mode:               req.Mode,
@@ -419,7 +508,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	// job_no 冲突（并发建任务）自动递增重试
 	if _, err := s.Store.CreateJobWithSubjects(ctx, job, subjects); err != nil {
 		if fingerprint != "" && strings.Contains(err.Error(), "download_jobs_reusable_fingerprint_key") {
-			if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr == nil && existing != nil {
+			if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects, req.OrganizationID, req.WorkspaceID); findErr == nil && existing != nil {
 				return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
 			}
 		}
@@ -430,7 +519,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 					err = nil
 					break
 				} else if fingerprint != "" && strings.Contains(retryErr.Error(), "download_jobs_reusable_fingerprint_key") {
-					if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects); findErr == nil && existing != nil {
+					if existing, findErr := s.Store.FindReusableJob(ctx, fingerprint, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects, req.OrganizationID, req.WorkspaceID); findErr == nil && existing != nil {
 						return s.reusedEnsureResponse(ctx, existing, fingerprint), nil
 					}
 					return nil, retryErr
@@ -448,10 +537,12 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	})
 	jobID := job.ID
 	return &EnsureResponse{
-		Status:     "planned",
-		DatasetRef: "ds_" + job.ID[:8],
-		JobID:      &jobID,
-		Coverage:   preview.OverallRatio,
+		Status:               "planned",
+		DatasetRef:           "ds_" + job.ID[:8],
+		JobID:                &jobID,
+		Coverage:             preview.OverallRatio,
+		Created:              true,
+		ProviderWorkRequired: true,
 	}, nil
 }
 
@@ -464,7 +555,54 @@ func (s *Service) reusedEnsureResponse(ctx context.Context, job *model.DownloadJ
 	}
 	s.Store.InsertAudit(ctx, nil, "dataset.ensure.reused", "download_job", job.ID, map[string]any{"request_fingerprint": fingerprint, "status": job.Status})
 	id := job.ID
-	return &EnsureResponse{Status: status, DatasetRef: "ds_" + job.ID[:8], JobID: &id, Coverage: coverage}
+	return &EnsureResponse{Status: status, DatasetRef: "ds_" + job.ID[:8], JobID: &id, Coverage: coverage, Reused: true, ProviderWorkRequired: false}
+}
+
+// ReuseCandidateLocal 查找同作用域可复用任务；不调用 Provider。
+func (s *Service) ReuseCandidateLocal(ctx context.Context, req EnsureRequest) (*model.DownloadJob, error) {
+	chain := sanitizeChain(req.Chain)
+	subjects, err := NormalizeAndDedupeAddressesForChain(chain, req.Subjects)
+	if err != nil {
+		return nil, err
+	}
+	datasets, err := sanitizeDatasets(req.Datasets)
+	if err != nil {
+		return nil, err
+	}
+	if s.ValidateChain != nil {
+		if err := s.ValidateChain(chain); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
+		return nil, err
+	}
+	if req.OrganizationID == "" || req.WorkspaceID == "" {
+		orgID, wsID, scopeErr := s.Store.DefaultOrgWorkspace(ctx)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		if req.OrganizationID == "" {
+			req.OrganizationID = orgID
+		}
+		if req.WorkspaceID == "" {
+			req.WorkspaceID = wsID
+		}
+	}
+	rng, err := s.ResolveRangeLocal(chain, req.Range)
+	if err != nil {
+		return nil, err
+	}
+	fp := scopedDownloadFingerprint(req.OrganizationID, req.WorkspaceID, downloadRequestFingerprint(chain, subjects, datasets, rng))
+	return s.Store.FindReusableJob(ctx, fp, chain, rng.RangeType, rng.FromBlock, rng.ToBlock, rng.FromTimestamp, rng.ToTimestamp, datasets, subjects, req.OrganizationID, req.WorkspaceID)
+}
+
+// scopedDownloadFingerprint 把租户作用域并入指纹。
+// 唯一索引是全局的；若不加 scope，不同组织对同一地址/范围的请求会互相
+// 竞争同一个指纹，既可能复用错误任务，也可能因唯一冲突而创建失败。
+func scopedDownloadFingerprint(orgID, wsID, fingerprint string) string {
+	sum := sha256.Sum256([]byte(orgID + "\x00" + wsID + "\x00" + fingerprint))
+	return hex.EncodeToString(sum[:])
 }
 
 func downloadRequestFingerprint(chain string, subjects, datasets []string, rng model.DownloadJobRange) string {

@@ -189,6 +189,69 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/jobs:
+    get:
+      operationId: adminJobsList
+      tags: [admin-v1]
+      x-required-permission: admin:job:list
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/jobs/{id}/commands/{command}:
+    post:
+      operationId: adminJobCommand
+      tags: [admin-v1]
+      x-required-permission: admin:job:control
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/jobs/{id}/diagnostics:
+    get:
+      operationId: adminJobDiagnostics
+      tags: [admin-v1]
+      x-required-permission: admin:job:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
   /api/admin/v1/login-events:
     get:
       operationId: adminLoginEvents
@@ -273,7 +336,6 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-  /api/admin/v1/organizations/{id}:
     patch:
       operationId: adminUpdateOrganization
       tags: [admin-v1]
@@ -504,7 +566,6 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-  /api/admin/v1/users/{id}:
     patch:
       operationId: adminUpdateUser
       tags: [admin-v1]
@@ -609,7 +670,6 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-  /api/admin/v1/users/{id}/roles:
     post:
       operationId: adminGrantRole
       tags: [admin-v1]
@@ -672,7 +732,6 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-  /api/admin/v1/workspaces:
     post:
       operationId: adminCreateWorkspace
       tags: [admin-v1]

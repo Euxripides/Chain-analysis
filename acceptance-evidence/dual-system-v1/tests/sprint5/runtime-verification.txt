@@ -1,0 +1,36 @@
+== 2026-09-12T19:54:31+07:00 ==
+host: dataserver
+api HEAD: 41a56f50dc833185631baa5dbbc56e4139ba843059725d47f2f362f103aa7ccf
+worker HEAD: f63f325f3a796a4420fb89a21559789f38535ea5dba39a9c0efdafa36c537d9a
+schema_migrations tail:
+postgres/0050_s5_job_identity_scope.sql
+postgres/0049_s5_explorer_download_jobs.sql
+postgres/0048_s4_permission_fix.sql
+services:
+active
+active
+active
+active
+health:
+{"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+
+public entry:
+app-v2=200 admin=200
+s5 tables:
+job_event_log=13616
+export_tickets_used=56
+canvas_with_refs=44
+s5 audit actions:
+canvas.create=22
+canvas.evidence_ref.denied=10
+canvas.update=26
+download.create=21
+download.refresh=10
+export.create=45
+export.download=56
+export.download_failed=16
+export.download_ticket=56
+job.cancel=20
+job.pause=10
+job.resume=10
+minio exports object count:

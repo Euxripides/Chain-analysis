@@ -338,17 +338,47 @@ function PagedTable<T>({
   rows: T[];
   rowKey: (row: T, index: number) => string;
 }) {
-  const pageSize = 100;
+  /**
+   * §30.1 / UX-004：分页窗口 + 视口虚拟滚动。
+   * - 每页 1000 行，页面切换仍是 O(1)；
+   * - 当前页只把视口附近的行放进 DOM，10k 行时 DOM 行数保持在几十行；
+   * - 保留上一页/下一页，兼容既有后台长表操作习惯。
+   */
+  const pageSize = 1000;
+  const rowHeight = 44;
+  const overscan = 8;
+  const viewportHeight = 560;
   const [page, setPage] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(page, pageCount - 1);
-  useEffect(() => setPage(0), [rows]);
-  const slice = rows.slice(current * pageSize, current * pageSize + pageSize);
+
+  useEffect(() => {
+    setPage(0);
+    setScrollTop(0);
+  }, [rows]);
+
+  const slice = useMemo(() => rows.slice(current * pageSize, current * pageSize + pageSize), [rows, current]);
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const visibleCount = Math.ceil(viewportHeight / rowHeight) + overscan * 2;
+  const end = Math.min(slice.length, start + visibleCount);
+  const topPad = start * rowHeight;
+  const bottomPad = Math.max(0, (slice.length - end) * rowHeight);
+  const visible = slice.slice(start, end);
 
   return (
     <>
-      <div className="table-scroll">
-        <table className="table">
+      <div
+        className="table-scroll"
+        style={{ maxHeight: viewportHeight, overflowY: "auto" }}
+        onScroll={(event) => {
+          const next = event.currentTarget.scrollTop;
+          window.requestAnimationFrame(() => setScrollTop(next));
+        }}
+        data-virtualized="true"
+        data-total-rows={rows.length}
+      >
+        <table className="table table--virtual">
           <thead>
             <tr>
               {columns.map((c) => (
@@ -359,8 +389,13 @@ function PagedTable<T>({
             </tr>
           </thead>
           <tbody>
-            {slice.map((row, index) => (
-              <tr key={rowKey(row, current * pageSize + index)}>
+            {topPad > 0 ? (
+              <tr aria-hidden="true" style={{ height: topPad }}>
+                <td colSpan={columns.length} style={{ padding: 0, border: 0 }} />
+              </tr>
+            ) : null}
+            {visible.map((row, index) => (
+              <tr key={rowKey(row, current * pageSize + start + index)} style={{ height: rowHeight }}>
                 {columns.map((c) => (
                   <td key={c.key} style={{ textAlign: c.align ?? "left" }}>
                     {c.render(row)}
@@ -368,24 +403,43 @@ function PagedTable<T>({
                 ))}
               </tr>
             ))}
+            {bottomPad > 0 ? (
+              <tr aria-hidden="true" style={{ height: bottomPad }}>
+                <td colSpan={columns.length} style={{ padding: 0, border: 0 }} />
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
-      {pageCount > 1 ? (
-        <div className="toolbar" style={{ padding: "var(--sp-3) var(--sp-4)", justifyContent: "space-between" }}>
-          <span style={{ color: "var(--c-slate)", fontSize: "var(--fs-12)" }}>
-            共 {rows.length} 行 · 第 {current + 1} / {pageCount} 页
-          </span>
-          <span className="toolbar">
-            <button type="button" className="btn btn--sm" disabled={current === 0} onClick={() => setPage(current - 1)}>
-              上一页
-            </button>
-            <button type="button" className="btn btn--sm" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)}>
-              下一页
-            </button>
-          </span>
-        </div>
-      ) : null}
+      <div className="toolbar" style={{ padding: "var(--sp-3) var(--sp-4)", justifyContent: "space-between" }}>
+        <span style={{ color: "var(--c-slate)", fontSize: "var(--fs-12)" }} data-testid="table-summary">
+          共 {rows.length} 行 · 第 {current + 1} / {pageCount} 页 · DOM {visible.length} 行（虚拟滚动）
+        </span>
+        <span className="toolbar">
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={current === 0}
+            onClick={() => {
+              setPage(current - 1);
+              setScrollTop(0);
+            }}
+          >
+            上一页
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={current >= pageCount - 1}
+            onClick={() => {
+              setPage(current + 1);
+              setScrollTop(0);
+            }}
+          >
+            下一页
+          </button>
+        </span>
+      </div>
     </>
   );
 }

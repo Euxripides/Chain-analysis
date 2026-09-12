@@ -67,6 +67,12 @@ func (s *Server) startBusForwarder(log *slog.Logger) {
 		if s.runtime != nil {
 			s.runtime.HandleJobEvent(context.Background(), subject, data)
 		}
+		// S5：任务事件先落 job_event_log 拿到单调 id，再扇出；
+		// 这样浏览器断线重连时 Last-Event-ID 可以精确重放（§18.5/§18.11）。
+		if jobID, eventType, payload, ok := jobEventRoute(subject, data); ok {
+			s.emitJobEvent(context.Background(), jobID, eventType, payload)
+			return
+		}
 		idx := strings.LastIndex(subject, ".")
 		if idx < 0 {
 			return

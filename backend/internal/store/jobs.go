@@ -22,7 +22,7 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 	var cb *string
 	err := rows.Scan(&j.ID, &j.JobNo, &j.Status, &j.Priority, &j.Source, &j.Mode, &j.RequestedMode, &j.EffectiveMode, &j.ModeReason, &j.ModeChangedAt, &j.Chain, &j.RangeType,
 		&fb, &tb, &ft, &tt, &j.Datasets, &j.ReusePolicy, &j.RequestFingerprint, &j.HeadBlock, &cb, &j.Error, &stats,
-		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt)
+		&j.OrganizationID, &j.WorkspaceID, &j.ProjectID, &rt, &j.CreatedAt, &j.UpdatedAt, &j.CreatedByIdentity)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func scanJob(rows pgx.Rows) (*model.DownloadJob, error) {
 
 const jobCols = "id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, " +
 	"from_timestamp, to_timestamp, datasets, reuse_policy, COALESCE(request_fingerprint,''), head_block, created_by, error, stats, " +
-	"organization_id, workspace_id, project_id, resolved_at, created_at, updated_at"
+	"organization_id, workspace_id, project_id, resolved_at, created_at, updated_at, created_by_identity"
 
 // CreateJobWithSubjects 创建 Job 与 Subject（四级模型前两级）。
 func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob, subjects []string) ([]model.Subject, error) {
@@ -95,10 +95,10 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 	}
 	_, err = tx.Exec(ctx, "INSERT INTO download_jobs "+
 		"(id, job_no, status, priority, source, mode, requested_mode, effective_mode, mode_reason, mode_changed_at, chain, range_type, from_block, to_block, from_timestamp, to_timestamp, "+
-		" datasets, reuse_policy, request_fingerprint, head_block, created_by, organization_id, workspace_id, project_id, resolved_at, stats) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NULLIF($19,''),$20,$21,$22,$23,$24,$25,$26::jsonb)",
+		" datasets, reuse_policy, request_fingerprint, head_block, created_by, created_by_identity, organization_id, workspace_id, project_id, resolved_at, stats) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NULLIF($19,''),$20,$21,$22,$23,$24,$25,$26,$27::jsonb)",
 		j.ID, j.JobNo, j.Status, j.Priority, j.Source, mode, j.RequestedMode, j.EffectiveMode, j.ModeReason, j.ModeChangedAt, j.Chain, j.RangeType, j.FromBlock, j.ToBlock,
-		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.RequestFingerprint, j.HeadBlock, j.CreatedBy,
+		j.FromTimestamp, j.ToTimestamp, j.Datasets, j.ReusePolicy, j.RequestFingerprint, j.HeadBlock, j.CreatedBy, j.CreatedByIdentity,
 		j.OrganizationID, j.WorkspaceID, j.ProjectID, j.ResolvedAt, stats)
 	if err != nil {
 		return nil, fmt.Errorf("insert job: %w", err)
@@ -126,9 +126,10 @@ func (s *Store) CreateJobWithSubjects(ctx context.Context, j *model.DownloadJob,
 // FindReusableJob returns an active or completed job with the same normalized
 // request. The exact legacy match lets deployments reuse jobs created before
 // request fingerprints were introduced.
-func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeType string, fromBlock, toBlock *int64, fromTime, toTime *time.Time, datasets, subjects []string) (*model.DownloadJob, error) {
+func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeType string, fromBlock, toBlock *int64, fromTime, toTime *time.Time, datasets, subjects []string, orgID, wsID string) (*model.DownloadJob, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT "+jobCols+` FROM download_jobs j
-		WHERE (j.status IN ('CREATED','PLANNING','QUEUED','RUNNING','PAUSE_REQUESTED','PAUSED','RESUMING','WAITING_USER_CONFIRMATION')
+		WHERE j.organization_id=$11::uuid AND j.workspace_id=$12::uuid
+		AND (j.status IN ('CREATED','PLANNING','QUEUED','RUNNING','PAUSE_REQUESTED','PAUSED','RESUMING','WAITING_USER_CONFIRMATION')
 			OR (j.status='COMPLETED' AND (j.range_type<>'full' OR NOT EXISTS (
 				SELECT 1 FROM unnest($10::text[]) requested_subject(subject)
 				CROSS JOIN unnest($8::text[]) requested_dataset(dataset)
@@ -145,7 +146,7 @@ func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeTy
 			AND NOT EXISTS (SELECT 1 FROM unnest($10::text[]) wanted(subject)
 				WHERE NOT EXISTS (SELECT 1 FROM download_subjects ds WHERE ds.job_id=j.id AND ds.subject=wanted.subject))
 		)) ORDER BY (j.request_fingerprint=$1) DESC NULLS LAST, j.created_at DESC LIMIT 1`,
-		fingerprint, chain, rangeType, fromBlock, toBlock, fromTime, toTime, datasets, len(subjects), subjects)
+		fingerprint, chain, rangeType, fromBlock, toBlock, fromTime, toTime, datasets, len(subjects), subjects, orgID, wsID)
 	if err != nil {
 		return nil, err
 	}

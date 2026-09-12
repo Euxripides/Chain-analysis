@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "@chain/design-tokens/tokens.css";
 import "@chain/ui/ui.css";
 import "./sprint4.css";
+import "./sprint5/sprint5.css";
 import { DialogProvider } from "@chain/ui";
 import { App } from "./App";
 

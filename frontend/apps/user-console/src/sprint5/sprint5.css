@@ -1,0 +1,190 @@
+/* Sprint 5：Explorer / 下载 / 任务 / 导出 / Canvas 的布局与响应式。
+   页面提示仍必须走 Dialog（AGENTS.md），这里只定义业务布局。 */
+
+.s5-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+.s5-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.s5-stack {
+  display: grid;
+  gap: var(--sp-3);
+}
+.s5-object-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+.s5-mono,
+.s5-object-head .s5-mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  overflow-wrap: anywhere;
+}
+.s5-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.s5-kpi {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--sp-3);
+  min-width: 0;
+}
+.s5-kpi__label {
+  color: var(--c-slate);
+  font-size: var(--fs-12);
+}
+.s5-kpi__value {
+  font-size: var(--fs-18, 18px);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.s5-form-section {
+  border-top: 1px solid var(--c-border);
+  padding: var(--sp-3) 0;
+}
+.s5-form-section:first-child {
+  border-top: 0;
+}
+.s5-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.s5-form-grid > * {
+  min-width: 0;
+}
+.s5-field-label {
+  display: block;
+  font-size: var(--fs-12);
+  color: var(--c-slate);
+  margin-bottom: 4px;
+}
+.s5-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.s5-progress {
+  height: 8px;
+  background: var(--c-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.s5-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--c-primary, #2563eb);
+}
+.s5-canvas-shell {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 320px;
+  gap: var(--sp-3);
+  align-items: start;
+}
+.s5-canvas-svg {
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--c-surface, #fff);
+  touch-action: none;
+}
+.s5-canvas-node {
+  cursor: pointer;
+}
+.s5-canvas-node.is-selected circle {
+  stroke: var(--c-primary, #2563eb);
+  stroke-width: 3;
+}
+.s5-canvas-side {
+  min-width: 0;
+}
+.s5-node-list {
+  max-height: 420px;
+  overflow: auto;
+}
+.s5-node-list__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  color: inherit;
+}
+.s5-node-list__item:focus-visible {
+  outline: 2px solid var(--c-primary, #2563eb);
+  outline-offset: -2px;
+}
+.s5-mobile-only {
+  display: none;
+}
+.table--virtual td {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table--virtual thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--c-surface, #fff);
+}
+.s5-chart-frame {
+  width: 100%;
+  overflow-x: auto;
+}
+.s5-json {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .s5-canvas-shell {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .s5-canvas-shell > .s5-canvas-left {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .s5-grid,
+  .s5-grid--3,
+  .s5-form-grid,
+  .s5-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .s5-canvas-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .s5-canvas-svg {
+    height: 320px;
+  }
+  .s5-mobile-only {
+    display: block;
+  }
+  .s5-desktop-only {
+    display: none;
+  }
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}

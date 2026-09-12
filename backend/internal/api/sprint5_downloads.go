@@ -1,0 +1,363 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
+)
+
+// ---- U-DL-01 / S5-BE-02（§18.10 / §21.5）----
+
+type downloadV2Subject struct {
+	Type  string `json:"type"`
+	Chain string `json:"chain"`
+	Value string `json:"value"`
+}
+
+type downloadV2Request struct {
+	CaseID          string              `json:"case_id"`
+	Chain           string              `json:"chain"`
+	Addresses       []string            `json:"addresses"`
+	Subjects        []downloadV2Subject `json:"subjects"`
+	Datasets        []string            `json:"datasets"`
+	Range           dataset.RangeSpec   `json:"range"`
+	ReusePolicy     string              `json:"reuse_policy"`
+	PerformanceMode string              `json:"performance_mode"`
+	Priority        int                 `json:"priority"`
+}
+
+type downloadV2Plan struct {
+	Request      map[string]any
+	EnsureReq    dataset.EnsureRequest
+	Preview      *dataset.CoveragePreviewResponse
+	Candidate    *model.DownloadJob
+	CoverageHit  bool
+	Refresh      bool
+	MissingBlock int64
+	Estimate     map[string]any
+	Risks        []string
+}
+
+func (s *Server) parseDownloadV2(w http.ResponseWriter, r *http.Request) (downloadV2Request, bool) {
+	var req downloadV2Request
+	if err := decodeJSON(r, &req); err != nil {
+		validationError(w, r, "请求体不是合法 JSON", nil)
+		return req, false
+	}
+	req.Chain = strings.ToLower(strings.TrimSpace(req.Chain))
+	req.ReusePolicy = strings.ToLower(strings.TrimSpace(req.ReusePolicy))
+	if req.ReusePolicy == "" {
+		req.ReusePolicy = "prefer_local"
+	}
+	switch req.ReusePolicy {
+	case "prefer_local", "refresh":
+	default:
+		validationError(w, r, "reuse_policy 只接受 prefer_local 或 refresh", []fieldError{{Field: "reuse_policy", Code: "invalid", Message: req.ReusePolicy}})
+		return req, false
+	}
+	if req.Chain == "" {
+		validationError(w, r, "chain 必填", []fieldError{{Field: "chain", Code: "required", Message: "请选择链"}})
+		return req, false
+	}
+	for _, sub := range req.Subjects {
+		if !strings.EqualFold(strings.TrimSpace(sub.Type), "ADDRESS") {
+			validationError(w, r, "v2 下载目前只接受 ADDRESS 类型对象", nil)
+			return req, false
+		}
+		if c := strings.ToLower(strings.TrimSpace(sub.Chain)); c != "" && c != req.Chain {
+			validationError(w, r, "一个下载请求只能包含同一链的对象", nil)
+			return req, false
+		}
+		req.Addresses = append(req.Addresses, sub.Value)
+	}
+	if len(req.Addresses) == 0 {
+		validationError(w, r, "至少需要一个地址", []fieldError{{Field: "addresses", Code: "required", Message: "请粘贴地址"}})
+		return req, false
+	}
+	if len(req.Addresses) > 100 {
+		validationError(w, r, "单次最多 100 个地址", nil)
+		return req, false
+	}
+	if req.Priority <= 0 {
+		req.Priority = 100
+	}
+	return req, true
+}
+
+// prepareDownloadPlan 只读本地索引：验证作用域、计算 Coverage、复用候选与估算。
+// 该函数不创建任务、不调用 Provider。
+func (s *Server) prepareDownloadPlan(w http.ResponseWriter, r *http.Request, req downloadV2Request) (*downloadV2Plan, bool) {
+	p := PrincipalFrom(r.Context())
+	if s.deps.Store == nil || s.svc == nil {
+		respondError(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY", "下载服务未就绪", nil)
+		return nil, false
+	}
+	addresses, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, req.Addresses)
+	if err != nil {
+		validationError(w, r, "地址不合法或去重后为空", []fieldError{{Field: "addresses", Code: "invalid", Message: err.Error()}})
+		return nil, false
+	}
+	datasets, err := normalizeDatasetsForDownload(req.Datasets)
+	if err != nil {
+		validationError(w, r, "Dataset 不合法", []fieldError{{Field: "datasets", Code: "invalid", Message: err.Error()}})
+		return nil, false
+	}
+	if req.CaseID != "" {
+		if _, err := uuid.Parse(req.CaseID); err != nil {
+			validationError(w, r, "case_id 必须是 UUID", nil)
+			return nil, false
+		}
+		var exists bool
+		if err := s.deps.Store.Pool.QueryRow(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM cases WHERE id=$1 AND organization_id=$2 AND workspace_id=$3)`,
+			req.CaseID, p.OrganizationID, p.WorkspaceID).Scan(&exists); err != nil || !exists {
+			respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "案件不存在或无权访问", nil)
+			return nil, false
+		}
+	}
+	ensureReq := dataset.EnsureRequest{
+		OrganizationID: p.OrganizationID, WorkspaceID: p.WorkspaceID, CreatedByIdentity: p.IdentityID,
+		Source: "user_download", Priority: req.Priority,
+		PerformanceMode: req.PerformanceMode, Subjects: addresses, Chain: req.Chain,
+		Datasets: datasets, Range: req.Range, ReusePolicy: req.ReusePolicy,
+	}
+	preview, err := s.svc.PreviewLocal(r.Context(), ensureReq)
+	if err != nil {
+		validationError(w, r, "预览失败："+err.Error(), nil)
+		return nil, false
+	}
+	candidate, err := s.svc.ReuseCandidateLocal(r.Context(), ensureReq)
+	if err != nil {
+		validationError(w, r, "复用检查失败："+err.Error(), nil)
+		return nil, false
+	}
+	refresh := req.ReusePolicy == "refresh"
+	if refresh {
+		candidate = nil // 显式 refresh 绝不复用，即使存在同指纹任务。
+	}
+	coverageHit := preview.OverallRatio >= 1 && !refresh
+	missingBlocks := missingBlocksFromPreview(preview)
+	estimate := s.downloadEstimate(r.Context(), req.Chain, addresses, datasets, missingBlocks)
+	risks := []string{}
+	if refresh {
+		risks = append(risks, "显式 refresh 会新增 Provider 取数，不复用本地已完成数据。")
+	}
+	if candidate != nil {
+		risks = append(risks, fmt.Sprintf("存在可复用任务 %s（状态 %s），默认不会新增 Provider 工作。", candidate.JobNo, candidate.Status))
+	}
+	if preview.OverallRatio > 0 && preview.OverallRatio < 1 {
+		risks = append(risks, fmt.Sprintf("本地 Coverage %.1f%%，任务只会补齐缺口。", preview.OverallRatio*100))
+	}
+	return &downloadV2Plan{
+		Request: map[string]any{
+			"case_id": req.CaseID, "chain": req.Chain, "addresses": addresses,
+			"datasets": datasets, "range": req.Range, "reuse_policy": req.ReusePolicy,
+			"performance_mode": ensureReq.PerformanceMode,
+		},
+		EnsureReq: ensureReq, Preview: preview, Candidate: candidate, CoverageHit: coverageHit,
+		Refresh: refresh, MissingBlock: missingBlocks, Estimate: estimate, Risks: risks,
+	}, true
+}
+
+func normalizeDatasetsForDownload(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return []string{"transactions", "token_transfers"}, nil
+	}
+	if len(in) > 6 {
+		return nil, errors.New("单次最多选择 6 个 Dataset")
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, raw := range in {
+		d := strings.ToLower(strings.TrimSpace(raw))
+		if !model.ValidDataset(d) {
+			return nil, fmt.Errorf("未知 Dataset %q", d)
+		}
+		if seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func missingBlocksFromPreview(p *dataset.CoveragePreviewResponse) int64 {
+	var total int64
+	for _, item := range p.Items {
+		for _, gap := range item.Gaps {
+			if gap.ToBlock >= gap.FromBlock {
+				total += gap.ToBlock - gap.FromBlock + 1
+			}
+		}
+	}
+	return total
+}
+
+// downloadEstimate 基于本地密度与历史 Provider 单位成本估算，不探测 Provider。
+func (s *Server) downloadEstimate(ctx context.Context, chainSlug string, addresses, datasets []string, missingBlocks int64) map[string]any {
+	out := map[string]any{
+		"estimated_missing_blocks": missingBlocks,
+		"estimated_rows":           nil,
+		"estimated_cost_usd":       nil,
+		"estimated_time_seconds":   nil,
+		"basis":                    "local_index_density + historical_provider_usage",
+	}
+	if s.deps.CH == nil || missingBlocks <= 0 {
+		out["basis"] = "no_missing_blocks"
+		return out
+	}
+	var localRows int64
+	if len(datasets) == 1 && datasets[0] == "token_transfers" {
+		_ = s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM blockchain.token_transfers FINAL WHERE chain=? AND (from_address IN (?) OR to_address IN (?))`, chainSlug, addresses, addresses).Scan(&localRows)
+	} else {
+		_ = s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM blockchain.transactions FINAL WHERE chain=? AND (from_address IN (?) OR to_address IN (?))`, chainSlug, addresses, addresses).Scan(&localRows)
+	}
+	if localRows <= 0 {
+		return out
+	}
+	coveredBlocks := int64(1)
+	_ = s.deps.Store.Pool.QueryRow(ctx, `
+		SELECT GREATEST(COALESCE(SUM(to_block-from_block+1),0),1) FROM dataset_coverage
+		WHERE chain=$1 AND subject = ANY($2) AND dataset = ANY($3)`,
+		chainSlug, addresses, datasets).Scan(&coveredBlocks)
+	density := float64(localRows) / float64(coveredBlocks)
+	estRows := int64(density * float64(missingBlocks))
+	if estRows < 0 {
+		estRows = 0
+	}
+	out["estimated_rows"] = estRows
+	var totalCost, totalRows float64
+	_ = s.deps.Store.Pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(estimated_cost_usd),0), COALESCE(SUM(rows),0)
+		FROM provider_usage WHERE dataset = ANY($1) AND rows > 0`, datasets).Scan(&totalCost, &totalRows)
+	if totalRows > 0 {
+		out["estimated_cost_usd"] = fmt.Sprintf("%.4f", float64(estRows)*(totalCost/totalRows))
+	}
+	return out
+}
+
+func (s *Server) handleDownloadPreview(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.parseDownloadV2(w, r)
+	if !ok {
+		return
+	}
+	plan, ok := s.prepareDownloadPlan(w, r, req)
+	if !ok {
+		return
+	}
+	providerWork := !plan.CoverageHit && plan.Candidate == nil
+	reuseInfo := map[string]any{
+		"policy":       plan.EnsureReq.ReusePolicy,
+		"will_reuse":   plan.Candidate != nil,
+		"candidate":    nil,
+		"coverage_hit": plan.CoverageHit,
+		"refresh":      plan.Refresh,
+	}
+	if plan.Candidate != nil {
+		reuseInfo["candidate"] = map[string]any{
+			"job_id": plan.Candidate.ID, "job_no": plan.Candidate.JobNo,
+			"status": plan.Candidate.Status, "coverage": plan.Preview.OverallRatio,
+			"updated_at": plan.Candidate.UpdatedAt,
+		}
+	}
+	respondOK(w, r, map[string]any{
+		"request":                plan.Request,
+		"coverage":               plan.Preview,
+		"missing_blocks":         plan.MissingBlock,
+		"provider_work_required": providerWork,
+		"reuse":                  reuseInfo,
+		"estimate":               plan.Estimate,
+		"risks":                  plan.Risks,
+		"source": map[string]any{
+			"coverage": "postgres:dataset_coverage", "provider": "local_index",
+			"as_of": time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
+	if strings.TrimSpace(r.Header.Get("Idempotency-Key")) == "" {
+		validationError(w, r, "创建下载必须携带 Idempotency-Key", []fieldError{{Field: "Idempotency-Key", Code: "required", Message: "缺少幂等键"}})
+		return
+	}
+	req, ok := s.parseDownloadV2(w, r)
+	if !ok {
+		return
+	}
+	p := PrincipalFrom(r.Context())
+	if req.ReusePolicy == "refresh" && !p.Has("download:refresh") {
+		respondError(w, r, http.StatusForbidden, "AUTHZ_FORBIDDEN", "显式 refresh 需要 download:refresh 权限", map[string]any{"permission": "download:refresh"})
+		return
+	}
+	plan, ok := s.prepareDownloadPlan(w, r, req)
+	if !ok {
+		return
+	}
+	if plan.CoverageHit {
+		s.writeAuditNow(r, "download.create.coverage_hit", "download", "download_request", req.CaseID,
+			map[string]any{"chain": req.Chain, "datasets": plan.EnsureReq.Datasets, "coverage": plan.Preview.OverallRatio})
+		respondOK(w, r, map[string]any{
+			"status": "ready", "created": false, "reused": false,
+			"provider_work_required": false, "coverage": plan.Preview.OverallRatio,
+			"job_id": nil, "message": "本地索引已完整覆盖请求范围，未创建任务、未调用 Provider。",
+		})
+		return
+	}
+	if plan.Candidate != nil {
+		s.writeAuditNow(r, "download.reuse", "download", "download_job", plan.Candidate.ID,
+			map[string]any{"chain": req.Chain, "datasets": plan.EnsureReq.Datasets, "policy": req.ReusePolicy})
+		resp, err := s.svc.Ensure(r.Context(), plan.EnsureReq)
+		if err != nil {
+			respondError(w, r, http.StatusConflict, "CONFLICT_REUSE_RACE", "复用任务状态已变化，请重新预览", nil)
+			return
+		}
+		jobID := ""
+		if resp.JobID != nil {
+			jobID = *resp.JobID
+		}
+		respondOK(w, r, map[string]any{
+			"status": "reused", "created": false, "reused": true,
+			"provider_work_required": false, "coverage": resp.Coverage,
+			"job_id": jobID, "message": "已复用现有任务，未新增 Provider 工作。",
+		})
+		return
+	}
+	resp, err := s.svc.Ensure(r.Context(), plan.EnsureReq)
+	if err != nil {
+		respondError(w, r, http.StatusConflict, "CONFLICT_DOWNLOAD", "创建下载失败："+err.Error(), nil)
+		return
+	}
+	if resp.JobID != nil {
+		action := "download.create"
+		if plan.Refresh {
+			action = "download.refresh"
+		}
+		s.writeAuditNow(r, action, "download", "download_job", *resp.JobID,
+			map[string]any{"chain": req.Chain, "datasets": plan.EnsureReq.Datasets,
+				"coverage": resp.Coverage, "refresh": plan.Refresh})
+	}
+	status := http.StatusOK
+	if resp.Created {
+		status = http.StatusCreated
+	}
+	body := map[string]any{
+		"status": resp.Status, "created": resp.Created, "reused": resp.Reused,
+		"provider_work_required": resp.ProviderWorkRequired, "coverage": resp.Coverage,
+		"job_id": resp.JobID, "dataset_ref": resp.DatasetRef,
+	}
+	if resp.JobID != nil {
+		if job, jerr := s.deps.Store.GetJob(r.Context(), *resp.JobID); jerr == nil && job != nil {
+			body["job_no"] = job.JobNo
+		}
+	}
+	writeEnvelope(w, status, envelope{Success: true, Data: body, Meta: metaFor(r.Context())})
+}

@@ -41,7 +41,7 @@ func (r *Runtime) WithAdvancedAnalyzer(fn func(context.Context, string, string) 
 	return r
 }
 
-func (r *Runtime) Start(ctx context.Context, id string) (map[string]any, error) {
+func (r *Runtime) Start(ctx context.Context, id string, actorIdentity ...string) (map[string]any, error) {
 	inv, err := r.service.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -67,6 +67,14 @@ func (r *Runtime) Start(ctx context.Context, id string) (map[string]any, error) 
 		to := time.Now().UTC()
 		from := to.AddDate(0, -1, 0)
 		req.Range = dataset.RangeSpec{Type: "time", From: &from, To: &to}
+	}
+	// 服务端注入作用域，覆盖 data_requirement 中可能携带的同名字段（§21.2）。
+	req.OrganizationID = inv.OrganizationID
+	if inv.WorkspaceID != nil {
+		req.WorkspaceID = *inv.WorkspaceID
+	}
+	if len(actorIdentity) > 0 {
+		req.CreatedByIdentity = actorIdentity[0]
 	}
 	req.Source = "investigation"
 	req.Priority = 100

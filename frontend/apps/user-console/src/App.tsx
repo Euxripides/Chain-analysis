@@ -31,6 +31,15 @@ const InboxPage = lazy(() => import("./pages/InboxPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const ExplorerPage = lazy(() => import("./pages/ExplorerPage"));
+const AddressDetailPage = lazy(() => import("./pages/AddressDetailPage"));
+const TransactionDetailPage = lazy(() => import("./pages/TransactionDetailPage"));
+const DownloadNewPage = lazy(() => import("./pages/DownloadNewPage"));
+const JobsPage = lazy(() => import("./pages/JobsPage"));
+const JobDetailPage = lazy(() => import("./pages/JobDetailPage"));
+const ExportsPage = lazy(() => import("./pages/ExportsPage"));
+const CanvasListPage = lazy(() => import("./pages/CanvasListPage"));
+const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 
 /** §3.1 建议导航。未实现的路由一律显示 NOT_IMPLEMENTED 说明，不伪装成可用页面。 */
 const navGroups: (permissions: string[]) => NavGroup[] = () => [
@@ -53,8 +62,9 @@ const navGroups: (permissions: string[]) => NavGroup[] = () => [
     label: "数据工具",
     items: [
       { to: "/explorer", label: "地址与交易查询", icon: <Search size={16} /> },
-      { to: "/downloads", label: "数据下载", icon: <Download size={16} /> },
+      { to: "/downloads/new", label: "数据下载", icon: <Download size={16} /> },
       { to: "/jobs", label: "任务中心", icon: <ListChecks size={16} /> },
+      { to: "/exports", label: "导出中心", icon: <FileText size={16} /> },
     ],
   },
   {
@@ -81,7 +91,12 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/graph": "canvas:list",
   "/explorer": "explorer:read",
   "/downloads": "download:create",
+  "/downloads/new": "download:create",
   "/jobs": "job:list:self",
+  "/exports": "export:list",
+  "/canvases": "canvas:read",
+  "/addresses": "explorer:read",
+  "/transactions": "explorer:read",
   "/inbox": "inbox:read",
   "/notifications": "notification:list",
   "/reports": "report:list",
@@ -154,10 +169,16 @@ function Shell() {
           <Route path="/inbox" element={<Guard permission="inbox:read"><InboxPage /></Guard>} />
           <Route path="/notifications" element={<Guard permission="notification:list"><NotificationsPage /></Guard>} />
           <Route path="/profile" element={<Guard permission="profile:read"><ProfilePage /></Guard>} />
-          <Route path="/graph" element={<Placeholder permission="canvas:list" title="资金图谱" sprint="S5" />} />
-          <Route path="/explorer" element={<Placeholder permission="explorer:read" title="地址与交易查询" sprint="S5" />} />
-          <Route path="/downloads" element={<Placeholder permission="download:create" title="数据下载" sprint="S5" />} />
-          <Route path="/jobs" element={<Placeholder permission="job:list:self" title="任务中心" sprint="S5" />} />
+          <Route path="/graph" element={<Guard permission="canvas:list"><CanvasListPage /></Guard>} />
+          <Route path="/canvases/:canvasId" element={<Guard permission="canvas:read"><CanvasPage /></Guard>} />
+          <Route path="/explorer" element={<Guard permission="explorer:read"><ExplorerPage /></Guard>} />
+          <Route path="/addresses/:chain/:address" element={<Guard permission="explorer:read"><AddressDetailPage /></Guard>} />
+          <Route path="/transactions/:chain/:hash" element={<Guard permission="explorer:read"><TransactionDetailPage /></Guard>} />
+          <Route path="/downloads" element={<Navigate to="/downloads/new" replace />} />
+          <Route path="/downloads/new" element={<Guard permission="download:create"><DownloadNewPage /></Guard>} />
+          <Route path="/jobs" element={<Guard permission="job:list:self"><JobsPage /></Guard>} />
+          <Route path="/jobs/:jobId" element={<Guard permission="job:read"><JobDetailPage /></Guard>} />
+          <Route path="/exports" element={<Guard permission="export:list"><ExportsPage /></Guard>} />
           <Route path="*" element={<Placeholder title="页面不存在" />} />
         </Routes>
       </Suspense>

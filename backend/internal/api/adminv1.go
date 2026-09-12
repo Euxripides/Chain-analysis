@@ -50,6 +50,11 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	r.Post("/audit/verify", s.require("admin:audit:verify", s.handleAdminAuditVerify))
 	r.Post("/audit/export", s.require("admin:audit:export", s.handleNotImplementedV2("audit.export")))
 
+	// Sprint 5：全局任务与固定诊断链（A-JOB-01/02）。
+	r.Get("/jobs", s.require("admin:job:list", s.handleAdminJobsList))
+	r.Get("/jobs/{id}/diagnostics", s.require("admin:job:read", s.handleAdminJobDiagnostics))
+	r.Post("/jobs/{id}/commands/{command}", s.require("admin:job:control", s.handleAdminJobCommand))
+
 	// 显式未实现的后台能力，避免"页面存在即认为已完成"。
 	r.Get("/provider/accounts", s.require("admin:provider:read", s.handleNotImplementedV2("admin.provider.accounts")))
 	r.Get("/alerts", s.require("admin:alert:read", s.handleNotImplementedV2("admin.alert.list")))
