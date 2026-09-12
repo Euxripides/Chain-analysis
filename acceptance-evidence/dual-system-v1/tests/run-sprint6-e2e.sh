@@ -261,6 +261,27 @@ BUD_AUD=$(sql "select count(*) from audit_events_v2 where action='admin.budget.e
 if [ "$BUD_AUD" -ge 1 ]; then A7B=yes; else A7B=no; fi
 check "ADMIN-007f" "预算评估写入审计" "$A7B" "yes"
 
+## ==================== 告警 → 对象关联链（§19 验收） ====================
+echo "---- 从告警定位到 request/provider/shard/checkpoint/object ----"
+ALERT_BUDGET_ID=$(sql "select id::text from api_control_alerts where fingerprint='budget:$BID' limit 1")
+DETAIL=$(adm "$JA" "$CS_A" GET "/api/admin/v1/alerts/$ALERT_BUDGET_ID")
+check "ALERT-TRACE-a" "告警详情返回 alert + related 两段" "$(echo "$DETAIL" | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print('ok' if 'alert' in d and 'related' in d else 'missing')" 2>/dev/null)" "ok"
+check "ALERT-TRACE-b" "关联链包含 Provider 命中或明确的未命中原因" "$(echo "$DETAIL" | python3 -c "import sys,json;k=json.load(sys.stdin)['data']['related'].get('provider');print('ok' if isinstance(k,dict) and ('key' in k) else 'missing')" 2>/dev/null)" "ok"
+# 用一条真实 Provider 请求告警验证 request→job→shard→checkpoint→object 链路可用：
+# 先取最近一条带 job_id 的 provider_usage，构造带 links 的告警（模拟运维告警挂点）。
+LINK_ROW=$(sql "select coalesce(request_id,'')||'|'||coalesce(provider,'')||'|'||coalesce(job_id::text,'')||'|'||coalesce(shard_id::text,'') from provider_usage where request_id<>'' order by request_time desc limit 1")
+LINK_REQ=$(echo "$LINK_ROW" | cut -d'|' -f1)
+LINK_PROV=$(echo "$LINK_ROW" | cut -d'|' -f2)
+LINK_JOB=$(echo "$LINK_ROW" | cut -d'|' -f3)
+LINK_SHARD=$(echo "$LINK_ROW" | cut -d'|' -f4)
+LINK_FP="s6-trace-$RUN_TAG"
+sql "insert into api_control_alerts (severity, priority, title, message, fingerprint, status, source, links) values ('P2','P2','S6 关联链验证','trace drill','$LINK_FP','OPEN','observability','{\"request_id\":\"$LINK_REQ\",\"provider\":\"$LINK_PROV\",\"job_id\":\"$LINK_JOB\",\"shard_id\":\"$LINK_SHARD\"}'::jsonb) on conflict (fingerprint) do update set links=excluded.links, status='OPEN'" >/dev/null
+LINK_ID=$(sql "select id::text from api_control_alerts where fingerprint='$LINK_FP'")
+LINK_DETAIL=$(adm "$JA" "$CS_A" GET "/api/admin/v1/alerts/$LINK_ID")
+check "ALERT-TRACE-c" "由告警可定位到 Provider 使用记录" "$(echo "$LINK_DETAIL" | python3 -c "import sys,json;r=json.load(sys.stdin)['data']['related'];print('ok' if isinstance(r.get('request'),dict) and r['request'].get('provider') else 'missing')" 2>/dev/null)" "ok"
+check "ALERT-TRACE-d" "关联链返回 job/shard 层" "$(echo "$LINK_DETAIL" | python3 -c "import sys,json;r=json.load(sys.stdin)['data']['related'];print('ok' if 'job' in r and 'shard' in r else 'missing')" 2>/dev/null)" "ok"
+sql "update api_control_alerts set status='RESOLVED', resolved_at=now() where id='$LINK_ID'" >/dev/null
+
 ## ==================== ADMIN-008 ====================
 echo "---- ADMIN-008 审计导出与 hash 校验 ----"
 check "ADMIN-008-0" "缺少 step-up 的审计导出被拒绝（403）" "$(adm_code "$JA" "$CS_A" POST /api/admin/v1/audit/export '{"format":"jsonl","chain":"audit","limit":500,"reason":"ADMIN-008 负向：无 step-up"}')" "403"
