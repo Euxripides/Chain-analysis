@@ -119,6 +119,8 @@ var Catalog = map[string]Permission{
 	"admin:user:disable":                {"admin:user:disable", "admin.identity", "停用用户", RiskCritical, false},
 	"admin:user:invite":                 {"admin:user:invite", "admin.identity", "邀请用户", RiskMedium, false},
 	"admin:user:password:reset":         {"admin:user:password:reset", "admin.identity", "重置用户密码", RiskCritical, false},
+	"admin:user:reset_mfa":              {"admin:user:reset_mfa", "admin.identity", "重置用户 MFA", RiskCritical, false},
+	"admin:user:delete":                 {"admin:user:delete", "admin.identity", "删除（离职）用户：软删 + 匿名化 + 归档其个人空间，保留审计引用", RiskCritical, true},
 	"admin:role:read":                   {"admin:role:read", "admin.identity", "查看角色", RiskLow, false},
 	"admin:role:manage":                 {"admin:role:manage", "admin.identity", "管理角色与权限", RiskCritical, false},
 	"admin:permission:read":             {"admin:permission:read", "admin.identity", "查看权限目录", RiskLow, false},

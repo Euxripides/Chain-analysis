@@ -1,0 +1,12 @@
+-- 0069_admin_user_delete_permission_seed.sql
+-- 目的：把 admin:user:delete 的权限种子写成「目录一致性检查」可解析的单行形式。
+--
+-- 背景：该键由 0068 引入，但 0068 的 INSERT 在 "sensitive)" 与 "VALUES" 之间换行，而
+--   internal/policy/catalog_sql_test.go 以字面量 "…sensitive) VALUES" 定位种子块 ——
+--   于是 0068 的那一行对解析器不可见：Go catalog 声明了该键、SQL 侧却"查无此行"，测试失败
+--  （数据库里其实已有该行，二者只是**文本形状**不一致）。更进一步，运行时的策略引擎以
+--   Go catalog 为准，缺声明会让端点直接 403 permission_not_declared（已在真机复现）。
+--
+-- 处理：0068 已应用于生产，**不修改历史迁移**；这里以单行形式重复声明同一条种子（幂等）。
+-- 幂等：ON CONFLICT (key) DO NOTHING；不修改任何既有授权与角色绑定。
+INSERT INTO permissions (key, category, description, risk_level, sensitive) VALUES ('admin:user:delete', 'admin.identity', '删除（离职）用户：软删 + 匿名化 + 归档其个人空间，保留审计引用', 'critical', true) ON CONFLICT (key) DO NOTHING;

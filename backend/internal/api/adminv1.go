@@ -34,6 +34,12 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	r.Post("/users/{id}/commands/disable", s.require("admin:user:disable", s.handleAdminDisableUser))
 	r.Post("/users/{id}/commands/enable", s.require("admin:user:disable", s.handleAdminEnableUser))
 	r.Post("/users/{id}/commands/reset-password", s.require("admin:user:password:reset", s.handleAdminResetPassword))
+	// §21.6 commands/reset-mfa：丢失认证器的账号必须由管理侧解除第二因素，否则永远登录不进来。
+	// 破坏性操作 → 二次确认 + step-up（与 disable/reset-password 同规格），并吊销该账号全部会话。
+	r.Post("/users/{id}/commands/reset-mfa", s.require("admin:user:reset_mfa", s.handleAdminResetMFA))
+	// 删除（离职）用户（迁移 0067 / 计划 §3.2）：软删 + 匿名化 + 归档个人空间。
+	// 权限键 admin:user:delete 属高风险，默认只授予 platform_admin 与 security_admin。
+	r.Delete("/users/{id}", s.require("admin:user:delete", s.handleAdminDeleteUser))
 	r.Get("/roles", s.require("admin:role:read", s.handleAdminListRoles))
 	r.Get("/roles/{id}/permissions", s.require("admin:role:read", s.handleAdminRolePermissions))
 	r.Get("/permissions", s.require("admin:permission:read", s.handleAdminListPermissions))
@@ -48,7 +54,10 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	r.Get("/audit/events/{id}", s.require("admin:audit:read", s.handleAdminAuditEventDetail))
 	r.Get("/audit/chains", s.require("admin:audit:verify", s.handleAdminAuditChains))
 	r.Post("/audit/verify", s.require("admin:audit:verify", s.handleAdminAuditVerify))
-	r.Post("/audit/export", s.require("admin:audit:export", s.handleNotImplementedV2("audit.export")))
+	// S7 修复：原先此处注册了 POST /audit/export 的 501 占位实现，而真实的审计导出处理器
+	// 已由 registerAdminGovernanceRoutes（sprint6_governance.go）注册同一路径。
+	// chi 对重复路由静默覆盖，实际生效者取决于注册顺序 —— 这是一个"看似 501、实则已实现"的
+	// 顺序地雷，已删除占位注册，保留唯一实现（实测返回真实业务的 400/200，不再是 501）。
 
 	// Sprint 6 审计修复：完整性事件边界（缺口检测 / 封存 / 边界之后逐项验证）。
 	s.registerAdminAuditIntegrityRoutes(r)
@@ -66,6 +75,11 @@ func (s *Server) registerAdminV1(r chi.Router) {
 	s.registerAdminProviderRoutes(r)
 	s.registerAdminGovernanceRoutes(r)
 	s.registerAdminObservabilityRoutes(r)
+	// Sprint 7 收尾：风险事件（A-RISK-01）。权限键 admin:risk:read 早已在 catalog 与角色里，
+	// 但此前只有占位页、没有端点，本组补齐 /risk/summary 与 /risk/events。
+	s.registerAdminRiskRoutes(r)
+	// 数据运维面：导出与对象存储、Coverage 与数据质量（此前两者都只有占位页）。
+	s.registerAdminDataOpsRoutes(r)
 }
 
 // ---- 运营总览 ----
@@ -195,7 +209,7 @@ func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
 	sessions, _, _ := s.iam.Sessions().List(r.Context(), iam.SessionFilter{IdentityID: id, ActiveOnly: true, Limit: 20})
 	identity.Roles = roles
 	s.writeAuditNow(r, "admin:user:read.detail", "admin.identity", "identity", id, nil)
-	respondOK(w, r, map[string]any{"identity": identity, "roles": roles, "active_sessions": sessions})
+	respondOK(w, r, map[string]any{"identity": identity, "roles": jsonStrings(roles), "active_sessions": sessions})
 }
 
 func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +349,92 @@ func (s *Server) handleAdminResetPassword(w http.ResponseWriter, r *http.Request
 	respondOK(w, r, map[string]any{"reset": true, "sessions_revoked": true})
 }
 
+// handleAdminResetMFA 重置某个账号的 MFA（§21.6 /users/{id}/commands/reset-mfa）。
+//
+// 为什么必须存在：账号一旦启用 MFA，丢失认证器就永远过不了登录第二步，
+// 而此前管理侧没有任何解除手段（规范列了这条命令，代码里没有实现）。
+//
+// 语义与安全边界：
+//   - 删除该身份的 TOTP 密钥与全部恢复码（不可逆）；
+//   - **同时吊销该账号的全部会话**：第二因素被移除后继续沿用旧会话会让重置形同虚设；
+//   - 破坏性操作 → confirm 二次确认 + step-up（当前账号密码），并写 before/after 审计；
+//   - 跨组织目标统一 404，不泄露存在性；未启用 MFA 的账号返回 409，不做无意义的"成功"。
+func (s *Server) handleAdminResetMFA(w http.ResponseWriter, r *http.Request) {
+	if !s.adminDBReady(w, r) {
+		return
+	}
+	if s.mfa == nil {
+		respondError(w, r, http.StatusServiceUnavailable, "AUTHN_MFA_UNAVAILABLE", "MFA 未启用", nil)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var body struct {
+		Confirm        bool   `json:"confirm"`
+		Reason         string `json:"reason"`
+		StepUpPassword string `json:"step_up_password"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		validationError(w, r, "请求体不是合法 JSON", nil)
+		return
+	}
+	if !body.Confirm {
+		respondError(w, r, http.StatusPreconditionRequired, "CONFLICT_CONFIRMATION_REQUIRED", "重置 MFA 需要二次确认", nil)
+		return
+	}
+	identity, err := s.iam.Repo().GetIdentityByID(r.Context(), id)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "用户不存在", nil)
+		return
+	}
+	p := PrincipalFrom(r.Context())
+	if identity.OrganizationID != p.OrganizationID && !s.isPlatformScope(r) {
+		// 跨组织对象统一返回 404，不泄露存在性（与 handleAdminGetUser 一致）。
+		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "用户不存在", nil)
+		return
+	}
+	// step-up 必须在真正删除之前：密码不对时一个字节都不能动。
+	if !s.s6StepUpOrFail(w, r, body.StepUpPassword, "admin.user.reset_mfa") {
+		return
+	}
+	enrolled, recoveryCodes, err := s.mfa.Summary(r.Context(), id)
+	if err != nil {
+		s.deps.Log.Error("mfa summary failed", "err", err, "identity_id", id)
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取 MFA 状态失败", nil)
+		return
+	}
+	if !enrolled {
+		respondError(w, r, http.StatusConflict, "CONFLICT_MFA_NOT_ENROLLED", "该账号未启用 MFA，无需重置", nil)
+		return
+	}
+	if err := s.mfa.Disable(r.Context(), id); err != nil {
+		s.deps.Log.Error("mfa reset failed", "err", err, "identity_id", id)
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "重置 MFA 失败", nil)
+		return
+	}
+	revoked, revokeErr := s.iam.Sessions().RevokeAllForIdentity(r.Context(), id, "mfa_reset", p.IdentityID)
+	// 密钥已经删除（不可回滚），因此这里不能整体失败；但"吊销失败"与"本来就没有会话"
+	// 必须可区分 —— 否则 200 + sessions_revoked=0 会被读成"已经收拾干净了"。
+	revocationFailed := revokeErr != nil
+	if revocationFailed {
+		s.deps.Log.Error("mfa reset: revoke sessions failed", "err", revokeErr, "identity_id", id)
+	}
+	s.policyEngineInvalidate(id)
+	isSelf := identity.ID == p.IdentityID
+	s.writeAuditWithChange(r, "admin:user:reset_mfa", "admin.identity", "identity", id,
+		map[string]any{"mfa_enrolled": true},
+		map[string]any{"mfa_enrolled": false},
+		map[string]any{
+			"reason": body.Reason, "recovery_codes_removed": recoveryCodes,
+			"sessions_revoked": revoked, "revocation_failed": revocationFailed, "self": isSelf,
+		})
+	respondOK(w, r, map[string]any{
+		"reset": true, "mfa_enrolled": false, "self": isSelf,
+		"removed":           map[string]any{"secret": true, "recovery_codes": recoveryCodes},
+		"sessions_revoked":  revoked,
+		"revocation_failed": revocationFailed,
+	})
+}
+
 // ---- 角色与权限 ----
 
 func (s *Server) handleAdminListRoles(w http.ResponseWriter, r *http.Request) {
@@ -465,29 +565,41 @@ func (s *Server) handleAdminRevokeSession(w http.ResponseWriter, r *http.Request
 		return
 	}
 	p := PrincipalFrom(r.Context())
-	var targetIdentity, targetOrg string
-	if err := s.deps.Store.Pool.QueryRow(r.Context(),
-		`SELECT identity_id, organization_id FROM sessions WHERE id = $1`, id).Scan(&targetIdentity, &targetOrg); err != nil {
+	// AUTH-007 / S3: this route owns its commit-time check in ONE dedicated short
+	// transaction with a deterministic lock order (see scopecommit_revoke.go). It
+	// must not enter the generic request transaction: taking its target row lock in
+	// the handler and then its own caller row lock at release is what built the lock
+	// ring between two administrators revoking each other concurrently.
+	outcome, reason, targetIdentity, txErr := s.revokeSessionDedicatedTx(r, p, id, body.Reason)
+	switch outcome {
+	case scopeRevokeCommitted:
+		s.writeAuditNow(r, "admin:session:revoke", "admin.security", "session", id,
+			map[string]any{"reason": body.Reason, "target_identity_id": targetIdentity, "commit_gate": "dedicated_short_tx"})
+		// C1-SSE-OLD-SCOPE-OPEN: an administratively revoked session must lose its
+		// long-lived authenticated reads immediately.
+		s.closeScopeSSESubscriptions(id, "", sseReasonSessionRevoked, r)
+		respondOK(w, r, map[string]any{"revoked": true})
+	case scopeRevokeActorStale:
+		// Same 409 and same exactly-once detached deny audit as the generic gate.
+		writeErrorCode(w, r, http.StatusConflict, ErrorAUTHZWorkspaceScopeStale, workspaceScopeStaleMessage, nil)
+		s.auditDenyCodeDetail(scopeCommitGateDetachedRequest(r), p, "admin:session:revoke", reason,
+			ErrorAUTHZWorkspaceScopeStale, http.StatusConflict,
+			map[string]any{"old_workspace_id": p.WorkspaceID, "gate": "dedicated_short_tx"})
+	case scopeRevokeTargetMissing:
 		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "会话不存在", nil)
-		return
+	case scopeRevokePermissionDenied:
+		writeErrorCode(w, r, http.StatusForbidden, "permission_denied", "当前身份没有该操作的权限",
+			map[string]any{"permission": "admin:session:revoke", "reason": reason})
+		s.auditDenyCodeDetail(scopeCommitGateDetachedRequest(r), p, "admin:session:revoke", reason,
+			"permission_denied", http.StatusForbidden, nil)
+	default:
+		if s.deps.Log != nil {
+			s.deps.Log.Error("admin session revoke could not be committed; failing closed",
+				"err", txErr, "reason", reason, "session_id", id)
+		}
+		writeErrorCode(w, r, http.StatusServiceUnavailable, "INTERNAL_NOT_READY",
+			"The revoke could not be committed; retry shortly.", nil)
 	}
-	if targetOrg != p.OrganizationID && !s.isPlatformScope(r) {
-		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "会话不存在", nil)
-		return
-	}
-	if err := s.iam.Sessions().RevokeByID(r.Context(), id, "revoked_by_admin", p.IdentityID); err != nil {
-		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "撤销会话失败", nil)
-		return
-	}
-	meta := metaFrom(r.Context())
-	_ = iam.RecordLoginEvent(r.Context(), s.iam.Repo().Pool(), s.cfg.Env, iam.LoginEvent{
-		EventType: iam.EventSessionRevoked, Result: "success", IdentityID: targetIdentity,
-		Audience: iam.AudienceAdmin, SessionID: id, IP: meta.IP, UserAgent: meta.UserAgent,
-		RiskLevel: "critical", Detail: map[string]any{"actor_id": p.IdentityID, "reason": body.Reason},
-	})
-	s.writeAuditNow(r, "admin:session:revoke", "admin.security", "session", id,
-		map[string]any{"reason": body.Reason, "target_identity_id": targetIdentity})
-	respondOK(w, r, map[string]any{"revoked": true})
 }
 
 // ---- 登录记录 ----

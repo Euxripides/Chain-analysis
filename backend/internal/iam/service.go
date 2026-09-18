@@ -18,6 +18,15 @@ var (
 	ErrAccountLocked   = errors.New("account locked")
 	ErrRateLimited     = errors.New("rate limited")
 	ErrMFAUnavailable  = errors.New("mfa not available")
+	// ErrMFAEnrollmentRequired：策略要求该受众必须使用 MFA，但该身份尚未注册。
+	// 与 ErrMFAUnavailable 的区别是「MFA 能力已可用，只是这个账号没启用」。
+	ErrMFAEnrollmentRequired = errors.New("mfa enrollment required")
+
+	// P1-20260913（会话作用域越权，根 11:12 工程决定）：工作区必须来自
+	// 该身份在该组织的 active 成员资格；以下错误一律 fail closed，绝不回退组织默认工作区。
+	ErrNoWorkspaceMembership      = errors.New("identity has no active workspace membership")
+	ErrWorkspaceSelectionRequired = errors.New("workspace selection required")
+	ErrWorkspaceNotMember         = errors.New("requested workspace is not an active membership")
 )
 
 // Config 是认证策略。字段来自环境变量，便于按环境收紧。
@@ -52,6 +61,9 @@ type LoginInput struct {
 	Scheme      string
 	RequestID   string
 	TraceID     string
+	// WorkspaceID 是登录时由客户端显式选择的工作区（P1-20260913）。
+	// 多成员资格身份必须给出；留空且成员资格唯一时自动绑定那一个。
+	WorkspaceID string
 }
 
 // LoginResult 成功后返回会话与一次性令牌。
@@ -60,6 +72,15 @@ type LoginResult struct {
 	Token   string
 	CSRF    string
 	Roles   []string
+
+	// MFARequired 为 true 时表示：密码已通过，但登录**尚未完成**。
+	// 此时 Session/Token/CSRF 全部为零值（没有会话、没有 Cookie），
+	// 调用方必须把 ChallengeID 交给客户端完成第二步（§21.4 返回 202）。
+	MFARequired        bool
+	ChallengeID        string
+	ChallengeExpiresAt time.Time
+	// Identity 用于在挑战响应里回显用户摘要（第二步之前还没有会话）。
+	Identity Identity
 }
 
 // Service 编排登录、退出、改密与会话撤销。
@@ -69,6 +90,16 @@ type Service struct {
 	cfg      Config
 	audit    *audit.Writer
 	limiter  *loginLimiter
+	// mfaGate 为 nil 时登录行为与接入 MFA 之前完全一致（api 层在数据库不可用时才不注入）。
+	mfaGate MFAChallengeGate
+}
+
+// SetMFAChallengeGate 注入登录第二步的挑战能力（见 iam.MFAChallengeGate）。
+func (s *Service) SetMFAChallengeGate(gate MFAChallengeGate) {
+	if s == nil {
+		return
+	}
+	s.mfaGate = gate
 }
 
 func NewService(repo *Repo, sessions *SessionManager, cfg Config, writer *audit.Writer) *Service {
@@ -166,6 +197,10 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	_ = s.repo.UnlockIfExpired(ctx, identity.ID)
 
 	switch identity.Status {
+	case StatusDeleted:
+		// 已删除（离职）账号：对外与停用同形（不泄露账号状态），原因码入库便于审计区分。
+		record(EventLoginDenied, "denied", ReasonDeletedAccount, "high", identity.ID)
+		return LoginResult{}, ErrAccountDisabled
 	case StatusDisabled:
 		record(EventLoginDenied, "denied", ReasonDisabledAccount, "high", identity.ID)
 		return LoginResult{}, ErrAccountDisabled
@@ -213,24 +248,71 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		_ = params
 	}
 
-	if s.cfg.RequireAdminMFA && in.Audience == AudienceAdmin && !identity.MFARequired {
-		// P0 仅保留策略与接口位置：真正的 TOTP 校验在 S2-BE-01 后续迭代实现，
-		// 未实现前不得宣称已支持，因此这里显式失败而不是静默放行。
-		record(EventLoginDenied, "denied", ReasonMFARequired, "high", identity.ID)
-		return LoginResult{}, ErrMFAUnavailable
+	// 登录第二步（AUTH-004）：密码通过后，已启用 MFA 的身份**不得**直接拿到会话。
+	//
+	// 这一步必须发生在 EnsureDevice / ResolveLoginWorkspace / sessions.Create 之前：
+	// 先建会话再撤销会留下一个"未满足 MFA 但已生效"的真实窗口，一旦撤销失败就是安全缺口。
+	mfaSatisfied := !(s.cfg.RequireAdminMFA && in.Audience == AudienceAdmin)
+	if gate := s.mfaGate; gate != nil {
+		enrolled, err := gate.Enrolled(ctx, identity.ID)
+		if err != nil {
+			// fail closed：读不到 MFA 状态时不得假设"该账号没启用"。
+			return LoginResult{}, err
+		}
+		if enrolled {
+			return s.startMFALogin(ctx, in, identity, record)
+		}
+		if s.cfg.RequireAdminMFA && in.Audience == AudienceAdmin {
+			// 策略要求后台必须 MFA，但该身份还没注册：显式拒绝而不是静默放行。
+			// 此前这里返回 ErrMFAUnavailable（501 未实现）；能力可用后语义变为"需先注册"。
+			record(EventLoginDenied, "denied", ReasonMFARequired, "high", identity.ID)
+			return LoginResult{}, ErrMFAEnrollmentRequired
+		}
 	}
 
+	return s.issueSession(ctx, sessionIssue{
+		Input: in, Identity: identity, Device: device, Start: start, AccountKey: accountKey,
+		AuthMethod: "password", MFASatisfied: mfaSatisfied, Record: record,
+	})
+}
+
+// sessionIssue 聚合"签发会话"所需的全部输入。
+//
+// 抽取原因：密码直登与 MFA 第二步是两个入口，但设备/工作区/会话/审计语义必须完全一致；
+// 任何一处复制都会让两条路径逐渐漂移（P1-20260913 的工作区越权正是这种漂移的产物）。
+type sessionIssue struct {
+	Input        LoginInput
+	Identity     Identity
+	Device       DeviceInfo
+	Start        time.Time
+	AccountKey   string
+	AuthMethod   string
+	MFASatisfied bool
+	MFAMethod    string
+	Record       func(eventType, result, reason, risk, identityID string)
+}
+
+// issueSession 是登录尾段：登记设备 -> 解析工作区 -> 建会话 -> 记登录成功事件。
+func (s *Service) issueSession(ctx context.Context, req sessionIssue) (LoginResult, error) {
+	in, identity, device := req.Input, req.Identity, req.Device
+	record := req.Record
+	if record == nil {
+		record = func(string, string, string, string, string) {}
+	}
 	deviceID, isNewDevice, err := s.sessions.EnsureDevice(ctx, identity.ID, device, in.IP.ClientIP)
 	if err != nil {
 		return LoginResult{}, err
 	}
 
 	orgID := identity.OrganizationID
-	wsID := s.defaultWorkspace(ctx, orgID)
+	wsID, wsErr := s.resolveLoginWorkspace(ctx, identity, in.WorkspaceID, record)
+	if wsErr != nil {
+		return LoginResult{}, wsErr
+	}
 
 	created, err := s.sessions.Create(ctx, SessionRequest{
 		Audience: in.Audience, IdentityID: identity.ID, OrganizationID: orgID, WorkspaceID: wsID,
-		AuthMethod: "password", MFASatisfied: !s.cfg.RequireAdminMFA,
+		AuthMethod: req.AuthMethod, MFASatisfied: req.MFASatisfied,
 		IP: in.IP, UserAgent: in.UserAgent, ClientHints: in.ClientHints, DeviceInfo: device,
 		EntryHost: in.EntryHost, Scheme: in.Scheme,
 	})
@@ -245,7 +327,9 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		return LoginResult{}, err
 	}
 	// 成功登录后清空该账号的失败额度，避免"手误若干次 + 正常登录"把额度耗光。
-	s.limiter.reset(accountKey)
+	if req.AccountKey != "" {
+		s.limiter.reset(req.AccountKey)
+	}
 
 	risk := "low"
 	if isNewDevice {
@@ -253,28 +337,235 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	}
 	_ = RecordLoginEvent(ctx, s.repo.Pool(), s.cfg.Environment, LoginEvent{
 		EventType: EventLoginSuccess, Result: "success", RiskLevel: risk,
-		IdentityID: identity.ID, SubjectEmail: email, OrganizationID: orgID, WorkspaceID: wsID,
+		IdentityID: identity.ID, SubjectEmail: identity.Email, OrganizationID: orgID, WorkspaceID: wsID,
 		Audience: in.Audience, SessionID: created.Session.ID, DeviceID: deviceID,
 		IsNewDevice: isNewDevice, DeviceInfo: device, UserAgent: in.UserAgent,
 		ClientHints: in.ClientHints, IP: in.IP, EntryHost: in.EntryHost, Scheme: in.Scheme,
 		RequestID: in.RequestID, TraceID: in.TraceID,
-		DurationMS: int(time.Since(start).Milliseconds()),
+		AuthMethod: req.AuthMethod, MFAMethod: req.MFAMethod, MFAResult: mfaResultFor(req.MFAMethod),
+		DurationMS: int(time.Since(req.Start).Milliseconds()),
 	})
 	return LoginResult{Session: created.Session, Token: created.Token, CSRF: created.CSRF, Roles: created.Session.Roles}, nil
 }
 
-// DefaultWorkspace 暴露默认工作区解析，供 OIDC 等非密码登录路径复用同一策略。
-func (s *Service) DefaultWorkspace(ctx context.Context, orgID string) string {
-	return s.defaultWorkspace(ctx, orgID)
+// resolveLoginWorkspace 解析会话要绑定的工作区，并记录每一次拒绝的原因。
+//
+// P1-20260913：旧实现 wsID := s.defaultWorkspace(ctx, orgID) 取组织内 ORDER BY slug 的
+// 第一个工作区，完全不看 workspace_memberships —— wsB-only 的 viewer 因此拿到 wsA 的会话，
+// 读到 wsA 的导出列表/明细（已真实复现）。现在只认成员资格，0 个成员/多成员未显式选择
+// 一律拒绝（fail closed），且拒绝必须留下登录事件。
+func (s *Service) resolveLoginWorkspace(ctx context.Context, identity Identity, requested string, record func(string, string, string, string, string)) (string, error) {
+	wsID, err := s.ResolveLoginWorkspace(ctx, identity.ID, identity.OrganizationID, requested)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNoWorkspaceMembership):
+			record(EventLoginDenied, "denied", ReasonNoWorkspaceMembership, "high", identity.ID)
+		case errors.Is(err, ErrWorkspaceNotMember):
+			record(EventLoginDenied, "denied", ReasonWorkspaceNotMember, "high", identity.ID)
+		default:
+			record(EventLoginDenied, "denied", ReasonWorkspaceSelectionRequired, "medium", identity.ID)
+		}
+		return "", err
+	}
+	return wsID, nil
 }
 
-func (s *Service) defaultWorkspace(ctx context.Context, orgID string) string {
-	var id string
-	if err := s.repo.Pool().QueryRow(ctx,
-		`SELECT id FROM workspaces WHERE organization_id = $1 ORDER BY slug LIMIT 1`, orgID).Scan(&id); err != nil {
+// startMFALogin 在密码通过后签发一次性挑战：不建会话、不下发 Cookie。
+//
+// 工作区在这里先解析一次：多工作区身份必须先给出 workspace_id（fail closed），
+// 且解析结果随挑战落库，第二步不需要客户端再报一次、也不可能被客户端篡改。
+func (s *Service) startMFALogin(ctx context.Context, in LoginInput, identity Identity, record func(string, string, string, string, string)) (LoginResult, error) {
+	gate := s.mfaGate
+	if gate == nil {
+		return LoginResult{}, ErrMFAEnrollmentRequired
+	}
+	wsID, err := s.resolveLoginWorkspace(ctx, identity, in.WorkspaceID, record)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	challenge, err := gate.IssueLoginChallenge(ctx, MFAChallengeRequest{
+		IdentityID: identity.ID, Audience: in.Audience,
+		OrganizationID: identity.OrganizationID, WorkspaceID: wsID,
+		ClientIP: in.IP.ClientIP, PeerIP: in.IP.PeerIP, ProxyChain: in.IP.ProxyChain,
+		UserAgent: in.UserAgent, EntryHost: in.EntryHost, Scheme: in.Scheme,
+		RequestID: in.RequestID, TraceID: in.TraceID,
+	})
+	if err != nil {
+		return LoginResult{}, err
+	}
+	// 状态机 §20.1：credentials_submitted -> mfa_required（密码已通过，但登录尚未完成）。
+	// result 只能取 login_events_result_check 允许的四个值（success/failure/denied/blocked）：
+	// 曾用 "challenge" 导致插入被约束拒绝、而链头已前进，在审计链上留下空洞。
+	record(EventLoginDenied, "denied", ReasonMFARequired, "medium", identity.ID)
+	return LoginResult{
+		MFARequired:        true,
+		ChallengeID:        challenge.Token,
+		ChallengeExpiresAt: challenge.ExpiresAt,
+		Identity:           identity,
+	}, nil
+}
+
+// CompleteMFALogin 在第二步校验通过后建会话（MFASatisfied=true，AuthMethod=password+mfa）。
+//
+// 入参全部来自挑战落库时的服务端记录，客户端只能提供 challenge_id 与验证码；
+// 这里重新校验身份状态与工作区成员资格，因为它们可能在 5 分钟窗口内被管理员改掉。
+func (s *Service) CompleteMFALogin(ctx context.Context, in MFACompletion) (LoginResult, error) {
+	if s == nil || s.repo == nil {
+		return LoginResult{}, errors.New("iam: service unavailable")
+	}
+	start := time.Now()
+	identity, err := s.repo.GetIdentityByID(ctx, in.IdentityID)
+	if err != nil {
+		// 挑战里的身份已不存在：对外与凭据错误同形，不泄露账号存在性。
+		return LoginResult{}, ErrInvalidCredentials
+	}
+	switch identity.Status {
+	case StatusDeleted, StatusDisabled:
+		return LoginResult{}, ErrAccountDisabled
+	case StatusLocked:
+		return LoginResult{}, ErrAccountLocked
+	}
+	if identity.LockedUntil != nil && identity.LockedUntil.After(time.Now()) {
+		return LoginResult{}, ErrAccountLocked
+	}
+	audience := in.Audience
+	if audience == "" {
+		audience = AudienceUser
+	}
+	device := ParseUserAgent(in.UserAgent)
+	proxy := in.ProxyChain
+	if proxy == nil {
+		proxy = []string{}
+	}
+	ip := ClientIP{ClientIP: in.ClientIP, PeerIP: in.PeerIP, ProxyChain: proxy}
+	record := func(eventType, result, reason, risk, identityID string) {
+		_ = RecordLoginEvent(ctx, s.repo.Pool(), s.cfg.Environment, LoginEvent{
+			EventType: eventType, Result: result, ReasonCode: reason, RiskLevel: risk,
+			IdentityID: identityID, SubjectEmail: identity.Email, Audience: audience,
+			DeviceInfo: device, UserAgent: in.UserAgent, IP: ip,
+			EntryHost: in.EntryHost, Scheme: in.Scheme,
+			RequestID: in.RequestID, TraceID: in.TraceID,
+			DurationMS: int(time.Since(start).Milliseconds()),
+		})
+	}
+	// §6.6.1 auth.mfa.success：与随后的 auth.login.success 分开记账，
+	// AUTH-004 的"MFA 成功/失败"因此可以直接按事件类型取数。
+	_ = RecordLoginEvent(ctx, s.repo.Pool(), s.cfg.Environment, LoginEvent{
+		EventType: EventMFASuccess, Result: "success", RiskLevel: "low",
+		IdentityID: identity.ID, SubjectEmail: identity.Email, Audience: audience,
+		AuthMethod: "password+mfa", MFAMethod: in.Method, MFAResult: "success",
+		DeviceInfo: device, UserAgent: in.UserAgent, IP: ip,
+		EntryHost: in.EntryHost, Scheme: in.Scheme,
+		RequestID: in.RequestID, TraceID: in.TraceID,
+		DurationMS: int(time.Since(start).Milliseconds()),
+	})
+	return s.issueSession(ctx, sessionIssue{
+		Input: LoginInput{
+			Email: identity.Email, Audience: audience, IP: ip,
+			UserAgent: in.UserAgent, EntryHost: in.EntryHost, Scheme: in.Scheme,
+			RequestID: in.RequestID, TraceID: in.TraceID, WorkspaceID: in.WorkspaceID,
+		},
+		Identity: identity, Device: device, Start: start,
+		AccountKey:   strings.Join([]string{in.ClientIP, NormalizeEmail(identity.Email)}, "|"),
+		AuthMethod:   "password+mfa",
+		MFASatisfied: true,
+		MFAMethod:    in.Method,
+		Record:       record,
+	})
+}
+
+// mfaResultFor 把通过方式映射为登录事件的 MFAResult（未走第二步时为空）。
+func mfaResultFor(method string) string {
+	if strings.TrimSpace(method) == "" {
 		return ""
 	}
-	return id
+	return "success"
+}
+
+// WorkspaceOption 是一个可供登录/切换显式选择的工作区。
+type WorkspaceOption struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// DefaultWorkspace 已删除（P1-20260913）。
+//
+// 旧实现是 SELECT id FROM workspaces WHERE organization_id = $1 ORDER BY slug LIMIT 1，
+// 不读 workspace_memberships：任何身份登录都会拿到组织内字母序第一个工作区。
+// 仅属于 wsB 的 viewer 因此拿到 wsA 会话并读到 wsA 的导出列表与明细（真实泄露，已复现）。
+// 现统一走 ResolveLoginWorkspace，只认成员资格且 fail closed。
+
+// WorkspaceOptions 返回该身份在指定组织内**有效成员资格**对应的工作区，按 slug 稳定排序。
+func (s *Service) WorkspaceOptions(ctx context.Context, identityID, orgID string) ([]WorkspaceOption, error) {
+	rows, err := s.repo.Pool().Query(ctx, `
+		SELECT w.id::text, w.slug, w.name
+		FROM workspace_memberships wm
+		JOIN workspaces w ON w.id = wm.workspace_id
+		WHERE wm.identity_id = $1 AND wm.organization_id = $2 AND wm.status = 'active'
+		  AND w.organization_id = $2
+		ORDER BY w.slug`, identityID, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []WorkspaceOption{}
+	for rows.Next() {
+		var o WorkspaceOption
+		if err := rows.Scan(&o.ID, &o.Slug, &o.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// ResolveLoginWorkspace 决定一次登录可以绑定的工作区（签发会话时的作用域）。
+//
+// 规则（P1-20260913）：
+//   - 只从该 identity 在该 org 的 active workspace_memberships 中选择；
+//   - 0 个 → ErrNoWorkspaceMembership：拒绝登录/签发会话，不回退组织默认工作区；
+//   - 1 个 → 直接绑定；
+//   - >1 个 → 必须由请求显式给出 workspace_id 且属于成员资格集合，否则
+//     ErrWorkspaceSelectionRequired（附可选列表）。不得任取首行，也不得用组织默认。
+func (s *Service) ResolveLoginWorkspace(ctx context.Context, identityID, orgID, requested string) (string, error) {
+	if identityID == "" || orgID == "" {
+		return "", ErrNoWorkspaceMembership
+	}
+	options, err := s.WorkspaceOptions(ctx, identityID, orgID)
+	if err != nil {
+		return "", err
+	}
+	return decideWorkspace(options, strings.TrimSpace(requested))
+}
+
+// decideWorkspace 是纯决策函数（无 IO），全部拒绝分支都能被单测覆盖。
+func decideWorkspace(options []WorkspaceOption, requested string) (string, error) {
+	if len(options) == 0 {
+		return "", ErrNoWorkspaceMembership
+	}
+	requested = strings.TrimSpace(requested)
+	if requested != "" {
+		for _, o := range options {
+			if o.ID == requested {
+				return o.ID, nil
+			}
+		}
+		return "", ErrWorkspaceNotMember
+	}
+	if len(options) == 1 {
+		return options[0].ID, nil
+	}
+	return "", &WorkspaceSelectionRequiredError{Options: options}
+}
+
+// WorkspaceSelectionRequiredError 携带可选工作区列表，供客户端渲染选择器后重试。
+type WorkspaceSelectionRequiredError struct{ Options []WorkspaceOption }
+
+func (e *WorkspaceSelectionRequiredError) Error() string { return "workspace selection required" }
+
+func (e *WorkspaceSelectionRequiredError) Is(target error) bool {
+	return target == ErrWorkspaceSelectionRequired
 }
 
 // Logout 撤销当前会话并记录事件。
@@ -521,7 +812,7 @@ func IsAuthError(err error) bool {
 	switch {
 	case errors.Is(err, ErrInvalidCredentials), errors.Is(err, ErrAccountDisabled),
 		errors.Is(err, ErrAccountLocked), errors.Is(err, ErrRateLimited),
-		errors.Is(err, ErrMFAUnavailable):
+		errors.Is(err, ErrMFAUnavailable), errors.Is(err, ErrMFAEnrollmentRequired):
 		return true
 	}
 	return false
@@ -540,8 +831,19 @@ func StatusForError(err error) (int, string) {
 		return http.StatusTooManyRequests, "rate_limited"
 	case errors.Is(err, ErrMFAUnavailable):
 		return http.StatusNotImplemented, "mfa_not_available"
+	case errors.Is(err, ErrMFAEnrollmentRequired):
+		// 403 而不是 501：MFA 能力已实现，只是这个账号还没注册（策略要求先注册）。
+		return http.StatusForbidden, "mfa_enrollment_required"
 	case errors.Is(err, ErrSessionInvalid):
 		return http.StatusUnauthorized, "session_invalid"
+	case errors.Is(err, ErrNoWorkspaceMembership):
+		return http.StatusForbidden, "no_workspace_membership"
+	case errors.Is(err, ErrWorkspaceSelectionRequired):
+		return http.StatusConflict, "workspace_selection_required"
+	case errors.Is(err, ErrWorkspaceNotMember):
+		return http.StatusForbidden, "workspace_not_member"
+	case errors.Is(err, ErrWorkspaceAccessRevoked):
+		return http.StatusUnauthorized, "workspace_access_revoked"
 	default:
 		return http.StatusInternalServerError, "internal_error"
 	}

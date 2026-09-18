@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Download,
@@ -13,7 +13,7 @@ import {
   User,
 } from "lucide-react";
 import { AppShell, EmptyState, NoPermissionState, PageHeader, SkeletonRows, useDialog, type NavGroup } from "@chain/ui";
-import { AuthProvider, useAuth } from "@chain/api-client";
+import { ApiError, AuthProvider, useAuth, type WorkspaceOption } from "@chain/api-client";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -42,7 +42,7 @@ const CanvasListPage = lazy(() => import("./pages/CanvasListPage"));
 const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 
 /** §3.1 建议导航。未实现的路由一律显示 NOT_IMPLEMENTED 说明，不伪装成可用页面。 */
-const navGroups: (permissions: string[]) => NavGroup[] = () => [
+const baseNavGroups: NavGroup[] = [
   {
     label: "工作台",
     items: [
@@ -103,6 +103,35 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/profile": "profile:read",
 };
 
+/**
+ * 取某个导航路径所需的权限：先精确匹配，再按最长前缀匹配（例如 /canvases/xxx 归到 /canvases）。
+ *
+ * 这张表此前只被定义、从未参与渲染（导航对所有人一视同仁）。现在它是导航裁剪的唯一依据：
+ * 会话缺少权限的入口不渲染；**查不到权限声明的入口也不渲染**（fail-closed，宁可少显示，
+ * 也不给出走不通的入口）。服务端 <Guard> 与逐端点鉴权仍然是权威判据。
+ */
+const requiredPermission = (to: string): string | undefined => {
+  if (ROUTE_PERMISSIONS[to]) return ROUTE_PERMISSIONS[to];
+  const prefix = Object.keys(ROUTE_PERMISSIONS)
+    .filter((key) => to.startsWith(key + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+  return prefix ? ROUTE_PERMISSIONS[prefix] : undefined;
+};
+
+/** §3.1 / §7.5 同源规则：导航入口按当前会话权限裁剪（权限来自 ROUTE_PERMISSIONS）。 */
+const navGroups = (permissions: string[]): NavGroup[] => {
+  const allowed = new Set(permissions);
+  return baseNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        const permission = requiredPermission(item.to);
+        return Boolean(permission) && allowed.has(permission as string);
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
+};
+
 export function App() {
   return (
     <AuthProvider audience="user">
@@ -144,7 +173,7 @@ function Shell() {
       env={session.audience === "user" ? "用户层系统" : session.audience}
       navGroups={navGroups(session.permissions)}
       user={{ displayName: session.display_name, email: session.email, roles: session.roles }}
-      headerExtra={null}
+      headerExtra={<WorkspaceSwitcher />}
       onLogout={async () => {
         await logout();
         navigate("/login", { replace: true });
@@ -186,6 +215,83 @@ function Shell() {
   );
 }
 
+/**
+ * 登录后的工作区切换器（P1-20260913 后半段）。
+ *
+ * 与会话是两件事：登录页的选择器决定"用哪个工作区建立会话"，
+ * 这里决定"已建立的会话切到哪个工作区"，由服务端按成员资格判定并写审计。
+ * 一切提示只走弹窗（AGENTS.md）。
+ */
+function WorkspaceSwitcher() {
+  const { session, workspaceOptions, switchWorkspace } = useAuth();
+  const dialog = useDialog();
+  const [options, setOptions] = useState<WorkspaceOption[]>([]);
+  const [busy, setBusy] = useState(false);
+  const currentId = session?.workspace_id ?? "";
+
+  useEffect(() => {
+    let alive = true;
+    void workspaceOptions()
+      .then((list) => {
+        if (alive) setOptions(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [workspaceOptions]);
+
+  const current = options.find((option) => option.id === currentId);
+  const label = current ? `${current.name}（${current.slug}）` : `${currentId.slice(0, 8)}…`;
+
+  const open = useCallback(async () => {
+    setBusy(true);
+    try {
+      const list = await workspaceOptions();
+      setOptions(list);
+      if (list.length <= 1) {
+        dialog.notify("info", "没有可切换的工作区", "该账号在当前组织内只有一个有效工作区成员资格，无法切换。");
+        return;
+      }
+      const picked = await dialog.confirm({
+        kind: "info",
+        title: "切换工作区",
+        body: "切换后当前页面的数据会按新工作区重新加载，未提交的编辑内容不会保留。",
+        actions: [
+          { label: "取消", result: "", variant: "default" },
+          ...list.map((option) => ({
+            label: option.id === currentId ? `${option.name}（当前）` : `${option.name}（${option.slug}）`,
+            value: option.id,
+            result: option.id,
+            variant: option.id === currentId ? ("default" as const) : ("primary" as const),
+          })),
+        ],
+      });
+      if (!picked || picked === "" || picked === currentId) return;
+      await switchWorkspace(picked);
+      dialog.notify("success", "已切换工作区", "页面数据已按新工作区重新加载。");
+    } catch (err) {
+      dialog.notify("error", "切换工作区失败", err instanceof ApiError ? err.userMessage : "请稍后重试");
+    } finally {
+      setBusy(false);
+    }
+  }, [currentId, dialog, switchWorkspace, workspaceOptions]);
+
+  return (
+    <button
+      type="button"
+      className="btn btn--ghost btn--sm"
+      data-testid="workspace-switcher"
+      data-audience="user"
+      aria-label="切换工作区"
+      onClick={() => void open()}
+      disabled={busy}
+    >
+      {busy ? "切换中…" : label}
+    </button>
+  );
+}
+
 function Guard({ permission, children }: { permission?: string; children: React.ReactNode }) {
   const { can } = useAuth();
   if (permission && !can(permission)) {
@@ -211,14 +317,11 @@ function Placeholder({ title, permission, sprint }: { title: string; permission?
         body={
           <>
             该模块记录在 dual-system-development-plan 的 {sprint ?? "后续"} Sprint 中，当前状态为 NOT_IMPLEMENTED。
-            旧的工程工作台仍然可用。
+            旧控制台已于 2026-09-18 退出公网（局域网入口关闭），此处不再提供入口。
           </>
         }
         action={
           <span className="toolbar">
-            <a className="btn btn--sm" href="/" target="_self">
-              打开旧工作台
-            </a>
             <button
               type="button"
               className="btn btn--sm"

@@ -121,16 +121,45 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	workspaceID := strings.TrimSpace(in.WorkspaceID)
+	// workspace_memberships 没有 id 列（主键是 workspace_id + identity_id）：
+	// 这里曾经写成 SELECT id::text，语句报 "column \"id\" does not exist" 后
+	// **整个请求事务进入 aborted 状态**，提交门（scope commit gate）随后把结果
+	// 改写成误导性的 409 AUTHZ_WORKSPACE_SCOPE_STALE —— 真实原因在响应里完全看不到。
+	// 教训：请求事务内的语句失败必须当场暴露，不能"忽略后继续"。
+	// ---- 个人空间（迁移 0066 / 计划 §3.3 N1、决策 D1）----
+	// 新用户一律先拥有自己的个人空间：旧实现在未指定工作区时回退到「组织内最早创建的工作区」
+	//（ORDER BY created_at LIMIT 1），实测把新用户塞进线上 default 工作区（30 名成员共享
+	// 26 个案件）——这正是"所有用户共用"的成因，该回退已删除。
+	// 角色绑 basic_user（基础操作、零 admin:*），**不绑 owner**：owner 实测持有 178 个权限
+	//（含 79 个 admin:*），绑给普通用户等于把后台控制面一起给出去，与决策 D4 冲突。
+	personalName := displayName + " 的个人空间"
+	personalSlug := "p-" + strings.ReplaceAll(identityID, "-", "")[:12]
+	var personalWorkspaceID string
 	if err := s.deps.Store.Pool.QueryRow(ctx, `
-		SELECT id::text FROM workspace_memberships wm WHERE wm.identity_id=$1 ORDER BY 1 LIMIT 1`, identityID).Scan(&workspaceID); err != nil {
-		workspaceID = ""
+		INSERT INTO workspaces (organization_id, name, slug, kind, owner_identity_id, created_by_identity)
+		VALUES ($1,$2,$3,'personal',$4,$5) RETURNING id::text`,
+		orgID, personalName, personalSlug, identityID, p.IdentityID).Scan(&personalWorkspaceID); err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "个人空间创建失败", nil)
+		return
 	}
-	if strings.TrimSpace(in.WorkspaceID) != "" {
-		workspaceID = strings.TrimSpace(in.WorkspaceID)
+	if _, err := s.deps.Store.Pool.Exec(ctx, `
+		INSERT INTO workspace_memberships (workspace_id, organization_id, identity_id, status)
+		VALUES ($1,$2,$3,'active') ON CONFLICT (workspace_id, identity_id) DO NOTHING`,
+		personalWorkspaceID, orgID, identityID); err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "个人空间成员关系写入失败", nil)
+		return
 	}
-	if workspaceID == "" {
-		_ = s.deps.Store.Pool.QueryRow(ctx,
-			"SELECT id::text FROM workspaces WHERE organization_id=$1 ORDER BY created_at LIMIT 1", orgID).Scan(&workspaceID)
+	var basicRoleID string
+	if err := s.deps.Store.Pool.QueryRow(ctx,
+		`SELECT id::text FROM roles WHERE key = 'basic_user' AND is_system LIMIT 1`).Scan(&basicRoleID); err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "缺少系统角色 basic_user（迁移 0068）", nil)
+		return
+	}
+	if _, err := s.deps.Store.Pool.Exec(ctx, `
+		INSERT INTO member_role_bindings (identity_id, role_id, scope_type, scope_id, reason)
+		VALUES ($1,$2,'workspace',$3,$4)`, identityID, basicRoleID, personalWorkspaceID, in.Reason); err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "个人空间角色绑定失败", nil)
+		return
 	}
 	if workspaceID != "" {
 		if _, err := s.deps.Store.Pool.Exec(ctx, `
@@ -141,17 +170,21 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	scopeType := "organization"
-	scopeID := any(orgID)
-	if workspaceID != "" {
-		scopeType = "workspace"
-		scopeID = workspaceID
-	}
-	if _, err := s.deps.Store.Pool.Exec(ctx, `
-		INSERT INTO member_role_bindings (identity_id, role_id, scope_type, scope_id, reason)
-		VALUES ($1,$2,$3,$4,$5)`, identityID, roleID, scopeType, scopeID, in.Reason); err != nil {
-		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "角色绑定失败", nil)
-		return
+	// 额外的 role_key 只在管理员**显式**要求角色、或**显式**指定共享工作区时才绑定：
+	// 默认的普通用户只需要个人空间里的 basic_user，不再叠加 viewer（决策 D4/D5）。
+	if strings.TrimSpace(in.RoleKey) != "" || workspaceID != "" {
+		scopeType := "organization"
+		scopeID := any(orgID)
+		if workspaceID != "" {
+			scopeType = "workspace"
+			scopeID = workspaceID
+		}
+		if _, err := s.deps.Store.Pool.Exec(ctx, `
+			INSERT INTO member_role_bindings (identity_id, role_id, scope_type, scope_id, reason)
+			VALUES ($1,$2,$3,$4,$5)`, identityID, roleID, scopeType, scopeID, in.Reason); err != nil {
+			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "角色绑定失败", nil)
+			return
+		}
 	}
 	s.policyEngineInvalidate(identityID)
 	_ = iam.RecordLoginEvent(ctx, s.deps.Store.Pool, s.cfg.Env, iam.LoginEvent{
@@ -160,11 +193,13 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		Detail: map[string]any{"role_key": roleKey, "workspace_id": workspaceID, "created_by": p.Email},
 	})
 	s.s6AuditChange(r, "admin.user.create", "admin.identity", "identity", identityID, nil,
-		map[string]any{"email": email, "role_key": roleKey, "workspace_id": workspaceID, "organization_id": orgID},
+		map[string]any{"email": email, "role_key": roleKey, "workspace_id": workspaceID,
+			"personal_workspace_id": personalWorkspaceID, "organization_id": orgID},
 		map[string]any{"reason": in.Reason})
 	respondCreated(w, r, map[string]any{
 		"id": identityID, "email": email, "display_name": displayName, "role_key": roleKey,
-		"organization_id": orgID, "workspace_id": workspaceID, "scope_type": scopeType,
+		"organization_id": orgID, "workspace_id": workspaceID,
+		"personal_workspace_id": personalWorkspaceID, "default_role_key": "basic_user",
 		"initial_password": password, "plaintext_returned_once": true, "must_change_password": true,
 	})
 }

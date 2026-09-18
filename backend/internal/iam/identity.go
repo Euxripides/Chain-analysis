@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // 身份状态机（§20.1）。
@@ -18,6 +18,10 @@ const (
 	StatusActive   = "active"
 	StatusDisabled = "disabled"
 	StatusLocked   = "locked"
+	// StatusDeleted 是「删除（离职）」后的终态（迁移 0067）：身份行**保留**
+	//（审计与 login_events 通过外键引用它），email/display_name 被匿名化，
+	// 一切登录路径都必须像 disabled 一样拒绝它。
+	StatusDeleted = "deleted"
 )
 
 // ErrIdentityNotFound 与 ErrInvalidCredentials 对外都收敛为同一响应。
@@ -27,13 +31,16 @@ var ErrIdentityNotFound = errors.New("identity not found")
 var ErrNoPassword = errors.New("identity has no password credential")
 
 type Identity struct {
-	ID                 string     `json:"id"`
-	OrganizationID     string     `json:"organization_id"`
-	Email              string     `json:"email"`
-	DisplayName        string     `json:"display_name"`
-	Status             string     `json:"status"`
-	IsPlatformAdmin    bool       `json:"is_platform_admin"`
-	MFARequired        bool       `json:"mfa_required"`
+	ID              string `json:"id"`
+	OrganizationID  string `json:"organization_id"`
+	Email           string `json:"email"`
+	DisplayName     string `json:"display_name"`
+	Status          string `json:"status"`
+	IsPlatformAdmin bool   `json:"is_platform_admin"`
+	MFARequired     bool   `json:"mfa_required"`
+	// MFAEnrolled 表示该身份已确认注册 TOTP（identity_mfa.confirmed_at 非空）。
+	// 与 MFARequired（管理员策略要求）语义不同：前者是事实，后者是要求。
+	MFAEnrolled        bool       `json:"mfa_enrolled"`
 	MustChangePassword bool       `json:"must_change_password"`
 	FailedLoginCount   int        `json:"failed_login_count"`
 	LockedUntil        *time.Time `json:"locked_until,omitempty"`
@@ -48,24 +55,26 @@ type Identity struct {
 const identityColumns = `i.id, i.organization_id, i.email, i.display_name, i.status,
     i.is_platform_admin, i.mfa_required, i.must_change_password, i.failed_login_count,
     i.locked_until, i.last_login_at, i.password_changed_at, i.created_at, i.updated_at,
-    EXISTS (SELECT 1 FROM credentials c WHERE c.identity_id = i.id AND c.kind = 'password' AND c.revoked_at IS NULL)`
+    EXISTS (SELECT 1 FROM credentials c WHERE c.identity_id = i.id AND c.kind = 'password' AND c.revoked_at IS NULL),
+    EXISTS (SELECT 1 FROM identity_mfa m WHERE m.identity_id = i.id AND m.confirmed_at IS NOT NULL)`
 
 func scanIdentity(row pgx.Row) (Identity, error) {
 	var it Identity
 	err := row.Scan(&it.ID, &it.OrganizationID, &it.Email, &it.DisplayName, &it.Status,
 		&it.IsPlatformAdmin, &it.MFARequired, &it.MustChangePassword, &it.FailedLoginCount,
-		&it.LockedUntil, &it.LastLoginAt, &it.PasswordChangedAt, &it.CreatedAt, &it.UpdatedAt, &it.HasPassword)
+		&it.LockedUntil, &it.LastLoginAt, &it.PasswordChangedAt, &it.CreatedAt, &it.UpdatedAt, &it.HasPassword,
+		&it.MFAEnrolled)
 	return it, err
 }
 
 // Repo 是 IAM 的 PostgreSQL 访问层。所有查询都以 identity_id / organization_id 为边界。
 type Repo struct {
-	pool *pgxpool.Pool
+	pool *dbtx.Pool
 }
 
-func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
+func NewRepo(pool *dbtx.Pool) *Repo { return &Repo{pool: pool} }
 
-func (r *Repo) Pool() *pgxpool.Pool { return r.pool }
+func (r *Repo) Pool() *dbtx.Pool { return r.pool }
 
 // NormalizeEmail 统一规范化，避免大小写/空白造成重复账号。
 func NormalizeEmail(email string) string {

@@ -1,0 +1,38 @@
+# LEGACY-CONSOLE-01 (2026-09-15): the legacy console gets its own service
+# credential, injected here. The browser never sees it; proxy_set_header
+# REPLACES any client-supplied copy, so the header cannot be forged.
+#
+# ⚠️ 2026-09-18（计划 §3.1 R2/R3，决策 D3）：**本文件只允许装在内网回环实例上**。
+#    公网入口（cloudflared → nginx 8088）已不再代理老控制台，也不再注入本凭据；
+#    公网 location / 一律 302 到 /app-v2/。把这份 map 装回公网入口，等于重新打开
+#    "无会话即可读业务数据"的通道（且审计里无法区分到人）。
+#    配套安装脚本：install-legacy-console-nginx.py（安装前会校验目标入口是否回环）。
+#
+# Injected only when ALL of these hold:
+#   * neither session cookie is present (a real session always wins upstream),
+#   * the request comes from the legacy app (its pages live at "/"; the new
+#     consoles live at /app-v2/ and /admin/),
+#   * the path is under /api/v1/ -- never /api/auth/ (the new line login flow)
+#     and never /api/admin/ (the control plane).
+
+map $cookie_cs_user_session$cookie_cs_admin_session $legacy_console_nocookie {
+    ""      "1";
+    default "0";
+}
+
+map $http_referer $legacy_console_from_legacy_app {
+    default                                         "0";
+    "~*^https?://[^/]+/(?:app-v2|admin|api)(?:/|$)" "0";
+    "~*^https?://[^/]+/"                            "1";
+    ""                                              "0";
+}
+
+map "$legacy_console_nocookie$legacy_console_from_legacy_app" $legacy_console_inject {
+    "11"    "1";
+    default "0";
+}
+
+map "$legacy_console_inject:$request_uri" $legacy_console_value {
+    default         "";
+    "~^1:/api/v1/"  "__LEGACY_CONSOLE_TOKEN__";
+}

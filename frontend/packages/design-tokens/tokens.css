@@ -1,37 +1,53 @@
 /*
  * 设计令牌 —— docs/dual-system-development-plan.md §7.2 / §17.2
  * 主题：证据控制台（Evidence Console）。两套系统共用同一套令牌。
+ *
+ * 2026-09-18 视觉刷新（"Forensic Instrument / 取证仪表台"）：
+ *   原配色是典型的企业后台蓝（#175cd3 + 冷蓝灰底 #f3f7fc + 1px 浅蓝描边），
+ *   观感停在 2015 年前后的 Bootstrap 式后台。本次只改**令牌值**，不改任何变量名，
+ *   因此全部页面一次性生效、业务代码零改动。要点：
+ *     1) 底色去蓝调（#f3f7fc → #F4F4F7），描边变浅（#d8e0ec → #E5E7EB）——卡片靠阴影分层，
+ *        不再靠"蓝色描边"；
+ *     2) 主操作色改为更有辨识度的靛蓝 #3B4FE4，并配同色系浅底；
+ *     3) 深色面独立成 --c-ink（近墨黑），侧栏不再用"石墨蓝"糊在一起；
+ *     4) 圆角整体放大一档、阴影改为双层（近距 + 远距），这是"现代感"最主要的两个开关；
+ *     5) 状态色（amber / green / danger）**保持原值不动**：它们的文字底配对已通过
+ *        WCAG AA 对比度校验（见下方注释与 npm run check:tokens），刷新不该把可达性改坏。
  */
 :root {
   /* 品牌与结构色 */
-  --c-graphite: #101828;
-  --c-cobalt: #175cd3;
-  --c-cobalt-strong: #0f47a8;
-  --c-cobalt-soft: #e8f1fd;
-  --c-ice: #f3f7fc;
-  --c-slate: #667085;
-  --c-amber: #d97706;          /* Evidence Amber：待复核 / 证据边界 / 风险（用于边框、图标、强调） */
+  --c-graphite: #0B1220;        /* 主文字：近墨黑 */
+  --c-ink: #0C1116;             /* 深色面（侧栏、登录品牌面板） */
+  --c-ink-soft: #151B23;
+  --c-cobalt: #3B4FE4;          /* 主操作色：靛蓝 */
+  --c-cobalt-strong: #2A38C7;
+  --c-cobalt-soft: #EDEFFE;
+  --c-ice: #F4F4F7;             /* 页面底：中性灰，去掉蓝调 */
+  /* 次级文字：中性底 #F4F4F7 上需 ≥4.5:1。原 #6B7280 只有 4.40，会被 check:tokens 拦下；
+     #646B78 为 4.88（白底 5.36），在保住"浅灰次级"观感的同时留出余量。 */
+  --c-slate: #646B78;
+  --c-amber: #d97706;           /* Evidence Amber：待复核 / 证据边界 / 风险 */
   --c-amber-soft: #fdf3e4;
   /* 文本专用琥珀色：#d97706 在 #fdf3e4 上对比度仅 2.90:1，不满足 WCAG AA 4.5:1。
      同一个色相压暗到 #b45309 后为 4.54:1，视觉上仍是"琥珀/待复核"语义，
      但可以安全用于正文与徽标文字。对比度由双系统质量用例强制校验。 */
   --c-amber-text: #b45309;
-  --c-green: #067647;          /* Verified Green：已验证 / 健康 / 完成 */
+  --c-green: #067647;           /* Verified Green：已验证 / 健康 / 完成 */
   --c-green-soft: #e6f5ee;
 
   /* 表面与边框 */
   --c-surface: #ffffff;
-  --c-surface-muted: #f8fafd;
-  --c-surface-sunken: #eef2f8;
-  --c-border: #d8e0ec;
-  --c-border-strong: #b6c2d4;
+  --c-surface-muted: #FAFAFB;
+  --c-surface-sunken: #F1F2F4;
+  --c-border: #E5E7EB;          /* 更浅：让"卡片"靠阴影浮起来，而不是靠描边框住 */
+  --c-border-strong: #D3D6DC;
 
   /* 状态语义 */
   --c-danger: #b42318;
   --c-danger-soft: #fdeceb;
-  --c-neutral: #475467;
-  --c-neutral-soft: #f0f2f5;
-  --c-focus: #175cd3;
+  --c-neutral: #4B5563;
+  --c-neutral-soft: #F2F3F5;
+  --c-focus: #3B4FE4;
 
   /* 排版：中文 Noto Sans SC，拉丁/标题 IBM Plex Sans，地址/哈希/金额 IBM Plex Mono */
   --font-sans: "IBM Plex Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
@@ -44,16 +60,18 @@
   --fs-18: 1.125rem;
   --fs-22: 1.375rem;
   --fs-28: 1.75rem;
+  --fs-34: 2.125rem;
 
   /* 间距（4px 基线） */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
   --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
 
-  /* 圆角与阴影 */
-  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.10);
-  --shadow-lg: 0 24px 64px rgba(16, 24, 40, 0.22);
+  /* 圆角与阴影：整体放大一档 + 双层阴影（近距定边界、远距给层次） */
+  --radius-xs: 6px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px;
+  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.06), 0 1px 3px rgba(11, 18, 32, 0.04);
+  --shadow-md: 0 2px 6px rgba(11, 18, 32, 0.06), 0 12px 32px rgba(11, 18, 32, 0.08);
+  --shadow-lg: 0 8px 24px rgba(11, 18, 32, 0.12), 0 32px 72px rgba(11, 18, 32, 0.18);
+  --shadow-focus: 0 0 0 3px rgba(59, 79, 228, 0.18);
 
   /* 层级 */
   --z-sticky: 20;
@@ -98,7 +116,7 @@ body {
 
 .mono { font-family: var(--font-mono); }
 
-h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.02em; }
 
 a { color: var(--c-cobalt); text-decoration: none; }
 a:hover { text-decoration: underline; }

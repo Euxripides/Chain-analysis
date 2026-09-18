@@ -90,7 +90,7 @@ export default function HomePage() {
                 {data.quick_actions.map((action) => {
                   if (action.key === "download.create") {
                     return (
-                      <a key={action.key} className="btn btn--sm" href="/">
+                      <a key={action.key} className="btn btn--sm" href="/app-v2/downloads/new">
                         {action.label}
                         <span className="badge badge--neutral" style={{ marginLeft: 6 }}>
                           S5

@@ -5,34 +5,38 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 )
 
 // 登录事件类型（§6.6.1）。
 const (
-	EventLoginSuccess     = "auth.login.success"
-	EventLoginFailure     = "auth.login.failure"
-	EventLogout           = "auth.logout"
-	EventSessionRefresh   = "auth.session.refresh"
-	EventSessionTouch     = "auth.session.touch"
-	EventSessionRevoked   = "auth.session.revoked"
-	EventSessionForced    = "auth.session.forced_offline"
-	EventLoginDenied      = "auth.login.denied"
-	EventLoginBlocked     = "auth.login.blocked"
-	EventPasswordChanged  = "auth.password.changed"
-	EventPasswordReset    = "auth.password.reset"
-	EventMFASuccess       = "auth.mfa.success"
-	EventMFAFailure       = "auth.mfa.failure"
-	EventMFARecoveryUsed  = "auth.mfa.recovery_used"
-	EventDeviceTrusted    = "auth.device.trusted"
-	EventSessionExpired   = "auth.session.expired"
+	EventLoginSuccess    = "auth.login.success"
+	EventLoginFailure    = "auth.login.failure"
+	EventLogout          = "auth.logout"
+	EventSessionRefresh  = "auth.session.refresh"
+	EventSessionTouch    = "auth.session.touch"
+	EventSessionRevoked  = "auth.session.revoked"
+	EventSessionForced   = "auth.session.forced_offline"
+	EventLoginDenied     = "auth.login.denied"
+	EventLoginBlocked    = "auth.login.blocked"
+	EventPasswordChanged = "auth.password.changed"
+	EventPasswordReset   = "auth.password.reset"
+	EventMFASuccess      = "auth.mfa.success"
+	EventMFAFailure      = "auth.mfa.failure"
+	EventMFARecoveryUsed = "auth.mfa.recovery_used"
+	EventDeviceTrusted   = "auth.device.trusted"
+	EventSessionExpired  = "auth.session.expired"
+	EventWorkspaceSwitch = "auth.workspace.switch"
 )
 
 // 失败原因码：对客户端统一返回 invalid_credentials，原因码只入库（§6.6.2）。
@@ -42,36 +46,42 @@ const (
 	ReasonBadPassword      = "bad_password"
 	ReasonDisabledAccount  = "account_disabled"
 	ReasonLockedAccount    = "account_locked"
+	ReasonDeletedAccount   = "account_deleted"
 	ReasonNoPassword       = "no_password_credential"
 	ReasonRateLimited      = "rate_limited"
 	ReasonAudienceMismatch = "audience_mismatch"
 	ReasonMFARequired      = "mfa_required"
 	ReasonMFAFailed        = "mfa_failed"
+	// P1-20260913：工作区成员资格相关的拒绝/撤销原因码。
+	ReasonNoWorkspaceMembership      = "no_workspace_membership"
+	ReasonWorkspaceSelectionRequired = "workspace_selection_required"
+	ReasonWorkspaceNotMember         = "workspace_not_member"
+	ReasonWorkspaceAccessRevoked     = "workspace_access_revoked"
 )
 
 // LoginEvent 是 §6.6.2 定义的登录记录写入模型。
 type LoginEvent struct {
-	EventType    string
-	Result       string
-	ReasonCode   string
-	RiskLevel    string
-	RiskAction   string
+	EventType  string
+	Result     string
+	ReasonCode string
+	RiskLevel  string
+	RiskAction string
 
-	IdentityID     string
-	SubjectEmail   string
-	OrganizationID string
-	WorkspaceID    string
-	Audience       string
-	AuthMethod     string
+	IdentityID       string
+	SubjectEmail     string
+	OrganizationID   string
+	WorkspaceID      string
+	Audience         string
+	AuthMethod       string
 	IdentityProvider string
-	MFAMethod      string
-	MFAResult      string
+	MFAMethod        string
+	MFAResult        string
 
-	SessionID      string
-	DeviceID       string
-	IsNewDevice    bool
-	DeviceTrusted  bool
-	DeviceInfo     DeviceInfo
+	SessionID     string
+	DeviceID      string
+	IsNewDevice   bool
+	DeviceTrusted bool
+	DeviceInfo    DeviceInfo
 
 	ClientHints map[string]string
 	UserAgent   string
@@ -93,6 +103,75 @@ func RecordLoginEvent(ctx context.Context, pool audit.DB, env string, e LoginEve
 	if pool == nil {
 		return nil
 	}
+	if e.Result == "" {
+		e.Result = "failure"
+	}
+	// 事件值必须先本地校验：login_events_result_check 只接受四个值，越界值会让 INSERT 失败。
+	// 在事务内失败是安全的（链头一并回滚），但调用方普遍写 `_ = RecordLoginEvent(...)`，
+	// 于是"审计少了一行"会变成完全静默的事件。这里在写库前就拒绝并回报。
+	if !loginEventResultAllowed(e.Result) {
+		err := fmt.Errorf("%w: %q", errLoginEventResultInvalid, e.Result)
+		reportLoginEventError(err)
+		return err
+	}
+	// ChainAppend 必须与写入行同事务提交：它先把链头推进到 seq，行随后才写。
+	// 两步不在同一事务里时，任何一次写入失败（例如 result 违反
+	// login_events_result_check）都会让链头前进而链上缺行，形成无法解释的空洞。
+	// 2026-09-16 真实发生过：MFA 挑战事件用了未在约束内的 result='challenge'，
+	// 6 条插入被拒、链头已推进（见 FIX-20260916-login-chain-gap.md）。
+	if beginner, ok := pool.(interface {
+		Begin(context.Context) (pgx.Tx, error)
+	}); ok {
+		tx, err := beginner.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin login event tx: %w", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if err := recordLoginEventTx(ctx, tx, env, e); err != nil {
+			reportLoginEventError(err)
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			reportLoginEventError(err)
+			return err
+		}
+		return nil
+	}
+	if err := recordLoginEventTx(ctx, pool, env, e); err != nil {
+		reportLoginEventError(err)
+		return err
+	}
+	return nil
+}
+
+// errLoginEventResultInvalid 表示事件 result 越界（会被 login_events_result_check 拒绝）。
+var errLoginEventResultInvalid = errors.New("login event result not allowed by login_events_result_check")
+
+// loginEventResultAllowed 必须与迁移里的 login_events_result_check 完全一致。
+func loginEventResultAllowed(result string) bool {
+	switch result {
+	case "success", "failure", "denied", "blocked":
+		return true
+	}
+	return false
+}
+
+// loginEventErrorHandler 由 api 层在启动时注入：登录事件写失败必须留痕到服务日志。
+// 只应在进程启动阶段设置一次（不参与请求期并发写）。
+var loginEventErrorHandler func(error)
+
+// SetLoginEventErrorHandler 注入登录事件写入失败的处理器。
+func SetLoginEventErrorHandler(fn func(error)) { loginEventErrorHandler = fn }
+
+func reportLoginEventError(err error) {
+	if err != nil && loginEventErrorHandler != nil {
+		loginEventErrorHandler(err)
+	}
+}
+
+// recordLoginEventTx 是真正的写入实现：规范化载荷 -> 追加链 -> 写行。
+// 调用方必须保证它在事务内执行（见 RecordLoginEvent 的注释）。
+func recordLoginEventTx(ctx context.Context, pool audit.DB, env string, e LoginEvent) error {
 	if e.Result == "" {
 		e.Result = "failure"
 	}
@@ -137,17 +216,19 @@ func RecordLoginEvent(ctx context.Context, pool audit.DB, env string, e LoginEve
 		"event_type":             e.EventType,
 		"result":                 e.Result,
 		"reason_code":            e.ReasonCode,
-		"identity_id":            e.IdentityID,
-		"subject_digest":         SubjectDigest(e.SubjectEmail),
-		"organization_id":        e.OrganizationID,
-		"audience":               e.Audience,
-		"auth_method":            e.AuthMethod,
-		"session_id":             e.SessionID,
-		"device_id":              e.DeviceID,
-		"client_ip":              e.IP.ClientIP,
-		"peer_ip":                e.IP.PeerIP,
-		"user_agent":             e.UserAgent,
-		"detail":                 e.Detail,
+		// UUID 列落库后读回是 COALESCE(col::text,'')，因此不可落库的文本必须在
+		// 载荷里就收敛成 ""，否则该行永远无法复算（2026-09-13 真实发生，见 ADR-019）。
+		"identity_id":     audit.UUIDPayloadValue(e.IdentityID),
+		"subject_digest":  SubjectDigest(e.SubjectEmail),
+		"organization_id": audit.UUIDPayloadValue(e.OrganizationID),
+		"audience":        e.Audience,
+		"auth_method":     e.AuthMethod,
+		"session_id":      audit.UUIDPayloadValue(e.SessionID),
+		"device_id":       audit.UUIDPayloadValue(e.DeviceID),
+		"client_ip":       e.IP.ClientIP,
+		"peer_ip":         e.IP.PeerIP,
+		"user_agent":      e.UserAgent,
+		"detail":          e.Detail,
 	}))
 	if err != nil {
 		return err
@@ -215,40 +296,40 @@ type LoginEventFilter struct {
 
 // LoginEventRow 是登录记录的读取视图。
 type LoginEventRow struct {
-	ID           string         `json:"id"`
-	Seq          int64          `json:"seq"`
-	OccurredAt   time.Time      `json:"occurred_at"`
-	EventType    string         `json:"event_type"`
-	Result       string         `json:"result"`
-	ReasonCode   string         `json:"reason_code"`
-	RiskLevel    string         `json:"risk_level"`
-	IdentityID   string         `json:"identity_id,omitempty"`
-	Email        string         `json:"email"`
-	SubjectMasked string        `json:"subject_masked"`
-	Audience     string         `json:"audience"`
-	AuthMethod   string         `json:"auth_method"`
-	SessionID    string         `json:"session_id,omitempty"`
-	DeviceID     string         `json:"device_id,omitempty"`
-	IsNewDevice  bool           `json:"is_new_device"`
-	DeviceLabel    string       `json:"device_label"`
-	DeviceType     string       `json:"device_type"`
-	DeviceVendor   string       `json:"device_vendor"`
-	DeviceModel    string       `json:"device_model"`
-	OSName         string       `json:"os_name"`
-	OSVersion      string       `json:"os_version"`
-	BrowserName    string       `json:"browser_name"`
-	BrowserVersion string       `json:"browser_version"`
-	UserAgent      string       `json:"user_agent"`
-	PeerIP       string         `json:"peer_ip"`
-	ClientIP     string         `json:"client_ip"`
-	EntryHost    string         `json:"entry_host"`
-	RequestID    string         `json:"request_id"`
-	Detail       map[string]any `json:"detail"`
-	EventHash    string         `json:"event_hash"`
-	PrevHash     string         `json:"prev_hash"`
+	ID             string         `json:"id"`
+	Seq            int64          `json:"seq"`
+	OccurredAt     time.Time      `json:"occurred_at"`
+	EventType      string         `json:"event_type"`
+	Result         string         `json:"result"`
+	ReasonCode     string         `json:"reason_code"`
+	RiskLevel      string         `json:"risk_level"`
+	IdentityID     string         `json:"identity_id,omitempty"`
+	Email          string         `json:"email"`
+	SubjectMasked  string         `json:"subject_masked"`
+	Audience       string         `json:"audience"`
+	AuthMethod     string         `json:"auth_method"`
+	SessionID      string         `json:"session_id,omitempty"`
+	DeviceID       string         `json:"device_id,omitempty"`
+	IsNewDevice    bool           `json:"is_new_device"`
+	DeviceLabel    string         `json:"device_label"`
+	DeviceType     string         `json:"device_type"`
+	DeviceVendor   string         `json:"device_vendor"`
+	DeviceModel    string         `json:"device_model"`
+	OSName         string         `json:"os_name"`
+	OSVersion      string         `json:"os_version"`
+	BrowserName    string         `json:"browser_name"`
+	BrowserVersion string         `json:"browser_version"`
+	UserAgent      string         `json:"user_agent"`
+	PeerIP         string         `json:"peer_ip"`
+	ClientIP       string         `json:"client_ip"`
+	EntryHost      string         `json:"entry_host"`
+	RequestID      string         `json:"request_id"`
+	Detail         map[string]any `json:"detail"`
+	EventHash      string         `json:"event_hash"`
+	PrevHash       string         `json:"prev_hash"`
 }
 
-func QueryLoginEvents(ctx context.Context, pool *pgxpool.Pool, f LoginEventFilter) ([]LoginEventRow, int, error) {
+func QueryLoginEvents(ctx context.Context, pool *dbtx.Pool, f LoginEventFilter) ([]LoginEventRow, int, error) {
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 100
 	}
