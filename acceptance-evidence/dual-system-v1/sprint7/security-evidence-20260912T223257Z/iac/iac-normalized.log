@@ -1,0 +1,120 @@
++ echo '=== [N0] byte-identical copies into an evidence-local dir (repo NOT modified) ==='
+=== [N0] byte-identical copies into an evidence-local dir (repo NOT modified) ===
++ cp -p /home/euripides/projects/blockchain-platform/deploy/compose.yaml /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized/docker-compose.yml
++ cp -p /home/euripides/projects/blockchain-platform/deploy/compose.yaml /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized/docker-compose.yaml.orig
++ sha256sum /home/euripides/projects/blockchain-platform/deploy/compose.yaml /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized/docker-compose.yml
+215cf15e37b5977c4e66ce25314abe81ae98eb2a4359985dc2ae686261694d66  /home/euripides/projects/blockchain-platform/deploy/compose.yaml
+215cf15e37b5977c4e66ce25314abe81ae98eb2a4359985dc2ae686261694d66  /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized/docker-compose.yml
++ cmp /home/euripides/projects/blockchain-platform/deploy/compose.yaml /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized/docker-compose.yml
++ echo CMP_IDENTICAL=yes
+CMP_IDENTICAL=yes
++ echo
+
++ echo '=== [N1] trivy config on normalized compose ==='
+=== [N1] trivy config on normalized compose ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac:/out aquasec/trivy:latest config /w --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 10m --format json --output /out/trivy-config-compose-normalized.json
++ tail -5
+2026-09-12T22:47:45Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:47:45Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:47:45Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?159.29 KiB / 234.65 KiB [---------------------------------------->__________________] 67.89% ? p/s ?207.29 KiB / 234.65 KiB [---------------------------------------------------->______] 88.34% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 536.35 KiB p/s 600ms2026-09-12T22:47:50Z	INFO	Detected config files	num=0
++ echo TRIVY_NORM_JSON_EXIT=0
+TRIVY_NORM_JSON_EXIT=0
++ tail -40
++ docker run --rm -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized:/w:ro aquasec/trivy:latest config /w --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 10m
+2026-09-12T22:47:50Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:47:50Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:47:50Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?167.30 KiB / 234.65 KiB [------------------------------------------>________________] 71.30% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 733.06 KiB p/s 500ms2026-09-12T22:47:53Z	INFO	Detected config files	num=0
+2026-09-12T22:47:53Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+
+Report Summary
+
+┌────────┬──────┬───────────────────┐
+│ Target │ Type │ Misconfigurations │
+├────────┼──────┼───────────────────┤
+│   -    │  -   │         -         │
+└────────┴──────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
++ echo
+
++ echo '=== [N2] checkov on normalized compose ==='
+=== [N2] checkov on normalized compose ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/normalized:/w:ro bridgecrew/checkov:latest -d /w -o json --compact
++ echo CHECKOV_NORM_EXIT=0
+CHECKOV_NORM_EXIT=0
++ cat /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-compose-normalized.json
++ head -c 600
+{
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "parsing_errors": 0,
+    "resource_count": 0,
+    "checkov_version": "3.3.17"
+}
++ echo
+
++ echo '--- stderr ---'
+--- stderr ---
++ tail -5 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-compose-normalized.stderr.txt
++ echo
+
++ echo '=== [N3] checkov explicit framework list ==='
+=== [N3] checkov explicit framework list ===
++ docker run --rm bridgecrew/checkov:latest --list-frameworks
++ head -20
+usage: checkov [-h] [-v] [--support] [-d DIRECTORY] [--add-check]
+               [-f FILE [FILE ...]] [--skip-path SKIP_PATH]
+               [--external-checks-dir EXTERNAL_CHECKS_DIR]
+               [--external-checks-git EXTERNAL_CHECKS_GIT]
+               [--external-checks-public-key EXTERNAL_CHECKS_PUBLIC_KEY] [-l]
+               [-o {cli,csv,cyclonedx,cyclonedx_json,json,junitxml,github_failed_only,gitlab_sast,sarif,spdx}]
+               [--output-file-path OUTPUT_FILE_PATH] [--output-bc-ids]
+               [--include-all-checkov-policies] [--quiet] [--compact]
+               [--framework FRAMEWORK [FRAMEWORK ...]]
+               [--skip-framework SKIP_FRAMEWORK [SKIP_FRAMEWORK ...]]
+               [-c CHECK] [--skip-check SKIP_CHECK]
+               [--run-all-external-checks] [-s] [--soft-fail-on SOFT_FAIL_ON]
+               [--hard-fail-on HARD_FAIL_ON] [--bc-api-key BC_API_KEY]
+               [--prisma-api-url PRISMA_API_URL] [--skip-results-upload]
+               [--docker-image DOCKER_IMAGE]
+               [--dockerfile-path DOCKERFILE_PATH] [--repo-id REPO_ID]
+               [-b BRANCH] [--skip-download] [--use-enforcement-rules]
+               [--download-external-modules DOWNLOAD_EXTERNAL_MODULES]
+               [--var-file VAR_FILE]
+               [--external-modules-download-path EXTERNAL_MODULES_DOWNLOAD_PATH]
++ echo
+
++ echo '=== [N4] checkov secrets: inspect CKV_SECRET_6 source lines (masked) ==='
+=== [N4] checkov secrets: inspect CKV_SECRET_6 source lines (masked) ===
++ python3 -
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/invalid-probe-2-partial.json line=32    json_key=page_token_hash              masked_b64=5842********************************************************2933
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/invalid-probe-2-partial.json line=49    json_key=page_token_hash              masked_b64=9fff********************************************************9cda
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/invalid-probe-2-partial.json line=83    json_key=page_token_hash              masked_b64=b0c7********************************************************094b
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/root-cause-probe.json       line=39    json_key=page_token_hash              masked_b64=5842********************************************************2933
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/root-cause-probe.json       line=56    json_key=page_token_hash              masked_b64=9fff********************************************************9cda
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/root-cause-probe.json       line=90    json_key=page_token_hash              masked_b64=b0c7********************************************************094b
+CKV_SECRET_6           /artifacts/v142_p0/01-live-probe/root-cause-probe.json       line=107   json_key=page_token_hash              masked_b64=5a51********************************************************df1b
+CKV_SECRET_6           /artifacts/v142_p0/02-certification/range-certification.json line=64    json_key=page_token_hash              masked_b64=5842********************************************************2933
+CKV_SECRET_6           /artifacts/v142_p0/03-final/live-root-cause-probe.json       line=39    json_key=page_token_hash              masked_b64=5842********************************************************2933
+CKV_SECRET_6           /artifacts/v142_p0/03-final/live-root-cause-probe.json       line=56    json_key=page_token_hash              masked_b64=9fff********************************************************9cda
+CKV_SECRET_6           /artifacts/v142_p0/03-final/live-root-cause-probe.json       line=90    json_key=page_token_hash              masked_b64=b0c7********************************************************094b
+CKV_SECRET_6           /artifacts/v142_p0/03-final/live-root-cause-probe.json       line=107   json_key=page_token_hash              masked_b64=5a51********************************************************df1b
+CKV_SECRET_6           /artifacts/v142_p0/03-final/range-certification.json         line=64    json_key=page_token_hash              masked_b64=5842********************************************************2933
++ export I R
++ echo
+
++ echo '=== [N5] full KICS findings table ==='
+=== [N5] full KICS findings table ===
++ python3 -
+kics_version=v2.1.20 files_scanned=2 lines_scanned=194 files_parsed=1 queries_total=308 total=10
+[MEDIUM] Container Capabilities Unrestricted (ce76b7d0-9e77-464d-b86f-c5c48e03e22d)
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+TypeError: 'int' object is not iterable
++ echo IAC_NORM_DONE=1
+IAC_NORM_DONE=1

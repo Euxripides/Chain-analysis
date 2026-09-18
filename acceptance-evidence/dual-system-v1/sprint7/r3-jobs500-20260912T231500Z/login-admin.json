@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "audience": "admin",
+    "csrf_token": "<redacted>",
+    "must_change_password": true,
+    "next": "/overview",
+    "roles": [
+      "owner"
+    ],
+    "session_id": "c0a0300b-4989-4f6a-821b-6dfed319c2df",
+    "state": "authenticated",
+    "user": {
+      "display_name": "<img src=x onerror=\"window.__xss=1\">SCRI PT",
+      "email": "admin@local",
+      "id": "6e192e52-d0aa-4e4a-9497-4953a332cfd3"
+    }
+  },
+  "meta": {
+    "request_id": "00509f37-6574-46c0-9a74-abdef1bebc55",
+    "trace_id": "c1933a5b-4e85-44e2-8219-868014e1b440",
+    "server_time": "2026-09-12T23:06:30.024Z",
+    "next_cursor": null
+  },
+  "error": null,
+  "_redaction_note": "csrf_token 已脱敏；会话令牌从未出现在响应体（仅 HttpOnly Cookie），且登录用的临时 cookie jar 已删除。"
+}

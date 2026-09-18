@@ -1,0 +1,30 @@
+### source-level (go.mod / go.sum) evidence for the 4 upgraded modules  utc=2026-09-13T02:09:35Z
+### these are the module files of the SOURCE TREE that produced the binaries;
+### the SBOM itself is derived from BINARY buildinfo, not from these files.
+--- file digests ---
+87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c  /home/euripides/projects/blockchain-platform/backend/go.mod
+654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb  /home/euripides/projects/blockchain-platform/backend/go.sum
+--- go directive ---
+go 1.26.0
+--- require lines for the 4 upgraded modules ---
+7:	github.com/go-chi/chi/v5 v5.3.2
+9:	github.com/jackc/pgx/v5 v5.9.2
+17:	golang.org/x/crypto v0.56.0
+--- go.sum lines for the 4 upgraded modules ---
+22:github.com/go-chi/chi/v5 v5.3.2 h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=
+23:github.com/go-chi/chi/v5 v5.3.2/go.mod h1:R+tYY2hNuVUUjxoPtqUdgBqevM9s9njzkTLutVsOCto=
+47:github.com/jackc/pgx/v5 v5.9.2 h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=
+48:github.com/jackc/pgx/v5 v5.9.2/go.mod h1:mal1tBGAFfLHvZzaYh77YS/eC6IX9OWbRV1QIIM0Jn4=
+133:github.com/xuri/excelize/v2 v2.11.0 h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=
+134:github.com/xuri/excelize/v2 v2.11.0/go.mod h1:jxFLbzaIwGQ5ufFNvYfUOHqXhfPaNmP14KWfmNz2Uak=
+151:golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+152:golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
+153:golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+154:golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
+155:golang.org/x/crypto v0.56.0 h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=
+156:golang.org/x/crypto v0.56.0/go.mod h1:OMW5y6CY9l38uPLmxU6l6pwcXp1obtLo3e6gT7gQR2I=
+--- go list -m (module cache view, read-only) ---
+github.com/go-chi/chi/v5 v5.3.2
+github.com/xuri/excelize/v2 v2.11.0
+github.com/jackc/pgx/v5 v5.9.2
+golang.org/x/crypto v0.56.0

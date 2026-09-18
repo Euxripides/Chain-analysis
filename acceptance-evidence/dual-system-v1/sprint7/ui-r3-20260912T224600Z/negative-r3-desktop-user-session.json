@@ -1,0 +1,73 @@
+{
+  "case": "user-audience session -> V1 backend page",
+  "service_denials": [
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "status": 401,
+      "request_id": "c0e5db2f-cd25-4616-8c87-0b8b028d35c4",
+      "trace_id": "a680403f-fcc6-4f6e-956f-28750f9194f9",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:22.681Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "status": 401,
+      "request_id": "7a94bf2c-3981-432d-ace6-afd981cc3f23",
+      "trace_id": "ff0b6834-41ac-44cb-9df7-e04725a8ba83",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:22.683Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "status": 401,
+      "request_id": "66ae6923-c2e1-43bc-9299-ef88f1acd7ad",
+      "trace_id": "08bff06f-c3a1-480a-923d-a8b25fbaa2f1",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:23.687Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "status": 401,
+      "request_id": "fa935ac4-1b9e-4941-bd2c-14ebc7d3321d",
+      "trace_id": "d723916d-1f32-4c3c-b1fe-ea0c7353a3cc",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:23.687Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    }
+  ],
+  "all_admin_calls": [
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "c0e5db2f-cd25-4616-8c87-0b8b028d35c4"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "7a94bf2c-3981-432d-ace6-afd981cc3f23"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "66ae6923-c2e1-43bc-9299-ef88f1acd7ad"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "fa935ac4-1b9e-4941-bd2c-14ebc7d3321d"
+    }
+  ],
+  "denied_request_ids": [
+    "c0e5db2f-cd25-4616-8c87-0b8b028d35c4",
+    "7a94bf2c-3981-432d-ace6-afd981cc3f23",
+    "66ae6923-c2e1-43bc-9299-ef88f1acd7ad",
+    "fa935ac4-1b9e-4941-bd2c-14ebc7d3321d"
+  ]
+}

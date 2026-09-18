@@ -1,0 +1,397 @@
+{
+  "task": "R-3 legacy V1 UI (api-control / system) admin-audience defect",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T225603Z",
+  "entry": "https://127.0.0.1:8448",
+  "playwright_rc": 1,
+  "projects": [
+    "r3-desktop",
+    "r3-mobile"
+  ],
+  "unique_case_titles": 15,
+  "cases_accounted": 30,
+  "cases_expected": 30,
+  "passed": 26,
+  "failed": 4,
+  "skipped": 0,
+  "flaky": 0,
+  "cases": [
+    {
+      "project": "r3-desktop",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "api-control：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "expected_status": "passed",
+      "duration_ms": 4284,
+      "retries": 0,
+      "error_head": "Error: 必须存在可度量的 X 轴刻度文本",
+      "error_text": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "system：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "expected_status": "passed",
+      "duration_ms": 3822,
+      "retries": 0,
+      "error_head": "Error: 必须存在可度量的 X 轴刻度文本",
+      "error_text": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "api-control：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "expected_status": "passed",
+      "duration_ms": 3265,
+      "retries": 0,
+      "error_head": "Error: 必须存在可度量的 X 轴刻度文本",
+      "error_text": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "system：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "expected_status": "passed",
+      "duration_ms": 3414,
+      "retries": 0,
+      "error_head": "Error: 必须存在可度量的 X 轴刻度文本",
+      "error_text": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 4543,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3820,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control：弹窗可开关（不做任何写操作）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3400,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control 与 system 无横向溢出",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3624,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3682,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3522,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control：弹窗可开关（不做任何写操作）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3900,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "title": "api-control 与 system 无横向溢出",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3485,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 5224,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "2a. 普通用户层会话声明 user 受众调后台接口：403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 2135,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 120,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "3. 匿名访问后台页：401",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 4627,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 1124,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 4755,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "2a. 普通用户层会话声明 user 受众调后台接口：403",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 1828,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 503,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "3. 匿名访问后台页：401",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3986,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "title": "4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 1509,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3725,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "已认证状态下入口直接回原页（/system?view=settings）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3104,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "未认证访问 /admin/* 时 return_to 不丢（search 保留）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 1777,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 3392,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "已认证状态下入口直接回原页（/system?view=settings）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 2931,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "未认证访问 /admin/* 时 return_to 不丢（search 保留）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 1483,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "恶意 return_to 一律落到白名单内（不会被外域接走）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 12797,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-nav-return-to.spec.ts",
+      "title": "恶意 return_to 一律落到白名单内（不会被外域接走）",
+      "status": "passed",
+      "expected_status": "passed",
+      "duration_ms": 13349,
+      "retries": 0,
+      "error_head": null,
+      "error_text": null
+    }
+  ],
+  "failed_case_details": [
+    {
+      "project": "r3-desktop",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "api-control：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "error": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-desktop",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "system：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "error": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "api-control：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "error": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    },
+    {
+      "project": "r3-mobile",
+      "file": "r3-chart-axes.spec.ts",
+      "title": "system：趋势图刻度完整落在容器内（几何断言）",
+      "status": "failed",
+      "error": "Error: 必须存在可度量的 X 轴刻度文本\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m0\u001b[39m\nReceived:   \u001b[31m0\u001b[39m"
+    }
+  ],
+  "audit_evidence": {
+    "status": "OK",
+    "collector": "docker exec deploy-postgres-1 psql -U blockchain -d blockchain_platform",
+    "rows_returned": 22,
+    "denied_request_ids_total": 22,
+    "request_ids_matched": 22,
+    "missing_request_ids": [],
+    "incomplete_fields": [],
+    "window_denials": 30,
+    "reason": null,
+    "stderr": null
+  },
+  "unclosed": [
+    "存在失败用例：api-control：趋势图刻度完整落在容器内（几何断言）, system：趋势图刻度完整落在容器内（几何断言）",
+    "playwright 退出码非 0：1"
+  ],
+  "criteria": "cases_accounted==cases_expected AND skipped==0 AND playwright_rc==0 AND failed==0 AND audit_evidence.status=='OK'",
+  "status": "FAIL"
+}

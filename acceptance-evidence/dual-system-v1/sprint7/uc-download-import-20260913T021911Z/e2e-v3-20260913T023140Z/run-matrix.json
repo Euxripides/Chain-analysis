@@ -1,0 +1,197 @@
+{
+  "scope_note": "R9-05 只证明 API 幂等；UI 多链第二组故障重试需独立故障注入夹具，未在本轮覆盖。",
+  "breakpoints_note": "本轮只覆盖 1440x900 与 390x844 两个断点；§27 要求的全部 4 断点仍未闭合。",
+  "tests": [
+    {
+      "project": "uc-desktop",
+      "test": "R9-01",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-02",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-03",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-04",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-05",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-06",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-desktop",
+      "test": "R9-07",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-01",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-02",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-03",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-04",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-05",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-06",
+      "expected": "run",
+      "actual": "MISSING",
+      "ok": false
+    },
+    {
+      "project": "uc-mobile",
+      "test": "R9-07",
+      "expected": "excluded-by-project-design",
+      "actual": "MISSING",
+      "ok": false
+    }
+  ],
+  "summary": {
+    "expected_run": 7,
+    "expected_excluded": 7,
+    "actual_passed": 0,
+    "actual_skipped": 0,
+    "actual_failed_or_missing": 14,
+    "mismatches": [
+      {
+        "project": "uc-desktop",
+        "test": "R9-01",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-02",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-03",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-04",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-05",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-06",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-desktop",
+        "test": "R9-07",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-01",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-02",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-03",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-04",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-05",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-06",
+        "expected": "run",
+        "actual": "MISSING"
+      },
+      {
+        "project": "uc-mobile",
+        "test": "R9-07",
+        "expected": "excluded-by-project-design",
+        "actual": "MISSING"
+      }
+    ]
+  }
+}

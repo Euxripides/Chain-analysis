@@ -1,0 +1,6 @@
+{
+  "case": "user token placed in admin cookie name + X-Auth-Audience: admin",
+  "status": 401,
+  "request_id": "c7e8c89c-93a9-4154-8100-21708ad2bf0d",
+  "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:56:46.186Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+}

@@ -1,0 +1,150 @@
+// exportprobe：ADR-019 双桶对象存在性**严格**探针（验收/运维诊断用，不参与 API/Worker 服务进程）。
+//
+// 为什么不能用 objectprobe -action=stat 做本轮的桶归属证据：
+//   minio-go v7.0.90 的 StatObject 走 HTTP HEAD（无响应体），当桶不存在时库会按
+//   objectName!="" 兜底把错误码**编造成 NoSuchKey**（api-error-response.go:120-151），
+//   于是"对象不在"与"桶不存在/权限故障"在只能看到 exists=false 的探针里无法区分。
+//   验收要求（根 2026-09-13 明令）：必须明确区分 NoSuchKey 与桶/权限故障。
+//
+// 本工具的判据与产品代码 internal/api/export_object_store.go 完全同构：
+//   1) 先 BucketExists 证明该桶**确实存在**；
+//   2) 再 StatObject，只接受对象级错误码 NoSuchKey/NoSuchObject 作为 OBJECT_MISSING；
+//   3) 其余错误（NoSuchBucket/AccessDenied/SignatureDoesNotMatch/网络/5xx）一律 STORAGE_FAULT。
+// 只输出实测事实（JSON），不做期望判定；判定由调用方的验收脚本 fail-closed 完成。
+//
+// 退出码：0 = 每个桶都得到了可区分的结论（OBJECT_PRESENT 或 OBJECT_MISSING）；
+//         4 = 出现 BUCKET_MISSING / STORAGE_FAULT / BUCKET_CHECK_FAILED（部署或权限故障，必须人工处理）。
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/minio/minio-go/v7"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/config"
+	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
+)
+
+type probeResult struct {
+	Role             string `json:"role"`
+	Bucket           string `json:"bucket"`
+	Key              string `json:"key"`
+	BucketExists     bool   `json:"bucket_exists"`
+	BucketCheckError string `json:"bucket_check_error,omitempty"`
+	Classification   string `json:"classification"`
+	ObjectPresent    bool   `json:"object_present"`
+	ObjectSize       int64  `json:"object_size"`
+	ETag             string `json:"etag,omitempty"`
+	ErrorCode        string `json:"error_code,omitempty"`
+	ErrorMessage     string `json:"error_message,omitempty"`
+}
+
+// classify 与 internal/api/export_object_store.go:isObjectNotFoundCode 同口径：
+// 只有对象级缺失码才算 OBJECT_MISSING，其余一律 STORAGE_FAULT。
+func classify(err error) string {
+	if err == nil {
+		return "OBJECT_PRESENT"
+	}
+	switch minio.ToErrorResponse(err).Code {
+	case "NoSuchKey", "NoSuchObject":
+		return "OBJECT_MISSING"
+	default:
+		return "STORAGE_FAULT"
+	}
+}
+
+func main() {
+	key := flag.String("key", "", "object key（必填）")
+	roles := flag.String("roles", "raw,export", "要探测的逻辑桶角色，逗号分隔：raw,export")
+	out := flag.String("out", "", "把 JSON 结果写入该文件（同时打印到 stdout）")
+	flag.Parse()
+	if strings.TrimSpace(*key) == "" {
+		fmt.Fprintln(os.Stderr, "key required")
+		os.Exit(2)
+	}
+	cfg := config.Load()
+	if strings.TrimSpace(cfg.RawBucket) == "" || strings.TrimSpace(cfg.ExportBucket) == "" {
+		fmt.Fprintln(os.Stderr, "RAW_BUCKET/EXPORT_BUCKET must both be configured")
+		os.Exit(4)
+	}
+	if strings.TrimSpace(cfg.RawBucket) == strings.TrimSpace(cfg.ExportBucket) {
+		fmt.Fprintf(os.Stderr, "RAW_BUCKET and EXPORT_BUCKET must differ (both %q)\n", cfg.RawBucket)
+		os.Exit(4)
+	}
+	ctx := context.Background()
+	// rawstore 需要一个初始桶；用 RAW 桶构造客户端（与 API 相同的配置来源）。
+	store, err := rawstore.New(ctx, cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioSecure, cfg.RawBucket)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "minio init: %v\n", err)
+		os.Exit(4)
+	}
+	client := store.Client()
+
+	results := make([]probeResult, 0, 2)
+	worst := 0
+	for _, role := range strings.Split(*roles, ",") {
+		role = strings.TrimSpace(role)
+		var name string
+		switch role {
+		case "raw":
+			name = cfg.RawBucket
+		case "export":
+			name = cfg.ExportBucket
+		default:
+			fmt.Fprintf(os.Stderr, "unknown role %q\n", role)
+			os.Exit(2)
+		}
+		res := probeResult{Role: role, Bucket: name, Key: *key}
+		exists, berr := client.BucketExists(ctx, name)
+		if berr != nil {
+			res.Classification = "BUCKET_CHECK_FAILED"
+			res.BucketCheckError = berr.Error()
+			results = append(results, res)
+			worst = 4
+			continue
+		}
+		res.BucketExists = exists
+		if !exists {
+			res.Classification = "BUCKET_MISSING"
+			results = append(results, res)
+			worst = 4
+			continue
+		}
+		info, serr := client.StatObject(ctx, name, *key, minio.StatObjectOptions{})
+		if serr != nil {
+			res.Classification = classify(serr)
+			res.ErrorCode = minio.ToErrorResponse(serr).Code
+			res.ErrorMessage = minio.ToErrorResponse(serr).Message
+			if res.Classification == "STORAGE_FAULT" {
+				worst = 4
+			}
+			results = append(results, res)
+			continue
+		}
+		res.Classification = "OBJECT_PRESENT"
+		res.ObjectPresent = true
+		res.ObjectSize = info.Size
+		res.ETag = info.ETag
+		results = append(results, res)
+	}
+
+	payload := map[string]any{
+		"key": *key, "raw_bucket": cfg.RawBucket, "export_bucket": cfg.ExportBucket,
+		"export_write_bucket_config": cfg.ExportWriteBucket, "export_read_order_config": cfg.ExportReadOrder,
+		"results": results,
+	}
+	blob, _ := json.MarshalIndent(payload, "", "  ")
+	fmt.Println(string(blob))
+	if *out != "" {
+		if err := os.WriteFile(*out, append(blob, '\n'), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "write out: %v\n", err)
+			os.Exit(4)
+		}
+	}
+	os.Exit(worst)
+}

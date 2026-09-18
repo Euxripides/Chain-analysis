@@ -1,0 +1,9 @@
+{
+  "final": {
+    "href": "https://127.0.0.1:8448/api-control?tab=errors",
+    "origin": "https://127.0.0.1:8448",
+    "pathname": "/api-control",
+    "search": "?tab=errors"
+  },
+  "query_preserved": true
+}

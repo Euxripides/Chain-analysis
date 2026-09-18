@@ -1,0 +1,36 @@
+{
+  "evidence_id": "security-evidence-20260912T223257Z",
+  "generated_utc": "2026-09-12T22:56:13.301Z",
+  "collection_window_utc": {
+    "start": "2026-09-12T22:32:57Z",
+    "end": "2026-09-12T23:00:00Z"
+  },
+  "collector_scope": "EVIDENCE COLLECTION ONLY — no source modification, no dependency upgrade, no deployment, no service restart.",
+  "not_a_clearance": true,
+  "not_a_clearance_reason": "This report delivers raw, reproducible measurements. It does NOT constitute a release-gate clearance. The severity counts are reported exactly as measured and are NOT adjusted toward any target, and the unresolved items below remain unresolved until remediation, re-scan and functional regression are actually performed by the main session.",
+  "evidence_root": {
+    "windows": "E:\\Code\\远程虚拟机\\harness\\blockchain-platform\\acceptance-evidence\\dual-system-v1\\sprint7\\security-evidence-20260912T223257Z",
+    "vm": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z",
+    "per_file_verification": "98 of 100 files byte-identical against the VM-generated SHA256SUMS.vm.txt; 0 mismatches. 2 files (sbom/backend.cdx.json, sbom/backend.spdx.json, ~26 MB) intentionally remain VM-resident with recorded sha256.",
+    "tarball_sha256": [
+      "60089d7a475853af2a90d97a22ea265e42e30b841b8b35cb122454d70af2dcea",
+      "cfb6f86b0a695f2f0c59629cce454c209ff40e44367f85ad6cb3936d6c1c9f84"
+    ]
+  },
+  "primary_gate": {
+    "source": "docs/dual-system-development-plan.md:1859",
+    "text": "P0/P1 漏洞为 0",
+    "verdict": "FAIL"
+  },
+  "priority_mapping": {
+    "convention": {
+      "P0": "CRITICAL",
+      "P1": "HIGH",
+      "P2": "MODERATE",
+      "P3": "LOW"
+    },
+    "provenance": "REPORT CONVENTION — the plan defines no severity-to-priority table. Stated explicitly so counts stay auditable.",
+    "counted_separately": true,
+    "merged_into_zero_claim": false
+  }
+}

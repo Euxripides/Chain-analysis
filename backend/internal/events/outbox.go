@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // RunOutbox publishes transactionally recorded domain events. Multiple API or
 // worker processes may run it safely because rows are claimed with SKIP LOCKED.
-func RunOutbox(ctx context.Context, pool *pgxpool.Pool, bus *Bus, log *slog.Logger) {
+func RunOutbox(ctx context.Context, pool *dbtx.Pool, bus *Bus, log *slog.Logger) {
 	if pool == nil || bus == nil || !bus.Enabled() {
 		log.Warn("outbox publisher disabled", "reason", "event bus unavailable")
 		return
@@ -30,7 +30,7 @@ func RunOutbox(ctx context.Context, pool *pgxpool.Pool, bus *Bus, log *slog.Logg
 	}
 }
 
-func publishOutboxBatch(ctx context.Context, pool *pgxpool.Pool, bus *Bus) error {
+func publishOutboxBatch(ctx context.Context, pool *dbtx.Pool, bus *Bus) error {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err

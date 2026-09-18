@@ -1,0 +1,276 @@
+Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 62 root packages:
+  github.com/blockchain-platform/blockchain-platform/internal/model
+  github.com/blockchain-platform/blockchain-platform/internal/config
+  github.com/blockchain-platform/blockchain-platform/internal/audit
+  github.com/blockchain-platform/blockchain-platform/internal/iam
+  github.com/blockchain-platform/blockchain-platform/internal/logger
+  github.com/blockchain-platform/blockchain-platform/internal/clickhouse
+  github.com/blockchain-platform/blockchain-platform/internal/method
+  github.com/blockchain-platform/blockchain-platform/internal/chain
+  github.com/blockchain-platform/blockchain-platform/internal/provider/rpc
+  github.com/blockchain-platform/blockchain-platform/internal/store
+  github.com/blockchain-platform/blockchain-platform/cmd/admin-fixture
+  github.com/blockchain-platform/blockchain-platform/cmd/admin-init
+  github.com/blockchain-platform/blockchain-platform/internal/policy
+  github.com/blockchain-platform/blockchain-platform/internal/access
+  github.com/blockchain-platform/blockchain-platform/internal/addressmeta
+  github.com/blockchain-platform/blockchain-platform/internal/advanced
+  github.com/blockchain-platform/blockchain-platform/internal/query
+  github.com/blockchain-platform/blockchain-platform/internal/analysis
+  github.com/blockchain-platform/blockchain-platform/internal/auth
+  github.com/blockchain-platform/blockchain-platform/internal/canvas
+  github.com/blockchain-platform/blockchain-platform/internal/platform/contract
+  github.com/blockchain-platform/blockchain-platform/internal/capability
+  github.com/blockchain-platform/blockchain-platform/internal/observability
+  github.com/blockchain-platform/blockchain-platform/internal/ingest
+  github.com/blockchain-platform/blockchain-platform/internal/provider
+  github.com/blockchain-platform/blockchain-platform/internal/tron
+  github.com/blockchain-platform/blockchain-platform/internal/dataset
+  github.com/blockchain-platform/blockchain-platform/internal/investigation
+  github.com/blockchain-platform/blockchain-platform/internal/rawstore
+  github.com/blockchain-platform/blockchain-platform/internal/report
+  github.com/blockchain-platform/blockchain-platform/internal/casework
+  github.com/blockchain-platform/blockchain-platform/internal/chainread
+  github.com/blockchain-platform/blockchain-platform/internal/chaintrace
+  github.com/blockchain-platform/blockchain-platform/internal/events
+  github.com/blockchain-platform/blockchain-platform/internal/tokenmeta
+  github.com/blockchain-platform/blockchain-platform/internal/explorer
+  github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt
+  github.com/blockchain-platform/blockchain-platform/internal/semantic
+  github.com/blockchain-platform/blockchain-platform/internal/subjectintel
+  github.com/blockchain-platform/blockchain-platform/internal/update
+  github.com/blockchain-platform/blockchain-platform/internal/api
+  github.com/blockchain-platform/blockchain-platform/internal/provider/ankr
+  github.com/blockchain-platform/blockchain-platform/internal/provider/ankr/rpc
+  github.com/blockchain-platform/blockchain-platform/internal/provider/mockrpc
+  github.com/blockchain-platform/blockchain-platform/migrations
+  github.com/blockchain-platform/blockchain-platform/internal/app
+  github.com/blockchain-platform/blockchain-platform/cmd/api
+  github.com/blockchain-platform/blockchain-platform/cmd/auditverify
+  github.com/blockchain-platform/blockchain-platform/cmd/loadprobe
+  github.com/blockchain-platform/blockchain-platform/cmd/migrate
+  github.com/blockchain-platform/blockchain-platform/cmd/objectprobe
+  github.com/blockchain-platform/blockchain-platform/cmd/parquetprobe
+  github.com/blockchain-platform/blockchain-platform/cmd/queryprobe
+  github.com/blockchain-platform/blockchain-platform/internal/provider/count
+  github.com/blockchain-platform/blockchain-platform/internal/countoracle
+  github.com/blockchain-platform/blockchain-platform/internal/spool
+  github.com/blockchain-platform/blockchain-platform/internal/download
+  github.com/blockchain-platform/blockchain-platform/cmd/rangecert
+  github.com/blockchain-platform/blockchain-platform/cmd/rangeprobe
+  github.com/blockchain-platform/blockchain-platform/internal/provider/chainbase
+  github.com/blockchain-platform/blockchain-platform/internal/provider/mockparallel
+  github.com/blockchain-platform/blockchain-platform/cmd/worker
+Govulncheck scanned the following 55 modules and the go1.26.7 standard library:
+  github.com/blockchain-platform/blockchain-platform
+  github.com/ClickHouse/ch-go@v0.65.1
+  github.com/ClickHouse/clickhouse-go/v2@v2.34.0
+  github.com/andybalholm/brotli@v1.1.1
+  github.com/beorn7/perks@v1.0.1
+  github.com/cespare/xxhash/v2@v2.3.0
+  github.com/dustin/go-humanize@v1.0.1
+  github.com/go-chi/chi/v5@v5.2.1
+  github.com/go-faster/city@v1.0.1
+  github.com/go-faster/errors@v0.7.1
+  github.com/go-ini/ini@v1.67.0
+  github.com/goccy/go-json@v0.10.5
+  github.com/google/uuid@v1.6.0
+  github.com/jackc/pgpassfile@v1.0.0
+  github.com/jackc/pgservicefile@v0.0.0-20240606120523-5a60cdf6a761
+  github.com/jackc/pgx/v5@v5.7.4
+  github.com/jackc/puddle/v2@v2.2.2
+  github.com/klauspost/compress@v1.19.1
+  github.com/klauspost/cpuid/v2@v2.2.10
+  github.com/minio/crc64nvme@v1.0.1
+  github.com/minio/md5-simd@v1.1.2
+  github.com/minio/minio-go/v7@v7.0.90
+  github.com/mohae/deepcopy@v0.0.0-20170929034955-c48cc78d4826
+  github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822
+  github.com/nats-io/nats.go@v1.41.2
+  github.com/nats-io/nkeys@v0.4.11
+  github.com/nats-io/nuid@v1.0.1
+  github.com/parquet-go/bitpack@v1.0.0
+  github.com/parquet-go/jsonlite@v1.0.0
+  github.com/parquet-go/parquet-go@v0.32.0
+  github.com/paulmach/orb@v0.11.1
+  github.com/pierrec/lz4/v4@v4.1.22
+  github.com/prometheus/client_golang@v1.24.1
+  github.com/prometheus/client_model@v0.6.2
+  github.com/prometheus/common@v0.70.1
+  github.com/prometheus/procfs@v0.21.1
+  github.com/richardlehane/mscfb@v1.0.4
+  github.com/richardlehane/msoleps@v1.0.4
+  github.com/rs/xid@v1.6.0
+  github.com/segmentio/asm@v1.2.0
+  github.com/shopspring/decimal@v1.4.0
+  github.com/twpayne/go-geom@v1.6.1
+  github.com/xuri/efp@v0.0.0-20240408161823-9ad904a10d6d
+  github.com/xuri/excelize/v2@v2.9.0
+  github.com/xuri/nfp@v0.0.0-20240318013403-ab9948c2c4a7
+  go.opentelemetry.io/otel@v1.35.0
+  go.opentelemetry.io/otel/trace@v1.35.0
+  golang.org/x/crypto@v0.54.0
+  golang.org/x/net@v0.57.0
+  golang.org/x/sync@v0.22.0
+  golang.org/x/sys@v0.48.0
+  golang.org/x/term@v0.46.0
+  golang.org/x/text@v0.40.0
+  google.golang.org/protobuf@v1.36.11
+  gopkg.in/yaml.v3@v3.0.1
+
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-5960
+    Excelize: Unbounded Row Index Allocation in Worksheet Parser (checkSheet
+    OOM/Panic DoS) in github.com/xuri/excelize
+  More info: https://pkg.go.dev/vuln/GO-2026-5960
+  Module: github.com/xuri/excelize/v2
+    Found in: github.com/xuri/excelize/v2@v2.9.0
+    Fixed in: github.com/xuri/excelize/v2@v2.11.0
+    Example traces found:
+      #1: internal/api/export.go:442:26: api.writeXLSXSheet calls excelize.File.NewSheet
+      #2: internal/api/export.go:460:30: api.writeXLSXSheet calls excelize.File.NewStreamWriter
+      #3: internal/api/export.go:456:32: api.writeXLSXSheet calls excelize.File.SetSheetDimension
+      #4: internal/api/export.go:395:23: api.writeXLSX calls excelize.NewFile
+
+Vulnerability #2: GO-2026-5004
+    SQL Injection via placeholder confusion with dollar quoted string literals
+    in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-5004
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.7.4
+    Fixed in: github.com/jackc/pgx/v5@v5.9.2
+    Example traces found:
+      #1: migrations/migrations.go:57:23: migrations.ApplyPostgres calls pgxpool.Conn.QueryRow, which eventually calls sanitize.SanitizeSQL
+
+Vulnerability #3: GO-2025-3770
+    Host header injection which leads to open redirect in RedirectSlashes in
+    github.com/go-chi/chi
+  More info: https://pkg.go.dev/vuln/GO-2025-3770
+  Module: github.com/go-chi/chi/v5
+    Found in: github.com/go-chi/chi/v5@v5.2.1
+    Fixed in: github.com/go-chi/chi/v5@v5.2.2
+    Example traces found:
+      #1: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.ChainHandler.ServeHTTP
+      #2: internal/api/server.go:533:63: api.logMiddleware calls chi.Context.RoutePattern
+      #3: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mount
+      #4: internal/api/server.go:273:7: api.Server.buildRouter calls chi.Mux.Get
+      #5: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle
+      #6: internal/api/server.go:281:9: api.Server.buildRouter calls chi.Mux.Route
+      #7: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mux.ServeHTTP
+      #8: internal/api/server.go:263:7: api.Server.buildRouter calls chi.Mux.Use
+      #9: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mux.routeHTTP
+      #10: internal/download/planner.go:825:24: download.Planner.ContinueShards calls json.Marshal, which eventually calls chi.NewMux
+      #11: internal/api/v12.go:367:33: api.Server.handleTicketDownload calls chi.NewRouteContext
+      #12: internal/api/server.go:262:20: api.Server.buildRouter calls chi.NewRouter
+      #13: internal/api/server.go:533:37: api.logMiddleware calls chi.RouteContext
+      #14: internal/api/v12.go:368:24: api.Server.handleTicketDownload calls chi.RouteParams.Add
+      #15: internal/api/rpc.go:25:43: api.Server.handleChainCapabilities calls chi.URLParam
+      #16: internal/method/chstore.go:266:25: method.ClickHouseStore.RewriteTransactions calls clickhouse.batch.Append, which eventually calls chi.contextKey.String
+      #17: internal/api/actions.go:22:2: api.init calls chi.init
+      #18: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.methodNotAllowedHandler
+      #19: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Len
+      #20: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Less
+      #21: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Swap
+      #22: internal/api/server.go:527:42: api.logMiddleware calls middleware.NewWrapResponseWriter
+      #23: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle, which eventually calls middleware.Recoverer
+      #24: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.Recoverer
+      #25: internal/api/server.go:264:26: api.Server.buildRouter calls middleware.Timeout
+      #26: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.Timeout
+      #27: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle, which eventually calls middleware.Timeout
+      #28: internal/api/server.go:540:24: api.logMiddleware calls middleware.basicWriter.Status
+      #29: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.basicWriter.Unwrap
+      #30: internal/api/bootstrap.go:211:34: api.statusRecorder.Write calls middleware.basicWriter.Write
+      #31: internal/api/actions.go:349:30: api.actionStatusWriter.WriteHeader calls middleware.basicWriter.WriteHeader
+      #32: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.compressResponseWriter.Flush
+      #33: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.compressResponseWriter.Unwrap
+      #34: internal/api/bootstrap.go:211:34: api.statusRecorder.Write calls middleware.compressResponseWriter.Write
+      #35: internal/api/actions.go:349:30: api.actionStatusWriter.WriteHeader calls middleware.compressResponseWriter.WriteHeader
+      #36: internal/method/chstore.go:266:25: method.ClickHouseStore.RewriteTransactions calls clickhouse.batch.Append, which eventually calls middleware.contextKey.String
+      #37: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.flushHijackWriter.Flush
+      #38: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.flushWriter.Flush
+      #39: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.http2FancyWriter.Flush
+      #40: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.httpFancyWriter.Flush
+      #41: internal/report/service.go:137:19: report.Service.Verify calls io.Copy, which eventually calls middleware.httpFancyWriter.ReadFrom
+      #42: internal/api/server.go:15:2: api.init calls middleware.init
+
+=== Package Results ===
+
+Vulnerability #1: GO-2026-5777
+    Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For
+    header in github.com/go-chi/chi
+  More info: https://pkg.go.dev/vuln/GO-2026-5777
+  Module: github.com/go-chi/chi/v5
+    Found in: github.com/go-chi/chi/v5@v5.2.1
+    Fixed in: github.com/go-chi/chi/v5@v5.3.0
+
+Vulnerability #2: GO-2026-5775
+    Chi Middleware vulnerable to IP spoofing via X-Forwarded-For header in
+    github.com/go-chi/chi
+  More info: https://pkg.go.dev/vuln/GO-2026-5775
+  Module: github.com/go-chi/chi/v5
+    Found in: github.com/go-chi/chi/v5@v5.2.1
+    Fixed in: github.com/go-chi/chi/v5@v5.3.0
+
+Vulnerability #3: GO-2026-5774
+    Chi has an IP spoofing vulnerability in middleware.RealIP in
+    github.com/go-chi/chi
+  More info: https://pkg.go.dev/vuln/GO-2026-5774
+  Module: github.com/go-chi/chi/v5
+    Found in: github.com/go-chi/chi/v5@v5.2.1
+    Fixed in: github.com/go-chi/chi/v5@v5.3.0
+
+Vulnerability #4: GO-2026-4772
+    CVE-2026-33816 in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-4772
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.7.4
+    Fixed in: github.com/jackc/pgx/v5@v5.9.0
+
+Vulnerability #5: GO-2026-4771
+    CVE-2026-33815 in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-4771
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.7.4
+    Fixed in: github.com/jackc/pgx/v5@v5.9.0
+
+=== Module Results ===
+
+Vulnerability #1: GO-2026-6355
+    Prevent DoS on deadlocked established channel in golang.org/x/crypto/ssh
+  More info: https://pkg.go.dev/vuln/GO-2026-6355
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: golang.org/x/crypto@v0.56.0
+
+Vulnerability #2: GO-2026-6354
+    Prevent DoS on deadlocked undecided channel in golang.org/x/crypto/ssh
+  More info: https://pkg.go.dev/vuln/GO-2026-6354
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: golang.org/x/crypto@v0.56.0
+
+Vulnerability #3: GO-2026-6303
+    Source-address critical option not enforced for non-public-key auth
+    callbacks in golang.org/x/crypto/ssh
+  More info: https://pkg.go.dev/vuln/GO-2026-6303
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: golang.org/x/crypto@v0.55.0
+
+Vulnerability #4: GO-2026-5932
+    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,
+    and has known security issues
+  More info: https://pkg.go.dev/vuln/GO-2026-5932
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.54.0
+    Fixed in: N/A
+
+Your code is affected by 3 vulnerabilities from 3 modules.
+This scan also found 5 vulnerabilities in packages you import and 4
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -155,6 +156,11 @@ func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeTy
 		return nil, nil
 	}
 	job, err := scanJob(rows)
+	// The fingerprint backfill below is a WRITE. Close the result set first: pgx
+	// allows only one in-flight statement per connection, and on a *dbtx.Pool
+	// bound to the request transaction both statements share one connection, so
+	// the UPDATE would fail with "conn busy".
+	rows.Close()
 	if err == nil && job.RequestFingerprint == "" {
 		_, _ = s.Pool.Exec(ctx, "UPDATE download_jobs SET request_fingerprint=$2 WHERE id=$1 AND request_fingerprint IS NULL", job.ID, fingerprint)
 		job.RequestFingerprint = fingerprint
@@ -174,21 +180,54 @@ func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, erro
 	return scanJob(rows)
 }
 
+// ListJobs 返回全局任务列表（下载引擎/后台对账使用，不面向 HTTP 请求）。
+//
+// HTTP 读取路径必须使用 ListJobsScoped：旧版 GET /api/v1/download-jobs 直接调用
+// 本函数，把**所有组织**的任务连同 organization_id / workspace_id 一起返回，
+// 是 P0 越权读取的一部分。
 func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) ([]model.DownloadJob, error) {
+	return s.listJobs(ctx, "", "", status, limit, offset)
+}
+
+// ListJobsScoped 按租户作用域列出任务。wsID 为空表示该组织下全部工作区。
+func (s *Store) ListJobsScoped(ctx context.Context, orgID, wsID, status string, limit, offset int) ([]model.DownloadJob, error) {
+	return s.listJobs(ctx, orgID, wsID, status, limit, offset)
+}
+
+func (s *Store) listJobs(ctx context.Context, orgID, wsID, status string, limit, offset int) ([]model.DownloadJob, error) {
 	q := "SELECT j.id, j.job_no, j.status, j.priority, j.source, j.mode, j.requested_mode, j.effective_mode, j.mode_reason, j.mode_changed_at, j.chain, j.range_type, j.from_block, j.to_block, " +
 		"j.from_timestamp, j.to_timestamp, j.datasets, j.reuse_policy, j.head_block, j.created_by, j.error, j.stats, " +
 		"j.organization_id, j.workspace_id, j.project_id, j.resolved_at, j.created_at, j.updated_at, " +
 		"COALESCE(SUM(sh.downloaded_rows) FILTER (WHERE " + EffectiveShardSQL("sh") + "),0), " +
 		"COUNT(sh.id) FILTER (WHERE " + EffectiveShardSQL("sh") + "), " +
-		"COUNT(sh.id) FILTER (WHERE sh.status='COMPLETED' AND " + EffectiveShardSQL("sh") + "), " +
+		"COUNT(sh.id) FILTER (WHERE sh.status='COMPLETED' AND " + EffectiveShardSQL("sh") + ") , " +
 		"COALESCE(u.req,0), COALESCE(u.cost,0) " +
 		"FROM download_jobs j " +
 		"LEFT JOIN download_shards sh ON sh.job_id = j.id " +
 		"LEFT JOIN (SELECT job_id, COUNT(*) AS req, COALESCE(SUM(estimated_cost_usd),0) AS cost FROM provider_usage WHERE usage_type<>'trc20_enrichment_summary' GROUP BY job_id) u ON u.job_id = j.id "
 	args := []any{}
+	conds := []string{}
+	if orgID != "" {
+		// [FIX 2026-09-13] 原实现两处缺陷：
+		//   1) j.organization_id=$1 与 j.workspace_id::text=$1 让同一参数同时处于 uuid / text 上下文，
+		//      PG 报 SQLSTATE 42883 "operator does not exist: text = uuid" → /api/v1/download-jobs 500；
+		//   2) 第二处引用的是 orgID 的序号（$1），即使消除类型冲突也会留下"workspace 比 org"的**静默语义错误**。
+		// 现改为：各自使用**独立且自增的参数序号**，列与参数两侧都显式 uuid 比较（不对索引列整体 ::text，
+		// 保持 organization_id / workspace_id 上索引可用）；workspace 为空时**不追加条件**，
+		// 由调用方（tenantScopeOr401 解析出的 scope）决定这是否合法的"组织级"范围。
+		conds = append(conds, "j.organization_id=$"+fmt.Sprint(len(args)+1)+"::uuid")
+		args = append(args, orgID)
+		if wsID != "" {
+			conds = append(conds, "j.workspace_id=$"+fmt.Sprint(len(args)+1)+"::uuid")
+			args = append(args, wsID)
+		}
+	}
 	if status != "" {
-		q += " WHERE j.status=$1"
+		conds = append(conds, "j.status=$"+fmt.Sprint(len(args)+1))
 		args = append(args, status)
+	}
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
 	}
 	q += " GROUP BY j.id, u.req, u.cost ORDER BY j.created_at DESC LIMIT $" + fmt.Sprint(len(args)+1) + " OFFSET $" + fmt.Sprint(len(args)+2)
 	args = append(args, limit, offset)
@@ -760,33 +799,38 @@ func (s *Store) ResetExpiredLeases(ctx context.Context, before time.Time) (int64
 }
 
 // RecomputeDataset 汇总 Shard 得到 Dataset 进度。
+//
+// 终态必须可达：所有有效 Shard 都进入终态（COMPLETED / FAILED_FINAL /
+// CANCELLED）但并非全部成功时，数据集判定为 FAILED —— 否则一个只有
+// FAILED_FINAL Shard 的数据集会永远停在 RUNNING，任务永远无法收敛
+// （2026-09-15 DL-20260915-0007 现场：25 个 bsc internal_transactions
+// 数据集永久 RUNNING，任务卡在 93%）。
 func (s *Store) RecomputeDataset(ctx context.Context, datasetID string) error {
-	var completed, total int64
+	var completed, terminal, total int64
 	var rows int64
 	err := s.Pool.QueryRow(ctx, "SELECT COUNT(*) FILTER (WHERE status='COMPLETED' AND "+EffectiveShardSQL("")+"), "+
+		"COUNT(*) FILTER (WHERE status IN ('COMPLETED','FAILED_FINAL','CANCELLED') AND "+EffectiveShardSQL("")+"), "+
 		"COUNT(*) FILTER (WHERE "+EffectiveShardSQL("")+"), "+
 		"COALESCE(SUM(downloaded_rows) FILTER (WHERE "+EffectiveShardSQL("")+"),0) "+
 		"FROM download_shards WHERE dataset_id=$1", datasetID).
-		Scan(&completed, &total, &rows)
+		Scan(&completed, &terminal, &total, &rows)
 	if err != nil {
 		return err
 	}
-	var status string
-	switch {
-	case total == 0:
-		status = model.ItemPending
-	case completed == total:
-		status = model.ItemCompleted
-	default:
-		status = model.ItemRunning
-	}
+	status := datasetStatusForTerminal(completed, terminal, total)
 	var progress float32
 	if total > 0 {
 		progress = float32(completed) / float32(total)
 	}
-	stats, _ := json.Marshal(map[string]any{"downloaded_rows": rows})
+	extra := map[string]any{"downloaded_rows": rows}
+	if status == model.ItemFailed {
+		var reason string
+		_ = s.Pool.QueryRow(ctx, "SELECT COALESCE(MAX(error),'') FROM download_shards WHERE dataset_id=$1 AND status IN ('FAILED_FINAL','CANCELLED')", datasetID).Scan(&reason)
+		extra["failure_reason"] = reason
+	}
+	stats, _ := json.Marshal(extra)
 	// V1.2：合并而不是覆盖 —— download_datasets.stats 同时承载 Count 预估/决策与 actuals 回写
-	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=CASE WHEN status IN ('WAITING_USER_CONFIRMATION','ABORTED_BY_USER') THEN status ELSE $2 END, progress=$3, "+
+	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=CASE WHEN status IN ('WAITING_USER_CONFIRMATION','ABORTED_BY_USER','SKIPPED') THEN status ELSE $2 END, progress=$3, "+
 		"stats = COALESCE(stats,'{}'::jsonb) || $4::jsonb, updated_at=now() WHERE id=$1",
 		datasetID, status, progress, stats)
 	if err != nil {
@@ -807,7 +851,7 @@ func (s *Store) RecomputeSubject(ctx context.Context, subjectID string) error {
 	defer rows.Close()
 	var totalW float64
 	var sum float64
-	var done, all int
+	var done, terminal, all int
 	anyFailed := false
 	for rows.Next() {
 		var status string
@@ -821,6 +865,9 @@ func (s *Store) RecomputeSubject(ctx context.Context, subjectID string) error {
 		if status == model.ItemCompleted || status == model.ItemSkipped {
 			done++
 		}
+		if status == model.ItemCompleted || status == model.ItemSkipped || status == model.ItemFailed {
+			terminal++
+		}
 		if status == model.ItemFailed {
 			anyFailed = true
 		}
@@ -828,15 +875,7 @@ func (s *Store) RecomputeSubject(ctx context.Context, subjectID string) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	status := model.ItemPending
-	switch {
-	case all > 0 && done == all && !anyFailed:
-		status = model.ItemCompleted
-	case anyFailed && done == all:
-		status = model.ItemFailed
-	default:
-		status = model.ItemRunning
-	}
+	status := subjectStatusForTerminal(all, done, terminal, anyFailed)
 	var progress float32
 	if totalW > 0 {
 		progress = float32(sum / totalW)
@@ -855,7 +894,7 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	defer rows.Close()
 	var sum float64
 	var n int
-	var done, all int
+	var done, terminal, all int
 	anyFailed := false
 	for rows.Next() {
 		var status string
@@ -869,6 +908,9 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 		if status == model.ItemCompleted || status == model.ItemSkipped {
 			done++
 		}
+		if status == model.ItemCompleted || status == model.ItemSkipped || status == model.ItemFailed {
+			terminal++
+		}
 		if status == model.ItemFailed {
 			anyFailed = true
 		}
@@ -880,17 +922,7 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	if n > 0 {
 		progress = float32(sum / float64(n))
 	}
-	var status string
-	switch {
-	case all > 0 && done == all && !anyFailed:
-		status = model.JobCompleted
-	case all > 0 && done == all && anyFailed:
-		status = model.JobPartialFailed
-	case n > 0:
-		status = model.JobRunning
-	default:
-		status = model.JobQueued
-	}
+	status := jobStatusForTerminal(all, done, terminal, anyFailed, n, progress)
 	var jobStatus string
 	err = s.Pool.QueryRow(ctx, "SELECT status FROM download_jobs WHERE id=$1", jobID).Scan(&jobStatus)
 	if err != nil {
@@ -900,7 +932,7 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	// Tail 加速会把父 Shard 标记为 superseded；若任务先进入终态再调用
 	// RecomputeJob，旧的 stats.progress 可能停留在 6/7（85.71%），而实际
 	// 有效集合已经是 6/6。同步 total/done/progress，避免 UI 显示假性卡住。
-	if jobStatus == model.JobCompleted || jobStatus == model.JobPartialFailed {
+	if jobStatus == model.JobCompleted || jobStatus == model.JobPartialFailed || jobStatus == model.JobFailed {
 		var shardTotal, shardDone int64
 		if err := s.Pool.QueryRow(ctx,
 			"SELECT COUNT(*) FILTER (WHERE "+EffectiveShardSQL("")+"), COUNT(*) FILTER (WHERE status='COMPLETED' AND "+EffectiveShardSQL("")+") FROM download_shards WHERE job_id=$1",
@@ -922,7 +954,7 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 	case model.JobCompleted, model.JobPartialFailed, model.JobFailed, model.JobCancelled, model.JobAbortedByUser, model.JobWaitingUserConfirmation, model.JobPaused, model.JobPauseReq:
 		return progress, nil
 	}
-	if status == model.JobCompleted || status == model.JobPartialFailed {
+	if status == model.JobCompleted || status == model.JobPartialFailed || status == model.JobFailed {
 		// Persist the authoritative effective-shard totals in the same update that
 		// moves the job to a terminal state. Without this, the last progress sample
 		// can remain at 99/100 even though all shards are already completed.
@@ -948,4 +980,52 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 		return progress, err
 	}
 	return progress, nil
+}
+
+// 终态收敛判定（纯函数，便于单测）。
+//
+// 规则：只要所有有效 Shard 都进入终态（COMPLETED / FAILED_FINAL /
+// CANCELLED），数据集/地址/任务就必须收敛，而不是无限期停在 RUNNING。
+// 2026-09-15 现场：bsc internal_transactions 的 Shard 全部 FAILED_FINAL，
+// 数据集永远 RUNNING，DL-20260915-0007/0008/0009 三个任务永远不结束。
+func datasetStatusForTerminal(completed, terminal, total int64) string {
+	switch {
+	case total == 0:
+		return model.ItemPending
+	case completed == total:
+		return model.ItemCompleted
+	case terminal == total:
+		return model.ItemFailed
+	default:
+		return model.ItemRunning
+	}
+}
+
+func subjectStatusForTerminal(all, done, terminal int, anyFailed bool) string {
+	switch {
+	case all > 0 && done == all && !anyFailed:
+		return model.ItemCompleted
+	case all > 0 && terminal == all && anyFailed:
+		return model.ItemFailed
+	default:
+		return model.ItemRunning
+	}
+}
+
+// progress 参与判定：部分地址虽然"有失败数据集"（例如某个 dataset 在当前链上
+// 不可用），但整体已经产出了数据时，任务是 PARTIAL_FAILED 而不是 FAILED —— 
+// DL-20260915-0007 完成了 75/100 个数据集，把整单报成 FAILED 会误导用户。
+func jobStatusForTerminal(all, done, terminal int, anyFailed bool, subjects int, progress float32) string {
+	switch {
+	case all > 0 && done == all && !anyFailed:
+		return model.JobCompleted
+	case all > 0 && terminal == all && anyFailed && (done > 0 || progress > 0):
+		return model.JobPartialFailed
+	case all > 0 && terminal == all && anyFailed:
+		return model.JobFailed
+	case subjects > 0:
+		return model.JobRunning
+	default:
+		return model.JobQueued
+	}
 }

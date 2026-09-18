@@ -19,15 +19,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
+	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
@@ -241,7 +242,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 type actionAuth struct {
 	hashes  [][32]byte
 	limit   int
-	pool    *pgxpool.Pool
+	pool    *dbtx.Pool
 	mu      sync.Mutex
 	windows map[[32]byte]struct {
 		minute int64
@@ -249,7 +250,7 @@ type actionAuth struct {
 	}
 }
 
-func newActionAuth(pool *pgxpool.Pool) *actionAuth {
+func newActionAuth(pool *dbtx.Pool) *actionAuth {
 	keys := strings.Split(os.Getenv("GPT_ACTIONS_API_KEYS"), ",")
 	if len(keys) == 1 && strings.TrimSpace(keys[0]) == "" {
 		keys = []string{os.Getenv("GPT_ACTIONS_API_KEY")}
@@ -474,7 +475,14 @@ func (s *Server) handleActionEnsureData(w http.ResponseWriter, r *http.Request) 
 	if req.PerformanceMode == "" {
 		req.PerformanceMode = "fast"
 	}
-	resp, e := s.svc.Ensure(r.Context(), dataset.EnsureRequest{Source: "chatgpt_mcp", Priority: 90, PerformanceMode: req.PerformanceMode, Subjects: req.Addresses, Chain: req.Chain, Datasets: req.Datasets, Range: req.Range, ReusePolicy: "prefer_local", CaseName: "ChatGPT MCP", Tags: []string{"ai-managed", "chatgpt-mcp"}, CreateMissingMeta: true})
+	// Actions 的下载任务同样必须带租户作用域：留空会退化成 DefaultOrgWorkspace，
+	// 让 API Key 表面写进一个它并未显式绑定的组织。
+	scope, scopeErr := s.systemScope(r.Context())
+	if scopeErr != nil {
+		actionFail(w, 500, "INTERNAL_ERROR", "Unable to resolve Actions workspace")
+		return
+	}
+	resp, e := s.svc.Ensure(r.Context(), dataset.EnsureRequest{Source: "chatgpt_mcp", Priority: 90, PerformanceMode: req.PerformanceMode, Subjects: req.Addresses, Chain: req.Chain, Datasets: req.Datasets, Range: req.Range, ReusePolicy: "prefer_local", CaseName: "ChatGPT MCP", Tags: []string{"ai-managed", "chatgpt-mcp"}, CreateMissingMeta: true, OrganizationID: scope.OrganizationID, WorkspaceID: scope.WorkspaceID})
 	if e != nil {
 		actionFail(w, 400, "DOWNLOAD_PLAN_FAILED", e.Error())
 		return
@@ -558,6 +566,12 @@ func (s *Server) handleCreateActionKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.RateLimit <= 0 {
 		req.RateLimit = 300
+	}
+	// S7 修复（DEF-01）：省略 allowed_ips 时切片为 nil，pgx 会把 nil 切片编码为 NULL，
+	// 而 gpt_action_api_keys.allowed_ips 是 NOT NULL，导致"字段可省略"的契约实际返回 500。
+	// 这里显式归一为空数组：省略 = 不限制来源 IP。
+	if req.AllowedIPs == nil {
+		req.AllowedIPs = []string{}
 	}
 	secretBytes := make([]byte, 32)
 	if _, err := rand.Read(secretBytes); err != nil {
@@ -919,6 +933,23 @@ func (s *Server) handleActionFlowSummary(w http.ResponseWriter, r *http.Request)
 	}
 	o, e := s.query.ActionFlowSummary(r.Context(), f.Chain, f.Address, f.Token, f.TokenContract, f.StartTime, f.EndTime)
 	if e != nil {
+		// The underlying cause was previously swallowed by the blanket 500, so a
+		// server refusal and a code defect looked identical in the log.
+		if s.deps.Log != nil {
+			s.deps.Log.Error("action flow summary query failed", "chain", f.Chain, "address", f.Address, "err", e)
+		}
+		// A scan refused on its own bounded budget is reported with a diagnosable
+		// code and a retryable status, so a timeout or a Code 241 is no longer
+		// indistinguishable from a code defect. The caller can act on it by
+		// narrowing start_time and end_time; anything else stays a 500.
+		switch {
+		case errors.Is(e, clickhouse.ErrScanTooLarge):
+			actionFail(w, http.StatusServiceUnavailable, "SCAN_TOO_LARGE", "The flow aggregate exceeds the bounded ClickHouse scan budget; narrow it with start_time and end_time")
+			return
+		case errors.Is(e, clickhouse.ErrScanTimeout):
+			actionFail(w, http.StatusServiceUnavailable, "SCAN_TIMEOUT", "The flow aggregate exceeded the bounded ClickHouse scan time; narrow it with start_time and end_time")
+			return
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to aggregate flow")
 		return
 	}
@@ -1414,11 +1445,14 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	}
 	zipIt := req.Format == "csv" || len(req.DataTypes) > 1
 	snapshot, _ := json.Marshal(map[string]any{"chain": c, "addresses": []string{req.Address}, "datasets": req.DataTypes, "format": req.Format, "compression": req.Compression, "token": req.Token, "token_contract": req.TokenContract, "start_time": req.StartTime, "end_time": req.EndTime})
-	orgID, wsID, workspaceErr := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	// GPT Actions 走独立的 Bearer API Key，不产生 session 主体，因此使用
+	// systemScope 显式解析平台数据面的租户绑定（见 objectaccess.go 的说明）。
+	scope, workspaceErr := s.systemScope(r.Context())
 	if workspaceErr != nil {
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to resolve export workspace")
 		return
 	}
+	orgID, wsID := scope.OrganizationID, scope.WorkspaceID
 	exp, e := s.deps.Store.CreateExportV2(r.Context(), wsID, orgID, nil, nil, strings.Join(req.DataTypes, "+"), req.Format, zipIt, snapshot)
 	if e != nil {
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to create export")
@@ -1428,13 +1462,37 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	if req.StartTime != nil || req.EndTime != nil || req.Token != "" || req.TokenContract != "" {
 		boundsJob = &model.DownloadJob{RangeType: "time", FromTimestamp: req.StartTime, ToTimestamp: req.EndTime, Status: model.JobCompleted, Stats: map[string]any{"gpt_actions_token_filter": strings.ToUpper(strings.TrimSpace(req.Token)), "gpt_actions_token_contract_filter": strings.TrimSpace(req.TokenContract)}}
 	}
-	go s.runExportMulti(context.Background(), exp, boundsJob, c, []string{req.Address}, req.DataTypes, req.Format, true, zipIt, false)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, boundsJob, c, []string{req.Address}, req.DataTypes, req.Format, true, zipIt, false)
 	writeJSON(w, http.StatusAccepted, actionEnvelope{Success: true, Data: map[string]any{"job_id": exp.ID, "status": "processing"}, Meta: map[string]any{}})
 }
+
+// handleActionExportStatus 返回 Actions 自己创建的导出状态。
+//
+// P0 修复（Actions 侧越权读取）：旧实现只要 job_id 是一个合法 UUID，就返回
+// **任意**导出的元数据，并在 COMPLETED 时签发下载票据 —— 也就是说一个
+// "export" scope 的 API Key 可以读取任何组织创建的导出（靠 UUID 不可枚举性兜底，
+// 不构成授权）。这里把可读范围收窄到本 Actions 平台作用域内的导出，
+// 越界仍返回 404（不泄露存在性），API Key 契约（路径/字段/状态码语义）保持不变。
 func (s *Server) handleActionExportStatus(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("job_id"))
 	if _, e := uuid.Parse(id); e != nil {
 		actionFail(w, 400, "JOB_NOT_FOUND", "Invalid job_id")
+		return
+	}
+	scope, scopeErr := s.systemScope(r.Context())
+	if scopeErr != nil {
+		actionFail(w, 500, "INTERNAL_ERROR", "Unable to resolve Actions workspace")
+		return
+	}
+	var exportOrg, exportWS string
+	if e := s.deps.Store.Pool.QueryRow(r.Context(),
+		`SELECT COALESCE(organization_id::text,''), COALESCE(workspace_id::text,'') FROM exports WHERE id=$1`, id).
+		Scan(&exportOrg, &exportWS); e != nil {
+		actionFail(w, 404, "JOB_NOT_FOUND", "Export job not found")
+		return
+	}
+	if exportOrg != scope.OrganizationID || exportWS != scope.WorkspaceID {
+		actionFail(w, 404, "JOB_NOT_FOUND", "Export job not found")
 		return
 	}
 	exp, e := s.deps.Store.GetExport(r.Context(), id)
@@ -1448,9 +1506,8 @@ func (s *Server) handleActionExportStatus(w http.ResponseWriter, r *http.Request
 	}
 	data := map[string]any{"job_id": exp.ID, "status": strings.ToLower(exp.Status), "total_rows": exp.Rows, "row_count": exp.Rows, "format": exp.Format, "compression": nil, "files": []any{}, "manifest_url": nil, "download_url": nil, "sha256": nil, "expires_at": nil}
 	if exp.Status == "COMPLETED" {
-		orgID, wsID, resolveErr := s.deps.Store.DefaultOrgWorkspace(r.Context())
-		if resolveErr == nil {
-			ticketID, ticketErr := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, orgID, wsID, 15*time.Minute)
+		// 票据绑定到导出对象自己的租户归属（上面已校验它与 Actions 作用域一致）。
+		if ticketID, ticketErr := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, exportOrg, exportWS, 15*time.Minute); ticketErr == nil {
 			if ticketErr == nil {
 				scheme := r.Header.Get("X-Forwarded-Proto")
 				if scheme == "" {

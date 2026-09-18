@@ -78,6 +78,25 @@ func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
 		return false
 	}
 	if total == 0 || ingested < total {
+		// 不可恢复页判定：存在 FAILED_FINAL 页且没有任何仍可重放的页 =>
+		// 这个 Shard 永远不会再进展。继续等待只会让任务永久卡住，因此把它
+		// 收敛为 FAILED_FINAL（非重试），由 Dataset 层记录失败原因。
+		if total > 0 {
+			if _, pending, permanent, lastErr, serr := sc.store.PageIngestSummary(ctx, sh.ID); serr == nil && permanent > 0 && pending == 0 {
+				reason := "ingest unrecoverable: " + lastErr
+				if _, ferr := sc.store.FailShard(ctx, sh.ID, reason, false); ferr != nil {
+					sc.log.Error("terminal shard fail failed", "shard_id", sh.ID, "err", ferr)
+				} else {
+					sc.log.Warn("shard finalized as failed", "shard_id", sh.ID, "job_id", sh.JobID,
+						"dataset", sh.Dataset, "permanent_pages", permanent, "reason", reason)
+					sc.publish("events.shards."+sh.JobID, map[string]any{
+						"type": "shard_status", "shard_id": sh.ID, "status": model.ShardFailedFinal,
+						"error": reason, "ts": time.Now(),
+					})
+				}
+				return false
+			}
+		}
 		// Fetch 未完成或仍有页面在 Ingest → 等待（§62）
 		if sh.Status == model.ShardFetched || sh.Status == model.ShardIngested {
 			now := time.Now()
@@ -186,7 +205,7 @@ func (sc *Scheduler) recomputeFinalizedBatch(ctx context.Context, shards []model
 		if sc.meta != nil {
 			if job, err := sc.store.GetJob(ctx, sh.JobID); err == nil {
 				address := sc.subjectAddress(ctx, id)
-				if err := sc.meta.SyncFromCoverage(ctx, job.Chain, address, "current"); err != nil {
+				if err := sc.meta.SyncFromCoverage(ctx, jobOrgID(job), jobWorkspaceID(job), job.Chain, address, "current"); err != nil {
 					sc.log.Error("workspace address stats sync failed", "job_id", sh.JobID, "subject", address, "err", err)
 				}
 			}

@@ -1,0 +1,728 @@
+{
+  "evidence_id": "security-evidence-20260912T223257Z",
+  "generated_utc": "2026-09-12T22:56:13.301Z",
+  "collection_window_utc": {
+    "start": "2026-09-12T22:32:57Z",
+    "end": "2026-09-12T23:00:12Z",
+    "end_basis": "Actual completion of the final collection command (remote sha256sum -c verification of the backend SBOM files and the matching local Get-FileHash). NOT a pre-filled forecast."
+  },
+  "collector_scope": "EVIDENCE COLLECTION ONLY — no source modification, no dependency upgrade, no deployment, no service restart.",
+  "not_a_clearance": true,
+  "not_a_clearance_reason": "This report delivers raw, reproducible measurements. It does NOT constitute a release-gate clearance. The severity counts are reported exactly as measured and are NOT adjusted toward any target, and the unresolved items below remain unresolved until remediation, re-scan and functional regression are actually performed by the main session.",
+  "evidence_root": {
+    "windows": "E:\\Code\\远程虚拟机\\harness\\blockchain-platform\\acceptance-evidence\\dual-system-v1\\sprint7\\security-evidence-20260912T223257Z",
+    "vm": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z",
+    "per_file_verification": "98 of 100 files byte-identical against the VM-generated SHA256SUMS.vm.txt; 0 mismatches. 2 files (sbom/backend.cdx.json, sbom/backend.spdx.json, ~26 MB) intentionally remain VM-resident with recorded sha256.",
+    "tarball_sha256": [
+      "60089d7a475853af2a90d97a22ea265e42e30b841b8b35cb122454d70af2dcea",
+      "cfb6f86b0a695f2f0c59629cce454c209ff40e44367f85ad6cb3936d6c1c9f84"
+    ]
+  },
+  "primary_gate": {
+    "source": "docs/dual-system-development-plan.md:1859",
+    "text": "P0/P1 漏洞为 0",
+    "verdict": "FAIL"
+  },
+  "priority_mapping": {
+    "convention": {
+      "P0": "CRITICAL",
+      "P1": "HIGH",
+      "P2": "MODERATE",
+      "P3": "LOW"
+    },
+    "provenance": "REPORT CONVENTION — the plan defines no severity-to-priority table. Stated explicitly so counts stay auditable.",
+    "counted_separately": true,
+    "merged_into_zero_claim": false
+  },
+  "dimensions": [
+    {
+      "id": "dependencies",
+      "name": "依赖漏洞（前端 pnpm / 后端 Go）",
+      "verdict": "FAIL",
+      "headline": "P0 = 2, P1 = 5, counted separately. The gate requires 0.",
+      "measured": {
+        "P0_critical": 2,
+        "P1_high": 5,
+        "P2_moderate": 3,
+        "P3_low": 1,
+        "unrated_unknown": 4,
+        "total_distinct": 15,
+        "frontend": {
+          "P0": 0,
+          "P1": 2,
+          "P2": 1,
+          "P3": 0,
+          "unrated": 0,
+          "total": 3,
+          "dependencies_audited": 175
+        },
+        "backend": {
+          "P0": 2,
+          "P1": 3,
+          "P2": 2,
+          "P3": 1,
+          "unrated": 4,
+          "total": 12,
+          "modules": 159
+        },
+        "P0_packages": [
+          "github.com/jackc/pgx/v5 v5.7.4 — GO-2026-4771, GO-2026-4772"
+        ],
+        "P1_packages": [
+          "github.com/xuri/excelize/v2 v2.9.0 — GO-2026-5960 (symbol-reachable)",
+          "github.com/go-chi/chi/v5 v5.2.1 — GO-2026-5775, GO-2026-5777",
+          "xlsx 0.18.5 — GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9 (NO FIX ON NPM)"
+        ]
+      },
+      "scanners": [
+        {
+          "tool": "pnpm audit",
+          "version": "pnpm 11.24.0 / node v24.20.0",
+          "registry": "https://registry.npmjs.org (per-command override; no .npmrc changed)",
+          "exit_code": 1,
+          "exit_meaning": "vulnerabilities found",
+          "artifact": "deps/official-registry-pnpm-audit.json",
+          "artifact_bytes": 2165
+        },
+        {
+          "tool": "govulncheck",
+          "version": "v1.8.0",
+          "db": "https://vuln.go.dev",
+          "db_last_modified": "2026-09-10T14:48:42Z",
+          "scan_level": "symbol",
+          "exit_codes": "text=3, json=0",
+          "artifact": "deps/govulncheck.json",
+          "artifact_bytes": 731940
+        },
+        {
+          "tool": "OSV API for severity",
+          "version": "api.osv.dev v1",
+          "note": "vuln.go.dev Go records carry no severity; severity resolved via GHSA aliases",
+          "artifact": "deps/osv-severity-table.json"
+        }
+      ],
+      "preserved_failure_evidence": {
+        "artifact": "deps/windows-host/pnpm-audit.json and deps/windows-attempt1-npmmirror-FAILED-pnpm-audit.json",
+        "bytes": 192,
+        "sha256": "4b7bccb843bdbb045a531327caa65951450dbaa041611ae82f3e928fedccf9d6",
+        "content": "ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS",
+        "note": "Kept verbatim as failure evidence. Its zeros are NOT a zero-vulnerability result."
+      },
+      "not_verified": [
+        {
+          "id": "NV-D1",
+          "item": "Second independent frontend advisory scanner",
+          "reason": "only pnpm audit covered npm advisories",
+          "commands_tried": "none — no second scanner installed",
+          "action": "run osv-scanner or trivy fs on the frontend and reconcile"
+        },
+        {
+          "id": "NV-D2",
+          "item": "Severity of 4 golang.org/x/crypto advisories",
+          "reason": "neither vuln.go.dev nor OSV/GHSA publishes a severity for GO-2026-5932/6303/6354/6355; recorded UNKNOWN rather than guessed",
+          "commands_tried": "api.osv.dev/v1/vulns/GO-2026-*; /GHSA-* (no alias); /CVE-2026-56854 (HTTP 404)",
+          "action": "manual CVSS review from upstream CVE records"
+        },
+        {
+          "id": "NV-D3",
+          "item": "Bundle-level reachability of the 2 xlsx HIGH advisories",
+          "reason": "xlsx is dynamically imported; no call-graph analysis was run",
+          "action": "bundle call-graph check"
+        }
+      ],
+      "to_close": [
+        "pgx/v5 v5.7.4 -> >= v5.9.2 (clears 2 P0 + 1 P3)",
+        "chi/v5 v5.2.1 -> >= v5.3.0 (clears 3 P1 + 1 P2)",
+        "xuri/excelize/v2 v2.9.0 -> >= v2.11.0 (clears the only symbol-reachable P1)",
+        "xlsx 0.18.5 — STATUS: OPEN / NOT CLOSED. Two HIGH advisories with no npm fix. A mere written owner risk decision does NOT close this and must NOT be counted as P1=0. Closure requires either (a) replacing the library, or (b) adopting the official SheetJS distribution package with a verifiable source plus integrity verification (hash/signature), AND a real export functional regression (actual CSV / XLSX / JSONL export test cases) proving the export path still works.",
+        "echarts 5.6.0 -> >= 6.1.0 (clears 1 P2)",
+        "re-run this directory's commands after landing the above"
+      ],
+      "remediation_gate": {
+        "rule": "A tool exit code of 0, and the absence of an upstream fix version, are both NOT evidence that the security gate passes.",
+        "still_exploitable_highs_may_not_be_waived": "The two xlsx HIGH advisories remain genuinely exploitable as long as the vulnerable library ships in the frontend bundle. They stay OPEN until code actually changes and regression passes.",
+        "closure_evidence_required": [
+          "library replaced OR official distribution package adopted",
+          "source provenance (publisher + channel)",
+          "integrity verification (hash and/or signature)",
+          "real export functional regression across CSV / XLSX / JSONL",
+          "re-scan showing the advisories are gone"
+        ]
+      }
+    },
+    {
+      "id": "sbom",
+      "name": "SBOM",
+      "verdict": "PASS_WITH_CAVEATS",
+      "measured": {
+        "tool": "syft 1.51.1",
+        "tool_digest": "sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c",
+        "formats": [
+          "CycloneDX 1.7",
+          "SPDX-2.3"
+        ],
+        "frontend_components": 176,
+        "backend_sbom_generated": true,
+        "deploy_components": 0,
+        "exit_codes": "all 0"
+      },
+      "not_verified": [
+        {
+          "id": "NV-S2",
+          "item": "deploy.cdx.json meaningful content",
+          "reason": "syft reports 0 components for pure config directories — 0 components is NOT '0 findings'",
+          "action": "use a config-aware SBOM tool if a build-configuration SBOM is required"
+        },
+        {
+          "id": "NV-S3",
+          "item": "The corrected production SBOM was not CVE-matched",
+          "reason": "backend-prod.cdx.json (190 components, current production binaries only) was generated but no grype / trivy sbom run was performed against it",
+          "commands_tried": "none",
+          "action": "run grype or 'trivy sbom' over sbom/backend-prod.cdx.json and sbom/frontend.cdx.json"
+        }
+      ],
+      "resolved": [
+        {
+          "id": "NV-S1 (WITHDRAWN)",
+          "item": "backend.cdx.json / backend.spdx.json absent from the Windows tree",
+          "resolution": "WITHDRAWN — the claim that ~26 MB exceeded the transfer sandbox was wrong. The system 'scp -o BatchMode=yes' channel works passwordless: both files were copied into this evidence directory and verified byte-identical (sizes 10,839,209 / 15,737,827; Windows Get-FileHash == remote sha256sum == big-artifacts.sha256.txt; remote 'sha256sum -c' returned OK). Full record: sbom/backend-sbom-verification.md.",
+          "lesson": "sftp_download's '/workspace' restriction is a tool-parameter limit, not a host capability limit; scp was available all along."
+        }
+      ],
+      "critical_method_finding": {
+        "problem": "The first backend SBOM was generated by scanning the whole backend/ directory and is CONTAMINATED by historical build artifacts.",
+        "raw_components": 10003,
+        "collector": "go-module-binary-cataloger matched 9,744 components (i.e. almost everything came from packaged binaries, not the module manifest)",
+        "source_path_breakdown": {
+          "/bin (about 170 api.bak-* / worker.bak-* historical binaries)": 9327,
+          "/.rollback": 286,
+          "/bin.next": 131,
+          "/go.mod (the real dependency manifest)": 55
+        },
+        "metadata_component": "{\"type\":\"file\",\"name\":\"/w\"} — no name and no version, unusable as a release artifact identity",
+        "verdict": "backend.cdx.json / backend.spdx.json describe the entire backend working directory including history and must NOT be used as production dependency evidence.",
+        "corrected_artifact": "sbom/backend-prod.cdx.json / backend-prod.spdx.json — 190 components (186 library + 4 file), sourced only from /api (55), /go.mod (55), /worker (44), /migrate (32)",
+        "cross_check": "go version -m on the three RUNNING production binaries (api e0a7c3bd…, worker 9c41079d…, migrate ab10efe3…) reports go1.26.7 with chi/v5 v5.2.1, pgx/v5 v5.7.4, excelize/v2 v2.9.0, x/crypto v0.54.0 — exactly matching the govulncheck findings, proving the corrected SBOM reflects the current production build and not a cache or historical artifact.",
+        "note": "excelize/v2 appears only in api, not in worker or migrate — consistent with excelize being used solely for export."
+      }
+    },
+    {
+      "id": "images",
+      "name": "容器镜像引用形态 / tag 可变性 / digest / 严重度",
+      "verdict": "FAIL",
+      "headline": "The deployment does NOT satisfy plan §29.1 (immutable images usable as release evidence). compose pins no digests, and no registry-verifiable manifest digest exists on this host.",
+      "measured": {
+        "in_scope_totals": {
+          "CRITICAL": 20,
+          "HIGH": 203,
+          "MEDIUM": 331,
+          "LOW": 201,
+          "UNKNOWN": 8,
+          "TOTAL": 763,
+          "images": 4,
+          "findings_with_no_fix": 83
+        },
+        "reproduces_prior_round": true,
+        "compose_pins_digest": false,
+        "compose_sha256_pin_occurrences": 0,
+        "compose_image_lines": [
+          "compose.yaml:3 image: postgres:18",
+          "compose.yaml:20 image: clickhouse/clickhouse-server:26.7",
+          "compose.yaml:43 image: minio/minio:latest",
+          "compose.yaml:56 image: nats:2-alpine"
+        ],
+        "images_pinned_by_digest": 0,
+        "images_referenced_by_repointable_tag": 5,
+        "per_image": [
+          {
+            "ref": "postgres:18",
+            "container": "deploy-postgres-1",
+            "reference_form": "tag",
+            "tag_is_repointable": true,
+            "has_referenceable_repo_digest": false,
+            "image_id_config_digest": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+            "repodigest_equals_config_digest": true,
+            "floating_latest": false,
+            "counts": {
+              "C": 14,
+              "H": 101,
+              "M": 154,
+              "L": 143,
+              "U": 3,
+              "total": 415,
+              "no_fix": 56
+            }
+          },
+          {
+            "ref": "clickhouse/clickhouse-server:26.7",
+            "container": "deploy-clickhouse-1",
+            "reference_form": "tag",
+            "tag_is_repointable": true,
+            "has_referenceable_repo_digest": false,
+            "image_id_config_digest": "sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+            "repodigest_equals_config_digest": true,
+            "floating_latest": false,
+            "counts": {
+              "C": 0,
+              "H": 0,
+              "M": 68,
+              "L": 30,
+              "U": 0,
+              "total": 98,
+              "no_fix": 21
+            }
+          },
+          {
+            "ref": "nats:2-alpine",
+            "container": "deploy-nats-1",
+            "reference_form": "tag",
+            "tag_is_repointable": true,
+            "has_referenceable_repo_digest": false,
+            "image_id_config_digest": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+            "repodigest_equals_config_digest": true,
+            "floating_latest": false,
+            "counts": {
+              "C": 0,
+              "H": 2,
+              "M": 8,
+              "L": 12,
+              "U": 1,
+              "total": 23,
+              "no_fix": 0
+            }
+          },
+          {
+            "ref": "minio/minio:latest",
+            "container": "deploy-minio-1",
+            "reference_form": "tag",
+            "tag_is_repointable": true,
+            "has_referenceable_repo_digest": false,
+            "image_id_config_digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+            "repodigest_equals_config_digest": true,
+            "floating_latest": true,
+            "counts": {
+              "C": 6,
+              "H": 100,
+              "M": 101,
+              "L": 16,
+              "U": 4,
+              "total": 227,
+              "no_fix": 6
+            }
+          }
+        ],
+        "digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect)",
+        "digest_recheck_at_utc": "2026-09-12T22:5xZ (docker images --digests; same values)",
+        "last_tag_time_utc": "2026-08-31T11:1xZ (all four images)"
+      },
+      "interpretation": {
+        "key_point": "Resolving a digest is NOT the same as having an immutable image. Any tag — including version tags like 18, 26.7 and 2-alpine — can be re-pointed. The resolved digest is only a point-in-time snapshot.",
+        "no_registry_manifest_digest": "For all 4 images RepoDigests equals the image config digest byte-for-byte. A genuine registry manifest digest would be a DIFFERENT value. docker manifest inspect also failed, so no manifest digest can be resolved from a registry here.",
+        "consequence": "Because compose pins no digest and no referenceable registry manifest digest exists, any 'docker compose pull' or redeploy can silently swap in different content.",
+        "reconciliation_note": "An independent review reported container-level RepoDigests as <none>; this round measured the image-level field as non-empty but identical to the config digest. Both observations lead to the same substantive conclusion and are recorded here rather than smoothed over."
+      },
+      "scanner_provenance": {
+        "tool": "trivy",
+        "version": "0.74.0",
+        "scanner_image_digest": "sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+        "db_version": 2,
+        "db_updated_at": "2026-09-12T13:01:09Z",
+        "db_repository": "docker.m.daocloud.io/aquasec/trivy-db:2 (fallback mirror; byte-equality with upstream NOT verified)"
+      },
+      "out_of_scope": [
+        {
+          "ref": "opensecurity/mobile-security-framework-mobsf:latest",
+          "container": "mobsf",
+          "image_id_config_digest": "sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+          "floating_latest": true,
+          "note": "Unrelated host service. NOT part of this project's release gate; excluded from every total."
+        }
+      ],
+      "not_verified": [
+        {
+          "id": "NV-I1",
+          "item": "Upstream vulnerability-DB byte-equality",
+          "reason": "mirror.gcr.io timed out and ghcr.io denied; the daocloud pull-through mirror was used and its byte-for-byte equality with upstream was NOT verified",
+          "commands_tried": "trivy image --download-db-only --db-repository mirror.gcr.io/aquasec/trivy-db (timeout); --db-repository ghcr.io/aquasec/trivy-db (DENIED)",
+          "action": "re-scan against upstream when reachable"
+        },
+        {
+          "id": "NV-I2",
+          "item": "Existence of a referenceable registry manifest digest on this host",
+          "reason": "4/4 images have RepoDigest == config digest; docker manifest inspect failed",
+          "commands_tried": "docker image inspect <tag> --format '{{json .RepoDigests}}|{{.Id}}'; docker images --digests; docker manifest inspect postgres:18",
+          "action": "re-pull via a trusted registry so a real manifest digest is recorded, or pin the config digest explicitly"
+        },
+        {
+          "id": "NV-I3",
+          "item": "Application build-product vulnerability scan coverage",
+          "reason": "backend/bin/{api,worker,migrate} and the two frontend dist bundles were inventoried, hashed and secret-scanned, but NO vulnerability scanner was run against them",
+          "commands_tried": "none",
+          "action": "run trivy fs or grype over the built binaries and dist bundles"
+        },
+        {
+          "id": "NV-I4",
+          "item": "Host systemd configuration surface",
+          "reason": "no scanner here supports systemd units, and no blockchain-* unit is installed on the host at all, so systemd-analyze security cannot run",
+          "commands_tried": "systemctl list-unit-files | grep -i blockchain (empty); ls /etc/systemd/system/ | grep -i blockchain (empty); systemctl is-active blockchain-*.service (8x inactive)",
+          "action": "decide whether the units ship; if so install them and run systemd-analyze security"
+        },
+        {
+          "id": "NV-I5",
+          "item": "Host nginx configuration surface",
+          "reason": "checkov, trivy config and KICS all lack nginx-configuration support",
+          "commands_tried": "trivy config -> 'Detected config files num=0'; checkov -d -> resource_count 0",
+          "action": "add an nginx-specific linter such as gixy to CI"
+        },
+        {
+          "id": "NV-I6",
+          "item": "mobsf image scan",
+          "reason": "scan stalled downloading the Java DB from the unreachable mirror.gcr.io; the image is also explicitly out of project scope",
+          "action": "not required for this project's release gate"
+        }
+      ],
+      "not_risk_accepted": "The 20 CRITICAL and 203 HIGH base-image findings are NOT accepted, waived or written off by this report. 83 of the findings have no upstream fix and require per-item decisions.",
+      "to_close": [
+        "Pin every release-relevant image by digest (or move to a commitment-backed immutable tag) in deploy/compose.yaml, re-scan and record the pinned digests",
+        "obtain a verifiable upstream manifest digest",
+        "triage the 20 CRITICAL / 203 HIGH (83 without upstream fixes) with explicit per-item decisions",
+        "close NV-I3 by scanning the application build products",
+        "add image scanning and digest-pin verification to CI"
+      ]
+    },
+    {
+      "id": "iac",
+      "name": "IaC 覆盖（compose / systemd / nginx / 监控）",
+      "verdict": "PARTIAL_FAIL",
+      "headline": "checkov and trivy config scanned ZERO files in deploy/. KICS genuinely covered compose.yaml (10 MEDIUM). systemd units and the nginx config have NO automated coverage at all.",
+      "measured": {
+        "checkov": {
+          "version": "3.3.17",
+          "files_scanned": 0,
+          "resource_count": 0,
+          "passed": 0,
+          "failed": 0,
+          "verdict": "NOT_VERIFIED — no coverage"
+        },
+        "trivy_config": {
+          "version": "0.74.0",
+          "detected_config_files": 0,
+          "verdict": "NOT_VERIFIED — no coverage",
+          "still_zero_after_renaming_to_docker_compose_yml": true
+        },
+        "kics": {
+          "version": "v2.1.20",
+          "files_scanned": 2,
+          "files_parsed": 1,
+          "queries_total": 308,
+          "queries_failed": 0,
+          "total_findings": 10,
+          "severity": {
+            "CRITICAL": 0,
+            "HIGH": 0,
+            "MEDIUM": 10,
+            "LOW": 0,
+            "INFO": 0
+          },
+          "verdict": "REAL coverage of compose.yaml"
+        },
+        "kics_rules": [
+          "Container Capabilities Unrestricted (ce76b7d0)",
+          "Healthcheck Not Set (698ed579)",
+          "Security Opt Not Set (610e266e)"
+        ],
+        "compose_is_only_automated_target": true
+      },
+      "key_findings": [
+        "No blockchain-* systemd unit is installed or active on the deployment host; the platform runs as bare processes (api pid 3413432, worker pid 3413434, vite dev server bound to 0.0.0.0:3000, preview servers on 3001/3002, MCP on 127.0.0.1:8090, host nginx 1.24.0).",
+        "None of the 8 systemd units has ANY sandbox hardening (NoNewPrivileges / ProtectSystem / ProtectHome / PrivateTmp / CapabilityBoundingSet / dedicated User=).",
+        "nginx CSP, X-Content-Type-Options and Referrer-Policy apply only to /admin/ and /app-v2/; location /, /api/, /mcp, /openapi.json, /docs and /redoc have none. No HSTS and no server_tokens off.",
+        "Positive: the nginx log_format uses $uri rather than $request_uri, so query-string secrets never reach the access logs — this is why the log secret scan is clean.",
+        "Positive: every compose port binds to 127.0.0.1 only.",
+        "The deployed nginx config is byte-identical to the repo version (sha256 200ef752...c9ccab)."
+      ],
+      "not_verified": [
+        {
+          "id": "NV-C1",
+          "item": "Automated checkov coverage of deploy/",
+          "reason": "checkov 3.3.17 reported resource_count 0 for both the original compose.yaml and a byte-identical docker-compose.yml copy; --framework docker_compose is not even a valid value in this version (argparse error)",
+          "commands_tried": "checkov -d /w/deploy -o json --compact; checkov -d /w/deploy --framework docker_compose",
+          "action": "pin a checkov version with docker-compose support, or rely on KICS"
+        },
+        {
+          "id": "NV-C2",
+          "item": "Automated trivy config coverage of deploy/",
+          "reason": "trivy 0.74.0 reported 'Detected config files num=0' with and without the docker-compose.yml filename, even after successfully downloading the checks bundle",
+          "commands_tried": "trivy config /w/deploy (unrestricted scanners); trivy config on a byte-identical docker-compose.yml copy with --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2",
+          "action": "use a compose-aware scanner (KICS already covers it)"
+        },
+        {
+          "id": "NV-C3",
+          "item": "Automated coverage of the 8 systemd units",
+          "reason": "none of checkov, trivy config or KICS supports systemd units",
+          "commands_tried": "all three scanners were run against deploy/ and parsed zero systemd files",
+          "action": "install the units, then run systemd-analyze security"
+        },
+        {
+          "id": "NV-C4",
+          "item": "Automated coverage of the nginx config",
+          "reason": "no supported scanner in this environment",
+          "commands_tried": "trivy config and checkov over deploy/ (0 files parsed)",
+          "action": "add gixy or an equivalent nginx linter to CI"
+        },
+        {
+          "id": "NV-C5",
+          "item": "deploy/monitoring/dual-system-alerts.yaml semantic review",
+          "reason": "KICS scanned 2 files but parsed only 1; this file was not parsed, and no rule-by-rule review was performed",
+          "action": "review the alert rules against the section 30 requirements"
+        },
+        {
+          "id": "NV-C6",
+          "item": "Whether the deployed systemd/nginx posture matches the repo files",
+          "reason": "the units are not installed at all, so repo files cannot be compared against a running configuration",
+          "action": "decide and document the intended runtime model"
+        }
+      ],
+      "to_close": [
+        "add a compose/systemd/nginx-aware checker to CI (section 23.8 requires IaC checks in CI)",
+        "pin the minio digest",
+        "apply cap_drop, security_opt and the missing healthchecks per KICS",
+        "decide whether the systemd units ship; if yes, install and harden them",
+        "remove --host 0.0.0.0 from blockchain-vite.service",
+        "raise the nginx security headers to server level and add HSTS / server_tokens off"
+      ]
+    },
+    {
+      "id": "secrets",
+      "name": "秘密扫描（AUDIT-002 / §23.8）",
+      "verdict": "FAIL",
+      "headline": "Runtime LOGS are clean (0 hits over 69 sources, 191,904 lines, 30 MB). But 7 production secrets are embedded in all three shipped Go binaries, and the same production Postgres / ClickHouse passwords sit in the git-tracked deploy/.env.example.",
+      "measured": {
+        "logs": {
+          "sources": 69,
+          "lines": 191904,
+          "bytes": 30083203,
+          "read_errors": 0,
+          "raw_matches": 0,
+          "plaintext_password_token_key_cookie_hits": 0,
+          "verdict": "PASS"
+        },
+        "build_products": {
+          "products_tested": 114,
+          "distinct_secret_values_tested": 18,
+          "values_found_in_build_products": 7,
+          "verdict": "FAIL"
+        },
+        "repo": {
+          "files_scanned": 1258,
+          "raw_matches": 279,
+          "candidates": 164,
+          "note": "The 164 candidates are overwhelmingly TypeScript/Go type annotations such as password: string, apiKey: string, token: TokenView; 57 of them sit in the non-release .codex-backups tree. The material exception is deploy/.env.example.",
+          "checkov_secrets_findings": 13,
+          "checkov_secrets_triage": "all 13 are the page_token_hash field in artifacts/v142_p0/**/*.json — hashes of pagination cursors, not credentials. FALSE POSITIVES."
+        }
+      },
+      "embedded_secrets": [
+        {
+          "key": "POSTGRES_PASSWORD / POSTGRES_DSN_PASSWORD",
+          "value_len": 17,
+          "value_sha256_16": "8cafc51c210a2240",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "CLICKHOUSE_PASSWORD / CLICKHOUSE_DSN_PASSWORD",
+          "value_len": 17,
+          "value_sha256_16": "8690ac3034f20c0f",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "MINIO_ROOT_PASSWORD",
+          "value_len": 20,
+          "value_sha256_16": "c0b83d9d44f5108f",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "CLICKHOUSE_URL",
+          "value_len": 67,
+          "value_sha256_16": "c3a933ca551eab96",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "NATS_URL",
+          "value_len": 21,
+          "value_sha256_16": "083f1b6f64b76c77",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "ANKR_MANAGEMENT_MCP_URL",
+          "value_len": 24,
+          "value_sha256_16": "a90f0a3debaea02a",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        },
+        {
+          "key": "MIGRATION_DATABASE_URL / DATABASE_URL (embeds the 43-char blockchain_api password 49da98fb5866d6a2)",
+          "value_len": 90,
+          "value_sha256_16": "7eeb2d7fd07ad41f",
+          "found_in": [
+            "backend/bin/api",
+            "backend/bin/worker",
+            "backend/bin/migrate"
+          ]
+        }
+      ],
+      "git_tracked_exposure": {
+        "file": "deploy/.env.example",
+        "git_tracked": true,
+        "contains": [
+          "POSTGRES_PASSWORD (sha16 8cafc51c210a2240)",
+          "CLICKHOUSE_PASSWORD (sha16 8690ac3034f20c0f)"
+        ],
+        "note": ".env is gitignored so deploy/.env itself is not committed, but the same credentials were copied into the tracked .env.example, bypassing that control.",
+        "tracked_env_like_files": [
+          "acceptance-evidence/dual-system-v1/tests/sprint4/ids.env",
+          "deploy/.env.example"
+        ]
+      },
+      "tools_unavailable": {
+        "gitleaks": "MISSING on both Windows and the VM",
+        "trufflehog": "MISSING on both Windows and the VM",
+        "commands_tried": "Get-Command gitleaks / Get-Command trufflehog (Windows); command -v gitleaks trufflehog (VM)"
+      },
+      "not_verified": [
+        {
+          "id": "NV-X1",
+          "item": "gitleaks / trufflehog independent coverage",
+          "reason": "neither binary is installed on either host",
+          "commands_tried": "Get-Command gitleaks; Get-Command trufflehog; command -v gitleaks trufflehog",
+          "action": "install gitleaks in CI and re-run for a second opinion"
+        },
+        {
+          "id": "NV-X2",
+          "item": "Git history secret scan",
+          "reason": "the VM deploy tree is not a git repository; only the Windows worktree's tracked-file list was consulted",
+          "action": "run gitleaks detect over full history in the Windows worktree"
+        },
+        {
+          "id": "NV-X3",
+          "item": "Frontend dist bundle secret coverage beyond regex rules",
+          "reason": "only pattern-based and value-presence checks were run; no entropy analysis over the bundles",
+          "action": "run gitleaks on the built dist output"
+        }
+      ],
+      "to_close": [
+        "stop compiling real credentials as config defaults — fail fast when the env var is absent",
+        "ROTATE POSTGRES_PASSWORD, CLICKHOUSE_PASSWORD, MINIO_ROOT_PASSWORD and the blockchain_api password: they shipped inside binaries and must be treated as compromised",
+        "reduce deploy/.env.example to placeholders and purge history",
+        "add a build-product secret gate to CI"
+      ]
+    }
+  ],
+  "overall_verdict": "FAIL",
+  "overall_verdict_reason": "Two independent hard requirements are unmet. (1) Section 23.8 'P0/P1 = 0': measured P0=2 and P1=5, counted separately; even under the reachability-corrected view P1 is 3. (2) Section 23.8 'build products contain no secret': 7 production secrets are embedded in all three shipped Go binaries, and the production Postgres and ClickHouse passwords sit in a git-tracked file. Further gaps: the deployment pins no image digests and has no referenceable registry manifest digest, violating section 29.1; checkov and trivy config provide zero IaC coverage of deploy/; systemd units and the nginx config have no automated coverage at all.",
+  "pass_dimensions": [
+    "sbom (with caveats)",
+    "runtime log secret scan (0 hits — the AUDIT-002 log dimension)"
+  ],
+  "fail_dimensions": [
+    "dependencies",
+    "images",
+    "secrets",
+    "iac (partial: only compose.yaml covered, by KICS)"
+  ],
+  "not_verified_index": [
+    "NV-C1 checkov coverage of deploy/ — 0 files",
+    "NV-C2 trivy config coverage of deploy/ — 0 files",
+    "NV-C3 systemd units — no automated coverage",
+    "NV-C4 nginx config — no automated coverage",
+    "NV-C5 monitoring alert rules — not parsed, not reviewed rule-by-rule",
+    "NV-C6 deployed vs repo systemd/nginx posture — units not installed, cannot be compared",
+    "NV-D1 second independent frontend advisory scanner — not run",
+    "NV-D2 severity for 4 golang.org/x/crypto advisories — not published anywhere consulted; recorded UNKNOWN rather than guessed",
+    "NV-D3 bundle-level reachability of the 2 xlsx HIGH advisories — not analysed",
+    "NV-I1 upstream vulnerability-DB byte-equality — unverifiable, mirrors unreachable",
+    "NV-I2 referenceable registry manifest digest — does not exist on this host (RepoDigest == config digest for 4/4)",
+    "NV-I3 application build-product vulnerability scan coverage — not performed",
+    "NV-I4 host systemd configuration surface — no scanner support, and the units are not installed",
+    "NV-I5 host nginx configuration surface — no scanner support",
+    "NV-I6 mobsf image scan — incomplete and out of project scope",
+    "NV-S2 deploy.cdx.json has 0 components — 0 components is not 0 findings",
+    "NV-S3 corrected production SBOM (190 components) was not CVE-matched — run grype / trivy sbom",
+    "NV-S4 the first backend SBOM was contaminated by historical backup binaries; whether ANY consumer relied on it must be checked before it is retired",
+    "NV-X1 gitleaks / trufflehog — not installed",
+    "NV-X2 git history secret scan — not performed",
+    "NV-X3 frontend bundle entropy scan — not performed"
+  ],
+  "constraints_respected": {
+    "read_only": true,
+    "source_files_modified": 0,
+    "dependencies_installed_or_upgraded": 0,
+    "docker_pull_build_rm_stop": 0,
+    "docker_run_note": "Scanner containers were started with 'docker run --rm' using images ALREADY present locally. The repository was mounted read-only (:ro); only the new evidence directory was mounted writable. No platform container or service was modified, stopped or restarted.",
+    "systemd_services_restarted": 0,
+    "production_database_writes": 0,
+    "pitr_files_touched": 0,
+    "pitr_note": "acceptance-evidence/dual-system-v1/sprint7/dr/ was never read or written, and the unrelated pitr-* containers on the host were left completely untouched.",
+    "integrity_proof": "sha256 of backend/go.mod, backend/go.sum, frontend/pnpm-lock.yaml and all six package.json files are identical before and after every scan — see the PRE/POST blocks in deps/windows-host/commands.log and deps/vm-deps-run.log.",
+    "severity_counts_adjusted_toward_target": false
+  },
+  "key_numbers_for_release_decision": {
+    "dependency_P0_critical": 2,
+    "dependency_P1_high": 5,
+    "dependency_P2_moderate": 3,
+    "dependency_P3_low": 1,
+    "dependency_unrated": 4,
+    "frontend_xlsx_advisories_with_no_npm_fix": 2,
+    "in_scope_image_CRITICAL": 20,
+    "in_scope_image_HIGH": 203,
+    "in_scope_image_total_findings": 763,
+    "in_scope_image_findings_with_no_fix": 83,
+    "compose_sha256_digest_pins": 0,
+    "images_with_referenceable_manifest_digest": 0,
+    "images_with_floating_latest_tag": 1,
+    "production_secrets_embedded_in_shipped_binaries": 7,
+    "runtime_log_secret_hits": 0,
+    "log_lines_scanned": 191904,
+    "iac_files_scanned_by_checkov": 0,
+    "iac_files_scanned_by_trivy_config": 0,
+    "iac_files_scanned_by_kics": 1,
+    "kics_medium_findings_on_compose": 10,
+    "systemd_units_with_sandbox_hardening": "0 of 8",
+    "systemd_units_installed_on_host": 0,
+    "sbom_backend_components_contaminated": 10003,
+    "sbom_backend_components_production_scope": 190,
+    "sbom_backend_components_from_go_mod": 55,
+    "sbom_backend_components_from_historical_binaries": 9327,
+    "backend_sbom_files_verified_byte_identical": 2,
+    "xlsx_advisories_status": "OPEN — not closed, not waived"
+  },
+  "resolved_and_withdrawn": [
+    {
+      "id": "NV-S1 (WITHDRAWN)",
+      "detail": "backend.cdx.json / backend.spdx.json were successfully scp'd into the evidence directory and verified byte-identical; the 'transfer sandbox' claim was incorrect and has been withdrawn. See sbom/backend-sbom-verification.md."
+    }
+  ]
+}

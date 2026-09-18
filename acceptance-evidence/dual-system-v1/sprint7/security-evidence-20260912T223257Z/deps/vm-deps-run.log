@@ -1,0 +1,765 @@
++ export NVM_DIR=/home/euripides/.nvm
++ NVM_DIR=/home/euripides/.nvm
++ '[' -s /home/euripides/.nvm/nvm.sh ']'
++ . /home/euripides/.nvm/nvm.sh
+++ NVM_SCRIPT_SOURCE=']'
+++ '[' -z '' ']'
+++ export NVM_CD_FLAGS=
+++ NVM_CD_FLAGS=
+++ nvm_is_zsh
+++ '[' -n '' ']'
+++ '[' -z /home/euripides/.nvm ']'
+++ case $NVM_DIR in
+++ unset NVM_SCRIPT_SOURCE
+++ nvm_process_parameters
+++ local NVM_AUTO_MODE
+++ NVM_AUTO_MODE=use
+++ '[' 0 -ne 0 ']'
+++ nvm_auto use
+++ local NVM_MODE
+++ NVM_MODE=use
+++ case "${NVM_MODE}" in
+++ local VERSION
+++ local NVM_CURRENT
++++ nvm_ls_current
++++ local NVM_LS_CURRENT_NODE_PATH
+++++ command which node
++++ NVM_LS_CURRENT_NODE_PATH=
++++ nvm_echo none
++++ command printf '%s\n' none
+++ NVM_CURRENT=none
+++ '[' _none = _none ']'
++++ nvm_resolve_local_alias default
+++ VERSION=v24.20.0
+++ '[' -n v24.20.0 ']'
+++ '[' _v24.20.0 '!=' _N/A ']'
+++ nvm_is_valid_version v24.20.0
+++ nvm_validate_implicit_alias v24.20.0
+++ case "${1-}" in
++++ nvm_iojs_prefix
++++ nvm_echo iojs
++++ command printf '%s\n' iojs
++++ nvm_node_prefix
++++ nvm_echo node
++++ command printf '%s\n' node
+++ local VERSION
++++ nvm_strip_iojs_prefix v24.20.0
++++ local NVM_IOJS_PREFIX
+++++ nvm_iojs_prefix
+++++ nvm_echo iojs
+++++ command printf '%s\n' iojs
++++ NVM_IOJS_PREFIX=iojs
++++ case "${1-}" in
++++ nvm_echo v24.20.0
++++ command printf '%s\n' v24.20.0
+++ VERSION=v24.20.0
+++ nvm_version_greater_than_or_equal_to v24.20.0 0
+++ command awk 'BEGIN {
+    if (ARGV[1] == "" || ARGV[2] == "") exit(1)
+    split(ARGV[1], a, /\./);
+    split(ARGV[2], b, /\./);
+    for (i=1; i<=3; i++) {
+      if (a[i] && a[i] !~ /^[0-9]+$/) exit(2);
+      if (a[i] < b[i]) exit(3);
+      else if (a[i] > b[i]) exit(0);
+    }
+    exit(0)
+  }' 24.20.0 0
+++ nvm use --silent v24.20.0
+++ '[' 3 -lt 1 ']'
+++ local DEFAULT_IFS
++++ nvm_echo t
++++ command printf '%s\n' t
++++ command tr t '\t'
+++ DEFAULT_IFS=' 	
+'
+++ '[' hxB '!=' hxB ']'
+++ '[' hxB '!=' hxB ']'
+++ '[' -n /usr/bin/bash ']'
+++ '[' hxB '!=' hxB ']'
+++ '[' ' 	
+' '!=' ' 	
+' ']'
+++ local i
+++ for i in "$@"
+++ case $i in
+++ for i in "$@"
+++ case $i in
+++ for i in "$@"
+++ case $i in
+++ local COMMAND
+++ COMMAND=use
+++ shift
+++ local VERSION
+++ local ADDITIONAL_PARAMETERS
+++ case $COMMAND in
+++ local PROVIDED_VERSION
+++ local NVM_SILENT
+++ local NVM_SILENT_ARG
+++ local NVM_DELETE_PREFIX
+++ NVM_DELETE_PREFIX=0
+++ local NVM_LTS
+++ local IS_VERSION_FROM_NVMRC
+++ IS_VERSION_FROM_NVMRC=0
+++ local NVM_WRITE_TO_NVMRC
+++ NVM_WRITE_TO_NVMRC=0
+++ '[' 2 -ne 0 ']'
+++ case "$1" in
+++ NVM_SILENT=1
+++ NVM_SILENT_ARG=--silent
+++ shift
+++ '[' 1 -ne 0 ']'
+++ case "$1" in
+++ '[' -n v24.20.0 ']'
+++ PROVIDED_VERSION=v24.20.0
+++ shift
+++ '[' 0 -ne 0 ']'
+++ '[' -n '' ']'
+++ '[' -z v24.20.0 ']'
++++ nvm_match_version v24.20.0
++++ local NVM_IOJS_PREFIX
+++++ nvm_iojs_prefix
+++++ nvm_echo iojs
+++++ command printf '%s\n' iojs
++++ NVM_IOJS_PREFIX=iojs
++++ local PROVIDED_VERSION
++++ PROVIDED_VERSION=v24.20.0
++++ case "_${PROVIDED_VERSION}" in
++++ nvm_version v24.20.0
++++ local PATTERN
++++ PATTERN=v24.20.0
++++ local VERSION
++++ '[' -z v24.20.0 ']'
++++ '[' v24.20.0 = current ']'
++++ local NVM_NODE_PREFIX
+++++ nvm_node_prefix
+++++ nvm_echo node
+++++ command printf '%s\n' node
++++ NVM_NODE_PREFIX=node
++++ case "_${PATTERN}" in
+++++ nvm_ls v24.20.0
+++++ command tail -1
+++++ local PATTERN
+++++ PATTERN=v24.20.0
+++++ local VERSIONS
+++++ VERSIONS=
+++++ '[' v24.20.0 = current ']'
+++++ local NVM_IOJS_PREFIX
++++++ nvm_iojs_prefix
++++++ nvm_echo iojs
++++++ command printf '%s\n' iojs
+++++ NVM_IOJS_PREFIX=iojs
+++++ local NVM_NODE_PREFIX
++++++ nvm_node_prefix
++++++ nvm_echo node
++++++ command printf '%s\n' node
+++++ NVM_NODE_PREFIX=node
+++++ local NVM_VERSION_DIR_IOJS
++++++ nvm_version_dir iojs
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=iojs
++++++ '[' -z iojs ']'
++++++ '[' iojs = new ']'
++++++ '[' _iojs = _iojs ']'
++++++ nvm_echo /home/euripides/.nvm/versions/io.js
++++++ command printf '%s\n' /home/euripides/.nvm/versions/io.js
+++++ NVM_VERSION_DIR_IOJS=/home/euripides/.nvm/versions/io.js
+++++ local NVM_VERSION_DIR_NEW
++++++ nvm_version_dir new
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=new
++++++ '[' -z new ']'
++++++ '[' new = new ']'
++++++ nvm_echo /home/euripides/.nvm/versions/node
++++++ command printf '%s\n' /home/euripides/.nvm/versions/node
+++++ NVM_VERSION_DIR_NEW=/home/euripides/.nvm/versions/node
+++++ local NVM_VERSION_DIR_OLD
++++++ nvm_version_dir old
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=old
++++++ '[' -z old ']'
++++++ '[' old = new ']'
++++++ '[' _old = _iojs ']'
++++++ '[' _old = _old ']'
++++++ nvm_echo /home/euripides/.nvm
++++++ command printf '%s\n' /home/euripides/.nvm
+++++ NVM_VERSION_DIR_OLD=/home/euripides/.nvm
+++++ case "${PATTERN}" in
+++++ nvm_resolve_local_alias v24.20.0
+++++ '[' -z v24.20.0 ']'
+++++ local VERSION
+++++ local EXIT_CODE
++++++ nvm_resolve_alias v24.20.0
++++++ '[' -z v24.20.0 ']'
++++++ local PATTERN
++++++ PATTERN=v24.20.0
++++++ local ALIAS
++++++ ALIAS=v24.20.0
++++++ local ALIAS_TEMP
++++++ local SEEN_ALIASES
++++++ SEEN_ALIASES=v24.20.0
++++++ local NVM_ALIAS_INDEX
++++++ NVM_ALIAS_INDEX=1
++++++ true
+++++++ nvm_alias v24.20.0
+++++++ command head -n 1
+++++++ command tail -n 1
++++++ ALIAS_TEMP=
++++++ '[' -z '' ']'
++++++ break
++++++ '[' -n v24.20.0 ']'
++++++ '[' _v24.20.0 '!=' _v24.20.0 ']'
++++++ nvm_validate_implicit_alias v24.20.0
++++++ return 2
+++++ VERSION=
+++++ EXIT_CODE=2
+++++ '[' -z '' ']'
+++++ return 2
++++++ nvm_ensure_version_prefix v24.20.0
++++++ local NVM_VERSION
+++++++ nvm_strip_iojs_prefix v24.20.0
+++++++ local NVM_IOJS_PREFIX
+++++++ command sed -e 's/^\([0-9]\)/v\1/g'
++++++++ nvm_iojs_prefix
++++++++ nvm_echo iojs
++++++++ command printf '%s\n' iojs
+++++++ NVM_IOJS_PREFIX=iojs
+++++++ case "${1-}" in
+++++++ nvm_echo v24.20.0
+++++++ command printf '%s\n' v24.20.0
++++++ NVM_VERSION=v24.20.0
++++++ nvm_is_iojs_version v24.20.0
++++++ case "${1-}" in
++++++ return 1
++++++ nvm_echo v24.20.0
++++++ command printf '%s\n' v24.20.0
+++++ PATTERN=v24.20.0
+++++ '[' v24.20.0 = N/A ']'
+++++ local NVM_PATTERN_STARTS_WITH_V
+++++ case $PATTERN in
+++++ NVM_PATTERN_STARTS_WITH_V=true
+++++ '[' true = true ']'
++++++ nvm_num_version_groups v24.20.0
++++++ local VERSION
++++++ VERSION=v24.20.0
++++++ VERSION=24.20.0
++++++ VERSION=24.20.0
++++++ '[' -z 24.20.0 ']'
++++++ local NVM_NUM_DOTS
+++++++ nvm_echo 24.20.0
+++++++ command printf '%s\n' 24.20.0
+++++++ command sed -e 's/[^\.]//g'
++++++ NVM_NUM_DOTS=..
++++++ local NVM_NUM_GROUPS
++++++ NVM_NUM_GROUPS=...
++++++ nvm_echo 3
++++++ command printf '%s\n' 3
+++++ '[' _3 = _3 ']'
+++++ nvm_is_version_installed v24.20.0
+++++ '[' -z v24.20.0 ']'
+++++ local NVM_NODE_BINARY
+++++ NVM_NODE_BINARY=node
++++++ nvm_get_os
++++++ local NVM_UNAME
+++++++ command uname -a
++++++ NVM_UNAME='Linux dataserver 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux'
++++++ local NVM_OS
++++++ case "${NVM_UNAME}" in
++++++ NVM_OS=linux
++++++ nvm_echo linux
++++++ command printf '%s\n' linux
+++++ '[' _linux = _win ']'
++++++ nvm_version_path v24.20.0
+++++ '[' -x /home/euripides/.nvm/versions/node/v24.20.0/bin/node ']'
+++++ return 0
+++++ VERSIONS=v24.20.0
+++++ '[' '' = true ']'
+++++ '[' -z v24.20.0 ']'
+++++ nvm_echo v24.20.0
+++++ command printf '%s\n' v24.20.0
++++ VERSION=v24.20.0
++++ '[' -z v24.20.0 ']'
++++ '[' _v24.20.0 = _N/A ']'
++++ nvm_echo v24.20.0
++++ command printf '%s\n' v24.20.0
+++ VERSION=v24.20.0
+++ '[' -z v24.20.0 ']'
+++ '[' 0 -eq 1 ']'
+++ '[' _v24.20.0 = _system ']'
+++ '[' _v24.20.0 = _∞ ']'
+++ '[' v24.20.0 = N/A ']'
+++ nvm_ensure_version_installed v24.20.0 0
+++ local PROVIDED_VERSION
+++ PROVIDED_VERSION=v24.20.0
+++ local IS_VERSION_FROM_NVMRC
+++ IS_VERSION_FROM_NVMRC=0
+++ '[' v24.20.0 = system ']'
+++ local LOCAL_VERSION
+++ local EXIT_CODE
++++ nvm_version v24.20.0
++++ local PATTERN
++++ PATTERN=v24.20.0
++++ local VERSION
++++ '[' -z v24.20.0 ']'
++++ '[' v24.20.0 = current ']'
++++ local NVM_NODE_PREFIX
+++++ nvm_node_prefix
+++++ nvm_echo node
+++++ command printf '%s\n' node
++++ NVM_NODE_PREFIX=node
++++ case "_${PATTERN}" in
+++++ nvm_ls v24.20.0
+++++ command tail -1
+++++ local PATTERN
+++++ PATTERN=v24.20.0
+++++ local VERSIONS
+++++ VERSIONS=
+++++ '[' v24.20.0 = current ']'
+++++ local NVM_IOJS_PREFIX
++++++ nvm_iojs_prefix
++++++ nvm_echo iojs
++++++ command printf '%s\n' iojs
+++++ NVM_IOJS_PREFIX=iojs
+++++ local NVM_NODE_PREFIX
++++++ nvm_node_prefix
++++++ nvm_echo node
++++++ command printf '%s\n' node
+++++ NVM_NODE_PREFIX=node
+++++ local NVM_VERSION_DIR_IOJS
++++++ nvm_version_dir iojs
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=iojs
++++++ '[' -z iojs ']'
++++++ '[' iojs = new ']'
++++++ '[' _iojs = _iojs ']'
++++++ nvm_echo /home/euripides/.nvm/versions/io.js
++++++ command printf '%s\n' /home/euripides/.nvm/versions/io.js
+++++ NVM_VERSION_DIR_IOJS=/home/euripides/.nvm/versions/io.js
+++++ local NVM_VERSION_DIR_NEW
++++++ nvm_version_dir new
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=new
++++++ '[' -z new ']'
++++++ '[' new = new ']'
++++++ nvm_echo /home/euripides/.nvm/versions/node
++++++ command printf '%s\n' /home/euripides/.nvm/versions/node
+++++ NVM_VERSION_DIR_NEW=/home/euripides/.nvm/versions/node
+++++ local NVM_VERSION_DIR_OLD
++++++ nvm_version_dir old
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=old
++++++ '[' -z old ']'
++++++ '[' old = new ']'
++++++ '[' _old = _iojs ']'
++++++ '[' _old = _old ']'
++++++ nvm_echo /home/euripides/.nvm
++++++ command printf '%s\n' /home/euripides/.nvm
+++++ NVM_VERSION_DIR_OLD=/home/euripides/.nvm
+++++ case "${PATTERN}" in
+++++ nvm_resolve_local_alias v24.20.0
+++++ '[' -z v24.20.0 ']'
+++++ local VERSION
+++++ local EXIT_CODE
++++++ nvm_resolve_alias v24.20.0
++++++ '[' -z v24.20.0 ']'
++++++ local PATTERN
++++++ PATTERN=v24.20.0
++++++ local ALIAS
++++++ ALIAS=v24.20.0
++++++ local ALIAS_TEMP
++++++ local SEEN_ALIASES
++++++ SEEN_ALIASES=v24.20.0
++++++ local NVM_ALIAS_INDEX
++++++ NVM_ALIAS_INDEX=1
++++++ true
+++++++ nvm_alias v24.20.0
+++++++ command head -n 1
+++++++ command tail -n 1
++++++ ALIAS_TEMP=
++++++ '[' -z '' ']'
++++++ break
++++++ '[' -n v24.20.0 ']'
++++++ '[' _v24.20.0 '!=' _v24.20.0 ']'
++++++ nvm_validate_implicit_alias v24.20.0
++++++ return 2
+++++ VERSION=
+++++ EXIT_CODE=2
+++++ '[' -z '' ']'
+++++ return 2
++++++ nvm_ensure_version_prefix v24.20.0
++++++ local NVM_VERSION
+++++++ nvm_strip_iojs_prefix v24.20.0
+++++++ local NVM_IOJS_PREFIX
+++++++ command sed -e 's/^\([0-9]\)/v\1/g'
++++++++ nvm_iojs_prefix
++++++++ nvm_echo iojs
++++++++ command printf '%s\n' iojs
+++++++ NVM_IOJS_PREFIX=iojs
+++++++ case "${1-}" in
+++++++ nvm_echo v24.20.0
+++++++ command printf '%s\n' v24.20.0
++++++ NVM_VERSION=v24.20.0
++++++ nvm_is_iojs_version v24.20.0
++++++ case "${1-}" in
++++++ return 1
++++++ nvm_echo v24.20.0
++++++ command printf '%s\n' v24.20.0
+++++ PATTERN=v24.20.0
+++++ '[' v24.20.0 = N/A ']'
+++++ local NVM_PATTERN_STARTS_WITH_V
+++++ case $PATTERN in
+++++ NVM_PATTERN_STARTS_WITH_V=true
+++++ '[' true = true ']'
++++++ nvm_num_version_groups v24.20.0
++++++ local VERSION
++++++ VERSION=v24.20.0
++++++ VERSION=24.20.0
++++++ VERSION=24.20.0
++++++ '[' -z 24.20.0 ']'
++++++ local NVM_NUM_DOTS
+++++++ nvm_echo 24.20.0
+++++++ command printf '%s\n' 24.20.0
+++++++ command sed -e 's/[^\.]//g'
++++++ NVM_NUM_DOTS=..
++++++ local NVM_NUM_GROUPS
++++++ NVM_NUM_GROUPS=...
++++++ nvm_echo 3
++++++ command printf '%s\n' 3
+++++ '[' _3 = _3 ']'
+++++ nvm_is_version_installed v24.20.0
+++++ '[' -z v24.20.0 ']'
+++++ local NVM_NODE_BINARY
+++++ NVM_NODE_BINARY=node
++++++ nvm_get_os
++++++ local NVM_UNAME
+++++++ command uname -a
++++++ NVM_UNAME='Linux dataserver 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux'
++++++ local NVM_OS
++++++ case "${NVM_UNAME}" in
++++++ NVM_OS=linux
++++++ nvm_echo linux
++++++ command printf '%s\n' linux
+++++ '[' _linux = _win ']'
++++++ nvm_version_path v24.20.0
+++++ '[' -x /home/euripides/.nvm/versions/node/v24.20.0/bin/node ']'
+++++ return 0
+++++ VERSIONS=v24.20.0
+++++ '[' '' = true ']'
+++++ '[' -z v24.20.0 ']'
+++++ nvm_echo v24.20.0
+++++ command printf '%s\n' v24.20.0
++++ VERSION=v24.20.0
++++ '[' -z v24.20.0 ']'
++++ '[' _v24.20.0 = _N/A ']'
++++ nvm_echo v24.20.0
++++ command printf '%s\n' v24.20.0
+++ LOCAL_VERSION=v24.20.0
+++ EXIT_CODE=0
+++ local NVM_VERSION_DIR
+++ '[' 0 '!=' 0 ']'
+++ nvm_is_version_installed v24.20.0
+++ '[' -z v24.20.0 ']'
+++ local NVM_NODE_BINARY
+++ NVM_NODE_BINARY=node
++++ nvm_get_os
++++ local NVM_UNAME
+++++ command uname -a
++++ NVM_UNAME='Linux dataserver 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux'
++++ local NVM_OS
++++ case "${NVM_UNAME}" in
++++ NVM_OS=linux
++++ nvm_echo linux
++++ command printf '%s\n' linux
+++ '[' _linux = _win ']'
++++ nvm_version_path v24.20.0
+++ '[' -x /home/euripides/.nvm/versions/node/v24.20.0/bin/node ']'
+++ return 0
+++ local NVM_VERSION_DIR
++++ nvm_version_path v24.20.0
++++ local VERSION
++++ VERSION=v24.20.0
++++ '[' -z v24.20.0 ']'
++++ nvm_is_iojs_version v24.20.0
++++ case "${1-}" in
++++ return 1
++++ nvm_version_greater 0.12.0 v24.20.0
++++ command awk 'BEGIN {
+    if (ARGV[1] == "" || ARGV[2] == "") exit(1)
+    split(ARGV[1], a, /\./);
+    split(ARGV[2], b, /\./);
+    for (i=1; i<=3; i++) {
+      if (a[i] && a[i] !~ /^[0-9]+$/) exit(2);
+      if (b[i] && b[i] !~ /^[0-9]+$/) { exit(0); }
+      if (a[i] < b[i]) exit(3);
+      else if (a[i] > b[i]) exit(0);
+    }
+    exit(4)
+  }' 0.12.0 24.20.0
+++++ nvm_version_dir new
+++++ local NVM_WHICH_DIR
+++++ NVM_WHICH_DIR=new
+++++ '[' -z new ']'
+++++ '[' new = new ']'
+++++ nvm_echo /home/euripides/.nvm/versions/node
+++++ command printf '%s\n' /home/euripides/.nvm/versions/node
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0
+++ NVM_VERSION_DIR=/home/euripides/.nvm/versions/node/v24.20.0
++++ nvm_change_path /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin /bin /home/euripides/.nvm/versions/node/v24.20.0
++++ '[' -z /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin ']'
++++ nvm_echo /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++++ command printf '%s\n' /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++++ nvm_grep -q '/home/euripides/.nvm/[^/]*/bin'
++++ GREP_OPTIONS=
++++ command grep -q '/home/euripides/.nvm/[^/]*/bin'
++++ nvm_echo /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++++ nvm_grep -q '/home/euripides/.nvm/versions/[^/]*/[^/]*/bin'
++++ command printf '%s\n' /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++++ GREP_OPTIONS=
++++ command grep -q '/home/euripides/.nvm/versions/[^/]*/[^/]*/bin'
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+++ PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+++ nvm_has manpath
+++ type manpath
+++ '[' -z '' ']'
+++ local MANPATH
++++ manpath
+++ MANPATH=/home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ nvm_change_path /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man /share/man /home/euripides/.nvm/versions/node/v24.20.0
++++ '[' -z /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man ']'
++++ nvm_grep -q '/home/euripides/.nvm/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -q '/home/euripides/.nvm/[^/]*/share/man'
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ nvm_grep -q '/home/euripides/.nvm/versions/[^/]*/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -q '/home/euripides/.nvm/versions/[^/]*/[^/]*/share/man'
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/home/euripides/.nvm/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/home/euripides/.nvm/[^/]*/share/man'
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/home/euripides/.nvm/versions/[^/]*/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/home/euripides/.nvm/versions/[^/]*/[^/]*/share/man'
++++ nvm_echo /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command printf '%s\n' /home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
++++ command sed -e 's#/home/euripides/.nvm/[^/]*/share/man[^:]*#/home/euripides/.nvm/versions/node/v24.20.0/share/man#' -e 's#/home/euripides/.nvm/versions/[^/]*/[^/]*/share/man[^:]*#/home/euripides/.nvm/versions/node/v24.20.0/share/man#'
+++ MANPATH=/home/euripides/.nvm/versions/node/v24.20.0/share/man:/usr/local/man:/usr/local/share/man:/usr/share/man
+++ export MANPATH
+++ export PATH
+++ hash -r
+++ export NVM_BIN=/home/euripides/.nvm/versions/node/v24.20.0/bin
+++ NVM_BIN=/home/euripides/.nvm/versions/node/v24.20.0/bin
+++ export NVM_INC=/home/euripides/.nvm/versions/node/v24.20.0/include/node
+++ NVM_INC=/home/euripides/.nvm/versions/node/v24.20.0/include/node
+++ '[' '' = true ']'
+++ local NVM_USE_OUTPUT
+++ NVM_USE_OUTPUT=
+++ '[' 1 -ne 1 ']'
+++ '[' _v24.20.0 '!=' _system ']'
+++ local NVM_USE_CMD
+++ NVM_USE_CMD='nvm use --delete-prefix'
+++ '[' -n v24.20.0 ']'
+++ NVM_USE_CMD='nvm use --delete-prefix v24.20.0'
+++ '[' 1 -eq 1 ']'
+++ NVM_USE_CMD='nvm use --delete-prefix v24.20.0 --silent'
+++ nvm_die_on_prefix 0 'nvm use --delete-prefix v24.20.0 --silent' /home/euripides/.nvm/versions/node/v24.20.0
+++ local NVM_DELETE_PREFIX
+++ NVM_DELETE_PREFIX=0
+++ case "${NVM_DELETE_PREFIX}" in
+++ local NVM_COMMAND
+++ NVM_COMMAND='nvm use --delete-prefix v24.20.0 --silent'
+++ local NVM_VERSION_DIR
+++ NVM_VERSION_DIR=/home/euripides/.nvm/versions/node/v24.20.0
+++ '[' -z 'nvm use --delete-prefix v24.20.0 --silent' ']'
+++ '[' -z /home/euripides/.nvm/versions/node/v24.20.0 ']'
+++ '[' -n '' ']'
+++ local NVM_OS
++++ nvm_get_os
++++ local NVM_UNAME
+++++ command uname -a
++++ NVM_UNAME='Linux dataserver 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux'
++++ local NVM_OS
++++ case "${NVM_UNAME}" in
++++ NVM_OS=linux
++++ nvm_echo linux
++++ command printf '%s\n' linux
+++ NVM_OS=linux
+++ local NVM_NPM_CONFIG_x_PREFIX_ENV
++++ command awk 'BEGIN { for (name in ENVIRON) if (toupper(name) == "NPM_CONFIG_PREFIX") { print name; break } }'
+++ NVM_NPM_CONFIG_x_PREFIX_ENV=
+++ '[' -n '' ']'
+++ local NVM_NPM_BUILTIN_NPMRC
+++ NVM_NPM_BUILTIN_NPMRC=/home/euripides/.nvm/versions/node/v24.20.0/lib/node_modules/npm/npmrc
+++ nvm_npmrc_bad_news_bears /home/euripides/.nvm/versions/node/v24.20.0/lib/node_modules/npm/npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/home/euripides/.nvm/versions/node/v24.20.0/lib/node_modules/npm/npmrc
+++ '[' -n /home/euripides/.nvm/versions/node/v24.20.0/lib/node_modules/npm/npmrc ']'
+++ '[' -f /home/euripides/.nvm/versions/node/v24.20.0/lib/node_modules/npm/npmrc ']'
+++ return 1
+++ local NVM_NPM_GLOBAL_NPMRC
+++ NVM_NPM_GLOBAL_NPMRC=/home/euripides/.nvm/versions/node/v24.20.0/etc/npmrc
+++ nvm_npmrc_bad_news_bears /home/euripides/.nvm/versions/node/v24.20.0/etc/npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/home/euripides/.nvm/versions/node/v24.20.0/etc/npmrc
+++ '[' -n /home/euripides/.nvm/versions/node/v24.20.0/etc/npmrc ']'
+++ '[' -f /home/euripides/.nvm/versions/node/v24.20.0/etc/npmrc ']'
+++ return 1
+++ local NVM_NPM_USER_NPMRC
+++ NVM_NPM_USER_NPMRC=/home/euripides/.npmrc
+++ nvm_npmrc_bad_news_bears /home/euripides/.npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/home/euripides/.npmrc
+++ '[' -n /home/euripides/.npmrc ']'
+++ '[' -f /home/euripides/.npmrc ']'
+++ return 1
+++ local NVM_NPM_PROJECT_NPMRC
++++ nvm_find_project_dir
++++ local path_
++++ path_=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z '!=' '' ']'
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/package.json ']'
++++ '[' '!' -d /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/node_modules ']'
++++ path_=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7 '!=' '' ']'
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7 '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/package.json ']'
++++ '[' '!' -d /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/node_modules ']'
++++ path_=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1 '!=' '' ']'
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1 '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/package.json ']'
++++ '[' '!' -d /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/node_modules ']'
++++ path_=/home/euripides/projects/blockchain-platform/acceptance-evidence
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence '!=' '' ']'
++++ '[' /home/euripides/projects/blockchain-platform/acceptance-evidence '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/blockchain-platform/acceptance-evidence/package.json ']'
++++ '[' '!' -d /home/euripides/projects/blockchain-platform/acceptance-evidence/node_modules ']'
++++ path_=/home/euripides/projects/blockchain-platform
++++ '[' /home/euripides/projects/blockchain-platform '!=' '' ']'
++++ '[' /home/euripides/projects/blockchain-platform '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/blockchain-platform/package.json ']'
++++ '[' '!' -d /home/euripides/projects/blockchain-platform/node_modules ']'
++++ path_=/home/euripides/projects
++++ '[' /home/euripides/projects '!=' '' ']'
++++ '[' /home/euripides/projects '!=' . ']'
++++ '[' '!' -f /home/euripides/projects/package.json ']'
++++ '[' '!' -d /home/euripides/projects/node_modules ']'
++++ path_=/home/euripides
++++ '[' /home/euripides '!=' '' ']'
++++ '[' /home/euripides '!=' . ']'
++++ '[' '!' -f /home/euripides/package.json ']'
++++ '[' '!' -d /home/euripides/node_modules ']'
++++ path_=/home
++++ '[' /home '!=' '' ']'
++++ '[' /home '!=' . ']'
++++ '[' '!' -f /home/package.json ']'
++++ '[' '!' -d /home/node_modules ']'
++++ path_=
++++ '[' '' '!=' '' ']'
++++ nvm_echo ''
++++ command printf '%s\n' ''
+++ NVM_NPM_PROJECT_NPMRC=/.npmrc
+++ nvm_npmrc_bad_news_bears /.npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/.npmrc
+++ '[' -n /.npmrc ']'
+++ '[' -f /.npmrc ']'
+++ return 1
+++ '[' -n '' ']'
++ export PATH=/usr/local/go/bin:/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++ PATH=/usr/local/go/bin:/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
++ GO=/usr/local/go/bin/go
++ GV=/tmp/gtools/govulncheck
++ echo '=== HOST / TOOL VERSIONS ==='
+=== HOST / TOOL VERSIONS ===
+++ hostname
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ echo 'host: dataserver  date_utc: 2026-09-12T22:37:01Z'
+host: dataserver  date_utc: 2026-09-12T22:37:01Z
+++ node -v
+++ pnpm -v
+++ npm -v
++ echo 'node: v24.20.0  pnpm: 11.24.0  npm: 11.19.0'
+node: v24.20.0  pnpm: 11.24.0  npm: 11.19.0
+++ npm config get registry
++ echo 'npm registry: https://registry.npmjs.org/'
+npm registry: https://registry.npmjs.org/
++ /usr/local/go/bin/go version
+go version go1.26.7 linux/amd64
++ /tmp/gtools/govulncheck -version
+Go: go1.26.7
+Scanner: govulncheck@v1.8.0
+DB: https://vuln.go.dev
+DB updated: 2026-09-10 14:48:42 +0000 UTC
+
++ echo
+
++ echo '=== PRE INTEGRITY ==='
+=== PRE INTEGRITY ===
++ sha256sum /home/euripides/projects/blockchain-platform/backend/go.mod /home/euripides/projects/blockchain-platform/backend/go.sum /home/euripides/projects/blockchain-platform/frontend/pnpm-lock.yaml /home/euripides/projects/blockchain-platform/frontend/package.json
+4e0f98fa4e9258cd07c1acc6f0ce5bd762cba5ba9343bcbd28b1f1a33644c36c  /home/euripides/projects/blockchain-platform/backend/go.mod
+34147fb9944ea49b8470e4c0e0da85eb53ce60706975b2d5fe34c2011ee4b6b2  /home/euripides/projects/blockchain-platform/backend/go.sum
+a11d5a0ec48ef455271427d048a066dc99a2b607f71beaa170188b22766a94b5  /home/euripides/projects/blockchain-platform/frontend/pnpm-lock.yaml
+1ee8ee3f9525c4fe466cb55f1154e288c698450acc45e4fee2b753330eaeeba9  /home/euripides/projects/blockchain-platform/frontend/package.json
++ echo
+
++ echo '=== [1] pnpm audit --json ==='
+=== [1] pnpm audit --json ===
++ cd /home/euripides/projects/blockchain-platform/frontend
++ CI=true
++ pnpm audit --json
++ echo PNPM_AUDIT_JSON_EXIT=1
+PNPM_AUDIT_JSON_EXIT=1
++ CI=true
++ pnpm audit
++ echo PNPM_AUDIT_TABLE_EXIT=1
+PNPM_AUDIT_TABLE_EXIT=1
++ echo
+
++ echo '=== [2] go list -m all ==='
+=== [2] go list -m all ===
++ cd /home/euripides/projects/blockchain-platform/backend
++ GOFLAGS=-mod=readonly
++ /usr/local/go/bin/go list -m all
+++ wc -l
++ echo 'GO_LIST_EXIT=0  lines=159'
+GO_LIST_EXIT=0  lines=159
++ GOFLAGS=-mod=readonly
++ /usr/local/go/bin/go list -m -json all
+++ grep -c '"Path"' /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/deps/go-list-m-all.json
++ echo module_count_json=159
+module_count_json=159
++ echo
+
++ echo '=== [3] govulncheck ==='
+=== [3] govulncheck ===
++ /tmp/gtools/govulncheck -version
++ /tmp/gtools/govulncheck ./...
++ echo GOVULNCHECK_EXIT=3
+GOVULNCHECK_EXIT=3
++ /tmp/gtools/govulncheck -show verbose ./...
++ echo GOVULNCHECK_VERBOSE_EXIT=3
+GOVULNCHECK_VERBOSE_EXIT=3
++ /tmp/gtools/govulncheck -format json ./...
++ echo GOVULNCHECK_JSON_EXIT=0
+GOVULNCHECK_JSON_EXIT=0
++ echo
+
++ echo '=== POST INTEGRITY ==='
+=== POST INTEGRITY ===
++ sha256sum /home/euripides/projects/blockchain-platform/backend/go.mod /home/euripides/projects/blockchain-platform/backend/go.sum /home/euripides/projects/blockchain-platform/frontend/pnpm-lock.yaml /home/euripides/projects/blockchain-platform/frontend/package.json
+4e0f98fa4e9258cd07c1acc6f0ce5bd762cba5ba9343bcbd28b1f1a33644c36c  /home/euripides/projects/blockchain-platform/backend/go.mod
+34147fb9944ea49b8470e4c0e0da85eb53ce60706975b2d5fe34c2011ee4b6b2  /home/euripides/projects/blockchain-platform/backend/go.sum
+a11d5a0ec48ef455271427d048a066dc99a2b607f71beaa170188b22766a94b5  /home/euripides/projects/blockchain-platform/frontend/pnpm-lock.yaml
+1ee8ee3f9525c4fe466cb55f1154e288c698450acc45e4fee2b753330eaeeba9  /home/euripides/projects/blockchain-platform/frontend/package.json
++ echo VM_DEPS_DONE=1
+VM_DEPS_DONE=1

@@ -1,0 +1,4 @@
+2026-09-12T22:46:02Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:46:02Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:46:02Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?159.29 KiB / 234.65 KiB [---------------------------------------->__________________] 67.89% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 634.28 KiB p/s 600ms2026-09-12T22:46:06Z	INFO	Detected config files	num=0

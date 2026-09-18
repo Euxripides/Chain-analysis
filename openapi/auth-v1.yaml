@@ -211,6 +211,65 @@ paths:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
 
+  /api/auth/v1/session/workspaces:
+    get:
+      operationId: listSessionWorkspaceOptions
+      summary: 当前身份在当前组织内可选的工作区（只返回 active 成员资格，不读组织默认值）
+      tags: [auth]
+      responses:
+        '200':
+          description: 可选工作区列表
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/session/workspace:
+    post:
+      operationId: switchSessionWorkspace
+      summary: 把当前会话切换到同一组织内的另一个成员工作区
+      description: |
+        目标必须是该身份的 active 成员资格，否则 fail closed 且不改动现有会话。
+        非 GET 请求必须携带 CSRF double-submit 令牌；成功后写
+        authorization.workspace_switched 审计。
+        会话离开旧工作区时，服务端会主动关闭该会话在旧作用域下建立的全部 SSE
+        订阅（审计 action job.events.scope_invalidated）。
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspace_id]
+              properties:
+                workspace_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 切换成功（state=switched）或目标与当前一致（state=unchanged）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少成员资格，或 CSRF 校验失败（csrf_failed）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: 会话状态已变化（AUTHZ_WORKSPACE_SWITCH_CONFLICT）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
   /api/auth/v1/sessions:
     get:
       operationId: listOwnSessions
@@ -391,15 +450,74 @@ paths:
   /api/auth/v1/mfa/verify:
     post:
       operationId: verifyMfa
-      summary: 校验 TOTP / 恢复码
-      description: 尚未实现（NOT_IMPLEMENTED），返回 501；不得据此认为已支持 MFA。
+      summary: 校验 TOTP / 恢复码（登录第二步或已登录 step-up）
+      description: |
+        两种用法：
+        * 登录第二步：body 带 `challenge_id`（`POST /api/auth/v1/login` 需要 MFA 时返回 202 并给出）。
+          无会话即可调用，成功后建会话并下发 Cookie；挑战单次使用、5 分钟过期、最多 5 次尝试。
+        * 已登录用户的 step-up：带会话且只给 `code`，成功返回 `verified=true`。
+        两条路径都不区分“码错”与“重放”，也不回显任何期望值。
       tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: 6 位 TOTP 验证码或一次性恢复码 }
+                challenge_id: { type: string, description: 登录第二步的挑战 id；自助 step-up 时留空 }
+                return_to: { type: string, description: 仅登录第二步使用，应用内相对路径 }
       responses:
-        '501':
-          description: 未实现
+        '200':
+          description: |
+            校验通过。登录第二步同时下发会话 Cookie（HttpOnly）；
+            自助 step-up 返回 verified / used_recovery_code。
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: AUTHN_MFA_INVALID（验证码不正确）或 AUTHN_MFA_CHALLENGE_INVALID（挑战已失效，需重新登录）
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: AUTHN_MFA_NOT_ENROLLED（该账号未启用 MFA，无可校验的第二因素）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '429':
+          description: RATE_LIMIT_MFA_ATTEMPTS（尝试次数用尽，该挑战作废，需重新登录）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '503':
+          description: AUTHN_MFA_UNAVAILABLE（该部署未接线 MFA 存储）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/mfa/enroll/start:
+    post:
+      operationId: startMfaEnrollment
+      summary: 开始 MFA 注册（生成密钥与 otpauth URI）
+      description: |
+        仅在已确认会话上可用。密钥在确认之前不改变登录要求；
+        已启用 MFA 的账号返回 409 AUTHN_MFA_ALREADY_ENROLLED（需先关闭再重新注册）。
+      tags: [auth]
+      responses:
+        '200':
+          description: 返回 secret / otpauth_uri / digits / period_seconds（secret 只在本次响应出现）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
         '401':
           description: 未认证或会话失效
           content:
@@ -407,6 +525,87 @@ paths:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
         '403':
           description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: AUTHN_MFA_ALREADY_ENROLLED（已启用 MFA）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '503':
+          description: AUTHN_MFA_UNAVAILABLE（该部署未接线 MFA 存储）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/mfa/enroll/confirm:
+    post:
+      operationId: confirmMfaEnrollment
+      summary: 用一次正确验证码确认 MFA 注册，并一次性下发恢复码
+      description: |
+        恢复码明文只在本次响应出现一次，库中仅存摘要；审计写 auth:mfa:enroll。
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: 认证器上的一次性验证码 }
+      responses:
+        '200':
+          description: 返回 enrolled=true 与 recovery_codes（一次性明文列表）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: AUTHN_MFA_INVALID（验证码不正确）或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: AUTHN_MFA_ALREADY_ENROLLED（已启用）或 AUTHN_MFA_NOT_ENROLLED（尚未开始注册）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '503':
+          description: AUTHN_MFA_UNAVAILABLE（该部署未接线 MFA 存储）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/auth/v1/mfa/disable:
+    post:
+      operationId: disableMfa
+      summary: 自助关闭 MFA（删除密钥与全部恢复码）
+      description: 审计写 auth:mfa:disable。关闭后登录不再要求第二因素。
+      tags: [auth]
+      responses:
+        '200':
+          description: 返回 enrolled=false
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或 CSRF 校验失败
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '503':
+          description: AUTHN_MFA_UNAVAILABLE（该部署未接线 MFA 存储）
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }

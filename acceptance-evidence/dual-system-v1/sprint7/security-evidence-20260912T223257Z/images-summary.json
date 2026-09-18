@@ -1,0 +1,1464 @@
+{
+  "generated_utc": "2026-09-12T22:45:52.674016+00:00",
+  "images": [
+    {
+      "scan_key": "postgres-18",
+      "image_ref": "postgres:18",
+      "in_project_release_scope": true,
+      "json_exists": true,
+      "json_bytes": 2151542,
+      "scan_status": "OK",
+      "artifact_name": "postgres:18",
+      "artifact_type": "container_image",
+      "metadata_os": "debian",
+      "metadata_repo_digests": [
+        "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
+      ],
+      "metadata_image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+      "metadata_repo_tags": [
+        "postgres:18"
+      ],
+      "counts": {
+        "CRITICAL": 14,
+        "HIGH": 101,
+        "MEDIUM": 154,
+        "LOW": 143,
+        "UNKNOWN": 3
+      },
+      "counts_total": 415,
+      "result_targets": [
+        {
+          "target": "postgres:18 (debian 13.6)",
+          "class": "os-pkgs",
+          "type": "debian",
+          "vulns": 369
+        },
+        {
+          "target": "usr/local/bin/gosu",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 46
+        }
+      ],
+      "no_fix_available_count": 56,
+      "top_packages": [
+        {
+          "pkg": "stdlib",
+          "installed": "v1.24.6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2025-68121",
+            "CVE-2025-61726",
+            "CVE-2025-61729",
+            "CVE-2026-25679",
+            "CVE-2026-27145",
+            "CVE-2026-32280",
+            "CVE-2026-32281",
+            "CVE-2026-32283",
+            "CVE-2026-33811",
+            "CVE-2026-33814",
+            "CVE-2026-33818",
+            "CVE-2026-39820",
+            "CVE-2026-39821",
+            "CVE-2026-39822",
+            "CVE-2026-39836",
+            "CVE-2026-42499",
+            "CVE-2026-42504",
+            "CVE-2026-56853",
+            "CVE-2026-56858",
+            "CVE-2026-56859",
+            "CVE-2026-56860",
+            "CVE-2026-56862",
+            "CVE-2025-47912",
+            "CVE-2025-58183",
+            "CVE-2025-58185",
+            "CVE-2025-58187",
+            "CVE-2025-58188",
+            "CVE-2025-58189",
+            "CVE-2025-61723",
+            "CVE-2025-61724",
+            "CVE-2025-61725",
+            "CVE-2025-61727",
+            "CVE-2025-61728",
+            "CVE-2025-61730",
+            "CVE-2026-27142",
+            "CVE-2026-32282",
+            "CVE-2026-32288",
+            "CVE-2026-32289",
+            "CVE-2026-39823",
+            "CVE-2026-39825",
+            "CVE-2026-39826",
+            "CVE-2026-42505",
+            "CVE-2026-42507",
+            "CVE-2025-58186",
+            "CVE-2026-27139"
+          ],
+          "fixed": "1.24.13, 1.25.7, 1.26.0-rc.3",
+          "title": "crypto/tls: crypto/tls: Incorrect certificate validation during TLS session resumption"
+        },
+        {
+          "pkg": "libperl5.40",
+          "installed": "5.40.1-6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-13221",
+            "CVE-2026-42496",
+            "CVE-2026-8376",
+            "CVE-2026-42497",
+            "CVE-2026-48962",
+            "CVE-2026-57432",
+            "CVE-2026-57433",
+            "CVE-2026-9538",
+            "CVE-2025-15649",
+            "CVE-2026-12087",
+            "CVE-2026-15534",
+            "CVE-2026-19487",
+            "CVE-2026-48959",
+            "CVE-2026-48961",
+            "CVE-2026-7010",
+            "CVE-2026-7017",
+            "CVE-2011-4116"
+          ],
+          "fixed": "5.40.1-6+deb13u1",
+          "title": "perl: Perl: Incorrect regular expression processing via large regular expressions"
+        },
+        {
+          "pkg": "perl",
+          "installed": "5.40.1-6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-13221",
+            "CVE-2026-42496",
+            "CVE-2026-8376",
+            "CVE-2026-42497",
+            "CVE-2026-48962",
+            "CVE-2026-57432",
+            "CVE-2026-57433",
+            "CVE-2026-9538",
+            "CVE-2025-15649",
+            "CVE-2026-12087",
+            "CVE-2026-15534",
+            "CVE-2026-19487",
+            "CVE-2026-48959",
+            "CVE-2026-48961",
+            "CVE-2026-7010",
+            "CVE-2026-7017",
+            "CVE-2011-4116"
+          ],
+          "fixed": "5.40.1-6+deb13u1",
+          "title": "perl: Perl: Incorrect regular expression processing via large regular expressions"
+        },
+        {
+          "pkg": "perl-base",
+          "installed": "5.40.1-6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-13221",
+            "CVE-2026-42496",
+            "CVE-2026-8376",
+            "CVE-2026-42497",
+            "CVE-2026-48962",
+            "CVE-2026-57432",
+            "CVE-2026-57433",
+            "CVE-2026-9538",
+            "CVE-2025-15649",
+            "CVE-2026-12087",
+            "CVE-2026-15534",
+            "CVE-2026-19487",
+            "CVE-2026-48959",
+            "CVE-2026-48961",
+            "CVE-2026-7010",
+            "CVE-2026-7017",
+            "CVE-2011-4116"
+          ],
+          "fixed": "5.40.1-6+deb13u1",
+          "title": "perl: Perl: Incorrect regular expression processing via large regular expressions"
+        },
+        {
+          "pkg": "perl-modules-5.40",
+          "installed": "5.40.1-6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-13221",
+            "CVE-2026-42496",
+            "CVE-2026-8376",
+            "CVE-2026-42497",
+            "CVE-2026-48962",
+            "CVE-2026-57432",
+            "CVE-2026-57433",
+            "CVE-2026-9538",
+            "CVE-2025-15649",
+            "CVE-2026-12087",
+            "CVE-2026-15534",
+            "CVE-2026-19487",
+            "CVE-2026-48959",
+            "CVE-2026-48961",
+            "CVE-2026-7010",
+            "CVE-2026-7017",
+            "CVE-2011-4116"
+          ],
+          "fixed": "5.40.1-6+deb13u1",
+          "title": "perl: Perl: Incorrect regular expression processing via large regular expressions"
+        },
+        {
+          "pkg": "libxml2",
+          "installed": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-6653",
+            "CVE-2026-74860",
+            "CVE-2026-86140",
+            "CVE-2026-86138",
+            "CVE-2026-86139",
+            "CVE-2026-86142",
+            "CVE-2026-86143",
+            "CVE-2026-86144",
+            "CVE-2026-11979",
+            "CVE-2026-86137",
+            "CVE-2026-86141"
+          ],
+          "fixed": null,
+          "title": "libxml2: mingw-libxml2: libxml2: Denial of Service via crafted XML input due to use-after-"
+        },
+        {
+          "pkg": "libssl3t64",
+          "installed": "3.5.6-1~deb13u2",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-14456",
+            "CVE-2026-18798",
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-14457",
+            "CVE-2026-54874",
+            "CVE-2026-63073",
+            "CVE-2026-63074",
+            "CVE-2026-63075",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.5.7-1~deb13u2",
+          "title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server"
+        },
+        {
+          "pkg": "openssl",
+          "installed": "3.5.6-1~deb13u2",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-14456",
+            "CVE-2026-18798",
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-14457",
+            "CVE-2026-54874",
+            "CVE-2026-63073",
+            "CVE-2026-63074",
+            "CVE-2026-63075",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.5.7-1~deb13u2",
+          "title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server"
+        },
+        {
+          "pkg": "openssl-provider-legacy",
+          "installed": "3.5.6-1~deb13u2",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-14456",
+            "CVE-2026-18798",
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-14457",
+            "CVE-2026-54874",
+            "CVE-2026-63073",
+            "CVE-2026-63074",
+            "CVE-2026-63075",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.5.7-1~deb13u2",
+          "title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server"
+        },
+        {
+          "pkg": "libpcre2-8-0",
+          "installed": "10.46-1~deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-86145",
+            "CVE-2026-89161",
+            "CVE-2026-89157",
+            "CVE-2026-89158",
+            "CVE-2026-89156",
+            "CVE-2026-89160",
+            "CVE-2026-89162"
+          ],
+          "fixed": "10.46-1~deb13u2",
+          "title": "pcre2: PCRE2: Out-of-bounds write allows arbitrary code execution via crafted regular expr"
+        },
+        {
+          "pkg": "libsqlite3-0",
+          "installed": "3.46.1-7+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-11822",
+            "CVE-2026-11824",
+            "CVE-2026-39113",
+            "CVE-2026-50812",
+            "CVE-2026-50813",
+            "CVE-2021-45346",
+            "CVE-2025-70873"
+          ],
+          "fixed": "3.46.1-7+deb13u2",
+          "title": "sqlite: SQLite: Arbitrary code execution via crafted FTS5 full-text search data"
+        },
+        {
+          "pkg": "libsystemd0",
+          "installed": "257.13-1~deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-16742",
+            "CVE-2026-15059",
+            "CVE-2013-4392",
+            "CVE-2023-31437",
+            "CVE-2023-31438",
+            "CVE-2023-31439",
+            "CVE-2026-40228"
+          ],
+          "fixed": null,
+          "title": "systemd: systemd-homed: Local privilege escalation via missing home-record signature verif"
+        },
+        {
+          "pkg": "libudev1",
+          "installed": "257.13-1~deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-16742",
+            "CVE-2026-15059",
+            "CVE-2013-4392",
+            "CVE-2023-31437",
+            "CVE-2023-31438",
+            "CVE-2023-31439",
+            "CVE-2026-40228"
+          ],
+          "fixed": null,
+          "title": "systemd: systemd-homed: Local privilege escalation via missing home-record signature verif"
+        },
+        {
+          "pkg": "bsdutils",
+          "installed": "1:2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "libblkid1",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "liblastlog2-2",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "libmount1",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "libsmartcols1",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "libuuid1",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "login",
+          "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "mount",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "util-linux",
+          "installed": "2.41.5-0+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-76642",
+            "CVE-2026-78408",
+            "CVE-2026-78409",
+            "CVE-2026-78410",
+            "CVE-2026-3184",
+            "CVE-2022-0563"
+          ],
+          "fixed": null,
+          "title": "util-linux: util-linux: failed external mount helper still runs privileged X-mount post-ho"
+        },
+        {
+          "pkg": "dirmngr",
+          "installed": "2.4.7-21+deb13u1+b4",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-24882",
+            "CVE-2025-68972",
+            "CVE-2022-3219",
+            "CVE-2026-57062"
+          ],
+          "fixed": null,
+          "title": "GnuPG: GnuPG: Stack-based buffer overflow in tpm2daemon allows arbitrary code execution"
+        },
+        {
+          "pkg": "gnupg",
+          "installed": "2.4.7-21+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-24882",
+            "CVE-2025-68972",
+            "CVE-2022-3219",
+            "CVE-2026-57062"
+          ],
+          "fixed": null,
+          "title": "GnuPG: GnuPG: Stack-based buffer overflow in tpm2daemon allows arbitrary code execution"
+        },
+        {
+          "pkg": "gnupg-l10n",
+          "installed": "2.4.7-21+deb13u1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-24882",
+            "CVE-2025-68972",
+            "CVE-2022-3219",
+            "CVE-2026-57062"
+          ],
+          "fixed": null,
+          "title": "GnuPG: GnuPG: Stack-based buffer overflow in tpm2daemon allows arbitrary code execution"
+        }
+      ]
+    },
+    {
+      "scan_key": "clickhouse-clickhouse-server-26.7",
+      "image_ref": "clickhouse/clickhouse-server:26.7",
+      "in_project_release_scope": true,
+      "json_exists": true,
+      "json_bytes": 775263,
+      "scan_status": "OK",
+      "artifact_name": "clickhouse/clickhouse-server:26.7",
+      "artifact_type": "container_image",
+      "metadata_os": "ubuntu",
+      "metadata_repo_digests": [
+        "clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e"
+      ],
+      "metadata_image_id": "sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+      "metadata_repo_tags": [
+        "clickhouse/clickhouse-server:26.7"
+      ],
+      "counts": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 68,
+        "LOW": 30,
+        "UNKNOWN": 0
+      },
+      "counts_total": 98,
+      "result_targets": [
+        {
+          "target": "clickhouse/clickhouse-server:26.7 (ubuntu 22.04)",
+          "class": "os-pkgs",
+          "type": "ubuntu",
+          "vulns": 98
+        }
+      ],
+      "no_fix_available_count": 21,
+      "top_packages": [
+        {
+          "pkg": "libc-bin",
+          "installed": "2.35-0ubuntu3.14",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-18374",
+            "CVE-2026-19542",
+            "CVE-2026-6368",
+            "CVE-2026-6791",
+            "CVE-2026-77117",
+            "CVE-2026-80489"
+          ],
+          "fixed": null,
+          "title": "glibc: glibc: Heap buffer overflow via attacker-controlled fopen mode string"
+        },
+        {
+          "pkg": "libc6",
+          "installed": "2.35-0ubuntu3.14",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-18374",
+            "CVE-2026-19542",
+            "CVE-2026-6368",
+            "CVE-2026-6791",
+            "CVE-2026-77117",
+            "CVE-2026-80489"
+          ],
+          "fixed": null,
+          "title": "glibc: glibc: Heap buffer overflow via attacker-controlled fopen mode string"
+        },
+        {
+          "pkg": "locales",
+          "installed": "2.35-0ubuntu3.14",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-18374",
+            "CVE-2026-19542",
+            "CVE-2026-6368",
+            "CVE-2026-6791",
+            "CVE-2026-77117",
+            "CVE-2026-80489"
+          ],
+          "fixed": null,
+          "title": "glibc: glibc: Heap buffer overflow via attacker-controlled fopen mode string"
+        },
+        {
+          "pkg": "perl-base",
+          "installed": "5.34.0-3ubuntu1.7",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-12087",
+            "CVE-2026-13221",
+            "CVE-2026-15534",
+            "CVE-2026-19487",
+            "CVE-2026-57432",
+            "CVE-2026-57433"
+          ],
+          "fixed": "5.34.0-3ubuntu1.8",
+          "title": "perl-Socket: perl-Socket: Information Disclosure due to Out-of-Bounds Read"
+        },
+        {
+          "pkg": "libssl3",
+          "installed": "3.0.2-0ubuntu1.26",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-54874",
+            "CVE-2026-63074",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.0.2-0ubuntu1.29",
+          "title": "openssl: heap buffer overflow in CMS key unwrapping"
+        },
+        {
+          "pkg": "openssl",
+          "installed": "3.0.2-0ubuntu1.26",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-54874",
+            "CVE-2026-63074",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.0.2-0ubuntu1.29",
+          "title": "openssl: heap buffer overflow in CMS key unwrapping"
+        },
+        {
+          "pkg": "bsdutils",
+          "installed": "1:2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "busybox",
+          "installed": "1:1.30.1-7ubuntu3.1",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2023-42366",
+            "CVE-2024-58251",
+            "CVE-2025-46394",
+            "CVE-2025-60876"
+          ],
+          "fixed": null,
+          "title": "busybox: A heap-buffer-overflow"
+        },
+        {
+          "pkg": "libblkid1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "libmount1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "libsmartcols1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "libuuid1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "mount",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "util-linux",
+          "installed": "2.37.2-4ubuntu3.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13595",
+            "CVE-2026-27456",
+            "CVE-2026-53613",
+            "CVE-2026-53615"
+          ],
+          "fixed": "2.37.2-4ubuntu3.6",
+          "title": "util-linux: util-linux: heap use-after-free in libblkid nested partition probing"
+        },
+        {
+          "pkg": "libp11-kit0",
+          "installed": "0.24.0-6build1",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-13757",
+            "CVE-2026-18938"
+          ],
+          "fixed": "0.24.0-6ubuntu0.1",
+          "title": "p11-kit: Stack exhaustion via unbounded recursion in RPC attribute parsing"
+        },
+        {
+          "pkg": "tar",
+          "installed": "1.34+dfsg-1ubuntu0.1.22.04.6",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-18477",
+            "CVE-2026-18508"
+          ],
+          "fixed": null,
+          "title": "tar: tar: TOCTOU in incremental dumpdir 'X' rename handling allows restore path escape"
+        },
+        {
+          "pkg": "diffutils",
+          "installed": "1:3.8-0ubuntu2",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-53910"
+          ],
+          "fixed": "1:3.8-0ubuntu2.1",
+          "title": "diffutils: heap‑based buffer overflow due to multiple signed integer overflows in line‑map"
+        },
+        {
+          "pkg": "libattr1",
+          "installed": "1:2.5.1-1build1",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-54371"
+          ],
+          "fixed": "1:2.5.1-1ubuntu0.1",
+          "title": "attr: attr: Symlink Traversal Privilege Escalation via getfattr and setfattr"
+        },
+        {
+          "pkg": "wget",
+          "installed": "1.21.2-2ubuntu1.5",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2021-31879"
+          ],
+          "fixed": null,
+          "title": "wget: authorization header disclosure on redirect"
+        },
+        {
+          "pkg": "zlib1g",
+          "installed": "1:1.2.11.dfsg-2ubuntu9.2",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-85091"
+          ],
+          "fixed": null,
+          "title": "zlib versions 1.3.1.2 through 1.3.2 contain a heap buffer overflow vul ..."
+        },
+        {
+          "pkg": "libncurses6",
+          "installed": "6.3-2ubuntu0.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495",
+            "CVE-2025-6141"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        },
+        {
+          "pkg": "libncursesw6",
+          "installed": "6.3-2ubuntu0.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495",
+            "CVE-2025-6141"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        },
+        {
+          "pkg": "libtinfo6",
+          "installed": "6.3-2ubuntu0.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495",
+            "CVE-2025-6141"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        },
+        {
+          "pkg": "login",
+          "installed": "1:4.8.1-2ubuntu2.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-29383",
+            "CVE-2024-56433"
+          ],
+          "fixed": null,
+          "title": "shadow: Improper input validation in shadow-utils package utility chfn"
+        },
+        {
+          "pkg": "ncurses-base",
+          "installed": "6.3-2ubuntu0.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495",
+            "CVE-2025-6141"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        }
+      ]
+    },
+    {
+      "scan_key": "nats-2-alpine",
+      "image_ref": "nats:2-alpine",
+      "in_project_release_scope": true,
+      "json_exists": true,
+      "json_bytes": 165095,
+      "scan_status": "OK",
+      "artifact_name": "nats:2-alpine",
+      "artifact_type": "container_image",
+      "metadata_os": "alpine",
+      "metadata_repo_digests": [
+        "nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3"
+      ],
+      "metadata_image_id": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+      "metadata_repo_tags": [
+        "nats:2-alpine"
+      ],
+      "counts": {
+        "CRITICAL": 0,
+        "HIGH": 2,
+        "MEDIUM": 8,
+        "LOW": 12,
+        "UNKNOWN": 1
+      },
+      "counts_total": 23,
+      "result_targets": [
+        {
+          "target": "nats:2-alpine (alpine 3.22.5)",
+          "class": "os-pkgs",
+          "type": "alpine",
+          "vulns": 20
+        },
+        {
+          "target": "usr/local/bin/nats-server",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 3
+        }
+      ],
+      "no_fix_available_count": 0,
+      "top_packages": [
+        {
+          "pkg": "libcrypto3",
+          "installed": "3.5.7-r0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-14456",
+            "CVE-2026-18798",
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-14457",
+            "CVE-2026-54874",
+            "CVE-2026-63073",
+            "CVE-2026-63074",
+            "CVE-2026-63075",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.5.8-r0",
+          "title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server"
+        },
+        {
+          "pkg": "libssl3",
+          "installed": "3.5.7-r0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-14456",
+            "CVE-2026-18798",
+            "CVE-2026-63072",
+            "CVE-2026-63076",
+            "CVE-2026-14457",
+            "CVE-2026-54874",
+            "CVE-2026-63073",
+            "CVE-2026-63074",
+            "CVE-2026-63075",
+            "CVE-2026-75803"
+          ],
+          "fixed": "3.5.8-r0",
+          "title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server"
+        },
+        {
+          "pkg": "golang.org/x/crypto",
+          "installed": "v0.55.0",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-56855",
+            "CVE-2026-78662",
+            "GO-2026-5932"
+          ],
+          "fixed": "0.56.0",
+          "title": "golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Denial of Service via crafted messages"
+        }
+      ]
+    },
+    {
+      "scan_key": "minio-minio-latest",
+      "image_ref": "minio/minio:latest",
+      "in_project_release_scope": false,
+      "json_exists": true,
+      "json_bytes": 2201111,
+      "scan_status": "OK",
+      "artifact_name": "minio/minio:latest",
+      "artifact_type": "container_image",
+      "metadata_os": "redhat",
+      "metadata_repo_digests": [
+        "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+      ],
+      "metadata_image_id": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "metadata_repo_tags": [
+        "minio/minio:latest"
+      ],
+      "counts": {
+        "CRITICAL": 6,
+        "HIGH": 100,
+        "MEDIUM": 101,
+        "LOW": 16,
+        "UNKNOWN": 4
+      },
+      "counts_total": 227,
+      "result_targets": [
+        {
+          "target": "minio/minio:latest (redhat 9.6)",
+          "class": "os-pkgs",
+          "type": "redhat",
+          "vulns": 37
+        },
+        {
+          "target": "usr/bin/mc",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 86
+        },
+        {
+          "target": "usr/bin/minio",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 104
+        }
+      ],
+      "no_fix_available_count": 6,
+      "top_packages": [
+        {
+          "pkg": "stdlib",
+          "installed": "v1.24.6",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2025-68121",
+            "CVE-2025-61726",
+            "CVE-2025-61729",
+            "CVE-2026-25679",
+            "CVE-2026-27145",
+            "CVE-2026-32280",
+            "CVE-2026-32281",
+            "CVE-2026-32283",
+            "CVE-2026-33811",
+            "CVE-2026-33814",
+            "CVE-2026-33818",
+            "CVE-2026-39820",
+            "CVE-2026-39821",
+            "CVE-2026-39822",
+            "CVE-2026-39836",
+            "CVE-2026-42499",
+            "CVE-2026-42504",
+            "CVE-2026-56853",
+            "CVE-2026-56858",
+            "CVE-2026-56859",
+            "CVE-2026-56860",
+            "CVE-2026-56862",
+            "CVE-2025-47912",
+            "CVE-2025-58183",
+            "CVE-2025-58185",
+            "CVE-2025-58187",
+            "CVE-2025-58188",
+            "CVE-2025-58189",
+            "CVE-2025-61723",
+            "CVE-2025-61724",
+            "CVE-2025-61725",
+            "CVE-2025-61727",
+            "CVE-2025-61728",
+            "CVE-2025-61730",
+            "CVE-2026-27142",
+            "CVE-2026-32282",
+            "CVE-2026-32288",
+            "CVE-2026-32289",
+            "CVE-2026-39823",
+            "CVE-2026-39825",
+            "CVE-2026-39826",
+            "CVE-2026-42505",
+            "CVE-2026-42507",
+            "CVE-2025-58186",
+            "CVE-2026-27139",
+            "CVE-2025-68121",
+            "CVE-2025-61726",
+            "CVE-2025-61729",
+            "CVE-2026-25679",
+            "CVE-2026-27145",
+            "CVE-2026-32280",
+            "CVE-2026-32281",
+            "CVE-2026-32283",
+            "CVE-2026-33811",
+            "CVE-2026-33814",
+            "CVE-2026-33818",
+            "CVE-2026-39820",
+            "CVE-2026-39821",
+            "CVE-2026-39822",
+            "CVE-2026-39836",
+            "CVE-2026-42499",
+            "CVE-2026-42504",
+            "CVE-2026-56853",
+            "CVE-2026-56858",
+            "CVE-2026-56859",
+            "CVE-2026-56860",
+            "CVE-2026-56862",
+            "CVE-2025-47912",
+            "CVE-2025-58183",
+            "CVE-2025-58185",
+            "CVE-2025-58187",
+            "CVE-2025-58188",
+            "CVE-2025-58189",
+            "CVE-2025-61723",
+            "CVE-2025-61724",
+            "CVE-2025-61725",
+            "CVE-2025-61727",
+            "CVE-2025-61728",
+            "CVE-2025-61730",
+            "CVE-2026-27142",
+            "CVE-2026-32282",
+            "CVE-2026-32288",
+            "CVE-2026-32289",
+            "CVE-2026-39823",
+            "CVE-2026-39825",
+            "CVE-2026-39826",
+            "CVE-2026-42505",
+            "CVE-2026-42507",
+            "CVE-2025-58186",
+            "CVE-2026-27139"
+          ],
+          "fixed": "1.24.13, 1.25.7, 1.26.0-rc.3",
+          "title": "crypto/tls: crypto/tls: Incorrect certificate validation during TLS session resumption"
+        },
+        {
+          "pkg": "google.golang.org/grpc",
+          "installed": "v1.71.0",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-33186",
+            "CVE-2026-84304",
+            "CVE-2026-84445",
+            "GHSA-hrxh-6v49-42gf",
+            "CVE-2026-84303",
+            "CVE-2026-33186",
+            "CVE-2026-84304",
+            "CVE-2026-84445",
+            "GHSA-hrxh-6v49-42gf",
+            "CVE-2026-84303"
+          ],
+          "fixed": "1.79.3",
+          "title": "google.golang.org/grpc/grpc-go: google.golang.org/grpc/authz: gRPC-Go: Authorization bypas"
+        },
+        {
+          "pkg": "github.com/minio/minio",
+          "installed": "v0.0.0-20250907161309-07c3a429bfed+dirty",
+          "severity": "CRITICAL",
+          "ids": [
+            "CVE-2026-33322",
+            "CVE-2026-33419",
+            "CVE-2025-62506",
+            "CVE-2026-34204",
+            "CVE-2026-39414",
+            "CVE-2026-40344",
+            "CVE-2026-41145"
+          ],
+          "fixed": null,
+          "title": "MinIO has JWT Algorithm Confusion in OIDC Authentication"
+        },
+        {
+          "pkg": "golang.org/x/crypto",
+          "installed": "v0.40.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2025-47913",
+            "CVE-2026-39828",
+            "CVE-2026-39829",
+            "CVE-2026-39830",
+            "CVE-2026-39831",
+            "CVE-2026-39832",
+            "CVE-2026-39835",
+            "CVE-2026-42508",
+            "CVE-2026-46595",
+            "CVE-2026-46597",
+            "CVE-2026-56854",
+            "CVE-2025-47914",
+            "CVE-2025-58181",
+            "CVE-2026-39827",
+            "CVE-2026-39833",
+            "CVE-2026-39834",
+            "CVE-2026-46598",
+            "CVE-2026-56855",
+            "CVE-2026-78662",
+            "GO-2026-5932",
+            "CVE-2025-47913",
+            "CVE-2026-39828",
+            "CVE-2026-39829",
+            "CVE-2026-39830",
+            "CVE-2026-39831",
+            "CVE-2026-39832",
+            "CVE-2026-39835",
+            "CVE-2026-42508",
+            "CVE-2026-46595",
+            "CVE-2026-46597",
+            "CVE-2026-56854",
+            "CVE-2025-47914",
+            "CVE-2025-58181",
+            "CVE-2026-39827",
+            "CVE-2026-39833",
+            "CVE-2026-39834",
+            "CVE-2026-46598",
+            "CVE-2026-56855",
+            "CVE-2026-78662",
+            "GO-2026-5932"
+          ],
+          "fixed": "0.43.0",
+          "title": "golang.org/x/crypto/ssh/agent: golang.org/x/crypto/ssh/agent: SSH client panic due to unex"
+        },
+        {
+          "pkg": "golang.org/x/net",
+          "installed": "v0.42.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-25681",
+            "CVE-2026-27136",
+            "CVE-2026-33814",
+            "CVE-2026-39821",
+            "CVE-2026-46600",
+            "CVE-2025-47911",
+            "CVE-2025-58190",
+            "CVE-2026-25680",
+            "CVE-2026-42502",
+            "CVE-2026-42506",
+            "CVE-2026-25681",
+            "CVE-2026-27136",
+            "CVE-2026-33814",
+            "CVE-2026-39821",
+            "CVE-2026-46600",
+            "CVE-2025-47911",
+            "CVE-2025-58190",
+            "CVE-2026-25680",
+            "CVE-2026-42502",
+            "CVE-2026-42506"
+          ],
+          "fixed": "0.55.0",
+          "title": "golang.org/x/net/html: golang.org/x/net/html: Arbitrary code execution via Cross-Site Scri"
+        },
+        {
+          "pkg": "github.com/prometheus/prometheus",
+          "installed": "v0.303.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-42151",
+            "CVE-2026-42154",
+            "CVE-2026-40179",
+            "CVE-2026-44903",
+            "CVE-2026-42151",
+            "CVE-2026-42154",
+            "CVE-2026-40179",
+            "CVE-2026-44903"
+          ],
+          "fixed": "0.311.3",
+          "title": "github.com/prometheus/prometheus: Prometheus: Information disclosure of Azure OAuth client"
+        },
+        {
+          "pkg": "libacl",
+          "installed": "2.3.1-4.el9",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-54369",
+            "CVE-2026-54370"
+          ],
+          "fixed": "2.4.0-1.el9_8",
+          "title": "acl: Symlink traversal privilege escalation via libacl functions"
+        },
+        {
+          "pkg": "golang.org/x/text",
+          "installed": "v0.27.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-56852",
+            "CVE-2026-56852"
+          ],
+          "fixed": "0.39.0",
+          "title": "golang.org/x/text: golang.org/x/text: Denial of Service via invalid UTF-8 input"
+        },
+        {
+          "pkg": "github.com/apache/thrift",
+          "installed": "v0.21.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-41602",
+            "CVE-2026-43871"
+          ],
+          "fixed": "0.23.0",
+          "title": "github.com/apache/thrift: Apache Thrift: Integer Overflow in TFramedTransport Go implement"
+        },
+        {
+          "pkg": "go.opentelemetry.io/otel/sdk",
+          "installed": "v1.35.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-24051",
+            "CVE-2026-39883"
+          ],
+          "fixed": "1.40.0",
+          "title": "opentelemetry-go: OpenTelemetry-Go Affected by Arbitrary Code Execution via PATH Hijacking"
+        },
+        {
+          "pkg": "libcap",
+          "installed": "2.48-9.el9_2",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-4878"
+          ],
+          "fixed": "2.48-10.el9_8.1",
+          "title": "libcap: libcap: Privilege escalation via TOCTOU race condition in cap_set_file()"
+        },
+        {
+          "pkg": "github.com/buger/jsonparser",
+          "installed": "v1.1.1",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-32285"
+          ],
+          "fixed": "1.1.2",
+          "title": "github.com/buger/jsonparser: github.com/buger/jsonparser: Denial of Service via malformed "
+        },
+        {
+          "pkg": "github.com/go-jose/go-jose/v4",
+          "installed": "v4.1.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-34986"
+          ],
+          "fixed": "4.1.4",
+          "title": "github.com/go-jose/go-jose/v3: github.com/go-jose/go-jose/v4: Go JOSE: Denial of Service v"
+        },
+        {
+          "pkg": "github.com/rabbitmq/amqp091-go",
+          "installed": "v1.10.0",
+          "severity": "HIGH",
+          "ids": [
+            "CVE-2026-79921"
+          ],
+          "fixed": "1.13.0",
+          "title": "github.com/rabbitmq/amqp091-go: amqp091-go: Denial of Service via oversized AMQP payloads"
+        },
+        {
+          "pkg": "glibc",
+          "installed": "2.34-168.el9_6.23",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-0915",
+            "CVE-2026-4046",
+            "CVE-2026-4437",
+            "CVE-2026-5435",
+            "CVE-2026-5450",
+            "CVE-2026-5928",
+            "CVE-2026-6238",
+            "CVE-2025-15281",
+            "CVE-2026-0861",
+            "CVE-2026-4438"
+          ],
+          "fixed": "2.34-231.el9_7.10",
+          "title": "glibc: glibc: Information disclosure via zero-valued network query"
+        },
+        {
+          "pkg": "glibc-common",
+          "installed": "2.34-168.el9_6.23",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-4046",
+            "CVE-2026-4437",
+            "CVE-2026-5435",
+            "CVE-2026-5450",
+            "CVE-2026-5928",
+            "CVE-2026-6238",
+            "CVE-2026-4438"
+          ],
+          "fixed": "2.34-270.el9_8",
+          "title": "glibc: glibc: Denial of Service via iconv() function with specific character sets"
+        },
+        {
+          "pkg": "glibc-minimal-langpack",
+          "installed": "2.34-168.el9_6.23",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-4046",
+            "CVE-2026-4437",
+            "CVE-2026-5435",
+            "CVE-2026-5450",
+            "CVE-2026-5928",
+            "CVE-2026-6238",
+            "CVE-2026-4438"
+          ],
+          "fixed": "2.34-270.el9_8",
+          "title": "glibc: glibc: Denial of Service via iconv() function with specific character sets"
+        },
+        {
+          "pkg": "coreutils-single",
+          "installed": "8.32-39.el9",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2025-5278",
+            "CVE-2026-56391",
+            "CVE-2026-56392"
+          ],
+          "fixed": "8.32-41.el9_8",
+          "title": "coreutils: Heap Buffer Under-Read in GNU Coreutils sort via Key Specification"
+        },
+        {
+          "pkg": "libattr",
+          "installed": "2.5.1-3.el9",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-54371"
+          ],
+          "fixed": "2.6.0-1.el9_8",
+          "title": "attr: attr: Symlink Traversal Privilege Escalation via getfattr and setfattr"
+        },
+        {
+          "pkg": "github.com/Azure/go-ntlmssp",
+          "installed": "v0.0.0-20221128193559-754e69321358",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-32952"
+          ],
+          "fixed": "0.1.1",
+          "title": "go-ntlmssp: go-ntlmssp: Denial of Service via malicious NTLM challenge"
+        },
+        {
+          "pkg": "github.com/eclipse/paho.mqtt.golang",
+          "installed": "v1.5.0",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2025-10543"
+          ],
+          "fixed": "1.5.1",
+          "title": "paho.mqtt.golang: paho.mqtt.golang: Integer Overflow in UTF-8 String Encoding"
+        },
+        {
+          "pkg": "go.mongodb.org/mongo-driver",
+          "installed": "v1.17.3",
+          "severity": "MEDIUM",
+          "ids": [
+            "CVE-2026-2303"
+          ],
+          "fixed": "1.17.7",
+          "title": "CVE-2026-2303 affecting package telegraf for versions less than 1.29.4-21"
+        },
+        {
+          "pkg": "libgcc",
+          "installed": "11.5.0-5.el9_5",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2021-46195",
+            "CVE-2022-27943"
+          ],
+          "fixed": null,
+          "title": "gcc: uncontrolled recursion in libiberty/rust-demangle.c"
+        },
+        {
+          "pkg": "ncurses-base",
+          "installed": "6.2-10.20210508.el9_6.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        },
+        {
+          "pkg": "ncurses-libs",
+          "installed": "6.2-10.20210508.el9_6.2",
+          "severity": "LOW",
+          "ids": [
+            "CVE-2023-50495"
+          ],
+          "fixed": null,
+          "title": "ncurses: segmentation fault via _nc_wrap_entry()"
+        }
+      ]
+    },
+    {
+      "scan_key": "mobsf-latest",
+      "image_ref": "opensecurity/mobile-security-framework-mobsf:latest",
+      "in_project_release_scope": false,
+      "json_exists": false,
+      "json_bytes": 0,
+      "scan_status": "SCAN_FAILED_OR_INCOMPLETE"
+    }
+  ]
+}

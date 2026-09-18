@@ -1,0 +1,9 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 497
+
+preserved_at=2026-09-13T02:53:16+07:00
+reason=保留原始 4 FAIL 证据（http://127.0.0.1:8088 入口下的 401 假失败），不覆盖、不删除
+source=acceptance-evidence/dual-system-v1/tests/sprint7/qa/ui/playwright.log
+269193379a8af136a2c1a9d7dbb10df085f506b733a3d90f4ff29d41fddc98fe  acceptance-evidence/dual-system-v1/tests/sprint7/qa/ui/playwright.log
+4140882eb1c312da65dc25e0fe453081abf70066a0ec14b8b82626f600f5d96d  acceptance-evidence/dual-system-v1/tests/sprint7/qa/ui/result.json

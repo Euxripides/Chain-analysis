@@ -11,6 +11,11 @@ type fakeRows struct{ rows []map[string]any }
 func (f fakeRows) RowsForExport(context.Context, string, string, string, int, int) ([]map[string]any, error) {
 	return f.rows, nil
 }
+
+// FlowTokenTransfers 是 P1-1 之后 Analyze 真正的读路径，测试桩必须同样实现它。
+func (f fakeRows) FlowTokenTransfers(context.Context, string, string, int) ([]map[string]any, error) {
+	return f.rows, nil
+}
 func TestAnalyzeAggregatesDirectionAndEvidence(t *testing.T) {
 	now := time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC)
 	svc := &Service{query: fakeRows{rows: []map[string]any{

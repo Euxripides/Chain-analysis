@@ -1,0 +1,28 @@
+{
+  "label": "lan_jobs_list",
+  "url": "http://127.0.0.1:8080/api/v2/jobs?limit=20",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.001662736,
+  "requests": 2784,
+  "rps": 139.18842831947248,
+  "errors": 8,
+  "status_counts": {
+    "200": 2776
+  },
+  "p50_ms": 45.904329000000004,
+  "p90_ms": 98.804394,
+  "p95_ms": 118.388993,
+  "p99_ms": 144.611843,
+  "min_ms": 2.216961,
+  "max_ms": 184.864825,
+  "avg_ms": 57.351734501795946,
+  "avg_response_bytes": 14570.011494252874,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded"
+  ]
+}

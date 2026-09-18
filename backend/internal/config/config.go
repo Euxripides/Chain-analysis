@@ -426,26 +426,51 @@ type Config struct {
 	LogLevel    string
 	HTTPPort    int
 	DatabaseURL string
+	// MigrationDatabaseURL 供迁移与初始化工具使用（需要 DDL 权限，通常是 owner 账号）。
+	MigrationDatabaseURL string
 	// DatabaseRuntimeRole 非空时，API/Worker/MCP 的每个数据库连接都会先 SET ROLE 到该角色，
 	// 从而把运行期权限与迁移/运维权限分离（§27.6 AUDIT-003：应用 DB 角色拒绝危险操作）。
 	DatabaseRuntimeRole string
-	ClickHouseURL       string
-	MinioEndpoint       string
-	MinioSecure         bool
-	MinioAccessKey      string
-	MinioSecretKey      string
-	NatsURL             string
-	RawBucket           string
-	ExportBucket        string
-	BackupsBucket       string
-	WorkerMetricsPort   int
-	Ankr                AnkrConfig
-	Tron                TronConfig
-	Method              MethodConfig
-	TokenMetadata       TokenMetadataConfig
-	RPC                 RPCConfig
-	AnkrManagement      AnkrManagementConfig
-	Auth                AuthConfig
+	// LEGACY-CONSOLE-01：老控制台（"/" 与局域网入口上的那套前端）自身没有登录页，
+	// 它只能借用 /admin/login 在"同一个域名"下签发的会话；换了 host（例如局域网 IP）
+	// 就没有会话，而 2026-09-13 S7-SEC-LEGACY-V1 之后 /api/v1 的读路由一律要求已认证，
+	// 于是老控制台看不到数据。下面四项给老线一个**自己的**服务凭据，由入口层注入，
+	// 使两条线不再互相依赖：老前端代码不改，新线（会话/工作区/CSRF/提交门）也不受影响。
+	// 哈希为空 = 整条路径关闭（fail closed）。
+	LegacyConsoleTokenSHA256    string
+	LegacyConsolePermissions    []string
+	LegacyConsoleOrganizationID string
+	LegacyConsoleWorkspaceID    string
+	// IdentityID 是该服务主体的审计主体（audit_events_v2.actor_id）：老控制台的每一次
+	// 请求都会以这个身份写审计，因此它必须是一个真实存在的 identities.id。留空 =
+	// 整条路径关闭（不编造主体）。
+	LegacyConsoleIdentityID string
+	// Audience 决定该主体属于哪一类会话受众：user（默认）或 admin。后台权限键
+	// （admin:*）只有 admin 受众才可能通过，因此配了 admin:* 却写成 user 会启动即关闭。
+	LegacyConsoleAudience string
+	ClickHouseURL         string
+	MinioEndpoint         string
+	MinioSecure           bool
+	MinioAccessKey        string
+	MinioSecretKey        string
+	NatsURL               string
+	RawBucket             string
+	ExportBucket          string
+	BackupsBucket         string
+	// F-R10-BUCKET（P2）：导出产物历史上落在 RAW_BUCKET（rawstore 默认桶）。
+	// ExportWriteBucket 决定**新写入**落在哪个桶："raw"（默认，保持既有行为）或 "export"。
+	// ExportReadOrder 是读取回退顺序（逗号分隔），默认 "export,raw"：先找新桶再回退旧桶，
+	// 从而在迁移/切写/回滚的任何阶段都能读到对象（双读兼容）。
+	ExportWriteBucket string
+	ExportReadOrder   string
+	WorkerMetricsPort int
+	Ankr              AnkrConfig
+	Tron              TronConfig
+	Method            MethodConfig
+	TokenMetadata     TokenMetadataConfig
+	RPC               RPCConfig
+	AnkrManagement    AnkrManagementConfig
+	Auth              AuthConfig
 
 	// V1.2（§12/§16/§69/§33/§121）：Chainbase Count Oracle 平面 + 全局并发。
 	Chainbase   ChainbaseConfig
@@ -462,6 +487,7 @@ type Config struct {
 type AuthConfig struct {
 	Mode               string // session | hybrid | legacy
 	CookieSecure       bool
+	CookieSecureMode   string // auto / always / never（S7-SEC-01 R-05）
 	CookiePrefix       string // 部署在 TLS 终止后可设置为 __Host-
 	CookieDomain       string
 	SessionIdleTTL     time.Duration
@@ -555,6 +581,59 @@ func parsePageLevels(s string) []int {
 
 // Validate 启动校验（§32：错误配置直接启动失败）。
 func (c *Config) Validate() error {
+	// [FIX 2026-09-13 / P0-密钥] 凭据必须由环境提供：缺失即快速失败。
+	// 历史实现在编译期内置了与生产同值的默认凭据（PG/CH/MinIO 各一组，值已按 §23.8 于 2026-09-13 轮换，
+	// 明文不再出现在任何文件），导致发行二进制内嵌可用凭据（§23.8 FAIL），且生产从未轮换默认值。
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL is required (credential defaults are no longer compiled in)")
+	}
+	if strings.TrimSpace(c.MigrationDatabaseURL) == "" {
+		return fmt.Errorf("MIGRATION_DATABASE_URL or DATABASE_URL is required")
+	}
+	if strings.TrimSpace(c.ClickHouseURL) == "" {
+		return fmt.Errorf("CLICKHOUSE_URL is required (credential defaults are no longer compiled in)")
+	}
+	if strings.TrimSpace(c.MinioSecretKey) == "" {
+		return fmt.Errorf("MINIO_ROOT_PASSWORD is required (credential defaults are no longer compiled in)")
+	}
+	// F-R10-BUCKET / ADR-019：导出写桶、读顺序与两个桶名必须是显式合法值。
+	// 非法值若被静默接受，会造成“以为切了写桶其实还在写旧桶”“以为在双读其实只在读旧桶”
+	// 这类伪证据，因此一律启动失败（fail closed），绝不回落默认值。
+	if raw := strings.TrimSpace(c.RawBucket); raw == "" {
+		return fmt.Errorf("RAW_BUCKET is required")
+	}
+	if exportBucket := strings.TrimSpace(c.ExportBucket); exportBucket == "" {
+		return fmt.Errorf("EXPORT_BUCKET is required")
+	}
+	if strings.TrimSpace(c.ExportBucket) == strings.TrimSpace(c.RawBucket) {
+		return fmt.Errorf("EXPORT_BUCKET must differ from RAW_BUCKET (both are %q)", strings.TrimSpace(c.RawBucket))
+	}
+	// 只接受规范字面量：区分大小写，且**不允许前后空白**。大小写变体或带空格的取值语义虽可
+	// 推断，但会让部署证据里出现与规范不同的字符串，审计时无法一眼确认，因此一律拒绝。
+	switch c.ExportWriteBucket {
+	case "raw", "export":
+	default:
+		return fmt.Errorf("EXPORT_WRITE_BUCKET must be raw or export (got %q)", c.ExportWriteBucket)
+	}
+	// 读顺序必须显式包含两个桶（顺序可变），未知项、重复项与带空格的项均为配置错误：
+	// 只配一个桶会让迁移/回滚期间的对象读不到，必须让它在启动期就暴露。
+	seen := map[string]bool{}
+	for _, part := range strings.Split(c.ExportReadOrder, ",") {
+		token := part
+		switch token {
+		case "raw", "export":
+		default:
+			return fmt.Errorf("EXPORT_READ_ORDER entries must be raw or export (got %q)", part)
+		}
+		if seen[token] {
+			return fmt.Errorf("EXPORT_READ_ORDER contains duplicate %q", token)
+		}
+		seen[token] = true
+	}
+	if !seen["raw"] || !seen["export"] {
+		return fmt.Errorf("EXPORT_READ_ORDER must contain both raw and export (got %q)", c.ExportReadOrder)
+	}
+
 	a := &c.Ankr
 	if c.Tron.Enabled {
 		vg := c.Tron.VolumeGuard
@@ -782,6 +861,36 @@ func envBool(key string, def bool) bool {
 	return def
 }
 
+// envBoolStrict 与 envBool 相同，但把 "auto" 视为"未设置"，回落到默认值。
+// 用于 AUTH_COOKIE_SECURE 这类支持三态的开关（auto/true/false）。
+func envBoolStrict(key string, def bool) bool {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" && !strings.EqualFold(v, "auto") {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
+}
+
+// cookieSecureMode 把 AUTH_COOKIE_SECURE 归一为 auto / always / never。
+//
+// 生产默认策略（S7-SEC-01 R-05）：APP_ENV=production 且未显式配置时使用 auto ——
+// HTTPS 入口（Cloudflare/Nginx TLS 终止，X-Forwarded-Proto=https）写 Secure + __Host-；
+// 非生产环境默认 auto 亦如此，本地 HTTP 调试仍然可用。
+// 显式 AUTH_COOKIE_SECURE=false 会被接受，但生产环境应视为配置错误（启动日志会告警）。
+func cookieSecureMode(raw, appEnv string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "yes", "on":
+		return "always"
+	case "false", "0", "no", "off":
+		return "never"
+	case "auto", "":
+		return "auto"
+	default:
+		return "auto"
+	}
+}
+
 func parseDurationEnv(key string, def time.Duration) time.Duration {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
@@ -809,26 +918,47 @@ func envFloat(key string, def float64) float64 {
 
 func Load() *Config {
 	return &Config{
-		Env:                 env("APP_ENV", "development"),
-		Timezone:            env("APP_TIMEZONE", "Asia/Bangkok"),
-		LogLevel:            env("API_LOG_LEVEL", "info"),
-		HTTPPort:            envInt("API_HTTP_PORT", 8080),
-		DatabaseURL:         env("DATABASE_URL", "postgres://blockchain:change_me_pg_2026@127.0.0.1:5433/blockchain_platform?sslmode=disable"),
-		DatabaseRuntimeRole: env("DB_RUNTIME_ROLE", ""),
-		ClickHouseURL:       env("CLICKHOUSE_URL", "clickhouse://blockchain:change_me_ch_2026@127.0.0.1:9000/blockchain"),
-		MinioEndpoint:       env("MINIO_ENDPOINT", "127.0.0.1:9001"),
-		MinioSecure:         envBool("MINIO_SECURE", false),
-		MinioAccessKey:      env("MINIO_ROOT_USER", "blockchain_admin"),
-		MinioSecretKey:      env("MINIO_ROOT_PASSWORD", "change_me_minio_2026"),
-		NatsURL:             env("NATS_URL", "nats://127.0.0.1:4222"),
-		RawBucket:           env("RAW_BUCKET", "blockchain-raw"),
-		ExportBucket:        env("EXPORT_BUCKET", "blockchain-exports"),
-		BackupsBucket:       env("BACKUPS_BUCKET", "blockchain-backups"),
-		WorkerMetricsPort:   envInt("WORKER_METRICS_PORT", 8081),
+		Env:      env("APP_ENV", "development"),
+		Timezone: env("APP_TIMEZONE", "Asia/Bangkok"),
+		LogLevel: env("API_LOG_LEVEL", "info"),
+		HTTPPort: envInt("API_HTTP_PORT", 8080),
+		// DATABASE_URL 是**应用运行账号**（api/worker）：S7 起应为非超级用户的受限登录角色，
+		// 连接后再 SET ROLE 到 DB_RUNTIME_ROLE（ADR-017 §5）。
+		// [FIX 2026-09-13 / P0-密钥] 不再编译期内置凭据默认值：缺 DATABASE_URL 时必须快速失败
+		// （历史默认值与生产同值并被编译进发行二进制 → §23.8 FAIL）。
+		DatabaseURL: env("DATABASE_URL", ""),
+		// MigrationDatabaseURL 是**迁移/运维账号**（cmd/migrate、admin-init、admin-fixture）：
+		// 需要 DDL 权限，因此仍使用 owner；未配置时回落 DATABASE_URL（向后兼容）。
+		MigrationDatabaseURL: env("MIGRATION_DATABASE_URL", env("DATABASE_URL", "")),
+		DatabaseRuntimeRole:  env("DB_RUNTIME_ROLE", ""),
+		// LEGACY-CONSOLE-01：入口层注入的服务凭据（SHA-256 十六进制）+ 它被授予的
+		// 权限键 + 它所属的组织/工作区。任何一项缺失都会让这条路径保持关闭。
+		LegacyConsoleTokenSHA256:    env("LEGACY_CONSOLE_TOKEN_SHA256", ""),
+		LegacyConsolePermissions:    splitList(env("LEGACY_CONSOLE_PERMISSIONS", "")),
+		LegacyConsoleOrganizationID: env("LEGACY_CONSOLE_ORGANIZATION_ID", ""),
+		LegacyConsoleWorkspaceID:    env("LEGACY_CONSOLE_WORKSPACE_ID", ""),
+		LegacyConsoleIdentityID:     env("LEGACY_CONSOLE_IDENTITY_ID", ""),
+		LegacyConsoleAudience:       env("LEGACY_CONSOLE_AUDIENCE", "user"),
+		ClickHouseURL:               env("CLICKHOUSE_URL", ""),
+		MinioEndpoint:               env("MINIO_ENDPOINT", "127.0.0.1:9001"),
+		MinioSecure:                 envBool("MINIO_SECURE", false),
+		MinioAccessKey:              env("MINIO_ROOT_USER", "blockchain_admin"),
+		MinioSecretKey:              env("MINIO_ROOT_PASSWORD", ""),
+		NatsURL:                     env("NATS_URL", "nats://127.0.0.1:4222"),
+		RawBucket:                   env("RAW_BUCKET", "blockchain-raw"),
+		ExportBucket:                env("EXPORT_BUCKET", "blockchain-exports"),
+		ExportWriteBucket:           env("EXPORT_WRITE_BUCKET", "raw"),
+		ExportReadOrder:             env("EXPORT_READ_ORDER", "export,raw"),
+		BackupsBucket:               env("BACKUPS_BUCKET", "blockchain-backups"),
+		WorkerMetricsPort:           envInt("WORKER_METRICS_PORT", 8081),
 		Auth: AuthConfig{
 			// 未配置时按环境决定：production 强制 session，其它环境 hybrid 便于平滑迁移。
-			Mode:               env("AUTH_MODE", defaultAuthMode(env("APP_ENV", "development"))),
-			CookieSecure:       envBool("AUTH_COOKIE_SECURE", env("APP_ENV", "development") == "production"),
+			Mode: env("AUTH_MODE", defaultAuthMode(env("APP_ENV", "development"))),
+			// AUTH_COOKIE_SECURE 支持三态（S7-SEC-01 R-05）：
+			//   auto（默认）—— 按入口协议：HTTPS 入口才写 Secure + __Host- 前缀；
+			//   true / false —— 固定行为（false 仅限本机 HTTP 调试，生产禁止）。
+			CookieSecure:       envBoolStrict("AUTH_COOKIE_SECURE", env("APP_ENV", "development") == "production"),
+			CookieSecureMode:   cookieSecureMode(env("AUTH_COOKIE_SECURE", "auto"), env("APP_ENV", "development")),
 			CookiePrefix:       env("AUTH_COOKIE_PREFIX", ""),
 			CookieDomain:       env("AUTH_COOKIE_DOMAIN", ""),
 			SessionIdleTTL:     time.Duration(envInt("AUTH_SESSION_IDLE_TTL_SECONDS", 43200)) * time.Second,
@@ -852,10 +982,13 @@ func Load() *Config {
 		Tron: TronConfig{
 			Enabled: envBool("TRON_ENABLED", false),
 			VolumeGuard: VolumeGuardConfig{
-				Enabled:              envBool("TRON_VOLUME_GUARD_ENABLED", true),
-				WarnRows:             int64(envInt("TRON_VOLUME_WARN_ROWS", 1000000)),
-				HardActualRows:       int64(envInt("TRON_VOLUME_HARD_ACTUAL_ROWS", 2000000)),
-				HardProjectedRows:    int64(envInt("TRON_VOLUME_HARD_PROJECTED_ROWS", 5000000)),
+				Enabled: envBool("TRON_VOLUME_GUARD_ENABLED", true),
+				// 2026-09-15 产品决定：单地址单 dataset 超过 100 万行就停下来等人工确认
+				// （"超过百万的地址就不下载了"）。人工确认门槛由 500 万降到 100 万，
+				// WarnRows 相应降到 50 万以保持阈值阶梯单调。
+				WarnRows:             int64(envInt("TRON_VOLUME_WARN_ROWS", 500000)),
+				HardActualRows:       int64(envInt("TRON_VOLUME_HARD_ACTUAL_ROWS", 1000000)),
+				HardProjectedRows:    int64(envInt("TRON_VOLUME_HARD_PROJECTED_ROWS", 1000000)),
 				ExtremeRows:          int64(envInt("TRON_VOLUME_EXTREME_ROWS", 10000000)),
 				SuperExtremeRows:     int64(envInt("TRON_VOLUME_SUPER_EXTREME_ROWS", 50000000)),
 				ProjectedConfidence:  envFloat("TRON_VOLUME_PROJECTED_CONFIDENCE", 0.80),

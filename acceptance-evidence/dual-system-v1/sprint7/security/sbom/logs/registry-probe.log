@@ -1,0 +1,20 @@
+========================================================================
+REPO: anchore/syft
+  direct-dockerhub       /v2/=-1 body=b"URLError(TimeoutError('timed out'))"
+  mirror-daocloud        /v2/=401 token=yes manifest=403 
+  mirror-1ms             /v2/=401 token=yes manifest=200 index_platforms=5
+  mirror-1panel          /v2/=403 body=b'error code: 1010\n'
+  mirror-rainbond        /v2/=-1 body=b"URLError(gaierror(-2, 'Name or service not known'))"
+  mirror-nju             /v2/=403 body=b'<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbi'
+  mirror-dockerproxy     /v2/=200 body=b'{}'
+  mirror-rat             /v2/=401 token=yes manifest=200 index_platforms=5
+========================================================================
+REPO: aquasec/trivy
+  direct-dockerhub       /v2/=-1 body=b"URLError(TimeoutError('timed out'))"
+  mirror-daocloud        /v2/=401 token=yes manifest=200 index_platforms=8
+  mirror-1ms             /v2/=401 token=yes manifest=200 index_platforms=8
+  mirror-1panel          /v2/=403 body=b'error code: 1010\n'
+  mirror-rainbond        /v2/=-1 body=b"URLError(gaierror(-2, 'Name or service not known'))"
+  mirror-nju             /v2/=403 body=b'<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbi'
+  mirror-dockerproxy     /v2/=200 body=b'{}'
+  mirror-rat             /v2/=401 token=yes manifest=200 index_platforms=8

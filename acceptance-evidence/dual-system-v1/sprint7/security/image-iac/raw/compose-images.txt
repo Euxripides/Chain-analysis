@@ -1,0 +1,4 @@
+3:    image: postgres:18
+20:    image: clickhouse/clickhouse-server:26.7
+43:    image: minio/minio:latest
+56:    image: nats:2-alpine

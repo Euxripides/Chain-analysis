@@ -57,12 +57,24 @@ def parse_routes(files: list[str], prefix: str):
     out = []
     for fname in files:
         body = (API / fname).read_text(encoding="utf-8")
-        pattern = re.compile(
-            r'^\s*(?:r|pr)\.(Get|Post|Patch|Delete|Put)\("([^"]+)"\s*,\s*(.+)$', re.M
-        )
-        for m in pattern.finditer(body):
-            method, path, tail = m.group(1).upper(), m.group(2), m.group(3).strip()
-            perm = re.search(r'require\("([a-z0-9:_\-]+)"', tail)
+        # A registration is one statement, and a statement may span several lines
+        # (s.requireAny(...) with a permission slice, for example). Matching a single line
+        # silently degraded those endpoints to operationId "unknown" with no permission, so the
+        # statement is reassembled until its parentheses balance.
+        lines = body.split("\n")
+        statements = []
+        for i, line in enumerate(lines):
+            m = re.match(r'^\s*(?:r|pr)\.(Get|Post|Patch|Delete|Put)\("([^"]+)"\s*,\s*(.*)$', line)
+            if not m:
+                continue
+            tail = m.group(3)
+            j = i
+            while tail.count("(") > tail.count(")") and j + 1 < len(lines):
+                j += 1
+                tail += " " + lines[j].strip()
+            statements.append((m.group(1).upper(), m.group(2), tail.strip()))
+        for method, path, tail in statements:
+            perm = re.search(r'require(?:Any)?\(\s*(?:\[\]string\{)?\s*"([a-z0-9:_\-]+)"', tail) or re.search(r'require\("([a-z0-9:_\-]+)"', tail)
             handler = re.search(r"(s\.handle\w+)", tail)
             not_impl = "handleNotImplementedV2" in tail
             out.append(
@@ -107,6 +119,17 @@ def render(name: str, title: str, routes) -> str:
         "    auth-v1.yaml 是完整级契约，可作为写法参考。",
         "x-contract-level: index-only",
         "x-generated-by: scripts/gen_openapi_index.py",
+        # Sprint 7 API-layer guards. They are enforced by the middleware for every operation
+        # in this file, so the contract must make them visible; the authoritative contract
+        # (allowlist, audit, fail-closed rules) lives in common/errors.yaml.
+        "x-must-change-password-guard:",
+        "  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED",
+        "  refused_status: 403",
+        "  see: './common/errors.yaml#/MustChangePasswordGuard'",
+        "x-session-workspace-scope-guard:",
+        "  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE",
+        "  refused_status: 409",
+        "  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'",
         "servers:",
         "  - url: /",
         "security:",

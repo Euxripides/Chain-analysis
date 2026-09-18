@@ -23,7 +23,9 @@ type ChainValidator func(chain string) error
 
 // MetaUpserter 元数据落库（由 addressmeta 实现，避免循环依赖）。
 type MetaUpserter interface {
-	EnsureLinked(ctx context.Context, chain, addr, caseName string, tags []string, createMissing bool) error
+	// EnsureLinked 必须携带调用方解析出的租户作用域（§6.4：前端不可提交 tenant ID，
+	// 服务端也不允许用"默认组织"兜底）。
+	EnsureLinked(ctx context.Context, orgID, wsID, chain, addr, caseName string, tags []string, createMissing bool) error
 }
 
 type Service struct {
@@ -302,6 +304,9 @@ func (s *Service) previewWithPolicy(ctx context.Context, req EnsureRequest, loca
 	if err != nil {
 		return nil, err
 	}
+	if err := validateChainDatasetSupport(chain, datasets); err != nil {
+		return nil, err
+	}
 	if s.ValidateChain != nil {
 		if err := s.ValidateChain(chain); err != nil {
 			return nil, err
@@ -366,6 +371,9 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err != nil {
 		return nil, err
 	}
+	if err := validateChainDatasetSupport(chain, datasets); err != nil {
+		return nil, err
+	}
 	if s.ValidateChain != nil {
 		if err := s.ValidateChain(chain); err != nil {
 			return nil, err
@@ -374,17 +382,14 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
 		return nil, err
 	}
-	if req.OrganizationID == "" || req.WorkspaceID == "" {
-		orgID, wsID, scopeErr := s.Store.DefaultOrgWorkspace(ctx)
-		if scopeErr != nil {
-			return nil, fmt.Errorf("resolve tenant scope: %w", scopeErr)
-		}
-		if req.OrganizationID == "" {
-			req.OrganizationID = orgID
-		}
-		if req.WorkspaceID == "" {
-			req.WorkspaceID = wsID
-		}
+	// 租户作用域必须由调用方**显式**提供（HTTP 路径来自已认证主体，后台路径来自
+	// 任务/预览自身的 organization_id / workspace_id）。
+	// P0 残余修复（R-2）：这里**不再**回退到 Store.DefaultOrgWorkspace。
+	// 租户不变量对 HTTP 与非 HTTP 路径同等适用；缺失即 fail closed，
+	// 否则后台路径会静默把作业落到默认组织（跨租户写）。
+	if strings.TrimSpace(req.OrganizationID) == "" || strings.TrimSpace(req.WorkspaceID) == "" {
+		return nil, fmt.Errorf("dataset.Ensure: tenant scope required (source=%q org=%q ws=%q) — 拒绝回退到默认组织",
+			req.Source, req.OrganizationID, req.WorkspaceID)
 	}
 	priority := req.Priority
 	if priority <= 0 {
@@ -415,7 +420,7 @@ func (s *Service) Ensure(ctx context.Context, req EnsureRequest) (*EnsureRespons
 				tags = m.Tags
 			}
 			if caseName != "" || len(tags) > 0 {
-				if err := s.Meta.EnsureLinked(ctx, chain, subj, caseName, tags, req.CreateMissingMeta); err != nil {
+				if err := s.Meta.EnsureLinked(ctx, req.OrganizationID, req.WorkspaceID, chain, subj, caseName, tags, req.CreateMissingMeta); err != nil {
 					return nil, err
 				}
 			}
@@ -569,6 +574,9 @@ func (s *Service) ReuseCandidateLocal(ctx context.Context, req EnsureRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	if err := validateChainDatasetSupport(chain, datasets); err != nil {
+		return nil, err
+	}
 	if s.ValidateChain != nil {
 		if err := s.ValidateChain(chain); err != nil {
 			return nil, err
@@ -577,17 +585,10 @@ func (s *Service) ReuseCandidateLocal(ctx context.Context, req EnsureRequest) (*
 	if err := s.validateTronFullRange(chain, datasets, req.Range); err != nil {
 		return nil, err
 	}
-	if req.OrganizationID == "" || req.WorkspaceID == "" {
-		orgID, wsID, scopeErr := s.Store.DefaultOrgWorkspace(ctx)
-		if scopeErr != nil {
-			return nil, scopeErr
-		}
-		if req.OrganizationID == "" {
-			req.OrganizationID = orgID
-		}
-		if req.WorkspaceID == "" {
-			req.WorkspaceID = wsID
-		}
+	// P0 残余修复（R-2）：同 Ensure，缺失租户作用域即 fail closed，绝不回退默认组织。
+	if strings.TrimSpace(req.OrganizationID) == "" || strings.TrimSpace(req.WorkspaceID) == "" {
+		return nil, fmt.Errorf("dataset.ReuseCandidateLocal: tenant scope required (source=%q org=%q ws=%q) — 拒绝回退到默认组织",
+			req.Source, req.OrganizationID, req.WorkspaceID)
 	}
 	rng, err := s.ResolveRangeLocal(chain, req.Range)
 	if err != nil {
@@ -625,6 +626,23 @@ func downloadRequestFingerprint(chain string, subjects, datasets []string, rng m
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(sum[:])
+}
+
+// validateChainDatasetSupport 拒绝当前 Provider 组合无法服务的 (chain, dataset)：
+// Ankr Advanced API 没有任何 internal transactions 方法（2026-09-15 核对官方
+// Query API 方法列表），只有 TRON 侧走 tron-grid 路由。旧实现会为这类请求规划
+// Shard，每个 Shard 立即非重试失败，任务永远停在 RUNNING（现场
+// DL-20260915-0007/0008：25/25 个 bsc internal_transactions 数据集 FAILED_FINAL）。
+func validateChainDatasetSupport(chain string, datasets []string) error {
+	if chain == "tron" {
+		return nil
+	}
+	for _, d := range datasets {
+		if d == "internal_transactions" {
+			return fmt.Errorf("dataset %q is not available on %s: the configured provider exposes no internal-transactions method", d, chain)
+		}
+	}
+	return nil
 }
 
 func sanitizeDatasets(in []string) ([]string, error) {

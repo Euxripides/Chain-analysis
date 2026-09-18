@@ -40,9 +40,15 @@ func (s *Store) CreateCase(ctx context.Context, wsID, orgID, caseNo, name, descr
 	return c, err
 }
 
-func (s *Store) ListCases(ctx context.Context, wsID string) ([]model.CaseInfo, error) {
+// ListCases 按租户作用域列出案件。
+//
+// P0 修复：签名由"只带 workspace_id"改为"org + workspace"。
+// 旧实现在 handler 里先取 Store.DefaultOrgWorkspace，任何登录用户都会读到
+// **默认组织**的案件；同时 wsID 为空时旧实现会退化成"不带条件的全表查询"风险。
+// wsID 为空表示主体只有组织级绑定（合法视图：该组织下全部工作区）。
+func (s *Store) ListCases(ctx context.Context, orgID, wsID string) ([]model.CaseInfo, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT id, organization_id, workspace_id, case_no, name, description, status, color, created_at, updated_at "+
-		"FROM cases WHERE workspace_id=$1 ORDER BY name", wsID)
+		"FROM cases WHERE organization_id=$1 AND ($2='' OR workspace_id::text=$2) ORDER BY name", orgID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +79,7 @@ func (s *Store) GetCaseByName(ctx context.Context, wsID, name string) (*model.Ca
 	return &c, err
 }
 
-func (s *Store) DeleteCase(ctx context.Context, wsID, id string) error {
+func (s *Store) DeleteCase(ctx context.Context, orgID, wsID, id string) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -89,7 +95,8 @@ func (s *Store) DeleteCase(ctx context.Context, wsID, id string) error {
 	if _, err := tx.Exec(ctx, "DELETE FROM address_case_links WHERE case_id=$1 AND workspace_id=$2", id, wsID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "DELETE FROM cases WHERE id=$1 AND workspace_id=$2", id, wsID); err != nil {
+	// 组织条件是第二道防线：即便上游对象级授权被绕过，也不能跨组织删除。
+	if _, err := tx.Exec(ctx, "DELETE FROM cases WHERE id=$1 AND organization_id=$3 AND ($2='' OR workspace_id::text=$2)", id, wsID, orgID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -106,9 +113,10 @@ func (s *Store) CreateTag(ctx context.Context, wsID, orgID, name, description, c
 	return t, err
 }
 
-func (s *Store) ListTags(ctx context.Context, wsID string) ([]model.TagInfo, error) {
+// ListTags 按租户作用域列出标签（同 ListCases 的 P0 修复口径）。
+func (s *Store) ListTags(ctx context.Context, orgID, wsID string) ([]model.TagInfo, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT id, organization_id, workspace_id, name, description, color, source, created_at, updated_at "+
-		"FROM tags WHERE workspace_id=$1 ORDER BY name", wsID)
+		"FROM tags WHERE organization_id=$1 AND ($2='' OR workspace_id::text=$2) ORDER BY name", orgID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +147,7 @@ func (s *Store) GetTagByName(ctx context.Context, wsID, name string) (*model.Tag
 	return &t, err
 }
 
-func (s *Store) DeleteTag(ctx context.Context, wsID, id string) error {
+func (s *Store) DeleteTag(ctx context.Context, orgID, wsID, id string) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -148,7 +156,7 @@ func (s *Store) DeleteTag(ctx context.Context, wsID, id string) error {
 	if _, err := tx.Exec(ctx, "DELETE FROM address_tag_links WHERE tag_id=$1 AND workspace_id=$2", id, wsID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "DELETE FROM tags WHERE id=$1 AND workspace_id=$2", id, wsID); err != nil {
+	if _, err := tx.Exec(ctx, "DELETE FROM tags WHERE id=$1 AND organization_id=$3 AND ($2='' OR workspace_id::text=$2)", id, wsID, orgID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

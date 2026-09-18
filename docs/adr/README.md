@@ -23,3 +23,7 @@
 | [ADR-016](ADR-016-s4-migration-runtime-oidc.md) | S4 迁移编号、runtime 失败可见性与 OIDC 禁用策略 | Accepted | §22.1、§28.6、§32 |
 | [ADR-017](ADR-017-s6-control-plane-and-runtime-role.md) | S6 控制面契约、权限键映射与运行期降权 | Accepted | §19、§21.6、§25、§28.8 |
 | [ADR-018](ADR-018-audit-integrity-incident-boundary.md) | 审计完整性事件边界：不可恢复缺口的封存与逐项验证 | Accepted | §6.6.5、§27.6 AUDIT-003/004、AD-004、AD-005 |
+| [ADR-019](ADR-019-export-bucket-dual-read-and-switch.md) | 导出产物桶的读优先级、可审计迁移与写切换 | Accepted | §19、§27 F-R10-BUCKET |
+| [ADR-019](ADR-019-audit-integrity-declared-events.md) | 审计完整性「稀疏声明」：不可修复事实的显式登记 | Accepted | §6.6.5、§27.6 AUDIT-004（编号与上一条冲突，历史遗留，未重排） |
+| [ADR-020](ADR-020-gate-request-audit-joins-transaction.md) | commit gate 请求内的审计写入加入请求事务 | Accepted | §6.5、§6.6.5、§27 AUDIT-004、§28.6 |
+| [ADR-021](ADR-021-feature-flags-on-request-paths.md) | 功能开关在真实请求路径上求值 | Accepted | §7.3、§16.7、§21.6 |

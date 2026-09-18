@@ -1,0 +1,11 @@
+CMD: sudo -n docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --download-db-only --db-repository ghcr.io/aquasec/trivy-db --cache-dir /root/.cache/trivy
+2026-09-12T16:44:27Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="ghcr.io/aquasec/trivy-db:2"
+2026-09-12T16:44:27Z	INFO	[vulndb] Need to update DB
+2026-09-12T16:44:27Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-09-12T16:44:27Z	INFO	[vulndb] Downloading artifact...	repo="ghcr.io/aquasec/trivy-db:2"
+2026-09-12T16:44:28Z	WARN	See https://trivy.dev/docs/v0.74/guide/references/troubleshooting#db
+2026-09-12T16:44:28Z	FATAL	Fatal error	run error: init error: DB error: failed to download vulnerability DB: OCI artifact error: failed to download vulnerability DB: failed to download artifact from ghcr.io/aquasec/trivy-db:2: OCI repository error: 1 error occurred:
+	* GET https://ghcr.io/token?scope=repository%3Aaquasec%2Ftrivy-db%3Apull&service=ghcr.io: DENIED: requested access to the resource is denied
+
+
+TRY1_GHCR_EXIT=1

@@ -1,0 +1,28 @@
+{
+  "label": "nginx_admin_overview",
+  "url": "http://127.0.0.1:8088/api/admin/v1/overview",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.001448401,
+  "requests": 11785,
+  "rps": 589.2073295757317,
+  "errors": 8,
+  "status_counts": {
+    "200": 11777
+  },
+  "p50_ms": 11.262158,
+  "p90_ms": 22.48367,
+  "p95_ms": 27.334461,
+  "p99_ms": 37.839196,
+  "min_ms": 4.222653,
+  "max_ms": 65.964374,
+  "avg_ms": 13.548162243190534,
+  "avg_response_bytes": 911.3809079338141,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded"
+  ]
+}

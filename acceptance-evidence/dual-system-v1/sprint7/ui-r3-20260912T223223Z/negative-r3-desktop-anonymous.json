@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-09-12T22:34:47.145Z",
+  "project": "",
+  "case": "anonymous -> V1 admin page",
+  "service_denials": [
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "10bfc8ce-6355-4a7e-8055-0df623b22ce3",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:34:44.901Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "91422214-080d-41be-b0c6-84320a8cd163",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:34:44.903Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "22b25f5c-4fab-4a2f-bf48-ad26edcab529",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:34:45.945Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "status": 401,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "5400e489-1fe5-478b-bb35-46a445934e9e",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:34:45.945Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    }
+  ]
+}

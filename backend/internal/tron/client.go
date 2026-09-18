@@ -1001,21 +1001,53 @@ func (c *Client) CurrentBalances(ctx context.Context, chain, address string) ([]
 	return out, nil
 }
 
+// ResolveAddressTypes 解析一批 TRON 地址的账户类型。
+//
+// 2026-09-17 修复（activity 端点 8–10 s）：原实现**逐个串行**调用 AccountState，
+// activity 一页最多 200 个对手方地址 ⇒ 最多 200 次串行外呼，在调用方 8 s 预算内必然超时；
+// 且只要其中一个地址出错就整批放弃（return out, err），调用方拿到 err 后连已成功的那部分
+// 也不写缓存 ⇒ **每个请求都重新烧满 8 秒**（实测稳定复现 8.2–10.2 s）。
+//
+// 现在：有限并发（maxParallel）+ 单地址容错（一个失败不影响其它）+ 返回**已解析的部分结果**，
+// 让调用方能把成功项写进 24h 缓存、对未解析项做短 TTL 负缓存。语义不变：仍是 canonical 地址 → 是否合约。
 func (c *Client) ResolveAddressTypes(ctx context.Context, chain string, addresses []string) (map[string]bool, error) {
 	if chain != "tron" {
 		return map[string]bool{}, nil
 	}
 	out := make(map[string]bool, len(addresses))
+	if len(addresses) == 0 {
+		return out, nil
+	}
+	const maxParallel = 8
+	sem := make(chan struct{}, maxParallel)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var firstErr error
 	for _, address := range addresses {
 		canonical, err := NormalizeTronAddress(address)
 		if err != nil {
 			continue
 		}
-		kind, err := c.AccountState(ctx, canonical)
-		if err != nil {
-			return out, err
-		}
-		out[canonical] = kind == AccountContract
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(canonical string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			kind, err := c.AccountState(ctx, canonical)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				return
+			}
+			out[canonical] = kind == AccountContract
+		}(canonical)
+	}
+	wg.Wait()
+	if len(out) == 0 && firstErr != nil {
+		return out, firstErr
 	}
 	return out, nil
 }

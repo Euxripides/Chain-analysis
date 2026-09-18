@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // 完整性状态取值。任何一条链在任何时刻只能是其中之一。
@@ -42,6 +42,7 @@ const (
 	IntegrityIntact           = "intact"            // 无缺口，全链可验证
 	IntegritySealedIncident   = "sealed_incident"   // 缺口已封存，边界之后可验证
 	IntegrityUndeclaredGap    = "undeclared_gap"    // 观测到缺口但尚未封存（不合法状态）
+	IntegrityDeclaredEvents   = "declared_events"   // 无缺口，但存在逐条声明的完整性事实（ADR-019）
 	IntegrityBoundaryConflict = "boundary_conflict" // 声明边界与实际数据矛盾（疑似回填）
 )
 
@@ -142,7 +143,10 @@ type Incident struct {
 	Evidence          map[string]any   `json:"evidence"`
 	EvidenceHash      string           `json:"evidence_hash"`
 	RetainedAnchors   []IncidentAnchor `json:"retained_anchors"`
-	AlreadySealed     bool             `json:"already_sealed"`
+	// DeclaredEvents 仅对 kind='declared_integrity_events' 非空：逐条声明的
+	// 稀疏事实（缺失行 / 内容哈希不可复算行）与其链上哈希证据。
+	DeclaredEvents []DeclaredEvent `json:"declared_events"`
+	AlreadySealed  bool            `json:"already_sealed"`
 }
 
 // SealedBoundaryRef 是校验结果里对边界的精简引用（不含大字段）。
@@ -161,19 +165,19 @@ type SealedBoundaryRef struct {
 
 // AnchorVerification 是单个每日锚点的逐项验证结论。
 type AnchorVerification struct {
-	Chain             string `json:"chain"`
-	AnchorDate        string `json:"anchor_date"`
-	FromSeq           int64  `json:"from_seq"`
-	ToSeq             int64  `json:"to_seq"`
-	HeadHash          string `json:"head_hash"`
-	EventCount        int64  `json:"event_count"`
-	ObjectRef         string `json:"object_ref"`
-	ContentHash       string `json:"content_hash"`
-	Disposition       string `json:"disposition"`
-	Verified          bool   `json:"verified"`
-	RecomputedHead    string `json:"recomputed_head_hash"`
-	Checked           int64  `json:"checked"`
-	Reason            string `json:"reason"`
+	Chain              string `json:"chain"`
+	AnchorDate         string `json:"anchor_date"`
+	FromSeq            int64  `json:"from_seq"`
+	ToSeq              int64  `json:"to_seq"`
+	HeadHash           string `json:"head_hash"`
+	EventCount         int64  `json:"event_count"`
+	ObjectRef          string `json:"object_ref"`
+	ContentHash        string `json:"content_hash"`
+	Disposition        string `json:"disposition"`
+	Verified           bool   `json:"verified"`
+	RecomputedHead     string `json:"recomputed_head_hash"`
+	Checked            int64  `json:"checked"`
+	Reason             string `json:"reason"`
 	ArchiveObjectHash  string `json:"archive_object_hash"`
 	ArchiveIntact      bool   `json:"archive_intact"`
 	HeadHashDerivation string `json:"head_hash_derivation"`
@@ -201,7 +205,7 @@ type IntegrityReport struct {
 // ---- 缺口检测 ----
 
 // DetectGap 直接观测一条链的当前数据形态，不依赖任何声明。
-func DetectGap(ctx context.Context, pool *pgxpool.Pool, chain string) (ObservedGap, error) {
+func DetectGap(ctx context.Context, pool *dbtx.Pool, chain string) (ObservedGap, error) {
 	reader, ok := chainReaders[chain]
 	if !ok {
 		return ObservedGap{}, fmt.Errorf("unknown chain %q", chain)
@@ -238,7 +242,8 @@ func DetectGap(ctx context.Context, pool *pgxpool.Pool, chain string) (ObservedG
 	if span := out.HeadSeq - out.FirstSurvivingSeq + 1; span != out.RowCount {
 		out.InternalGapCount = span - out.RowCount
 	}
-	if inc, err := LoadIncident(ctx, pool, chain); err == nil && inc != nil {
+	// 只看缺口事件：稀疏声明不属于"边界"，不能拿它的区间做反回填计数。
+	if inc, err := LoadGapIncident(ctx, pool, chain); err == nil && inc != nil {
 		out.Sealed = true
 		out.IncidentRef = inc.IncidentRef
 		if err := pool.QueryRow(ctx, fmt.Sprintf(
@@ -276,7 +281,7 @@ func scanIncident(row pgx.Row) (Incident, error) {
 }
 
 // LoadIncident 读取某条链已封存的完整性事件；不存在返回 (nil, nil)。
-func LoadIncident(ctx context.Context, pool *pgxpool.Pool, chain string) (*Incident, error) {
+func LoadIncident(ctx context.Context, pool *dbtx.Pool, chain string) (*Incident, error) {
 	if pool == nil {
 		return nil, nil
 	}
@@ -292,10 +297,15 @@ func LoadIncident(ctx context.Context, pool *pgxpool.Pool, chain string) (*Incid
 		return nil, err
 	}
 	inc.RetainedAnchors = anchors
+	declared, err := loadDeclaredEventsForIncident(ctx, pool, inc.ID)
+	if err != nil {
+		return nil, err
+	}
+	inc.DeclaredEvents = declared
 	return &inc, nil
 }
 
-func loadIncidentAnchors(ctx context.Context, pool *pgxpool.Pool, incidentID string) ([]IncidentAnchor, error) {
+func loadIncidentAnchors(ctx context.Context, pool *dbtx.Pool, incidentID string) ([]IncidentAnchor, error) {
 	rows, err := pool.Query(ctx, `SELECT chain, anchor_date::text, from_seq, to_seq, head_hash, event_count,
 	       object_ref, content_hash, archive_hash, archive_intact, disposition, created_at
 	  FROM audit_integrity_incident_anchors WHERE incident_id = $1 ORDER BY anchor_date`, incidentID)
@@ -390,7 +400,7 @@ func AppendIncidentEvent(ctx context.Context, tx pgx.Tx, ref, chain, event, acto
 //
 // 幂等：同一 (chain, gap_from, gap_to) 已封存时直接返回既有事件（AlreadySealed=true），
 // 不重复写入、不修改任何既有行。
-func SealIncident(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, p SealParams) (Incident, error) {
+func SealIncident(ctx context.Context, pool *dbtx.Pool, getter ObjectGetter, p SealParams) (Incident, error) {
 	if pool == nil {
 		return Incident{}, errors.New("audit store unavailable")
 	}
@@ -404,7 +414,7 @@ func SealIncident(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, 
 	if !observed.HasPrefixGap {
 		return Incident{}, fmt.Errorf("%w: chain=%s min_seq=%d", ErrNoGapDetected, p.Chain, observed.FirstSurvivingSeq)
 	}
-	if existing, err := LoadIncident(ctx, pool, p.Chain); err != nil {
+	if existing, err := LoadGapIncident(ctx, pool, p.Chain); err != nil {
 		return Incident{}, err
 	} else if existing != nil && existing.GapFromSeq == observed.GapFromSeq && existing.GapToSeq == observed.GapToSeq {
 		existing.AlreadySealed = true
@@ -514,7 +524,7 @@ func SealIncident(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, 
 }
 
 // LoadIncidentByRef 按引用名读取事件。
-func LoadIncidentByRef(ctx context.Context, pool *pgxpool.Pool, ref string) (Incident, error) {
+func LoadIncidentByRef(ctx context.Context, pool *dbtx.Pool, ref string) (Incident, error) {
 	inc, err := scanIncident(pool.QueryRow(ctx, incidentSelect+" WHERE incident_ref = $1", ref))
 	if err != nil {
 		return Incident{}, err
@@ -529,7 +539,7 @@ func LoadIncidentByRef(ctx context.Context, pool *pgxpool.Pool, ref string) (Inc
 
 // collectRetainedAnchors 收集完全落在封存缺口内的既有锚点，并核对 MinIO 归档对象哈希。
 // 只读：不修改 audit_chain_anchors 任何行。
-func collectRetainedAnchors(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, chain string, gapTo int64) ([]IncidentAnchor, error) {
+func collectRetainedAnchors(ctx context.Context, pool *dbtx.Pool, getter ObjectGetter, chain string, gapTo int64) ([]IncidentAnchor, error) {
 	rows, err := pool.Query(ctx, `SELECT chain, anchor_date::text, from_seq, to_seq, head_hash, event_count,
 	       object_ref, content_hash FROM audit_chain_anchors
 	  WHERE chain = $1 AND to_seq <= $2 ORDER BY anchor_date`, chain, gapTo)
@@ -556,8 +566,9 @@ func collectRetainedAnchors(ctx context.Context, pool *pgxpool.Pool, getter Obje
 // 必须同时支持两种派生方式，否则会把历史锚点误判为损坏：
 //   - chain_head（0055 起的规范语义）：head_hash == 区间末行 event_hash；
 //   - legacy_max_hash（0055 之前的归档器语义）：head_hash == 区间内 max(event_hash)。
+//
 // 返回空字符串表示两种派生都对不上，锚点内容与区间事件不一致。
-func AnchorHeadMatches(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq, toSeq int64, headHash string) (string, error) {
+func AnchorHeadMatches(ctx context.Context, pool *dbtx.Pool, chain string, fromSeq, toSeq int64, headHash string) (string, error) {
 	reader, ok := chainReaders[chain]
 	if !ok {
 		return "", fmt.Errorf("unknown chain %q", chain)

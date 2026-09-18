@@ -1,0 +1,1327 @@
+{
+	"Path": "github.com/blockchain-platform/blockchain-platform",
+	"Main": true,
+	"Dir": "/home/euripides/projects/blockchain-platform/backend",
+	"GoMod": "/home/euripides/projects/blockchain-platform/backend/go.mod",
+	"GoVersion": "1.26.0"
+}
+{
+	"Path": "dario.cat/mergo",
+	"Version": "v1.0.0",
+	"Time": "2023-06-20T06:39:01Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/AdaLogics/go-fuzz-headers",
+	"Version": "v0.0.0-20230811130428-ced1acdcaa24",
+	"Time": "2023-08-11T13:04:28Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/Azure/go-ansiterm",
+	"Version": "v0.0.0-20210617225240-d185dfc1b5a1",
+	"Time": "2021-06-17T22:52:40Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/ClickHouse/ch-go",
+	"Version": "v0.65.1",
+	"Time": "2025-02-18T02:25:41Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/!click!house/ch-go@v0.65.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/!click!house/ch-go/@v/v0.65.1.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:SLuxmLl5Mjj44/XbINsK2HFvzqup0s6rwKLFH347ZhU=",
+	"GoModSum": "h1:bsodgURwmrkvkBe5jw1qnGDgyITsYErfONKAHn05nv4="
+}
+{
+	"Path": "github.com/ClickHouse/clickhouse-go",
+	"Version": "v1.5.4",
+	"Time": "2022-02-08T13:41:28Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/ClickHouse/clickhouse-go/v2",
+	"Version": "v2.34.0",
+	"Time": "2025-04-01T01:41:03Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/!click!house/clickhouse-go/v2@v2.34.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/!click!house/clickhouse-go/v2/@v/v2.34.0.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:Y4rqkdrRHgExvC4o/NTbLdY5LFQ3LHS77/RNFxFX3Co=",
+	"GoModSum": "h1:yioSINoRLVZkLyDzdMXPLRIqhDvel8iLBlwh6Iefso8="
+}
+{
+	"Path": "github.com/DATA-DOG/go-sqlmock",
+	"Version": "v1.5.2",
+	"Time": "2024-01-06T21:33:25Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/!d!a!t!a-!d!o!g/go-sqlmock/@v/v1.5.2.mod",
+	"GoVersion": "1.15",
+	"Sum": "h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=",
+	"GoModSum": "h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU="
+}
+{
+	"Path": "github.com/Microsoft/go-winio",
+	"Version": "v0.6.2",
+	"Time": "2024-04-09T20:07:04Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/alecthomas/assert/v2",
+	"Version": "v2.10.0",
+	"Time": "2024-05-27T01:12:23Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/alecthomas/assert/v2/@v/v2.10.0.mod",
+	"GoVersion": "1.18",
+	"Sum": "h1:jjRCHsj6hBJhkmhznrCzoNpbA3zqy0fYiUcYZP/GkPY=",
+	"GoModSum": "h1:Bze95FyfUr7x34QZrjL+XP+0qgp/zg8yS+TtBj1WA3k="
+}
+{
+	"Path": "github.com/alecthomas/kingpin/v2",
+	"Version": "v2.4.0",
+	"Time": "2023-09-30T22:59:49Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/alecthomas/repr",
+	"Version": "v0.4.0",
+	"Time": "2024-02-19T08:02:57Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/alecthomas/repr/@v/v0.4.0.mod",
+	"GoVersion": "1.18",
+	"Sum": "h1:GhI2A8MACjfegCPVq9f1FLvIBS+DrQ2KQBFZP1iFzXc=",
+	"GoModSum": "h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4="
+}
+{
+	"Path": "github.com/alecthomas/units",
+	"Version": "v0.0.0-20240927000941-0f3dac36c52b",
+	"Time": "2024-09-27T00:09:41Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/andybalholm/brotli",
+	"Version": "v1.1.1",
+	"Time": "2024-07-29T16:56:04Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/andybalholm/brotli@v1.1.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/andybalholm/brotli/@v/v1.1.1.mod",
+	"GoVersion": "1.13",
+	"Sum": "h1:PR2pgnyFznKEugtsUo0xLdDop5SKXd5Qf5ysW+7XdTA=",
+	"GoModSum": "h1:05ib4cKhjx3OQYUY22hTVd34Bc8upXjOLL2rKwwZBoA="
+}
+{
+	"Path": "github.com/beorn7/perks",
+	"Version": "v1.0.1",
+	"Time": "2019-07-31T12:00:54Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/beorn7/perks@v1.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/beorn7/perks/@v/v1.0.1.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=",
+	"GoModSum": "h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw="
+}
+{
+	"Path": "github.com/cenkalti/backoff/v4",
+	"Version": "v4.3.0",
+	"Time": "2024-01-02T22:56:19Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/cespare/xxhash/v2",
+	"Version": "v2.3.0",
+	"Time": "2024-04-04T20:00:10Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/cespare/xxhash/v2/@v/v2.3.0.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=",
+	"GoModSum": "h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs="
+}
+{
+	"Path": "github.com/cloudflare/golz4",
+	"Version": "v0.0.0-20150217214814-ef862a3cdc58",
+	"Time": "2015-02-17T21:48:14Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/containerd/log",
+	"Version": "v0.1.0",
+	"Time": "2023-09-09T00:27:15Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/containerd/platforms",
+	"Version": "v0.2.1",
+	"Time": "2024-06-10T21:45:32Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/cpuguy83/dockercfg",
+	"Version": "v0.3.1",
+	"Time": "2021-08-05T20:01:48Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/davecgh/go-spew",
+	"Version": "v1.1.1",
+	"Time": "2018-02-21T23:26:28Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/davecgh/go-spew@v1.1.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/davecgh/go-spew/@v/v1.1.1.mod",
+	"Sum": "h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=",
+	"GoModSum": "h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38="
+}
+{
+	"Path": "github.com/distribution/reference",
+	"Version": "v0.6.0",
+	"Time": "2024-03-20T17:09:59Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/dmarkham/enumer",
+	"Version": "v1.5.10",
+	"Time": "2024-06-17T17:13:14Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/docker/docker",
+	"Version": "v28.0.4+incompatible",
+	"Time": "2025-03-25T13:53:08Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/docker/go-connections",
+	"Version": "v0.5.0",
+	"Time": "2023-11-10T21:24:14Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/docker/go-units",
+	"Version": "v0.5.0",
+	"Time": "2022-05-17T10:43:04Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/dustin/go-humanize",
+	"Version": "v1.0.1",
+	"Time": "2023-01-10T06:44:38Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/dustin/go-humanize@v1.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/dustin/go-humanize/@v/v1.0.1.mod",
+	"GoVersion": "1.16",
+	"Sum": "h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=",
+	"GoModSum": "h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto="
+}
+{
+	"Path": "github.com/felixge/httpsnoop",
+	"Version": "v1.0.4",
+	"Time": "2023-03-12T10:31:09Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/go-chi/chi/v5",
+	"Version": "v5.2.1",
+	"Time": "2025-01-20T20:41:44Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/go-chi/chi/v5@v5.2.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/go-chi/chi/v5/@v/v5.2.1.mod",
+	"GoVersion": "1.20",
+	"Sum": "h1:KOIHODQj58PmL80G2Eak4WdvUzjSJSm0vG72crDCqb8=",
+	"GoModSum": "h1:L2yAIGWB3H+phAw1NxKwWM+7eUH/lU8pOMm5hHcoops="
+}
+{
+	"Path": "github.com/go-faster/city",
+	"Version": "v1.0.1",
+	"Time": "2022-01-25T00:54:58Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/go-faster/city@v1.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/go-faster/city/@v/v1.0.1.mod",
+	"GoVersion": "1.17",
+	"Sum": "h1:4WAxSZ3V2Ws4QRDrscLEDcibJY8uf41H6AhXDrNDcGw=",
+	"GoModSum": "h1:jKcUJId49qdW3L1qKHH/3wPeUstCVpVSXTM6vO3VcTw="
+}
+{
+	"Path": "github.com/go-faster/errors",
+	"Version": "v0.7.1",
+	"Time": "2023-12-13T12:05:03Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/go-faster/errors@v0.7.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/go-faster/errors/@v/v0.7.1.mod",
+	"GoVersion": "1.20",
+	"Sum": "h1:MkJTnDoEdi9pDabt1dpWf7AA8/BaSYZqibYyhZ20AYg=",
+	"GoModSum": "h1:5ySTjWFiphBs07IKuiL69nxdfd5+fzh1u7FPGZP2quo="
+}
+{
+	"Path": "github.com/go-ini/ini",
+	"Version": "v1.67.0",
+	"Time": "2022-08-08T11:35:30Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/go-ini/ini@v1.67.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/go-ini/ini/@v/v1.67.0.mod",
+	"Sum": "h1:z6ZrTEZqSWOTyH2FlglNbNgARyHG8oLW9gMELqKr06A=",
+	"GoModSum": "h1:ByCAeIL28uOIIG0E3PJtZPDL8WnHpFKFOtgjp+3Ies8="
+}
+{
+	"Path": "github.com/go-logr/logr",
+	"Version": "v1.4.2",
+	"Time": "2024-05-20T10:45:40Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/go-logr/stdr",
+	"Version": "v1.2.2",
+	"Time": "2021-12-14T08:00:35Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/go-ole/go-ole",
+	"Version": "v1.2.6",
+	"Time": "2021-09-15T00:35:42Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/goccy/go-json",
+	"Version": "v0.10.5",
+	"Time": "2025-01-25T05:38:06Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/goccy/go-json@v0.10.5",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/goccy/go-json/@v/v0.10.5.mod",
+	"GoVersion": "1.19",
+	"Sum": "h1:Fq85nIqj+gXn/S5ahsiTlK3TmC85qgirsdTP/+DeaC4=",
+	"GoModSum": "h1:oq7eo15ShAhp70Anwd5lgX2pLfOS3QCiwU/PULtXL6M="
+}
+{
+	"Path": "github.com/gogo/protobuf",
+	"Version": "v1.3.2",
+	"Time": "2021-01-10T08:01:47Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/gogo/protobuf/@v/v1.3.2.mod",
+	"GoVersion": "1.15",
+	"GoModSum": "h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q="
+}
+{
+	"Path": "github.com/golang-jwt/jwt/v5",
+	"Version": "v5.3.1",
+	"Time": "2026-01-28T19:58:13Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/golang/protobuf",
+	"Version": "v1.5.0",
+	"Time": "2021-03-18T00:15:31Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/golang/protobuf/@v/v1.5.0.mod",
+	"GoVersion": "1.9",
+	"GoModSum": "h1:FsONVRAS9T7sI+LIUmWTfcYkHO4aIWwzhcaSAoJOfIk="
+}
+{
+	"Path": "github.com/golang/snappy",
+	"Version": "v0.0.1",
+	"Time": "2019-02-18T23:22:22Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/golang/snappy/@v/v0.0.1.mod",
+	"GoModSum": "h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q="
+}
+{
+	"Path": "github.com/google/go-cmp",
+	"Version": "v0.7.0",
+	"Time": "2025-01-14T18:15:44Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/google/go-cmp@v0.7.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/google/go-cmp/@v/v0.7.0.mod",
+	"GoVersion": "1.21",
+	"Sum": "h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=",
+	"GoModSum": "h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU="
+}
+{
+	"Path": "github.com/google/uuid",
+	"Version": "v1.6.0",
+	"Time": "2024-01-23T18:54:04Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/google/uuid@v1.6.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/google/uuid/@v/v1.6.0.mod",
+	"Sum": "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=",
+	"GoModSum": "h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo="
+}
+{
+	"Path": "github.com/gorilla/websocket",
+	"Version": "v1.4.2",
+	"Time": "2020-03-19T17:50:51Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/hashicorp/go-version",
+	"Version": "v1.7.0",
+	"Time": "2024-05-24T10:16:12Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/hexops/gotextdiff",
+	"Version": "v1.0.3",
+	"Time": "2020-12-13T06:12:29Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/hexops/gotextdiff/@v/v1.0.3.mod",
+	"GoVersion": "1.16",
+	"Sum": "h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=",
+	"GoModSum": "h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg="
+}
+{
+	"Path": "github.com/jackc/pgpassfile",
+	"Version": "v1.0.0",
+	"Time": "2019-03-30T16:09:02Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/jackc/pgpassfile@v1.0.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/jackc/pgpassfile/@v/v1.0.0.mod",
+	"GoVersion": "1.12",
+	"Sum": "h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=",
+	"GoModSum": "h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg="
+}
+{
+	"Path": "github.com/jackc/pgservicefile",
+	"Version": "v0.0.0-20240606120523-5a60cdf6a761",
+	"Time": "2024-06-06T12:05:23Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/jackc/pgservicefile@v0.0.0-20240606120523-5a60cdf6a761",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/jackc/pgservicefile/@v/v0.0.0-20240606120523-5a60cdf6a761.mod",
+	"GoVersion": "1.14",
+	"Sum": "h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=",
+	"GoModSum": "h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM="
+}
+{
+	"Path": "github.com/jackc/pgx/v5",
+	"Version": "v5.7.4",
+	"Time": "2025-03-25T01:04:45Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/jackc/pgx/v5@v5.7.4",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/jackc/pgx/v5/@v/v5.7.4.mod",
+	"GoVersion": "1.21",
+	"Sum": "h1:9wKznZrhWa2QiHL+NjTSPP6yjl3451BX3imWDnokYlg=",
+	"GoModSum": "h1:ncY89UGWxg82EykZUwSpUKEfccBGGYq1xjrOpsbsfGQ="
+}
+{
+	"Path": "github.com/jackc/puddle/v2",
+	"Version": "v2.2.2",
+	"Time": "2024-09-10T11:12:31Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/jackc/puddle/v2@v2.2.2",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/jackc/puddle/v2/@v/v2.2.2.mod",
+	"GoVersion": "1.19",
+	"Sum": "h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=",
+	"GoModSum": "h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4="
+}
+{
+	"Path": "github.com/jpillora/backoff",
+	"Version": "v1.0.0",
+	"Time": "2019-10-03T12:57:08Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/json-iterator/go",
+	"Version": "v1.1.12",
+	"Time": "2021-09-11T02:17:26Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/julienschmidt/httprouter",
+	"Version": "v1.3.0",
+	"Time": "2019-09-29T23:21:22Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/kisielk/errcheck",
+	"Version": "v1.5.0",
+	"Time": "2021-01-05T19:12:31Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kisielk/errcheck/@v/v1.5.0.mod",
+	"GoVersion": "1.14",
+	"GoModSum": "h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8="
+}
+{
+	"Path": "github.com/kisielk/gotool",
+	"Version": "v1.0.0",
+	"Time": "2018-02-21T18:54:26Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kisielk/gotool/@v/v1.0.0.mod",
+	"GoModSum": "h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck="
+}
+{
+	"Path": "github.com/klauspost/compress",
+	"Version": "v1.19.1",
+	"Time": "2026-07-20T09:36:27Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/klauspost/compress@v1.19.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/klauspost/compress/@v/v1.19.1.mod",
+	"GoVersion": "1.24",
+	"Sum": "h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk=",
+	"GoModSum": "h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ="
+}
+{
+	"Path": "github.com/klauspost/cpuid/v2",
+	"Version": "v2.2.10",
+	"Time": "2025-02-24T19:37:05Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/klauspost/cpuid/v2@v2.2.10",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/klauspost/cpuid/v2/@v/v2.2.10.mod",
+	"GoVersion": "1.22",
+	"Sum": "h1:tBs3QSyvjDyFTq3uoc/9xFpCuOsJQFNPiAhYdw2skhE=",
+	"GoModSum": "h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0="
+}
+{
+	"Path": "github.com/kr/pretty",
+	"Version": "v0.3.0",
+	"Time": "2020-11-24T22:22:38Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/kr/pretty@v0.3.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kr/pretty/@v/v0.3.0.mod",
+	"GoVersion": "1.12",
+	"Sum": "h1:WgNl7dwNpEZ6jJ9k1snq4pZsg7DOEN8hP9Xw0Tsjwk0=",
+	"GoModSum": "h1:640gp4NfQd8pI5XOwp5fnNeVWj67G7CFk/SaSQn7NBk="
+}
+{
+	"Path": "github.com/kr/pty",
+	"Version": "v1.1.1",
+	"Time": "2018-01-13T18:08:13Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kr/pty/@v/v1.1.1.mod",
+	"GoModSum": "h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ="
+}
+{
+	"Path": "github.com/kr/text",
+	"Version": "v0.2.0",
+	"Time": "2020-02-14T20:31:06Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/kr/text@v0.2.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kr/text/@v/v0.2.0.mod",
+	"Sum": "h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=",
+	"GoModSum": "h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE="
+}
+{
+	"Path": "github.com/kylelemons/godebug",
+	"Version": "v1.1.0",
+	"Time": "2019-05-05T01:16:37Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/kylelemons/godebug@v1.1.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/kylelemons/godebug/@v/v1.1.0.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=",
+	"GoModSum": "h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw="
+}
+{
+	"Path": "github.com/lib/pq",
+	"Version": "v1.10.9",
+	"Time": "2023-04-26T04:34:24Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/lufia/plan9stats",
+	"Version": "v0.0.0-20211012122336-39d0f177ccd0",
+	"Time": "2021-10-12T12:23:36Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/magiconair/properties",
+	"Version": "v1.8.7",
+	"Time": "2022-12-08T14:25:49Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/minio/crc64nvme",
+	"Version": "v1.0.1",
+	"Time": "2025-02-14T15:55:52Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/minio/crc64nvme@v1.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/minio/crc64nvme/@v/v1.0.1.mod",
+	"GoVersion": "1.22",
+	"Sum": "h1:DHQPrYPdqK7jQG/Ls5CTBZWeex/2FMS3G5XGkycuFrY=",
+	"GoModSum": "h1:eVfm2fAzLlxMdUGc0EEBGSMmPwmXD5XiNRpnu9J3bvg="
+}
+{
+	"Path": "github.com/minio/md5-simd",
+	"Version": "v1.1.2",
+	"Time": "2021-01-07T19:48:44Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/minio/md5-simd@v1.1.2",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/minio/md5-simd/@v/v1.1.2.mod",
+	"GoVersion": "1.14",
+	"Sum": "h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=",
+	"GoModSum": "h1:MzdKDxYpY2BT9XQFocsiZf/NKVtR7nkE4RoEpN+20RM="
+}
+{
+	"Path": "github.com/minio/minio-go/v7",
+	"Version": "v7.0.90",
+	"Time": "2025-04-08T04:39:55Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/minio/minio-go/v7@v7.0.90",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/minio/minio-go/v7/@v/v7.0.90.mod",
+	"GoVersion": "1.23.0",
+	"Sum": "h1:TmSj1083wtAD0kEYTx7a5pFsv3iRYMsOJ6A4crjA1lE=",
+	"GoModSum": "h1:uvMUcGrpgeSAAI6+sD3818508nUyMULw94j2Nxku/Go="
+}
+{
+	"Path": "github.com/mkevac/debugcharts",
+	"Version": "v0.0.0-20191222103121-ae1c48aa8615",
+	"Time": "2019-12-22T10:31:21Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/docker-image-spec",
+	"Version": "v1.3.1",
+	"Time": "2024-02-09T17:17:29Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/patternmatcher",
+	"Version": "v0.6.0",
+	"Time": "2023-08-22T20:52:28Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/sys/sequential",
+	"Version": "v0.5.0",
+	"Time": "2022-08-29T09:59:30Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/sys/user",
+	"Version": "v0.1.0",
+	"Time": "2023-09-18T20:18:40Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/sys/userns",
+	"Version": "v0.1.0",
+	"Time": "2024-08-07T23:23:49Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/moby/term",
+	"Version": "v0.5.0",
+	"Time": "2023-05-02T11:56:13Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/modern-go/concurrent",
+	"Version": "v0.0.0-20180306012644-bacd9c7ef1dd",
+	"Time": "2018-03-06T01:26:44Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/modern-go/reflect2",
+	"Version": "v1.0.2",
+	"Time": "2021-09-11T02:10:30Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/mohae/deepcopy",
+	"Version": "v0.0.0-20170929034955-c48cc78d4826",
+	"Time": "2017-09-29T03:49:55Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/mohae/deepcopy@v0.0.0-20170929034955-c48cc78d4826",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/mohae/deepcopy/@v/v0.0.0-20170929034955-c48cc78d4826.mod",
+	"Sum": "h1:RWengNIwukTxcDr9M+97sNutRR1RKhG96O6jWumTTnw=",
+	"GoModSum": "h1:TaXosZuwdSHYgviHp1DAtfrULt5eUgsSMsZf+YrPgl8="
+}
+{
+	"Path": "github.com/montanaflynn/stats",
+	"Version": "v0.0.0-20171201202039-1bf9dbcd8cbe",
+	"Time": "2017-12-01T20:20:39Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/montanaflynn/stats/@v/v0.0.0-20171201202039-1bf9dbcd8cbe.mod",
+	"GoModSum": "h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc="
+}
+{
+	"Path": "github.com/morikuni/aec",
+	"Version": "v1.0.0",
+	"Time": "2017-01-13T03:34:06Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/munnerz/goautoneg",
+	"Version": "v0.0.0-20191010083416-a7dc8b61c822",
+	"Time": "2019-10-10T08:34:16Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/munnerz/goautoneg/@v/v0.0.0-20191010083416-a7dc8b61c822.mod",
+	"Sum": "h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=",
+	"GoModSum": "h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ="
+}
+{
+	"Path": "github.com/mwitkow/go-conntrack",
+	"Version": "v0.0.0-20190716064945-2f068394615f",
+	"Time": "2019-07-16T06:49:45Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/nats-io/nats.go",
+	"Version": "v1.41.2",
+	"Time": "2025-04-17T16:44:15Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/nats-io/nats.go@v1.41.2",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/nats-io/nats.go/@v/v1.41.2.mod",
+	"GoVersion": "1.23.0",
+	"Sum": "h1:5UkfLAtu/036s99AhFRlyNDI1Ieylb36qbGjJzHixos=",
+	"GoModSum": "h1:iRWIPokVIFbVijxuMQq4y9ttaBTMe0SFdlZfMDd+33g="
+}
+{
+	"Path": "github.com/nats-io/nkeys",
+	"Version": "v0.4.11",
+	"Time": "2025-04-16T14:15:12Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/nats-io/nkeys@v0.4.11",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/nats-io/nkeys/@v/v0.4.11.mod",
+	"GoVersion": "1.23.0",
+	"Sum": "h1:q44qGV008kYd9W1b1nEBkNzvnWxtRSQ7A8BoqRrcfa0=",
+	"GoModSum": "h1:szDimtgmfOi9n25JpfIdGw12tZFYXqhGxjhVxsatHVE="
+}
+{
+	"Path": "github.com/nats-io/nuid",
+	"Version": "v1.0.1",
+	"Time": "2019-04-10T00:38:38Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/nats-io/nuid@v1.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/nats-io/nuid/@v/v1.0.1.mod",
+	"Sum": "h1:5iA8DT8V7q8WK2EScv2padNa/rTESc1KdnPw4TC2paw=",
+	"GoModSum": "h1:19wcPz3Ph3q0Jbyiqsd0kePYG7A95tJPxeL+1OSON2c="
+}
+{
+	"Path": "github.com/opencontainers/go-digest",
+	"Version": "v1.0.0",
+	"Time": "2020-05-14T01:46:00Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/opencontainers/image-spec",
+	"Version": "v1.1.0",
+	"Time": "2024-01-27T02:31:59Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/parquet-go/bitpack",
+	"Version": "v1.0.0",
+	"Time": "2025-10-29T18:01:22Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/parquet-go/bitpack@v1.0.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/parquet-go/bitpack/@v/v1.0.0.mod",
+	"GoVersion": "1.24.0",
+	"Sum": "h1:AUqzlKzPPXf2bCdjfj4sTeacrUwsT7NlcYDMUQxPcQA=",
+	"GoModSum": "h1:XnVk9TH+O40eOOmvpAVZ7K2ocQFrQwysLMnc6M/8lgs="
+}
+{
+	"Path": "github.com/parquet-go/jsonlite",
+	"Version": "v1.0.0",
+	"Time": "2025-12-09T04:26:20Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/parquet-go/jsonlite@v1.0.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/parquet-go/jsonlite/@v/v1.0.0.mod",
+	"GoVersion": "1.23",
+	"Sum": "h1:87QNdi56wOfsE5bdgas0vRzHPxfJgzrXGml1zZdd7VU=",
+	"GoModSum": "h1:nDjpkpL4EOtqs6NQugUsi0Rleq9sW/OtC1NnZEnxzF0="
+}
+{
+	"Path": "github.com/parquet-go/parquet-go",
+	"Version": "v0.32.0",
+	"Time": "2026-08-10T22:07:31Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/parquet-go/parquet-go@v0.32.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/parquet-go/parquet-go/@v/v0.32.0.mod",
+	"GoVersion": "1.24.9",
+	"Sum": "h1:NWDqTUHfrCS4cJP/Fj2HlxvqsrVedWG3sayMkf+znzM=",
+	"GoModSum": "h1:navtkAYr2LGoJVp141oXPlO/sxLvaOe3la2JEoD8+rg="
+}
+{
+	"Path": "github.com/pascaldekloe/name",
+	"Version": "v1.0.1",
+	"Time": "2020-09-21T18:03:38Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/paulmach/orb",
+	"Version": "v0.11.1",
+	"Time": "2024-01-29T19:30:13Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/paulmach/orb@v0.11.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/paulmach/orb/@v/v0.11.1.mod",
+	"GoVersion": "1.15",
+	"Sum": "h1:3koVegMC4X/WeiXYz9iswopaTwMem53NzTJuTF20JzU=",
+	"GoModSum": "h1:5mULz1xQfs3bmQm63QEJA6lNGujuRafwA5S/EnuLaLU="
+}
+{
+	"Path": "github.com/paulmach/protoscan",
+	"Version": "v0.2.1",
+	"Time": "2022-02-07T20:01:11Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/paulmach/protoscan/@v/v0.2.1.mod",
+	"GoVersion": "1.15",
+	"GoModSum": "h1:SpcSwydNLrxUGSDvXvO0P7g7AuhJ7lcKfDlhJCDw2gY="
+}
+{
+	"Path": "github.com/pierrec/lz4/v4",
+	"Version": "v4.1.22",
+	"Time": "2024-12-12T16:53:43Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/pierrec/lz4/v4@v4.1.22",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/pierrec/lz4/v4/@v/v4.1.22.mod",
+	"GoVersion": "1.14",
+	"Sum": "h1:cKFw6uJDK+/gfw5BcDL0JL5aBsAFdsIT18eRtLj7VIU=",
+	"GoModSum": "h1:gZWDp/Ze/IJXGXf23ltt2EXimqmTUXEy0GFuRQyBid4="
+}
+{
+	"Path": "github.com/pkg/errors",
+	"Version": "v0.9.1",
+	"Time": "2020-01-14T19:47:44Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/pkg/errors/@v/v0.9.1.mod",
+	"GoModSum": "h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0="
+}
+{
+	"Path": "github.com/pmezard/go-difflib",
+	"Version": "v1.0.0",
+	"Time": "2016-01-10T10:55:54Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/pmezard/go-difflib@v1.0.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/pmezard/go-difflib/@v/v1.0.0.mod",
+	"Sum": "h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=",
+	"GoModSum": "h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4="
+}
+{
+	"Path": "github.com/power-devops/perfstat",
+	"Version": "v0.0.0-20210106213030-5aafc221ea8c",
+	"Time": "2021-01-06T21:30:30Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/prometheus/client_golang",
+	"Version": "v1.24.1",
+	"Time": "2026-07-24T06:32:04Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/prometheus/client_golang@v1.24.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/prometheus/client_golang/@v/v1.24.1.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:JnJkREXzWxUdCuPFpIWZiPispT9xVV59uiuyR2bPlnU=",
+	"GoModSum": "h1:F+oSRECHg4sse5ucfYpYDeIv/hu68Zo0uoHKetWnzcE="
+}
+{
+	"Path": "github.com/prometheus/client_model",
+	"Version": "v0.6.2",
+	"Time": "2025-04-11T05:38:16Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/prometheus/client_model@v0.6.2",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/prometheus/client_model/@v/v0.6.2.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:oBsgwpGs7iVziMvrGhE53c/GrLUsZdHnqNwqPLxwZyk=",
+	"GoModSum": "h1:y3m2F6Gdpfy6Ut/GBsUqTWZqCUvMVzSfMLjcu6wAwpE="
+}
+{
+	"Path": "github.com/prometheus/common",
+	"Version": "v0.70.1",
+	"Time": "2026-07-22T06:06:48Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/prometheus/common@v0.70.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/prometheus/common/@v/v0.70.1.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:1HvjP4D5oL3t8RsPlwxA9onvvStjtIHYE5XuuwOi/PY=",
+	"GoModSum": "h1:VdFUQDMZK3VLkurFUVhia6uys/0suUp86TJz5qbJRhc="
+}
+{
+	"Path": "github.com/prometheus/procfs",
+	"Version": "v0.21.1",
+	"Time": "2026-06-30T13:35:04Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/prometheus/procfs@v0.21.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/prometheus/procfs/@v/v0.21.1.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:GljZCt+zSTS+NZq88cyQ1LjZ+RCHp3uVuabBWA5+OJI=",
+	"GoModSum": "h1:aB55Cww9pdSJVHk0hUf0inxWyyjPogFIjmHKYgMKmtY="
+}
+{
+	"Path": "github.com/richardlehane/mscfb",
+	"Version": "v1.0.4",
+	"Time": "2022-01-16T20:28:55Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/richardlehane/mscfb@v1.0.4",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/richardlehane/mscfb/@v/v1.0.4.mod",
+	"Sum": "h1:WULscsljNPConisD5hR0+OyZjwK46Pfyr6mPu5ZawpM=",
+	"GoModSum": "h1:YzVpcZg9czvAuhk9T+a3avCpcFPMUWm7gK3DypaEsUk="
+}
+{
+	"Path": "github.com/richardlehane/msoleps",
+	"Version": "v1.0.4",
+	"Time": "2023-11-24T17:05:28Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/richardlehane/msoleps@v1.0.4",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/richardlehane/msoleps/@v/v1.0.4.mod",
+	"Sum": "h1:WuESlvhX3gH2IHcd8UqyCuFY5yiq/GR/yqaSM/9/g00=",
+	"GoModSum": "h1:BWev5JBpU9Ko2WAgmZEuiz4/u3ZYTKbjLycmwiWUfWg="
+}
+{
+	"Path": "github.com/rogpeppe/go-internal",
+	"Version": "v1.16.0",
+	"Time": "2026-07-01T15:11:24Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/rogpeppe/go-internal@v1.16.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/rogpeppe/go-internal/@v/v1.16.0.mod",
+	"GoVersion": "1.25",
+	"Sum": "h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=",
+	"GoModSum": "h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs="
+}
+{
+	"Path": "github.com/rs/xid",
+	"Version": "v1.6.0",
+	"Time": "2024-08-23T12:21:22Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/rs/xid@v1.6.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/rs/xid/@v/v1.6.0.mod",
+	"GoVersion": "1.16",
+	"Sum": "h1:fV591PaemRlL6JfRxGDEPl69wICngIQ3shQtzfy2gxU=",
+	"GoModSum": "h1:7XoLgs4eV+QndskICGsho+ADou8ySMSjJKDIan90Nz0="
+}
+{
+	"Path": "github.com/segmentio/asm",
+	"Version": "v1.2.0",
+	"Time": "2022-04-27T20:45:16Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/segmentio/asm@v1.2.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/segmentio/asm/@v/v1.2.0.mod",
+	"GoVersion": "1.18",
+	"Sum": "h1:9BQrFxC+YOHJlTlHGkTrFWf59nbL3XnCoFLTwDCI7ys=",
+	"GoModSum": "h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs="
+}
+{
+	"Path": "github.com/shirou/gopsutil",
+	"Version": "v3.21.11+incompatible",
+	"Time": "2021-11-30T23:46:45Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/shirou/gopsutil/v3",
+	"Version": "v3.23.12",
+	"Time": "2023-12-31T06:59:26Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/shoenig/go-m1cpu",
+	"Version": "v0.1.6",
+	"Time": "2023-05-05T01:29:33Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/shopspring/decimal",
+	"Version": "v1.4.0",
+	"Time": "2024-04-12T14:15:38Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/shopspring/decimal@v1.4.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/shopspring/decimal/@v/v1.4.0.mod",
+	"GoVersion": "1.10",
+	"Sum": "h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=",
+	"GoModSum": "h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME="
+}
+{
+	"Path": "github.com/sirupsen/logrus",
+	"Version": "v1.9.3",
+	"Time": "2023-05-21T12:59:35Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/stretchr/objx",
+	"Version": "v0.1.0",
+	"Time": "2018-01-06T01:13:53Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/stretchr/objx/@v/v0.1.0.mod",
+	"GoModSum": "h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME="
+}
+{
+	"Path": "github.com/stretchr/testify",
+	"Version": "v1.11.1",
+	"Time": "2025-08-27T10:46:31Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/stretchr/testify@v1.11.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/stretchr/testify/@v/v1.11.1.mod",
+	"GoVersion": "1.17",
+	"Sum": "h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=",
+	"GoModSum": "h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U="
+}
+{
+	"Path": "github.com/testcontainers/testcontainers-go",
+	"Version": "v0.33.0",
+	"Time": "2024-08-20T11:48:12Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/tidwall/pretty",
+	"Version": "v1.0.0",
+	"Time": "2019-03-25T15:38:08Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/tidwall/pretty/@v/v1.0.0.mod",
+	"GoModSum": "h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk="
+}
+{
+	"Path": "github.com/tklauser/go-sysconf",
+	"Version": "v0.3.12",
+	"Time": "2023-08-05T05:20:10Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/tklauser/numcpus",
+	"Version": "v0.6.1",
+	"Time": "2023-05-16T12:05:20Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/twpayne/go-geom",
+	"Version": "v1.6.1",
+	"Time": "2025-04-14T20:30:39Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/twpayne/go-geom@v1.6.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/twpayne/go-geom/@v/v1.6.1.mod",
+	"GoVersion": "1.22",
+	"Sum": "h1:iLE+Opv0Ihm/ABIcvQFGIiFBXd76oBIar9drAwHFhR4=",
+	"GoModSum": "h1:Kr+Nly6BswFsKM5sd31YaoWS5PeDDH2NftJTK7Gd028="
+}
+{
+	"Path": "github.com/twpayne/go-kml/v3",
+	"Version": "v3.2.1",
+	"Time": "2024-12-24T17:31:06Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/xdg-go/pbkdf2",
+	"Version": "v1.0.0",
+	"Time": "2021-03-28T18:46:53Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xdg-go/pbkdf2/@v/v1.0.0.mod",
+	"GoVersion": "1.9",
+	"GoModSum": "h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI="
+}
+{
+	"Path": "github.com/xdg-go/scram",
+	"Version": "v1.1.1",
+	"Time": "2022-03-04T01:10:50Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xdg-go/scram/@v/v1.1.1.mod",
+	"GoVersion": "1.11",
+	"GoModSum": "h1:RaEWvsqvNKKvBPvcKeFjrG2cJqOkHTiyTpzz23ni57g="
+}
+{
+	"Path": "github.com/xdg-go/stringprep",
+	"Version": "v1.0.3",
+	"Time": "2022-03-02T00:41:17Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xdg-go/stringprep/@v/v1.0.3.mod",
+	"GoVersion": "1.11",
+	"GoModSum": "h1:W3f5j4i+9rC0kuIEJL0ky1VpHXQU3ocBgklLGvcBnW8="
+}
+{
+	"Path": "github.com/xhit/go-str2duration/v2",
+	"Version": "v2.1.0",
+	"Time": "2022-12-07T00:32:32Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/xuri/efp",
+	"Version": "v0.0.0-20240408161823-9ad904a10d6d",
+	"Time": "2024-04-08T16:18:23Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/xuri/efp@v0.0.0-20240408161823-9ad904a10d6d",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xuri/efp/@v/v0.0.0-20240408161823-9ad904a10d6d.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:llb0neMWDQe87IzJLS4Ci7psK/lVsjIS2otl+1WyRyY=",
+	"GoModSum": "h1:ybY/Jr0T0GTCnYjKqmdwxyxn2BQf2RcQIIvex5QldPI="
+}
+{
+	"Path": "github.com/xuri/excelize/v2",
+	"Version": "v2.9.0",
+	"Time": "2024-10-10T14:44:38Z",
+	"Dir": "/home/euripides/go/pkg/mod/github.com/xuri/excelize/v2@v2.9.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xuri/excelize/v2/@v/v2.9.0.mod",
+	"GoVersion": "1.18",
+	"Sum": "h1:1tgOaEq92IOEumR1/JfYS/eR0KHOCsRv/rYXXh6YJQE=",
+	"GoModSum": "h1:uqey4QBZ9gdMeWApPLdhm9x+9o2lq4iVmjiLfBS5hdE="
+}
+{
+	"Path": "github.com/xuri/nfp",
+	"Version": "v0.0.0-20240318013403-ab9948c2c4a7",
+	"Time": "2024-03-18T01:34:03Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/xuri/nfp@v0.0.0-20240318013403-ab9948c2c4a7",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xuri/nfp/@v/v0.0.0-20240318013403-ab9948c2c4a7.mod",
+	"GoVersion": "1.15",
+	"Sum": "h1:hPVCafDV85blFTabnqKgNhDCkJX25eik94Si9cTER4A=",
+	"GoModSum": "h1:WwHg+CVyzlv/TX9xqBFXEZAuxOPxn2k1GNHwG41IIUQ="
+}
+{
+	"Path": "github.com/xyproto/randomstring",
+	"Version": "v1.0.5",
+	"Time": "2023-02-06T10:49:41Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/github.com/xyproto/randomstring@v1.0.5",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/xyproto/randomstring/@v/v1.0.5.mod",
+	"GoVersion": "1.17",
+	"Sum": "h1:YtlWPoRdgMu3NZtP45drfy1GKoojuR7hmRcnhZqKjWU=",
+	"GoModSum": "h1:rgmS5DeNXLivK7YprL0pY+lTuhNQW3iGxZ18UQApw/E="
+}
+{
+	"Path": "github.com/youmark/pkcs8",
+	"Version": "v0.0.0-20181117223130-1be2e3e5546d",
+	"Time": "2018-11-17T22:31:30Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/youmark/pkcs8/@v/v0.0.0-20181117223130-1be2e3e5546d.mod",
+	"GoModSum": "h1:rHwXgn7JulP+udvsHwJoVG1YGAP6VLg4y9I5dyZdqmA="
+}
+{
+	"Path": "github.com/yuin/goldmark",
+	"Version": "v1.2.1",
+	"Time": "2020-07-30T13:33:42Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/github.com/yuin/goldmark/@v/v1.2.1.mod",
+	"GoVersion": "1.13",
+	"GoModSum": "h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74="
+}
+{
+	"Path": "github.com/yusufpapurcu/wmi",
+	"Version": "v1.2.3",
+	"Time": "2023-05-18T18:38:25Z",
+	"Indirect": true
+}
+{
+	"Path": "go.mongodb.org/mongo-driver",
+	"Version": "v1.11.4",
+	"Time": "2023-04-04T22:37:12Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/go.mongodb.org/mongo-driver/@v/v1.11.4.mod",
+	"GoVersion": "1.13",
+	"GoModSum": "h1:PTSz5yu21bkT/wXpkS7WR5f0ddqw5quethTUn9WM+2g="
+}
+{
+	"Path": "go.opentelemetry.io/auto/sdk",
+	"Version": "v1.1.0",
+	"Time": "2024-12-05T17:49:43Z",
+	"Indirect": true
+}
+{
+	"Path": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+	"Version": "v0.49.0",
+	"Time": "2024-02-23T17:23:36Z",
+	"Indirect": true
+}
+{
+	"Path": "go.opentelemetry.io/otel",
+	"Version": "v1.35.0",
+	"Time": "2025-03-05T18:33:59Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/go.opentelemetry.io/otel@v1.35.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/go.opentelemetry.io/otel/@v/v1.35.0.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=",
+	"GoModSum": "h1:UEqy8Zp11hpkUrL73gSlELM0DupHoiq72dR+Zqel/+Y="
+}
+{
+	"Path": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+	"Version": "v1.19.0",
+	"Time": "2023-09-28T19:28:51Z",
+	"Indirect": true
+}
+{
+	"Path": "go.opentelemetry.io/otel/metric",
+	"Version": "v1.35.0",
+	"Time": "2025-03-05T18:33:59Z",
+	"Indirect": true
+}
+{
+	"Path": "go.opentelemetry.io/otel/sdk",
+	"Version": "v1.34.0",
+	"Time": "2025-01-17T16:21:54Z",
+	"Indirect": true
+}
+{
+	"Path": "go.opentelemetry.io/otel/trace",
+	"Version": "v1.35.0",
+	"Time": "2025-03-05T18:33:59Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/go.opentelemetry.io/otel/trace@v1.35.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/go.opentelemetry.io/otel/trace/@v/v1.35.0.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs=",
+	"GoModSum": "h1:WUk7DtFp1Aw2MkvqGdwiXYDZZNvA/1J8o6xRXLrIkyc="
+}
+{
+	"Path": "go.uber.org/atomic",
+	"Version": "v1.11.0",
+	"Time": "2023-05-03T17:25:03Z",
+	"Indirect": true
+}
+{
+	"Path": "go.uber.org/goleak",
+	"Version": "v1.3.0",
+	"Time": "2023-10-24T16:28:03Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/go.uber.org/goleak@v1.3.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/go.uber.org/goleak/@v/v1.3.0.mod",
+	"GoVersion": "1.20",
+	"Sum": "h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=",
+	"GoModSum": "h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE="
+}
+{
+	"Path": "go.uber.org/multierr",
+	"Version": "v1.11.0",
+	"Time": "2023-03-29T23:00:37Z",
+	"Indirect": true
+}
+{
+	"Path": "go.uber.org/zap",
+	"Version": "v1.27.0",
+	"Time": "2024-02-20T20:55:06Z",
+	"Indirect": true
+}
+{
+	"Path": "go.yaml.in/yaml/v2",
+	"Version": "v2.4.4",
+	"Time": "2026-03-06T22:01:45Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/go.yaml.in/yaml/v2@v2.4.4",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/go.yaml.in/yaml/v2/@v/v2.4.4.mod",
+	"GoVersion": "1.15",
+	"Sum": "h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=",
+	"GoModSum": "h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ="
+}
+{
+	"Path": "golang.org/x/crypto",
+	"Version": "v0.54.0",
+	"Time": "2026-07-08T18:22:26Z",
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/crypto@v0.54.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/crypto/@v/v0.54.0.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=",
+	"GoModSum": "h1:KWL8ny2AZdGR2cWmzeHrp2azQPGogOv+HeQaVEXC2dk="
+}
+{
+	"Path": "golang.org/x/image",
+	"Version": "v0.18.0",
+	"Time": "2024-06-18T20:19:45Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/image@v0.18.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/image/@v/v0.18.0.mod",
+	"GoVersion": "1.18",
+	"Sum": "h1:jGzIakQa/ZXI1I0Fxvaa9W7yP25TqT6cHIHn+6CqvSQ=",
+	"GoModSum": "h1:4yyo5vMFQjVjUcVk4jEQcU9MGy/rulF5WvUILseCM2E="
+}
+{
+	"Path": "golang.org/x/mod",
+	"Version": "v0.37.0",
+	"Time": "2026-06-08T15:10:58Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/net",
+	"Version": "v0.57.0",
+	"Time": "2026-07-08T21:02:14Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/net@v0.57.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/net/@v/v0.57.0.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=",
+	"GoModSum": "h1:KpXc8iv+r3XplLAG/f7Jsf9RPszJzdR0f58q9vGOuEU="
+}
+{
+	"Path": "golang.org/x/oauth2",
+	"Version": "v0.36.0",
+	"Time": "2026-02-11T19:14:10Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/sync",
+	"Version": "v0.22.0",
+	"Time": "2026-07-01T17:29:34Z",
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/sync@v0.22.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/sync/@v/v0.22.0.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek=",
+	"GoModSum": "h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0="
+}
+{
+	"Path": "golang.org/x/sys",
+	"Version": "v0.48.0",
+	"Time": "2026-08-31T19:43:43Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/sys@v0.48.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/sys/@v/v0.48.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=",
+	"GoModSum": "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+}
+{
+	"Path": "golang.org/x/term",
+	"Version": "v0.46.0",
+	"Time": "2026-09-08T16:27:41Z",
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/term@v0.46.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/term/@v/v0.46.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE=",
+	"GoModSum": "h1:+K02xbkittuwc0Am4abfA3Fc+XRGXkvBXNO88NCXPoc="
+}
+{
+	"Path": "golang.org/x/text",
+	"Version": "v0.40.0",
+	"Time": "2026-07-08T15:41:08Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/golang.org/x/text@v0.40.0",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/text/@v/v0.40.0.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=",
+	"GoModSum": "h1:hpnzDAfGV753zIKo+wk3u1bVKCGPbrnF7+7LBF/UHVY="
+}
+{
+	"Path": "golang.org/x/time",
+	"Version": "v0.0.0-20220210224613-90d013bbcef8",
+	"Time": "2022-02-10T22:46:13Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/tools",
+	"Version": "v0.47.0",
+	"Time": "2026-06-25T17:02:32Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/xerrors",
+	"Version": "v0.0.0-20200804184101-5ec99f83aff1",
+	"Time": "2020-08-04T18:41:01Z",
+	"Indirect": true,
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/golang.org/x/xerrors/@v/v0.0.0-20200804184101-5ec99f83aff1.mod",
+	"GoVersion": "1.11",
+	"GoModSum": "h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0="
+}
+{
+	"Path": "google.golang.org/genproto/googleapis/api",
+	"Version": "v0.0.0-20240318140521-94a12d6c2237",
+	"Time": "2024-03-18T14:05:21Z",
+	"Indirect": true
+}
+{
+	"Path": "google.golang.org/genproto/googleapis/rpc",
+	"Version": "v0.0.0-20240318140521-94a12d6c2237",
+	"Time": "2024-03-18T14:05:21Z",
+	"Indirect": true
+}
+{
+	"Path": "google.golang.org/protobuf",
+	"Version": "v1.36.11",
+	"Time": "2025-12-12T08:48:31Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/google.golang.org/protobuf@v1.36.11",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/google.golang.org/protobuf/@v/v1.36.11.mod",
+	"GoVersion": "1.23",
+	"Sum": "h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=",
+	"GoModSum": "h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco="
+}
+{
+	"Path": "gopkg.in/check.v1",
+	"Version": "v1.0.0-20201130134442-10cb98267c6c",
+	"Time": "2020-11-30T13:44:42Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/gopkg.in/check.v1@v1.0.0-20201130134442-10cb98267c6c",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/gopkg.in/check.v1/@v/v1.0.0-20201130134442-10cb98267c6c.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=",
+	"GoModSum": "h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q="
+}
+{
+	"Path": "gopkg.in/yaml.v3",
+	"Version": "v3.0.1",
+	"Time": "2022-05-27T08:35:30Z",
+	"Indirect": true,
+	"Dir": "/home/euripides/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1",
+	"GoMod": "/home/euripides/go/pkg/mod/cache/download/gopkg.in/yaml.v3/@v/v3.0.1.mod",
+	"Sum": "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=",
+	"GoModSum": "h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM="
+}

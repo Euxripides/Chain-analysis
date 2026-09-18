@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "check:tokens": "node scripts/check-token-contrast.mjs",
+    "verify:xlsx": "node scripts/verify-xlsx-tarball.mjs",
     "build:user": "vite build --config apps/user-console/vite.config.ts",
     "build:admin": "vite build --config apps/admin-console/vite.config.ts",
     "gen:audit-coverage": "cd .. && python3 scripts/gen_audit_coverage.py"
@@ -24,7 +25,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

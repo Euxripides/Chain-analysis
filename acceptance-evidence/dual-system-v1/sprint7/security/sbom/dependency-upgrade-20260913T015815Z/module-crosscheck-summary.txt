@@ -1,0 +1,28 @@
+UPGRADED-MODULE PRESENCE IN THE SCOPED SBOMs (per-binary, per-format)
+generated_utc = 2026-09-13T02:11:45Z
+validation_result = PASS
+real_gaps = 0   not_linked_occurrences = 8
+
+module                           expect   api cdx|spdx    worker cdx|spdx    migrate cdx|spdx
+github.com/go-chi/chi/v5         5.3.2    OK          OK          NOT-LINKED  NOT-LINKED  NOT-LINKED  NOT-LINKED
+github.com/xuri/excelize/v2      2.11.0   OK          OK          NOT-LINKED  NOT-LINKED  NOT-LINKED  NOT-LINKED
+github.com/jackc/pgx/v5          5.9.2    OK          OK          OK          OK          OK          OK        
+golang.org/x/crypto              0.56.0   OK          OK          OK          OK          OK          OK        
+
+--- api   target=backend/bin/api
+    target sha256 = 8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a
+    go=go1.26.7 main=github.com/blockchain-platform/blockchain-platform/cmd/api embedded_modules=53 vcs_settings={}
+    cdx: component_count=56 sha256=d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a
+    spdx: package_count=56 sha256=a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c
+--- worker   target=backend/bin/worker
+    target sha256 = 513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48
+    go=go1.26.7 main=github.com/blockchain-platform/blockchain-platform/cmd/worker embedded_modules=42 vcs_settings={}
+    cdx: component_count=45 sha256=b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2
+    spdx: package_count=45 sha256=4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e
+--- migrate   target=backend/bin/migrate
+    target sha256 = 28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4
+    go=go1.26.7 main=github.com/blockchain-platform/blockchain-platform/cmd/migrate embedded_modules=30 vcs_settings={}
+    cdx: component_count=33 sha256=f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec
+    spdx: package_count=33 sha256=f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce
+
+NOT-LINKED = not present in that binary at all (per-binary scan scope), not a version defect.

@@ -1,0 +1,132 @@
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-admin-console.service -----
+# 后台管理系统（Admin Console）。
+# 灰度期监听 127.0.0.1:3002，由 Nginx 以 /admin/ 前缀对外。
+# 只读静态产物，不连接数据库，不读取任何密钥。
+[Unit]
+Description=Blockchain Platform admin console (Admin Console, 127.0.0.1:3002)
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/admin-console/vite.config.ts --host 127.0.0.1 --port 3002 --strictPort
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/admin-console.log
+StandardError=append:/tmp/admin-console.log
+
+[Install]
+WantedBy=default.target
+
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-api.service -----
+# API 进程。承载 REST/SSE、认证授权、审计写入与业务审计哈希链。
+# 注意：AUTH_MODE 必须是 session（生产）；配置见 deploy/.env。
+[Unit]
+Description=Blockchain Platform API (Go, 127.0.0.1:8080)
+After=network-online.target docker.service
+Wants=network-online.target
+# StartLimitIntervalSec 属于 [Unit]，放进 [Service] 会被 systemd 忽略并告警。
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+WorkingDirectory=/home/euripides/projects/blockchain-platform/backend
+ExecStart=/home/euripides/projects/blockchain-platform/backend/bin/api
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/api.log
+StandardError=append:/tmp/api.log
+
+[Install]
+WantedBy=default.target
+
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-mcp.service -----
+[Unit]
+Description=Blockchain Platform MCP Server
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/mcp
+ExecStart=/usr/bin/env node dist/server.js
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/mcp.log
+StandardError=append:/tmp/mcp.log
+
+[Install]
+WantedBy=default.target
+
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-user-console.service -----
+# 用户层系统（Investigator Console）。
+# 灰度期监听 127.0.0.1:3001，由 Nginx 以 /app-v2/ 前缀对外。
+# 只读静态产物，不连接数据库，不读取任何密钥。
+[Unit]
+Description=Blockchain Platform user console (Investigator Console, 127.0.0.1:3001)
+After=network-online.target blockchain-api.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/user-console/vite.config.ts --host 127.0.0.1 --port 3001 --strictPort
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/user-console.log
+StandardError=append:/tmp/user-console.log
+
+[Install]
+WantedBy=default.target
+
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-vite.service -----
+# 旧 SPA 开发服务器（灰度期保留，/ 入口）。
+# 计划要求在切流验收完成后下线，见 docs/implementation/dual-system-progress.md。
+[Unit]
+Description=Blockchain Platform frontend Vite dev server (port 3000)
+After=network-online.target blockchain-api.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js --host 0.0.0.0
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/vite.log
+StandardError=append:/tmp/vite.log
+
+[Install]
+WantedBy=default.target
+
+----- /home/euripides/projects/blockchain-platform/deploy/blockchain-worker.service -----
+# Worker 进程。承载下载调度，以及 §28.5 S3-BE-02 的审计后台任务：
+#   审计链定时校验 / 每日锚点归档到 MinIO / Outbox 积压指标采集。
+[Unit]
+Description=Blockchain Platform Worker (Go, 127.0.0.1:8081)
+After=network-online.target docker.service blockchain-api.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+WorkingDirectory=/home/euripides/projects/blockchain-platform/backend
+ExecStart=/home/euripides/projects/blockchain-platform/backend/bin/worker
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/worker.log
+StandardError=append:/tmp/worker.log
+
+[Install]
+WantedBy=default.target
+

@@ -1,0 +1,6 @@
+=== FINGERPRINT BEFORE ===
+60ec9012bf2a997b9a1de2b02aec0bb3  go.mod
+f2d26700809306edf233d305c99d06c6  go.sum
+=== FINGERPRINT AFTER ===
+60ec9012bf2a997b9a1de2b02aec0bb3  go.mod
+f2d26700809306edf233d305c99d06c6  go.sum

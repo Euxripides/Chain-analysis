@@ -1,0 +1,131 @@
+{
+  "local_summary_text": "提示\n地址导入解析摘要（浏览器）\n本地摘要只做拆分与计数；接受/拒绝与规范化地址以服务端再次验证为准。\n文件名\nmin.xlsx\n文件类型\nXLSX/Excel\n扫描行数\n1\n空白行\n0\n识别表头\naddress 表头（列映射）\n可选列\nchain、case、tags\n链分布（本地）\nbsc:1\n带案件/标签的行\n1\n本次送校验\n1 个地址\n取消\n提交服务端校验",
+  "server_verdict_text": "已完成\n服务端地址校验结果\n只有服务端 accepted 的规范化地址会进入预览与创建；被拒条目不会静默丢弃。\n服务端提交\n1\n服务端接受\n1\n服务端拒绝\n0\n链分布\nbsc:1\n作用域\norg 5edc0f75… / ws 8b41836b…\n校验来源\nserver:dataset.NormalizeAndDedupeAddressesForChain + chain_registry + workspace-scoped meta lookup\n本次会话权限\ndownload:create=true · case:create=true · case:update=true\n案件 R9-MISSING-CASE-20260913\n本工作区不存在 —— 已从本次提交中移除，不会出现在创建请求里\n标签 R9-MISSING-TAG-20260913\n本工作区不存在 —— 已从本次提交中移除，不会出现在创建请求里\n本次不绑定的案件\nR9-MISSING-CASE-20260913\n本次不绑定的标签\nR9-MISSING-TAG-20260913\n实际提交\n上述名称已从创建请求的 payload 中移除（不会被提交）\n取消\n使用服务端结果",
+  "result_text": "已完成\n下载任务已创建\nbsc status\nplanned\nbsc created/reused\ntrue / false\nbsc job\n554d50b9-d7a3-41af-a393-732370c25c45 · DL-20260913-0018\nprovider_work_required\ntrue\ncoverage\nbsc:0.0%\n已创建任务数\n1\n查看任务",
+  "preview_request_body": {
+    "chain": "bsc",
+    "addresses": [
+      "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649"
+    ],
+    "datasets": [
+      "transactions",
+      "token_transfers"
+    ],
+    "range": {
+      "type": "full"
+    },
+    "reuse_policy": "prefer_local",
+    "performance_mode": "safe"
+  },
+  "create_request_body": {
+    "chain": "bsc",
+    "addresses": [
+      "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649"
+    ],
+    "datasets": [
+      "transactions",
+      "token_transfers"
+    ],
+    "range": {
+      "type": "full"
+    },
+    "reuse_policy": "prefer_local",
+    "performance_mode": "safe"
+  },
+  "create_response": {
+    "coverage": 0,
+    "created": true,
+    "dataset_ref": "ds_554d50b9",
+    "job_id": "554d50b9-d7a3-41af-a393-732370c25c45",
+    "job_no": "DL-20260913-0018",
+    "provider_work_required": true,
+    "reused": false,
+    "status": "planned"
+  },
+  "preview_trace_ids": [
+    {
+      "request_id": "0eb533d5-7466-4650-a988-a389c892db0c",
+      "trace_id": "ff113db5-ca86-4192-935a-fef32680a36c",
+      "status": 200
+    }
+  ],
+  "create_trace_ids": [
+    {
+      "request_id": "90c3d9ec-4969-4e48-8538-26c0371ababe",
+      "trace_id": "628c6bbf-4d12-46b9-bf76-78a594492eab",
+      "status": 201
+    }
+  ],
+  "all_api_calls": [
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/auth/v1/session",
+      "status": 401,
+      "request_id": "80306533-66e6-4ae3-b0cf-f44a4f190b65",
+      "trace_id": "a8a2f73d-ccb8-46b6-801c-dc55f6f42ef7"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/auth/v1/methods",
+      "status": 200,
+      "request_id": "f271183f-1044-49b3-b9e7-40d0c7e3654d",
+      "trace_id": "e95211bf-f6a0-457a-b51b-89461a4f45f9"
+    },
+    {
+      "method": "POST",
+      "url": "https://127.0.0.1:8448/api/auth/v1/login",
+      "status": 200,
+      "request_id": "1c9acbf7-0b79-41c7-8a3b-d4530112a953",
+      "trace_id": "90cfd3d3-1f4c-402e-85be-532ae9d5c468"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/auth/v1/session",
+      "status": 200,
+      "request_id": "aea12779-1b5d-4125-85d0-48a14a707485",
+      "trace_id": "3b7fb05a-ec72-404a-bf50-5f56b9c06961"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/auth/v1/session",
+      "status": 200,
+      "request_id": "c94c9b96-5dd0-407f-ba86-77ae43acfecc",
+      "trace_id": "a873b575-1374-4610-89fa-576c6f08aa09"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v2/meta/datasets",
+      "status": 200,
+      "request_id": "ec5c09ff-7a66-44a8-a282-b5d62bc94a36",
+      "trace_id": "3f8918f9-efd0-44aa-93d0-d4a3362cfa5b"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v2/meta/chains",
+      "status": 200,
+      "request_id": "39384e90-0006-486f-b252-4930fd957009",
+      "trace_id": "bf0a8e49-6cca-4d8a-bbd8-153ecdef0607"
+    },
+    {
+      "method": "POST",
+      "url": "https://127.0.0.1:8448/api/v2/downloads/validate-addresses",
+      "status": 200,
+      "request_id": "1b614c40-7780-4913-b13e-fcb1d67b7279",
+      "trace_id": "65eae0ed-e948-4b0f-9b75-c7a96b176ec7"
+    },
+    {
+      "method": "POST",
+      "url": "https://127.0.0.1:8448/api/v2/downloads/preview",
+      "status": 200,
+      "request_id": "0eb533d5-7466-4650-a988-a389c892db0c",
+      "trace_id": "ff113db5-ca86-4192-935a-fef32680a36c"
+    },
+    {
+      "method": "POST",
+      "url": "https://127.0.0.1:8448/api/v2/downloads",
+      "status": 201,
+      "request_id": "90c3d9ec-4969-4e48-8538-26c0371ababe",
+      "trace_id": "628c6bbf-4d12-46b9-bf76-78a594492eab"
+    }
+  ]
+}

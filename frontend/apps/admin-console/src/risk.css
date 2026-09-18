@@ -1,0 +1,100 @@
+/* 风险事件页（A-RISK-01）。沿用"证据控制台"令牌，只增加本页需要的结构：
+   严重度时间轨、拦截/放行分配条、原因码排行、来源排行。 */
+
+.risk-page { display: flex; flex-direction: column; gap: var(--sp-5); }
+
+/* ---------- 工具条 ---------- */
+.risk-toolbar {
+  display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: flex-end;
+  justify-content: space-between;
+}
+.risk-seg { display: inline-flex; background: var(--c-surface-sunken); border: 1px solid var(--c-border); border-radius: var(--radius-sm); padding: 2px; }
+.risk-seg button {
+  border: 0; background: transparent; color: var(--c-neutral); cursor: pointer;
+  padding: 5px 12px; border-radius: 4px; font-size: var(--fs-12); white-space: nowrap;
+}
+.risk-seg button[aria-pressed="true"] { background: var(--c-surface); color: var(--c-graphite); font-weight: 600; box-shadow: var(--shadow-sm); }
+.risk-seg__label { font-size: var(--fs-11); text-transform: uppercase; letter-spacing: .08em; color: var(--c-slate); display: block; margin-bottom: 4px; }
+
+/* ---------- KPI 磁贴 ---------- */
+.risk-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: var(--sp-3); }
+.risk-kpi {
+  position: relative; background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--radius-md); padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-5);
+  box-shadow: var(--shadow-sm); overflow: hidden;
+}
+.risk-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c-border-strong); }
+.risk-kpi[data-tone="danger"]::before { background: var(--c-danger); }
+.risk-kpi[data-tone="warn"]::before { background: var(--c-amber); }
+.risk-kpi[data-tone="ok"]::before { background: var(--c-green); }
+.risk-kpi[data-tone="info"]::before { background: var(--c-cobalt); }
+.risk-kpi__label { font-size: var(--fs-11); letter-spacing: .06em; text-transform: uppercase; color: var(--c-slate); }
+.risk-kpi__value { font-size: var(--fs-28); font-weight: 600; line-height: 1.15; margin-top: 2px; }
+.risk-kpi__hint { font-size: var(--fs-12); color: var(--c-slate); margin-top: 2px; }
+
+/* ---------- 严重度时间轨 ---------- */
+.risk-rail { padding: var(--sp-4) 0 var(--sp-2); }
+.risk-rail__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.risk-rail__title { font-size: var(--fs-13); font-weight: 600; }
+.risk-rail__track { display: flex; gap: 2px; align-items: flex-end; height: 54px; }
+.risk-rail__cell {
+  flex: 1 1 0; min-width: 3px; border: 0; padding: 0; cursor: pointer;
+  background: var(--c-surface-sunken); border-radius: 2px 2px 0 0; height: 6px;
+  transition: transform var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
+}
+.risk-rail__cell:hover { filter: brightness(0.94); transform: translateY(-2px); }
+.risk-rail__cell[data-level="critical"] { background: var(--c-danger); }
+.risk-rail__cell[data-level="high"] { background: var(--c-amber); }
+.risk-rail__cell[data-level="medium"] { background: var(--c-cobalt); }
+.risk-rail__cell[data-level="low"] { background: var(--c-border-strong); }
+.risk-rail__cell[aria-pressed="true"] { outline: 2px solid var(--c-focus); outline-offset: 1px; }
+.risk-rail__axis { display: flex; justify-content: space-between; font-size: var(--fs-11); color: var(--c-slate); margin-top: 4px; }
+.risk-legend { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: var(--fs-11); color: var(--c-slate); margin-top: var(--sp-2); }
+.risk-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+
+/* ---------- 拦截 / 放行 ---------- */
+.risk-split { display: flex; flex-direction: column; gap: var(--sp-2); }
+.risk-split__bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--c-surface-sunken); }
+.risk-split__seg { height: 100%; }
+.risk-split__seg[data-kind="blocked"] { background: var(--c-green); }
+.risk-split__seg[data-kind="denied"] { background: var(--c-cobalt); }
+.risk-split__seg[data-kind="failure"] { background: var(--c-amber); }
+.risk-split__seg[data-kind="other"] { background: var(--c-danger); }
+.risk-split__keys { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: var(--fs-12); color: var(--c-neutral); }
+.risk-split__keys b { font-variant-numeric: tabular-nums; color: var(--c-graphite); }
+
+/* ---------- 排行（原因码 / 来源） ---------- */
+.risk-rank { display: flex; flex-direction: column; }
+.risk-rank__row {
+  display: grid; grid-template-columns: minmax(120px, 1.1fr) 3fr auto; gap: var(--sp-3);
+  align-items: center; padding: 7px 0; border-top: 1px solid var(--c-surface-sunken);
+  background: none; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; width: 100%;
+}
+.risk-rank__row:first-child { border-top: 0; }
+.risk-rank__row:hover { background: var(--c-ice); }
+.risk-rank__row[aria-pressed="true"] { background: var(--c-cobalt-soft); }
+.risk-rank__key { font-family: var(--font-mono); font-size: var(--fs-12); overflow-wrap: anywhere; }
+.risk-rank__bar { height: 8px; background: var(--c-surface-sunken); border-radius: 999px; overflow: hidden; }
+.risk-rank__fill { height: 100%; border-radius: 999px; background: var(--c-cobalt); }
+.risk-rank__fill[data-hot="true"] { background: var(--c-danger); }
+.risk-rank__fill[data-warm="true"] { background: var(--c-amber); }
+.risk-rank__count { font-variant-numeric: tabular-nums; font-size: var(--fs-12); color: var(--c-neutral); white-space: nowrap; }
+
+.risk-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@media (max-width: 1100px) { .risk-grid { grid-template-columns: 1fr; } }
+
+.risk-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-12);
+  background: var(--c-cobalt-soft); color: var(--c-cobalt-strong); border: 1px solid #c7ddfb;
+  border-radius: 999px; padding: 3px 10px;
+}
+.risk-chip button { border: 0; background: none; color: inherit; cursor: pointer; font-size: var(--fs-13); line-height: 1; }
+
+.risk-row { display: flex; align-items: center; gap: var(--sp-2); }
+.risk-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.risk-dot[data-level="critical"] { background: var(--c-danger); }
+.risk-dot[data-level="high"] { background: var(--c-amber); }
+.risk-dot[data-level="medium"] { background: var(--c-cobalt); }
+.risk-dot[data-level="low"] { background: var(--c-border-strong); }
+.risk-muted { color: var(--c-slate); font-size: var(--fs-12); }

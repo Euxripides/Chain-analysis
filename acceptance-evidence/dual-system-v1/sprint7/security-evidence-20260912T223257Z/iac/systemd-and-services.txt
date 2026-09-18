@@ -1,0 +1,85 @@
++ echo '=== hostname/date ==='
+=== hostname/date ===
++ hostname
+dataserver
++ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-09-12T22:42:17Z
++ echo '=== systemctl list-unit-files (blockchain) ==='
+=== systemctl list-unit-files (blockchain) ===
++ timeout 60 systemctl list-unit-files
++ grep -i blockchain
++ echo '=== is-active ==='
+=== is-active ===
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-api.service
++ printf '%-42s %s\n' blockchain-api inactive
+blockchain-api                             inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-worker.service
++ printf '%-42s %s\n' blockchain-worker inactive
+blockchain-worker                          inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-admin-console.service
++ printf '%-42s %s\n' blockchain-admin-console inactive
+blockchain-admin-console                   inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-user-console.service
++ printf '%-42s %s\n' blockchain-user-console inactive
+blockchain-user-console                    inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-vite.service
++ printf '%-42s %s\n' blockchain-vite inactive
+blockchain-vite                            inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-mcp.service
++ printf '%-42s %s\n' blockchain-mcp inactive
+blockchain-mcp                             inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-e2e-tls.service
++ printf '%-42s %s\n' blockchain-e2e-tls inactive
+blockchain-e2e-tls                         inactive
++ for u in blockchain-api blockchain-worker blockchain-admin-console blockchain-user-console blockchain-vite blockchain-mcp blockchain-e2e-tls blockchain-containers-watchdog
+++ timeout 10 systemctl is-active blockchain-containers-watchdog.service
++ printf '%-42s %s\n' blockchain-containers-watchdog inactive
+blockchain-containers-watchdog             inactive
++ echo '=== exit-codes: systemctl is-active returns non-zero for inactive ==='
+=== exit-codes: systemctl is-active returns non-zero for inactive ===
++ echo '=== deployed unit files ==='
+=== deployed unit files ===
++ ls -la /etc/systemd/system/
++ grep -i blockchain
++ echo '=== unit file hashes (deployed) ==='
+=== unit file hashes (deployed) ===
++ sha256sum '/etc/systemd/system/blockchain-*.service' '/etc/systemd/system/blockchain-*.timer'
+sha256sum: '/etc/systemd/system/blockchain-*.service': No such file or directory
+sha256sum: '/etc/systemd/system/blockchain-*.timer': No such file or directory
++ echo '=== nginx ==='
+=== nginx ===
++ nginx -v
+nginx version: nginx/1.24.0 (Ubuntu)
++ sha256sum /etc/nginx/sites-enabled/blockchain-platform.conf
+200ef752cc577569eb6c13d4b5eab791607f5a50496ce5780f8afde50cc9ccab  /etc/nginx/sites-enabled/blockchain-platform.conf
++ echo '=== TRIVY CONFIG probe on deploy/ (unrestricted scanners) ==='
+=== TRIVY CONFIG probe on deploy/ (unrestricted scanners) ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform/deploy:/w:ro aquasec/trivy:latest config /w --timeout 15m
++ tail -40
+2026-09-12T22:42:18Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:42:18Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:42:18Z	INFO	[checks-client] Downloading the checks bundle...
+2026-09-12T22:49:08Z	ERROR	[misconfig] Falling back to embedded checks	err="failed to download checks bundle: download error: OCI repository error: 1 error occurred:\n\t* Get \"https://mirror.gcr.io/v2/\": dial tcp 192.178.163.82:443: connect: connection timed out\n\n"
+2026-09-12T22:49:09Z	INFO	Detected config files	num=0
+2026-09-12T22:49:09Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+
+Report Summary
+
+┌────────┬──────┬───────────────────┐
+│ Target │ Type │ Misconfigurations │
+├────────┼──────┼───────────────────┤
+│   -    │  -   │         -         │
+└────────┴──────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
++ echo PROBE_DONE=1
+PROBE_DONE=1

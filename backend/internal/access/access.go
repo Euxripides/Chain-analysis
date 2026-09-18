@@ -3,9 +3,9 @@
 // 路由级 `s.require(permission, ...)` 只能回答"这个身份能不能做这类操作"，
 // 不能回答"这个身份能不能碰这一个对象"。本包补上后半句：
 //
-//	1. 按资源类型与 ID 读取对象的 organization_id / workspace_id；
-//	2. 校验对象租户是否落在主体的作用域内（organization / workspace 两种绑定）；
-//	3. 越界时不返回 403 而是返回"不存在"，避免通过错误码枚举他人对象（§27 RBAC-002）。
+//  1. 按资源类型与 ID 读取对象的 organization_id / workspace_id；
+//  2. 校验对象租户是否落在主体的作用域内（organization / workspace 两种绑定）；
+//  3. 越界时不返回 403 而是返回"不存在"，避免通过错误码枚举他人对象（§27 RBAC-002）。
 //
 // 关键在于**调用点必须在读取对象之前**执行，且查询本身也要带作用域条件，
 // 两道防线任何一道失效都不会造成跨租户读取。
@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 )
@@ -60,10 +60,10 @@ var Resources = map[string]resource{
 
 // Resolver 读取对象归属。查询全部使用参数化 SQL，不接受拼接的表名/列名以外的输入。
 type Resolver struct {
-	pool *pgxpool.Pool
+	pool *dbtx.Pool
 }
 
-func NewResolver(pool *pgxpool.Pool) *Resolver { return &Resolver{pool: pool} }
+func NewResolver(pool *dbtx.Pool) *Resolver { return &Resolver{pool: pool} }
 
 // ScopeOf 返回对象的作用域；对象不存在时返回 ErrNotFound。
 func (r *Resolver) ScopeOf(ctx context.Context, resourceType, id string) (Scope, error) {

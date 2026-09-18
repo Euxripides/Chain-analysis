@@ -119,7 +119,22 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 			job.ID, req.Format, zipIt, snapshot, job.UpdatedAt, p.OrganizationID, p.WorkspaceID).Scan(&existingID); err == nil {
 			if item, ok := s.requireExportScope(r, existingID); ok {
 				s.writeAuditNow(r, "export.reuse", "export", "export", existingID, map[string]any{"job_id": job.ID})
-				respondOK(w, r, item)
+				// R10 缺陷修复（2026-09-13）：复用分支原先直接 respondOK(item)，返回的是列表项形状
+				// （缺 job_id/addresses/datasets），与创建分支的响应契约不一致，前端弹窗因此显示
+				// job_id —、地址数 0、Dataset —。这里在**已通过 org/ws 作用域校验**的 item 之上补齐
+				// 创建契约字段；addresses/datasets 取自本次匹配所用的 snapshot（同一作用域，不是猜测，
+				// 也不跨 scope），不额外查库、不新增字段来源。
+				resp := make(map[string]any, len(item)+6)
+				for k, v := range item {
+					resp[k] = v
+				}
+				resp["status"] = existingStatus(item, "COMPLETED")
+				resp["format"] = req.Format
+				resp["zip"] = zipIt
+				resp["job_id"] = req.JobID
+				resp["addresses"] = len(addresses)
+				resp["datasets"] = datasets
+				respondOK(w, r, resp)
 				return
 			}
 		}
@@ -135,7 +150,7 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "创建导出失败", nil)
 		return
 	}
-	go s.runExportMulti(context.Background(), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
 	s.writeAuditNow(r, "export.create", "export", "export", exp.ID, map[string]any{
 		"job_id": req.JobID, "format": req.Format, "zip": zipIt, "addresses": len(addresses), "datasets": datasets,
 	})
@@ -143,6 +158,14 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		"id": exp.ID, "status": exp.Status, "format": req.Format, "zip": zipIt,
 		"job_id": req.JobID, "addresses": len(addresses), "datasets": datasets,
 	})
+}
+
+// existingStatus 取列表项里的 status，缺失时返回 fallback（复用分支只在 status='COMPLETED' 时命中）。
+func existingStatus(item map[string]any, fallback string) any {
+	if v, ok := item["status"]; ok && v != nil {
+		return v
+	}
+	return fallback
 }
 
 func statusOfJob(job *model.DownloadJob) string {
@@ -301,18 +324,21 @@ func (s *Server) handleExportV2Download(w http.ResponseWriter, r *http.Request) 
 	routeCtx.URLParams.Add("id", exportID)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx))
 	// DATA-008：对象缺失时不得宣称下载成功，留下可操作的审计线索。
+	// F-R10-BUCKET：对象可能在旧桶（未迁移/已回滚）或新桶，DATA-008 检查必须双读。
 	if s.deps.Raw != nil {
 		var objectRef string
 		if err := s.deps.Store.Pool.QueryRow(r.Context(), `SELECT object_ref FROM exports WHERE id=$1`, exportID).Scan(&objectRef); err == nil && objectRef != "" {
-			if _, statErr := s.deps.Raw.Stat(r.Context(), objectRef); statErr != nil {
+			if _, _, statErr := s.statExportObject(r.Context(), objectRef); statErr != nil {
 				s.writeAuditNow(r, "export.download_failed", "export", "export", exportID,
-					map[string]any{"reason": "object_missing", "object_ref": objectRef, "action": "notify_admin"})
+					map[string]any{"reason": "object_missing", "object_ref": objectRef, "action": "notify_admin", "ticket": true})
 				respondError(w, r, http.StatusServiceUnavailable, "DATA_OBJECT_MISSING",
 					"导出对象在对象存储中缺失，请管理员检查 MinIO 与导出记录", map[string]any{"export_id": exportID, "object_ref": objectRef})
 				return
 			}
 		}
 	}
-	s.writeAuditNow(r, "export.download", "export", "export", exportID, map[string]any{"ticket": true, "method": r.Method})
-	s.handleDownloadExport(w, r)
+	// ADR-019 §3.4 + D-R10V9-01：成功下载审计统一由 serveExportObject 写（direct 与 ticket 同 action、
+	// 同字段口径：object_bucket=真实 MinIO 桶名、object_bucket_role=逻辑角色、附 ticket=true），
+	// 这里不再单独写第二条 —— 避免同一动作出现两套不可统一查询的记录。
+	s.handleDownloadExportTicket(w, r)
 }

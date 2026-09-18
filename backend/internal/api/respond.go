@@ -39,6 +39,18 @@ type envelope struct {
 	Error   *apiError `json:"error"`
 }
 
+// jsonStrings 保证数组字段永远序列化成 []（而不是 null）。
+//
+// 2026-09-16 真实缺陷：身份没有任何角色绑定时 Roles 为 nil，响应里是 "roles": null，
+// 前端渲染期抛 Cannot read properties of null (reading 'join') 并整页白屏。
+// 契约上 roles/permissions 是数组就不该出现 null —— 客户端归一化是第二道防线，不是唯一一道。
+func jsonStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
 func metaFor(ctx context.Context) apiMeta {
 	m := metaFrom(ctx)
 	return apiMeta{
@@ -69,6 +81,12 @@ func respondList(w http.ResponseWriter, r *http.Request, data any, total int, ne
 	writeEnvelope(w, http.StatusOK, envelope{Success: true, Data: data, Meta: meta})
 }
 
+// respondAccepted 返回 202：请求已被接受但尚未完成（§21.3 的 202 语义；
+// §21.4「需要 MFA 时返回 202」）。调用方不得把 202 当作登录成功。
+func respondAccepted(w http.ResponseWriter, r *http.Request, data any) {
+	writeEnvelope(w, http.StatusAccepted, envelope{Success: true, Data: data, Meta: metaFor(r.Context())})
+}
+
 func respondCreated(w http.ResponseWriter, r *http.Request, data any) {
 	writeEnvelope(w, http.StatusCreated, envelope{Success: true, Data: data, Meta: metaFor(r.Context())})
 }
@@ -92,11 +110,13 @@ func respondError(w http.ResponseWriter, r *http.Request, status int, code, mess
 	})
 }
 
-// writeErrorCode 供中间件使用（无 *http.Request 之外的上下文需求）。
-func writeErrorCode(w http.ResponseWriter, status int, code, message string, details map[string]any) {
+// writeErrorCode 供中间件使用。
+// [FIX 2026-09-13 / trace 契约] 必须从请求上下文取 meta，否则错误响应的
+// meta.request_id / meta.trace_id 恒为空字符串（而响应头有值），§21.3/§27 的 trace 还原无法成立。
+func writeErrorCode(w http.ResponseWriter, r *http.Request, status int, code, message string, details map[string]any) {
 	writeEnvelope(w, status, envelope{
 		Success: false,
-		Meta:    apiMeta{ServerTime: time.Now().UTC().Format("2006-01-02T15:04:05.000Z")},
+		Meta:    metaFor(r.Context()),
 		Error: &apiError{
 			Code:        code,
 			Message:     message,

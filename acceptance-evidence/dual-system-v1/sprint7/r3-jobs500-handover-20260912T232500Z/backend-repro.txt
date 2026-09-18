@@ -1,0 +1,26 @@
+### 列类型（download_jobs）
+   column_name   | data_type 
+-----------------+-----------
+ id              | uuid
+ organization_id | uuid
+ workspace_id    | uuid
+(3 rows)
+
+
+### PR1 复现：把 uuid 列与 text 参数比较（模拟 handler 传 Go string）
+ERROR:  operator does not exist: uuid = text
+LINE 1: ... j.id FROM download_jobs j WHERE j.organization_id=$1 AND ($...
+                                                             ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  prepared statement "t1" does not exist
+
+### PR2 对照：加 ::uuid 转换后正常
+PREPARE
+ERROR:  prepared statement "t2" does not exist
+
+### PR3 参数序号错位复现（jobs.go:208 把 wsID 当 orgID 用）
+ERROR:  operator does not exist: text = uuid
+LINE 1: ...j.organization_id=$1 AND ($2='' OR j.workspace_id::text=$1);
+                                                                  ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  prepared statement "t3" does not exist

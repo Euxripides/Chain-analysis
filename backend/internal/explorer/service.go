@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +43,23 @@ type cachedAddressType struct {
 	isContract bool
 	expiresAt  time.Time
 }
+
+const (
+	// addressTypeSuccessTTL：成功解析的缓存时长（与原实现一致，24h）。
+	addressTypeSuccessTTL = 24 * time.Hour
+	// addressTypeResolveBudget：单次请求允许花在"地址类型解析"上的**墙钟**上限。
+	// 原实现给 8s，一页上百个候选地址逐个串行外呼必然耗尽预算 ⇒ 每个请求都卡满 8s。
+	// 现在压到 500ms：到点就返回已解析的部分，未解析项交给后续请求（缓存逐轮填充）。
+	addressTypeResolveBudget = 500 * time.Millisecond
+	// addressTypeMaxResolve：每次请求最多解析多少个地址（按地址排序保证确定性）。
+	// TRON 的 AccountState 是"每地址一次 HTTP"，全量解析上百个地址在交互预算内不可能完成；
+	// 每请求解析 16 个（并发 8 ⇒ 约 2 轮），配合 24h 成功缓存，几次请求后整页类型就都齐了。
+	addressTypeMaxResolve = 16
+	// addressTypeNegativeTTL：未解析成功（超时/上游失败）时的负缓存时长。
+	// 目的：原实现超时后**一条缓存都不写**，导致每个请求都重新烧满 8s；
+	// 这里缓存"这一页没解析出来"这个事实 2 分钟，显示语义与超时后缺失一致（按非合约呈现），过期后自然重试。
+	addressTypeNegativeTTL = 2 * time.Minute
+)
 
 func New(ch *clickhouse.Conn, st *store.Store, tokens ...*tokenmeta.Service) *Service {
 	var svc *tokenmeta.Service
@@ -86,6 +104,14 @@ type QueryRequest struct {
 	// Light 只跳过逐行 Contract/Case/Tag 富化，用于客户端“加载全部”性能路径；
 	// 不改变数据来源和行数，字段仍来自本地 ClickHouse（§30.1）。
 	Light bool `json:"-"`
+
+	// OrgID / WSID 是**服务端注入**的租户作用域（json:"-"：客户端无法提交）。
+	//
+	// P0 修复：enrich 会把案件名/标签名附加到每一行；旧实现用
+	// Store.DefaultOrgWorkspace 取默认工作区，等于把默认组织的案件名泄露给
+	// 任何其他组织的调用者。作用域为空时直接跳过富化（fail closed）。
+	OrgID string `json:"-"`
+	WSID  string `json:"-"`
 }
 
 type Result struct {
@@ -120,7 +146,7 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 		return nil, err
 	}
 	if !req.Light {
-		s.enrich(ctx, req.Chain, req.Addresses, rows)
+		s.enrich(ctx, req.Chain, req.Addresses, rows, req.WSID)
 	}
 	next := ""
 	if len(rows) == req.Limit {
@@ -414,7 +440,7 @@ func partitionBy(ds string) string {
 }
 
 // enrich Token Symbol/Name/Logo + matched_addresses + 案件/标签（`12/`21/`29/`50）。
-func (s *Service) enrich(ctx context.Context, chain string, addresses []string, rows []map[string]any) {
+func (s *Service) enrich(ctx context.Context, chain string, addresses []string, rows []map[string]any, wsID string) {
 	set := map[string]bool{}
 	for _, a := range addresses {
 		set[a] = true
@@ -499,10 +525,8 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 	if len(needMeta) == 0 {
 		return
 	}
-	wsID := ""
-	if _, w, err := s.Store.DefaultOrgWorkspace(ctx); err == nil {
-		wsID = w
-	}
+	// wsID 由调用方（handler）从已认证主体解析后传入；为空表示拿不到可信作用域，
+	// 此时不附加案件/标签名，避免跨租户泄露。
 	caseCache := map[string][]string{}
 	tagCache := map[string][]string{}
 	for a := range needMeta {
@@ -555,18 +579,33 @@ func (s *Service) resolveAddressTypes(ctx context.Context, chain string, rows []
 	if len(missing) == 0 {
 		return result
 	}
-	resolveCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	resolved, err := s.AddressTypes.ResolveAddressTypes(resolveCtx, chain, missing)
-	if err != nil {
-		return result
+	// 冷请求的候选地址可能有上百个（一页 200 行 × from/to/address/counterparty 去重）。
+	// 每请求最多解析 addressTypeMaxResolve 个，其余留给后续请求（不要把它们写成负缓存，
+	// 否则会在 TTL 内一直按"非合约"呈现）。
+	sort.Strings(missing)
+	attempt := missing
+	if len(attempt) > addressTypeMaxResolve {
+		attempt = attempt[:addressTypeMaxResolve]
 	}
+	resolveCtx, cancel := context.WithTimeout(ctx, addressTypeResolveBudget)
+	defer cancel()
+	resolved, err := s.AddressTypes.ResolveAddressTypes(resolveCtx, chain, attempt)
+	// 2026-09-17 修复（activity 端点稳定 8–10 s）：原实现在 err != nil 时**直接返回、一条缓存都不写**。
+	// 而一页最多 200 个对手方地址逐个串行外呼几乎必然耗尽 8s 预算，于是每个请求都重新烧满 8s。
+	// 现在：成功项写 24h 缓存；未解析项写短 TTL 负缓存（显示语义与"超时后缺失"一致：按非合约呈现），
+	// 重复请求因此降到毫秒级。
 	s.typeMu.Lock()
 	defer s.typeMu.Unlock()
-	for _, address := range missing {
-		isContract := resolved[address]
-		result[address] = isContract
-		s.typeCache[strings.ToLower(chain)+":"+address] = cachedAddressType{isContract: isContract, expiresAt: now.Add(24 * time.Hour)}
+	for _, address := range attempt {
+		key := strings.ToLower(chain) + ":" + address
+		if isContract, ok := resolved[address]; ok {
+			result[address] = isContract
+			s.typeCache[key] = cachedAddressType{isContract: isContract, expiresAt: now.Add(addressTypeSuccessTTL)}
+			continue
+		}
+		if err != nil || resolveCtx.Err() != nil {
+			s.typeCache[key] = cachedAddressType{isContract: false, expiresAt: now.Add(addressTypeNegativeTTL)}
+		}
 	}
 	return result
 }

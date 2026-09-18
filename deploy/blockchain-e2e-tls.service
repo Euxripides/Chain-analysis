@@ -1,0 +1,30 @@
+# 双系统浏览器验收专用：本地回环 TLS 入口（systemd 用户单元）
+#
+# 为什么需要它：公网入口是 cloudflared -> 127.0.0.1:8088，nginx 对所有 /api 路由
+# 写死 proxy_set_header X-Forwarded-Proto https，因此后端在**所有**入口都下发
+# Secure + __Host- 会话 Cookie。Chromium 对 http://127.0.0.1 的 Secure Cookie 宽容，
+# 但 Playwright 的 APIRequestContext（page.request / context.cookies(url)）严格按
+# "secure cookie 只在 https 源回送"处理——http 源下 Cookie 被丢弃，用例内独立 API
+# 断言全部 401（假失败，§27 浏览器套件 4 条 FAIL 的真实根因）。
+#
+# 本单元只监听 127.0.0.1:8448，把 TLS 终止后转成明文转发给 127.0.0.1:8088，
+# 与 cloudflared 的行为一致（同为回环明文上游），且：
+#   - 不监听任何非回环地址，与公网链路物理隔离；
+#   - 不修改任何生产配置与 Cookie 策略（__Host-/Secure 保持启用）；
+#   - 自签证书仅用于验收，浏览器侧由 Playwright ignoreHTTPSErrors 处理。
+#
+# 安装：scripts/e2e/e2e-tls-entry.sh install
+[Unit]
+Description=Blockchain Platform loopback TLS acceptance entry (E2E only, 127.0.0.1:8448 -> 127.0.0.1:8088)
+Documentation=docs/manuals/operations.md
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat -d -d OPENSSL-LISTEN:8448,bind=127.0.0.1,reuseaddr,fork,cert=%h/.local/share/blockchain-platform/e2e-tls/e2e-loopback.crt,key=%h/.local/share/blockchain-platform/e2e-tls/e2e-loopback.key,verify=0 TCP:127.0.0.1:8088
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

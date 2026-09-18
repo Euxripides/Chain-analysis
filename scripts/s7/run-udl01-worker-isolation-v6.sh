@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# run-udl01-worker-isolation-v6.sh — U-DL-01：隔离解析 Worker / 有界超时 / 可取消 / 大文件 / 恶意 ZIP 真实验收轮。
+# v6：在 v5c 基础上增加 U5 绑定判据（超时/进度文案不得出现"0 秒"，服务端实际服务的页面 chunk 必须含新文案）。
+#
+# 判据与 R10 v7 同构（根已认可的 fail-closed 纪律）：
+#   PASS 只在 playwright rc=0 ∧ report-check rc=0 ∧ crosscheck rc=0 ∧ summary-render rc=0
+#        ∧ bundle 绑定冻结稳定 ∧ 无 Traceback 时打印；每个 post-processing 命令的 rc 都进 gate.txt。
+# 本轮**不部署**：部署已在 udl01-deploy-user-console.sh（PASS=16/FAIL=1，失败项是脚本自身的 chunk 发现缺陷）
+# 完成，本脚本只做"服务端实际服务的字节 == 磁盘 == 预期"的绑定校验。
+set -uo pipefail
+export PATH="/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/go/bin:$PATH"
+R="${R:-/home/euripides/projects/blockchain-platform}"
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+EV="${EV:-$R/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-$TS}"
+XC="${XC:-$R/scripts/s7/udl01-crosscheck-v6.py}"
+D="$R/frontend/apps/user-console"
+if [ -e "$EV" ]; then echo "EV_EXISTS_FAILCLOSED $EV"; exit 9; fi
+mkdir -p "$EV"; chmod 700 "$EV"
+exec > >(tee -a "$EV/runner.console.log") 2>&1
+echo "script_sha256=$(sha256sum "$0" | cut -d' ' -f1)" | tee "$EV/run-meta.txt"
+echo "crosscheck_sha256=$(sha256sum "$XC" | cut -d' ' -f1)" | tee -a "$EV/run-meta.txt"
+echo "evidence=$EV" | tee -a "$EV/run-meta.txt"
+echo "started_utc=$TS" | tee -a "$EV/run-meta.txt"
+GATE="$EV/gate.txt"
+gate_note(){ printf '%s\n' "$1" >> "$GATE"; }
+
+api_pid(){ pgrep -f "$R/backend/bin/api\$" | head -1; }
+worker_pid(){ pgrep -f "$R/backend/bin/worker\$" | head -1; }
+
+echo "=== P0a 冻结基线（api/worker 身份，运行前后必须一致） ==="
+API_PID_B="$(api_pid)"; WORKER_PID_B="$(worker_pid)"
+API_SHA_B="$(sha256sum "/proc/$API_PID_B/exe" | cut -d' ' -f1)"
+WORKER_SHA_B="$(sha256sum "/proc/$WORKER_PID_B/exe" | cut -d' ' -f1)"
+echo "api_pid=$API_PID_B sha=$API_SHA_B" | tee -a "$EV/run-meta.txt"
+echo "worker_pid=$WORKER_PID_B sha=$WORKER_SHA_B" | tee -a "$EV/run-meta.txt"
+{ echo "api_sha_before=$API_SHA_B"; echo "worker_sha_before=$WORKER_SHA_B"; } >> "$GATE"
+
+echo "=== P0b0 配置自检（v5b 轮真实缺陷：config 的 testMatch 静默没改到，Playwright 跑了旧 spec） ==="
+CONF="$R/frontend/playwright.udl01v6.config.ts"
+SPEC="$R/frontend/tests/udl01-worker-isolation-v6.spec.ts"
+# (1) 配置文件必须存在，且 testMatch 恰好指向 v6 spec
+[ -f "$CONF" ] || { echo "CONFIG_MISSING $CONF"; exit 4; }
+# 真实缺陷（本轮负向校准发现）：配置里 testMatch 写的是 /udl01-worker-isolation-v6\.spec\.ts/，
+# 含字面反斜杠，用 grep 的 \\. 转义模式永远匹配不到 -> 真轮次会误判 CONFIG_TESTMATCH_MISMATCH。
+# 因此改为**解析并比较** testMatch 的实际内容（不依赖转义层次，也不依赖注释/其它行）。
+python3 - "$CONF" <<'PY' || { echo "CONFIG_TESTMATCH_MISMATCH"; exit 4; }
+import re
+import sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r"testMatch:\s*/([^/]+)/", src)
+expected = "udl01-worker-isolation-v6\\.spec\\.ts"
+ok = bool(m) and m.group(1) == expected
+print("config_testmatch_parsed=%r expected=%r ok=%s" % (m.group(1) if m else None, expected, ok))
+sys.exit(0 if ok else 1)
+PY
+[ -f "$SPEC" ] || { echo "SPEC_V6_MISSING"; exit 4; }
+# (2) 自检：本 runner 自身不得再引用 v5c 配置/旧 spec（根 2026-09-13 发现的真实缺陷：
+#     P0b0 检查 v6 配置，但真正传给 Playwright 的 --config 仍是 v5c -> 跑旧 spec 却可能 PASS）
+#     自匹配陷阱：模式必须拼出来，否则 grep 会匹配到自己这一行（永远 exit 4）。
+STALE_A="udl01v5"
+STALE_PAT="${STALE_A}c"
+if grep -q "$STALE_PAT" "$0"; then echo "RUNNER_REFERENCES_STALE_CONFIG"; exit 4; fi
+#     (3) 真正执行的那条命令行里的 --config 必须解析出 v6 配置（不看注释、不看自匹配行）。
+EXEC_PAT_A="playwright/test/cli.js test --conf"
+EXEC_LINE="$(grep -F -m1 -e "${EXEC_PAT_A}ig" "$0" || true)"
+EXEC_ARG="$(echo "$EXEC_LINE" | grep -o -E "playwright[.]udl01v6[.]config[.]ts" | head -1)"
+if [ "$EXEC_ARG" != "playwright.udl01v6.config.ts" ]; then echo "RUNNER_EXEC_CONFIG_NOT_V6 got=$EXEC_ARG"; exit 4; fi
+echo "config_testmatch_ok=1 exec_config=playwright.udl01v6.config.ts spec=$SPEC" | tee -a "$EV/run-meta.txt"
+
+echo "=== P0b1 0 秒判据字符串校准（浏览器之前，fail-closed） ==="
+ZSC="$R/scripts/s7/udl01-zero-second-criterion-calibration.py"
+python3 "$ZSC" "$EV/p0b1-zero-second-calibration.json" > "$EV/p0b1-zero-second-calibration.out" 2>&1
+ZSC_RC=$?
+tail -3 "$EV/p0b1-zero-second-calibration.out"
+gate_note "zero_second_calibration_rc=$ZSC_RC"
+echo "zero_second_calibration_rc=$ZSC_RC" | tee -a "$EV/run-meta.txt"
+if [ "$ZSC_RC" != 0 ]; then echo "ZERO_SECOND_CRITERION_CALIBRATION_FAILED rc=$ZSC_RC"; exit 5; fi
+
+echo "=== P0b readiness + 登录夹具 ==="
+READY=0
+for i in $(seq 1 30); do
+  B="$(curl -s -m 5 http://127.0.0.1:8080/health/ready || true)"
+  if printf '%s' "$B" | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(1)
+c=d.get("checks") or {}
+sys.exit(0 if d.get("status")=="ready" and all(c.get(k)=="ok" for k in ("postgres","clickhouse","nats","minio")) else 1)'; then READY=1; break; fi
+  sleep 1
+done
+[ "$READY" -eq 1 ] || { echo "READINESS_FAILED $B"; exit 8; }
+echo "ready_attempts=$i body=$B" | tee -a "$EV/run-meta.txt"
+set -a; . /home/euripides/.s7jobscope-creds.env; set +a
+for v in S7JS_INVESTIGATOR_EMAIL S7JS_INVESTIGATOR_PW; do
+  eval "val=\$$v"; [ -n "${val:-}" ] || { echo "PREFLIGHT_MISSING $v"; exit 3; }
+done
+
+echo "=== P0c bundle 绑定（服务端实际服务的字节，本轮不部署） ==="
+DISK_INDEX_SHA="$(sha256sum "$D/dist/index.html" | cut -d' ' -f1)"
+SERVED_INDEX_SHA="$(curl -s -k https://127.0.0.1:8448/app-v2/ | sha256sum | cut -d' ' -f1)"
+PAGE_CHUNK="$(ls "$D/dist/assets" | grep -E '^DownloadNewPage-.*\.js$' | head -1)"
+WORKER_CHUNK="$(ls "$D/dist/assets" | grep -E '^import-parse\.worker-.*\.js$' | head -1)"
+grep -q "$WORKER_CHUNK" "$D/dist/assets/$PAGE_CHUNK" && REFS=true || REFS=false
+W_HTTP="$(curl -s -k -o "$EV/served-worker-chunk.js" -w '%{http_code}' "https://127.0.0.1:8448/app-v2/assets/$WORKER_CHUNK")"
+W_DISK_SHA="$(sha256sum "$D/dist/assets/$WORKER_CHUNK" | cut -d' ' -f1)"
+W_SERVED_SHA="$(sha256sum "$EV/served-worker-chunk.js" | cut -d' ' -f1)"
+P_HTTP="$(curl -s -k -o "$EV/served-page-chunk.js" -w '%{http_code}' "https://127.0.0.1:8448/app-v2/assets/$PAGE_CHUNK")"
+P_DISK_SHA="$(sha256sum "$D/dist/assets/$PAGE_CHUNK" | cut -d' ' -f1)"
+P_SERVED_SHA="$(sha256sum "$EV/served-page-chunk.js" | cut -d' ' -f1)"
+BUDGET_HITS="$(grep -c '毫秒' "$EV/served-page-chunk.js" 2>/dev/null || true)"; BUDGET_HITS="${BUDGET_HITS:-0}"
+COPY_HITS="$(grep -c '内没有完成' "$EV/served-page-chunk.js" 2>/dev/null || true)"; COPY_HITS="${COPY_HITS:-0}"
+CSP="$(curl -s -k -D - -o /dev/null https://127.0.0.1:8448/app-v2/ | grep -ci 'content-security-policy')"
+python3 - "$EV/bundle-binding.json" "$SERVED_INDEX_SHA" "$DISK_INDEX_SHA" "$PAGE_CHUNK" "$WORKER_CHUNK" "$W_HTTP" "$W_DISK_SHA" "$W_SERVED_SHA" "$REFS" "$CSP" "$P_HTTP" "$P_DISK_SHA" "$P_SERVED_SHA" "$BUDGET_HITS" "$COPY_HITS" <<'PY'
+import json, sys
+(out, served, disk, page, worker, http, dsha, ssha, refs, csp, phttp, pdsha, pssha, bhits, chits) = sys.argv[1:16]
+json.dump({"served_index_sha": served, "disk_index_sha": disk, "page_chunk": page, "worker_chunk": worker,
+           "worker_chunk_http": http, "worker_chunk_disk_sha": dsha, "worker_chunk_served_sha": ssha,
+           "page_chunk_http": phttp, "page_chunk_disk_sha": pdsha, "page_chunk_served_sha": pssha,
+           "page_chunk_budget_ms_hits": int(bhits or 0), "page_chunk_timeout_copy_hits": int(chits or 0),
+           "page_chunk_references_worker": refs == "true", "csp_headers": int(csp)},
+          open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PY
+cat "$EV/bundle-binding.json" | tee -a "$EV/run-meta.txt"
+
+echo "=== P1 真实夹具（v5b：200k 行 .xls + 60k 行 .xlsx + 6 类恶意 ZIP + 正常对照） ==="
+mkdir -p "$EV/fixtures"
+node "$R/frontend/scripts/r9-make-fixtures-v5c.mjs" "$EV/fixtures" 200000 60000 > "$EV/p1-fixtures.log" 2>&1
+FIXRC=$?
+echo "fixtures_rc=$FIXRC" | tee -a "$EV/run-meta.txt"
+gate_note "fixtures_rc=$FIXRC"
+tail -3 "$EV/p1-fixtures.log"
+ls -l "$EV/fixtures" | awk '{print $5, $9}' | grep udl01 || true
+
+echo "=== P2 真实浏览器（隔离解析 / 超时 / 取消 / 恶意 ZIP / 回归） ==="
+cd "$R/frontend" || exit 90
+export E2E_BASE_URL="${E2E_BASE_URL:-https://127.0.0.1:8448}"
+export E2E_CHROMIUM_PATH="${E2E_CHROMIUM_PATH:-/usr/bin/chromium-browser}"
+export UDL01_OUT="$EV" UDL01_EMAIL="$S7JS_INVESTIGATOR_EMAIL" UDL01_PASSWORD="$S7JS_INVESTIGATOR_PW" UDL01_FIXTURES="$EV/fixtures"
+node node_modules/@playwright/test/cli.js test --config playwright.udl01v6.config.ts > "$EV/playwright.console.log" 2>&1
+RC=$?
+echo "$RC" > "$EV/playwright.rc"
+echo "playwright_rc=$RC" | tee -a "$EV/run-meta.txt"
+tail -n 30 "$EV/playwright.console.log"
+
+echo "=== P2b 运行时 spec 身份（Playwright 自己打印的 spec 路径） ==="
+SPEC_RT_RC=0
+if ! grep -q "udl01-worker-isolation-v6.spec.ts" "$EV/playwright.console.log"; then SPEC_RT_RC=1; echo "RUNTIME_SPEC_NOT_V6"; fi
+STALE_SPEC="udl01-worker-isolation-v5"
+if grep -q "${STALE_SPEC}b.spec.ts" "$EV/playwright.console.log"; then SPEC_RT_RC=1; echo "RUNTIME_SPEC_STALE_V5B"; fi
+echo "runtime_spec_identity_rc=$SPEC_RT_RC" | tee -a "$EV/run-meta.txt"
+gate_note "runtime_spec_identity_rc=$SPEC_RT_RC"
+
+echo "=== P3 冻结复核 + report 校验 ==="
+API_PID_A="$(api_pid)"; WORKER_PID_A="$(worker_pid)"
+API_SHA_A="$(sha256sum "/proc/$API_PID_A/exe" 2>/dev/null | cut -d' ' -f1)"
+WORKER_SHA_A="$(sha256sum "/proc/$WORKER_PID_A/exe" 2>/dev/null | cut -d' ' -f1)"
+FREEZE_STABLE=0
+[ "$API_SHA_A" = "$API_SHA_B" ] && [ "$WORKER_SHA_A" = "$WORKER_SHA_B" ] && [ "$API_PID_A" = "$API_PID_B" ] && FREEZE_STABLE=1
+{ echo "api_sha_after=$API_SHA_A"; echo "worker_sha_after=$WORKER_SHA_A"; echo "freeze_stable=$FREEZE_STABLE"; } >> "$GATE"
+REPORT_RC=0
+if [ ! -s "$EV/playwright-report.json" ]; then echo REPORT_MISSING; REPORT_RC=1; else
+python3 - "$EV/playwright-report.json" > "$EV/p3-report-check.txt" 2>&1 <<'PY'
+import json, sys
+rep = json.load(open(sys.argv[1], encoding="utf-8"))
+s = rep.get("stats") or {}
+print("suites=%d expected=%s unexpected=%s skipped=%s flaky=%s" % (len(rep.get("suites") or []), s.get("expected"), s.get("unexpected"), s.get("skipped"), s.get("flaky")))
+sys.exit(0 if (rep.get("suites") and s.get("expected") == 5 and s.get("unexpected") == 0 and s.get("skipped") == 0) else 1)
+PY
+REPORT_RC=$?; fi
+cat "$EV/p3-report-check.txt"
+gate_note "report_check_rc=$REPORT_RC"
+
+echo "=== P3b 报告身份（实际执行的 spec 必须是 v6 spec，机器判据） ==="
+IDENT="$R/scripts/s7/udl01-report-identity-v6.py"
+python3 "$IDENT" "$EV/playwright-report.json" "udl01-worker-isolation-v6.spec.ts" > "$EV/p3b-report-identity.txt" 2>&1
+IDENT_RC=$?
+cat "$EV/p3b-report-identity.txt"
+gate_note "report_identity_rc=$IDENT_RC"
+echo "report_identity_rc=$IDENT_RC" | tee -a "$EV/run-meta.txt"
+
+echo "=== P4 机器核验 ==="
+python3 "$XC" "$EV" > "$EV/udl01-summary.json" 2> "$EV/udl01-crosscheck.err"
+XRC=$?
+gate_note "crosscheck_rc=$XRC"
+echo "crosscheck_rc=$XRC" | tee -a "$EV/run-meta.txt"
+
+echo "=== P4b U5 判据实存性（新判据必须真的执行且通过，不是只改注释） ==="
+U5G="$R/scripts/s7/udl01-u5-gate-v6.py"
+python3 "$U5G" "$EV/udl01-summary.json" > "$EV/p4b-u5-gate.txt" 2>&1
+U5_RC=$?
+cat "$EV/p4b-u5-gate.txt"
+gate_note "u5_gate_rc=$U5_RC"
+echo "u5_gate_rc=$U5_RC" | tee -a "$EV/run-meta.txt"
+
+echo "=== P5 summary 渲染（rc 进 gate） ==="
+python3 - "$EV/udl01-summary.json" > "$EV/p5-summary-render.out" 2>&1 <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+print("verdict=%s checks_total=%s checks_failed=%s" % (d.get("verdict"), d.get("checks_total"), d.get("checks_failed")))
+for row in (d.get("failed") or [])[:40]:
+    print("FAILED: %s -> %s" % (row.get("check"), json.dumps(row.get("detail"), ensure_ascii=False)[:240]))
+for row in (d.get("matrix") or []):
+    o = row.get("observed") or {}
+    print("matrix %s: status=%s results=%s dur=%s ev_bytes=%s ok=%s" % (row.get("test"), o.get("status"), o.get("result_statuses"), o.get("result_durations"), row.get("evidence_bytes"), row.get("ok")))
+PY
+SUMMARY_RC=$?
+cat "$EV/p5-summary-render.out"
+gate_note "summary_render_rc=$SUMMARY_RC"
+
+echo "=== P6 最终 gate（fail-closed） ==="
+sleep 1
+TB=0
+for f in "$EV/runner.console.log" "$EV/playwright.console.log" "$EV/udl01-crosscheck.err" "$EV/p3-report-check.txt" "$EV/p3b-report-identity.txt" "$EV/p4b-u5-gate.txt" "$EV/p5-summary-render.out" "$EV/p1-fixtures.log"; do
+  [ -f "$f" ] || continue
+  if grep -q "Traceback (most recent call last)" "$f"; then TB=1; echo "traceback_found_in=$f"; fi
+done
+gate_note "traceback_found=$TB"
+GATE_FAILS=""
+gate_chk(){ [ "$2" -ne 0 ] && GATE_FAILS="$GATE_FAILS $1(rc=$2)"; return 0; }
+gate_chk playwright "$RC"
+gate_chk runtime-spec-identity "$SPEC_RT_RC"
+gate_chk report-check "$REPORT_RC"
+gate_chk report-identity "$IDENT_RC"
+gate_chk crosscheck "$XRC"
+gate_chk u5-gate "$U5_RC"
+gate_chk summary-render "$SUMMARY_RC"
+gate_chk fixtures "$FIXRC"
+[ "$FREEZE_STABLE" -eq 1 ] || GATE_FAILS="$GATE_FAILS freeze-unstable"
+[ "$TB" -eq 0 ] || GATE_FAILS="$GATE_FAILS traceback-found"
+echo "gate_failures=$(echo $GATE_FAILS | tr -s ' ' | sed 's/^ *//')" >> "$GATE"
+cat "$GATE" | tee -a "$EV/run-meta.txt"
+if [ -n "$GATE_FAILS" ]; then echo "UDL01_V6_VERDICT=FAIL gate_failures=$GATE_FAILS" | tee -a "$EV/run-meta.txt"; exit 1; fi
+echo "UDL01_V6_VERDICT=PASS playwright_rc=$RC report_rc=$REPORT_RC crosscheck_rc=$XRC summary_render_rc=$SUMMARY_RC fixtures_rc=$FIXRC freeze_stable=$FREEZE_STABLE traceback=$TB" | tee -a "$EV/run-meta.txt"
+exit 0

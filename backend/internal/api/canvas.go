@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Server) handleListCanvases(w http.ResponseWriter, r *http.Request) {
+	// canvases.List 只按 case_id 过滤，没有租户条件；因此必须先对父案件做对象级授权。
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
+		return
+	}
 	items, err := s.canvases.List(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
@@ -18,6 +22,9 @@ func (s *Server) handleListCanvases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"items": items})
 }
 func (s *Server) handleCreateCanvas(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
+		return
+	}
 	var req canvas.CreateRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
@@ -27,10 +34,16 @@ func (s *Server) handleCreateCanvas(w http.ResponseWriter, r *http.Request) {
 	writeCanvas(w, item, err, http.StatusCreated)
 }
 func (s *Server) handleGetCanvas(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "canvas", chi.URLParam(r, "id")) {
+		return
+	}
 	item, err := s.canvases.Get(r.Context(), chi.URLParam(r, "id"))
 	writeCanvas(w, item, err, http.StatusOK)
 }
 func (s *Server) handleUpdateCanvas(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "canvas", chi.URLParam(r, "id")) {
+		return
+	}
 	var req canvas.UpdateRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
@@ -41,6 +54,9 @@ func (s *Server) handleUpdateCanvas(w http.ResponseWriter, r *http.Request) {
 	writeCanvas(w, item, err, http.StatusOK)
 }
 func (s *Server) handleBranchCanvas(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "canvas", chi.URLParam(r, "id")) {
+		return
+	}
 	var req canvas.CreateRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
@@ -50,6 +66,9 @@ func (s *Server) handleBranchCanvas(w http.ResponseWriter, r *http.Request) {
 	writeCanvas(w, item, err, http.StatusCreated)
 }
 func (s *Server) handleCreateCanvasSnapshot(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "canvas", chi.URLParam(r, "id")) {
+		return
+	}
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -65,6 +84,9 @@ func (s *Server) handleCreateCanvasSnapshot(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusCreated, item)
 }
 func (s *Server) handleListCanvasSnapshots(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "canvas", chi.URLParam(r, "id")) {
+		return
+	}
 	items, err := s.canvases.ListSnapshots(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeCanvasError(w, err)

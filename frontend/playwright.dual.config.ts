@@ -29,5 +29,25 @@ export default defineConfig({
     { name: "user-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "admin-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "user-mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    // §14.5 最终轮要求的补充档位（各自只跑对应规格，不影响既有 project 的覆盖面）：
+    //   平板档：后台管理操作的平板宽度（1024×768），触屏语义与桌面一致；
+    //   cross-role：受众/角色越权的双向负向（服务端必须拒绝，不接受前端隐藏）；
+    //   reduced-motion：减少动态效果下的可用性（先用 matchMedia 证明设置生效）。
+    {
+      name: "admin-tablet",
+      testMatch: /dual-system-(sprint6|quality)\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 768 }, hasTouch: true },
+    },
+    {
+      name: "cross-role",
+      // §7.5「每个角色只看到允许的导航和按钮」由 nav-permission 规格做双向验证（服务端为唯一判据）。
+      testMatch: /dual-system-(cross-role|nav-permission)\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: "reduced-motion",
+      testMatch: /dual-system-reduced-motion\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" },
+    },
   ],
 });

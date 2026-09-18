@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
+import { useScopedQuery as useQuery } from '../lib/sessionScope'
 import { Archive, ChevronDown, Clock3, Copy, Download, Filter, MoreHorizontal, Pause, Play, Plus, Search, Trash2, X } from 'lucide-react'
 import { api } from '../api/client'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -12,6 +13,9 @@ import { copyText } from '../utils/clipboard'
 import { datasetLabel } from '../utils/field-labels'
 
 const terminal = new Set(['COMPLETED', 'CANCELLED', 'FAILED', 'PARTIAL_FAILED', 'ABORTED_BY_USER'])
+// 可恢复（继续）的暂停态：PAUSE_REQUESTED 是暂停收敛中的状态，用户在这里
+// 也必须能直接继续 —— 服务端已允许从该状态恢复，界面不能再隐藏入口。
+const resumable = new Set(['PAUSED', 'PAUSE_REQUESTED', 'PAUSED_FALLBACK_TOO_EXPENSIVE'])
 const statusViews = [
   ['all', '全部任务'], ['RUNNING', '运行中'], ['COMPLETED', '已完成'], ['FAILED', '失败'], ['PARTIAL_FAILED', '异常'],
 ] as const
@@ -168,7 +172,7 @@ export default function JobsPage() {
                 <td>${Number(stats.api_cost_usd || 0).toFixed(4)}</td>
                 <td>{fmtDuration(Number(stats.elapsed_seconds || 0))}</td>
                 <td className="table-time">{new Date(job.created_at).toLocaleString('zh-CN', { hour12: false })}</td>
-                <td onClick={(event) => event.stopPropagation()}><details className="row-menu"><summary aria-label={`任务 ${job.job_no} 更多操作`}><MoreHorizontal size={16} /></summary><div><Link to={`/jobs/${job.id}`}>查看完整详情</Link><button onClick={() => void handleCopy(job.id)}><Copy size={13} />复制任务 ID</button>{job.status === 'RUNNING' && <button onClick={() => act(job, 'pause')}><Pause size={13} />暂停</button>}{job.status === 'PAUSED' && <button onClick={() => act(job, 'resume')}><Play size={13} />继续</button>}{!terminal.has(job.status) && <button className="danger-text" onClick={() => setConfirmIds([job.id])}><Trash2 size={13} />取消</button>}</div></details></td>
+                <td onClick={(event) => event.stopPropagation()}><details className="row-menu"><summary aria-label={`任务 ${job.job_no} 更多操作`}><MoreHorizontal size={16} /></summary><div><Link to={`/jobs/${job.id}`}>查看完整详情</Link><button onClick={() => void handleCopy(job.id)}><Copy size={13} />复制任务 ID</button>{job.status === 'RUNNING' && <button onClick={() => act(job, 'pause')}><Pause size={13} />暂停</button>}{resumable.has(job.status) && <button onClick={() => act(job, 'resume')}><Play size={13} />继续</button>}{!terminal.has(job.status) && <button className="danger-text" onClick={() => setConfirmIds([job.id])}><Trash2 size={13} />取消</button>}</div></details></td>
               </tr>
             })}
             {!query.isPending && jobs.length === 0 && <tr><td colSpan={15}><div className="table-empty"><Archive size={22} /><b>当前筛选条件下没有任务</b><button className="text-button" onClick={() => { setSearch(''); setChain('all'); setDataset('all'); setView('all') }}>清除筛选</button></div></td></tr>}
@@ -185,7 +189,7 @@ export default function JobsPage() {
       <div className="drawer-status"><span className={`status-badge status-${preview.status.toLowerCase()}`}><i />{statusLabel(preview.status)}</span><div className="progress-cell"><span><i style={{ width: `${progressOf(preview) * 100}%` }} /></span><b>{(progressOf(preview) * 100).toFixed(0)}%</b></div></div>
       <dl className="drawer-facts"><div><dt>链</dt><dd>{preview.chain.toUpperCase()}</dd></div><div><dt>运行模式</dt><dd><PerformanceModeBadge requested={preview.requested_mode || 'fast'} effective={preview.effective_mode || preview.requested_mode || 'fast'} onExplain={() => setNotice(`请求模式：${(preview.requested_mode || 'fast').toUpperCase()}\n当前模式：${(preview.effective_mode || 'fast').toUpperCase()}`)} /></dd></div><div><dt>Dataset</dt><dd>{preview.datasets.map(datasetLabel).join(', ')}</dd></div><div><dt>行数</dt><dd>{Number(preview.stats.downloaded_rows || 0).toLocaleString()}</dd></div><div><dt>请求数</dt><dd>{Number(preview.stats.api_requests || 0).toLocaleString()}</dd></div><div><dt>成本</dt><dd>${Number(preview.stats.api_cost_usd || 0).toFixed(5)}</dd></div><div><dt>创建时间</dt><dd>{new Date(preview.created_at).toLocaleString('zh-CN', { hour12: false })}</dd></div></dl>
       <section className="drawer-events"><h3>执行轨迹</h3><div className="signal-spine compact"><div className="ok"><i /><span>参数校验</span><b>完成</b></div><div className={preview.status === 'QUEUED' ? 'warn' : 'ok'}><i /><span>请求拉取</span><b>{jobStage(preview)}</b></div><div className={preview.status === 'COMPLETED' ? 'ok' : ''}><i /><span>导出文件</span><b>{preview.status === 'COMPLETED' ? '就绪' : '等待'}</b></div></div></section>
-      <footer><Link className="primary-button" to={`/jobs/${preview.id}`}>查看完整详情</Link>{preview.status === 'RUNNING' && <button className="secondary-button" onClick={() => act(preview, 'pause')}>暂停任务</button>}</footer>
+      <footer><Link className="primary-button" to={`/jobs/${preview.id}`}>查看完整详情</Link>{preview.status === 'RUNNING' && <button className="secondary-button" onClick={() => act(preview, 'pause')}>暂停任务</button>}{resumable.has(preview.status) && <button className="secondary-button" onClick={() => act(preview, 'resume')}>继续任务</button>}</footer>
     </aside></>}
 
     {confirmIds.length > 0 && <ConfirmDialog eyebrow="任务操作" title={`取消 ${confirmIds.length} 个任务`} confirmLabel="确认取消" onConfirm={cancelSelected} onCancel={() => setConfirmIds([])}><p>取消后当前执行会停止，已下载的数据不会自动删除。</p></ConfirmDialog>}

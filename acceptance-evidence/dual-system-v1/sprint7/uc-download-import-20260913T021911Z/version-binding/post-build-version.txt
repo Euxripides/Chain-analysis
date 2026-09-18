@@ -1,0 +1,18 @@
+captured_utc=2026-09-13T02:34:55Z
+--- source AFTER (the version the v4 round exercises) ---
+d62e478e0ff96ea18be114bb0b8992f59349729ddbb68606fe4052f159fdab9b  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/src/pages/DownloadNewPage.tsx
+--- deployed bundle AFTER rebuild ---
+6a17382a7bf73726ba1922a24e356bf4db88b701a28d4539f5ff820c63cb495a  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/index.html
+544615d1efeb6eea5fcbaaafc6fafae418bac822227b739865500ea12b877324  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/index-BhhcsntC.js
+28480d2d37d243f6325c7fc93161b507fc54b2a5eece0c8bf22717b124cbd4e3  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-Bjj3S7N-.js
+--- new guard strings present in built bundle ---
+string[声明值不可信] -> /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-Bjj3S7N-.js
+string[DecompressionStream] -> /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-Bjj3S7N-.js
+string[ZIP 中央目录未被完整消费] -> /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-Bjj3S7N-.js
+string[暂不支持 ZIP64] -> /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-Bjj3S7N-.js
+--- served index AFTER rebuild ---
+src="/app-v2/assets/index-BhhcsntC.js"
+--- backend unchanged ---
+7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a  /home/euripides/projects/blockchain-platform/backend/bin/api
+513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48  /home/euripides/projects/blockchain-platform/backend/bin/worker
+28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4  /home/euripides/projects/blockchain-platform/backend/bin/migrate

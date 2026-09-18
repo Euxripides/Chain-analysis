@@ -1,0 +1,63 @@
+=== IMAGE INSPECT ===
+id=sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c
+repodigests=["docker.1ms.run/anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c","anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c"]
+created=2026-08-27T17:00:22.866987799Z
+size=29444736
+
+=== SYFT BINARY SHA256 ATTEMPT (no sudo, --user) ===
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "sha256sum": executable file not found in $PATH
+
+Run 'docker run --help' for more information
+attempt1_exit=0
+--- entrypoint /bin/sh probe ---
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+
+Run 'docker run --help' for more information
+
+=== SYFT VERSION (no sudo, --user) ===
+Application:   syft
+Version:       1.51.1
+BuildDate:     2026-08-27T16:55:02Z
+GitCommit:     91a0032987d91b7411b52f6f5c185c5e7f775495
+GitDescription: v1.51.1
+Platform:      linux/amd64
+GoVersion:     go1.26.3
+Compiler:      gc
+SchemaVersion: 16.1.10
+version_exit=0
+
+=== FILE TYPE OF TARGETS ===
+/home/euripides/projects/blockchain-platform/backend/bin/api:     ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, Go BuildID=xFod9_Rhh-qXk7mzH3hx/kExDoAg5DLz0NtJFAcse/5K5zBZEZQYLAHMtwjI8I/fbzvQi02olkP1R3GHhN9, BuildID[sha1]=bac07b524052bdd62d41c6e56f2761256ee6db73, with debug_info, not stripped
+/home/euripides/projects/blockchain-platform/backend/bin/worker:  ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, Go BuildID=xGToxWJdSzjSWbivAMt5/OdGsBqWaEFuHyp3cNULo/VQVxr3AbGa_1c8dS92eB/SfIYOvB0FH3GOMRvCOAJ, BuildID[sha1]=bd6c8cad0e4b3b227eaa699c49d88896fd5d2c95, with debug_info, not stripped
+/home/euripides/projects/blockchain-platform/backend/bin/migrate: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, Go BuildID=Houj-tdZbC9lehIwF3Qy/zxZ0LkJhUj49sVY1pVJF/G1dfJ15O5orNvCCARY4n/mcHuFnbSDCIlXPG3TrJl, BuildID[sha1]=3153d017fab980f470ea5d0355cd797ec3330321, with debug_info, not stripped
+
+=== PILOT SCAN A: explicit file: scheme, api ===
+[0000]  WARN unable to get filesystem cache at /tmp/.cache/syft: unable to create directory at '/tmp/.cache/syft': mkdir /tmp/.cache: permission denied
+A_exit=0
+
+=== PILOT SCAN B: bare relative path (old-flow style), api ===
+[0000]  WARN unable to get filesystem cache at /tmp/.cache/syft: unable to create directory at '/tmp/.cache/syft': mkdir /tmp/.cache: permission denied
+B_exit=0
+
+=== PILOT OUTPUTS ===
+-rw-r--r-- 1 euripides euripides 60083 Sep 13 09:07 /tmp/sbom-dep-upgrade-20260913T015815Z/pilot-A-file.cdx.json
+-rw-r--r-- 1 euripides euripides 60083 Sep 13 09:07 /tmp/sbom-dep-upgrade-20260913T015815Z/pilot-B-bare.cdx.json
+84355a77f2e6c05bee7c611fb97c5e3aee93259dfab092bfe3cfe5d40073626f  /tmp/sbom-dep-upgrade-20260913T015815Z/pilot-A-file.cdx.json
+ea7986cfef52c5fee0952ffe6ef0a741499ddd426320b6251926461949233001  /tmp/sbom-dep-upgrade-20260913T015815Z/pilot-B-bare.cdx.json
+
+=== PILOT COMPARE ===
+pilot-A-file.cdx.json components= 56 types= {'library': 55, 'file': 1}
+   meta.component= {"bom-ref": "399f18d68f3f9359", "type": "file", "name": "api", "version": "sha256:8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a"}
+   meta.source?  []
+    github.com/go-chi/chi/v5 -> ['pkg:golang/github.com/go-chi/chi/v5@v5.3.2']
+    github.com/xuri/excelize/v2 -> ['pkg:golang/github.com/xuri/excelize/v2@v2.11.0']
+    github.com/jackc/pgx/v5 -> ['pkg:golang/github.com/jackc/pgx/v5@v5.9.2']
+    golang.org/x/crypto -> ['pkg:golang/golang.org/x/crypto@v0.56.0']
+pilot-B-bare.cdx.json components= 56 types= {'library': 55, 'file': 1}
+   meta.component= {"bom-ref": "22db590d71f764e4", "type": "file", "name": "api", "version": "sha256:8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a"}
+   meta.source?  []
+    github.com/go-chi/chi/v5 -> ['pkg:golang/github.com/go-chi/chi/v5@v5.3.2']
+    github.com/xuri/excelize/v2 -> ['pkg:golang/github.com/xuri/excelize/v2@v2.11.0']
+    github.com/jackc/pgx/v5 -> ['pkg:golang/github.com/jackc/pgx/v5@v5.9.2']
+    golang.org/x/crypto -> ['pkg:golang/golang.org/x/crypto@v0.56.0']
+PILOT_DONE

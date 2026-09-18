@@ -11,6 +11,10 @@ func productionTestConfig(t *testing.T) *Config {
 		"ANKR_PROD_REJECT_BOUNDARY": "64", "ANKR_MAX_PAGE_SIZE": "10000",
 		"ANKR_PAGE_LEVELS": "1000,2000,5000,10000", "ANKR_MANAGEMENT_ENABLED": "false",
 		"RPC_ENABLED": "false",
+		// [FIX 2026-09-13 / P0-密钥] 凭据不再有编译期默认值：测试必须显式提供（仅测试值）。
+		"DATABASE_URL":        "postgres://test:test@127.0.0.1:5432/testdb?sslmode=disable",
+		"CLICKHOUSE_URL":      "clickhouse://test:test@127.0.0.1:9000/testdb",
+		"MINIO_ROOT_PASSWORD": "test-only-minio-secret",
 	}
 	for key, value := range values {
 		t.Setenv(key, value)

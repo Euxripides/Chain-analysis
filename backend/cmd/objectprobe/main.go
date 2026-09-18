@@ -20,16 +20,24 @@ import (
 )
 
 func main() {
-	action := flag.String("action", "stat", "stat|backup|delete|restore")
+	action := flag.String("action", "stat", "stat|stat-strict|backup|delete|restore")
 	bucket := flag.String("bucket", "", "bucket（默认 config RawBucket）")
 	key := flag.String("key", "", "object key（必填）")
 	file := flag.String("file", "", "backup/restore 本地文件")
+	out := flag.String("out", "", "stat-strict: 把 JSON 实测结果同时写入该文件")
+	timeoutSpec := flag.String("timeout", "30s", "stat-strict: 整个只读探测的有界超时（如 30s/2s）")
 	flag.Parse()
 	if *key == "" {
 		fmt.Fprintln(os.Stderr, "key required")
 		os.Exit(2)
 	}
 	cfg := config.Load()
+	// stat-strict 必须**完全只读**：rawstore.New 会 EnsureBucket->MakeBucket，用它做存在性
+	// 探针会在桶名写错时**创建**桶并掩盖部署/权限故障（2026-09-13 实测事故，见 statstrict.go）。
+	// 因此在构造任何会建桶的存储对象之前就分派。
+	if *action == "stat-strict" {
+		os.Exit(runStatStrict(cfg, *key, *out, *timeoutSpec))
+	}
 	b := *bucket
 	if b == "" {
 		b = cfg.RawBucket

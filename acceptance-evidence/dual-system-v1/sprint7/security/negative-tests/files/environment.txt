@@ -1,0 +1,15 @@
+date=2026-09-13T00:07:28+07:00
+host=dataserver
+DB_RUNTIME_ROLE=blockchain_app
+AUTH_MODE=session
+APP_ENV=development
+AUTH_TRUSTED_PROXIES=127.0.0.1/32,::1/128
+AUTH_COOKIE_SECURE=auto
+AUTH_COOKIE_PREFIX=[__Host-]
+auth_methods=<html>
+<head><title>502 Bad Gateway</title></head>
+<body>
+<center><h1>502 Bad Gateway</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# S7-SEC-01 Go dependency vulnerability scan - exact commands and exit codes
+# host: dataserver  user: euripides  time: 2026-09-12T23:36:13+07:00
+# working_dir: /home/euripides/projects/blockchain-platform/backend
+
+## 1. toolchain
+cmd: /usr/local/go/bin/go version
+out: go version go1.26.7 linux/amd64
+
+## 2. install scanner
+cmd: GOBIN=/tmp/gtools GOPROXY=https://goproxy.cn,direct /usr/local/go/bin/go install golang.org/x/vuln/cmd/govulncheck@latest
+exit_code: 0
+result: Scanner: govulncheck@v1.8.0  DB: https://vuln.go.dev  DB updated: 2026-09-10 14:48:42 +0000 UTC
+
+## 3. prewarm module cache
+cmd: cd /home/euripides/projects/blockchain-platform/backend && GOPROXY=https://goproxy.cn,direct go mod download
+exit_code: see go-mod-download.txt
+
+## 4. primary scan
+cmd: cd /home/euripides/projects/blockchain-platform/backend && GOPROXY=https://goproxy.cn,direct /tmp/gtools/govulncheck ./...
+exit_code: 3
+stdout_file: govulncheck.txt
+note: govulncheck exit code 3 == vulnerabilities found (expected/normal, NOT a command failure)
+
+## 5. verbose scan (reachability)
+cmd: cd /home/euripides/projects/blockchain-platform/backend && GOPROXY=https://goproxy.cn,direct /tmp/gtools/govulncheck -show verbose ./...
+exit_code: 3
+stdout_file: govulncheck-verbose.txt
+
+## 6. integrity
+cmd: md5sum go.mod go.sum   (before and after scan)
+result_file: go-mod-fingerprint.txt

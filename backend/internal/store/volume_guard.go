@@ -86,18 +86,7 @@ func (s *Store) RecordVolumeCommit(ctx context.Context, sh model.Shard, pageNo i
 	projectedCost := actualCost * ratio
 	projectedDuration := elapsed * ratio
 	risk := volumeRisk(projectedMid, limits)
-	reason := ""
-	trigger := false
-	if !override && state != model.ItemAbortedByUser {
-		switch {
-		case actualRows >= limits.HardActualRows:
-			trigger, reason = true, model.GuardReasonActualRows
-		case projectedMid >= limits.ExtremeRows && confidence >= limits.ExtremeConfidence:
-			trigger, reason = true, model.GuardReasonProjectedRows
-		case projectedMid >= limits.HardProjectedRows && confidence >= limits.ProjectedConfidence:
-			trigger, reason = true, model.GuardReasonProjectedRows
-		}
-	}
+	trigger, reason := guardTriggered(actualRows, projectedMid, confidence, limits, override, state)
 	newlyTriggered := trigger && state != model.ItemWaitingUserConfirmation
 	if trigger {
 		state = model.ItemWaitingUserConfirmation
@@ -130,6 +119,27 @@ func (s *Store) RecordVolumeCommit(ctx context.Context, sh model.Shard, pageNo i
 	}
 	guard, err := s.GetVolumeGuard(ctx, sh.JobID, sh.SubjectID, sh.Dataset)
 	return guard, newlyTriggered, err
+}
+
+// guardTriggered 判定是否停下来等人工确认（纯函数，便于单测）。
+//
+// 生产策略（2026-09-15 起）：**单地址单 dataset 超过 100 万行即触发** ——
+// 实际行数到线，或预测行数到线且置信度达标，二者任一成立都暂停该地址的
+// 下载并弹窗让用户选择继续/终止。阈值全部来自配置
+// （TRON_VOLUME_HARD_ACTUAL_ROWS / TRON_VOLUME_HARD_PROJECTED_ROWS）。
+func guardTriggered(actualRows, projectedMid int64, confidence float64, l model.VolumeGuardThresholds, override bool, state string) (bool, string) {
+	if override || state == model.ItemAbortedByUser {
+		return false, ""
+	}
+	switch {
+	case actualRows >= l.HardActualRows:
+		return true, model.GuardReasonActualRows
+	case projectedMid >= l.ExtremeRows && confidence >= l.ExtremeConfidence:
+		return true, model.GuardReasonProjectedRows
+	case projectedMid >= l.HardProjectedRows && confidence >= l.ProjectedConfidence:
+		return true, model.GuardReasonProjectedRows
+	}
+	return false, ""
 }
 
 func volumeRisk(projected int64, l model.VolumeGuardThresholds) string {

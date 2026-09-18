@@ -1,0 +1,27 @@
+# 入口矩阵（nginx 路由 -> 上游）
+
+| 公网路径 | 上游 | 产品 | 状态 |
+|---|---|---|---|
+    16:    location = /mcp {
+    17:        proxy_pass http://127.0.0.1:8090/mcp;
+    28:    location = /mcp-health {
+    29:        proxy_pass http://127.0.0.1:8090/health;
+    34:    location = /openapi.json {
+    35:        proxy_pass http://127.0.0.1:8080;
+    39:    location = /docs {
+    40:        proxy_pass http://127.0.0.1:8080;
+    44:    location = /redoc {
+    45:        proxy_pass http://127.0.0.1:8080;
+    52:    location ^~ /api/ {
+    53:        proxy_pass http://127.0.0.1:8080;
+    68:    location ^~ /admin/ {
+    77:        proxy_pass http://127.0.0.1:3002/admin/;
+    90:    location ^~ /app-v2/ {
+    99:        proxy_pass http://127.0.0.1:3001/app-v2/;
+    111:    location / {
+    112:        proxy_pass http://127.0.0.1:3000;
+/                            nginx= public=200
+/app-v2/                     nginx= public=200
+/admin/                      nginx= public=200
+/api/auth/v1/methods         nginx= public=200
+/health/ready                nginx= public=200

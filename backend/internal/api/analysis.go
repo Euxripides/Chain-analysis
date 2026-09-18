@@ -11,8 +11,14 @@ func (s *Server) handleAddressFlowProfile(w http.ResponseWriter, r *http.Request
 		writeArchitectureError(w, http.StatusServiceUnavailable, "ANALYSIS_UNAVAILABLE", "analysis service unavailable")
 		return
 	}
-	result, err := s.analysis.Analyze(r.Context(), chi.URLParam(r, "chain"), chi.URLParam(r, "address"))
+	// P1-1：与 v2 explorer 的 flow-profile 共用同一套交互扫描预算。
+	readCtx, cancelRead := explorerReadContext(r.Context())
+	defer cancelRead()
+	result, err := s.analysis.Analyze(readCtx, chi.URLParam(r, "chain"), chi.URLParam(r, "address"))
 	if err != nil {
+		if explorerScanRefusal(w, r, readCtx, err, "资金流分析") {
+			return
+		}
 		writeArchitectureError(w, http.StatusBadRequest, "FLOW_PROFILE_FAILED", err.Error())
 		return
 	}

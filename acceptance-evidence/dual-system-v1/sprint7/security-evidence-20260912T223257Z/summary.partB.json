@@ -1,0 +1,137 @@
+{
+  "deps": {
+    "id": "dependencies",
+    "name": "依赖漏洞（前端 pnpm / 后端 Go）",
+    "verdict": "FAIL",
+    "headline": "P0 = 2, P1 = 5, counted separately. The gate requires 0.",
+    "measured": {
+      "P0_critical": 2,
+      "P1_high": 5,
+      "P2_moderate": 3,
+      "P3_low": 1,
+      "unrated_unknown": 4,
+      "total_distinct": 15,
+      "frontend": {
+        "P0": 0,
+        "P1": 2,
+        "P2": 1,
+        "P3": 0,
+        "unrated": 0,
+        "total": 3,
+        "dependencies_audited": 175
+      },
+      "backend": {
+        "P0": 2,
+        "P1": 3,
+        "P2": 2,
+        "P3": 1,
+        "unrated": 4,
+        "total": 12,
+        "modules": 159
+      },
+      "P0_packages": [
+        "github.com/jackc/pgx/v5 v5.7.4 — GO-2026-4771, GO-2026-4772"
+      ],
+      "P1_packages": [
+        "github.com/xuri/excelize/v2 v2.9.0 — GO-2026-5960 (symbol-reachable)",
+        "github.com/go-chi/chi/v5 v5.2.1 — GO-2026-5775, GO-2026-5777",
+        "xlsx 0.18.5 — GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9 (NO FIX ON NPM)"
+      ]
+    },
+    "scanners": [
+      {
+        "tool": "pnpm audit",
+        "version": "pnpm 11.24.0 / node v24.20.0",
+        "registry": "https://registry.npmjs.org (per-command override; no .npmrc changed)",
+        "exit_code": 1,
+        "exit_meaning": "vulnerabilities found",
+        "artifact": "deps/official-registry-pnpm-audit.json",
+        "artifact_bytes": 2165
+      },
+      {
+        "tool": "govulncheck",
+        "version": "v1.8.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "scan_level": "symbol",
+        "exit_codes": "text=3, json=0",
+        "artifact": "deps/govulncheck.json",
+        "artifact_bytes": 731940
+      },
+      {
+        "tool": "OSV API for severity",
+        "version": "api.osv.dev v1",
+        "note": "vuln.go.dev Go records carry no severity; severity resolved via GHSA aliases",
+        "artifact": "deps/osv-severity-table.json"
+      }
+    ],
+    "preserved_failure_evidence": {
+      "artifact": "deps/windows-host/pnpm-audit.json and deps/windows-attempt1-npmmirror-FAILED-pnpm-audit.json",
+      "bytes": 192,
+      "sha256": "4b7bccb843bdbb045a531327caa65951450dbaa041611ae82f3e928fedccf9d6",
+      "content": "ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS",
+      "note": "Kept verbatim as failure evidence. Its zeros are NOT a zero-vulnerability result."
+    },
+    "not_verified": [
+      {
+        "id": "NV-D1",
+        "item": "Second independent frontend advisory scanner",
+        "reason": "only pnpm audit covered npm advisories",
+        "commands_tried": "none — no second scanner installed",
+        "action": "run osv-scanner or trivy fs on the frontend and reconcile"
+      },
+      {
+        "id": "NV-D2",
+        "item": "Severity of 4 golang.org/x/crypto advisories",
+        "reason": "neither vuln.go.dev nor OSV/GHSA publishes a severity for GO-2026-5932/6303/6354/6355; recorded UNKNOWN rather than guessed",
+        "commands_tried": "api.osv.dev/v1/vulns/GO-2026-*; /GHSA-* (no alias); /CVE-2026-56854 (HTTP 404)",
+        "action": "manual CVSS review from upstream CVE records"
+      },
+      {
+        "id": "NV-D3",
+        "item": "Bundle-level reachability of the 2 xlsx HIGH advisories",
+        "reason": "xlsx is dynamically imported; no call-graph analysis was run",
+        "action": "bundle call-graph check"
+      }
+    ],
+    "to_close": [
+      "pgx/v5 v5.7.4 -> >= v5.9.2 (clears 2 P0 + 1 P3)",
+      "chi/v5 v5.2.1 -> >= v5.3.0 (clears 3 P1 + 1 P2)",
+      "xuri/excelize/v2 v2.9.0 -> >= v2.11.0 (clears the only symbol-reachable P1)",
+      "xlsx 0.18.5 -> NO FIX ON NPM: replace the library, vendor the official SheetJS build with integrity verification, or obtain a written risk decision from the owner",
+      "echarts 5.6.0 -> >= 6.1.0 (clears 1 P2)",
+      "re-run this directory's commands after landing the above"
+    ]
+  },
+  "sbom": {
+    "id": "sbom",
+    "name": "SBOM",
+    "verdict": "PASS_WITH_CAVEATS",
+    "measured": {
+      "tool": "syft 1.51.1",
+      "tool_digest": "sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c",
+      "formats": [
+        "CycloneDX 1.7",
+        "SPDX-2.3"
+      ],
+      "frontend_components": 176,
+      "backend_sbom_generated": true,
+      "deploy_components": 0,
+      "exit_codes": "all 0"
+    },
+    "not_verified": [
+      {
+        "id": "NV-S1",
+        "item": "backend.cdx.json / backend.spdx.json present in the Windows tree",
+        "reason": "~26 MB exceeds the session transfer sandbox (SSH download restricted to /workspace)",
+        "action": "copy from the VM evidence root; sha256 recorded in big-artifacts.sha256.txt"
+      },
+      {
+        "id": "NV-S2",
+        "item": "deploy.cdx.json meaningful content",
+        "reason": "syft reports 0 components for pure config directories — 0 components is NOT '0 findings'",
+        "action": "use a config-aware SBOM tool if a build-configuration SBOM is required"
+      }
+    ]
+  }
+}

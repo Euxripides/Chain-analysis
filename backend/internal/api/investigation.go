@@ -70,6 +70,10 @@ func (s *Server) handleCreateInvestigation(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleGetInvestigation(w http.ResponseWriter, r *http.Request) {
+	// 对象级二次授权：不属于主体组织/工作区的调查统一返回 404。
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	inv, err := s.investigations.Get(r.Context(), chi.URLParam(r, "id"))
 	if errors.Is(err, investigation.ErrNotFound) {
 		writeArchitectureError(w, http.StatusNotFound, "INVESTIGATION_NOT_FOUND", "investigation not found")
@@ -83,8 +87,14 @@ func (s *Server) handleGetInvestigation(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleListInvestigations(w http.ResponseWriter, r *http.Request) {
+	// P0 修复：列表必须带主体作用域。旧实现 investigations.List 没有任何租户条件，
+	// 会把全平台调查任务连同 organization_id 一起返回。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := s.investigations.List(r.Context(), limit)
+	items, err := s.investigations.ListScoped(r.Context(), scope.OrganizationID, scope.WorkspaceID, limit)
 	if err != nil {
 		writeArchitectureError(w, http.StatusInternalServerError, "INVESTIGATION_LIST_FAILED", "investigation list failed")
 		return
@@ -93,6 +103,9 @@ func (s *Server) handleListInvestigations(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleInvestigationRuntime(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	view, err := s.investigations.RuntimeView(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeArchitectureError(w, http.StatusInternalServerError, "INVESTIGATION_RUNTIME_READ_FAILED", "investigation runtime read failed")
@@ -102,6 +115,9 @@ func (s *Server) handleInvestigationRuntime(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleInvestigationArtifacts(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	view, err := s.investigations.Artifacts(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeArchitectureError(w, http.StatusInternalServerError, "INVESTIGATION_ARTIFACTS_READ_FAILED", "investigation artifacts read failed")
@@ -111,6 +127,11 @@ func (s *Server) handleInvestigationArtifacts(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleInvestigationAction(w http.ResponseWriter, r *http.Request) {
+	// 写路由同样必须做对象级授权：否则任何有 investigation:run 的主体
+	// 都能启动/取消他人组织里的调查。
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	action := chi.URLParam(r, "action")
 	if action != "start" && action != "analyze" && action != "pause" && action != "resume" && action != "retry" && action != "cancel" && action != "approve" {
 		writeArchitectureError(w, http.StatusNotFound, "ACTION_NOT_FOUND", "unsupported investigation action")

@@ -1,0 +1,41 @@
+captured_at=2026-09-13T05:46:00+07:00
+project=/home/euripides/projects/blockchain-platform
+--- systemctl --user show -p ExecStart ---
+MainPID=3413432
+ExecStart={ path=/home/euripides/projects/blockchain-platform/backend/bin/api ; argv[]=/home/euripides/projects/blockchain-platform/backend/bin/api ; ignore_errors=no ; start_time=[Sun 2026-09-13 04:14:09 +07] ; stop_time=[n/a] ; pid=3413432 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+
+MainPID=3413434
+ExecStart={ path=/home/euripides/projects/blockchain-platform/backend/bin/worker ; argv[]=/home/euripides/projects/blockchain-platform/backend/bin/worker ; ignore_errors=no ; start_time=[Sun 2026-09-13 04:14:09 +07] ; stop_time=[n/a] ; pid=3413434 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+--- 前端服务 ---
+MainPID=3744085
+ExecStart={ path=/home/euripides/.nvm/versions/node/v24.20.0/bin/node ; argv[]=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js --host 0.0.0.0 ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+MainPID=3626770
+ExecStart={ path=/home/euripides/.nvm/versions/node/v24.20.0/bin/node ; argv[]=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js preview --config apps/admin-console/vite.config.ts --host 127.0.0.1 --port 3002 --strictPort ; ignore_errors=no ; start_time=[Sun 2026-09-13 05:45:57 +07] ; stop_time=[n/a] ; pid=3626770 ; code=(null) ; status=0/0 }
+--- /proc/<PID>/exe ---
+blockchain-api.service MainPID=3413432 exe=/home/euripides/projects/blockchain-platform/backend/bin/api
+blockchain-worker.service MainPID=3413434 exe=/home/euripides/projects/blockchain-platform/backend/bin/worker
+--- sha256(binary on disk) ---
+e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7  /home/euripides/projects/blockchain-platform/backend/bin/api
+9c41079d5c59067e0585166d049219de0f14fd93069b3c3a194dff0ecf9fccb6  /home/euripides/projects/blockchain-platform/backend/bin/worker
+--- sha256(/proc/<PID>/exe) ---
+e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7  /proc/3413432/exe
+9c41079d5c59067e0585166d049219de0f14fd93069b3c3a194dff0ecf9fccb6  /proc/3413434/exe
+--- 前端产物的真实 sha256（随本轮源码一起记录）---
+0900441d5cdc1f0085bfd0cda4091a12a8ec92aebb522346c04267211cb94809  /home/euripides/projects/blockchain-platform/frontend/src/api/client.ts
+b0a9bbd36a4c5d6bc2cb625255c9c7b2ef422c6ff99b583642e83bd90c2e83f7  /home/euripides/projects/blockchain-platform/frontend/src/App.tsx
+374bc87637830bbf6daaa8abdae8487c670b87bbd1a3e432763e49044817faeb  /home/euripides/projects/blockchain-platform/frontend/src/auth/AdminSession.tsx
+8075f8709cc88c271b98d9ba9e57348c0090a34a8f2a99b1debd680941aaa3b9  /home/euripides/projects/blockchain-platform/frontend/src/components/BackendLoginDialog.tsx
+1a3f36d4a818c8004e554aaf4f51dc3e6fb8cd330ed4b6772e69269a321bce33  /home/euripides/projects/blockchain-platform/frontend/src/pages/SystemPage.tsx
+da979bf64b88753648350b580fb389f518aa0f73aab7925eb2b6d376f43cff3a  /home/euripides/projects/blockchain-platform/frontend/apps/admin-console/src/App.tsx
+2b017a66617cca13ea6bb65fbfc77d907f4110351e1885d8c5c74104d006037c  /home/euripides/projects/blockchain-platform/frontend/apps/admin-console/src/pages/LoginPage.tsx
+db3311ac3967ba6aece8bfe6d36606e7e2701644703f9b3abee2def0697fc254  /home/euripides/projects/blockchain-platform/frontend/apps/admin-console/src/lib/returnTo.ts
+--- 管理后台静态产物（vite preview 直接读盘）---
+-rw-rw-r-- 1 euripides euripides   4069 Sep 13 05:45 SessionsPage-DuEl3YEm.js
+-rw-rw-r-- 1 euripides euripides  13232 Sep 13 05:45 SettingsPage-DZw0b4ZC.js
+-rw-rw-r-- 1 euripides euripides   2712 Sep 13 05:45 SystemHealthPage-DuBJz_zh.js
+-rw-rw-r-- 1 euripides euripides   6016 Sep 13 05:45 SystemVersionPage-Dz8sjmeP.js
+-rw-rw-r-- 1 euripides euripides   4832 Sep 13 05:45 UsersPage-C6pu40yo.js

@@ -3,6 +3,7 @@ package download
 
 import (
 	"context"
+	"log/slog"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -107,13 +108,20 @@ func (sc *Scheduler) v14RuntimeTick(ctx context.Context) {
 			observability.AnkrFetchRetryQueueDepth.Set(float64(retryReady))
 		}
 		// phase ratio：最近 5 分钟 provider_usage 的 TTFB/(TTFB+Body)（30s 缓存）
+		// 修复（S7-DEF）：provider_usage 的时间列是 request_time，没有 created_at。
+		// 原查询每次执行都报 "column created_at does not exist"，错误被 `_ =` 吞掉，
+		// 导致本函数下方两项观测**永久不更新**（phaseRatio 停留在初值、AnkrRetryAmplification 从不写入），
+		// 并以约 1 次/秒刷 PostgreSQL 错误日志。列名已更正为 request_time。
 		now := time.Now()
 		sc.v14.phaseMu.Lock()
 		if now.Sub(sc.v14.ratioAt) > 30*time.Second {
 			var ratio *float64
-			_ = sc.store.Pool.QueryRow(ctx,
+			if qerr := sc.store.Pool.QueryRow(ctx,
 				"SELECT AVG(ttfb_ms::float8 / NULLIF(ttfb_ms + body_ms, 0)) FROM provider_usage "+
-					"WHERE provider='ankr' AND ttfb_ms > 0 AND body_ms > 0 AND created_at > now() - interval '5 minutes'").Scan(&ratio)
+					"WHERE provider='ankr' AND ttfb_ms > 0 AND body_ms > 0 AND request_time > now() - interval '5 minutes'").Scan(&ratio); qerr != nil {
+				// 失败绝不静默：旧值会被下游当作实时相位比使用，必须显式留痕
+				slog.Warn("phase ratio 查询失败，phaseRatio 保持上一次取值（可能是陈旧值）", "err", qerr)
+			}
 			if ratio != nil && *ratio > 0.01 && *ratio < 0.99 {
 				sc.v14.phaseRatio = *ratio
 			}
@@ -123,13 +131,28 @@ func (sc *Scheduler) v14RuntimeTick(ctx context.Context) {
 		sc.v14.phaseMu.Unlock()
 		observability.AnkrFetchWaitingTTFB.Set(active * ratio)
 		observability.AnkrFetchBodyInflight.Set(active * (1 - ratio))
-		// retry amplification（§28：attempts / 成功页，5 分钟窗口）
+		// retry amplification（§28：外部 Provider 尝试 / 外部 Provider 成功，5 分钟窗口）
+		//
+		// 语义边界（必须与 progress.go 的失败判据保持一致）：
+		//   * 成功状态集合是 ('ok','success') —— 只认 'ok' 会把 success 行漏算成失败。
+		//     实测近 1 小时 ok=96 / success=25，漏算约 21%，会让 amplification 虚高。
+		//   * cache_hit / singleflight_hit **不是外部 Provider 调用**，分子与分母都必须排除；
+		//     否则缓存命中会同时抬高 attempts 与"未成功"计数，得到虚高的 amplification。
+		//   * http_status >= 400 即使 status 写成成功也不计为成功。
 		var attempts, okPages int64
-		_ = sc.store.Pool.QueryRow(ctx,
-			"SELECT COUNT(*), COUNT(*) FILTER (WHERE status='ok') FROM provider_usage "+
-				"WHERE provider='ankr' AND created_at > now() - interval '5 minutes'").Scan(&attempts, &okPages)
-		if okPages > 0 && attempts > 0 {
+		if qerr := sc.store.Pool.QueryRow(ctx,
+			"SELECT COUNT(*) FILTER (WHERE NOT COALESCE(cache_hit,false) AND NOT COALESCE(singleflight_hit,false) "+
+				"AND COALESCE(status,'') NOT IN ('cache_hit','singleflight_hit')), "+
+				"COUNT(*) FILTER (WHERE NOT COALESCE(cache_hit,false) AND NOT COALESCE(singleflight_hit,false) "+
+				"AND COALESCE(status,'') IN ('ok','success') AND COALESCE(http_status,0) < 400) "+
+				"FROM provider_usage WHERE provider='ankr' AND request_time > now() - interval '5 minutes'").Scan(&attempts, &okPages); qerr != nil {
+			// 失败绝不静默：否则外部的 attempts/成功 会以 0 参与分母或保留旧值而被当作实时结果
+			slog.Warn("retry amplification 查询失败，该指标保持上一次取值（可能是陈旧值）", "err", qerr)
+		} else if okPages > 0 && attempts > 0 {
 			observability.AnkrRetryAmplification.Set(float64(attempts) / float64(okPages))
+		} else if okPages == 0 {
+			// 5 分钟窗口内没有成功的外部调用：指标语义未定义，明确留痕而不是给一个看起来正常的旧值
+			slog.Debug("retry amplification 窗口内无成功外部调用，指标未更新", "attempts", attempts, "ok", okPages)
 		}
 	}
 }

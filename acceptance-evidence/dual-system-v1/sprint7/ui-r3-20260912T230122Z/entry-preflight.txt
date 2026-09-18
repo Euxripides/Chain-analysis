@@ -1,0 +1,19 @@
+entry=https://127.0.0.1:8448
+checked_at=2026-09-13T06:01:22+07:00
+scheme=https OK
+health_live=200
+--- 关键入口探测（真实状态码）---
+/                200
+/admin/login     200
+/api-control     200
+/system          200
+/health/ready    200
+--- 静态资源归属（V1 SPA 由 vite:3000 提供）---
+<title>Trace Desk · 链上调查工作台</title>
+--- 监听归属 ---
+LISTEN 0      511          0.0.0.0:3000       0.0.0.0:*          
+LISTEN 0      5          127.0.0.1:8448       0.0.0.0:*          
+LISTEN 0      511        127.0.0.1:8088       0.0.0.0:*          
+LISTEN 0      511        127.0.0.1:3002       0.0.0.0:*          
+LISTEN 0      511        127.0.0.1:3001       0.0.0.0:*          
+LISTEN 0      65535              *:8080             *:*          

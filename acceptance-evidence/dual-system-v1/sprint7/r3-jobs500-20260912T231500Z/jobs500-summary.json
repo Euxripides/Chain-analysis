@@ -1,0 +1,102 @@
+{
+  "finding": "GET /api/v1/download-jobs 对已认证主体返回 500",
+  "endpoint": "/api/v1/download-jobs?limit=100 (also limit=5)",
+  "verdict": "BACKEND_DEFECT (非客户端受众问题)  判据见 criterion",
+  "criterion": {
+    "rule": "若 500 可由**直接后端调用**（curl，不经前端）复现 → 不源于 R-3 客户端改动",
+    "probes": [
+      {
+        "principal": "fixture-investigator (user 受众)",
+        "audience_header": "(none)",
+        "status": 500,
+        "sqlstate": "42883"
+      },
+      {
+        "principal": "fixture-investigator (user 受众)",
+        "audience_header": "user",
+        "status": 500,
+        "sqlstate": "42883"
+      },
+      {
+        "principal": "admin@local (owner, admin 受众)",
+        "audience_header": "admin",
+        "status": 500,
+        "sqlstate": "42883"
+      },
+      {
+        "principal": "fixture-investigator (user 受众)",
+        "audience_header": "(none)",
+        "url": "/api/v1/download-jobs?limit=5",
+        "status": 500,
+        "sqlstate": "42883"
+      },
+      {
+        "principal": "admin@local",
+        "audience_header": "(none)",
+        "status": 401,
+        "note": "仅因为 /api/v1 路径按 user 受众解析、浏览器无 user cookie —— 预期行为"
+      }
+    ],
+    "conclusion": "平台管理员 admin@local（owner，177 权限）同样 500 → 既不是权限问题，也不是受众选择问题，与 X-Auth-Audience 是否存在无关。"
+  },
+  "response_evidence": {
+    "http_status": 500,
+    "response_header_request_id": "12cd8359-4eac-4de7-8d1b-2f2f77339e5f",
+    "response_header_trace_id": "2c47b772-a754-4c8c-bd36-5aedaf21c19a",
+    "body_verbatim": "{\"error\":\"ERROR: operator does not exist: text = uuid (SQLSTATE 42883)\"}",
+    "body_meta_request_id": "（该 500 响应体没有 meta 信封，字段不存在——区别于 401/403 的 meta.request_id/meta.trace_id 为空字符串）",
+    "body_meta_trace_id": "（同上，不存在）"
+  },
+  "requester_scope_redacted": {
+    "investigator": {
+      "audience": "user",
+      "roles": [
+        "investigator"
+      ],
+      "identity_id_prefix": "2f545a30",
+      "organization_id_prefix": "627c131a",
+      "workspace_id_prefix": "14dfbf1b",
+      "permissions_total": 85,
+      "holds": [
+        "download:read",
+        "job:control"
+      ]
+    },
+    "admin": {
+      "audience": "admin",
+      "roles": [
+        "owner"
+      ],
+      "identity_id_prefix": "6e192e52",
+      "organization_id_prefix": "d3b152f2",
+      "workspace_id_prefix": "000e31bb",
+      "permissions_total": 177,
+      "holds": [
+        "admin:job:list",
+        "admin:job:read"
+      ]
+    }
+  },
+  "server_logs": {
+    "queried": "journalctl --user -u blockchain-api.service / -u blockchain-worker.service",
+    "window": "出证时间窗内",
+    "matching_lines_for_42883_or_download_jobs": 0,
+    "interpretation": "后端**没有**为该 SQL 错误写日志行（原始日志全文见 server-logs.txt）；这是可观测性缺口，一并交接。"
+  },
+  "playwright_trace": "无。该失败由 R-3 附加的用户层回归脚本（frontend/r3-regress.mjs，ad-hoc 浏览器脚本）发现，不是 Playwright test 用例，因此没有 trace.zip。原始捕获见 regression-user-layer-v1-pages.json 与本目录的 hdr-*/body-*/status-* 文件。",
+  "files": [
+    "login-investigator.json",
+    "login-admin.json",
+    "session-investigator.json",
+    "session-admin.json",
+    "subject-scope.json",
+    "hdr-*.txt",
+    "body-*.json",
+    "status-*.txt",
+    "server-logs.txt",
+    "jobs500-summary.json",
+    "HANDOVER.md"
+  ],
+  "not_fixed_here": "按约束（R-3 在途部署期间不得并发改后端），本项**未修**，交由主代理处理。",
+  "r3_suite_note": "R-3 的 30 绿**不含**该失败；它是独立的用户层回归对照，不得被表述为‘完整前端通过’。"
+}

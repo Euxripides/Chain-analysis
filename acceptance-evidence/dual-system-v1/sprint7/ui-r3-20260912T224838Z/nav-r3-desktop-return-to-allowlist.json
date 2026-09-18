@@ -1,0 +1,113 @@
+{
+  "rejected_cases": [
+    {
+      "case": "protocol-relative",
+      "payload": "//evil.example.com/api-control",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "absolute-foreign",
+      "payload": "https://evil.example.com/api-control",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "javascript-scheme",
+      "payload": "javascript:alert(document.domain)",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "backslash",
+      "payload": "/\\evil.example.com",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "parent-escape",
+      "payload": "/api-control/../../etc/passwd",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "on-origin-not-allowlisted",
+      "payload": "/admin/overview",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "encoded-slash",
+      "payload": "/api-control%2f%2fevil.example.com",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "encoded-backslash",
+      "payload": "/%5c%5cevil.example.com",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    },
+    {
+      "case": "scheme-relative-host",
+      "payload": "/api-control@evil.example.com",
+      "final": {
+        "href": "https://127.0.0.1:8448/admin/overview",
+        "origin": "https://127.0.0.1:8448",
+        "pathname": "/admin/overview",
+        "search": ""
+      },
+      "rejected_foreign": true
+    }
+  ],
+  "positive_control": {
+    "href": "https://127.0.0.1:8448/api-control?tab=budgets",
+    "origin": "https://127.0.0.1:8448",
+    "pathname": "/api-control",
+    "search": "?tab=budgets"
+  },
+  "allowlist": [
+    "/api-control",
+    "/system"
+  ]
+}

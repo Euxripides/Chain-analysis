@@ -1,0 +1,28 @@
+{
+  "label": "wan_admin_overview",
+  "url": "https://aurore.online/api/admin/v1/overview",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000490225,
+  "requests": 113,
+  "rps": 5.649861514831945,
+  "errors": 8,
+  "status_counts": {
+    "200": 105
+  },
+  "p50_ms": 1226.725101,
+  "p90_ms": 2221.9501990000003,
+  "p95_ms": 2872.6627740000004,
+  "p99_ms": 3381.10623,
+  "min_ms": 257.127192,
+  "max_ms": 4907.084043,
+  "avg_ms": 1405.0644051946902,
+  "avg_response_bytes": 847.433628318584,
+  "error_samples": [
+    "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded"
+  ]
+}

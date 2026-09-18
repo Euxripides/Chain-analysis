@@ -1,0 +1,81 @@
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-5960
+    Excelize: Unbounded Row Index Allocation in Worksheet Parser (checkSheet
+    OOM/Panic DoS) in github.com/xuri/excelize
+  More info: https://pkg.go.dev/vuln/GO-2026-5960
+  Module: github.com/xuri/excelize/v2
+    Found in: github.com/xuri/excelize/v2@v2.9.0
+    Fixed in: github.com/xuri/excelize/v2@v2.11.0
+    Example traces found:
+      #1: internal/api/export.go:442:26: api.writeXLSXSheet calls excelize.File.NewSheet
+      #2: internal/api/export.go:460:30: api.writeXLSXSheet calls excelize.File.NewStreamWriter
+      #3: internal/api/export.go:456:32: api.writeXLSXSheet calls excelize.File.SetSheetDimension
+      #4: internal/api/export.go:395:23: api.writeXLSX calls excelize.NewFile
+
+Vulnerability #2: GO-2026-5004
+    SQL Injection via placeholder confusion with dollar quoted string literals
+    in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-5004
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.7.4
+    Fixed in: github.com/jackc/pgx/v5@v5.9.2
+    Example traces found:
+      #1: migrations/migrations.go:57:23: migrations.ApplyPostgres calls pgxpool.Conn.QueryRow, which eventually calls sanitize.SanitizeSQL
+
+Vulnerability #3: GO-2025-3770
+    Host header injection which leads to open redirect in RedirectSlashes in
+    github.com/go-chi/chi
+  More info: https://pkg.go.dev/vuln/GO-2025-3770
+  Module: github.com/go-chi/chi/v5
+    Found in: github.com/go-chi/chi/v5@v5.2.1
+    Fixed in: github.com/go-chi/chi/v5@v5.2.2
+    Example traces found:
+      #1: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.ChainHandler.ServeHTTP
+      #2: internal/api/server.go:533:63: api.logMiddleware calls chi.Context.RoutePattern
+      #3: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mount
+      #4: internal/api/server.go:273:7: api.Server.buildRouter calls chi.Mux.Get
+      #5: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle
+      #6: internal/api/server.go:281:9: api.Server.buildRouter calls chi.Mux.Route
+      #7: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mux.ServeHTTP
+      #8: internal/api/server.go:263:7: api.Server.buildRouter calls chi.Mux.Use
+      #9: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.Mux.routeHTTP
+      #10: internal/download/planner.go:825:24: download.Planner.ContinueShards calls json.Marshal, which eventually calls chi.NewMux
+      #11: internal/api/v12.go:367:33: api.Server.handleTicketDownload calls chi.NewRouteContext
+      #12: internal/api/server.go:262:20: api.Server.buildRouter calls chi.NewRouter
+      #13: internal/api/server.go:533:37: api.logMiddleware calls chi.RouteContext
+      #14: internal/api/v12.go:368:24: api.Server.handleTicketDownload calls chi.RouteParams.Add
+      #15: internal/api/rpc.go:25:43: api.Server.handleChainCapabilities calls chi.URLParam
+      #16: internal/method/chstore.go:266:25: method.ClickHouseStore.RewriteTransactions calls clickhouse.batch.Append, which eventually calls chi.contextKey.String
+      #17: internal/api/actions.go:22:2: api.init calls chi.init
+      #18: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls chi.methodNotAllowedHandler
+      #19: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Len
+      #20: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Less
+      #21: internal/observability/http_metrics.go:224:52: observability.InflightValue calls prometheus.Registry.Gather, which eventually calls chi.nodes.Swap
+      #22: internal/api/server.go:527:42: api.logMiddleware calls middleware.NewWrapResponseWriter
+      #23: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle, which eventually calls middleware.Recoverer
+      #24: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.Recoverer
+      #25: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.Timeout
+      #26: internal/api/server.go:272:10: api.Server.buildRouter calls chi.Mux.Handle, which eventually calls middleware.Timeout
+      #27: internal/api/server.go:264:26: api.Server.buildRouter calls middleware.Timeout
+      #28: internal/api/server.go:540:24: api.logMiddleware calls middleware.basicWriter.Status
+      #29: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.basicWriter.Unwrap
+      #30: internal/api/bootstrap.go:211:34: api.statusRecorder.Write calls middleware.basicWriter.Write
+      #31: internal/api/actions.go:349:30: api.actionStatusWriter.WriteHeader calls middleware.basicWriter.WriteHeader
+      #32: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.compressResponseWriter.Flush
+      #33: cmd/worker/main.go:117:32: worker.main calls http.Server.Serve, which eventually calls middleware.compressResponseWriter.Unwrap
+      #34: internal/api/bootstrap.go:211:34: api.statusRecorder.Write calls middleware.compressResponseWriter.Write
+      #35: internal/api/actions.go:349:30: api.actionStatusWriter.WriteHeader calls middleware.compressResponseWriter.WriteHeader
+      #36: internal/method/chstore.go:266:25: method.ClickHouseStore.RewriteTransactions calls clickhouse.batch.Append, which eventually calls middleware.contextKey.String
+      #37: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.flushHijackWriter.Flush
+      #38: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.flushWriter.Flush
+      #39: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.http2FancyWriter.Flush
+      #40: internal/api/bootstrap.go:219:10: api.statusRecorder.Flush calls middleware.httpFancyWriter.Flush
+      #41: internal/report/service.go:137:19: report.Service.Verify calls io.Copy, which eventually calls middleware.httpFancyWriter.ReadFrom
+      #42: internal/api/server.go:15:2: api.init calls middleware.init
+
+Your code is affected by 3 vulnerabilities from 3 modules.
+This scan also found 5 vulnerabilities in packages you import and 4
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+Use '-show verbose' for more details.

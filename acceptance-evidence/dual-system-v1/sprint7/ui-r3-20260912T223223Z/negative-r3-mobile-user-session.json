@@ -1,0 +1,49 @@
+{
+  "captured_at": "2026-09-12T22:37:05.528Z",
+  "project": "",
+  "case": "user-audience session -> V1 admin page",
+  "service_denials": [
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "59ec2670-af21-4b1e-b1c3-0026871feab3",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:37:03.278Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"missing_permission\"}}}\n"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "d224ef62-9cd4-4e53-addd-72a895db385a",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:37:03.279Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:routing:read\",\"reason\":\"missing_permission\"}}}\n"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "request_id": "cd561e81-2e8c-4896-a7b7-6f74d7378691",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:37:04.354Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"missing_permission\"}}}\n"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "request_id": "794dcb4b-8bed-4e97-a4a5-11e4489f454d",
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:37:04.355Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:routing:read\",\"reason\":\"missing_permission\"}}}\n"
+    }
+  ],
+  "all_admin_calls": [
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all"
+    },
+    {
+      "status": 403,
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states"
+    }
+  ]
+}

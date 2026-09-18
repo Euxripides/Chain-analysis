@@ -1,0 +1,806 @@
+{
+  "config": {
+    "argv": [
+      "/home/euripides/.nvm/versions/node/v24.20.0/bin/node",
+      "/home/euripides/projects/blockchain-platform/frontend/node_modules/@playwright/test/cli.js",
+      "test",
+      "tests/r9-uc-download-import-v4.spec.ts",
+      "--config",
+      "playwright.r9v4.config.ts",
+      "--project=uc-desktop",
+      "--project=uc-mobile",
+      "--reporter=list",
+      "--reporter=json"
+    ],
+    "configFile": "/home/euripides/projects/blockchain-platform/frontend/playwright.r9v4.config.ts",
+    "rootDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "uc-desktop",
+        "name": "uc-desktop",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/r9-uc-download-import-v4\\.spec\\.ts/"
+        ],
+        "timeout": 180000
+      },
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "uc-mobile",
+        "name": "uc-mobile",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/r9-uc-download-import-v4\\.spec\\.ts/"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "r9-uc-download-import-v4.spec.ts",
+      "file": "r9-uc-download-import-v4.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "R9 U-DL-01 CSV/XLSX import (app-v2)",
+          "file": "r9-uc-download-import-v4.spec.ts",
+          "line": 116,
+          "column": 6,
+          "specs": [
+            {
+              "title": "R9-01 最小 .xlsx 导入：浏览器摘要 → 服务端再次验证 → 未解析案件/标签被移除 → 真实创建",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5623,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:34:58.489Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-77e0712f13861234f5b0",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 117,
+              "column": 3
+            },
+            {
+              "title": "R9-02 坏文件：解析失败必须走 Dialog，且不得发出任何校验/创建请求",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1875,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:04.822Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-222e0a3f136b7e9e5a08",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 188,
+              "column": 3
+            },
+            {
+              "title": "R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 5511,
+                      "error": {
+                        "message": "Error: locator.click: Error: strict mode violation: getByRole('button', { name: '取消' }) resolved to 2 elements:\n    1) <button class=\"btn\" type=\"button\">取消</button> aka locator('#main-content').getByRole('button', { name: '取消' })\n    2) <button class=\"btn\" type=\"button\">取消</button> aka getByLabel('服务端地址校验结果').getByRole('button', { name: '取消' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '取消' })\u001b[22m\n",
+                        "stack": "Error: locator.click: Error: strict mode violation: getByRole('button', { name: '取消' }) resolved to 2 elements:\n    1) <button class=\"btn\" type=\"button\">取消</button> aka locator('#main-content').getByRole('button', { name: '取消' })\n    2) <button class=\"btn\" type=\"button\">取消</button> aka getByLabel('服务端地址校验结果').getByRole('button', { name: '取消' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '取消' })\u001b[22m\n\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts:254:52",
+                        "location": {
+                          "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                          "column": 52,
+                          "line": 254
+                        },
+                        "snippet": "  252 |     expect(directSummary.accepted, \"服务端直连也必须只接受 100 条\").toBe(100);\n  253 |     expect(directSummary.cap_rejected, \"服务端必须显式拒绝其余 50 条\").toBe(50);\n> 254 |     await page.getByRole(\"button\", { name: \"取消\" }).click();\n      |                                                    ^\n  255 |     await expect(serverDialog).toBeHidden();\n  256 |     expect(net.filter((r) => r.url.includes(\"/api/v2/downloads/preview\")).length, \"取消后不得预览\").toBe(0);\n  257 |   });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "column": 52,
+                            "line": 254
+                          },
+                          "message": "Error: locator.click: Error: strict mode violation: getByRole('button', { name: '取消' }) resolved to 2 elements:\n    1) <button class=\"btn\" type=\"button\">取消</button> aka locator('#main-content').getByRole('button', { name: '取消' })\n    2) <button class=\"btn\" type=\"button\">取消</button> aka getByLabel('服务端地址校验结果').getByRole('button', { name: '取消' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '取消' })\u001b[22m\n\n\n  252 |     expect(directSummary.accepted, \"服务端直连也必须只接受 100 条\").toBe(100);\n  253 |     expect(directSummary.cap_rejected, \"服务端必须显式拒绝其余 50 条\").toBe(50);\n> 254 |     await page.getByRole(\"button\", { name: \"取消\" }).click();\n      |                                                    ^\n  255 |     await expect(serverDialog).toBeHidden();\n  256 |     expect(net.filter((r) => r.url.includes(\"/api/v2/downloads/preview\")).length, \"取消后不得预览\").toBe(0);\n  257 |   });\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts:254:52"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:06.724Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-f0b65-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-f0b65-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-f0b65-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "column": 52,
+                        "line": 254
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-026006871888d3f3b510",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 211,
+              "column": 3
+            },
+            {
+              "title": "R9-04 混合文件：合法/非法/重复 → 服务端判定与最终 payload 只含 accepted",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7297,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:13.648Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-92b25f19b419c4835902",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 259,
+              "column": 3
+            },
+            {
+              "title": "R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3622,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:22.707Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-bd4af31ee2d97c605a1e",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 296,
+              "column": 3
+            },
+            {
+              "title": "R9-07 格式防线：改名文件与压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 7643,
+                      "error": {
+                        "message": "Error: bomb-size.xlsx 的拒绝原因必须点名真实格式问题\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"超过上限\"\u001b[39m\nReceived string:    \u001b[31m\"错误\u001b[39m\n\u001b[31m文件解析失败\u001b[39m\n\u001b[31m无法读取 bomb-size.xlsx：不是合法的 OOXML 工作簿：缺少 [Content_Types].xml\u001b[39m\n\u001b[31m知道了\"\u001b[39m",
+                        "stack": "Error: bomb-size.xlsx 的拒绝原因必须点名真实格式问题\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"超过上限\"\u001b[39m\nReceived string:    \u001b[31m\"错误\u001b[39m\n\u001b[31m文件解析失败\u001b[39m\n\u001b[31m无法读取 bomb-size.xlsx：不是合法的 OOXML 工作簿：缺少 [Content_Types].xml\u001b[39m\n\u001b[31m知道了\"\u001b[39m\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts:346:52",
+                        "location": {
+                          "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                          "column": 52,
+                          "line": 346
+                        },
+                        "snippet": "  344 |         createCalls: net.filter((r) => r.url.includes(\"/api/v2/downloads\")).length,\n  345 |       });\n> 346 |       expect(text, item.file + \" 的拒绝原因必须点名真实格式问题\").toContain(item.expectReason);\n      |                                                    ^\n  347 |       expect(text).toContain(item.file);\n  348 |       expect(observed[observed.length - 1].validateCalls, item.file + \" 不得触发服务端校验\").toBe(0);\n  349 |       expect(observed[observed.length - 1].createCalls, item.file + \" 不得触发创建\").toBe(0);"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "column": 52,
+                            "line": 346
+                          },
+                          "message": "Error: bomb-size.xlsx 的拒绝原因必须点名真实格式问题\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"超过上限\"\u001b[39m\nReceived string:    \u001b[31m\"错误\u001b[39m\n\u001b[31m文件解析失败\u001b[39m\n\u001b[31m无法读取 bomb-size.xlsx：不是合法的 OOXML 工作簿：缺少 [Content_Types].xml\u001b[39m\n\u001b[31m知道了\"\u001b[39m\n\n  344 |         createCalls: net.filter((r) => r.url.includes(\"/api/v2/downloads\")).length,\n  345 |       });\n> 346 |       expect(text, item.file + \" 的拒绝原因必须点名真实格式问题\").toContain(item.expectReason);\n      |                                                    ^\n  347 |       expect(text).toContain(item.file);\n  348 |       expect(observed[observed.length - 1].validateCalls, item.file + \" 不得触发服务端校验\").toBe(0);\n  349 |       expect(observed[observed.length - 1].createCalls, item.file + \" 不得触发创建\").toBe(0);\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts:346:52"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:26.364Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-1c403-压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求-uc-desktop/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-1c403-压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求-uc-desktop/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260913T023455Z/test-results/r9-uc-download-import-v4-R-1c403-压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求-uc-desktop/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "column": 52,
+                        "line": 346
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-c57016187ee4e341cf43",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 320,
+              "column": 3
+            },
+            {
+              "title": "R9-06 手机断点：导入 Dialog 在 390x844 可读且无横向溢出",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "mobile-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 356,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 995,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:35.274Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "mobile-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 356,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-bd8d5099b70df7fc5e7f",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 354,
+              "column": 3
+            },
+            {
+              "title": "R9-01 最小 .xlsx 导入：浏览器摘要 → 服务端再次验证 → 未解析案件/标签被移除 → 真实创建",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 119,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 663,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:39.636Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 119,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-ee40ff5f4016309a4e6d",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 117,
+              "column": 3
+            },
+            {
+              "title": "R9-02 坏文件：解析失败必须走 Dialog，且不得发出任何校验/创建请求",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 190,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 391,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:41.566Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 190,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-cc9925ca8d5eca3ee7ec",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 188,
+              "column": 3
+            },
+            {
+              "title": "R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 213,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 289,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:42.007Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 213,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-d06de12db0d08986c7a7",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 211,
+              "column": 3
+            },
+            {
+              "title": "R9-04 混合文件：合法/非法/重复 → 服务端判定与最终 payload 只含 accepted",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 261,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 274,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:42.331Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 261,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-9695550178381d059494",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 259,
+              "column": 3
+            },
+            {
+              "title": "R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 298,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 479,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:42.635Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 298,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-f0d5e12e9e526e2c2886",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 296,
+              "column": 3
+            },
+            {
+              "title": "R9-07 格式防线：改名文件与压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "description": "desktop-only assertion set",
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                        "line": 322,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 549,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:43.155Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "description": "desktop-only assertion set",
+                          "location": {
+                            "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v4.spec.ts",
+                            "line": 322,
+                            "column": 10
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-1b2f2aa8b4f1930efa73",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 320,
+              "column": 3
+            },
+            {
+              "title": "R9-06 手机断点：导入 Dialog 在 390x844 可读且无横向溢出",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-mobile",
+                  "projectName": "uc-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5877,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-13T02:35:43.798Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d27977f44f625d92cc25-15ff3883a70e6d975cc5",
+              "file": "r9-uc-download-import-v4.spec.ts",
+              "line": 354,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-13T02:34:57.776Z",
+    "duration": 52892.528,
+    "expected": 5,
+    "skipped": 7,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

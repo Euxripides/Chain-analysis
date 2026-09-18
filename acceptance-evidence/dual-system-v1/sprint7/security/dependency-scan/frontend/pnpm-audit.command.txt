@@ -1,0 +1,4 @@
+CMD: cd /home/euripides/projects/blockchain-platform/frontend && CI=true pnpm audit --json
+started_at: 2026-09-12T23:37:18+07:00
+exit_code: 1
+finished_at: 2026-09-12T23:37:21+07:00

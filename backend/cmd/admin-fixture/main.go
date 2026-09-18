@@ -3,10 +3,10 @@
 // 跨租户负向测试无法在单组织部署上执行：需要第二个组织、第二个工作区，
 // 以及不同角色的账号。本工具生成这套最小夹具，并且：
 //
-//   * 拒绝在 APP_ENV=production 下运行；
-//   * 密码取一次性随机值并打印到标准输出，不写死默认口令；
-//   * 生成的账号一律 must_change_password=true；
-//   * 全过程写入 login 链（auth.fixture.created），保证夹具本身也可追溯。
+//   - 拒绝在 APP_ENV=production 下运行；
+//   - 密码取一次性随机值并打印到标准输出，不写死默认口令；
+//   - 生成的账号一律 must_change_password=true；
+//   - 全过程写入 login 链（auth.fixture.created），保证夹具本身也可追溯。
 //
 // 用法：
 //
@@ -51,7 +51,15 @@ func main() {
 		os.Exit(2)
 	}
 
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	// 夹具需要 DDL/所有权权限：优先使用迁移账号。
+	// S7 的应用账号降权（ADR-017）之后 blockchain_api 对 organizations/identities
+	// 等表没有权限，继续用 cfg.DatabaseURL 会让本工具以
+	// "permission denied for table organizations" 直接失败。
+	dsn := cfg.MigrationDatabaseURL
+	if dsn == "" {
+		dsn = cfg.DatabaseURL
+	}
+	st, err := store.New(ctx, dsn)
 	if err != nil {
 		log.Error("postgres connect failed", "err", err)
 		os.Exit(1)

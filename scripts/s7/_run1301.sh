@@ -1,0 +1,1 @@
+echo "=== s7qa progress ==="; tail -20 /tmp/s7qa.out; echo "=== summary.txt ==="; cat /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/tests/sprint7/qa/summary.txt 2>/dev/null; echo "=== running? ==="; pgrep -af 'run-sprint7-qa|run-sprint' | head -5

@@ -1,0 +1,11 @@
+== has_table_privilege ==
+UPDATE=false DELETE=false TRUNCATE=false INSERT=true
+== 实际尝试（SET ROLE blockchain_app） ==
+STMT|UPDATE audit_events_v2 SET action='tamper' WHERE seq=1|RESULT|ERROR:  permission denied for table audit_events_v2 SET 
+STMT|DELETE FROM audit_events_v2 WHERE seq=1|RESULT|ERROR:  permission denied for table audit_events_v2 SET 
+STMT|TRUNCATE audit_events_v2|RESULT|ERROR:  permission denied for table audit_events_v2 SET 
+STMT|UPDATE audit_chain_anchors SET chain='x'|RESULT|ERROR:  permission denied for table audit_chain_anchors SET 
+STMT|DELETE FROM audit_chain_anchors|RESULT|SET ERROR:  permission denied for table audit_chain_anchors 
+STMT|CREATE TABLE s7_sec_probe_tbl(id int)|RESULT|SET ERROR:  permission denied for schema public 
+STMT|ALTER TABLE audit_events_v2 ADD COLUMN s7_probe int|RESULT|SET ERROR:  must be owner of table audit_events_v2 
+STMT|DROP TABLE audit_chain_anchors|RESULT|SET ERROR:  must be owner of table audit_chain_anchors 

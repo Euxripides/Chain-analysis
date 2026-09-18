@@ -1,0 +1,13 @@
+HTTP/1.1 429 Too Many Requests
+Server: nginx/1.24.0 (Ubuntu)
+Date: Sat, 12 Sep 2026 17:07:37 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 367
+Connection: keep-alive
+Access-Control-Allow-Headers: Content-Type, Authorization, X-User-Id, X-User-Email, X-Org-Id, X-User-Role
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Origin: *
+Retry-After: 59
+X-Request-Id: 295b9335-9eaf-4f15-84d2-5c2a02ecab66
+X-Trace-Id: 35a42fd7-3882-4e0e-95d4-b48ed0af33eb
+

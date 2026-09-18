@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
+import { useScopedQuery as useQuery } from '../lib/sessionScope'
 import { Check, ChevronLeft, Copy, Download, FileJson, MapPin, MoreHorizontal, Pause, Play, RefreshCw, Search } from 'lucide-react'
 import { api } from '../api/client'
 import CopyToast from '../components/CopyToast'
@@ -12,6 +13,8 @@ import { copyText } from '../utils/clipboard'
 import { datasetLabel } from '../utils/field-labels'
 
 type DetailTab = 'overview' | 'addresses' | 'shards' | 'logs' | 'exports'
+// 可"继续"的暂停态：包含暂停收敛中的 PAUSE_REQUESTED（服务端已允许恢复）。
+const RESUMABLE_STATUSES = new Set(['PAUSED', 'PAUSE_REQUESTED', 'PAUSED_FALLBACK_TOO_EXPENSIVE'])
 const tabs: Array<[DetailTab, string]> = [['overview', '概览'], ['addresses', '地址进度'], ['shards', 'Shards'], ['logs', '日志'], ['exports', '导出']]
 
 function phaseState(index: number, progress: number, status: string) {
@@ -124,7 +127,7 @@ export default function JobDetailPage() {
       <div className="route-actions">
         {query.data.guards?.some((guard) => guard.state === 'WAITING_USER_CONFIRMATION') && <button className="secondary-button danger-text" onClick={() => setDismissedGuard('')}>处理高活跃地址</button>}
         {job.status === 'RUNNING' && <button className="secondary-button" onClick={() => act('pause')}><Pause size={15} />暂停任务</button>}
-        {job.status === 'PAUSED' && <button className="secondary-button" onClick={() => act('resume')}><Play size={15} />继续任务</button>}
+        {RESUMABLE_STATUSES.has(job.status) && <button className="secondary-button" onClick={() => act('resume')}><Play size={15} />继续任务</button>}
         <button className="primary-button" disabled={!!exporting || job.datasets.length === 0} onClick={() => doExport(job.datasets[0], 'csv')}><Download size={15} />导出全部</button>
         <button className="icon-button" aria-label="更多任务操作"><MoreHorizontal size={18} /></button>
       </div>

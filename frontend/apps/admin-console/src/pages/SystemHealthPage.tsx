@@ -102,8 +102,8 @@ export default function SystemHealthPage() {
         items={[
           { label: "会话 ID", value: session?.session_id ?? "—" },
           { label: "受众", value: session?.audience ?? "—" },
-          { label: "角色", value: session?.roles.join(", ") || "—" },
-          { label: "权限数", value: String(session?.permissions.length ?? 0) },
+          { label: "角色", value: (session?.roles ?? []).join(", ") || "—" },
+          { label: "权限数", value: String((session?.permissions ?? []).length) },
           { label: "组织", value: session?.organization_id ?? "—" },
           { label: "工作区", value: session?.workspace_id ?? "—" },
           { label: "会话到期", value: session ? new Date(session.expires_at).toLocaleString("zh-CN") : "—" },

@@ -1,0 +1,130 @@
+{
+  "drill": "pitr",
+  "ts": "20260912T222045Z",
+  "verdict": "PASS",
+  "verdict_note": "PASS 需要：真实 basebackup + pg_verifybackup；基于 T_fail 时刻 pg_stat_archiver 已确认完成的连续归档段的冻结集；独立 clone 恢复；恢复日志 + 目标前后业务标记（request_id 唯一绑定）共同证明到达目标；**实测 durability RPO**（T_fail − T_durable，由对冻结集的实际恢复得出）；RTO（T_fail→业务验证完成）；WAL 无缺段；缺段真实负向成立。任一维度未闭合只能是 PARTIAL。",
+  "unclosed_reasons": [],
+  "archive_mode": "on",
+  "wal_level": "replica",
+  "pg_version": "18.6 (Debian 18.6-1.pgdg13+2)",
+  "archive_timeout_setting": "60",
+  "archive_timeout_unit": "s",
+  "archive_timeout_seconds": 60,
+  "reached_target": true,
+  "target_time": "2026-09-12 22:21:00.891516",
+  "timeline_restored": "2",
+  "replay_precision_seconds": 0.274,
+  "replay_precision_note": "**不是 RPO**：目标时刻与恢复库最后重放事务时刻之差",
+  "rpo_seconds": 51,
+  "rpo_marker_seconds": 51,
+  "rpo_last_replay_seconds": 51,
+  "rpo_samples_seconds": [
+    12.308,
+    51.637
+  ],
+  "rpo_status": "MEASURED",
+  "rpo_method": "T_fail（模拟故障时刻）− T_durable；T_durable 取二者保守值：(a) 对 T_fail 冻结归档集实际恢复后库中最新**可见且 hash 一致**的业务标记 occurred_at（事件时间，早于提交时间 → RPO 保守偏大）；(b) 恢复库 pg_last_xact_replay_timestamp()（WAL 回放到的最后一次事务提交时间，真实 commit 时间）。两者均不得为负且 <=900s。",
+  "rpo_time_sources": {
+    "t_fail": "生产库 now()（与 pg_stat_archiver.last_archived_wal 截止边界同一次读取）",
+    "t_durable_marker": "audit_events_v2.occurred_at（应用写入的事件时间；早于提交时刻 → RPO 保守偏大）",
+    "t_durable_commit": "pg_last_xact_replay_timestamp()（WAL 回放到的最后一次事务提交时间）",
+    "clock": "同一台主机、同一 PG 实例时钟，无跨机偏移"
+  },
+  "rpo_limit_seconds": 900,
+  "rpo_rounds": {
+    "rpo1": {
+      "t_fail": "2026-09-12 22:21:16.510578",
+      "t_fail_epoch": 1789251676.510578,
+      "cutoff_last_archived_wal": "00000001000000030000004A",
+      "window_age_s": "12",
+      "segments": "3",
+      "frozen_verify": "OK",
+      "listing_taken_at": "2026-09-12T22:21:16Z",
+      "rpo_marker_seconds": 12.308,
+      "rpo_last_replay_seconds": 11.846,
+      "t_durable_occurred_at": "2026-09-12 22:21:04.202987",
+      "last_replay_commit_ts": "2026-09-12 22:21:04.664397",
+      "restored_container": "pitr-rpo1-20260912T222045Z"
+    },
+    "rpo2": {
+      "t_fail": "2026-09-12 22:21:55.840374",
+      "t_fail_epoch": 1789251715.840374,
+      "cutoff_last_archived_wal": "00000001000000030000004A",
+      "window_age_s": "51",
+      "segments": "3",
+      "frozen_verify": "OK",
+      "listing_taken_at": "2026-09-12T22:21:55Z",
+      "rpo_marker_seconds": 51.637,
+      "rpo_last_replay_seconds": 51.176,
+      "t_durable_occurred_at": "2026-09-12 22:21:04.202987",
+      "last_replay_commit_ts": "2026-09-12 22:21:04.664397",
+      "restored_container": "pitr-rpo2-20260912T222045Z"
+    }
+  },
+  "rto_seconds": 11,
+  "rto_status": "MEASURED",
+  "rto_ready": true,
+  "elapsed_attempt_seconds": 11,
+  "rto_method": "T_fail（灾难时刻）→ base clone + 恢复实例启动 + WAL 重放 + 就绪业务验证完成；仅当 target 到达且业务验证通过才计为有效 RTO",
+  "rto_breakdown_seconds": {
+    "clone": 2,
+    "recovery": 2
+  },
+  "rto_limit_seconds": 14400,
+  "base_backup_dir": "/data/blockchain-platform/postgres/pitr-base-20260912T222045Z",
+  "basebackup_seconds": 6,
+  "pgdata_size": "3.0G",
+  "db_size": "864 MB",
+  "path_facts": "UNKNOWN:UNKNOWN 755 /var/lib/postgresql;postgres:root 700 /var/lib/postgresql/18/docker;postgres:postgres 700 /var/lib/postgresql/wal-archive;",
+  "base_manifest_start_lsn": "3/48000028",
+  "base_manifest_end_lsn": "3/48012A28",
+  "wal_continuity": {
+    "checked": 3,
+    "missing": 0,
+    "range_start": "000000010000000300000048",
+    "boundary_last": "00000001000000030000004A",
+    "range_start_in_base_pgwal": "yes"
+  },
+  "markers": {
+    "before": {
+      "seq": "50947",
+      "occurred_at": "2026-09-12 22:20:56.161797",
+      "hash": "5d6ddf62ec3e4aa0b7400f357da6c553d93503f7efb9a342539e0d22a25dd2c1",
+      "request_id": "pitr-20260912T222045Z-before"
+    },
+    "filler": {
+      "seq": "50948",
+      "occurred_at": "2026-09-12 22:21:04.000821",
+      "request_id": "pitr-20260912T222045Z-filler"
+    },
+    "after": {
+      "seq": "50949",
+      "occurred_at": "2026-09-12 22:21:04.202987",
+      "hash": "551c67137d09170a0eb89800f0f488d756ea0551c2a9b422affa1e86d602381a",
+      "request_id": "pitr-20260912T222045Z-after"
+    },
+    "restored": "filler_present=0 after_present=0 max=50947 count=48604",
+    "order_ok": "True"
+  },
+  "negative_missing_segment": {
+    "ok": true,
+    "segment": "000000010000000300000049",
+    "container": "pitr-neg-20260912T222045Z",
+    "log_evidence": "cp: cannot stat '/frozen/00000002.history': No such file or directory",
+    "target_stop_seen": "0",
+    "prod_archive_sha_unchanged": true
+  },
+  "prod_archive_untouched": true,
+  "prod_moved_dir": "no",
+  "biz_verify": {
+    "ok": true,
+    "auditverify_rc": 0,
+    "prod_migrations": "57"
+  },
+  "script_sha256": "38f935dc8e3710c8022f8a29c8442b25824c2658d000a69798b809909572235d",
+  "failures_count": 0,
+  "not_verified_count": 0,
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T222045Z.logs",
+  "report": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T222045Z.md",
+  "cleanup": "所有容器/基础备份/克隆/冻结副本与证据一律保留，不自动清理"
+}

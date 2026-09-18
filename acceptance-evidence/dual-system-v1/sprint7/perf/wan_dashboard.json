@@ -1,0 +1,28 @@
+{
+  "label": "wan_dashboard",
+  "url": "https://aurore.online/api/v2/dashboard",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.001133896,
+  "requests": 206,
+  "rps": 10.299416076665418,
+  "errors": 206,
+  "status_counts": {
+    "401": 198
+  },
+  "p50_ms": 640.830708,
+  "p90_ms": 1187.10095,
+  "p95_ms": 1236.6430340000002,
+  "p99_ms": 1453.423916,
+  "min_ms": 59.191824,
+  "max_ms": 1934.40271,
+  "avg_ms": 768.7371905291265,
+  "avg_response_bytes": 216.2621359223301,
+  "error_samples": [
+    "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+    "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+    "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+    "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+    "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded"
+  ]
+}

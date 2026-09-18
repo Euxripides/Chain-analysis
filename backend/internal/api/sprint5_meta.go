@@ -58,8 +58,14 @@ func (s *Server) handleExplorerFlowProfile(w http.ResponseWriter, r *http.Reques
 		respondError(w, r, http.StatusNotImplemented, "NOT_IMPLEMENTED", "分析服务未启用", nil)
 		return
 	}
-	result, err := s.analysis.Analyze(r.Context(), sub.Chain, sub.Normalized)
+	// P1-1：资金流分析是 explorer 里最重的读（实测 9.88s），必须跑在交互预算内。
+	readCtx, cancelRead := explorerReadContext(r.Context())
+	defer cancelRead()
+	result, err := s.analysis.Analyze(readCtx, sub.Chain, sub.Normalized)
 	if err != nil {
+		if explorerScanRefusal(w, r, readCtx, err, "资金流分析") {
+			return
+		}
 		respondError(w, r, http.StatusBadRequest, "DATA_ANALYSIS_FAILED", "资金流分析失败", nil)
 		return
 	}

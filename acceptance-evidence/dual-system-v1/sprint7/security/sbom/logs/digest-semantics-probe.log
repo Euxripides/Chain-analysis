@@ -1,0 +1,23 @@
+=== TEST A: does the SPDX document carry the REAL file sha256 for the api package? ===
+real file sha256 (python, full read) = 6106d8e4b09ed881864c9bc9212b29a45b698dc78825dcf936d317b6ed890a10
+  pkg=github.com/ClickHouse/ch-go versionInfo=v0.65.1 checksums=[{"algorithm": "SHA256", "checksumValue": "48bbb198b9793238f8e3f5db20db0ad8716fceaba9d2ceabc0a2c51f7e3b6615"}]
+  pkg=github.com/ClickHouse/clickhouse-go/v2 versionInfo=v2.34.0 checksums=[{"algorithm": "SHA256", "checksumValue": "638aea91dad11e0131bc2e28fcd4db2dd6392c54372c74bbeff44d171157dc2a"}]
+  pkg=github.com/andybalholm/brotli versionInfo=v1.1.1 checksums=[{"algorithm": "SHA256", "checksumValue": "3d1da9827c85ce7284ba0b6c528d312dd0e8a7948a5dde507f9cac5beed77530"}]
+  pkg=github.com/beorn7/perks versionInfo=v1.0.1 checksums=[{"algorithm": "SHA256", "checksumValue": "5656ca2a735f57c6c9cdeaa86b870e2aa3ba6d8af75a0299c4ef19d7afa1b0e3"}]
+  pkg=github.com/cespare/xxhash/v2 versionInfo=v2.3.0 checksums=[{"algorithm": "SHA256", "checksumValue": "50bf35e7153d4aab059626f3ba08338d786883b6cbea85fd05b3599cbd9416fb"}]
+  pkg=github.com/dustin/go-humanize versionInfo=v1.0.1 checksums=[{"algorithm": "SHA256", "checksumValue": "1b392163b4f954d8449301f43d52608f3f9f5f5ae106b47ba514f79839297826"}]
+packages carrying checksums: 54
+SPDX_HAS_REAL_FILE_SHA=no
+
+=== TEST B: syft metadata.component.version for a NON-Go plain text file ===
+plain.txt sha256 = 97e13733e97d8615239a6fe42c9058bec1bec4e8b72dfc3c14caf5d100d99f23  bytes=23
+syft metadata.component = {"bom-ref": "32f852014c692315", "type": "file", "name": "plain.txt", "version": "sha256:97e13733e97d8615239a6fe42c9058bec1bec4e8b72dfc3c14caf5d100d99f23"}
+SYFT_FIELD_EQUALS_FILE_SHA=yes
+
+=== TEST C: is the CDX version field a hash of the Go build id string? ===
+cdx metadata.component.version = sha256:33440571c848795bc787d437d32ec07f6c3621f57d44adddd5be4f440dccf5ad
+current go build id (from file(1)) = C6YFod-YOEII9pOfIm_N/ic2Fq7DmIdu74vccv39x/TECrg4-id_71a3k9tTCA/e4Y2V9qnDxmxCp7Ceh2G
+  candidate buildid_raw = d7be61a9a8f84218ac339afa7181ca09647b12c29426641ed1ab87acac0101a9
+  candidate buildid_nl = 1bc6bbfe595afee8f7c1c0f5bd499acf3443971da3f7ae9cf44278cf5fad44e3
+  candidate buildid_actionid = 19f7b54830ea7e7332b8144ec7533d685d86631dedbd835082ef3dcb58e8404d
+  candidate buildid_contentid = fce5f66815d7a4b379698c8e893811876ede954822854db20f32993068980ab0

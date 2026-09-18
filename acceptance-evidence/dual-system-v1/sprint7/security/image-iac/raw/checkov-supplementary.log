@@ -1,0 +1,72 @@
+### SUPPLEMENTARY (non-trivy) compose misconfig scan - checkov
+timestamp_utc=2026-09-12T16:48:51Z
+RATIONALE: verified that trivy 0.74.0 config scanner has NO docker-compose support
+  evidence: raw/trivy-selftest-compose.log and raw/trivy-compose-coverage-probe.log
+  (compose.yaml + docker-compose.yaml NOT recognized; checks bundle namespaces = cloud,docker,kubernetes,test)
+  The repo has NO Dockerfile / k8s / terraform / helm / ansible -> trivy config yields 0 targets.
+  checkov is used ONLY to fill that gap; trivy remains the primary tool of record.
+
+--- pull bridgecrew/checkov:latest ---
+bf2b86b29845: Pull complete
+ac5e0885917e: Pull complete
+Digest: sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3
+Status: Downloaded newer image for bridgecrew/checkov:latest
+docker.io/bridgecrew/checkov:latest
+["bridgecrew/checkov@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3"]|sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3|2026-09-10T08:06:37.362480647Z
+CHECKOV_VERSION:
+3.3.17
+
+--- SELFTEST: does checkov detect the deliberately-bad compose? ---
+{
+    "check_type": "dockerfile",
+    "results": {
+        "passed_checks": [
+            {
+                "check_id": "CKV_DOCKER_5",
+                "bc_check_id": "BC_DKR_4",
+                "check_name": "Ensure update instructions are not use alone in the Dockerfile",
+                "check_result": {
+                    "result": "PASSED",
+                    "results_configuration": null
+                },
+                "code_block": [
+                    [
+                        1,
+                        "FROM ubuntu:latest\n"
+                    ],
+                    [
+                        2,
+                        "USER root\n"
+                    ],
+                    [
+                        3,
+                        "ENV API_KEY=supersecret123\n"
+                    ],
+                    [
+                        4,
+                        "RUN apt-get update && apt-get install -y curl\n"
+                    ],
+                    [
+                        5,
+                        "EXPOSE 22"
+                    ]
+                ],
+                "file_path": "/plain/Dockerfile",
+                "file_abs_path": "/t/plain/Dockerfile",
+                "repo_file_path": "/t/plain/Dockerfile",
+                "file_line_range": [
+                    1,
+                    5
+                ],
+                "resource": "/plain/Dockerfile.",
+                "evaluations": null,
+                "check_class": "checkov.dockerfile.checks.UpdateNotAlonwrite /dev/stdout: broken pipe
+
+--- REAL SCAN: deploy/ (compose.yaml + *.service + nginx conf) JSON ---
+CHECKOV_JSON_EXIT=0
+
+--- REAL SCAN: deploy/ table ---
+CHECKOV_CLI_EXIT=0
+
+--- also scan repo root (dockerfile/compose framework) ---
+CHECKOV_REPO_EXIT=0

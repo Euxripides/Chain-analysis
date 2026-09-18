@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrNotFound = errors.New("canvas not found")
@@ -68,9 +68,9 @@ type Snapshot struct {
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
-type Service struct{ pool *pgxpool.Pool }
+type Service struct{ pool *dbtx.Pool }
 
-func New(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func New(pool *dbtx.Pool) *Service { return &Service{pool: pool} }
 
 func (s *Service) Create(ctx context.Context, caseID string, req CreateRequest) (Canvas, error) {
 	req.Name = strings.TrimSpace(req.Name)

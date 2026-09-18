@@ -1,0 +1,626 @@
+package api
+
+// F-R10-BUCKET / ADR-019 单测：读写 helper 的语义必须有**可执行证明**，不能只靠说明。
+//
+// 覆盖根要求的四组判据：
+//   1) 首桶对象级缺失（NoSuchKey）→ 回退到 RAW 并读成功；
+//   2) 首桶桶级缺失（NoSuchBucket）→ fail closed，**不回退**；
+//   3) AccessDenied → fail closed，不回退；
+//   4) 两个桶都是对象级缺失 → errExportObjectMissing（DATA_OBJECT_MISSING 语义）。
+//
+// 另外覆盖：写桶选择、写后回读校验、审计字段用真实桶名、非法配置 fail closed、nil 存储不 panic。
+//
+// 桩服务器说明（与 minio-go v7.0.90 的真实行为对齐）：
+//   - 对象请求走 HTTP HEAD（StatObject / Object.Stat），缺失时**不发响应体**，
+//     库会按 objectName != "" 兜底编造 Code=NoSuchKey —— 这正是桶不存在也能伪装成对象缺失的根因；
+//   - 桶级请求 HEAD /{bucket} 缺失时同样无响应体，库兜底编造 Code=NoSuchBucket（BucketExists 依赖它）；
+//   - 每个桶的第一次请求前，库会先 GET /{bucket}?location=；
+//     strictLocation=true 时缺失桶返回 404 NoSuchBucket（真实 MinIO 行为），
+//     strictLocation=false 时一律 200 us-east-1（模拟对 location 宽松的 S3 兼容实现，
+//     此时桶不存在只能靠 BucketExists 兜住）。
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/minio/minio-go/v7"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/config"
+	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
+)
+
+const (
+	testRawBucket    = "blockchain-raw"
+	testExportBucket = "blockchain-exports"
+)
+
+type s3Stub struct {
+	objects       map[string]map[string]string
+	denied        map[string]bool
+	strictLoctn   bool
+	requestCounts map[string]int
+	requests      []string
+	server        *httptest.Server
+}
+
+func newS3Stub(t *testing.T) *s3Stub {
+	t.Helper()
+	stub := &s3Stub{
+		objects:       map[string]map[string]string{testRawBucket: {}, testExportBucket: {}},
+		denied:        map[string]bool{},
+		strictLoctn:   true,
+		requestCounts: map[string]int{},
+	}
+	_ = stub.requests
+	stub.server = httptest.NewServer(http.HandlerFunc(stub.handle))
+	t.Cleanup(stub.server.Close)
+	return stub
+}
+
+func (s *s3Stub) bucketExists(bucket string) bool {
+	_, ok := s.objects[bucket]
+	return ok
+}
+
+func (s *s3Stub) writeS3Error(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(status)
+	_, _ = io.WriteString(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>"+code+
+		"</Code><Message>"+code+"</Message></Error>")
+}
+
+func (s *s3Stub) handle(w http.ResponseWriter, r *http.Request) {
+	s.requestCounts[r.Method+" "+strings.SplitN(strings.TrimPrefix(r.URL.Path, "/"), "/", 2)[0]]++
+	s.requests = append(s.requests, r.Method+" "+r.URL.RequestURI()+" range="+r.Header.Get("Range"))
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	parts := strings.SplitN(path, "/", 2)
+	bucket := parts[0]
+	key := ""
+	if len(parts) > 1 {
+		key = parts[1]
+	}
+	switch {
+	case key == "" && r.Method == http.MethodGet:
+		// getBucketLocation
+		if s.denied[bucket] {
+			// 真实行为：库对 AccessDenied 的 location 响应是容忍的（回落 us-east-1）。
+			s.writeS3Error(w, http.StatusForbidden, "AccessDenied")
+			return
+		}
+		if s.strictLoctn && !s.bucketExists(bucket) {
+			s.writeS3Error(w, http.StatusNotFound, "NoSuchBucket")
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"+
+			"<LocationConstraint xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">us-east-1</LocationConstraint>")
+	case key == "" && r.Method == http.MethodHead:
+		// BucketExists：HEAD /{bucket}
+		if s.denied[bucket] {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if !s.bucketExists(bucket) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	case key != "" && r.Method == http.MethodPut:
+		if s.denied[bucket] {
+			s.writeS3Error(w, http.StatusForbidden, "AccessDenied")
+			return
+		}
+		if !s.bucketExists(bucket) {
+			s.writeS3Error(w, http.StatusNotFound, "NoSuchBucket")
+			return
+		}
+		payload, _ := io.ReadAll(r.Body)
+		// minio-go 默认用 STREAMING-AWS4-HMAC-SHA256-PAYLOAD（aws-chunked 分帧）上传，
+		// 线上字节数 != 对象字节数，桩必须还原真实对象内容（实测 5 字节对象 Content-Length=177）。
+		if strings.HasPrefix(r.Header.Get("X-Amz-Content-Sha256"), "STREAMING-") ||
+			strings.Contains(r.Header.Get("Content-Encoding"), "aws-chunked") {
+			decoded, ok := decodeAWSChunked(payload)
+			if !ok {
+				s.writeS3Error(w, http.StatusBadRequest, "InvalidRequest")
+				return
+			}
+			if want := r.Header.Get("X-Amz-Decoded-Content-Length"); want != "" {
+				if n, err := strconv.ParseInt(want, 10, 64); err != nil || n != int64(len(decoded)) {
+					s.writeS3Error(w, http.StatusBadRequest, "IncompleteBody")
+					return
+				}
+			}
+			payload = decoded
+		}
+		s.objects[bucket][key] = string(payload)
+		w.Header().Set("ETag", "\"stub-etag\"")
+		w.WriteHeader(http.StatusOK)
+	case key != "":
+		if s.denied[bucket] {
+			s.writeS3Error(w, http.StatusForbidden, "AccessDenied")
+			return
+		}
+		body, ok := s.objects[bucket][key]
+		if !ok {
+			// 与真实 MinIO/库兜底一致：无响应体，Code 由库按对象/桶上下文编造。
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if rng := r.Header.Get("Range"); rng != "" && r.Method == http.MethodGet {
+			start, end, ok := parseStubRange(rng, int64(len(body)))
+			if !ok {
+				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			slice := body[start : end+1]
+			w.Header().Set("Content-Range", "bytes "+strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(end, 10)+"/"+strconv.Itoa(len(body)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(slice)))
+			// minio-go 的 getObject 会用响应头构造 ObjectInfo，缺 Last-Modified 会直接报错。
+			w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+			w.Header().Set("ETag", "\"stub-etag\"")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = io.WriteString(w, slice)
+			return
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+		w.Header().Set("ETag", "\"stub-etag\"")
+		w.WriteHeader(http.StatusOK)
+		if r.Method != http.MethodHead {
+			_, _ = io.WriteString(w, body)
+		}
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+// decodeAWSChunked 还原 aws-chunked 编码体，格式为：
+// 十六进制块长度[;chunk-signature=64位十六进制]，随后 CRLF、负载、CRLF；
+// 以长度 0 的块结束（其后可能有 trailer 头）。
+// 这里用 strings 常量拼接 CRLF，避免文档注释里出现被解释的转义序列。
+func decodeAWSChunked(body []byte) ([]byte, bool) {
+	out := make([]byte, 0, len(body))
+	rest := body
+	for {
+		idx := bytes.Index(rest, []byte("\r\n"))
+		if idx < 0 {
+			return nil, false
+		}
+		header := string(rest[:idx])
+		rest = rest[idx+2:]
+		if semi := strings.IndexByte(header, ';'); semi >= 0 {
+			header = header[:semi]
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(header), 16, 64)
+		if err != nil || n < 0 {
+			return nil, false
+		}
+		if n == 0 {
+			return out, true
+		}
+		if int64(len(rest)) < n+2 {
+			return nil, false
+		}
+		out = append(out, rest[:n]...)
+		rest = rest[n+2:]
+	}
+}
+
+func parseStubRange(spec string, size int64) (int64, int64, bool) {
+	if !strings.HasPrefix(spec, "bytes=") {
+		return 0, 0, false
+	}
+	parts := strings.SplitN(strings.TrimPrefix(spec, "bytes="), "-", 2)
+	start, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil || start < 0 || start >= size {
+		return 0, 0, false
+	}
+	end := size - 1
+	if len(parts) > 1 && strings.TrimSpace(parts[1]) != "" {
+		parsed, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		end = parsed
+	}
+	if end >= size {
+		end = size - 1
+	}
+	if end < start {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+func newTestServer(t *testing.T, stub *s3Stub, mutate func(*config.Config)) *Server {
+	t.Helper()
+	endpoint := strings.TrimPrefix(stub.server.URL, "http://")
+	store, err := rawstore.New(context.Background(), endpoint, "test-access", "test-secret", false, testRawBucket)
+	if err != nil {
+		t.Fatalf("rawstore.New: %v", err)
+	}
+	cfg := &config.Config{
+		RawBucket:         testRawBucket,
+		ExportBucket:      testExportBucket,
+		ExportWriteBucket: "raw",
+		ExportReadOrder:   "export,raw",
+	}
+	if mutate != nil {
+		mutate(cfg)
+	}
+	return &Server{deps: Deps{
+		Cfg: cfg,
+		Raw: store,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}}
+}
+
+func TestOpenExportObjectFallsBackWhenExportHasNoSuchKey(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	r, size, loc, err := s.openExportObject(context.Background(), "exports/a.csv")
+	if err != nil {
+		t.Fatalf("expected raw fallback to succeed, got %v", err)
+	}
+	defer r.Close()
+	body, _ := io.ReadAll(r)
+	if string(body) != "raw-body" || size != int64(len("raw-body")) {
+		t.Fatalf("unexpected body/size: %q %d", body, size)
+	}
+	if loc.Bucket != exportBucketRaw || loc.Name != testRawBucket {
+		t.Fatalf("unexpected location: %+v", loc)
+	}
+	if isExportObjectMissing(err) {
+		t.Fatal("raw fallback must not be reported as missing")
+	}
+}
+
+func TestOpenExportObjectPrefersExportBucket(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	stub.objects[testExportBucket]["exports/a.csv"] = "export-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	r, _, loc, err := s.openExportObject(context.Background(), "exports/a.csv")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer r.Close()
+	body, _ := io.ReadAll(r)
+	if string(body) != "export-body" {
+		t.Fatalf("expected export bucket to win, got %q", body)
+	}
+	if loc.Bucket != exportBucketExport || loc.Name != testExportBucket {
+		t.Fatalf("unexpected location: %+v", loc)
+	}
+}
+
+// 场景 1（根判据）：首桶桶不存在 → 必须 fail closed，绝不回退到 RAW。
+// strictLocation=false 时对象 404 会被库兜底成 NoSuchKey，只有 BucketExists 能揭穿。
+func TestOpenExportObjectDoesNotFallBackWhenExportBucketMissing(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.strictLoctn = false
+	delete(stub.objects, testExportBucket)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	r, _, _, err := s.openExportObject(context.Background(), "exports/a.csv")
+	if err == nil {
+		r.Close()
+		t.Fatal("missing EXPORT_BUCKET must not fall back to raw")
+	}
+	if isExportObjectMissing(err) {
+		t.Fatalf("bucket-level fault must not be reported as object missing: %v", err)
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("expected explicit bucket-missing error, got %v", err)
+	}
+	var missing bucketMissingError
+	if !asBucketMissing(err, &missing) || missing.bucket != testExportBucket {
+		t.Fatalf("expected bucketMissingError for %s, got %v", testExportBucket, err)
+	}
+}
+
+// strictLocation=true（真实 MinIO）：location 请求先失败，同样必须 fail closed。
+func TestOpenExportObjectDoesNotFallBackWhenExportBucketMissingStrictLocation(t *testing.T) {
+	stub := newS3Stub(t)
+	delete(stub.objects, testExportBucket)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	if _, _, _, err := s.openExportObject(context.Background(), "exports/a.csv"); err == nil || isExportObjectMissing(err) {
+		t.Fatalf("strict-location bucket fault must fail closed, got %v", err)
+	}
+}
+
+// 场景 2（根判据）：AccessDenied → fail closed，不回退，也不谎称对象缺失。
+func TestOpenExportObjectDoesNotFallBackOnAccessDenied(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	stub.denied[testExportBucket] = true
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	_, _, _, err := s.openExportObject(context.Background(), "exports/a.csv")
+	if err == nil {
+		t.Fatal("AccessDenied must fail closed")
+	}
+	if isExportObjectMissing(err) {
+		t.Fatalf("permission error must not be reported as object missing: %v", err)
+	}
+	var resp minio.ErrorResponse
+	if !errors.As(err, &resp) || resp.Code != "AccessDenied" {
+		t.Fatalf("expected AccessDenied to surface, got %v", err)
+	}
+}
+
+func TestStatExportObjectDoesNotFallBackOnAccessDenied(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	stub.denied[testExportBucket] = true
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	if _, _, err := s.statExportObject(context.Background(), "exports/a.csv"); err == nil || isExportObjectMissing(err) {
+		t.Fatalf("stat must fail closed on AccessDenied, got %v", err)
+	}
+}
+
+// 场景 3（根判据）：两个桶都对象级缺失 → 才是 DATA_OBJECT_MISSING 语义。
+func TestExportObjectMissingOnlyWhenBothBucketsLackTheKey(t *testing.T) {
+	stub := newS3Stub(t)
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	_, _, _, err := s.openExportObject(context.Background(), "exports/nope.csv")
+	if !isExportObjectMissing(err) {
+		t.Fatalf("expected errExportObjectMissing, got %v", err)
+	}
+	if _, _, err := s.statExportObject(context.Background(), "exports/nope.csv"); !isExportObjectMissing(err) {
+		t.Fatalf("stat: expected errExportObjectMissing, got %v", err)
+	}
+}
+
+func TestStatExportObjectFallsBackToRaw(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	size, loc, err := s.statExportObject(context.Background(), "exports/a.csv")
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if size != int64(len("raw-body")) || loc.Bucket != exportBucketRaw {
+		t.Fatalf("unexpected stat result: size=%d loc=%+v", size, loc)
+	}
+}
+
+func TestOpenExportObjectRangeFallsBackAndStreams(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "0123456789"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	r, size, loc, err := s.openExportObjectRange(context.Background(), "exports/a.csv", 2, 5)
+	if err != nil {
+		t.Fatalf("range: %v", err)
+	}
+	defer r.Close()
+	body, rerr := io.ReadAll(r)
+	if string(body) != "2345" || size != 10 || loc.Bucket != exportBucketRaw {
+		t.Fatalf("unexpected range result: %q err=%v size=%d loc=%+v requests=%v", body, rerr, size, loc, stub.requests)
+	}
+}
+
+func TestOpenExportObjectRangeFromExportBucketAndInvalidRange(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testExportBucket]["exports/a.zip"] = "abcdef"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	r, _, loc, err := s.openExportObjectRange(context.Background(), "exports/a.zip", 1, -1)
+	if err != nil {
+		t.Fatalf("range: %v", err)
+	}
+	body, _ := io.ReadAll(r)
+	r.Close()
+	if string(body) != "bcdef" || loc.Bucket != exportBucketExport {
+		t.Fatalf("unexpected tail range: %q loc=%+v", body, loc)
+	}
+	// 对象存在但区间非法：必须报 ErrInvalidRange，且不回退到另一个桶。
+	if _, _, _, err := s.openExportObjectRange(context.Background(), "exports/a.zip", 99, -1); err == nil {
+		t.Fatal("expected invalid range error")
+	} else if isExportObjectMissing(err) {
+		t.Fatalf("invalid range must not be reported as missing: %v", err)
+	}
+}
+
+func TestPutExportStreamHonoursWriteBucket(t *testing.T) {
+	stub := newS3Stub(t)
+	allowPutIntent(t)
+	s := newTestServer(t, stub, nil)
+
+	size, loc, err := s.putExportStream(context.Background(), "exp-unit-test", "exports/new.csv", strings.NewReader("hello"), 5, "text/csv")
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if size != 5 || loc.Bucket != exportBucketRaw || loc.Name != testRawBucket {
+		t.Fatalf("unexpected put result: size=%d loc=%+v stored=%q requests=%v", size, loc, stub.objects[testRawBucket]["exports/new.csv"], stub.requests)
+	}
+	if _, ok := stub.objects[testRawBucket]["exports/new.csv"]; !ok {
+		t.Fatal("object not written to raw bucket")
+	}
+
+	exported := newTestServer(t, stub, func(c *config.Config) { c.ExportWriteBucket = "export" })
+	size, loc, err = exported.putExportStream(context.Background(), "exp-unit-test", "exports/new2.csv", strings.NewReader("hello"), 5, "text/csv")
+	if err != nil {
+		t.Fatalf("put export: %v", err)
+	}
+	if size != 5 || loc.Bucket != exportBucketExport || loc.Name != testExportBucket {
+		t.Fatalf("unexpected export put result: size=%d loc=%+v", size, loc)
+	}
+	if _, ok := stub.objects[testExportBucket]["exports/new2.csv"]; !ok {
+		t.Fatal("object not written to export bucket after switch")
+	}
+	if _, ok := stub.objects[testRawBucket]["exports/new2.csv"]; ok {
+		t.Fatal("object must not also be written to raw bucket after switch")
+	}
+}
+
+func TestPutExportStreamRejectsInvalidWriteBucket(t *testing.T) {
+	for _, value := range []string{"bogus", "", "RAW", "Export", " export", "export "} {
+		stub := newS3Stub(t)
+		s := newTestServer(t, stub, func(c *config.Config) { c.ExportWriteBucket = value })
+		if _, _, err := s.putExportStream(context.Background(), "exp-unit-test", "exports/x.csv", strings.NewReader("x"), 1, "text/csv"); err == nil {
+			t.Fatalf("EXPORT_WRITE_BUCKET=%q must fail closed, not default to raw", value)
+		}
+		if len(stub.objects[testRawBucket]) != 0 || len(stub.objects[testExportBucket]) != 0 {
+			t.Fatalf("no object may be written on invalid configuration %q", value)
+		}
+	}
+}
+
+// 运行期必须与 config.Validate 同严格度：任何非法读顺序都要 fail closed，
+// 不允许"忽略非法项后继续"（那会造成"以为双读其实单读"的伪证据）。
+func TestExportReadOrderRejectsEveryInvalidVariant(t *testing.T) {
+	invalid := []string{
+		"",                 // 零个 token
+		"bogus",            // 未知
+		"export",           // 缺 raw
+		"raw",              // 缺 export
+		"export,bogus",     // 未知尾项（根指出的污染场景）
+		"bogus,export",     // 未知首项
+		"export,export",    // 重复（根指出的污染场景）
+		"raw,raw",          // 重复
+		"export,raw,raw",   // 三次
+		"export,raw,",      // 尾随空项
+		",export,raw",      // 首空项
+		"export, raw",      // 项内空白
+		"export ,raw",      // 项内空白
+		"RAW,export",       // 大小写变体
+		"Export,raw",       // 大小写变体
+		"export;raw",       // 分隔符错误
+		"export raw",       // 分隔符错误
+		"export,raw,extra", // 多余项
+	}
+	for _, spec := range invalid {
+		stub := newS3Stub(t)
+		s := newTestServer(t, stub, func(c *config.Config) { c.ExportReadOrder = spec })
+		if _, _, _, err := s.openExportObject(context.Background(), "exports/a.csv"); err == nil {
+			t.Fatalf("EXPORT_READ_ORDER=%q must fail closed on read", spec)
+		}
+		if _, _, err := s.statExportObject(context.Background(), "exports/a.csv"); err == nil {
+			t.Fatalf("EXPORT_READ_ORDER=%q must fail closed on stat", spec)
+		}
+		if _, err := parseExportReadOrder(spec); err == nil {
+			t.Fatalf("EXPORT_READ_ORDER=%q must be rejected by the parser", spec)
+		}
+	}
+}
+
+func TestExportReadOrderAcceptsBothCanonicalOrders(t *testing.T) {
+	for spec, want := range map[string][]exportBucket{
+		"export,raw": {exportBucketExport, exportBucketRaw},
+		"raw,export": {exportBucketRaw, exportBucketExport},
+	} {
+		got, err := parseExportReadOrder(spec)
+		if err != nil {
+			t.Fatalf("EXPORT_READ_ORDER=%q must be accepted: %v", spec, err)
+		}
+		if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+			t.Fatalf("parse %q = %+v, want %+v", spec, got, want)
+		}
+	}
+}
+
+// 两个逻辑桶指向同一个真实桶时必须 fail closed（否则双读/切写证据自相矛盾）。
+func TestRuntimeRejectsRawAndExportBucketBeingIdentical(t *testing.T) {
+	stub := newS3Stub(t)
+	stub.objects[testRawBucket]["exports/a.csv"] = "raw-body"
+	allowPutIntent(t)
+	s := newTestServer(t, stub, func(c *config.Config) { c.ExportBucket = testRawBucket })
+
+	if _, _, _, err := s.openExportObject(context.Background(), "exports/a.csv"); err == nil {
+		t.Fatal("identical RAW_BUCKET/EXPORT_BUCKET must fail closed on read")
+	}
+	if _, _, err := s.statExportObject(context.Background(), "exports/a.csv"); err == nil {
+		t.Fatal("identical RAW_BUCKET/EXPORT_BUCKET must fail closed on stat")
+	}
+	if _, _, err := s.putExportStream(context.Background(), "exp-unit-test", "exports/x.csv", strings.NewReader("x"), 1, "text/csv"); err == nil {
+		t.Fatal("identical RAW_BUCKET/EXPORT_BUCKET must fail closed on write")
+	}
+}
+
+func TestAuditFieldsUseRealBucketName(t *testing.T) {
+	fields := exportLocation{Bucket: exportBucketExport, Name: testExportBucket, Key: "exports/a.csv"}.auditFields()
+	if fields["object_bucket"] != testExportBucket {
+		t.Fatalf("object_bucket must be the real bucket name, got %v", fields["object_bucket"])
+	}
+	if fields["object_bucket_role"] != "export" {
+		t.Fatalf("object_bucket_role must be the logical role, got %v", fields["object_bucket_role"])
+	}
+	if fields["object_ref"] != "exports/a.csv" {
+		t.Fatalf("object_ref mismatch: %v", fields["object_ref"])
+	}
+}
+
+func TestHelpersFailClosedWithoutStorageClient(t *testing.T) {
+	s := &Server{deps: Deps{Cfg: &config.Config{
+		RawBucket: testRawBucket, ExportBucket: testExportBucket,
+		ExportWriteBucket: "raw", ExportReadOrder: "export,raw",
+	}}}
+	if _, _, _, err := s.openExportObject(context.Background(), "k"); err == nil {
+		t.Fatal("nil rawstore must fail closed")
+	}
+	if _, _, err := s.putExportStream(context.Background(), "exp-unit-test", "k", strings.NewReader("x"), 1, "text/plain"); err == nil {
+		t.Fatal("nil rawstore must fail closed on write")
+	}
+	if _, _, err := s.statExportObject(context.Background(), "k"); err == nil {
+		t.Fatal("nil rawstore must fail closed on stat")
+	}
+}
+
+func TestIsExportObjectMissingDistinguishesBucketErrors(t *testing.T) {
+	if !isExportObjectMissing(errExportObjectMissing) {
+		t.Fatal("sentinel must be recognised")
+	}
+	if isExportObjectMissing(context.Canceled) {
+		t.Fatal("context cancellation is not a missing object")
+	}
+}
+
+func asBucketMissing(err error, target *bucketMissingError) bool {
+	return errors.As(err, target)
+}
+
+// allowPutIntent installs the documented test-only override for the duration of
+// one test. The production path leaves exportIntentOverride nil so every real
+// object write evaluates the real durable-intent and live-scope check; the live
+// behaviour gates exercise the real check end to end.
+func allowPutIntent(t *testing.T) {
+	t.Helper()
+	prev := exportIntentOverride
+	exportIntentOverride = func(context.Context, string) (bool, string) { return true, "" }
+	t.Cleanup(func() { exportIntentOverride = prev })
+}

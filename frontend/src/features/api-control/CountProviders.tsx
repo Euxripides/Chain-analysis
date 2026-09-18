@@ -1,6 +1,6 @@
 // V1.3 Count Providers（§72-§74）：Provider/Chain/Dataset 运行视图（数据源 /api/v1/count-oracle/providers）。
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useScopedQuery as useQuery } from "../../lib/sessionScope";
 import { DatabaseZap, Gauge } from "lucide-react";
 import { countOracleHttp } from "../../api/client";
 import NoticeDialog from "../../components/NoticeDialog";

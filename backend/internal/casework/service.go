@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
@@ -89,7 +89,7 @@ func forbidden(msg string, details map[string]any) *APIError {
 
 // Service 是 Sprint 4 领域服务的聚合入口。
 type Service struct {
-	pool    *pgxpool.Pool
+	pool    *dbtx.Pool
 	audit   *audit.Writer
 	objects *rawstore.Store
 	reports *report.Service
@@ -98,7 +98,7 @@ type Service struct {
 	preview func(context.Context, dataset.EnsureRequest) (*dataset.CoveragePreviewResponse, error)
 }
 
-func New(pool *pgxpool.Pool, auditWriter *audit.Writer, objects *rawstore.Store, reports *report.Service) *Service {
+func New(pool *dbtx.Pool, auditWriter *audit.Writer, objects *rawstore.Store, reports *report.Service) *Service {
 	return &Service{pool: pool, audit: auditWriter, objects: objects, reports: reports}
 }
 
@@ -197,21 +197,57 @@ func (s *Service) reviewersWithPermissionTx(ctx context.Context, tx pgx.Tx, orga
 	return out, rows.Err()
 }
 
-func (s *Service) resolveWorkspace(ctx context.Context, q queryRower, organizationID, workspaceID string) (string, error) {
-	if workspaceID != "" {
+// resolveWorkspace decides the concrete workspace a write lands in
+// (P1-20260914-CASEWORK-MEMBERSHIP).
+//
+// A defect of the same class as api.objectaccess.writableWorkspace was still
+// present on the case-write path: when workspaceID was empty the old code ran
+//
+//	SELECT id FROM workspaces WHERE organization_id=$1
+//	 ORDER BY (slug='default') DESC, slug LIMIT 1
+//
+// i.e. an identity principal with no workspace silently fell back to the
+// organisation default / first workspace without ever consulting membership.
+// That fallback is exactly the P0 cross-tenant write cause fixed on the api
+// side, so the same fail-closed policy is applied here:
+//
+//  1. principal with a bound workspace: it must belong to this organisation and,
+//     for an identity principal, the identity must hold an ACTIVE membership;
+//  2. identity principal with no bound workspace: fail closed, never pick one;
+//  3. only a migration-era system principal (compat headers / platform data
+//     plane, no identity to judge) may fall back to the organisation's first
+//     workspace, and it stays inside one concrete organisation.
+func (s *Service) resolveWorkspace(ctx context.Context, q queryRower, p policy.Principal) (string, error) {
+	if p.WorkspaceID != "" {
 		var exists bool
-		if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=$1::uuid AND organization_id=$2::uuid)`, workspaceID, organizationID).Scan(&exists); err != nil {
+		if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=$1::uuid AND organization_id=$2::uuid)`, p.WorkspaceID, p.OrganizationID).Scan(&exists); err != nil {
 			return "", err
 		}
 		if !exists {
 			return "", forbidden("当前工作区不属于会话组织", nil)
 		}
-		return workspaceID, nil
+		if p.IdentityID != "" && !p.System {
+			var member bool
+			if err := q.QueryRow(ctx, `
+                SELECT EXISTS(SELECT 1 FROM workspace_memberships
+                 WHERE workspace_id=$1::uuid AND identity_id=$2::uuid
+                   AND organization_id=$3::uuid AND status='active')`,
+				p.WorkspaceID, p.IdentityID, p.OrganizationID).Scan(&member); err != nil {
+				return "", err
+			}
+			if !member {
+				return "", forbidden("当前身份不是该工作区的有效成员", nil)
+			}
+		}
+		return p.WorkspaceID, nil
+	}
+	if !p.System {
+		return "", forbidden("会话未绑定工作区，拒绝写入", nil)
 	}
 	var id string
 	err := q.QueryRow(ctx, `
         SELECT id::text FROM workspaces WHERE organization_id=$1::uuid
-        ORDER BY (slug='default') DESC, slug LIMIT 1`, organizationID).Scan(&id)
+        ORDER BY created_at, id LIMIT 1`, p.OrganizationID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", notFound()
 	}

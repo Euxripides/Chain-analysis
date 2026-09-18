@@ -27,6 +27,34 @@ export interface DialogAction {
   variant?: "primary" | "danger" | "default";
   /** confirm 类对话框的语义结果；未提供时使用 label。 */
   result?: string;
+  /**
+   * 该动作在本次会话里不可用（例如"该账号未启用 MFA，无法重置"）。
+   *
+   * 按钮保持可见并 disabled —— 能力边界必须让用户看得见，而不是把入口藏起来；
+   * 禁用原因写在 title 上（同时建议在 details 里给出一条可读的说明，
+   * 因为部分浏览器不会为 disabled 按钮显示 tooltip）。
+   */
+  disabled?: boolean;
+  title?: string;
+}
+
+/**
+ * 多字段表单里的一个字段。
+ *
+ * 视觉上沿用既有 field / input / btn 样式，不引入新的视觉语言；
+ * checkbox 类型的 required 表示"必须勾选"（用于破坏性操作的"我已确认上述影响"）。
+ */
+export interface DialogField {
+  name: string;
+  label: string;
+  type?: "text" | "password" | "checkbox";
+  placeholder?: string;
+  defaultValue?: string;
+  /** 默认 true：必填字段未填写（或未勾选）前，非 default 动作按钮保持 disabled。 */
+  required?: boolean;
+  pattern?: RegExp;
+  patternHint?: string;
+  autoComplete?: string;
 }
 
 export interface DialogRequest {
@@ -41,6 +69,22 @@ export interface DialogRequest {
   confirmWord?: string;
   /** 需要用户输入一个值时使用（替代原生 window.prompt）。 */
   input?: { label: string; placeholder?: string; defaultValue?: string; pattern?: RegExp; patternHint?: string };
+  /**
+   * 多字段表单（例如破坏性命令的"原因 + step-up 密码 + 影响确认"）。
+   *
+   * 与 input（单值简写）互斥，两项都给出时以 fields 为准。所有必填字段就绪前，
+   * 非 default 动作按钮保持 disabled；提交结果编码为 `form:<json>`，
+   * 调用方用 dialogFormValues() 解出。取消（variant=default）始终可用。
+   */
+  fields?: DialogField[];
+  /**
+   * 需要用户主动勾选确认后才能关闭。
+   *
+   * 用途是一次性内容：例如 MFA 恢复码明文只出现这一次，
+   * 不勾选"我已保存"就既不能点按钮、也不能用 ESC/点击遮罩关闭
+   * （否则用户会以为自己还能再看一次）。
+   */
+  acknowledge?: { label: string; hint?: string };
   onResolve?: (value: string | null) => void;
 }
 
@@ -56,6 +100,12 @@ interface DialogContextValue {
     submitLabel?: string;
     kind?: DialogKind;
   }) => Promise<string | null>;
+  /**
+   * 命令式关闭当前弹窗（把队首请求按"取消"结果 resolve 掉）。
+   * 用途：长任务型弹窗（例如隔离解析进度）在任务正常结束后必须自行退场，
+   * 否则会一直占据页面并挡住后续提示。调用方需自行区分"用户取消"与"任务已结束"。
+   */
+  dismiss: () => void;
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
@@ -73,6 +123,30 @@ export function dialogInputValue(result: string | null): string | null {
   if (!result || !result.startsWith("input:")) return null;
   const v = result.slice("input:".length).trim();
   return v === "" ? null : v;
+}
+
+/** 从 open()/confirm() 的结果中取出多字段表单值；取消或非表单结果返回 null。 */
+export function dialogFormValues(result: string | null): Record<string, string> | null {
+  if (!result || !result.startsWith("form:")) return null;
+  try {
+    const parsed: unknown = JSON.parse(result.slice("form:".length));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      values[key] = value === null || value === undefined ? "" : String(value);
+    }
+    return values;
+  } catch {
+    return null;
+  }
+}
+
+/** 单个字段是否满足提交条件（必填、勾选、pattern）。 */
+function dialogFieldOk(field: DialogField, raw: string): boolean {
+  if (field.type === "checkbox") return field.required === false || raw === "true";
+  const value = raw.trim();
+  if (field.required !== false && value === "") return false;
+  return field.pattern ? field.pattern.test(value) : true;
 }
 
 export function DialogProvider({ children }: { children: React.ReactNode }) {
@@ -114,8 +188,9 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             { label: req.submitLabel ?? "确定", result: "ok", variant: "primary" },
           ],
         }),
+      dismiss: () => resolveActive(null),
     }),
-    [open],
+    [open, resolveActive],
   );
 
   return (
@@ -141,12 +216,45 @@ const KIND_META: Record<DialogKind, { tone: string; label: string }> = {
   confirm: { tone: "warn", label: "请确认" },
 };
 
+/** 表单初始值：只接受显式 defaultValue，其余字段留空（绝不预填敏感值）。 */
+function initialFormValues(fields: DialogField[] | undefined): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const field of fields ?? []) {
+    values[field.name] = field.type === "checkbox" ? (field.defaultValue === "true" ? "true" : "") : (field.defaultValue ?? "");
+  }
+  return values;
+}
+
 function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve: (v: string | null) => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
   const [word, setWord] = useState("");
   const [inputValue, setInputValue] = useState(request.input?.defaultValue ?? "");
+  const [formValues, setFormValues] = useState<Record<string, string>>(() => initialFormValues(request.fields));
   const [busy, setBusy] = useState(false);
+  const [acked, setAcked] = useState(!request.acknowledge);
+  // 键盘/遮罩处理器挂在稳定的事件监听上，因此用 ref 读取最新勾选状态。
+  const ackedRef = useRef(!request.acknowledge);
+
+  const requiresAck = Boolean(request.acknowledge);
+  const ackPending = requiresAck && !acked;
+  const setAck = (next: boolean) => {
+    ackedRef.current = next;
+    setAcked(next);
+  };
+
+  /**
+   * 队列前移到下一个请求时重置弹窗自身的输入状态。
+   * DialogHost 不随请求重新挂载，若不重置，上一个弹窗的确认词/输入值会被带进下一个。
+   */
+  useEffect(() => {
+    setWord("");
+    setInputValue(request.input?.defaultValue ?? "");
+    setFormValues(initialFormValues(request.fields));
+    setBusy(false);
+    ackedRef.current = !request.acknowledge;
+    setAcked(!request.acknowledge);
+  }, [request]);
 
   const actions = request.actions ?? [{ label: "关闭", variant: "primary", result: "ok" }];
   const requiresWord = Boolean(request.confirmWord);
@@ -154,6 +262,10 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
   const needsInput = Boolean(request.input);
   const inputOk =
     !needsInput || !request.input?.pattern || request.input.pattern.test(inputValue.trim());
+  const formFields = request.fields ?? [];
+  const needsFields = formFields.length > 0;
+  const fieldsOk = !needsFields || formFields.every((field) => dialogFieldOk(field, formValues[field.name] ?? ""));
+  const setFormValue = (name: string, value: string) => setFormValues((current) => ({ ...current, [name]: value }));
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement;
@@ -169,6 +281,8 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
+        // 一次性内容未被确认保存前，ESC 不关闭弹窗。
+        if (!ackedRef.current) return;
         onResolve(null);
         return;
       }
@@ -204,7 +318,8 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
       className="dialog-backdrop"
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onResolve(null);
+        // 同上：一次性内容未被确认保存前，点击遮罩也不关闭。
+        if (e.target === e.currentTarget && ackedRef.current) onResolve(null);
       }}
     >
       <div
@@ -222,7 +337,14 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
           <h2 className="dialog__title" id="dialog-title">
             {request.title}
           </h2>
-          <button className="dialog__close" aria-label="关闭对话框" onClick={() => onResolve(null)} type="button">
+          <button
+            className="dialog__close"
+            aria-label="关闭对话框"
+            type="button"
+            disabled={ackPending}
+            title={ackPending ? "请先勾选确认后再关闭" : undefined}
+            onClick={() => onResolve(null)}
+          >
             <X size={18} />
           </button>
         </div>
@@ -265,6 +387,65 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
               ) : null}
             </div>
           ) : null}
+          {needsFields ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", marginTop: "var(--sp-4)" }}>
+              {formFields.map((field) => {
+                const id = `dialog-field-${field.name}`;
+                const value = formValues[field.name] ?? "";
+                const ok = dialogFieldOk(field, value);
+                const hint =
+                  !ok && field.patternHint ? (
+                    <span className="field__hint" style={{ color: "var(--c-danger)" }}>
+                      {field.patternHint}
+                    </span>
+                  ) : null;
+                if (field.type === "checkbox") {
+                  return (
+                    <div className="field" key={field.name}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", cursor: "pointer" }} htmlFor={id}>
+                        <input
+                          id={id}
+                          type="checkbox"
+                          required={field.required !== false}
+                          checked={value === "true"}
+                          onChange={(e) => setFormValue(field.name, e.target.checked ? "true" : "")}
+                        />
+                        <span className="field__label" style={{ margin: 0 }}>
+                          {field.label}
+                        </span>
+                      </label>
+                      {hint}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="field" key={field.name}>
+                    <label className="field__label" htmlFor={id}>
+                      {field.label}
+                    </label>
+                    <input
+                      id={id}
+                      className="input"
+                      type={field.type === "password" ? "password" : "text"}
+                      autoComplete={field.autoComplete ?? (field.type === "password" ? "current-password" : "off")}
+                      aria-invalid={!ok}
+                      required={field.required !== false}
+                      placeholder={field.placeholder}
+                      value={value}
+                      onChange={(e) => setFormValue(field.name, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && fieldsOk) {
+                          e.preventDefault();
+                          onResolve(`form:${JSON.stringify(formValues)}`);
+                        }
+                      }}
+                    />
+                    {hint}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           {requiresWord ? (
             <div className="field" style={{ marginTop: "var(--sp-4)" }}>
               <label className="field__label" htmlFor="dialog-confirm-word">
@@ -279,6 +460,22 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
               />
             </div>
           ) : null}
+          {requiresAck ? (
+            <div className="field" style={{ marginTop: "var(--sp-4)" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", cursor: "pointer" }}>
+                <input
+                  id="dialog-acknowledge"
+                  type="checkbox"
+                  checked={acked}
+                  onChange={(e) => setAck(e.target.checked)}
+                />
+                <span className="field__label" style={{ margin: 0 }}>
+                  {request.acknowledge!.label}
+                </span>
+              </label>
+              {request.acknowledge!.hint ? <span className="field__hint">{request.acknowledge!.hint}</span> : null}
+            </div>
+          ) : null}
         </div>
         <div className="dialog__foot">
           {actions.map((action) => (
@@ -286,15 +483,31 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
               key={action.label}
               type="button"
               className={`btn${action.variant === "primary" ? " btn--primary" : action.variant === "danger" ? " btn--danger" : ""}`}
-              disabled={busy || (requiresWord && action.variant !== "default" && !wordOk) || (needsInput && action.variant !== "default" && !inputOk)}
+              title={action.disabled ? action.title : undefined}
+              disabled={
+                busy ||
+                ackPending ||
+                action.disabled ||
+                (requiresWord && action.variant !== "default" && !wordOk) ||
+                (needsInput && action.variant !== "default" && !inputOk) ||
+                // 三项齐全才允许提交：必填字段/勾选框未就绪时，提交按钮保持 disabled。
+                (needsFields && action.variant !== "default" && !fieldsOk)
+              }
               onClick={() => {
                 if (action.variant === "default") {
                   onResolve(action.result ?? null);
                   return;
                 }
                 setBusy(true);
-                // 输入类弹窗把用户输入编码进结果，调用方用 toDialogInput 解出。
-                onResolve(needsInput ? `input:${inputValue.trim()}` : (action.result ?? action.label));
+                // 输入类弹窗把用户输入编码进结果：单值用 dialogInputValue 解出，
+                // 多字段表单用 dialogFormValues 解出。密码等敏感值只随本次 Promise 传递，不落任何持久化状态。
+                onResolve(
+                  needsFields
+                    ? `form:${JSON.stringify(formValues)}`
+                    : needsInput
+                      ? `input:${inputValue.trim()}`
+                      : (action.result ?? action.label),
+                );
               }}
             >
               {action.label}

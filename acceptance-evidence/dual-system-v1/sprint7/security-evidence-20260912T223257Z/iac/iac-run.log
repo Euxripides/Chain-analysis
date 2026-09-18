@@ -1,0 +1,257 @@
++ echo '=== PROVENANCE ==='
+=== PROVENANCE ===
++ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-09-12T22:44:58Z
++ echo '--- scanner images (local, NOT pulled) ---'
+--- scanner images (local, NOT pulled) ---
++ for img in bridgecrew/checkov:latest checkmarx/kics:latest aquasec/trivy:latest
++ docker image inspect bridgecrew/checkov:latest --format '{{.RepoTags}}|{{json .RepoDigests}}|{{.Id}}|{{.Created}}'
+[bridgecrew/checkov:latest]|["bridgecrew/checkov@sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3"]|sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3|2026-09-10T08:06:37.362480647Z
++ for img in bridgecrew/checkov:latest checkmarx/kics:latest aquasec/trivy:latest
++ docker image inspect checkmarx/kics:latest --format '{{.RepoTags}}|{{json .RepoDigests}}|{{.Id}}|{{.Created}}'
+[checkmarx/kics:latest]|["checkmarx/kics@sha256:3e5a268eb8adda2e5a483c9359ddfc4cd520ab856a7076dc0b1d8784a37e2602"]|sha256:3e5a268eb8adda2e5a483c9359ddfc4cd520ab856a7076dc0b1d8784a37e2602|2026-03-03T18:05:16.663233211Z
++ for img in bridgecrew/checkov:latest checkmarx/kics:latest aquasec/trivy:latest
++ docker image inspect aquasec/trivy:latest --format '{{.RepoTags}}|{{json .RepoDigests}}|{{.Id}}|{{.Created}}'
+[aquasec/trivy:latest]|["aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"]|sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969|2026-08-14T11:27:20.641164516Z
++ echo '--- checkov version ---'
+--- checkov version ---
++ docker run --rm bridgecrew/checkov:latest --version
+3.3.17
++ echo '--- kics version ---'
+--- kics version ---
++ docker run --rm checkmarx/kics:latest version
+Keeping Infrastructure as Code Secure v2.1.20
++ echo '--- trivy supported misconfig scanners ---'
+--- trivy supported misconfig scanners ---
++ docker run --rm aquasec/trivy:latest config --help
++ grep -A3 misconfig-scanners
++ head -12
+      --misconfig-scanners strings        comma-separated list of misconfig scanners to use for misconfiguration scanning (default [azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible])
+      --raw-config-scanners strings       specify the types of scanners that will also scan raw configurations. For example, scanners will scan a non-adapted configuration into a shared state (allowed values: terraform)
+      --render-cause strings              specify configuration types for which the rendered causes will be shown in the table report (allowed values: terraform,ansible)
+      --tf-exclude-downloaded-modules     exclude misconfigurations for downloaded terraform modules
++ echo
+
++ echo '=== TARGET FILE INVENTORY (repo deploy/) ==='
+=== TARGET FILE INVENTORY (repo deploy/) ===
++ find /home/euripides/projects/blockchain-platform/deploy -type f
++ sort
+/home/euripides/projects/blockchain-platform/deploy/blockchain-admin-console.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-api.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-containers-watchdog.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-containers-watchdog.timer
+/home/euripides/projects/blockchain-platform/deploy/blockchain-e2e-tls.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-mcp.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-user-console.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-vite.service
+/home/euripides/projects/blockchain-platform/deploy/blockchain-worker.service
+/home/euripides/projects/blockchain-platform/deploy/compose.yaml
+/home/euripides/projects/blockchain-platform/deploy/.env
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2125
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2201
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2207
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-dualsystem
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-s7-cookie-20260912T170344Z
+/home/euripides/projects/blockchain-platform/deploy/.env.bak-s7-role-20260912T170832Z
+/home/euripides/projects/blockchain-platform/deploy/.env.cross-provider-final-restore
+/home/euripides/projects/blockchain-platform/deploy/.env.cross-provider-restore
+/home/euripides/projects/blockchain-platform/deploy/.env.example
+/home/euripides/projects/blockchain-platform/deploy/.env.orig
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v510-64
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v513-cost
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v51-performance-20260908
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v52-20260908
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v52c-20260908
+/home/euripides/projects/blockchain-platform/deploy/.env.pre-v52d-20260908
+/home/euripides/projects/blockchain-platform/deploy/.env.tron-v4-fallback-test
+/home/euripides/projects/blockchain-platform/deploy/.env.tron-v4-fallback-test-2
+/home/euripides/projects/blockchain-platform/deploy/monitoring/dual-system-alerts.yaml
+/home/euripides/projects/blockchain-platform/deploy/nginx-blockchain-platform.conf
++ echo '--- sha256 of each target ---'
+--- sha256 of each target ---
++ find /home/euripides/projects/blockchain-platform/deploy -type f -print0
++ sort -z
++ xargs -0 sha256sum
+f81588cb370c71862d43e2a764aab8066c555f2c60798291d11f96dd5b2cd912  /home/euripides/projects/blockchain-platform/deploy/blockchain-admin-console.service
+0dfc95e6c88db0137a4b6bda362b6e0d7cfbcc122f26c38d360c19aa61cf5516  /home/euripides/projects/blockchain-platform/deploy/blockchain-api.service
+b0cd75b4a65b3d6c5102de461e67e771431e1a3b41f579de1b7374e40ebac6a6  /home/euripides/projects/blockchain-platform/deploy/blockchain-containers-watchdog.service
+fb2a24b0fbc33839d1efd6e91dafc5e6cad418c8dbe60de61eb02391fcdfb13f  /home/euripides/projects/blockchain-platform/deploy/blockchain-containers-watchdog.timer
+7cdae70d85c191883f836df8de2dbf53546c3e390db68927f77cd8159834fe8b  /home/euripides/projects/blockchain-platform/deploy/blockchain-e2e-tls.service
+8073d8e5e816f526e6e4f74d09d886b8f27dc76b199ec220ccbb2a77dad8fa1d  /home/euripides/projects/blockchain-platform/deploy/blockchain-mcp.service
+6fe9149e0052745b40275eb436c0a33975623bab25b5fbc075a22085508fa867  /home/euripides/projects/blockchain-platform/deploy/blockchain-user-console.service
+e208fb4044d6a1e0ab7a057bba48ce8e7972f06b0e10ceacab961ffb714bb31b  /home/euripides/projects/blockchain-platform/deploy/blockchain-vite.service
+00a8b99ee41ef21f520779edf7c28fe869578940634bf9c70ca7f3102f88d3a7  /home/euripides/projects/blockchain-platform/deploy/blockchain-worker.service
+215cf15e37b5977c4e66ce25314abe81ae98eb2a4359985dc2ae686261694d66  /home/euripides/projects/blockchain-platform/deploy/compose.yaml
+d10b543ba69e6974ab31f57964006be27d8c40ac9c59953567c9c03db8d7bc02  /home/euripides/projects/blockchain-platform/deploy/.env
+6ed5469920fb7a3aeb121d6c9b25d6012671c0887e66213b11c169999d88d91d  /home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2125
+3248264a92c9de4ba884bf206ea975a3a2d00bc4371d04de90709a8b1d57837d  /home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2201
+6ec2f84f71e1916ad49554bbaa15c256a910a19bf7784902f9186d71c8b0b16d  /home/euripides/projects/blockchain-platform/deploy/.env.bak-20260908-2207
+d340965f482ec8d9fc1bdd0cf68555a63f3bb099d1395c293ae8a6810372fe76  /home/euripides/projects/blockchain-platform/deploy/.env.bak-dualsystem
+3921d556f1ee22a42a5e542e20dcf5917c57cb5cc2cf1be71fa7389ac73b63d8  /home/euripides/projects/blockchain-platform/deploy/.env.bak-s7-cookie-20260912T170344Z
+3bace1e8e5200a6021683aa9abcf407cd190c55b1662a631c5312375b70a7414  /home/euripides/projects/blockchain-platform/deploy/.env.bak-s7-role-20260912T170832Z
+ae8e29ac022933c2ac932d502a0d777b61d135c06032cd0c872dd0645582990c  /home/euripides/projects/blockchain-platform/deploy/.env.cross-provider-final-restore
+ae8e29ac022933c2ac932d502a0d777b61d135c06032cd0c872dd0645582990c  /home/euripides/projects/blockchain-platform/deploy/.env.cross-provider-restore
+22426c160740a00fa784af1f146d7cda8eab18bd1b0e9ba2d92f1ca83111d820  /home/euripides/projects/blockchain-platform/deploy/.env.example
+c65a820eef7403ce1793014889aa37b0d83c4ee90412a9bcb9d00ea052d20559  /home/euripides/projects/blockchain-platform/deploy/.env.orig
+0b669dfcdf7592516cde04dcc9a097935116318be119cb8f5fefb1fe56988443  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v510-64
+6a0100d9368f22cacd010ce55df40bd94622dba5616f14c88f96aae1fcd16851  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v513-cost
+b54dad480aee6d7f6deaf38e3d02d91f16b719ac3f7474b9b99c3ed258733f8c  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v51-performance-20260908
+2ef277d318f441922dafa38f7dcda3f23b995f082f3a2b762bcf7c92e53b13cb  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v52-20260908
+d62fb8f10c134ef0945c4ed1a25d1e22a5e8638777a4b21580f32db99d870066  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v52c-20260908
+d62fb8f10c134ef0945c4ed1a25d1e22a5e8638777a4b21580f32db99d870066  /home/euripides/projects/blockchain-platform/deploy/.env.pre-v52d-20260908
+88b6a60fdf4e6777712f4d3dbca755ca3cba620dbb91d9b33a561309c85df5f9  /home/euripides/projects/blockchain-platform/deploy/.env.tron-v4-fallback-test
+88b6a60fdf4e6777712f4d3dbca755ca3cba620dbb91d9b33a561309c85df5f9  /home/euripides/projects/blockchain-platform/deploy/.env.tron-v4-fallback-test-2
+1728ae7ed7ee058472274659bc189f46532c514bf13a485f484bbdc715d8735d  /home/euripides/projects/blockchain-platform/deploy/monitoring/dual-system-alerts.yaml
+200ef752cc577569eb6c13d4b5eab791607f5a50496ce5780f8afde50cc9ccab  /home/euripides/projects/blockchain-platform/deploy/nginx-blockchain-platform.conf
++ echo
+
++ echo '=== [1] CHECKOV on deploy/ (json) ==='
+=== [1] CHECKOV on deploy/ (json) ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro bridgecrew/checkov:latest -d /w/deploy -o json --compact
++ echo CHECKOV_DEPLOY_JSON_EXIT=0
+CHECKOV_DEPLOY_JSON_EXIT=0
++ head -c 400 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-deploy.json
+{
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "parsing_errors": 0,
+    "resource_count": 0,
+    "checkov_version": "3.3.17"
+}
++ echo
+
++ echo '--- checkov stderr ---'
+--- checkov stderr ---
++ cat /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-deploy.stderr.txt
++ echo
+
++ echo '=== [2] CHECKOV on deploy/ (cli table) ==='
+=== [2] CHECKOV on deploy/ (cli table) ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro bridgecrew/checkov:latest -d /w/deploy --compact
++ echo CHECKOV_DEPLOY_TABLE_EXIT=0
+CHECKOV_DEPLOY_TABLE_EXIT=0
++ echo
+
++ echo '=== [3] CHECKOV docker_compose framework explicit ==='
+=== [3] CHECKOV docker_compose framework explicit ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro bridgecrew/checkov:latest -d /w/deploy --framework docker_compose -o json --compact
++ echo CHECKOV_COMPOSE_EXIT=2
+CHECKOV_COMPOSE_EXIT=2
++ head -c 400 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-compose.json
++ echo
+
++ echo
+
++ echo '=== [4] CHECKOV secrets framework on repo (source) ==='
+=== [4] CHECKOV secrets framework on repo (source) ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro bridgecrew/checkov:latest -d /w --framework secrets --compact -o json
++ echo CHECKOV_SECRETS_EXIT=1
+CHECKOV_SECRETS_EXIT=1
++ head -c 400 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/checkov-secrets.json
+{
+    "check_type": "secrets",
+    "results": {
+        "passed_checks": [],
+        "failed_checks": [
+            {
+                "check_id": "CKV_SECRET_6",
+                "bc_check_id": "BC_GIT_6",
+                "check_name": "Base64 High Entropy String",
+                "check_result": {
+                    "result": "FAILED"
+                },
+                "code_block": null,
+       + echo
+
++ echo
+
++ echo '=== [5] KICS on deploy/ ==='
+=== [5] KICS on deploy/ ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform/deploy:/path:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac:/out checkmarx/kics:latest scan -p /path -o /out --report-formats json,html --no-progress
++ echo KICS_DEPLOY_EXIT=40
+KICS_DEPLOY_EXIT=40
++ tail -25 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/kics-deploy.log
+
+
+	[38;2;255;114;19m[3]:[0m ../../path/compose.yaml:[38;2;34;187;51m55[0m
+
+		054: 
+[38;2;240;173;78m		055:   nats:
+[0m		056:     image: nats:2-alpine
+
+
+	[38;2;255;114;19m[4]:[0m ../../path/compose.yaml:[38;2;34;187;51m2[0m
+
+		001: services:
+[38;2;240;173;78m		002:   postgres:
+[0m		003:     image: postgres:18
+
+
+
+Results Summary:
+[38;2;255;0;0mCRITICAL[0m: 0
+[38;2;187;33;36mHIGH[0m: 0
+[38;2;255;114;19mMEDIUM[0m: 10
+[38;2;237;213;126mLOW[0m: 0
+[38;2;91;192;222mINFO[0m: 0
+TOTAL: 10
+
++ echo
+
++ echo '=== [6] TRIVY CONFIG on deploy/ (daocloud checks-bundle mirror) ==='
+=== [6] TRIVY CONFIG on deploy/ (daocloud checks-bundle mirror) ===
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac:/out aquasec/trivy:latest config /w/deploy --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 10m --format json --output /out/trivy-config-deploy.json
++ echo TRIVY_CONFIG_JSON_EXIT=0
+TRIVY_CONFIG_JSON_EXIT=0
++ tail -8 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/trivy-config-deploy.stderr.txt
+2026-09-12T22:46:02Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:46:02Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:46:02Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?159.29 KiB / 234.65 KiB [---------------------------------------->__________________] 67.89% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 634.28 KiB p/s 600ms2026-09-12T22:46:06Z	INFO	Detected config files	num=0
++ docker run --rm -v /home/euripides/projects/blockchain-platform:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac:/out aquasec/trivy:latest config /w/deploy --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 10m
++ echo TRIVY_CONFIG_TABLE_EXIT=0
+TRIVY_CONFIG_TABLE_EXIT=0
++ tail -30 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac/trivy-config-deploy.txt
+2026-09-12T22:46:07Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:46:07Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:46:07Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?151.29 KiB / 234.65 KiB [-------------------------------------->____________________] 64.48% ? p/s ?234.65 KiB / 234.65 KiB [--------------------------------------------------------->] 100.00% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 566.62 KiB p/s 600ms2026-09-12T22:46:11Z	INFO	Detected config files	num=0
+2026-09-12T22:46:11Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+
+Report Summary
+
+┌────────┬──────┬───────────────────┐
+│ Target │ Type │ Misconfigurations │
+├────────┼──────┼───────────────────┤
+│   -    │  -   │         -         │
+└────────┴──────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
++ echo
+
++ echo '=== DONE ==='
+=== DONE ===
++ ls -la /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/iac
+total 152
+drwxrwxr-x 2 euripides euripides  4096 Sep 13 05:46 .
+drwxrwxr-x 7 euripides euripides  4096 Sep 13 05:45 ..
+-rw-rw-r-- 1 euripides euripides     0 Sep 13 05:45 checkov-compose.json
+-rw-rw-r-- 1 euripides euripides  2964 Sep 13 05:45 checkov-compose.stderr.txt
+-rw-rw-r-- 1 euripides euripides   138 Sep 13 05:45 checkov-deploy.json
+-rw-rw-r-- 1 euripides euripides     0 Sep 13 05:45 checkov-deploy.stderr.txt
+-rw-rw-r-- 1 euripides euripides   217 Sep 13 05:45 checkov-deploy.txt
+-rw-rw-r-- 1 euripides euripides 24191 Sep 13 05:45 checkov-secrets.json
+-rw-rw-r-- 1 euripides euripides     0 Sep 13 05:45 checkov-secrets.stderr.txt
+-rw-rw-r-- 1 euripides euripides 16762 Sep 13 05:46 iac-run.log
+-rw-rw-r-- 1 euripides euripides  5551 Sep 13 05:46 kics-deploy.log
+-rwxr-xr-x 1 root      root      51250 Sep 13 05:46 results.html
+-rwxr-xr-x 1 root      root       6879 Sep 13 05:46 results.json
+-rw-rw-r-- 1 euripides euripides  4185 Sep 13 05:42 systemd-and-services.txt
+-rw-r--r-- 1 root      root        233 Sep 13 05:46 trivy-config-deploy.json
+-rw-rw-r-- 1 euripides euripides   579 Sep 13 05:46 trivy-config-deploy.stderr.txt
+-rw-rw-r-- 1 euripides euripides  1295 Sep 13 05:46 trivy-config-deploy.txt
++ echo IAC_DONE=1
+IAC_DONE=1

@@ -1,0 +1,10 @@
+/overview=401
+/users=401
+/roles=401
+/sessions=401
+/audit/events=401
+/control/state=401
+/observability/overview=401
+/providers=401
+/settings=401
+/system/version=401

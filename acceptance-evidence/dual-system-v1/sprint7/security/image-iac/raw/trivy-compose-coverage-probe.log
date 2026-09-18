@@ -1,0 +1,4 @@
+CMD: trivy config /t with --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:1
+"Target": "plain/Dockerfile"
+"Target": "plain/k8s.yaml"
+BUNDLE1_TARGETS_EXIT=0

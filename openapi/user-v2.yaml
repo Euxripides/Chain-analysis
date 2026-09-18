@@ -10,6 +10,14 @@ info:
     auth-v1.yaml 是完整级契约，可作为写法参考。
 x-contract-level: index-only
 x-generated-by: scripts/gen_openapi_index.py
+x-must-change-password-guard:
+  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
+  refused_status: 403
+  see: './common/errors.yaml#/MustChangePasswordGuard'
+x-session-workspace-scope-guard:
+  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
+  refused_status: 409
+  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'
 servers:
   - url: /
 security:
@@ -499,6 +507,27 @@ paths:
   /api/v2/downloads/preview:
     post:
       operationId: downloadPreview
+      tags: [user-v2]
+      x-required-permission: download:create
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/v2/downloads/validate-addresses:
+    post:
+      operationId: downloadValidateAddresses
       tags: [user-v2]
       x-required-permission: download:create
       responses:

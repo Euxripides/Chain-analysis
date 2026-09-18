@@ -1,0 +1,120 @@
+S7-SEC-01  image-iac  scan commands, exit codes, tool versions
+=============================================================
+Host: dataserver (euripides@192.168.31.152)   CWD: /home/euripides/projects/blockchain-platform
+Evidence root: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/image-iac
+Repo in container: ALWAYS mounted read-only (:ro) at /w ; evidence dir mounted read-write at /out
+Docker Engine 29.7.2 (API 1.55)
+
+--- VULNERABILITY DB PROVENANCE -------------------------------------------
+DB Version        : 2
+DB UpdatedAt      : 2026-09-12T13:01:09.044712903Z
+DB NextUpdate     : 2026-09-13T13:01:09.044712565Z
+DB DownloadedAt   : 2026-09-12T16:47:08.604622754Z
+DB final source   : docker.m.daocloud.io/aquasec/trivy-db:2   (fallback mirror)
+checks bundle     : docker.m.daocloud.io/aquasec/trivy-checks:2 (fallback mirror)
+NOTE: default source mirror.gcr.io and upstream ghcr.io were BOTH unreachable
+      (timeout / DENIED). See raw/db-download-try1-ghcr.log.
+      Mirror is a pull-through cache of the same OCI artifact, BUT byte-for-byte
+      equality with upstream could NOT be verified -> very-fresh CVE gaps possible.
+
+--- TOOL VERSIONS ----------------------------------------------------------
+trivy        aquasec/trivy:latest   Version 0.74.0
+             digest sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+             created 2026-08-14T11:27:20.641164516Z
+checkov      bridgecrew/checkov:latest  version 3.3.17
+             digest sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3
+kics         checkmarx/kics:latest   NOT_VERIFIED (pull did not complete)
+
+--- COMMANDS (in execution order) -----------------------------------------
+[01] sudo -n docker pull aquasec/trivy:latest
+     exit 0 | Digest: sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+     evidence: trivy-version.txt
+
+[02] sudo -n docker run --rm aquasec/trivy:latest --version
+     exit 0 | Version: 0.74.0
+     evidence: trivy-version.txt
+
+[03] sudo -n docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --download-db-only --cache-dir /root/.cache/trivy
+     exit 1 | FAILED: mirror.gcr.io/aquasec/trivy-db:2 -> dial tcp 192.178.163.82:443: connect: connection timed out
+     evidence: raw/db-download-try1-ghcr.log
+
+[04] sudo -n docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --download-db-only --db-repository ghcr.io/aquasec/trivy-db --cache-dir /root/.cache/trivy
+     exit 1 | FAILED: ghcr.io token endpoint -> DENIED: requested access to the resource is denied
+     evidence: raw/db-download-try1-ghcr.log
+
+[05] sudo -n docker run --rm -v trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --download-db-only --db-repository docker.m.daocloud.io/aquasec/trivy-db --cache-dir /root/.cache/trivy
+     exit 0 | Artifact successfully downloaded, 112.93 MiB in 49s
+     evidence: raw/db-download-try2-daocloud.log
+
+[06] trivy config /w --scanners misconfig --format json -o /out/misconfig/trivy-config.json   (INSIDE container, 1st attempt)
+     exit 1 | FATAL unknown flag: --scanners   <-- trivy config does NOT accept --scanners; use --misconfig-scanners
+     evidence: misconfig/trivy-config-run.log (lines 74-78)
+
+[07] trivy config /w --misconfig-scanners azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --skip-dirs **/node_modules --skip-dirs **/.git --skip-dirs **/dist --skip-dirs **/build --skip-dirs **/vendor --skip-dirs **/acceptance-evidence --skip-dirs **/.venv --skip-dirs **/coverage --timeout 30m --format json --output /out/misconfig/trivy-config.json
+     exit 0 | INFO Detected config files num=0    <-- ZERO FILES SCANNED
+     evidence: misconfig/trivy-config.json, misconfig/trivy-config-run.log
+
+[08] same as [07] but --format table --output /out/misconfig/trivy-config.txt
+     exit 0 | WARN [report] Supported files for scanner(s) not found. scanners=[misconfig]
+     evidence: misconfig/trivy-config.txt
+
+[09] trivy config /w/deploy --misconfig-scanners <same> --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 30m --format json --output /out/misconfig/trivy-config-deploy.json
+     exit 0 | Detected config files num=0
+     evidence: misconfig/trivy-config-deploy.json
+
+[10] same as [09] but --format table --output /out/misconfig/trivy-config-deploy.txt
+     exit 0 | Table shows Target '-', Type '-', Misconfigurations '-' with legend '-: Not scanned'
+     evidence: misconfig/trivy-config-deploy.txt
+
+[11] trivy image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL        --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m        --format json --output /out/images/<name>.json <ref>
+     run 4x: postgres:18 | clickhouse/clickhouse-server:26.7 | nats:2-alpine | minio/minio:latest
+     exit 0 x4
+     evidence: images/*.json, images/trivy-images-run.log (JSON_EXIT_* = 0 x4)
+
+[12] same as [11] but --format table --output /out/images/<name>.txt
+     exit 0 x4
+     evidence: images/*.txt, images/trivy-images-run.log (TABLE_EXIT_* = 0 x4)
+
+[13] sudo -n docker pull bridgecrew/checkov:latest
+     exit 0 | Digest sha256:41c4701c6a56d8952e5aba7a420f871c8b70b57da94eb4f142dcdf7295bb0be3
+     evidence: raw/checkov-supplementary.log
+
+[14] checkov -d /w/deploy -o json > /out/misconfig/checkov-compose.json
+     exit 0 | resource_count 0, failed 0, passed 0  <-- compose.yaml NOT recognized either
+     evidence: misconfig/checkov-compose.json
+
+[15] checkov -d /w/deploy -o cli > /out/misconfig/checkov-compose.txt
+     exit 0 | banner only, no findings, no resources
+     evidence: misconfig/checkov-compose.txt
+
+[16] checkov -d /w --framework dockerfile -o json > /out/misconfig/checkov-repo-dockerfile.json
+     exit 0 | resource_count 0
+     evidence: misconfig/checkov-repo-dockerfile.json
+
+[17] kics scan -p /w/deploy -o /tmp/kics-real --report-formats json,html      (checkmarx/kics:latest)
+     NOT COMPLETED | container image pull exceeded the execution window; no output produced;
+     /tmp/kics-real and /tmp/kics-selftest do not exist. NOT_VERIFIED.
+     evidence: (none - no output was produced)
+
+--- COVERAGE SELF-TEST (proves which file types trivy recognises) ----------
+[18] trivy config /t        on /tmp/trivy-selftest containing DELIBERATELY BAD:
+       plain/compose.yaml, plain/docker-compose.yaml, plain/Dockerfile, plain/k8s.yaml
+     exit 0 | Targets found: plain/Dockerfile, plain/k8s.yaml ONLY
+              compose.yaml and docker-compose.yaml were NOT detected at all
+     evidence: raw/trivy-selftest-compose.log
+
+[19] same self-test with --checks-bundle-repository .../aquasec/trivy-checks:1 (older bundle)
+     exit 0 | Targets found: plain/Dockerfile, plain/k8s.yaml ONLY (still no compose)
+     evidence: raw/trivy-compose-coverage-probe.log
+
+[20] grep -ril "compose|docker-compose|docker_compose" /root/.cache/trivy/policy/content
+     ZERO matches across 580 rego policies; bundle namespaces = cloud, docker, kubernetes, test
+     evidence: raw/trivy-checksbundle-compose-grep.log
+
+--- CONCLUSION OF COVERAGE ------------------------------------------------
+trivy config scans: 0 files.  This means "0 files scanned", NOT "0 findings".
+trivy-checks has NO docker-compose checks and no systemd / nginx support.
+The repo contains ONLY compose.yaml + *.service + nginx conf (no Dockerfile, no
+k8s, no terraform/helm/ansible) -> trivy config is structurally unable to cover it.
+checkov also failed to recognise compose. KICS attempt NOT_VERIFIED.
+=> IaC/config misconfiguration coverage for this sprint is NOT_VERIFIED.

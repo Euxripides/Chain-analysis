@@ -1,0 +1,21 @@
+
+        npx playwright show-trace test-results/dual-system-sprint5-S5-ADM-ce7e1-定诊断链-全局任务列表跨组织可见，诊断链按固定顺序渲染-admin-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [user-desktop] › tests/dual-system-sprint4.spec.ts:106:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互 
+    [user-desktop] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE 
+    [user-desktop] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖 
+    [admin-desktop] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染 
+  21 skipped
+  33 passed (2.8m)
+{
+  "passed": 33,
+  "failed": 4,
+  "skipped": 21,
+  "flaky": 0,
+  "rc": 1,
+  "status": "FAIL",
+  "criteria": "failed==0 and rc==0 and passed>0"
+}

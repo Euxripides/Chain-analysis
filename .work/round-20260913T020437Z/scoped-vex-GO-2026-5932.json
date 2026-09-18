@@ -1,0 +1,87 @@
+{
+  "vex_version": "1.0",
+  "generated_at_utc": "2026-09-13T02:45:00Z",
+  "generated_by": "DSH main writer (U-DL-01 round), on the engineering decision of the root monitor",
+  "scope": "per-artifact, THIS BUILD ONLY (three exact Go binaries listed in products[])",
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "GO-2026-5932",
+        "source": "https://vuln.go.dev/ID/GO-2026-5932.json",
+        "summary": "golang.org/x/crypto/openpgp is unmaintained and unsafe by design"
+      },
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The advisory's affected packages are golang.org/x/crypto/openpgp and its subpackages only (officially read from vuln.go.dev). Those packages are NOT linked into any of the three production binaries: nm reports 0 openpgp symbols in each artifact (rc=0, non-empty symbol tables) and go list -deps over the three production cmds yields 531 packages with no openpgp-prefixed package.",
+      "products": [
+        {
+          "component": "api",
+          "bom_ref": "pkg:golang/github.com/blockchain-platform/blockchain-platform/cmd/api@(devel)?file=backend/bin/api",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a"
+            }
+          ],
+          "size_bytes": 56206166
+        },
+        {
+          "component": "worker",
+          "bom_ref": "pkg:golang/github.com/blockchain-platform/blockchain-platform/cmd/worker@(devel)?file=backend/bin/worker",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48"
+            }
+          ],
+          "size_bytes": 42685594
+        },
+        {
+          "component": "migrate",
+          "bom_ref": "pkg:golang/github.com/blockchain-platform/blockchain-platform/cmd/migrate@(devel)?file=backend/bin/migrate",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4"
+            }
+          ],
+          "size_bytes": 30859300
+        }
+      ],
+      "evidence": {
+        "proof_dir": "root-openpgp-proof/",
+        "files": [
+          "api.nm.txt",
+          "worker.nm.txt",
+          "migrate.nm.txt",
+          "go-list-deps.txt",
+          "proof.json"
+        ],
+        "hashes_manifest": "root-openpgp-proof.sha256.txt",
+        "independent_recheck": "live-artifact-recheck.txt (nm 0 openpgp symbols, rc=0, per artifact)",
+        "root_json_copy": "openpgp-production-not-affected-root.json"
+      },
+      "assumptions": [
+        "The current version does NOT load this package dynamically (no plugin / no runtime module loading of golang.org/x/crypto/openpgp). If plugin loading is introduced, this statement is void.",
+        "This is an impact classification for these exact artifacts, NOT a waiver and NOT a claim that the advisory is harmless in general.",
+        "It is not based on 'no CVSS published' and not on 'symbol scan level 0' alone."
+      ],
+      "invalidation_triggers": [
+        "any rebuild of api/worker/migrate (artifact sha changes)",
+        "any change to go.mod / go.sum / the dependency graph",
+        "introduction of plugin or dynamic loading"
+      ],
+      "reviewed_at": "2026-09-13T02:46:46Z"
+    }
+  ],
+  "explicitly_not_claimed": [
+    "global P0 = 0 or P1 = 0 for the project",
+    "release GO / production cutover",
+    "container image P0/P1 status (separate, still OPEN)",
+    "any other dependency finding, SBOM gap, or §27/§31 acceptance item"
+  ],
+  "notes": [
+    "Other dependency scan results and full QA remain OPEN; this file closes exactly one advisory's impact classification for three exact artifacts.",
+    "VEX expires as soon as any artifact hash above changes."
+  ]
+}

@@ -1,0 +1,1052 @@
+##### backend/internal/api/authmw.go
+diff --git a/backend/internal/api/authmw.go b/backend/internal/api/authmw.go
+index 270cc11..2860599 100644
+--- a/backend/internal/api/authmw.go
++++ b/backend/internal/api/authmw.go
+@@ -4,10 +4,13 @@ import (
+ 	"context"
+ 	"errors"
+ 	"net/http"
++	"net/url"
+ 	"strings"
+ 	"time"
+ 
+ 	"github.com/google/uuid"
++	"github.com/jackc/pgx/v5"
++	"github.com/jackc/pgx/v5/pgxpool"
+ 
+ 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
+ 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
+@@ -18,6 +21,39 @@ import (
+ 
+ type principalCtxKey struct{}
+ type requestMetaCtxKey struct{}
++type auditOriginCtxKey struct{}
++
++// auditOrigin 记录"派生后台审计上下文的那次**真实**请求"的方法与路径。
++//
++// 背景（R10v8 定点实测证据，audit_events_v2 seq 51944）：D-R10V4-01 修复把
++// export.completed 写进了 v2 不可抵赖审计链，但 request 维度是**假的** ——
++// writeAuditCtx 当时用 r0() 合成请求（POST /api/auth/v1/refresh），
++// 于是"导出完成"这条事件记录的路由指向了另一个端点。
++// 审计的 request 维度必须可追溯到真实请求：这里把真实 method/path 随 ctx 传下去，
++// 来源缺失时**留空**，绝不伪造——宁可字段为空，也不写一条指向别的端点的假记录。
++type auditOrigin struct {
++	Method string
++	Path   string
++}
++
++// withAuditOrigin 在请求中间件里记录真实来源（method + 路由路径）。
++func withAuditOrigin(ctx context.Context, method, path string) context.Context {
++	return context.WithValue(ctx, auditOriginCtxKey{}, auditOrigin{Method: method, Path: path})
++}
++
++// auditOriginFrom 取回真实来源；不存在时返回空串（调用方必须按"未知"处理，不得编造）。
++func auditOriginFrom(ctx context.Context) (string, string) {
++	if o, ok := ctx.Value(auditOriginCtxKey{}).(auditOrigin); ok {
++		return o.Method, o.Path
++	}
++	return "", ""
++}
++
++// auditRequestFor 用真实来源还原一个请求对象，仅供 auditEventFor 读取 request 维度。
++func auditRequestFor(ctx context.Context) *http.Request {
++	method, path := auditOriginFrom(ctx)
++	return &http.Request{Method: method, URL: &url.URL{Path: path}, Header: http.Header{}}
++}
+ 
+ // actorCtxKey 保存一个可变主体槽位：identityMiddleware 在下游填充，
+ // logMiddleware / metricsMiddleware 在上游读取，用于 §25.1 的 actor_id 字段。
+@@ -137,6 +173,7 @@ func (s *Server) requestMetaMiddleware(next http.Handler) http.Handler {
+ 		w.Header().Set("X-Request-Id", meta.RequestID)
+ 		w.Header().Set("X-Trace-Id", meta.TraceID)
+ 		ctx := withRequestMeta(r.Context(), meta)
++		ctx = withAuditOrigin(ctx, r.Method, r.URL.Path)
+ 		ctx = context.WithValue(ctx, actorCtxKey{}, &actorHolder{})
+ 		next.ServeHTTP(w, r.WithContext(ctx))
+ 	})
+@@ -158,6 +195,27 @@ func traceIDFrom(r *http.Request) string {
+ 	return uuid.NewString()
+ }
+ 
++// cookieByName 依次按候选名读取 Cookie（先安全名 __Host-xxx，再普通名 xxx）。
++// 部署在 HTTP/HTTPS 之间切换或回滚时，两类命名的既有会话都不会因改名而失效。
++func cookieByName(r *http.Request, names []string) (*http.Cookie, bool) {
++	for _, n := range names {
++		if c, err := r.Cookie(n); err == nil && c.Value != "" {
++			return c, true
++		}
++	}
++	return nil, false
++}
++
++// secureCookieFor 依据**本次请求的入口协议**决定 Cookie 是否使用 Secure 与 __Host- 前缀
++// （S7-SEC-01 R-05）。HTTPS 入口（Cloudflare/Nginx TLS 终止，X-Forwarded-Proto=https）
++// 使用 __Host- 前缀 + Secure；HTTP 入口退回普通命名，避免浏览器因 __Host- 约束直接拒绝 Cookie。
++func (s *Server) secureCookieFor(r *http.Request) bool {
++	if s.iam == nil {
++		return false
++	}
++	return s.iam.Sessions().Config().SecureFor(requestScheme(r))
++}
++
+ func requestScheme(r *http.Request) string {
+ 	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); v != "" {
+ 		return v
+@@ -198,10 +256,12 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
+ 				}
+ 			}
+ 			for _, aud := range candidates {
+-				c, err := r.Cookie(cfg.CookieName(aud))
+-				if err != nil || c.Value == "" {
++				c, ok := cookieByName(r, cfg.CookieNameCandidates(aud))
++				if !ok {
+ 					continue
+ 				}
++				err := error(nil)
++				_ = err
+ 				sess, err := s.iam.Sessions().Authenticate(ctx, c.Value, aud)
+ 				switch {
+ 				case err == nil:
+@@ -217,11 +277,20 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
+ 					// 普通业务请求会静默退化成"未登录"。
+ 					s.handleTokenReuse(ctx, sess, aud)
+ 					ctx = context.WithValue(ctx, sessionReuseCtxKey{}, true)
+-					s.iam.Sessions().ClearCookies(w, aud)
++					s.iam.Sessions().ClearCookiesFor(w, aud, s.secureCookieFor(r))
++				case errors.Is(err, iam.ErrWorkspaceAccessRevoked):
++					// P1-20260913：工作区成员资格被撤销 → 既有会话立即 fail closed。
++					// 先撤销会话并写安全审计，再返回显式错误码；绝不继续放行，
++					// 也绝不静默退化成普通未登录（否则撤权不可观测）。
++					s.handleWorkspaceAccessRevoked(ctx, sess, aud)
++					s.iam.Sessions().ClearCookiesFor(w, aud, s.secureCookieFor(r))
++					respondError(w, r, http.StatusUnauthorized, "AUTHZ_WORKSPACE_ACCESS_REVOKED",
++						"工作区访问权限已被撤销，请重新登录", nil)
++					return
+ 				case errors.Is(err, iam.ErrSessionInvalid):
+ 					// 过期/已撤销：清理 Cookie，继续走未认证路径，
+ 					// 由 require() 返回 401 而不是静默降级为兼容头。
+-					s.iam.Sessions().ClearCookies(w, aud)
++					s.iam.Sessions().ClearCookiesFor(w, aud, s.secureCookieFor(r))
+ 				default:
+ 					if !errors.Is(err, context.Canceled) {
+ 						s.deps.Log.Error("session authenticate failed", "err", err, "audience", aud)
+@@ -259,6 +328,9 @@ func principalFromSession(ctx context.Context, sess iam.Session, engine *policy.
+ 		OrganizationID: sess.OrganizationID, WorkspaceID: sess.WorkspaceID,
+ 		SessionID: sess.ID, DeviceID: sess.DeviceID, Audience: sess.Audience,
+ 		Roles: sess.Roles, Authenticated: true,
++		// The flag comes from the session row, which loadByToken re-reads from identities on
++		// every request: no extra query and no stale cache. See mustchangepw.go.
++		MustChangePassword: sess.Identity.MustChangePassword,
+ 	}
+ 	if engine != nil {
+ 		perms, roles, err := engine.Load(ctx, sess.IdentityID, sess.OrganizationID)
+@@ -300,7 +372,7 @@ func (s *Server) require(permission string, next http.HandlerFunc) http.HandlerF
+ 		p := PrincipalFrom(ctx)
+ 
+ 		if !p.Authenticated {
+-			writeErrorCode(w, http.StatusUnauthorized, "unauthenticated", "需要登录", nil)
++			writeErrorCode(w, r, http.StatusUnauthorized, "unauthenticated", "需要登录", nil)
+ 			s.auditDeny(r, p, permission, policy.Decision{Permission: permission, Reason: "unauthenticated"}, http.StatusUnauthorized)
+ 			return
+ 		}
+@@ -308,7 +380,7 @@ func (s *Server) require(permission string, next http.HandlerFunc) http.HandlerF
+ 		observability.RecordAuthzDecision(boolLabel(decision.Allowed), "route")
+ 		if !decision.Allowed {
+ 			observability.RecordAuthzDenied(permission, decision.Reason)
+-			writeErrorCode(w, http.StatusForbidden, "permission_denied", "当前身份没有该操作的权限", map[string]any{
++			writeErrorCode(w, r, http.StatusForbidden, "permission_denied", "当前身份没有该操作的权限", map[string]any{
+ 				"permission": permission, "reason": decision.Reason,
+ 			})
+ 			s.auditDeny(r, p, permission, decision, http.StatusForbidden)
+@@ -317,10 +389,64 @@ func (s *Server) require(permission string, next http.HandlerFunc) http.HandlerF
+ 		// CSRF Cookie 名与会话受众绑定：必须用主体自己的受众，而不是路径推断值，
+ 		// 否则后台会话调用 /api/auth/v1/* 自助端点时会取错 Cookie。
+ 		if s.csrfRequired(r, p) && !s.checkCSRF(r, p.Audience) {
+-			writeErrorCode(w, http.StatusForbidden, "csrf_failed", "请求校验失败，请刷新页面后重试", nil)
++			writeErrorCode(w, r, http.StatusForbidden, "csrf_failed", "请求校验失败，请刷新页面后重试", nil)
+ 			s.auditDeny(r, p, permission, policy.Decision{Permission: permission, Reason: "csrf_failed"}, http.StatusForbidden)
+ 			return
+ 		}
++		if !s.guardSessionWorkspace(w, r, p, permission) {
++			return
++		}
++		next(w, r)
++	}
++}
++
++// requireAny 是 require 的多权限变体：主体持有其中任意一个即通过，并对**实际命中的那个**权限
++// 做判定与审计（不会因为"有一个通过"就跳过 CSRF 与 deny 记录）。
++//
++// 使用场景（S7）：同一路径下由 {command} 决定具体动作的路由，例如
++// POST /providers/{id}/commands/{command} —— 入口必须允许"读 / 改配置 / 轮换密钥"三类主体进入，
++// 再由 handler 按命令做精确鉴权。若入口只写 admin:provider:read，
++// 则 policy 目录里被授予 admin:provider:key:rotate 的 security_admin 反而永远进不来。
++func (s *Server) requireAny(permissions []string, next http.HandlerFunc) http.HandlerFunc {
++	return func(w http.ResponseWriter, r *http.Request) {
++		p := PrincipalFrom(r.Context())
++		if !p.Authenticated {
++			ctx := context.WithValue(r.Context(), routePermCtxKey{}, strings.Join(permissions, "|"))
++			r = r.WithContext(ctx)
++			writeErrorCode(w, r, http.StatusUnauthorized, "unauthenticated", "需要登录", nil)
++			s.auditDeny(r, p, strings.Join(permissions, "|"), policy.Decision{Permission: strings.Join(permissions, "|"), Reason: "unauthenticated"}, http.StatusUnauthorized)
++			return
++		}
++		matched := ""
++		var lastDecision policy.Decision
++		for _, perm := range permissions {
++			decision := s.decide(r, p, perm)
++			observability.RecordAuthzDecision(boolLabel(decision.Allowed), "route")
++			lastDecision = decision
++			if decision.Allowed {
++				matched = perm
++				break
++			}
++		}
++		label := strings.Join(permissions, "|")
++		if matched == "" {
++			observability.RecordAuthzDenied(label, lastDecision.Reason)
++			writeErrorCode(w, r, http.StatusForbidden, "permission_denied", "当前身份没有该操作的权限", map[string]any{
++				"permissions": permissions, "reason": lastDecision.Reason,
++			})
++			s.auditDeny(r, p, label, lastDecision, http.StatusForbidden)
++			return
++		}
++		ctx := context.WithValue(r.Context(), routePermCtxKey{}, matched)
++		r = r.WithContext(ctx)
++		if s.csrfRequired(r, p) && !s.checkCSRF(r, p.Audience) {
++			writeErrorCode(w, r, http.StatusForbidden, "csrf_failed", "请求校验失败，请刷新页面后重试", nil)
++			s.auditDeny(r, p, matched, policy.Decision{Permission: matched, Reason: "csrf_failed"}, http.StatusForbidden)
++			return
++		}
++		if !s.guardSessionWorkspace(w, r, p, matched) {
++			return
++		}
+ 		next(w, r)
+ 	}
+ }
+@@ -374,8 +500,8 @@ func (s *Server) checkCSRF(r *http.Request, audience string) bool {
+ 	if audience == "" {
+ 		audience = audienceForPath(r.URL.Path)
+ 	}
+-	cookie, err := r.Cookie(cfg.CSRFSecretCookie(audience))
+-	if err != nil {
++	cookie, ok := cookieByName(r, cfg.CSRFSecretCookieCandidates(audience))
++	if !ok {
+ 		return false
+ 	}
+ 	header := strings.TrimSpace(r.Header.Get(cfg.CSRFHeader))
+@@ -385,8 +511,12 @@ func (s *Server) checkCSRF(r *http.Request, audience string) bool {
+ 	if header == "" || header != cookie.Value {
+ 		return false
+ 	}
+-	sessionCookie, err := r.Cookie(cfg.CookieName(audience))
+-	if err != nil {
++	// S7-SEC-01 R-05 修复回归：这里必须与 identityMiddleware / 写入路径使用同一套
++	// "候选名" 逻辑。CookieName() 会**无条件**加上 NamePrefix（__Host-），
++	// 而 HTTP 入口写入的是不带前缀的名字 —— 用单名查找会找不到会话 Cookie，
++	// 结果是"CSRF token 正确却仍 403 csrf_failed"，把所有直连 :8080 的验收链路打红。
++	sessionCookie, ok := cookieByName(r, cfg.CookieNameCandidates(audience))
++	if !ok {
+ 		return false
+ 	}
+ 	sess, err := s.iam.Sessions().Authenticate(r.Context(), sessionCookie.Value, audience)
+@@ -507,3 +637,161 @@ func resourceFromPath(path string) string {
+ 	}
+ 	return trimmed
+ }
++
++// ---------------------------------------------------------------------------
++// Session workspace staleness guard (sprint7 C1-RACE, defence in depth).
++//
++// Measured defect: a state-changing request that was authenticated while the session was in
++// workspace A could still commit into workspace A after the same session had been switched
++// to workspace B -- the principal is resolved once, at the start of the request, while the
++// request body is still being uploaded. The security-critical variant (membership revoked in
++// A) is already fail closed by the feature-level membership re-check; this guard closes the
++// remaining window, where the SESSION workspace itself goes stale mid-request.
++//
++// Contract: for state-changing requests only (never GET/HEAD/OPTIONS) the guard compares
++// principal.workspace_id with the CURRENT workspace of the live session row, read with one
++// primary-key lookup. A missing or revoked session row, a different workspace, and any
++// database error all refuse with HTTP 409 and the stable code
++// AUTHZ_WORKSPACE_SCOPE_STALE. Safe methods never touch the database.
++// ---------------------------------------------------------------------------
++
++// ErrorAUTHZWorkspaceScopeStale is the stable refusal code (HTTP 409) for a state-changing
++// request whose session workspace no longer matches the live session row.
++const ErrorAUTHZWorkspaceScopeStale = "AUTHZ_WORKSPACE_SCOPE_STALE"
++
++// workspaceScopeStaleMessage is the user-facing text of that refusal. It names no object, no
++// workspace and no session identifier.
++const workspaceScopeStaleMessage = "The session workspace changed while this request was in flight; reload the session and retry."
++
++// sessionScopeReader reads the CURRENT workspace of a live session row.
++//
++// It is an interface so the guard can be unit-tested without PostgreSQL; in production
++// Server.sessionScope stays nil and the lookup below runs against s.deps.Store.Pool.
++type sessionScopeReader interface {
++	LiveSessionWorkspace(ctx context.Context, sessionID string) (workspaceID string, found bool, err error)
++}
++
++// sessionWorkspaceLookup is the production implementation: one indexed primary-key lookup on
++// the sessions table. It selects the workspace of the row only while it is still live.
++type sessionWorkspaceLookup struct {
++	pool *pgxpool.Pool
++}
++
++// sessionWorkspaceQuery reads the live session row for the staleness guard. The session id
++// is a UUID primary key, so this is a single index lookup.
++const sessionWorkspaceQuery = "SELECT workspace_id::text FROM sessions WHERE id = $1::uuid AND revoked_at IS NULL"
++
++func (l sessionWorkspaceLookup) LiveSessionWorkspace(ctx context.Context, sessionID string) (string, bool, error) {
++	var workspaceID *string
++	err := l.pool.QueryRow(ctx, sessionWorkspaceQuery, sessionID).Scan(&workspaceID)
++	if errors.Is(err, pgx.ErrNoRows) {
++		return "", false, nil
++	}
++	if err != nil {
++		return "", false, err
++	}
++	if workspaceID == nil {
++		return "", true, nil
++	}
++	return *workspaceID, true, nil
++}
++
++// liveSessionWorkspace resolves the reader: an injected stub (tests) or the production pool.
++// A server without a usable pool cannot verify the session scope, which the caller treats as
++// fail closed.
++func (s *Server) liveSessionWorkspace(ctx context.Context, sessionID string) (string, bool, error) {
++	if s.sessionScope != nil {
++		return s.sessionScope.LiveSessionWorkspace(ctx, sessionID)
++	}
++	if s.deps.Store == nil || s.deps.Store.Pool == nil {
++		return "", false, errSessionScopeUnverifiable
++	}
++	return sessionWorkspaceLookup{pool: s.deps.Store.Pool}.LiveSessionWorkspace(ctx, sessionID)
++}
++
++// errSessionScopeUnverifiable means the session scope could not be read at all; callers must
++// fail closed, never allow.
++var errSessionScopeUnverifiable = errors.New("session workspace unverifiable")
++
++// needsSessionWorkspaceCheck reports whether the staleness guard applies to this request.
++// Only cookie-authenticated, session-scoped, state-changing requests are checked: an
++// organisation-level principal without a session workspace, a system/compat principal and
++// every safe method are out of scope and cost no database round trip.
++func needsSessionWorkspaceCheck(r *http.Request, p policy.Principal) bool {
++	switch r.Method {
++	case http.MethodGet, http.MethodHead, http.MethodOptions:
++		return false
++	}
++	return !p.System && p.SessionID != "" && p.WorkspaceID != ""
++}
++
++// guardSessionWorkspace is called by require/requireAny after the permission decision and
++// after the CSRF check, for state-changing requests only. It returns false when the request
++// was already refused, in which case the caller must not run the handler.
++//
++// Fail closed: a missing or revoked session row, a workspace mismatch and any database error
++// all refuse with 409 AUTHZ_WORKSPACE_SCOPE_STALE and an explicit audit deny row.
++func (s *Server) guardSessionWorkspace(w http.ResponseWriter, r *http.Request, p policy.Principal, permission string) bool {
++	if !needsSessionWorkspaceCheck(r, p) {
++		return true
++	}
++	current, found, err := s.liveSessionWorkspace(r.Context(), p.SessionID)
++	reason := ""
++	switch {
++	case err != nil:
++		reason = "session_scope_unverifiable"
++	case !found:
++		reason = "session_missing"
++	case current != p.WorkspaceID:
++		reason = "session_workspace_changed"
++	default:
++		return true
++	}
++	if err != nil && s.deps.Log != nil {
++		s.deps.Log.Error("session workspace lookup failed; failing closed",
++			"err", err, "session_id", p.SessionID, "route", r.URL.Path)
++	}
++	writeErrorCode(w, r, http.StatusConflict, ErrorAUTHZWorkspaceScopeStale, workspaceScopeStaleMessage, nil)
++	s.auditDenyCode(r, p, permission, reason, ErrorAUTHZWorkspaceScopeStale, http.StatusConflict)
++	return false
++}
++
++// auditDenyCode records an authorization denial whose stable error code is not
++// permission_denied (for example AUTHZ_WORKSPACE_SCOPE_STALE or
++// AUTHN_PASSWORD_CHANGE_REQUIRED). It keeps the existing deny convention -- action
++// authorization.denied, category authorization -- and adds the accurate error code, the deny
++// reason, the route and the request id.
++//
++// The write is synchronous and detached from the client connection (auditRequestDetached) so
++// the row survives a client disconnect. A failed write is logged but never turns the refusal
++// into an allow: the refusal is the fail-closed decision. It never records a password, a
++// password hash or a session token.
++func (s *Server) auditDenyCode(r *http.Request, p policy.Principal, permission, reason, code string, status int) {
++	if s.auditSink == nil && s.audit == nil {
++		return
++	}
++	meta := metaFrom(r.Context())
++	risk := policy.RiskHigh
++	if permission != "" {
++		if declared := policy.RiskOf(permission); declared != "" {
++			risk = declared
++		}
++	}
++	event := audit.Event{
++		ActorType: "user", ActorID: p.IdentityID, ActorEmail: p.Email, ActorName: p.DisplayName,
++		ActorRoles: p.Roles, OrganizationID: p.OrganizationID, WorkspaceID: p.WorkspaceID,
++		SessionID: p.SessionID, DeviceID: p.DeviceID,
++		Action: "authorization.denied", Category: "authorization",
++		ResourceType: resourceFromPath(r.URL.Path), ResourceID: r.PathValue("id"),
++		HTTPMethod: r.Method, Route: r.URL.Path, RequestID: meta.RequestID, TraceID: meta.TraceID,
++		Result: "deny", HTTPStatus: status, ErrorCode: code,
++		PermissionKey: permission, PolicyDecision: "deny", DenyReason: reason,
++		RiskLevel: risk, Sensitive: true,
++		PeerIP: meta.IP.PeerIP, ClientIP: meta.IP.ClientIP, ProxyChain: meta.IP.ProxyChain,
++		UserAgent: meta.UserAgent,
++		Detail:    map[string]any{"reason": reason},
++	}
++	if err := s.emitAudit(auditRequestDetached(r).Context(), event); err != nil && s.deps.Log != nil {
++		s.deps.Log.Error("audit deny write failed", "err", err, "error_code", code, "route", r.URL.Path)
++	}
++}
+
+##### backend/internal/api/server.go
+diff --git a/backend/internal/api/server.go b/backend/internal/api/server.go
+index e28c551..d006dc5 100644
+--- a/backend/internal/api/server.go
++++ b/backend/internal/api/server.go
+@@ -15,7 +15,6 @@ import (
+ 	"github.com/go-chi/chi/v5/middleware"
+ 	"github.com/prometheus/client_golang/prometheus/promhttp"
+ 
+-	"github.com/blockchain-platform/blockchain-platform/internal/access"
+ 	"github.com/blockchain-platform/blockchain-platform/internal/addressmeta"
+ 	"github.com/blockchain-platform/blockchain-platform/internal/advanced"
+ 	"github.com/blockchain-platform/blockchain-platform/internal/analysis"
+@@ -99,17 +98,77 @@ type Server struct {
+ 	subjects       *subjectintel.Service
+ 
+ 	// §6.3/§6.5：身份、授权与审计底座。
+-	cfg            *config.Config
+-	iam            *iam.Service
+-	policy         *policy.Engine
+-	audit          *audit.Writer
+-	guard          *access.Guard
++	cfg    *config.Config
++	iam    *iam.Service
++	policy *policy.Engine
++	audit  *audit.Writer
++	// auditSink 仅用于测试注入关键路径审计（生产为 nil，走 audit.Writer）。D-R10V9-01。
++	auditSink auditSink
++	guard     objectScoper
++	// sessionScope is a test seam for the live-session workspace lookup used by the
++	// session-workspace staleness guard (nil in production, where the guard reads
++	// s.deps.Store.Pool directly). Same injection pattern as auditSink and guard.
++	sessionScope sessionScopeReader
++
+ 	casework       *casework.Service
+ 	oidc           *iam.OIDCAdapter
+ 	authMode       auth.Mode
+ 	trustedProxies []*net.IPNet
+ }
+ 
++// auditSink 是审计写入的最小接口：生产实现是 *audit.Writer；测试可注入记录桩，
++// 使"下载成功必须留下服务端审计"这类关键路径能被 httptest 逐字段断言（D-R10V9-01）。
++type auditSink interface {
++	Write(ctx context.Context, e audit.Event) error
++}
++
++// emitAudit 统一审计出口。写入失败**不静默**：沿用既有关键操作审计策略 —— 记录 Error 日志
++// 并返回错误，由调用方决定是 fail closed 还是业务成功 + 明确审计告警。绝不吞掉错误。
++//
++// D-B2RAW-02 (2026-09-13 security review, real defect): auditRequestDetached uses
++// context.WithoutCancel to survive client disconnect, which ALSO drops the request deadline.
++// audit.Writer.Write then runs Begin/INSERT/Commit with that context, while production
++// PostgreSQL has statement_timeout=0, every role has an empty rolconfig and the pgxpool sets
++// no per-query timeout -- so this audit write was completely UNBOUNDED. If the database stalls
++// (lock wait, saturated pool) the download handler goroutine and its pooled connection stay
++// pinned forever; repeated downloads can exhaust the pool and turn an audit-reliability fix
++// into an availability defect. Bound every audit write that has no deadline; contexts that
++// already carry an earlier deadline are left untouched.
++func (s *Server) emitAudit(ctx context.Context, ev audit.Event) error {
++	if s.auditSink == nil && s.audit == nil {
++		return nil
++	}
++	ctx, cancel := auditBoundedContext(ctx)
++	defer cancel()
++	if s.auditSink != nil {
++		return s.auditSink.Write(ctx, ev)
++	}
++	return s.audit.Write(ctx, ev)
++}
++
++// auditWriteTimeout bounds a single audit write.
++// It must stay a var (not a const): the regression test lowers it to prove deterministically
++// that an unbounded write really is cut off.
++var auditWriteTimeout = 5 * time.Second
++
++// auditBoundedContext clamps an audit write to the SMALLER of the caller's own deadline and
++// now+auditWriteTimeout, returning the matching cancel.
++//
++// D-B2RAW-03 (2026-09-13 review, second face of D-B2RAW-02): the first fix only added a bound
++// when the caller had NO deadline, so any caller carrying a deadline LONGER than the bound
++// (a request/background context with its own multi-minute or one-hour timeout) silently kept an
++// effectively unbounded audit write, and TestAuditBoundedContextAddsAndPreservesDeadline pinned
++// that hole with a one-hour parent. The safety intent is an upper bound on the write, so a later
++// deadline is now clamped down to now+auditWriteTimeout; an EARLIER deadline is still preserved
++// exactly, because shortening the caller's own semantics is never allowed either.
++func auditBoundedContext(ctx context.Context) (context.Context, context.CancelFunc) {
++	limit := time.Now().Add(auditWriteTimeout)
++	if dl, ok := ctx.Deadline(); ok && !dl.After(limit) {
++		return ctx, func() {}
++	}
++	return context.WithDeadline(ctx, limit)
++}
++
+ type chainAwareAddressTypeResolver struct {
+ 	evm  provider.AddressTypeResolver
+ 	tron provider.AddressTypeResolver
+@@ -268,6 +327,11 @@ func (s *Server) buildRouter() {
+ 	r.Use(s.logMiddleware())
+ 	r.Use(s.metricsMiddleware())
+ 	r.Use(s.identityMiddleware)
++	// Server-side enforcement of identities.must_change_password: business surfaces are
++	// refused (403 AUTHN_PASSWORD_CHANGE_REQUIRED) while the flag is set. Must run after
++	// identityMiddleware (it needs the principal) and before auditCaptureMiddleware (a
++	// refused request is not a business operation). See internal/api/mustchangepw.go.
++	r.Use(s.mustChangePasswordMiddleware)
+ 	r.Use(s.auditCaptureMiddleware)
+ 
+ 	r.Handle("/metrics", promhttp.Handler())
+@@ -280,150 +344,210 @@ func (s *Server) buildRouter() {
+ 	r.Get("/redoc", s.handleActionsRedoc)
+ 
+ 	r.Route("/api/v1", func(api chi.Router) {
++		// registerActionRoutes 必须先注册：它自己的子路由（/admin/action-api-keys）
++		// 与下面的 session 路由互不重叠，但 Actions 面独立鉴权，顺序保持原样。
+ 		s.registerActionRoutes(api)
++		// ------------------------------------------------------------------
++		// P0 修复（S7-SEC-LEGACY-V1）：/api/v1 下**每一条**读路由都必须显式声明权限。
++		//
++		// 背景：本兼容面历史上只在写路由上调用 s.require(...)，大量读路由直接注册
++		// handler，导致无 Cookie / 无 Authorization 的请求可以拿到 cases、
++		// download-jobs、api-control、admin 等真实业务数据（HTTP 200）。
++		//
++		// 原则与硬约束：
++		//   - 不使用"全局登录"中间件糊过去：每条路由的权限键必须与其域内已有写权限相称，
++		//     便于按域授予最小权限、并让审计动作名精确；
++		//   - 公开白名单只保留**不含租户业务数据**的元数据/链上公共查询，逐条注明理由；
++		//   - 未在下方显式声明 require 的读路由不存在；新增路由必须二选一并写明理由。
++		//   - registerActionRoutes 注册的 GPT Actions 路由（/address/*、/transaction/*、
++		//     /analysis/*、/export/*、/data/*、/admin/action-api-keys/*）走独立的
++		//     Bearer API Key + scopes 认证（actions.go），**不得**套用 session 规则，
++		//     因此本处不为其添加任何 require（见本块最上方的调用）。
++		// ------------------------------------------------------------------
++
++		// ---- 公开白名单（无租户业务数据） ----
++		// /me：前端用它判断"是否已登录"，只回显当前主体（未登录时返回匿名用户），
++		// 不含任何组织/工作区业务数据；若要求登录才能探测登录态，登录页无法工作。
+ 		api.Get("/me", s.handleMe)
++		// /system/architecture：架构基线元数据（组件就绪位、契约版本），无租户字段。
+ 		api.Get("/system/architecture", s.handleArchitectureStatus)
++		// /capabilities：能力注册表描述符（名称/版本/契约），无租户字段。
+ 		api.Get("/capabilities", s.handleCapabilities)
+-		api.Post("/investigations", s.handleCreateInvestigation)
+-		api.Get("/investigations", s.handleListInvestigations)
+-		api.Get("/investigations/{id}", s.handleGetInvestigation)
+-		api.Get("/investigations/{id}/runtime", s.handleInvestigationRuntime)
+-		api.Get("/investigations/{id}/artifacts", s.handleInvestigationArtifacts)
+-		api.Get("/analysis/addresses/{chain}/{address}/flow-profile", s.handleAddressFlowProfile)
+-		api.Get("/analysis/addresses/{chain}/{address}/semantic-events", s.handleAddressSemanticEvents)
+-		api.Post("/analysis/addresses/{chain}/{address}/semantic-events/rebuild", s.handleRebuildAddressSemanticEvents)
+-		api.Get("/analysis/addresses/{chain}/{address}/advanced", s.handleAddressAdvancedAnalysis)
+-		api.Post("/analysis/addresses/{chain}/{address}/advanced/rebuild", s.handleRebuildAddressAdvancedAnalysis)
+-		api.Post("/investigations/{id}/{action}", s.handleInvestigationAction)
+-		api.Get("/investigations/{id}/reports", s.handleListInvestigationReports)
+-		api.Post("/investigations/{id}/reports", s.handleGenerateInvestigationReport)
+-		api.Get("/reports/{id}/download", s.handleDownloadInvestigationReport)
+-		api.Get("/investigations/{id}/subjects", s.handleInvestigationSubjects)
+-		api.Post("/investigations/{id}/subjects", s.handleInvestigationSubjects)
+-		api.Post("/investigations/{id}/relationships", s.handleInvestigationRelationships)
+-		api.Post("/datasets/ensure", s.handleEnsure)
+-		api.Post("/datasets/coverage/preview", s.handleCoveragePreview)
+-		api.Get("/download-jobs", s.handleListJobs)
+-		api.Get("/download-jobs/{id}", s.handleGetJob)
+-		api.Post("/download-jobs/{id}/pause", s.handlePause)
+-		api.Post("/download-jobs/{id}/resume", s.handleResume)
+-		api.Post("/download-jobs/{id}/cancel", s.handleCancel)
+-		api.Get("/download-jobs/{id}/guard", s.handleGetVolumeGuards)
+-		api.Post("/download-jobs/{id}/guard/continue", s.handleContinueVolumeGuard)
+-		api.Post("/download-jobs/{id}/guard/abort", s.handleAbortVolumeGuard)
+-		api.Post("/download-jobs/{id}/subjects/{subjectID}/{action}", s.handleSubjectControl)
+-		api.Get("/download-jobs/{id}/events", s.handleJobEvents)
+-		api.Get("/providers/ankr/status", s.handleProviderStatus)
+-		api.Get("/providers/ankr/usage", s.handleProviderUsage)
++		// /system/chains/{chain}/capabilities：RPC 网关能力位（archive/trace/batch 是否可用），
++		// 链级静态元数据，用于前端在登录前渲染支持链列表。
+ 		api.Get("/system/chains/{chain}/capabilities", s.handleChainCapabilities)
++		// /chains/capabilities：链能力矩阵（chain_capabilities 表，链级静态元数据，无租户字段）。
++		api.Get("/chains/capabilities", s.handleV12ChainCapabilities)
++		// /chains/{chain}/head：链上公共 head，属"链上公共 head 查询"白名单。
+ 		api.Get("/chains/{chain}/head", s.handleChainHead)
+-		api.Get("/addresses/{chain}/{address}/runtime", s.handleAddressRuntime)
++		// /transactions/{chain}/{tx_hash}/receipt：链上公共回执，不含平台侧数据。
+ 		api.Get("/transactions/{chain}/{tx_hash}/receipt", s.handleRPCReceipt)
+-		api.Get("/transactions/{chain}/{tx_hash}/trace", s.handleTransactionTrace)
+-		api.Get("/transactions/{chain}/{tx_hash}/internal-calls", s.handleInternalCalls)
+-
+-		// V1.6 API Control Center：统一审计、成本、异常管控和人工接管。
+-		api.Get("/api-control/overview", s.handleAPIControlOverview)
+-		api.Get("/api-control/provider-accounts", s.handleAPIControlProviderAccounts)
+-		api.Post("/api-control/provider-accounts/ankr/connect", s.handleAnkrManagementConnect)
+-		api.Get("/api-control/provider-accounts/ankr/oauth/callback", s.handleAnkrManagementCallback)
+-		api.Post("/api-control/provider-accounts/ankr/sync", s.handleAnkrManagementSync)
+-		api.Delete("/api-control/provider-accounts/ankr", s.handleAnkrManagementDisconnect)
+-		api.Get("/api-control/control/states", s.handleAPIControlState)
+-		api.Get("/api-control/control/policies", s.handleAPIControlPolicies)
+-		api.Patch("/api-control/control/policies", s.handleAPIControlPolicies)
+-		api.Post("/api-control/control/overrides", s.handleAPIControlOverride)
+-		api.Patch("/api-control/control/kill-switch", s.handleAPIControlKillSwitch)
+-		api.Get("/api-control/control/actions", s.handleAPIControlActions)
+-		api.Get("/api-control/requests", s.handleAPIControlRequests)
+-		api.Get("/api-control/requests/{id}", s.handleAPIControlRequests)
+-		api.Get("/api-control/errors", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "errors") })
+-		api.Get("/api-control/costs", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "costs") })
+-		api.Get("/api-control/operations", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "operations") })
+-		api.Get("/api-control/providers", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "providers") })
+-		api.Get("/api-control/usage-types", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "usage-types") })
+-		api.Get("/api-control/budgets", s.handleAPIControlBudgets)
+-		api.Post("/api-control/budgets", s.handleAPIControlBudgets)
+-
+-		// V1.1：极限性能 Benchmark（§45/§46）
+-		api.Post("/admin/ankr/benchmarks", s.handleBenchmarkCreate)
+-		api.Get("/admin/ankr/benchmarks", s.handleBenchmarkList)
+-		api.Get("/admin/ankr/benchmarks/{id}", s.handleBenchmarkGet)
+-
+-		// V1.2：Count Oracle / Global Concurrency（§80-§82/§85/§88/§61）
+-		api.Get("/count-oracle/status", s.handleCountOracleStatus)
+-		// V1.3：Count Provider Port（§72-§74/§98）
+-		api.Get("/count-oracle/providers", s.handleCountProviders)
+-		api.Get("/count-oracle/resolutions", s.handleResolutionDecisions)
+-		api.Get("/count-oracle/observations", s.handleCountOracleObservations)
+-		api.Get("/count-oracle/calibration", s.handleCountOracleCalibration)
+-		api.Get("/admin/planning-decisions", s.handlePlanningDecisions)
+-		api.Get("/providers/ankr/global-concurrency", s.handleGlobalConcurrency)
+-		// V1.4（§51/§14）：Ankr Fetch Runtime / Profile / Global Ready Queue / Range Certifications
+-		api.Get("/providers/ankr/fetch-runtime", s.handleAnkrFetchRuntime)
+-		api.Get("/providers/ankr/production-profile", s.handleAnkrProductionProfile)
+-		api.Post("/providers/ankr/performance-mode", s.handleSetAnkrPerformanceMode)
+-		api.Post("/download-jobs/{id}/performance-mode", s.handleSetJobPerformanceMode)
+-		api.Get("/providers/ankr/fetch-profile", s.handleAnkrFetchProfile)
+-		api.Get("/providers/ankr/ready-queue", s.handleGlobalReadyQueue)
+-		api.Get("/admin/ankr/range-certifications", s.handleListRangeCertifications)
+-		api.Post("/admin/ankr/range-certifications", s.handleRecordRangeCertification)
+-		api.Get("/chains/capabilities", s.handleV12ChainCapabilities)
+-		api.Get("/api-control/alerts", s.handleAPIControlAlerts)
+-		api.Post("/api-control/alerts/{id}/actions", s.handleAPIControlAlerts)
+-		api.Get("/coverage", s.handleCoverage)
+-		api.Get("/coverage/stats", s.handleCoverageStats)
+-		api.Get("/datasets/{dataset}", s.handleDatasetRows)
+-		api.Get("/addresses/{address}/activity", s.handleAddressActivity)
+-		api.Post("/exports", s.handleCreateExport)
+-		api.Get("/exports/{id}", s.handleGetExport)
+-		api.Get("/exports/{id}/download", s.handleDownloadExport)
+-		api.Head("/exports/{id}/download", s.handleDownloadExport)
+-		api.Post("/exports/{id}/download-ticket", s.handleExportTicket)
+-
+-		api.Get("/cases", s.handleListCases)
+-		api.Post("/cases", s.handleCreateCase)
+-		api.Delete("/cases/{id}", s.handleDeleteCase)
+-		api.Get("/cases/{id}/canvases", s.handleListCanvases)
+-		api.Post("/cases/{id}/canvases", s.handleCreateCanvas)
+-		api.Get("/canvases/{id}", s.handleGetCanvas)
+-		api.Patch("/canvases/{id}", s.handleUpdateCanvas)
+-		api.Post("/canvases/{id}/branch", s.handleBranchCanvas)
+-		api.Get("/canvases/{id}/snapshots", s.handleListCanvasSnapshots)
+-		api.Post("/canvases/{id}/snapshots", s.handleCreateCanvasSnapshot)
+-		api.Get("/tags", s.handleListTags)
+-		api.Post("/tags", s.handleCreateTag)
+-		api.Delete("/tags/{id}", s.handleDeleteTag)
+-
+-		api.Get("/data-explorer/addresses", s.handleExplorerAddresses)
+-		api.Post("/data-explorer/query", s.handleExplorerQuery)
+-
+-		api.Patch("/addresses/{chain}/{address}/metadata", s.handleAddressMetadata)
++		// /transactions/{chain}/{tx_hash}：链上公共交易详情与 ABI 解码结果（方法签名来自公共 ABI 库）。
++		api.Get("/transactions/{chain}/{tx_hash}", s.handleTransactionDetail)
++		// /tokens/*：链上公共 Token 元数据与图标（属"链上公共 tokens 查询"白名单）。
+ 		api.Get("/tokens/search", s.handleTokenSearch)
+-		api.Get("/tokens/enrichment", s.handleTokenEnrichment)
+ 		api.Get("/tokens/{chain}/{contract}/logo", s.handleTokenLogo)
+ 		api.Get("/tokens/{chain}/{contract}", s.handleTokenGet)
+-		api.Post("/admin/tokens/{chain}/{contract}/resolve", s.handleTokenResolve)
+-		api.Post("/admin/tokens/{chain}/{contract}/override", s.handleTokenOverride)
+-		api.Post("/admin/token-metadata/backfill", s.handleTokenBackfill)
+-		api.Get("/admin/token-metadata/backfill", s.handleTokenBackfillList)
+-
+-		api.Post("/updates/preview", s.handleUpdatePreview)
+-		api.Post("/updates/{id}/confirm", s.handleUpdateConfirm)
+-
+-		// V1.3 Method / ABI（§52）
+-		api.Get("/transactions/{chain}/{tx_hash}", s.handleTransactionDetail)
++		// /methods/*：链上公共 ABI / 方法签名查询（属"链上公共 methods 查询"白名单）。
+ 		api.Get("/methods/search", s.handleMethodSearch)
+-		api.Get("/methods/enrichment", s.handleMethodEnrichment)
+ 		api.Get("/methods/{selector}", s.handleMethodLookup)
+ 
++		// ---- 调查域（租户数据） ----
++		api.Post("/investigations", s.require("investigation:create", s.handleCreateInvestigation))
++		api.Get("/investigations", s.require("investigation:list", s.handleListInvestigations))
++		api.Get("/investigations/{id}", s.require("investigation:read", s.handleGetInvestigation))
++		api.Get("/investigations/{id}/runtime", s.require("investigation:read", s.handleInvestigationRuntime))
++		api.Get("/investigations/{id}/artifacts", s.require("investigation:read", s.handleInvestigationArtifacts))
++		api.Post("/investigations/{id}/{action}", s.require("investigation:run", s.handleInvestigationAction))
++		api.Get("/investigations/{id}/reports", s.require("report:list", s.handleListInvestigationReports))
++		api.Post("/investigations/{id}/reports", s.require("report:create", s.handleGenerateInvestigationReport))
++		api.Get("/reports/{id}/download", s.require("report:download", s.handleDownloadInvestigationReport))
++		api.Get("/investigations/{id}/subjects", s.require("subject:list", s.handleInvestigationSubjects))
++		api.Post("/investigations/{id}/subjects", s.require("subject:create", s.handleInvestigationSubjects))
++		api.Post("/investigations/{id}/relationships", s.require("investigation:update", s.handleInvestigationRelationships))
++		// 地址画像/语义/进阶分析读的是**平台本地已入库数据**（本地 CH 表），
++		// 未认证访问会变成"某地址是否被本平台采集过"的存在性探针，因此按本地数据查询鉴权。
++		api.Get("/analysis/addresses/{chain}/{address}/flow-profile", s.require("explorer:read", s.handleAddressFlowProfile))
++		api.Get("/analysis/addresses/{chain}/{address}/semantic-events", s.require("explorer:read", s.handleAddressSemanticEvents))
++		api.Post("/analysis/addresses/{chain}/{address}/semantic-events/rebuild", s.require("admin:dataset:manage", s.handleRebuildAddressSemanticEvents))
++		api.Get("/analysis/addresses/{chain}/{address}/advanced", s.require("explorer:read", s.handleAddressAdvancedAnalysis))
++		api.Post("/analysis/addresses/{chain}/{address}/advanced/rebuild", s.require("admin:dataset:manage", s.handleRebuildAddressAdvancedAnalysis))
++
++		// ---- 下载 / 任务域（租户数据） ----
++		api.Post("/datasets/ensure", s.require("download:create", s.handleEnsure))
++		api.Post("/datasets/coverage/preview", s.require("explorer:read", s.handleCoveragePreview))
++		api.Get("/download-jobs", s.require("job:list:workspace", s.handleListJobs))
++		api.Get("/download-jobs/{id}", s.require("job:read", s.handleGetJob))
++		api.Post("/download-jobs/{id}/pause", s.require("job:control", s.handlePause))
++		api.Post("/download-jobs/{id}/resume", s.require("job:control", s.handleResume))
++		api.Post("/download-jobs/{id}/cancel", s.require("job:control", s.handleCancel))
++		api.Get("/download-jobs/{id}/guard", s.require("job:read", s.handleGetVolumeGuards))
++		api.Post("/download-jobs/{id}/guard/continue", s.require("job:control", s.handleContinueVolumeGuard))
++		api.Post("/download-jobs/{id}/guard/abort", s.require("job:control", s.handleAbortVolumeGuard))
++		api.Post("/download-jobs/{id}/subjects/{subjectID}/{action}", s.require("job:control", s.handleSubjectControl))
++		api.Get("/download-jobs/{id}/events", s.require("job:read", s.handleJobEvents))
++
++		// ---- Provider / 计数域（平台级运维数据） ----
++		// providers/ankr/* 暴露 Provider 端点、并发目标、成本与限流状态，
++		// 属于平台运维面；用与该域已有写权限（admin:provider:update /
++		// admin:performance:update / admin:cost:read）相称的读权限收敛。
++		api.Get("/providers/ankr/status", s.require("admin:provider:read", s.handleProviderStatus))
++		api.Get("/providers/ankr/usage", s.require("admin:cost:read", s.handleProviderUsage))
++		api.Get("/providers/ankr/global-concurrency", s.require("admin:performance:read", s.handleGlobalConcurrency))
++		api.Get("/providers/ankr/fetch-runtime", s.require("admin:performance:read", s.handleAnkrFetchRuntime))
++		api.Get("/providers/ankr/production-profile", s.require("admin:performance:read", s.handleAnkrProductionProfile))
++		api.Post("/providers/ankr/performance-mode", s.require("admin:performance:update", s.handleSetAnkrPerformanceMode))
++		api.Post("/download-jobs/{id}/performance-mode", s.require("admin:performance:update", s.handleSetJobPerformanceMode))
++		api.Get("/providers/ankr/fetch-profile", s.require("admin:performance:read", s.handleAnkrFetchProfile))
++		api.Get("/providers/ankr/ready-queue", s.require("admin:performance:read", s.handleGlobalReadyQueue))
++		api.Get("/count-oracle/status", s.require("admin:provider:read", s.handleCountOracleStatus))
++		api.Get("/count-oracle/providers", s.require("admin:provider:read", s.handleCountProviders))
++		api.Get("/count-oracle/resolutions", s.require("admin:provider:read", s.handleResolutionDecisions))
++		api.Get("/count-oracle/observations", s.require("admin:provider:read", s.handleCountOracleObservations))
++		api.Get("/count-oracle/calibration", s.require("admin:provider:read", s.handleCountOracleCalibration))
++		// 计划决策按 job_id 检索，属全局任务数据面。
++		api.Get("/admin/planning-decisions", s.require("admin:job:read", s.handlePlanningDecisions))
++		// 地址运行时读取（地址类型/原生余额）会消耗付费 Provider 配额，
++		// 且 /addresses/* 族整体属于业务数据面；按地址读权限收敛。
++		api.Get("/addresses/{chain}/{address}/runtime", s.require("address:read", s.handleAddressRuntime))
++		api.Get("/transactions/{chain}/{tx_hash}/trace", s.require("transaction:read", s.handleTransactionTrace))
++		api.Get("/transactions/{chain}/{tx_hash}/internal-calls", s.require("transaction:read", s.handleInternalCalls))
++
++		// ---- API Control Center（平台运维面，全部需要后台读权限） ----
++		api.Get("/api-control/overview", s.require("admin:dashboard:read", s.handleAPIControlOverview))
++		api.Get("/api-control/provider-accounts", s.require("admin:provider:read", s.handleAPIControlProviderAccounts))
++		api.Post("/api-control/provider-accounts/ankr/connect", s.require("admin:provider:update", s.handleAnkrManagementConnect))
++		// /api-control/provider-accounts/ankr/oauth/callback：**保持公开**，理由有三：
++		//  1. 它是 OAuth 提供方发起的浏览器顶级跳转，浏览器不会带自定义头，
++		//     而 /api/v1 路径按 §3.3 解析为 user 受众，后台会话（admin Cookie）
++		//     在这里本来就取不到 —— 加 require 只会把合法回调打成 401；
++		//  2. 回调本身不构成授权：CompleteOAuth 校验的是服务端签发的、单次使用、
++		//     10 分钟过期且绑定 PKCE verifier 的 state（ankr_management_oauth_state），
++		//     而 state 只能由已通过 admin:provider:update 的 connect 端点取得；
++		//  3. 缺少 state/code 或 state 无效时只回一个 error 重定向，不改变任何状态。
++		// 结论：state 绑定已经提供了比 session 更强的授权证明，此处不需要 require。
++		api.Get("/api-control/provider-accounts/ankr/oauth/callback", s.handleAnkrManagementCallback)
++		api.Post("/api-control/provider-accounts/ankr/sync", s.require("admin:provider:update", s.handleAnkrManagementSync))
++		api.Delete("/api-control/provider-accounts/ankr", s.require("admin:provider:update", s.handleAnkrManagementDisconnect))
++		api.Get("/api-control/control/states", s.require("admin:routing:read", s.handleAPIControlState))
++		api.Get("/api-control/control/policies", s.require("admin:routing:read", s.handleAPIControlPolicies))
++		api.Patch("/api-control/control/policies", s.require("admin:routing:update", s.handleAPIControlPolicies))
++		api.Post("/api-control/control/overrides", s.require("admin:performance:update", s.handleAPIControlOverride))
++		api.Patch("/api-control/control/kill-switch", s.require("admin:killswitch:engage", s.handleAPIControlKillSwitch))
++		api.Get("/api-control/control/actions", s.require("admin:routing:read", s.handleAPIControlActions))
++		api.Get("/api-control/requests", s.require("admin:request:read", s.handleAPIControlRequests))
++		api.Get("/api-control/requests/{id}", s.require("admin:request:read", s.handleAPIControlRequests))
++		api.Get("/api-control/errors", s.require("admin:request:read", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "errors") }))
++		api.Get("/api-control/costs", s.require("admin:cost:read", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "costs") }))
++		api.Get("/api-control/operations", s.require("admin:request:read", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "operations") }))
++		api.Get("/api-control/providers", s.require("admin:provider:read", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "providers") }))
++		api.Get("/api-control/usage-types", s.require("admin:cost:read", func(w http.ResponseWriter, r *http.Request) { s.aggregateUsage(w, r, "usage-types") }))
++		api.Get("/api-control/budgets", s.require("admin:budget:read", s.handleAPIControlBudgets))
++		api.Post("/api-control/budgets", s.require("admin:budget:update", s.handleAPIControlBudgets))
++		api.Get("/api-control/alerts", s.require("admin:alert:read", s.handleAPIControlAlerts))
++		api.Post("/api-control/alerts/{id}/actions", s.require("admin:alert:manage", s.handleAPIControlAlerts))
++
++		// ---- 后台运维 / 基准 / 认证证据 ----
++		api.Post("/admin/ankr/benchmarks", s.require("admin:performance:update", s.handleBenchmarkCreate))
++		api.Get("/admin/ankr/benchmarks", s.require("admin:performance:read", s.handleBenchmarkList))
++		api.Get("/admin/ankr/benchmarks/{id}", s.require("admin:performance:read", s.handleBenchmarkGet))
++		api.Get("/admin/ankr/range-certifications", s.require("admin:performance:read", s.handleListRangeCertifications))
++		api.Post("/admin/ankr/range-certifications", s.require("admin:performance:update", s.handleRecordRangeCertification))
++
++		// ---- Coverage / Dataset / Explorer（平台本地数据面） ----
++		// coverage 与同域已有的 POST /datasets/coverage/preview 使用同一个读权限键
++		// （explorer:read = "查询本地数据"）。dataset_coverage 没有租户列，无法按组织过滤，
++		// 因此这里靠 require 收敛到"已认证且具备本地数据查询权"的主体。
++		api.Get("/coverage", s.require("explorer:read", s.handleCoverage))
++		api.Get("/coverage/stats", s.require("explorer:read", s.handleCoverageStats))
++		api.Get("/datasets/{dataset}", s.require("explorer:read", s.handleDatasetRows))
++		api.Get("/addresses/{address}/activity", s.require("explorer:read", s.handleAddressActivity))
++		api.Get("/data-explorer/addresses", s.require("explorer:read", s.handleExplorerAddresses))
++		api.Post("/data-explorer/query", s.require("explorer:read", s.handleExplorerQuery))
++
++		// ---- 导出（租户对象） ----
++		api.Post("/exports", s.require("export:create", s.handleCreateExport))
++		api.Get("/exports/{id}", s.require("export:read", s.handleGetExport))
++		api.Get("/exports/{id}/download", s.require("export:download", s.handleExportDownloadScoped))
++		api.Head("/exports/{id}/download", s.require("export:download", s.handleExportDownloadScoped))
++		api.Post("/exports/{id}/download-ticket", s.require("export:download", s.handleExportTicket))
++
++		// ---- 案件 / 画布 / 标签（租户对象） ----
++		api.Get("/cases", s.require("case:list", s.handleListCases))
++		api.Post("/cases", s.require("case:create", s.handleCreateCase))
++		api.Delete("/cases/{id}", s.require("case:delete", s.handleDeleteCase))
++		api.Get("/cases/{id}/canvases", s.require("canvas:list", s.handleListCanvases))
++		api.Post("/cases/{id}/canvases", s.require("canvas:create", s.handleCreateCanvas))
++		api.Get("/canvases/{id}", s.require("canvas:read", s.handleGetCanvas))
++		api.Patch("/canvases/{id}", s.require("canvas:update", s.handleUpdateCanvas))
++		api.Post("/canvases/{id}/branch", s.require("canvas:branch", s.handleBranchCanvas))
++		api.Get("/canvases/{id}/snapshots", s.require("canvas:snapshot", s.handleListCanvasSnapshots))
++		api.Post("/canvases/{id}/snapshots", s.require("canvas:snapshot:create", s.handleCreateCanvasSnapshot))
++		api.Get("/tags", s.require("case:read", s.handleListTags))
++		api.Post("/tags", s.require("case:update", s.handleCreateTag))
++		api.Delete("/tags/{id}", s.require("case:update", s.handleDeleteTag))
++
++		// ---- Token / Method 元数据（链上公共数据，读受限、写受限） ----
++		api.Patch("/addresses/{chain}/{address}/metadata", s.require("admin:dataset:manage", s.handleAddressMetadata))
++		// enrichment 是**平台元数据覆盖率统计**（不是单条 Token/Method 查询），
++		// 会暴露本地已处理规模，按 Dataset 读权限收敛。
++		api.Get("/tokens/enrichment", s.require("admin:dataset:read", s.handleTokenEnrichment))
++		api.Post("/admin/tokens/{chain}/{contract}/resolve", s.require("admin:dataset:manage", s.handleTokenResolve))
++		api.Post("/admin/tokens/{chain}/{contract}/override", s.require("admin:dataset:manage", s.handleTokenOverride))
++		api.Post("/admin/token-metadata/backfill", s.require("admin:dataset:manage", s.handleTokenBackfill))
++		api.Get("/admin/token-metadata/backfill", s.require("admin:dataset:read", s.handleTokenBackfillList))
++		api.Get("/methods/enrichment", s.require("admin:dataset:read", s.handleMethodEnrichment))
++
++		api.Post("/updates/preview", s.require("admin:dataset:manage", s.handleUpdatePreview))
++		api.Post("/updates/{id}/confirm", s.require("admin:dataset:manage", s.handleUpdateConfirm))
++
+ 		// 管理员接口必须权限控制（§52）
+-		api.Post("/admin/methods/backfill", s.handleCreateBackfill)
+-		api.Get("/admin/methods/backfill", s.handleListBackfill)
+-		api.Get("/admin/methods/backfill/{id}", s.handleGetBackfill)
+-		api.Post("/admin/methods/backfill/{id}/{action}", s.handleControlBackfill)
+-		api.Post("/admin/methods/signatures", s.handleCreateSignature)
+-		api.Post("/admin/contracts/{chain}/{address}/abi", s.handleUploadABI)
++		api.Post("/admin/methods/backfill", s.require("admin:dataset:manage", s.handleCreateBackfill))
++		api.Get("/admin/methods/backfill", s.require("admin:dataset:read", s.handleListBackfill))
++		api.Get("/admin/methods/backfill/{id}", s.require("admin:dataset:read", s.handleGetBackfill))
++		api.Post("/admin/methods/backfill/{id}/{action}", s.require("admin:dataset:manage", s.handleControlBackfill))
++		api.Post("/admin/methods/signatures", s.require("admin:dataset:manage", s.handleCreateSignature))
++		api.Post("/admin/contracts/{chain}/{address}/abi", s.require("admin:dataset:manage", s.handleUploadABI))
+ 	})
+ 
+ 	// §21.4 认证 API（新系统入口）。
+
+##### backend/internal/policy/engine.go
+diff --git a/backend/internal/policy/engine.go b/backend/internal/policy/engine.go
+index 32b5694..e115993 100644
+--- a/backend/internal/policy/engine.go
++++ b/backend/internal/policy/engine.go
+@@ -26,6 +26,11 @@ type Principal struct {
+ 	Permissions    []string `json:"permissions"`
+ 	Authenticated  bool     `json:"authenticated"`
+ 	System         bool     `json:"system"`
++	// MustChangePassword mirrors identities.must_change_password for the authenticated
++	// identity. It travels with the session row (iam.SessionManager.loadByToken already
++	// selects it), so the API middleware can fail closed on business surfaces without an
++	// extra database round trip. It is never taken from the client.
++	MustChangePassword bool `json:"must_change_password,omitempty"`
+ }
+ 
+ // Has 判断是否具备某权限（仅 RBAC 部分；对象级条件见 Engine.Authorize）。
+
+##### backend/internal/api/mustchangepw.go
+
+##### backend/internal/api/mustchangepw_test.go
+
+##### backend/internal/api/sessionscope_test.go
+
+##### backend/internal/api/mustchangepw_live_test.go
+
+##### openapi/common/errors.yaml
+diff --git a/openapi/common/errors.yaml b/openapi/common/errors.yaml
+index d46ac72..2aba5ef 100644
+--- a/openapi/common/errors.yaml
++++ b/openapi/common/errors.yaml
+@@ -54,11 +54,15 @@ KnownErrorCodes:
+   AUTHN_UNAUTHENTICATED: 401
+   AUTHN_MFA_UNAVAILABLE: 501
+   AUTHN_OIDC_NOT_CONFIGURED: 501
++  # Sprint 7 C1-SEC: server-side enforcement of identities.must_change_password.
++  AUTHN_PASSWORD_CHANGE_REQUIRED: 403
+   AUTHZ_ACCOUNT_DISABLED: 403
+   AUTHZ_ACCOUNT_LOCKED: 423
+   AUTHZ_CSRF_FAILED: 403
+   AUTHZ_FORBIDDEN: 403
+   AUTHZ_PERMISSION_DENIED: 403
++  # Sprint 7 C1-RACE: session workspace staleness guard (defence in depth).
++  AUTHZ_WORKSPACE_SCOPE_STALE: 409
+   VALIDATION_INVALID_ARGUMENT: 400
+   VALIDATION_UNKNOWN_ROLE: 422
+   RESOURCE_NOT_FOUND: 404
+@@ -69,3 +73,72 @@ KnownErrorCodes:
+   INTERNAL_ERROR: 500
+   INTERNAL_NOT_READY: 503
+   NOT_IMPLEMENTED: 501
++
++# ---------------------------------------------------------------------------
++# Sprint 7 API-layer authorization guards.
++#
++# These are enforced by the Go middleware layer (backend/internal/api), not by an individual
++# endpoint, so they apply to every business operation documented in user-v2.yaml,
++# admin-v1.yaml and auth-v1.yaml. Both answer the standard ErrorEnvelope above.
++# ---------------------------------------------------------------------------
++
++# Server-side enforcement of identities.must_change_password (sprint7 C1-SEC).
++# A session whose identity still carries must_change_password = true is refused on every
++# business surface BEFORE any business logic runs. The self-service surface stays reachable so
++# the holder can repair the state, and health/metrics/docs are untouched.
++MustChangePasswordGuard:
++  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
++  refused_status: 403
++  guarded_surfaces:
++    - /api/v1/
++    - /api/v2/
++    - /api/admin/v1/
++  fail_closed: true
++  fail_closed_note: >-
++    Any /api/ path that is neither allowlisted nor part of the self-service auth surface is
++    guarded, so a future surface is refused by default without a code change.
++  reachable_while_flagged:
++    - GET /api/auth/v1/session
++    - POST /api/auth/v1/logout
++    - POST /api/auth/v1/password/change
++    - GET /api/auth/v1/methods
++  unchanged_behaviour:
++    - every other /api/auth/v1 route keeps its previous behaviour
++    - /health/live, /health/ready, /metrics, /openapi.json, /docs, /redoc are outside the guard
++  audit: >-
++    action authorization.denied, category authorization, result deny, http_status 403,
++    error_code AUTHN_PASSWORD_CHANGE_REQUIRED, deny_reason must_change_password, plus the
++    route and the request id. No password, password hash or session token is ever recorded.
++  response:
++    description: >-
++      The authenticated identity must change its password first. details.reason is
++      must_change_password and details.password_change_endpoint names the self-service route
++      that clears the flag.
++    content:
++      application/json:
++        schema:
++          $ref: '#/ErrorEnvelope'
++
++# Session workspace staleness guard (sprint7 C1-RACE, defence in depth).
++# A state-changing request authenticated while the session was in workspace A must not commit
++# into A after the same session was switched to B.
++SessionWorkspaceScopeGuard:
++  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
++  refused_status: 409
++  scope: state-changing methods only (GET, HEAD and OPTIONS are never checked)
++  condition: >-
++    the live sessions row is missing or revoked, or its workspace no longer equals the
++    principal's workspace, or the row cannot be read at all (fail closed)
++  cost: one primary-key lookup on sessions per state-changing request
++  audit: >-
++    action authorization.denied, category authorization, result deny, http_status 409,
++    error_code AUTHZ_WORKSPACE_SCOPE_STALE, deny_reason session_workspace_changed or
++    session_missing or session_scope_unverifiable, plus the route and the request id.
++  response:
++    description: >-
++      The session workspace changed while this request was in flight; reload the session and
++      retry. The message names no object, workspace or session identifier.
++    content:
++      application/json:
++        schema:
++          $ref: '#/ErrorEnvelope'
+
+##### openapi/user-v2.yaml
+diff --git a/openapi/user-v2.yaml b/openapi/user-v2.yaml
+index 5577622..ee64799 100644
+--- a/openapi/user-v2.yaml
++++ b/openapi/user-v2.yaml
+@@ -10,6 +10,14 @@ info:
+     auth-v1.yaml 是完整级契约，可作为写法参考。
+ x-contract-level: index-only
+ x-generated-by: scripts/gen_openapi_index.py
++x-must-change-password-guard:
++  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
++  refused_status: 403
++  see: './common/errors.yaml#/MustChangePasswordGuard'
++x-session-workspace-scope-guard:
++  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
++  refused_status: 409
++  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'
+ servers:
+   - url: /
+ security:
+
+##### openapi/admin-v1.yaml
+diff --git a/openapi/admin-v1.yaml b/openapi/admin-v1.yaml
+index 0eab936..2ceb023 100644
+--- a/openapi/admin-v1.yaml
++++ b/openapi/admin-v1.yaml
+@@ -10,6 +10,14 @@ info:
+     auth-v1.yaml 是完整级契约，可作为写法参考。
+ x-contract-level: index-only
+ x-generated-by: scripts/gen_openapi_index.py
++x-must-change-password-guard:
++  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
++  refused_status: 403
++  see: './common/errors.yaml#/MustChangePasswordGuard'
++x-session-workspace-scope-guard:
++  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
++  refused_status: 409
++  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'
+ servers:
+   - url: /
+ security:
+
+##### scripts/gen_openapi_index.py
+diff --git a/scripts/gen_openapi_index.py b/scripts/gen_openapi_index.py
+index 5e7d739..ce37a7f 100644
+--- a/scripts/gen_openapi_index.py
++++ b/scripts/gen_openapi_index.py
+@@ -107,6 +107,17 @@ def render(name: str, title: str, routes) -> str:
+         "    auth-v1.yaml 是完整级契约，可作为写法参考。",
+         "x-contract-level: index-only",
+         "x-generated-by: scripts/gen_openapi_index.py",
++        # Sprint 7 API-layer guards. They are enforced by the middleware for every operation
++        # in this file, so the contract must make them visible; the authoritative contract
++        # (allowlist, audit, fail-closed rules) lives in common/errors.yaml.
++        "x-must-change-password-guard:",
++        "  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED",
++        "  refused_status: 403",
++        "  see: './common/errors.yaml#/MustChangePasswordGuard'",
++        "x-session-workspace-scope-guard:",
++        "  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE",
++        "  refused_status: 409",
++        "  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'",
+         "servers:",
+         "  - url: /",
+         "security:",

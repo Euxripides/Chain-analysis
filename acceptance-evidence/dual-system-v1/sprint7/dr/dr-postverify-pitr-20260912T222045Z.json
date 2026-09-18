@@ -1,0 +1,116 @@
+{
+  "drill": "pitr",
+  "postverify_for_ts": "20260912T222045Z",
+  "verdict": "PASS",
+  "checks": {
+    "frozen_script_present": {
+      "ok": true,
+      "detail": "38f935dc8e3710c8022f8a29c8442b25824c2658d000a69798b809909572235d"
+    },
+    "neg_log_present": {
+      "ok": true,
+      "detail": "160fc36a9302cbb57bb21dd1cedfbc9b592aff66c81d405a194fe4d2edb1dac6"
+    },
+    "hidden_segment_identified": {
+      "ok": true,
+      "detail": "000000010000000300000049"
+    },
+    "hidden_segment_actually_requested": {
+      "ok": true,
+      "detail": [
+        "cp: cannot stat '/frozen/000000010000000300000049': No such file or directory",
+        "cp: cannot stat '/frozen/000000010000000300000049': No such file or directory"
+      ]
+    },
+    "fatal_target_not_reached": {
+      "ok": true,
+      "detail": [
+        "2026-09-12 22:22:09.127 UTC [38] FATAL:  recovery ended before configured recovery target was reached"
+      ]
+    },
+    "no_target_stop_in_negative": {
+      "ok": true,
+      "detail": []
+    },
+    "neg_container_terminated": {
+      "ok": true,
+      "detail": "exited"
+    },
+    "neg_container_nonzero_exit": {
+      "ok": true,
+      "detail": 1
+    },
+    "prod_archive_segment_intact": {
+      "ok": true,
+      "detail": "d126f673a4e07f8569d4c08024b55f72c7bf0f42e071b303453c5529cd2b0ed1"
+    },
+    "prod_archive_segment_unchanged": {
+      "ok": true,
+      "detail": "d126f673a4e07f8569d4c08024b55f72c7bf0f42e071b303453c5529cd2b0ed1 vs d126f673a4e07f8569d4c08024b55f72c7bf0f42e071b303453c5529cd2b0ed1"
+    },
+    "restoreA_promoted": {
+      "ok": true,
+      "detail": "f"
+    },
+    "restoreA_new_timeline": {
+      "ok": true,
+      "detail": "2"
+    },
+    "restoreA_stop_evidence": {
+      "ok": true,
+      "detail": [
+        "2026-09-12 22:21:11.327 UTC [38] LOG:  recovery stopping before commit of transaction 7758669, time 2026-09-12 22:21:01.586935+00"
+      ]
+    },
+    "restoreA_before_present_hash_match": {
+      "ok": true,
+      "detail": "5d6ddf62ec3e4aa0b7400f357da6c553d93503f7efb9a342539e0d22a25dd2c1 vs 5d6ddf62ec3e4aa0b7400f357da6c553d93503f7efb9a342539e0d22a25dd2c1"
+    },
+    "restoreA_after_absent": {
+      "ok": true,
+      "detail": "0"
+    },
+    "restoreA_max_leq_before": {
+      "ok": true,
+      "detail": "50947 vs 50947"
+    }
+  },
+  "evidence": {
+    "frozen_script": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T222045Z.logs/frozen/pitr-drill.sh",
+    "frozen_script_sha256": "38f935dc8e3710c8022f8a29c8442b25824c2658d000a69798b809909572235d",
+    "report_sha256": "d75e16bcc562e1dbcdbdb9041a8f8a235ccbbcdc4306a2e5c21276fd2cdc1fd1",
+    "result_sha256": "05e10cfa5c982e298b2892a26182025067a1b96f2b39f4eb1a9105529d2a114b",
+    "neg_container_log": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T222045Z.logs/restoreNeg-container.log",
+    "neg_container_log_sha256": "160fc36a9302cbb57bb21dd1cedfbc9b592aff66c81d405a194fe4d2edb1dac6",
+    "hidden_segment": "000000010000000300000049",
+    "hidden_segment_requests": [
+      "cp: cannot stat '/frozen/000000010000000300000049': No such file or directory",
+      "cp: cannot stat '/frozen/000000010000000300000049': No such file or directory"
+    ],
+    "target_not_reached_fatal": [
+      "2026-09-12 22:22:09.127 UTC [38] FATAL:  recovery ended before configured recovery target was reached"
+    ],
+    "target_stop_lines": [],
+    "neg_container_state": "exited",
+    "neg_container_exit_code": 1,
+    "prod_archive_segment_sha256_now": "d126f673a4e07f8569d4c08024b55f72c7bf0f42e071b303453c5529cd2b0ed1",
+    "frozen_segment_sha256": "d126f673a4e07f8569d4c08024b55f72c7bf0f42e071b303453c5529cd2b0ed1",
+    "restoreA_port": "5554",
+    "restoreA_in_recovery": "f",
+    "restoreA_timeline": "2",
+    "restoreA_last_completed_xact": "2026-09-12 22:21:00.617671",
+    "restoreA_stop_lines": [
+      "2026-09-12 22:21:11.327 UTC [38] LOG:  recovery stopping before commit of transaction 7758669, time 2026-09-12 22:21:01.586935+00"
+    ],
+    "restoreA_marker_before": {
+      "seq": "50947",
+      "prod_hash": "5d6ddf62ec3e4aa0b7400f357da6c553d93503f7efb9a342539e0d22a25dd2c1",
+      "restored_hash": "5d6ddf62ec3e4aa0b7400f357da6c553d93503f7efb9a342539e0d22a25dd2c1"
+    },
+    "restoreA_marker_filler_count": "0",
+    "restoreA_marker_after_count": "0",
+    "restoreA_max_seq": "50947"
+  },
+  "failed_checks": [],
+  "note": "本文件为**追加式后验**：不修改原 frozen 脚本/报告/JSON，也不重跑已成立的恢复；用于把缺段负向与目标恢复绑定到具体段名、具体日志行、具体 sha256 与容器退出码。"
+}

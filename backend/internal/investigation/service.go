@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/blockchain-platform/blockchain-platform/internal/platform/contract"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrNotFound = errors.New("investigation not found")
@@ -49,9 +50,9 @@ type CreateRequest struct {
 	DataRequirement map[string]any      `json:"data_requirement,omitempty"`
 }
 
-type Service struct{ pool *pgxpool.Pool }
+type Service struct{ pool *dbtx.Pool }
 
-func New(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func New(pool *dbtx.Pool) *Service { return &Service{pool: pool} }
 
 func (s *Service) Create(ctx context.Context, req CreateRequest) (Investigation, bool, error) {
 	if err := req.Subject.Validate(); err != nil {
@@ -129,11 +130,32 @@ func (s *Service) Get(ctx context.Context, id string) (Investigation, error) {
 	return inv, err
 }
 
+// List 返回全平台调查任务（后台对账用，不面向 HTTP 请求）。
+//
+// P0 修复：HTTP 读取路径必须使用 ListScoped —— 旧版 GET /api/v1/investigations
+// 直接调用本函数，无任何租户条件，会把所有组织的调查连同 organization_id 返回。
 func (s *Service) List(ctx context.Context, limit int) ([]Investigation, error) {
+	return s.list(ctx, "", "", limit)
+}
+
+// ListScoped 按租户作用域列出调查任务。wsID 为空表示该组织下全部工作区。
+func (s *Service) ListScoped(ctx context.Context, orgID, wsID string, limit int) ([]Investigation, error) {
+	return s.list(ctx, orgID, wsID, limit)
+}
+
+func (s *Service) list(ctx context.Context, orgID, wsID string, limit int) ([]Investigation, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id::text,organization_id::text,workspace_id::text,case_id::text,subject,goal,mode,status,budget,stop_conditions,state,contract_version,revision,created_at,updated_at FROM investigations ORDER BY updated_at DESC LIMIT $1`, limit)
+	query := `SELECT id::text,organization_id::text,workspace_id::text,case_id::text,subject,goal,mode,status,budget,stop_conditions,state,contract_version,revision,created_at,updated_at FROM investigations`
+	args := []any{}
+	if orgID != "" {
+		query += " WHERE organization_id=$1 AND ($2='' OR workspace_id::text=$2)"
+		args = append(args, orgID, wsID)
+	}
+	query += " ORDER BY updated_at DESC LIMIT $" + strconv.Itoa(len(args)+1)
+	args = append(args, limit)
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -19,22 +19,26 @@ import (
 
 // registerAdminControlRoutes 挂载控制面端点（§21.6「任务、数据、Provider、控制」）。
 func (s *Server) registerAdminControlRoutes(r chi.Router) {
-	// 实时控制面（A-CONTROL-01）
-	r.Get("/control/state", s.require("admin:killswitch:read", s.handleAdminControlState))
-	r.Get("/control/actions", s.require("admin:killswitch:read", s.handleAdminControlActions))
-	r.Get("/control/policies", s.require("admin:killswitch:read", s.handleAdminControlPolicies))
+	// 实时控制面（A-CONTROL-01）。
+	//
+	// §7.3：只读的 control-plane v2 视图挂在 `admin.control_plane_v2` 开关之下（真实请求路径求值）。
+	// **注意边界**：Kill Switch 的 preview/request/approve/reject/execute/restore 是安全与恢复路径，
+	// 一律**不挂开关** —— 把恢复能力做成可灰度的功能开关，等于给出一个"悄悄关掉恢复"的入口。
+	r.Get("/control/state", s.require("admin:killswitch:read", s.requireFlag("admin.control_plane_v2", "admin:killswitch:read", s.handleAdminControlState)))
+	r.Get("/control/actions", s.require("admin:killswitch:read", s.requireFlag("admin.control_plane_v2", "admin:killswitch:read", s.handleAdminControlActions)))
+	r.Get("/control/policies", s.require("admin:killswitch:read", s.requireFlag("admin.control_plane_v2", "admin:killswitch:read", s.handleAdminControlPolicies)))
 	r.Patch("/control/policies", s.require("admin:killswitch:engage", s.handleAdminUpdateControlPolicies))
 
 	// Kill Switch（A-KILL-01）：影响预览 → 原因 → step-up → 第二审批人 → 执行 → 健康验证 → 恢复
 	r.Post("/control/kill-switch/preview", s.require("admin:killswitch:engage", s.handleAdminKillSwitchPreview))
-	r.Get("/control/kill-switch/requests", s.require("admin:killswitch:read", s.handleAdminKillSwitchRequests))
+	r.Get("/control/kill-switch/requests", s.require("admin:killswitch:read", s.requireFlag("admin.control_plane_v2", "admin:killswitch:read", s.handleAdminKillSwitchRequests)))
 	r.Post("/control/kill-switch/requests", s.require("admin:killswitch:engage", s.handleAdminKillSwitchRequest))
 	r.Get("/control/kill-switch/requests/{id}", s.require("admin:killswitch:read", s.handleAdminKillSwitchRequestDetail))
 	r.Post("/control/kill-switch/requests/{id}/approve", s.require("admin:approval:decide", s.handleAdminKillSwitchApprove))
 	r.Post("/control/kill-switch/requests/{id}/reject", s.require("admin:approval:decide", s.handleAdminKillSwitchReject))
 	r.Post("/control/kill-switch/requests/{id}/execute", s.require("admin:killswitch:engage", s.handleAdminKillSwitchExecute))
 	r.Post("/control/kill-switch/requests/{id}/restore", s.require("admin:killswitch:release", s.handleAdminKillSwitchRestore))
-	r.Get("/control/kill-switch/health", s.require("admin:killswitch:read", s.handleAdminKillSwitchHealth))
+	r.Get("/control/kill-switch/health", s.require("admin:killswitch:read", s.requireFlag("admin.control_plane_v2", "admin:killswitch:read", s.handleAdminKillSwitchHealth)))
 
 	// 审批中心（通用，供 Kill Switch / 删除 / 恢复共用）
 	r.Get("/approvals", s.require("admin:approval:read", s.handleAdminApprovals))
@@ -365,8 +369,12 @@ func (s *Server) s6KillSwitchImpact(ctx context.Context, mode string) map[string
 		count(*) FILTER (WHERE status IN ('RUNNING','RESUMING')),
 		count(*) FILTER (WHERE status IN ('CREATED','PLANNING','QUEUED','PAUSE_REQUESTED')),
 		count(*) FILTER (WHERE status = 'PAUSED') FROM download_jobs`).Scan(&running, &waiting, &paused)
-	_ = s.deps.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM dataset_jobs WHERE status IN ('RUNNING','PENDING')`).Scan(&runningSubjects)
-	_ = s.deps.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM shards WHERE status IN ('RUNNING','PENDING')`).Scan(&runningShards)
+	// 这两条查询曾经指向**不存在的表**（dataset_jobs / shards）：语句一失败，
+	// 请求事务即进入 aborted 状态，提交门随后把整个请求改写成 409 —— 影响预览因此
+	// 永远拿不到数据，现场却只看到一个与作用域无关的错（2026-09-16 定位）。
+	// 真实表：download_subjects（逐地址进度）与 download_shards（逐 dataset 分片）。
+	_ = s.deps.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM download_subjects WHERE status IN ('RUNNING','PENDING')`).Scan(&runningSubjects)
+	_ = s.deps.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM download_shards WHERE status IN ('RUNNING','PENDING')`).Scan(&runningShards)
 	impact["running_jobs"] = running
 	impact["waiting_jobs"] = waiting
 	impact["paused_jobs"] = paused

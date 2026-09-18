@@ -1,0 +1,2 @@
+api pid=4011163 exe=/home/euripides/projects/blockchain-platform/backend/bin/api sha=7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a want=7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a
+worker pid=4011175 exe=/home/euripides/projects/blockchain-platform/backend/bin/worker sha=513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48 want=513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48

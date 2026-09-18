@@ -1,0 +1,12 @@
+HTTP/1.1 500 Internal Server Error
+Server: nginx/1.24.0 (Ubuntu)
+Date: Sat, 12 Sep 2026 23:06:30 GMT
+Content-Type: application/json
+Content-Length: 73
+Connection: keep-alive
+Access-Control-Allow-Headers: Content-Type, Authorization, X-User-Id, X-User-Email, X-Org-Id, X-User-Role
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Origin: *
+X-Request-Id: 898d6295-641e-4a43-9f57-b075d6782bab
+X-Trace-Id: e0f19a17-32c6-4c3b-972e-52746facbcfe
+

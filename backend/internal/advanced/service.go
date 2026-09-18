@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
@@ -25,11 +25,11 @@ type rowQuery interface {
 }
 
 type Service struct {
-	pool  *pgxpool.Pool
+	pool  *dbtx.Pool
 	query rowQuery
 }
 
-func New(pool *pgxpool.Pool, query rowQuery) *Service { return &Service{pool: pool, query: query} }
+func New(pool *dbtx.Pool, query rowQuery) *Service { return &Service{pool: pool, query: query} }
 
 type Signal struct {
 	Type       string         `json:"type"`

@@ -1,0 +1,188 @@
+{
+	"kics_version": "v2.1.20",
+	"files_scanned": 2,
+	"lines_scanned": 194,
+	"files_parsed": 1,
+	"lines_parsed": 68,
+	"lines_ignored": 0,
+	"files_failed_to_scan": 0,
+	"queries_total": 308,
+	"queries_failed_to_execute": 0,
+	"queries_failed_to_compute_similarity_id": 0,
+	"scan_id": "console",
+	"severity_counters": {
+		"CRITICAL": 0,
+		"HIGH": 0,
+		"INFO": 0,
+		"LOW": 0,
+		"MEDIUM": 10,
+		"TRACE": 0
+	},
+	"total_counter": 10,
+	"total_bom_resources": 0,
+	"start": "2026-09-12T22:45:47.833553807Z",
+	"end": "2026-09-12T22:46:01.355963314Z",
+	"paths": [
+		"/path"
+	],
+	"queries": [
+		{
+			"query_name": "Container Capabilities Unrestricted",
+			"query_id": "ce76b7d0-9e77-464d-b86f-c5c48e03e22d",
+			"query_url": "https://docs.docker.com/compose/compose-file/compose-file-v3/#cap_add-cap_drop",
+			"severity": "MEDIUM",
+			"platform": "DockerCompose",
+			"cwe": "400",
+			"risk_score": "6.8",
+			"cloud_provider": "COMMON",
+			"category": "Resource Management",
+			"experimental": false,
+			"description": "Some capabilities are not needed in certain (or any) containers. Make sure that you only add capabilities that your container needs. Drop unnecessary capabilities as well.",
+			"description_id": "1ddab108",
+			"files": [
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "2a542b39188a51e0871d688e5ca057ad05fa1571a4a8794da453232e4c35b7cf",
+					"line": 19,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.clickhouse",
+					"search_line": 19,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'cap_drop' attribute",
+					"actual_value": "Docker compose file doesn't have 'cap_drop' attribute. Make sure your container only has necessary capabilities."
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "9236cd8bcf063e33838d2d5f0accb691b4d053ba4a33b6496efde0f2c3cd1687",
+					"line": 42,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.minio",
+					"search_line": 42,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'cap_drop' attribute",
+					"actual_value": "Docker compose file doesn't have 'cap_drop' attribute. Make sure your container only has necessary capabilities."
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "fdc3f475f84cc6df58ef15cc8ccecaaaad021360d81af2bf4e5e9f4fd7a2c480",
+					"line": 55,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.nats",
+					"search_line": 55,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'cap_drop' attribute",
+					"actual_value": "Docker compose file doesn't have 'cap_drop' attribute. Make sure your container only has necessary capabilities."
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "58fa315c0aeb919a7256a5ff31ee0c94a7a5493582cd389eaf1e8b5cc33d6215",
+					"line": 2,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.postgres",
+					"search_line": 2,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'cap_drop' attribute",
+					"actual_value": "Docker compose file doesn't have 'cap_drop' attribute. Make sure your container only has necessary capabilities."
+				}
+			]
+		},
+		{
+			"query_name": "Healthcheck Not Set",
+			"query_id": "698ed579-b239-4f8f-a388-baa4bcb13ef8",
+			"query_url": "https://docs.docker.com/compose/compose-file/compose-file-v3/#healthcheck",
+			"severity": "MEDIUM",
+			"platform": "DockerCompose",
+			"cwe": "703",
+			"risk_score": "5.1",
+			"cloud_provider": "COMMON",
+			"category": "Availability",
+			"experimental": false,
+			"description": "Check containers periodically to see if they are running properly.",
+			"description_id": "449b7c5c",
+			"files": [
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "2a6ebc8b13e764cb3bdecc8755263e7b7a4510401912a8d76496a2faab36d99c",
+					"line": 55,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.nats",
+					"search_line": 55,
+					"search_value": "",
+					"expected_value": "Healthcheck should be defined.",
+					"actual_value": "Healthcheck is not defined."
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "d87348cd9e620df8c1cea05c8af9aa8bcab810bc39b6adad1e9c0ec333fe75b8",
+					"line": 42,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.minio",
+					"search_line": 42,
+					"search_value": "",
+					"expected_value": "Healthcheck should be defined.",
+					"actual_value": "Healthcheck is not defined."
+				}
+			]
+		},
+		{
+			"query_name": "Security Opt Not Set",
+			"query_id": "610e266e-6c12-4bca-9925-1ed0cd29742b",
+			"query_url": "https://docs.docker.com/compose/compose-file/compose-file-v3/#security_opt",
+			"severity": "MEDIUM",
+			"platform": "DockerCompose",
+			"cwe": "693",
+			"risk_score": "5.5",
+			"cloud_provider": "COMMON",
+			"category": "Resource Management",
+			"experimental": false,
+			"description": "Attribute 'security_opt' should be defined.",
+			"description_id": "83fb7a65",
+			"files": [
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "81f3a6ae942242e2cba7ea1b907bb082ef2439d06ed02d4d4dd80ce623fdacfa",
+					"line": 19,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.clickhouse",
+					"search_line": 19,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'security_opt' attribute",
+					"actual_value": "Docker compose file does not have 'security_opt' attribute"
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "9cc5806459b552cfcd6b13163d18655ac927b5564cdfebadf34f70c4f4bbbcf2",
+					"line": 42,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.minio",
+					"search_line": 42,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'security_opt' attribute",
+					"actual_value": "Docker compose file does not have 'security_opt' attribute"
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "9298a85cf8281c441820073fcc845a92ce87eaaac34324dd41e1773826f106fa",
+					"line": 2,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.postgres",
+					"search_line": 2,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'security_opt' attribute",
+					"actual_value": "Docker compose file does not have 'security_opt' attribute"
+				},
+				{
+					"file_name": "../../path/compose.yaml",
+					"similarity_id": "32b713e5a7d84dfdd6cd44a97ae4ffdc4700bd0c84f4d99bfcd15c2a91bbcca5",
+					"line": 55,
+					"issue_type": "MissingAttribute",
+					"search_key": "services.nats",
+					"search_line": 55,
+					"search_value": "",
+					"expected_value": "Docker compose file to have 'security_opt' attribute",
+					"actual_value": "Docker compose file does not have 'security_opt' attribute"
+				}
+			]
+		}
+	]
+}

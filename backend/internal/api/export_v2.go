@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/v7"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/compress/zstd"
 	"github.com/xuri/excelize/v2"
@@ -168,14 +167,13 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 			}
 		}
 	}
+	// P0 修复：作用域必须由调用方注入（session 主体来自 tenantScope，
+	// GPT Actions 来自 systemScope）。这里不再回退到 DefaultOrgWorkspace ——
+	// 否则任何认证用户都能把导出写进默认组织，并在导出列表/详情里读到它。
 	orgID, wsID := req.OrgID, req.WSID
 	if orgID == "" || wsID == "" {
-		var err error
-		orgID, wsID, err = s.deps.Store.DefaultOrgWorkspace(r.Context())
-		if err != nil {
-			writeJSON(w, 500, map[string]any{"error": err.Error()})
-			return
-		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "tenant scope is required for exports"})
+		return
 	}
 	var createdBy *string
 	if req.UserID != "" {
@@ -187,48 +185,76 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExportMulti(context.Background(), exp, job, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, job, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
 	writeJSON(w, 202, exp)
 }
 
 // runExportMulti 流式多地址导出（`52：Go API 不承载 GB 级文件，行级流式写 MinIO）。
 func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *model.DownloadJob, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool) {
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "RUNNING", "", "", 0, "")
+	// NOTE (P4, 2026-09-15): there is deliberately NO start-of-pipeline intent
+	// check here. The pipeline goroutine is launched inside the request handler,
+	// i.e. BEFORE the request transaction commits, so a check that runs outside
+	// that transaction can observe "no row" for a perfectly legitimate export.
+	// Measured on the all-format gate run p4-allfmt-20260914T235024Z: 6 of 8
+	// accepted exports aborted at start with intent_row_missing while their rows
+	// were committed. The single enforcement point is the pre-Put gate in
+	// putExportStream, which runs after the pipeline has done real work and the
+	// request has long committed.
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, extFor(format))
 	if zipIt {
 		key = fmt.Sprintf("exports/%s.zip", exp.ID)
 	}
 	var rowsTotal int64
 	var objectSHA string
+	var loc exportLocation
 	var ferr error
 
+	// 导出文件里的案件/标签注释必须使用**该导出对象自己的**工作区，
+	// 而不是默认工作区（否则会把另一个租户的案件名写进文件）。
+	exportWS := s.exportWorkspaceID(ctx, exp.ID)
+
 	if zipIt {
-		rowsTotal, objectSHA, ferr = s.writeZipExport(ctx, exp, job, key, chain, addresses, datasets, format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, loc, ferr = s.writeZipExport(ctx, exp, job, key, chain, exportWS, addresses, datasets, format, includeMeta, includeDecodedInput)
 	} else {
-		rowsTotal, objectSHA, ferr = s.writeSingleExport(ctx, job, key, chain, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, loc, ferr = s.writeSingleExport(ctx, exp.ID, job, key, chain, exportWS, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
 	}
 	if ferr != nil {
+		// A failed pipeline used to be visible only in the exports row, so the
+		// end-to-end gate could see a stuck PENDING/FAILED export with no line
+		// in the runtime log that explained it. Always log the real cause.
+		if s.deps.Log != nil {
+			s.deps.Log.Warn("export pipeline failed", "export_id", exp.ID, "zip", zipIt,
+				"format", format, "datasets", len(datasets), "error", ferr.Error())
+		}
 		_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "FAILED", "", "", 0, ferr.Error())
 		return
 	}
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "COMPLETED", key, objectSHA, rowsTotal, "")
-	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
+	multiDetail := map[string]any{
 		"chain": chain, "addresses": len(addresses), "datasets": datasets, "format": format, "zip": zipIt, "rows": rowsTotal,
-	})
+	}
+	// ADR-019 §2.2：完成事件必须带落桶证据。
+	for k, v := range loc.auditFields() {
+		multiDetail[k] = v
+	}
+	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, multiDetail)
+	// D-R10V4-01：同时写入 v2 审计链（audit_events_v2），legacy 写入保留。
+	s.writeAuditCtx(ctx, "export.completed", "export", "export", exp.ID, multiDetail)
 }
 
 // writeSingleExport 单地址单数据集：流式写一个对象。
-func (s *Server) writeSingleExport(ctx context.Context, job *model.DownloadJob, key, chain, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
+func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *model.DownloadJob, key, chain, wsID, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
 	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, job)
 	rows, err := s.query.RowsForExportRange(ctx, dataset, chain, addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
 	if err != nil {
-		return 0, "", err
+		return 0, "", exportLocation{Key: key}, err
 	}
 	rows = filterGPTActionExportToken(job, rows)
 	rows = dedupeExportRows(dataset, rows)
 	s.attachTokenMetadata(ctx, chain, rows)
 	if includeMeta {
-		s.annotateRows(ctx, chain, addr, rows)
+		s.annotateRows(ctx, chain, addr, rows, wsID)
 	}
 	s.attachDecodedInput(ctx, chain, dataset, rows, includeDecodedInput)
 	rowCount := int64(len(rows))
@@ -248,28 +274,28 @@ func (s *Server) writeSingleExport(ctx context.Context, job *model.DownloadJob, 
 		done <- werr
 	}()
 	if format == "parquet" {
-		if _, err := s.writeParquetTemp(ctx, key, dataset, rows); err != nil {
-			return 0, "", err
+		_, loc, err := s.writeParquetTemp(ctx, exportID, key, dataset, rows)
+		if err != nil {
+			return 0, "", loc, err
 		}
 		sha, err := s.objectSHA256(ctx, key)
-		return rowCount, sha, err
+		return rowCount, sha, loc, err
 	}
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: contentType(format)})
+	_, loc, err := s.putExportStream(ctx, exportID, key, pr, -1, contentType(format))
 	_ = pr.CloseWithError(err)
 	werr := <-done
 	if err != nil {
-		return 0, "", err
+		return 0, "", loc, err
 	}
-	_ = info
 	if werr != nil {
-		return 0, "", werr
+		return 0, "", loc, werr
 	}
 	sha, err := s.objectSHA256(ctx, key)
-	return rowCount, sha, err
+	return rowCount, sha, loc, err
 }
 
 // writeZipExport 多地址/多文件：流式 ZIP（`49 结构 + manifest.json）。
-func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *model.DownloadJob, key, chain string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, error) {
+func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *model.DownloadJob, key, chain, wsID string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
 	pr, pw := io.Pipe()
 	type zipResult struct {
 		rows int64
@@ -356,7 +382,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 							partRows := dedupeExportRows(task.ds, buckets[addr])
 							s.attachTokenMetadata(pipelineCtx, chain, partRows)
 							if includeMeta {
-								s.annotateRows(pipelineCtx, chain, addr, partRows)
+								s.annotateRows(pipelineCtx, chain, addr, partRows, wsID)
 							}
 							s.attachDecodedInput(pipelineCtx, chain, task.ds, partRows, includeDecodedInput)
 							select {
@@ -373,7 +399,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 						rows = dedupeExportRows(task.ds, rows)
 						s.attachTokenMetadata(pipelineCtx, chain, rows)
 						if includeMeta {
-							s.annotateRows(pipelineCtx, chain, task.addr, rows)
+							s.annotateRows(pipelineCtx, chain, task.addr, rows, wsID)
 						}
 						s.attachDecodedInput(pipelineCtx, chain, task.ds, rows, includeDecodedInput)
 						if format == "csv" || format == "jsonl" {
@@ -417,7 +443,16 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 		var werr error
 		for part := range parts {
 			if part.err != nil {
-				werr = part.err
+				// Keep the FIRST failure. Every worker shares pipelineCtx, so the
+				// cancel() below makes the other in-flight queries return
+				// context.Canceled. Overwriting werr with that cascade used to hide
+				// the real cause: measured 2026-09-15 on the P4 v2 ZIP positive, a
+				// ClickHouse MEMORY_LIMIT_EXCEEDED on token_transfers surfaced as
+				// "put export object ...: context canceled" and the exports row
+				// recorded nothing about the real error at all.
+				if werr == nil {
+					werr = fmt.Errorf("zip dataset %q address %q: %w", part.ds, part.addr, part.err)
+				}
 				cancel()
 				continue
 			}
@@ -468,17 +503,26 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 		_ = pw.CloseWithError(werr)
 		done <- zipResult{rows: rowsTotal, err: werr}
 	}()
-	_, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "application/zip"})
+	// Immediately before the object write, which is the side effect that object
+	// storage cannot roll back: without the committed intent row this pipeline must
+	// not create the artifact at all.
+	if !s.exportIntentCommitted(ctx, exp.ID) {
+		_ = pr.CloseWithError(errExportIntentGone)
+		<-done
+		s.exportAbortNoIntent(exp.ID, "zip-put")
+		return 0, "", exportLocation{Key: key}, errExportIntentGone
+	}
+	_, loc, err := s.putExportStream(ctx, exp.ID, key, pr, -1, "application/zip")
 	_ = pr.CloseWithError(err)
 	result := <-done
 	if err != nil {
-		return 0, "", err
+		return 0, "", loc, err
 	}
 	if result.err != nil {
-		return 0, "", result.err
+		return 0, "", loc, result.err
 	}
 	sha, err := s.objectSHA256(ctx, key)
-	return result.rows, sha, err
+	return result.rows, sha, loc, err
 }
 
 type preparedZipEntry struct {
@@ -594,10 +638,28 @@ func (s *Server) attachDecodedInput(ctx context.Context, chain, dataset string, 
 	}
 }
 
+// exportWorkspaceID 返回导出对象自己的工作区。
+//
+// exports 表带 organization_id / workspace_id，但 model.Export 没有映射这两列，
+// 因此这里单独查一次；查询失败时返回空串，调用方会跳过案件/标签注释（fail closed），
+// 绝不回退到 Store.DefaultOrgWorkspace（否则会把别的租户案件名写进导出文件）。
+func (s *Server) exportWorkspaceID(ctx context.Context, exportID string) string {
+	if s.deps.Store == nil || s.deps.Store.Pool == nil || exportID == "" {
+		return ""
+	}
+	var wsID string
+	if err := s.deps.Store.Pool.QueryRow(ctx,
+		"SELECT COALESCE(workspace_id::text,'') FROM exports WHERE id=$1", exportID).Scan(&wsID); err != nil {
+		return ""
+	}
+	return wsID
+}
+
 // annotateRows 附加案件/标签元数据（`50：matched_address/case_names/tag_names）。
-func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows []map[string]any) {
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(ctx)
-	if err != nil {
+func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows []map[string]any, wsID string) {
+	if wsID == "" {
+		// 拿不到任务自己的作用域就不附加案件/标签名，绝不回退到默认工作区
+		// （否则会把另一个租户的案件名写进导出文件）。
 		return
 	}
 	cache := map[string][]string{}
@@ -745,26 +807,26 @@ func (s *Server) streamParquetZipEntry(ctx context.Context, w io.Writer, dataset
 }
 
 // writeParquetTemp 单文件 Parquet：临时文件 + 上传（内存有界）。
-func (s *Server) writeParquetTemp(ctx context.Context, key, dataset string, rows []map[string]any) (int64, error) {
+func (s *Server) writeParquetTemp(ctx context.Context, exportID, key, dataset string, rows []map[string]any) (int64, exportLocation, error) {
 	tmp, err := os.CreateTemp("", "export-*.parquet")
 	if err != nil {
-		return 0, err
+		return 0, exportLocation{Key: key}, err
 	}
 	defer os.Remove(tmp.Name())
 	if _, err := s.writeParquetTo(ctx, tmp, dataset, rows); err != nil {
 		tmp.Close()
-		return 0, err
+		return 0, exportLocation{Key: key}, err
 	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		tmp.Close()
-		return 0, err
+		return 0, exportLocation{Key: key}, err
 	}
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, tmp, -1, minio.PutObjectOptions{ContentType: "application/vnd.apache.parquet"})
+	size, loc, err := s.putExportStream(ctx, exportID, key, tmp, -1, "application/vnd.apache.parquet")
 	tmp.Close()
 	if err != nil {
-		return 0, err
+		return 0, loc, err
 	}
-	return info.Size, nil
+	return size, loc, nil
 }
 
 // parquetExportRow 是所有链上数据集的稳定列并集；不适用的列保持零值。
@@ -874,8 +936,10 @@ func exportStrings(row map[string]any, key string) []string {
 	return nil
 }
 
+// objectSHA256 复算对象内容的 SHA-256。F-R10-BUCKET：必须走双读，
+// 否则迁移到新桶的对象在切写后无法复算（旧实现只读 raw 桶）。
 func (s *Server) objectSHA256(ctx context.Context, key string) (string, error) {
-	r, _, err := s.deps.Raw.Open(ctx, key)
+	r, _, _, err := s.openExportObject(ctx, key)
 	if err != nil {
 		return "", err
 	}

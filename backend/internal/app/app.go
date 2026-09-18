@@ -68,12 +68,15 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config invalid: %w", err)
 	}
-	// 迁移用连接账号（表 owner）：只在启动阶段使用。
-	owner, err := store.New(ctx, cfg.DatabaseURL)
+	// 迁移用连接账号（表 owner / 具备 DDL 权限）：只在启动阶段使用。
+	// S7-SEC-01 R-07：应用运行账号（cfg.DatabaseURL）已改为非超级用户的受限登录角色，
+	// 不再具备 CREATE TABLE / ALTER 权限，因此这里必须显式使用运维账号
+	// （MIGRATION_DATABASE_URL，未配置时回落 DATABASE_URL）。
+	owner, err := store.New(ctx, cfg.MigrationDatabaseURL)
 	if err != nil {
 		return nil, err
 	}
-	if err := migrations.ApplyPostgres(ctx, owner.Pool); err != nil {
+	if err := migrations.ApplyPostgres(ctx, owner.Pool.Raw()); err != nil {
 		return nil, err
 	}
 	// 运行期降权：DB_RUNTIME_ROLE 非空时，业务语句统一按受限角色执行（§27.6 AUDIT-003）。

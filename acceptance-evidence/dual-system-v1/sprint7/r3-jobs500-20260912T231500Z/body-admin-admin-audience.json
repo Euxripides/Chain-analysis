@@ -1,0 +1,1 @@
+{"error":"ERROR: operator does not exist: text = uuid (SQLSTATE 42883)"}

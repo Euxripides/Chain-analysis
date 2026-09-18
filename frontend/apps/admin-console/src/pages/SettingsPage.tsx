@@ -7,6 +7,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  Metric,
   PageHeader,
   SkeletonRows,
   StatusBadge,
@@ -60,6 +61,15 @@ interface SettingDraft {
   boolValue: boolean;
   secretRef: string;
   reason: string;
+}
+
+/** GET /api/auth/v1/methods 的只读认证能力声明（既有的公开端点，不含任何密钥）。 */
+interface AuthMethods {
+  local?: boolean;
+  oidc?: boolean;
+  /** AUTH_REQUIRE_ADMIN_MFA：后台是否强制 MFA。 */
+  mfa_required?: boolean;
+  audiences?: string[];
 }
 
 function isSecretSetting(setting: Setting): boolean {
@@ -235,6 +245,22 @@ export default function SettingsPage() {
 
   const canUpdate = can("admin:config:update");
   const canHistory = can("admin:config:history:read");
+
+  /**
+   * 认证能力只读面板的数据。
+   *
+   * 来源仅限既有公开端点 GET /api/auth/v1/methods（不含密钥、不需要新后端）。
+   * 读取失败时保持"—"，不打断配置页的主任务，也不在页面里贴提示条（AGENTS.md）。
+   */
+  const [authMethods, setAuthMethods] = useState<AuthMethods | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    client
+      .get<AuthMethods>("/api/auth/v1/methods", { signal: controller.signal })
+      .then((response) => setAuthMethods(response.data ?? null))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [client]);
 
   useEffect(() => {
     if (category !== "all" || list.items.length === 0) return;
@@ -526,6 +552,17 @@ export default function SettingsPage() {
     }
   };
 
+  const explainAuth = () => {
+    dialog.notify("info", "认证设置取值口径", null, [
+      { label: "接口", value: "GET /api/auth/v1/methods（公开只读，无密钥）" },
+      { label: "本地账户", value: "local：邮箱 + 密码（Argon2id）登录是否可用" },
+      { label: "组织账号", value: "oidc：未配置时后端返回 501，前端不伪装可用" },
+      { label: "后台强制 MFA", value: "AUTH_REQUIRE_ADMIN_MFA：true 时后台账号登录必须完成 MFA 第二步" },
+      { label: "修改方式", value: "部署级环境变量，本页只读；不在配置中心里改" },
+      { label: "账号注册", value: "各账号是否已绑定认证器由身份本人在用户端自助管理" },
+    ]);
+  };
+
   const explainScope = () => {
     dialog.notify("info", "配置口径", null, [
       { label: "接口", value: "GET /api/admin/v1/settings" },
@@ -553,6 +590,41 @@ export default function SettingsPage() {
           </>
         }
       />
+
+      <Card
+        title="认证设置（只读）"
+        actions={
+          <button type="button" className="btn btn--sm" onClick={explainAuth}>
+            口径
+          </button>
+        }
+      >
+        <div className="metric-grid">
+          <Metric
+            label="本地账户登录"
+            value={authMethods ? (authMethods.local ? "启用" : "停用") : "—"}
+            tone={authMethods?.local ? "ok" : "neutral"}
+            hint="邮箱 + 密码（Argon2id）"
+          />
+          <Metric
+            label="组织账号（OIDC）"
+            value={authMethods ? (authMethods.oidc ? "启用" : "未配置") : "—"}
+            tone={authMethods?.oidc ? "ok" : "neutral"}
+            hint="未配置时后端显式返回 501"
+          />
+          <Metric
+            label="后台强制 MFA"
+            value={authMethods ? (authMethods.mfa_required ? "要求" : "未要求") : "—"}
+            tone={authMethods?.mfa_required ? "warn" : "neutral"}
+            hint="AUTH_REQUIRE_ADMIN_MFA"
+          />
+          <Metric
+            label="会话受众"
+            value={authMethods?.audiences?.join(" / ") || "—"}
+            hint="用户层与后台会话互不通用"
+          />
+        </div>
+      </Card>
 
       <Card title="筛选">
         <div className="toolbar" style={{ alignItems: "flex-end" }}>

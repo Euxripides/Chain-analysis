@@ -5,12 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/access"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
 	"github.com/blockchain-platform/blockchain-platform/internal/auth"
+	"github.com/blockchain-platform/blockchain-platform/internal/featureflag"
 	"github.com/blockchain-platform/blockchain-platform/internal/iam"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
@@ -35,7 +36,16 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 	}
 	s.trustedProxies = proxies
 
-	s.audit = audit.NewWriter(poolOf(deps), deps.Cfg.Env, deps.Log)
+	// The audit writer deliberately holds the RAW pool, not the dbtx wrapper: an
+	// audit row must survive a rolled back business transaction (that is how a
+	// scope-deny is recorded), and the audit hash-chain head must never stay
+	// locked for the length of a gated handler. emitAudit also strips the request
+	// transaction from the context before writing.
+	s.audit = audit.NewWriter(poolOf(deps).Raw(), deps.Cfg.Env, deps.Log)
+
+	// §7.3：功能开关在真实请求路径上求值。开关是"低频改、高频读"的配置，
+	// 读取带 10 秒 TTL 缓存；未接线（无数据库）时 requireFlag 一律拒绝，不会默认放行。
+	s.flags = featureflag.NewStore(poolOf(deps).Raw(), featureflag.DefaultTTL, deps.Log)
 
 	if deps.Store == nil {
 		return
@@ -51,6 +61,7 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 		IdleTTL:         deps.Cfg.Auth.SessionIdleTTL,
 		AbsoluteTTL:     deps.Cfg.Auth.SessionAbsoluteTTL,
 		Secure:          deps.Cfg.Auth.CookieSecure,
+		SecureMode:      deps.Cfg.Auth.CookieSecureMode,
 		SameSite:        http.SameSiteLaxMode,
 		Domain:          deps.Cfg.Auth.CookieDomain,
 		Path:            "/",
@@ -63,6 +74,17 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 		MinPasswordLength:  deps.Cfg.Auth.MinPasswordLength,
 		RequireAdminMFA:    deps.Cfg.Auth.RequireAdminMFA,
 	}, s.audit)
+	// AUTH-004 登录第二步：把 MFA 持久化层适配成 iam 的挑战门禁。
+	// s.mfa 为 nil（数据库未接线）时不注入，登录行为与接入前完全一致；
+	// 数据库可用时一律注入，避免"配置里少一行就静默不要求第二步"。
+	s.iam.SetMFAChallengeGate(newMFAChallengeGate(s.mfa))
+	// 登录事件写失败必须留痕：调用方普遍写 `_ = RecordLoginEvent(...)`，
+	// 没有这条钩子时"审计少了一行"是完全静默的（2026-09-16 的链上空洞就是这样产生的）。
+	iam.SetLoginEventErrorHandler(func(err error) {
+		if s.deps.Log != nil {
+			s.deps.Log.Error("login event write failed", "err", err.Error())
+		}
+	})
 
 	oidcCfg := deps.Cfg.Auth.OIDC
 	if oidcCfg.Enabled {
@@ -92,7 +114,7 @@ func (s *Server) wireIdentityAndAudit(deps Deps) {
 	}
 }
 
-func poolOf(deps Deps) *pgxpool.Pool {
+func poolOf(deps Deps) *dbtx.Pool {
 	if deps.Store == nil {
 		return nil
 	}

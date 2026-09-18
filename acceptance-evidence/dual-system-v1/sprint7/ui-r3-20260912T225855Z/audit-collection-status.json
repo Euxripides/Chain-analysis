@@ -1,0 +1,45 @@
+{
+  "collector": "docker exec deploy-postgres-1 psql -U blockchain -d blockchain_platform",
+  "note": "只读查询；未授予任何新权限、未改 pg_hba、未扩大应用运行账号权限",
+  "queries": [
+    {
+      "purpose": "按本轮 request_id 取拒绝事件",
+      "sql": "SELECT json_agg(t) FROM (SELECT request_id, occurred_at, action, category, result, http_status, http_method, route_template, permission_key, policy_decision, deny_reason, actor_type, actor_email, actor_id, organization_id, workspace_id, session_id, event_hash, trace_id, client_ip, user_agent, detail FROM audit_events_v2 WHERE request_id IN ('025f6ab7-9a6c-495a-9a25-3c711fe06d53','1b5b5bb4-c14a-4822-8ff3-57d62f345679','224f7584-3095-44b8-8b18-73a40c061f3b','24b823d0-dfbd-43ad-b656-492427d4fd84','24f41983-614a-4477-81b9-047ec9afd876','28fbf299-61a5-4e4f-898c-84a478cfc331','2a9d3b4f-001c-4d04-b4e1-222b3438e7a2','416f590f-3f23-45e4-b91a-f76c72d969e3','5ab9fdcc-936f-445d-a8ff-092c1c9dcbee','637af9e0-f17c-4b40-b48e-3a6bfc6daf48','8978fbce-96c7-455f-bfa0-7f396fa9692d','8a430e31-33bf-4229-a8cc-7375d0cfdee5','a5a1fe5d-79aa-4e72-b5f5-cba611ad6b9b','a8841d7c-f2b7-4b74-94d4-9376fe729d16','adfe44d8-f4fb-43f1-a3cc-3a7826b0e9d5','ae5ea246-5b48-491e-a614-59d187e265af','b9abd6fb-8bf5-4bf4-b5ed-9f47f00ae5a9','c91ecb35-0c9a-40f6-998d-b99996e79b6e','f2784b38-bbb9-4d75-bb7a-0351b911125e','fb2f7070-96b2-470d-82cb-5e869e678217','fef7a58b-91e4-47cb-8fc9-f5d4b27793ff','ffb43467-7539-4137-b4ec-8f55ef97118d') AND action = 'authorization.denied' ORDER BY occurred_at) t;"
+    },
+    {
+      "purpose": "运行时间窗内全部拒绝事件",
+      "sql": "SELECT json_agg(t) FROM (SELECT request_id, occurred_at, action, category, result, http_status, http_method, route_template, permission_key, policy_decision, deny_reason, actor_type, actor_email, actor_id, organization_id, workspace_id, session_id, event_hash, trace_id, client_ip, user_agent, detail FROM audit_events_v2 WHERE action = 'authorization.denied' AND occurred_at >= '2026-09-13T05:58:56+07:00'::timestamptz AND occurred_at <= '2026-09-13T06:00:49+07:00'::timestamptz ORDER BY occurred_at DESC LIMIT 500) t;"
+    }
+  ],
+  "denied_request_ids_total": 22,
+  "denied_request_ids": [
+    "025f6ab7-9a6c-495a-9a25-3c711fe06d53",
+    "1b5b5bb4-c14a-4822-8ff3-57d62f345679",
+    "224f7584-3095-44b8-8b18-73a40c061f3b",
+    "24b823d0-dfbd-43ad-b656-492427d4fd84",
+    "24f41983-614a-4477-81b9-047ec9afd876",
+    "28fbf299-61a5-4e4f-898c-84a478cfc331",
+    "2a9d3b4f-001c-4d04-b4e1-222b3438e7a2",
+    "416f590f-3f23-45e4-b91a-f76c72d969e3",
+    "5ab9fdcc-936f-445d-a8ff-092c1c9dcbee",
+    "637af9e0-f17c-4b40-b48e-3a6bfc6daf48",
+    "8978fbce-96c7-455f-bfa0-7f396fa9692d",
+    "8a430e31-33bf-4229-a8cc-7375d0cfdee5",
+    "a5a1fe5d-79aa-4e72-b5f5-cba611ad6b9b",
+    "a8841d7c-f2b7-4b74-94d4-9376fe729d16",
+    "adfe44d8-f4fb-43f1-a3cc-3a7826b0e9d5",
+    "ae5ea246-5b48-491e-a614-59d187e265af",
+    "b9abd6fb-8bf5-4bf4-b5ed-9f47f00ae5a9",
+    "c91ecb35-0c9a-40f6-998d-b99996e79b6e",
+    "f2784b38-bbb9-4d75-bb7a-0351b911125e",
+    "fb2f7070-96b2-470d-82cb-5e869e678217",
+    "fef7a58b-91e4-47cb-8fc9-f5d4b27793ff",
+    "ffb43467-7539-4137-b4ec-8f55ef97118d"
+  ],
+  "rows_returned": 22,
+  "request_ids_matched": 22,
+  "request_ids_missing": [],
+  "request_ids_with_incomplete_fields": [],
+  "window_denials": 31,
+  "status": "OK"
+}

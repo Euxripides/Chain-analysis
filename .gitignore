@@ -19,3 +19,11 @@ backend/bin/
 mcp/node_modules/
 mcp/dist/
 frontend/.tmp/
+
+# 构建产物与本地副本：不入库（2026-09-18）
+#   artifacts/  单文件 53.6 MB，race 压测的 api 二进制
+#   *.exe       Windows 构建产物（fixture-membership.exe，28.3 MB）
+#   /home/      误建的仓库嵌套副本，路径超出 Windows MAX_PATH，会让 git 在 Windows 上报错
+artifacts/
+*.exe
+/home/

@@ -12,7 +12,10 @@ set -uo pipefail
 BASE=${BASE:-http://127.0.0.1:8080}
 PW=${ADMIN_PASSWORD:?需要 ADMIN_PASSWORD}
 FIXTURE_ENV=${FIXTURE_ENV:-/tmp/dual-system-fixture.env}
-PW_VIEWER=${FIXTURE_VIEWER_PASSWORD:-}
+# 夹具口令有两个来源：QA 编排器显式传 FIXTURE_VIEWER_PASSWORD，或 /tmp/s6-e2e-env.sh 里的 VIEWER_PASSWORD。
+# 2026-09-16 教训：只认前者时，run-sprint7-qa.sh 会在 sprint12 上留下一条"AUTH-007 需要夹具账号口令"的
+# BLOCKED —— 那是编排缺口，却让矩阵里出现一个看起来像产品问题的 BLOCKED 行。这里两个都认。
+PW_VIEWER=${FIXTURE_VIEWER_PASSWORD:-${VIEWER_PASSWORD:-}}
 
 PASS=0; FAIL=0; BLOCKED=0
 WORK=$(mktemp -d)
@@ -30,10 +33,26 @@ login_json() { # login_json <jar> <email> <password> <audience> -> body
   curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
     -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
 }
+# 多工作区身份登录必须显式选择工作区（P1-20260913）：服务端不替用户猜作用域。
+# 夹具账号同时属于 acme-lab 与 acme-lab-other，不带 workspace_id 会得到
+# AUTHN_WORKSPACE_SELECTION_REQUIRED。这里按邮箱解析目标工作区并随登录一并提交。
+if [ -z "${FIXTURE_WORKSPACE_ID:-}" ] && [ -r /tmp/dual-system-fixture.env ]; then
+  set -a; . /tmp/dual-system-fixture.env; set +a
+fi
+login_workspace() {
+  case "$1" in
+    *@fixture.local) printf '%s' "${FIXTURE_WORKSPACE_ID:-}" ;;
+    *) printf '' ;;
+  esac
+}
 login() { # 返回状态码
   local jar=$1 email=$2 pass=$3 aud=${4:-user}
+  local ws; ws=$(login_workspace "$email")
+  local body="{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\""
+  [ -n "$ws" ] && body="$body,\"workspace_id\":\"$ws\""
+  body="$body}"
   curl -s -o /dev/null -w '%{http_code}' -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
-    -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
+    -d "$body" "$BASE/api/auth/v1/login"
 }
 csrf() { grep "$1" "$2" 2>/dev/null | awk '{print $7}'; }
 cookie_of() { awk -v n="$2" '$6==n {print $7}' "$1" 2>/dev/null; }

@@ -5,12 +5,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Store struct {
-	Pool *pgxpool.Pool
+	Pool *dbtx.Pool
 }
 
 // New 打开连接池（连接账号为迁移/运维账号）。
@@ -42,7 +43,7 @@ func NewWithRuntimeRole(ctx context.Context, url, runtimeRole string) (*Store, e
 	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
-	return &Store{Pool: pool}, nil
+	return &Store{Pool: dbtx.New(pool)}, nil
 }
 
 func (s *Store) Close() {

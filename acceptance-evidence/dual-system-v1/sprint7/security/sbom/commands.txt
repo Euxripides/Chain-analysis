@@ -1,0 +1,79 @@
+S7-SEC-01 SBOM generation - command log
+host=dataserver  utc_start=2026-09-12T16:53:54Z
+project=/home/euripides/projects/blockchain-platform
+backend target = /home/euripides/projects/blockchain-platform/backend/bin/api
+frontend target = /home/euripides/projects/blockchain-platform/frontend
+evidence_dir=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom
+
+--- CONTAINER IMAGE PROVENANCE ---
+image_ref_used      = docker.1ms.run/anchore/syft:latest
+image_digest        = docker.1ms.run/anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c
+image_id            = sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c
+image_size_bytes    = 29444736
+image_created       = 2026-08-27T17:00:22.866987799Z
+local_alias_tag     = anchore/syft:latest 95fe0835e5be 117MB
+docker_server       = 29.7.2
+NOTE: registry-1.docker.io is UNREACHABLE from this VM (TCP/HTTPS timeout);
+      the daemon registry-mirror docker.m.daocloud.io answers 403 Forbidden for
+      anchore/syft manifests. Image was therefore pulled from the mirror
+      docker.1ms.run (manifest probe HTTP 200), whose manifest digest is listed above.
+      Pull log: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/00-pull-syft.log ; registry probe: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/registry-probe.log
+==========================================================
+### STEP: syft-version   utc=2026-09-12T16:53:55Z
+CMD: sudo -n docker run --rm docker.1ms.run/anchore/syft:latest version
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/syft-version.log
+
+version_exit=0
+backend_target=bin/api
+### STEP: backend-cdx   utc=2026-09-12T16:53:56Z
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest bin/api -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-cdx.log
+
+### STEP: backend-spdx   utc=2026-09-12T16:53:59Z
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest bin/api -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-spdx.log
+
+### STEP: frontend-cdx   utc=2026-09-12T16:54:02Z
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest dir:frontend -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/frontend.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/frontend-cdx.log
+
+### STEP: frontend-spdx   utc=2026-09-12T16:54:11Z
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest dir:frontend -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/frontend.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/frontend-spdx.log
+
+validation_exit=0
+==========================================================
+### STEP: json-validation + SUMMARY.md generation   utc=2026-09-12T16:56:00Z
+CMD: python3 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/sbom_report.py   (writes /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt and /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/SUMMARY.md)
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt
+==========================================================
+### STEP: backend re-scan with scan-target stability proof   utc=2026-09-12T16:58:39Z
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest bin/api -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.cdx.json
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest bin/api -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.spdx.json
+NOTE: binary was rebuilt by a concurrent deploy during the first pass; see /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend-scan-stability.txt
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-cdx.log, /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-spdx.log
+==========================================================
+### STEP: json-validation + SUMMARY.md regeneration (post-rescan)   utc=2026-09-12T16:58:39Z
+CMD: python3 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/sbom_report.py   (writes /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt and /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/SUMMARY.md)
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt
+==========================================================
+### STEP: CORRECTED backend SBOM generation   utc=2026-09-12T17:00:19Z
+### replaced target bin/api (resolved to /w/bin/api - stale 2026-09-08 build) with backend/bin/api
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/api -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-cdx.log
+CMD: sudo -n docker run --rm -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/api -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/logs/backend-spdx.log
+SUPERSEDED_OUTPUT_ARCHIVED: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/discarded-wrong-target/
+
+==========================================================
+### STEP: full JSON parse of all four artifacts + SUMMARY.md regeneration   utc=2026-09-12T17:00:20Z
+CMD: python3 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/sbom_report.py
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt

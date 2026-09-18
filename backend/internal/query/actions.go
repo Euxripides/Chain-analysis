@@ -10,6 +10,8 @@ import (
 
 	"github.com/shopspring/decimal"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 )
 
 // ActionFilter is the shared, strictly-whitelisted filter surface exposed to
@@ -460,13 +462,37 @@ func (s *Service) ActionFlowSummary(ctx context.Context, chain, address, token, 
 		where = append(where, "timestamp<=?")
 		args = append(args, *end)
 	}
-	inCond := "to_address=target AND from_address!=target"
-	outCond := "from_address=target AND to_address!=target"
+	// ReplacingMergeTree deduplication is expressed as an explicit argMax group-by
+	// on the sorting key instead of FINAL. Measured 2026-09-15 on the real
+	// instance: with FINAL this aggregate read 85,074,805 rows and held
+	// 6.87-10.62 GiB per call (23.4 s to 52.3 s, 12 real calls in 30 minutes),
+	// could not use the bloom_filter skip indexes on from_address/to_address, and
+	// was refused with Code 241 against the 19.60 GiB server ceiling. The same
+	// answer through the deduplicated subquery below reads 1.0-1.4 M rows in
+	// 0.3-3.3 s and 11-36 MiB. argMax(column, source_ingested_at) keeps exactly
+	// the row FINAL keeps: one row per (chain, tx_hash, log_index, token_address)
+	// with the greatest version, and the partition-key column is fixed by the
+	// chain predicate. The outer predicates use the deduplicated aliases so the
+	// planner cannot push a predicate into the aggregate subquery.
+	inCond := "to_addr=target AND fr_addr!=target"
+	outCond := "fr_addr=target AND to_addr!=target"
 	args = append([]any{address}, args...)
-	q := `WITH ? AS target SELECT toString(sumIf(amount,` + inCond + `)),toString(sumIf(amount,` + outCond + `)),toString(sumIf(amount,` + inCond + `)-sumIf(amount,` + outCond + `)),countIf(` + inCond + `),countIf(` + outCond + `),uniqExactIf(from_address,` + inCond + `),uniqExactIf(to_address,` + outCond + `),nullIf(minIf(timestamp,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(timestamp,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(minIf(timestamp,` + outCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(timestamp,` + outCond + `),toDateTime64(0,3,'UTC')) FROM blockchain.token_transfers FINAL WHERE ` + strings.Join(where, " AND ")
+	q := `WITH ? AS target SELECT toString(sumIf(amt,` + inCond + `)),toString(sumIf(amt,` + outCond + `)),toString(sumIf(amt,` + inCond + `)-sumIf(amt,` + outCond + `)),countIf(` + inCond + `),countIf(` + outCond + `),uniqExactIf(fr_addr,` + inCond + `),uniqExactIf(to_addr,` + outCond + `),nullIf(minIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(minIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')) FROM (SELECT tx_hash,log_index,token_address,argMax(amount,source_ingested_at) AS amt,argMax(timestamp,source_ingested_at) AS ts,argMax(from_address,source_ingested_at) AS fr_addr,argMax(to_address,source_ingested_at) AS to_addr FROM blockchain.token_transfers WHERE ` + strings.Join(where, " AND ") + ` GROUP BY tx_hash,log_index,token_address)`
+	// The scan runs on the bounded interactive budget, so a pathological caller
+	// is refused on its own budget instead of loading the shared server. Both the
+	// deadline and the per-query setting are applied: clickhouse-go derives its
+	// own max_execution_time from a context deadline and that derived value wins
+	// over the setting (measured 64 s for the router's 60 s deadline), so the
+	// deadline is what actually holds the scan inside the request budget.
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
 	var o FlowSummary
 	err := s.CH.DB().QueryRow(ctx, q, args...).Scan(&o.TotalIn, &o.TotalOut, &o.NetFlow, &o.InTxCount, &o.OutTxCount, &o.UniqueInAddresses, &o.UniqueOutAddresses, &o.FirstInTime, &o.LastInTime, &o.FirstOutTime, &o.LastOutTime)
-	return o, err
+	if err != nil {
+		return o, clickhouse.DescribeInteractiveScanError(err)
+	}
+	return o, nil
 }
 
 func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minTotal string, minCount, limit int, sortBy string) ([]map[string]any, error) {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useScopedQuery as useQuery } from '../lib/sessionScope'
 import { ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 import NoticeDialog from './NoticeDialog'

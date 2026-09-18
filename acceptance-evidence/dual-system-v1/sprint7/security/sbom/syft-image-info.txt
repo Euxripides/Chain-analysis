@@ -1,0 +1,9 @@
+image_ref=docker.1ms.run/anchore/syft:latest
+image_digest=docker.1ms.run/anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c
+image_id=sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c
+image_size_bytes=29444736
+image_created=2026-08-27T17:00:22.866987799Z
+image_arch=amd64
+image_os=linux
+docker_server=29.7.2
+pulled_from_mirror=docker.1ms.run (registry-1.docker.io unreachable; docker.m.daocloud.io returned 403)

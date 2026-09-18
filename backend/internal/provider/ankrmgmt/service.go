@@ -16,13 +16,13 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 )
 
 var ErrAuthorizationRequired = errors.New("Ankr account authorization is required")
 
 type Service struct {
-	pool *pgxpool.Pool
+	pool *dbtx.Pool
 	cfg  config.AnkrManagementConfig
 	http *http.Client
 	aead cipher.AEAD
@@ -48,7 +48,7 @@ type Account struct {
 	RawBalance        json.RawMessage `json:"-"`
 }
 
-func New(pool *pgxpool.Pool, cfg config.AnkrManagementConfig) (*Service, error) {
+func New(pool *dbtx.Pool, cfg config.AnkrManagementConfig) (*Service, error) {
 	s := &Service{pool: pool, cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}}
 	if cfg.Enabled {
 		var err error

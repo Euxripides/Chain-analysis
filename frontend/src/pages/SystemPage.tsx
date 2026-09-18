@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useScopedQuery as useQuery } from '../lib/sessionScope'
 import { Link } from 'react-router-dom'
 import { Activity, AlertTriangle, ArrowUpRight, Check, Database, RefreshCw, Server, ShieldCheck } from 'lucide-react'
-import { api, apiControlHttp } from '../api/client'
+import { adminGetJson, api, apiControlHttp } from '../api/client'
 import NoticeDialog from '../components/NoticeDialog'
 import type { AggregateItem, Overview } from '../features/api-control/types'
 
@@ -19,7 +19,9 @@ export default function SystemPage() {
   const overview = useQuery({ queryKey: ['ac-overview', 'system'], queryFn: () => apiControlHttp<Overview>('/overview?range=24h'), refetchInterval: 30_000, staleTime: 30_000 })
   const account = useQuery({ queryKey: ['ac-provider-accounts'], queryFn: () => apiControlHttp<{ accounts: { provider: string; official_available: boolean; remaining_credits: number | null; balance_usd: number | null }[] }>('/provider-accounts') })
   const errors = useQuery({ queryKey: ['ac-errors', 'system'], queryFn: () => apiControlHttp<{ items: AggregateItem[] }>('/errors?range=24h') })
-  const coverage = useQuery({ queryKey: ['coverage-stats'], queryFn: async () => { const response = await fetch('/api/v1/coverage/stats'); if (!response.ok) throw new Error('Coverage 加载失败'); return response.json() as Promise<{ stats: Record<string, number> }> }, refetchInterval: 30_000 })
+  // 状态总览是**后台页面**：/api/v1/coverage/stats 挂在 /api/v1 前缀下，
+  // 服务端按路径推断为 user 受众，必须显式声明 admin 才会读到后台会话 Cookie。
+  const coverage = useQuery({ queryKey: ['coverage-stats'], queryFn: () => adminGetJson<{ stats: Record<string, number> }>('/coverage/stats'), refetchInterval: 30_000 })
   const tokens = useQuery({ queryKey: ['token-enrichment'], queryFn: api.tokenEnrichment, refetchInterval: 30_000 })
 
   useEffect(() => {

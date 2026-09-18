@@ -8,6 +8,10 @@ import (
 )
 
 func (s *Server) handleInvestigationSubjects(w http.ResponseWriter, r *http.Request) {
+	// 主体对象/关系都挂在调查下，且 subjectintel.List 无非租户条件过滤。
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	if s.subjects == nil {
 		writeArchitectureError(w, http.StatusServiceUnavailable, "SUBJECT_INTELLIGENCE_UNAVAILABLE", "subject intelligence service unavailable")
 		return
@@ -35,6 +39,9 @@ func (s *Server) handleInvestigationSubjects(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusCreated, out)
 }
 func (s *Server) handleInvestigationRelationships(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	if s.subjects == nil {
 		writeArchitectureError(w, http.StatusServiceUnavailable, "SUBJECT_INTELLIGENCE_UNAVAILABLE", "subject intelligence service unavailable")
 		return

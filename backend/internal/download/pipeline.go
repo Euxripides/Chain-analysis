@@ -5,7 +5,9 @@ package download
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"sort"
@@ -151,6 +153,13 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 	start := time.Now()
 	rows, err := p.spool.LoadRows(spool.PageFile{PageNo: pr.pageNo, RawPath: pr.rawPath, MetaPath: pr.metaPath, Meta: pr.meta})
 	if err != nil {
+		// 原始 spool 对象已不存在 => 永久失败。若仍按可重试处理，finalizer
+		// 每 30 秒重放一次同样的错误，Shard 永远停在 FETCHED，任务既不能
+		// 完成也不能暂停收敛（现场 DL-20260909-0001，2026-09-08 起）。
+		if errors.Is(err, fs.ErrNotExist) {
+			p.failPagePermanent(ctx, pr, "spool load: "+err.Error())
+			return
+		}
 		p.failPage(ctx, pr, "spool load: "+err.Error())
 		return
 	}
@@ -279,6 +288,15 @@ func (p *ingestPipeline) failPage(ctx context.Context, pr pageRef, msg string) {
 		p.log.Error("fail page failed", "err", err)
 	}
 	p.log.Error("page ingest failed", "shard_id", pr.shardID, "page_no", pr.pageNo, "err", msg)
+	p.scheduled.Delete(pr.pageID)
+}
+
+// failPagePermanent 标记不可恢复的页（原始 spool 对象丢失）：不再重放。
+func (p *ingestPipeline) failPagePermanent(ctx context.Context, pr pageRef, msg string) {
+	if err := p.store.FailPageFinal(ctx, pr.pageID, msg); err != nil {
+		p.log.Error("fail page final failed", "err", err)
+	}
+	p.log.Error("page ingest failed permanently", "shard_id", pr.shardID, "page_no", pr.pageNo, "err", msg)
 	p.scheduled.Delete(pr.pageID)
 }
 

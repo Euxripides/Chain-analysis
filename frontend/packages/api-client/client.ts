@@ -34,8 +34,10 @@ export class ApiError extends Error {
   readonly retryable: boolean;
   readonly details?: Record<string, unknown>;
   readonly traceId?: string;
+  /** 服务端限流响应（429）携带的 Retry-After，已归一化为秒；不可解析时为 undefined。 */
+  readonly retryAfterSeconds?: number;
 
-  constructor(status: number, body: ApiErrorBody, traceId?: string) {
+  constructor(status: number, body: ApiErrorBody, traceId?: string, retryAfterSeconds?: number) {
     super(body.message || `HTTP ${status}`);
     this.name = "ApiError";
     this.status = status;
@@ -44,6 +46,7 @@ export class ApiError extends Error {
     this.retryable = Boolean(body.retryable);
     this.details = body.details;
     this.traceId = traceId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 
   /** 面向用户的中文提示（不包含后端实现细节）。 */
@@ -123,6 +126,9 @@ export class ApiClient {
     });
 
     const traceId = response.headers.get("X-Trace-Id") ?? undefined;
+    // 429 的 Retry-After 要在构造 ApiError 之前取出：限流提示必须告诉用户"等多久"，
+    // 否则第二步验证失败后只能给出无信息量的"请稍后重试"。
+    const retryAfterSeconds = parseRetryAfter(response.headers.get("Retry-After"));
 
     if (response.status === 204) {
       return {
@@ -142,7 +148,7 @@ export class ApiClient {
         message: "服务返回了无法解析的响应",
         field_errors: [],
         retryable: response.status >= 500,
-      }, traceId);
+      }, traceId, retryAfterSeconds);
     }
 
     if (!response.ok || payload?.success === false) {
@@ -164,7 +170,7 @@ export class ApiClient {
         }
         this.onUnauthenticated?.();
       }
-      throw new ApiError(response.status, body, traceId);
+      throw new ApiError(response.status, body, traceId, retryAfterSeconds);
     }
 
     const meta: ApiMeta =
@@ -200,6 +206,19 @@ function defaultMessageFor(status: number): string {
   }
 }
 
+/** 把 Retry-After（秒数或 HTTP 日期）归一化为秒；两种形式都不是时返回 undefined。 */
+function parseRetryAfter(value: string | null): number | undefined {
+  const raw = (value ?? "").trim();
+  if (raw === "") return undefined;
+  if (/^\d+$/.test(raw)) {
+    const seconds = Number(raw);
+    return Number.isFinite(seconds) ? seconds : undefined;
+  }
+  const at = Date.parse(raw);
+  if (Number.isNaN(at)) return undefined;
+  return Math.max(0, Math.ceil((at - Date.now()) / 1000));
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -232,6 +251,14 @@ export interface AuthSession {
   absolute_expires_at: string;
   must_change_password: boolean;
   mfa_satisfied: boolean;
+  /**
+   * 该身份是否已启用 MFA（§19.9 本轮新增，用于安全设置页渲染"已启用/未启用"）。
+   *
+   * 刻意声明为可选：字段是否存在取决于部署版本。前端不得把"字段缺失"当成权威的
+   * false（那会让已启用 MFA 的账号显示成未启用），因此安全设置页保留了本地回退，
+   * 并以 enroll/start 的 409 AUTHN_MFA_ALREADY_ENROLLED 作为最终纠偏。
+   */
+  mfa_enrolled?: boolean;
   csrf_token: string;
 }
 
@@ -244,6 +271,78 @@ export interface LoginResult {
   csrf_token: string;
   session_id: string;
   must_change_password: boolean;
+}
+
+/**
+ * MFA 错误码（§19.9 契约）。前端只按 code 判定分支，展示一律用服务端 error.message；
+ * 集中在这里是为了避免三个页面各写一遍字符串字面量。
+ */
+export const MFA_ERROR_CODES = {
+  /** 验证码错误：停在第二步，允许重试。 */
+  invalid: "AUTHN_MFA_INVALID",
+  /** 挑战过期/已使用/不存在：必须回到第一步重新登录。 */
+  challengeInvalid: "AUTHN_MFA_CHALLENGE_INVALID",
+  /** 尝试次数用尽（通常带 Retry-After）：必须回到第一步重新登录。 */
+  attemptsExhausted: "RATE_LIMIT_MFA_ATTEMPTS",
+  /** 该账号已启用 MFA（enroll/start 冲突）。 */
+  alreadyEnrolled: "AUTHN_MFA_ALREADY_ENROLLED",
+  /** 未先 start 就 confirm。 */
+  notEnrolled: "AUTHN_MFA_NOT_ENROLLED",
+  /** 部署未启用 MFA 服务。 */
+  unavailable: "AUTHN_MFA_UNAVAILABLE",
+} as const;
+
+/**
+ * 登录第二步挑战：POST /api/auth/v1/login 在"该账号已启用 MFA"时返回 HTTP 202，
+ * data 即本类型。**此时服务端不会下发任何 Cookie**，也就没有会话，
+ * 因此前端不能把它当登录成功，也不能去读 /session。
+ */
+export interface MfaChallenge {
+  state: "mfa_required";
+  /** 一次性挑战令牌；只提交给 /mfa/verify，绝不放进 URL 或日志。 */
+  challenge_id: string;
+  expires_at: string;
+  expires_in_seconds: number;
+  audience: "user" | "admin";
+  /** 允许的第二步方式，例如 ["totp", "recovery_code"]。 */
+  methods: string[];
+  next: string;
+  user: SessionUser;
+}
+
+/** 登录接口的两种成功形态：直接建立会话，或要求第二步验证。 */
+export type LoginResponse = LoginResult | MfaChallenge;
+
+/** 类型守卫：区分"已建立会话"与"需要第二步"。 */
+export function isMfaChallenge(value: LoginResponse | null | undefined): value is MfaChallenge {
+  return Boolean(value) && (value as MfaChallenge).state === "mfa_required";
+}
+
+/** POST /api/auth/v1/mfa/enroll/start 的 data。 */
+export interface MfaEnrollStart {
+  /** Base32 共享密钥（手工输入用）。 */
+  secret: string;
+  /** otpauth:// URI（二维码内容）。 */
+  otpauth_uri: string;
+  digits: number;
+  period_seconds: number;
+}
+
+/** POST /api/auth/v1/mfa/enroll/confirm 的 data；恢复码明文只在此出现一次。 */
+export interface MfaEnrollConfirm {
+  enrolled: boolean;
+  recovery_codes: string[];
+}
+
+/** 已登录会话上的 step-up 校验结果。 */
+export interface MfaStepUpResult {
+  verified: boolean;
+  used_recovery_code: boolean;
+}
+
+/** POST /api/auth/v1/mfa/disable 的 data。 */
+export interface MfaDisableResult {
+  enrolled: boolean;
 }
 
 export interface SessionRow {
@@ -338,7 +437,16 @@ export interface AdminIdentity {
   display_name: string;
   status: string;
   is_platform_admin: boolean;
+  /** 策略要求：该身份登录时必须完成 MFA（identities.mfa_required）。 */
   mfa_required: boolean;
+  /**
+   * 该身份是否已注册认证器（MFA 实际已启用）。
+   *
+   * 管理端用户接口目前只返回 mfa_required（策略要求），不返回注册状态；
+   * 这里声明为可选：一旦后端在身份 JSON 上补上 mfa_enrolled，用户列表无需改动即可显示
+   * 真实注册状态；字段缺失时页面按"接口未提供"如实呈现，绝不猜测。
+   */
+  mfa_enrolled?: boolean;
   must_change_password: boolean;
   failed_login_count: number;
   locked_until?: string;

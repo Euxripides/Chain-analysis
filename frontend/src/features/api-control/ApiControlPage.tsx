@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useScopedQuery as useQuery } from "../../lib/sessionScope";
 import { useSearchParams } from "react-router-dom";
 import { AgGridReact } from "ag-grid-react";
 import {

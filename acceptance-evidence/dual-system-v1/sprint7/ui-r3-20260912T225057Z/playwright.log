@@ -1,0 +1,33 @@
+
+Running 26 tests using 1 worker
+
+  ✓   1 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (4.7s)
+  ✓   2 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:91:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (4.0s)
+  ✓   3 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:120:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (3.2s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T225057Z
+  ✓   4 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:154:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (3.8s)
+  ✓   5 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:36:1 › 1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒 (5.4s)
+  ✓   6 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:63:1 › 2a. 普通用户层会话声明 user 受众调后台接口：403 (2.2s)
+  ✓   7 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:89:1 › 2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch (276ms)
+  ✓   8 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:120:1 › 3. 匿名访问后台页：401 (4.6s)
+  ✓   9 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:142:1 › 4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.2s)
+  ✓  10 [r3-desktop] › tests/r3-nav-return-to.spec.ts:32:3 › R-3 后台登录回跳与 return_to 白名单 › 匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query） (4.4s)
+  ✓  11 [r3-desktop] › tests/r3-nav-return-to.spec.ts:75:3 › R-3 后台登录回跳与 return_to 白名单 › 已认证状态下入口直接回原页（/system?view=settings） (3.2s)
+  ✓  12 [r3-desktop] › tests/r3-nav-return-to.spec.ts:84:3 › R-3 后台登录回跳与 return_to 白名单 › 未认证访问 /admin/* 时 return_to 不丢（search 保留） (1.8s)
+  ✓  13 [r3-desktop] › tests/r3-nav-return-to.spec.ts:110:5 › R-3 后台登录回跳与 return_to 白名单 › return_to 开放重定向防护 › 恶意 return_to 一律落到白名单内（不会被外域接走） (13.1s)
+  ✓  14 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (4.2s)
+  ✓  15 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:91:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (3.9s)
+  ✓  16 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:120:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (4.0s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T225057Z
+  ✓  17 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:154:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (4.1s)
+  ✓  18 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:36:1 › 1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒 (4.8s)
+  ✓  19 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:63:1 › 2a. 普通用户层会话声明 user 受众调后台接口：403 (2.2s)
+  ✓  20 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:89:1 › 2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch (311ms)
+  ✓  21 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:120:1 › 3. 匿名访问后台页：401 (4.3s)
+  ✓  22 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:142:1 › 4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.7s)
+  ✓  23 [r3-mobile] › tests/r3-nav-return-to.spec.ts:32:3 › R-3 后台登录回跳与 return_to 白名单 › 匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query） (3.7s)
+  ✓  24 [r3-mobile] › tests/r3-nav-return-to.spec.ts:75:3 › R-3 后台登录回跳与 return_to 白名单 › 已认证状态下入口直接回原页（/system?view=settings） (2.6s)
+  ✓  25 [r3-mobile] › tests/r3-nav-return-to.spec.ts:84:3 › R-3 后台登录回跳与 return_to 白名单 › 未认证访问 /admin/* 时 return_to 不丢（search 保留） (1.8s)
+  ✓  26 [r3-mobile] › tests/r3-nav-return-to.spec.ts:110:5 › R-3 后台登录回跳与 return_to 白名单 › return_to 开放重定向防护 › 恶意 return_to 一律落到白名单内（不会被外域接走） (13.2s)
+
+  26 passed (1.8m)

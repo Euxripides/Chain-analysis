@@ -38,6 +38,40 @@ func (s *Server) handleEnsure(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "bad request: " + err.Error()})
 		return
 	}
+	// 服务端注入租户/操作者作用域：EnsureRequest 的这两个字段是 json:"-"，
+	// 客户端无法提交；旧实现留空则会退化成 Store.DefaultOrgWorkspace（P0 成因之一）。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := s.writableWorkspace(r.Context(), scope)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	p := PrincipalFrom(r.Context())
+	req.OrganizationID = scope.OrganizationID
+	req.WorkspaceID = wsID
+	req.CreatedBy = p.Email
+	req.CreatedByIdentity = p.IdentityID
+	// §21.2：/datasets/ensure 只要求 download:create，但 create_missing_meta=true 会经
+	// addressmeta.EnsureLinked 真实创建案件/标签。这里必须按既有写入口的权限键显式授权，
+	// 否则只持有 download:create 的调用方可以越权造元数据。
+	if req.CreateMissingMeta {
+		caseRequested := strings.TrimSpace(req.CaseName) != ""
+		tagRequested := len(trimDedupeStrings(req.Tags)) > 0
+		for _, meta := range req.SubjectMeta {
+			if strings.TrimSpace(meta.CaseName) != "" {
+				caseRequested = true
+			}
+			if len(trimDedupeStrings(meta.Tags)) > 0 {
+				tagRequested = true
+			}
+		}
+		if !s.authorizeMetaCreate(w, r, caseRequested, tagRequested) {
+			return
+		}
+	}
 	resp, err := s.svc.Ensure(r.Context(), req)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -52,6 +86,17 @@ func (s *Server) handleCoveragePreview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "bad request: " + err.Error()})
 		return
 	}
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := s.writableWorkspace(r.Context(), scope)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	req.OrganizationID = scope.OrganizationID
+	req.WorkspaceID = wsID
 	resp, err := s.svc.Preview(r.Context(), req)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -70,9 +115,25 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	if offset < 0 {
 		offset = 0
 	}
-	jobs, err := s.deps.Store.ListJobs(r.Context(), status, limit, offset)
+	// P0 修复：任务列表必须按主体作用域过滤。
+	// 旧实现调用 Store.ListJobs（无 WHERE 租户条件），把全部组织的任务连同
+	// organization_id / workspace_id 一起返回给任何调用者。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	jobs, err := s.deps.Store.ListJobsScoped(r.Context(), scope.OrganizationID, scope.WorkspaceID, status, limit, offset)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		// [FIX 2026-09-13 / P0] 旧实现把 err.Error()（含原始 SQL 报错文本）直接写进响应体：
+		// 既泄露内部结构，又使该错误在服务端完全不可观测（历史 /api/v1/download-jobs 500 即如此）。
+		// 现改为：响应体只给稳定错误码，详情写入服务端日志。
+		if s.deps.Log != nil {
+			s.deps.Log.Error("list jobs failed", "err", err.Error(),
+				"request_id", requestIDFrom(r), "trace_id", traceIDFrom(r),
+				"organization_id", scope.OrganizationID, "workspace_id", scope.WorkspaceID,
+				"status", status, "limit", limit, "offset", offset)
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "internal_error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
@@ -94,6 +155,10 @@ type jobDetail struct {
 }
 
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
+	// 对象级授权：跨组织/跨工作区统一 404，不泄露任务是否存在。
+	if !s.scopedObject(w, r, "job", chi.URLParam(r, "id")) {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	job, err := s.deps.Store.GetJob(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -182,6 +247,9 @@ type volumeGuardActionRequest struct {
 }
 
 func (s *Server) handleGetVolumeGuards(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "job", chi.URLParam(r, "id")) {
+		return
+	}
 	guards, err := s.deps.Store.VolumeGuardsByJob(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -268,6 +336,24 @@ func (s *Server) handleSubjectControl(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"job_id": jobID, "subject_id": subjectID, "status": status})
 }
 
+// canResumeJob 决定哪些状态允许"继续/重试"。
+//
+//   - PAUSED / PAUSED_FALLBACK_TOO_EXPENSIVE：常规恢复。
+//   - PAUSE_REQUESTED：暂停收敛可能因为残留 Shard 短暂停在该状态。旧实现只接受
+//     PAUSED，用户按下暂停后既不能完成暂停也不能恢复下载（409 固定失败，
+//     现场投诉"暂停之后不能恢复下载"）。
+//   - FAILED / PARTIAL_FAILED：允许重新规划缺口后重试（Planner.ResumeJob 会保留
+//     已完成数据、只对未完成数据集重新规划），否则失败任务没有任何补救入口。
+func canResumeJob(status string) bool {
+	switch status {
+	case model.JobPaused, model.JobPausedFallbackTooExpensive, model.JobPauseReq,
+		model.JobFailed, model.JobPartialFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Server) controlJob(w http.ResponseWriter, r *http.Request, target, action string) {
 	id := chi.URLParam(r, "id")
 	job, err := s.deps.Store.GetJob(r.Context(), id)
@@ -286,7 +372,7 @@ func (s *Server) controlJob(w http.ResponseWriter, r *http.Request, target, acti
 			return
 		}
 	case "resume":
-		if job.Status != model.JobPaused && job.Status != model.JobPausedFallbackTooExpensive {
+		if !canResumeJob(job.Status) {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "job is " + job.Status})
 			return
 		}

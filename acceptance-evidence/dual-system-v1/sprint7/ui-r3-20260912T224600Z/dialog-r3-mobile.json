@@ -1,0 +1,6 @@
+{
+  "kill_switch_after_cancel": false,
+  "dialog_opened": true,
+  "dialog_closed": true,
+  "write_operations_issued": false
+}

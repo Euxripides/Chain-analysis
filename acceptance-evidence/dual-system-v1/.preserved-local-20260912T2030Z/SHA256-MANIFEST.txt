@@ -1,0 +1,7 @@
+﻿639cc3096edb89a091be2adc95d7ebd72c67a844fbd07f8eb0a32b78127189d0  331  sprint7\security\negative-tests\result.json
+8422fb4ad84fa5c6a7646a591024959d09bdb85efdb760c7a5857bf9eb176d32  17555  sprint7\security\negative-tests\run.log
+0c23397db8bf5109785ea28ad5d9fbdb0789c848fe1fd8e4331fa7b14ec023ee  38788  sprint7\security\image-iac\SUMMARY.md
+2aa210a64b83ef2e8f48ed6c518bfe8049ac8977bd5436ab9f2f637a8770060f  17485  sprint7\security\dependency-scan\SUMMARY.md
+55ed19a972b6364d32eb2760e3382f160b1aa72e358a7ac0f892bb24075da2f5  1586  sprint7\release\release-gate.md
+3f8a4e03490ed166d32fb112efe2d9e40a2926405fbcc6372f041d033005e0df  1501  tests\sprint7\qa\summary.json
+ee5fc2e04e9279a233054996e3775ed87a18088a55866fab83fc6d8c885bc7fb  88  tests\sprint7\qa\summary.txt

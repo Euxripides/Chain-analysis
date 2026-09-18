@@ -1,0 +1,71 @@
+# trivy image pull + version evidence
+timestamp_utc=2026-09-12T16:33:35Z
+host=dataserver
+command: sudo -n docker pull aquasec/trivy:latest
+--- pull output ---
+latest: Pulling from aquasec/trivy
+44136fa355b3: Already exists
+99f1ca71a2b5: Pulling fs layer
+0c664a59f299: Pulling fs layer
+9b17763e725d: Pulling fs layer
+e653b5f3db1d: Download complete
+d52de991631c: Download complete
+99f1ca71a2b5: Download complete
+0c664a59f299: Download complete
+0c664a59f299: Pull complete
+9b17763e725d: Download complete
+9b17763e725d: Pull complete
+99f1ca71a2b5: Pull complete
+Digest: sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+Status: Downloaded newer image for aquasec/trivy:latest
+docker.io/aquasec/trivy:latest
+PULL_EXIT=0
+--- image inspect (digest / repo digests / created) ---
+["aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"]|"sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"|2026-08-14T11:27:20.641164516Z|amd64/linux
+--- docker images aquasec/trivy ---
+REPOSITORY      TAG       DIGEST                                                                    IMAGE ID                                                                  CREATED       SIZE
+aquasec/trivy   latest    sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969   sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969   4 weeks ago   254MB
+--- trivy --version (container) ---
+Version: 0.74.0
+TRIVY_VERSION_EXIT=0
+--- trivy --help (first 40 lines) ---
+Scanner for vulnerabilities in container images, file systems, and Git repositories, as well as for configuration issues and hard-coded secrets
+
+Usage:
+  trivy [global flags] command [flags] target
+  trivy [command]
+
+Examples:
+  # Scan a container image
+  $ trivy image python:3.4-alpine
+
+  # Scan a container image from a tar archive
+  $ trivy image --input ruby-3.1.tar
+
+  # Scan local filesystem
+  $ trivy fs .
+
+  # Run in server mode
+  $ trivy server
+
+Scanning Commands
+  config      Scan config files for misconfigurations
+  filesystem  Scan local filesystem
+  image       Scan a container image
+  kubernetes  [EXPERIMENTAL] Scan kubernetes cluster
+  repository  Scan a repository
+  rootfs      Scan rootfs
+  sbom        Scan SBOM for vulnerabilities and licenses
+  vm          [EXPERIMENTAL] Scan a virtual machine image
+
+Management Commands
+  module      Manage modules
+  plugin      Manage plugins
+  vex         [EXPERIMENTAL] VEX utilities
+
+Utility Commands
+  clean       Remove cached files
+  completion  Generate the autocompletion script for the specified shell
+  convert     Convert Trivy JSON report into a different format
+  help        Help about any command
+  registry    Manage registry authentication

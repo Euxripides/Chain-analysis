@@ -1,0 +1,61 @@
+========================================================================
+VALIDATION OF SYFT SBOM ARTIFACTS  (all figures computed from the files on disk)
+========================================================================
+FILE: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.cdx.json
+  size_bytes = 60246
+  sha256     = a88121ed7c9b7bbdac8f7746d72d8b1b6e95abe9577753ef8d9e48ec6dd72740
+  bomFormat    = CycloneDX
+  specVersion  = 1.7
+  serialNumber = urn:uuid:e4b14227-2125-4ce2-9728-988d18685842
+  components   = 56
+  dependencies = 1
+  metadata.tools = {"components": [{"type": "application", "author": "anchore", "name": "syft", "version": "1.51.1"}]}
+  metadata.component = {"bom-ref": "22db590d71f764e4", "type": "file", "name": "api", "version": "sha256:bae72e0a5063643866d5fe2e259ba4239d8f6ca94ab0191b7c59496fcc040142"}
+  types        = {"library": 55, "file": 1}
+  ecosystems   = {"golang": 55, "(no purl)": 1}
+  licenses_top10 = {"BSD-3-Clause": 1}
+  components_without_license = 55
+
+FILE: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/backend.spdx.json
+  size_bytes = 86473
+  sha256     = aa9b008c9da0ebcf3ece0bff161bb681d953ff6117a5dc8b75e53d6e6c75b550
+  spdxVersion  = SPDX-2.3
+  dataLicense  = CC0-1.0
+  name         = api
+  packages     = 56
+  relationships= 165
+  creationInfo.creators = ["Organization: Anchore, Inc", "Tool: syft-1.51.1"]
+  primaryPackagePurpose = {"(unset)": 55, "FILE": 1}
+  ecosystems   = {"golang": 55}
+  licenses_top10 = {"NOASSERTION": 55, "BSD-3-Clause": 1}
+
+FILE: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/frontend.cdx.json
+  size_bytes = 225134
+  sha256     = 3b1f94f01b7ec6aae5f2198d37ffbb05c429f76e50c53565bce28ec749618b46
+  bomFormat    = CycloneDX
+  specVersion  = 1.7
+  serialNumber = urn:uuid:15424c11-71d1-4939-8f9a-2bf31d31b9fd
+  components   = 184
+  dependencies = 65
+  metadata.tools = {"components": [{"type": "application", "author": "anchore", "name": "syft", "version": "1.51.1"}]}
+  metadata.component = {"bom-ref": "ec56d9acce72be61", "type": "file", "name": "frontend"}
+  types        = {"library": 181, "file": 3}
+  ecosystems   = {"npm": 175, "golang": 6, "(no purl)": 3}
+  licenses_top10 = {"MIT": 14, "Apache-2.0": 4, "BSD-3-Clause": 2, "ISC": 1}
+  components_without_license = 163
+
+FILE: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/frontend.spdx.json
+  size_bytes = 382784
+  sha256     = 554ead9edfc7580a608c16c73d3f3794b8d9e5bbb756d39d702adda918fc3199
+  spdxVersion  = SPDX-2.3
+  dataLicense  = CC0-1.0
+  name         = frontend
+  packages     = 182
+  relationships= 551
+  creationInfo.creators = ["Organization: Anchore, Inc", "Tool: syft-1.51.1"]
+  primaryPackagePurpose = {"(unset)": 181, "FILE": 1}
+  ecosystems   = {"npm": 175, "golang": 6}
+  licenses_top10 = {"NOASSERTION": 161, "MIT": 14, "Apache-2.0": 4, "BSD-3-Clause": 2, "ISC": 1}
+
+SUMMARY.md written: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/SUMMARY.md (14669 bytes)
+backend_go_deps_embedded=53

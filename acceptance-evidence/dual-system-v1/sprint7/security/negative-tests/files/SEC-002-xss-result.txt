@@ -1,0 +1,2 @@
+api_body=alert(1)xss-probe
+db_body=alert(1)xss-probe

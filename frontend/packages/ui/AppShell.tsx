@@ -144,7 +144,7 @@ export function AppShell({
                 </span>
                 <span>
                   <span style={{ display: "block", color: "var(--c-graphite)", fontWeight: 600 }}>{user.displayName}</span>
-                  <span style={{ fontSize: "var(--fs-11)" }}>{user.roles.join(" / ") || "no-role"}</span>
+                  <span style={{ fontSize: "var(--fs-11)" }}>{describeRoles(user.roles)}</span>
                 </span>
               </>
             ) : (
@@ -168,6 +168,19 @@ export function AppShell({
       </div>
     </div>
   );
+}
+
+/**
+ * 角色文案。
+ *
+ * ShellUser.roles 由会话归一化（AuthProvider）保证是数组；这里仍做无条件兜底：
+ * 后端曾把"该身份没有任何角色绑定"的 roles 序列化成 JSON null，任何一处直接
+ * join 都会在渲染期抛 TypeError，React 卸载整棵树，整个应用只剩空白的 #root。
+ * Shell 是最后一层，绝不假设上游一定干净：非数组按空集合处理，非字符串项忽略。
+ */
+function describeRoles(roles: unknown): string {
+  if (!Array.isArray(roles)) return "no-role";
+  return roles.filter((role): role is string => typeof role === "string").join(" / ") || "no-role";
 }
 
 /** 全局搜索框只是一个受控输入；实际检索由页面接管（禁止在 shell 里伪造结果）。 */

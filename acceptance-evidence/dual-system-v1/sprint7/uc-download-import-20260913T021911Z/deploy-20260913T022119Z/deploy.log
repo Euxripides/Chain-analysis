@@ -1,0 +1,23 @@
+=== r9 DEPLOY STRICT v2 START 2026-09-13T02:21:27Z BUILD=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/build-20260913T021911Z OUT=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/deploy-20260913T022119Z ===
+script_sha256=0b3bc1caeed127de82fada450be6d0917570158dc6b05444602bd77f8dcd9bee
+--- P0 pre-state ---
+p0 census: SET jobs|CANCELLED|814 jobs|COMPLETED|1586 jobs|PAUSED|4 jobs|PAUSED_FALLBACK_TOO_EXPENSIVE|1 jobs|PAUSE_REQUESTED|1 jobs|QUEUED|18 jobs|RUNNING|1 
+p0 ready body={"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+--- P1 staged artifacts ---
+--- P2 preserve + install ---
+preserved old sha: 8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a  /home/euripides/projects/blockchain-platform/backend/bin/api.bak-r9-20260913T022127Z 513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48  /home/euripides/projects/blockchain-platform/backend/bin/worker.bak-r9-20260913T022127Z 28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4  /home/euripides/projects/blockchain-platform/backend/bin/migrate.bak-r9-20260913T022127Z 
+--- P3 restart ---
+p3 new api pid=4011163 worker pid=4011175
+--- P4 post health ---
+p4 ready body={"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+--- P5 auth boundary + new route presence ---
+--- P6 business continuity ---
+SET
+jobs=2425
+shards=28419
+checkpoints=20009
+outbox_events=163
+p6 census: SET jobs|CANCELLED|814 jobs|COMPLETED|1586 jobs|PAUSED|4 jobs|PAUSED_FALLBACK_TOO_EXPENSIVE|1 jobs|PAUSE_REQUESTED|1 jobs|QUEUED|18 jobs|RUNNING|1 
+p6 table counts: download_jobs=SET 2425 download_shards=SET 28419 checkpoints=SET 20009 
+--- P7 journal ---
+=== r9 DEPLOY STRICT v2 END 2026-09-13T02:21:33Z FAIL=0 PASS=28 ===

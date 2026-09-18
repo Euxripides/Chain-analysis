@@ -14,6 +14,8 @@ const AlgorithmVersion = "basic-flow-v1.0"
 
 type rowQuery interface {
 	RowsForExport(context.Context, string, string, string, int, int) ([]map[string]any, error)
+	// FlowTokenTransfers 是不走导出形状的读路径（显式去重 + 跳数索引 + 交互预算）。
+	FlowTokenTransfers(context.Context, string, string, int) ([]map[string]any, error)
 }
 type Service struct{ query rowQuery }
 
@@ -55,7 +57,9 @@ func (s *Service) Analyze(ctx context.Context, chain, address string) (Result, e
 	if chain != "tron" {
 		address = strings.ToLower(address)
 	}
-	rows, err := s.query.RowsForExport(ctx, "token_transfers", chain, address, 50000, 0)
+	// P1-1 第 2 项：改走 FlowTokenTransfers（显式去重 + 跳数索引），不再借导出形状的
+	// "SELECT * ... FINAL ... ORDER BY timestamp"，那条路实测 9.9 秒且随地址活动量线性变差。
+	rows, err := s.query.FlowTokenTransfers(ctx, chain, address, 50000)
 	if err != nil {
 		return Result{}, err
 	}

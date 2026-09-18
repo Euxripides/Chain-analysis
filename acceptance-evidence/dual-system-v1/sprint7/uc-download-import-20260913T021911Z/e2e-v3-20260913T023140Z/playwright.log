@@ -1,0 +1,87 @@
+
+Running 14 tests using 1 worker
+
+  ✓   1 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:117:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-01 最小 .xlsx 导入：浏览器摘要 → 服务端再次验证 → 未解析案件/标签被移除 → 真实创建 (5.6s)
+  ✓   2 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:188:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-02 坏文件：解析失败必须走 Dialog，且不得发出任何校验/创建请求 (2.7s)
+  ✘   3 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:211:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览 (2.8s)
+  ✓   4 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:245:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-04 混合文件：合法/非法/重复 → 服务端判定与最终 payload 只含 accepted (6.0s)
+  ✘   5 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:282:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务 (5.3s)
+  ✓   6 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:306:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-07 格式防线：改名文件与压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求 (8.6s)
+  -   7 [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:339:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-06 手机断点：导入 Dialog 在 390x844 可读且无横向溢出
+  -   8 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:117:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-01 最小 .xlsx 导入：浏览器摘要 → 服务端再次验证 → 未解析案件/标签被移除 → 真实创建
+  -   9 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:188:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-02 坏文件：解析失败必须走 Dialog，且不得发出任何校验/创建请求
+  -  10 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:211:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览
+  -  11 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:245:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-04 混合文件：合法/非法/重复 → 服务端判定与最终 payload 只含 accepted
+  -  12 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:282:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务
+  -  13 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:306:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-07 格式防线：改名文件与压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求
+  ✓  14 [uc-mobile] › tests/r9-uc-download-import-v3.spec.ts:339:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-06 手机断点：导入 Dialog 在 390x844 可读且无横向溢出 (8.3s)
+
+
+  1) [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:211:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览 
+
+    Error: 服务端必须显式拒绝其余 50 条
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 50
+    Received: 0
+
+      236 |     });
+      237 |     expect(verdict.summary?.accepted, "服务端必须恰好接受 100 条").toBe(100);
+    > 238 |     expect(verdict.summary?.cap_rejected, "服务端必须显式拒绝其余 50 条").toBe(50);
+          |                                                               ^
+      239 |     expect(serverText, "Dialog 必须显示被拒 50 条").toContain("服务端拒绝");
+      240 |     await page.getByRole("button", { name: "取消" }).click();
+      241 |     await expect(serverDialog).toBeHidden();
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v3.spec.ts:238:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-9e22f-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-9e22f-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-9e22f-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-9e22f-须显式报出（接受-100-拒绝-50），取消后不得预览-uc-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:282:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务 
+
+    Error: first create must return a job id
+
+    expect(received).toBeTruthy()
+
+    Received: undefined
+
+      296 |     expect(first.status(), "first create").toBeLessThan(300);
+      297 |     expect(second.status(), "second create").toBeLessThan(300);
+    > 298 |     expect(firstBody.job_id, "first create must return a job id").toBeTruthy();
+          |                                                                   ^
+      299 |     expect(secondBody.job_id, "retry must reuse the same job, not create a new one").toBe(firstBody.job_id);
+      300 |     const jobs = await page.request.get("/api/v2/jobs?limit=100", { headers: { "X-Auth-Audience": "user" } });
+      301 |     const jobsBody = await jobs.json().catch(() => ({ items: [] }));
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r9-uc-download-import-v3.spec.ts:298:67
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-e17c2-等键-同一-payload-连续创建，必须复用同一任务-uc-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-e17c2-等键-同一-payload-连续创建，必须复用同一任务-uc-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-e17c2-等键-同一-payload-连续创建，必须复用同一任务-uc-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v3-20260913T023140Z/test-results/r9-uc-download-import-v3-R-e17c2-等键-同一-payload-连续创建，必须复用同一任务-uc-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:211:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-03 大文件 150 行：上限必须显式报出（接受 100 / 拒绝 50），取消后不得预览 
+    [uc-desktop] › tests/r9-uc-download-import-v3.spec.ts:282:3 › R9 U-DL-01 CSV/XLSX import (app-v2) › R9-05 重试不重复：同一幂等键 + 同一 payload 连续创建，必须复用同一任务 
+  7 skipped
+  5 passed (1.1m)

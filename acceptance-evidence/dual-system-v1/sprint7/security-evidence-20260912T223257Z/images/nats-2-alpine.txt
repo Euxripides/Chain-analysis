@@ -1,0 +1,117 @@
+
+Report Summary
+
+┌───────────────────────────────┬──────────┬─────────────────┐
+│            Target             │   Type   │ Vulnerabilities │
+├───────────────────────────────┼──────────┼─────────────────┤
+│ nats:2-alpine (alpine 3.22.5) │  alpine  │       20        │
+├───────────────────────────────┼──────────┼─────────────────┤
+│ usr/local/bin/nats-server     │ gobinary │        3        │
+└───────────────────────────────┴──────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+nats:2-alpine (alpine 3.22.5)
+=============================
+Total: 20 (UNKNOWN: 0, LOW: 12, MEDIUM: 6, HIGH: 2, CRITICAL: 0)
+
+┌────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│  Library   │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                            Title                             │
+├────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libcrypto3 │ CVE-2026-14456 │ HIGH     │ fixed  │ 3.5.7-r0          │ 3.5.8-r0      │ openssl: OpenSSL: Denial of Service via unbounded memory     │
+│            │                │          │        │                   │               │ growth in QUIC server...                                     │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-14456                   │
+│            ├────────────────┼──────────┤        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-18798 │ MEDIUM   │        │                   │               │ openssl: QUIC server may trigger double free when processing │
+│            │                │          │        │                   │               │ INITIAL packet                                               │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-18798                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63072 │          │        │                   │               │ openssl: heap buffer overflow in CMS key unwrapping          │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63072                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63076 │          │        │                   │               │ openssl: invalid pointer dereference in CMP server via       │
+│            │                │          │        │                   │               │ crafted protectionAlg                                        │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63076                   │
+│            ├────────────────┼──────────┤        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-14457 │ LOW      │        │                   │               │ openssl: RPK server signature algorithm selection can        │
+│            │                │          │        │                   │               │ dereference a missing certificate                            │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-14457                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-54874 │          │        │                   │               │ openssl: excessive memory use buffering DTLS records for a   │
+│            │                │          │        │                   │               │ future epoch                                                 │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-54874                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63073 │          │        │                   │               │ openssl: untrusted sender DN used as format string in CMP    │
+│            │                │          │        │                   │               │ response validation...                                       │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63073                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63074 │          │        │                   │               │ openssl: CMP indefinite cache growth of ExtraCerts           │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63074                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63075 │          │        │                   │               │ openssl: QUIC ACK-only packet retention can cause memory     │
+│            │                │          │        │                   │               │ exhaustion                                                   │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63075                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-75803 │          │        │                   │               │ Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with │
+│            │                │          │        │                   │               │ an empty ...                                                 │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-75803                   │
+├────────────┼────────────────┼──────────┤        │                   │               ├──────────────────────────────────────────────────────────────┤
+│ libssl3    │ CVE-2026-14456 │ HIGH     │        │                   │               │ openssl: OpenSSL: Denial of Service via unbounded memory     │
+│            │                │          │        │                   │               │ growth in QUIC server...                                     │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-14456                   │
+│            ├────────────────┼──────────┤        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-18798 │ MEDIUM   │        │                   │               │ openssl: QUIC server may trigger double free when processing │
+│            │                │          │        │                   │               │ INITIAL packet                                               │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-18798                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63072 │          │        │                   │               │ openssl: heap buffer overflow in CMS key unwrapping          │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63072                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63076 │          │        │                   │               │ openssl: invalid pointer dereference in CMP server via       │
+│            │                │          │        │                   │               │ crafted protectionAlg                                        │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63076                   │
+│            ├────────────────┼──────────┤        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-14457 │ LOW      │        │                   │               │ openssl: RPK server signature algorithm selection can        │
+│            │                │          │        │                   │               │ dereference a missing certificate                            │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-14457                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-54874 │          │        │                   │               │ openssl: excessive memory use buffering DTLS records for a   │
+│            │                │          │        │                   │               │ future epoch                                                 │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-54874                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63073 │          │        │                   │               │ openssl: untrusted sender DN used as format string in CMP    │
+│            │                │          │        │                   │               │ response validation...                                       │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63073                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63074 │          │        │                   │               │ openssl: CMP indefinite cache growth of ExtraCerts           │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63074                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-63075 │          │        │                   │               │ openssl: QUIC ACK-only packet retention can cause memory     │
+│            │                │          │        │                   │               │ exhaustion                                                   │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-63075                   │
+│            ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│            │ CVE-2026-75803 │          │        │                   │               │ Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with │
+│            │                │          │        │                   │               │ an empty ...                                                 │
+│            │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-75803                   │
+└────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
+
+usr/local/bin/nats-server (gobinary)
+====================================
+Total: 3 (UNKNOWN: 1, LOW: 0, MEDIUM: 2, HIGH: 0, CRITICAL: 0)
+
+┌─────────────────────┬────────────────┬──────────┬──────────┬───────────────────┬───────────────┬─────────────────────────────────────────────────────────────┐
+│       Library       │ Vulnerability  │ Severity │  Status  │ Installed Version │ Fixed Version │                            Title                            │
+├─────────────────────┼────────────────┼──────────┼──────────┼───────────────────┼───────────────┼─────────────────────────────────────────────────────────────┤
+│ golang.org/x/crypto │ CVE-2026-56855 │ MEDIUM   │ fixed    │ v0.55.0           │ 0.56.0        │ golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Denial of │
+│                     │                │          │          │                   │               │ Service via crafted messages                                │
+│                     │                │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-56855                  │
+│                     ├────────────────┤          │          │                   │               ├─────────────────────────────────────────────────────────────┤
+│                     │ CVE-2026-78662 │          │          │                   │               │ golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Denial of │
+│                     │                │          │          │                   │               │ Service via channel request flooding                        │
+│                     │                │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-78662                  │
+│                     ├────────────────┼──────────┼──────────┤                   ├───────────────┼─────────────────────────────────────────────────────────────┤
+│                     │ GO-2026-5932   │ UNKNOWN  │ affected │                   │               │ The golang.org/x/crypto/openpgp package is unmaintained,    │
+│                     │                │          │          │                   │               │ unsafe by design, and has known security...                 │
+└─────────────────────┴────────────────┴──────────┴──────────┴───────────────────┴───────────────┴─────────────────────────────────────────────────────────────┘

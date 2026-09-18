@@ -1,0 +1,1083 @@
+{
+  "artifacts": [
+    {
+      "buildinfo": {
+        "build_settings": {
+          "-buildmode": "exe",
+          "-compiler": "gc",
+          "CGO_CFLAGS": "",
+          "CGO_CPPFLAGS": "",
+          "CGO_CXXFLAGS": "",
+          "CGO_ENABLED": "1",
+          "CGO_LDFLAGS": "",
+          "GOAMD64": "v1",
+          "GOARCH": "amd64",
+          "GOOS": "linux"
+        },
+        "embedded_module_count": 53,
+        "go_version": "go1.26.7",
+        "main_module": "github.com/blockchain-platform/blockchain-platform",
+        "main_module_version": "(devel)",
+        "main_package": "github.com/blockchain-platform/blockchain-platform/cmd/api",
+        "vcs_settings": {}
+      },
+      "buildinfo_vs_go_sum_crosscheck": {
+        "github.com/go-chi/chi/v5": {
+          "binary_buildinfo_h1": "h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=",
+          "binary_buildinfo_version": "v5.3.2",
+          "binary_version_matches_expected": true,
+          "expected_version": "5.3.2",
+          "go_mod_version": "v5.3.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        },
+        "github.com/jackc/pgx/v5": {
+          "binary_buildinfo_h1": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "binary_buildinfo_version": "v5.9.2",
+          "binary_version_matches_expected": true,
+          "expected_version": "5.9.2",
+          "go_mod_version": "v5.9.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "binary_buildinfo_h1": "h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=",
+          "binary_buildinfo_version": "v2.11.0",
+          "binary_version_matches_expected": true,
+          "expected_version": "2.11.0",
+          "go_mod_version": "v2.11.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        },
+        "golang.org/x/crypto": {
+          "binary_buildinfo_h1": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "binary_buildinfo_version": "v0.56.0",
+          "binary_version_matches_expected": true,
+          "expected_version": "0.56.0",
+          "go_mod_version": "v0.56.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        }
+      },
+      "live_process_binding": [
+        {
+          "cmdline": "/home/euripides/projects/blockchain-platform/backend/bin/api",
+          "exe": "/home/euripides/projects/blockchain-platform/backend/bin/api",
+          "pid": 3965182
+        }
+      ],
+      "name": "api",
+      "sboms": [
+        {
+          "component_count": 56,
+          "dependency_count": 1,
+          "file": "api.cdx.json",
+          "format": "CycloneDX 1.7",
+          "serial_number": "urn:uuid:d87cbce1-2abe-4888-9cab-16f355f2c6eb",
+          "sha256": "d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a",
+          "size_bytes": 60083,
+          "target_binding": {
+            "match": true,
+            "metadata_component_type": "file",
+            "metadata_component_version": "sha256:8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a",
+            "real_file_sha256": "8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a"
+          },
+          "unchanged_since_generation": true
+        },
+        {
+          "file": "api.spdx.json",
+          "format": "SPDX-2.3 (CC0-1.0)",
+          "package_count": 56,
+          "relationship_count": 165,
+          "sha256": "a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c",
+          "size_bytes": 86474,
+          "unchanged_since_generation": true
+        }
+      ],
+      "scoped_target": {
+        "kind": "file",
+        "kind_note": "compiled Go (ELF) binary - NOT a container image, NOT a directory",
+        "path": "/home/euripides/projects/blockchain-platform/backend/bin/api",
+        "sha256": "8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a",
+        "sha256_at_validation_time": "8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a",
+        "sha256_matches_validation_time": true,
+        "size_bytes": 56147343
+      },
+      "upgraded_modules": {
+        "github.com/go-chi/chi/v5": {
+          "components": [
+            {
+              "name": "github.com/go-chi/chi/v5",
+              "purl": "pkg:golang/github.com/go-chi/chi/v5@v5.3.2",
+              "version": "v5.3.2"
+            }
+          ],
+          "expected_version": "5.3.2",
+          "found": true,
+          "version_ok": true
+        },
+        "github.com/jackc/pgx/v5": {
+          "components": [
+            {
+              "name": "github.com/jackc/pgx/v5",
+              "purl": "pkg:golang/github.com/jackc/pgx/v5@v5.9.2",
+              "version": "v5.9.2"
+            }
+          ],
+          "expected_version": "5.9.2",
+          "found": true,
+          "version_ok": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "components": [
+            {
+              "name": "github.com/xuri/excelize/v2",
+              "purl": "pkg:golang/github.com/xuri/excelize/v2@v2.11.0",
+              "version": "v2.11.0"
+            }
+          ],
+          "expected_version": "2.11.0",
+          "found": true,
+          "version_ok": true
+        },
+        "golang.org/x/crypto": {
+          "components": [
+            {
+              "name": "golang.org/x/crypto",
+              "purl": "pkg:golang/golang.org/x/crypto@v0.56.0",
+              "version": "v0.56.0"
+            }
+          ],
+          "expected_version": "0.56.0",
+          "found": true,
+          "version_ok": true
+        }
+      }
+    },
+    {
+      "buildinfo": {
+        "build_settings": {
+          "-buildmode": "exe",
+          "-compiler": "gc",
+          "CGO_CFLAGS": "",
+          "CGO_CPPFLAGS": "",
+          "CGO_CXXFLAGS": "",
+          "CGO_ENABLED": "1",
+          "CGO_LDFLAGS": "",
+          "GOAMD64": "v1",
+          "GOARCH": "amd64",
+          "GOOS": "linux"
+        },
+        "embedded_module_count": 42,
+        "go_version": "go1.26.7",
+        "main_module": "github.com/blockchain-platform/blockchain-platform",
+        "main_module_version": "(devel)",
+        "main_package": "github.com/blockchain-platform/blockchain-platform/cmd/worker",
+        "vcs_settings": {}
+      },
+      "buildinfo_vs_go_sum_crosscheck": {
+        "github.com/go-chi/chi/v5": {
+          "binary_buildinfo_h1": null,
+          "binary_buildinfo_version": null,
+          "binary_version_matches_expected": false,
+          "expected_version": "5.3.2",
+          "go_mod_version": "v5.3.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=",
+          "h1_matches_go_sum": false,
+          "linked_into_binary": false
+        },
+        "github.com/jackc/pgx/v5": {
+          "binary_buildinfo_h1": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "binary_buildinfo_version": "v5.9.2",
+          "binary_version_matches_expected": true,
+          "expected_version": "5.9.2",
+          "go_mod_version": "v5.9.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "binary_buildinfo_h1": null,
+          "binary_buildinfo_version": null,
+          "binary_version_matches_expected": false,
+          "expected_version": "2.11.0",
+          "go_mod_version": "v2.11.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=",
+          "h1_matches_go_sum": false,
+          "linked_into_binary": false
+        },
+        "golang.org/x/crypto": {
+          "binary_buildinfo_h1": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "binary_buildinfo_version": "v0.56.0",
+          "binary_version_matches_expected": true,
+          "expected_version": "0.56.0",
+          "go_mod_version": "v0.56.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        }
+      },
+      "live_process_binding": [
+        {
+          "cmdline": "/home/euripides/projects/blockchain-platform/backend/bin/worker",
+          "exe": "/home/euripides/projects/blockchain-platform/backend/bin/worker",
+          "pid": 3965195
+        }
+      ],
+      "name": "worker",
+      "sboms": [
+        {
+          "component_count": 45,
+          "dependency_count": 1,
+          "file": "worker.cdx.json",
+          "format": "CycloneDX 1.7",
+          "serial_number": "urn:uuid:daff9baa-2c4f-4c35-bd03-9448319d7d36",
+          "sha256": "b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2",
+          "size_bytes": 47752,
+          "target_binding": {
+            "match": true,
+            "metadata_component_type": "file",
+            "metadata_component_version": "sha256:513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48",
+            "real_file_sha256": "513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48"
+          },
+          "unchanged_since_generation": true
+        },
+        {
+          "file": "worker.spdx.json",
+          "format": "SPDX-2.3 (CC0-1.0)",
+          "package_count": 45,
+          "relationship_count": 132,
+          "sha256": "4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e",
+          "size_bytes": 68963,
+          "unchanged_since_generation": true
+        }
+      ],
+      "scoped_target": {
+        "kind": "file",
+        "kind_note": "compiled Go (ELF) binary - NOT a container image, NOT a directory",
+        "path": "/home/euripides/projects/blockchain-platform/backend/bin/worker",
+        "sha256": "513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48",
+        "sha256_at_validation_time": "513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48",
+        "sha256_matches_validation_time": true,
+        "size_bytes": 42685594
+      },
+      "upgraded_modules": {
+        "github.com/go-chi/chi/v5": {
+          "components": [],
+          "expected_version": "5.3.2",
+          "found": false,
+          "version_ok": false
+        },
+        "github.com/jackc/pgx/v5": {
+          "components": [
+            {
+              "name": "github.com/jackc/pgx/v5",
+              "purl": "pkg:golang/github.com/jackc/pgx/v5@v5.9.2",
+              "version": "v5.9.2"
+            }
+          ],
+          "expected_version": "5.9.2",
+          "found": true,
+          "version_ok": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "components": [],
+          "expected_version": "2.11.0",
+          "found": false,
+          "version_ok": false
+        },
+        "golang.org/x/crypto": {
+          "components": [
+            {
+              "name": "golang.org/x/crypto",
+              "purl": "pkg:golang/golang.org/x/crypto@v0.56.0",
+              "version": "v0.56.0"
+            }
+          ],
+          "expected_version": "0.56.0",
+          "found": true,
+          "version_ok": true
+        }
+      }
+    },
+    {
+      "buildinfo": {
+        "build_settings": {
+          "-buildmode": "exe",
+          "-compiler": "gc",
+          "CGO_CFLAGS": "",
+          "CGO_CPPFLAGS": "",
+          "CGO_CXXFLAGS": "",
+          "CGO_ENABLED": "1",
+          "CGO_LDFLAGS": "",
+          "GOAMD64": "v1",
+          "GOARCH": "amd64",
+          "GOOS": "linux"
+        },
+        "embedded_module_count": 30,
+        "go_version": "go1.26.7",
+        "main_module": "github.com/blockchain-platform/blockchain-platform",
+        "main_module_version": "(devel)",
+        "main_package": "github.com/blockchain-platform/blockchain-platform/cmd/migrate",
+        "vcs_settings": {}
+      },
+      "buildinfo_vs_go_sum_crosscheck": {
+        "github.com/go-chi/chi/v5": {
+          "binary_buildinfo_h1": null,
+          "binary_buildinfo_version": null,
+          "binary_version_matches_expected": false,
+          "expected_version": "5.3.2",
+          "go_mod_version": "v5.3.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=",
+          "h1_matches_go_sum": false,
+          "linked_into_binary": false
+        },
+        "github.com/jackc/pgx/v5": {
+          "binary_buildinfo_h1": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "binary_buildinfo_version": "v5.9.2",
+          "binary_version_matches_expected": true,
+          "expected_version": "5.9.2",
+          "go_mod_version": "v5.9.2",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "binary_buildinfo_h1": null,
+          "binary_buildinfo_version": null,
+          "binary_version_matches_expected": false,
+          "expected_version": "2.11.0",
+          "go_mod_version": "v2.11.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=",
+          "h1_matches_go_sum": false,
+          "linked_into_binary": false
+        },
+        "golang.org/x/crypto": {
+          "binary_buildinfo_h1": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "binary_buildinfo_version": "v0.56.0",
+          "binary_version_matches_expected": true,
+          "expected_version": "0.56.0",
+          "go_mod_version": "v0.56.0",
+          "go_mod_version_ok": true,
+          "go_sum_h1_for_expected_version": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+          "h1_matches_go_sum": true,
+          "linked_into_binary": true
+        }
+      },
+      "live_process_binding": "no live process at report time",
+      "name": "migrate",
+      "sboms": [
+        {
+          "component_count": 33,
+          "dependency_count": 1,
+          "file": "migrate.cdx.json",
+          "format": "CycloneDX 1.7",
+          "serial_number": "urn:uuid:7b108d5b-e382-42fc-9500-bc1b875346f7",
+          "sha256": "f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec",
+          "size_bytes": 34611,
+          "target_binding": {
+            "match": true,
+            "metadata_component_type": "file",
+            "metadata_component_version": "sha256:28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4",
+            "real_file_sha256": "28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4"
+          },
+          "unchanged_since_generation": true
+        },
+        {
+          "file": "migrate.spdx.json",
+          "format": "SPDX-2.3 (CC0-1.0)",
+          "package_count": 33,
+          "relationship_count": 96,
+          "sha256": "f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce",
+          "size_bytes": 49939,
+          "unchanged_since_generation": true
+        }
+      ],
+      "scoped_target": {
+        "kind": "file",
+        "kind_note": "compiled Go (ELF) binary - NOT a container image, NOT a directory",
+        "path": "/home/euripides/projects/blockchain-platform/backend/bin/migrate",
+        "sha256": "28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4",
+        "sha256_at_validation_time": "28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4",
+        "sha256_matches_validation_time": true,
+        "size_bytes": 30859300
+      },
+      "upgraded_modules": {
+        "github.com/go-chi/chi/v5": {
+          "components": [],
+          "expected_version": "5.3.2",
+          "found": false,
+          "version_ok": false
+        },
+        "github.com/jackc/pgx/v5": {
+          "components": [
+            {
+              "name": "github.com/jackc/pgx/v5",
+              "purl": "pkg:golang/github.com/jackc/pgx/v5@v5.9.2",
+              "version": "v5.9.2"
+            }
+          ],
+          "expected_version": "5.9.2",
+          "found": true,
+          "version_ok": true
+        },
+        "github.com/xuri/excelize/v2": {
+          "components": [],
+          "expected_version": "2.11.0",
+          "found": false,
+          "version_ok": false
+        },
+        "golang.org/x/crypto": {
+          "components": [
+            {
+              "name": "golang.org/x/crypto",
+              "purl": "pkg:golang/golang.org/x/crypto@v0.56.0",
+              "version": "v0.56.0"
+            }
+          ],
+          "expected_version": "0.56.0",
+          "found": true,
+          "version_ok": true
+        }
+      }
+    }
+  ],
+  "defects_in_this_scope": {
+    "record": "DEFECT-RECORD-20260913-validator-passes.md",
+    "summary": "Two defects in my own validator code were found and corrected. Neither affected the six SBOM documents, which were produced before validation ran and whose sha256 values are re-verified as unchanged."
+  },
+  "documents": {
+    "api": {
+      "cdx": {
+        "component_count": 56,
+        "components_without_license": 55,
+        "dependency_count": 1,
+        "file": "api.cdx.json",
+        "format": "CycloneDX 1.7",
+        "licenses": {
+          "BSD-3-Clause": 1
+        },
+        "serial_number": "urn:uuid:d87cbce1-2abe-4888-9cab-16f355f2c6eb",
+        "sha256": "d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a",
+        "target_binding": {
+          "match": true,
+          "metadata_component_type": "file",
+          "metadata_component_version": "sha256:8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a",
+          "real_file_sha256": "8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a"
+        }
+      },
+      "spdx": {
+        "creators": [
+          "Organization: Anchore, Inc",
+          "Tool: syft-1.51.1"
+        ],
+        "file": "api.spdx.json",
+        "format": "SPDX-2.3 (CC0-1.0)",
+        "licenses": {
+          "BSD-3-Clause": 1,
+          "NOASSERTION": 55
+        },
+        "package_count": 56,
+        "relationship_count": 165,
+        "sha256": "a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c"
+      }
+    },
+    "migrate": {
+      "cdx": {
+        "component_count": 33,
+        "components_without_license": 32,
+        "dependency_count": 1,
+        "file": "migrate.cdx.json",
+        "format": "CycloneDX 1.7",
+        "licenses": {
+          "BSD-3-Clause": 1
+        },
+        "serial_number": "urn:uuid:7b108d5b-e382-42fc-9500-bc1b875346f7",
+        "sha256": "f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec",
+        "target_binding": {
+          "match": true,
+          "metadata_component_type": "file",
+          "metadata_component_version": "sha256:28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4",
+          "real_file_sha256": "28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4"
+        }
+      },
+      "spdx": {
+        "creators": [
+          "Organization: Anchore, Inc",
+          "Tool: syft-1.51.1"
+        ],
+        "file": "migrate.spdx.json",
+        "format": "SPDX-2.3 (CC0-1.0)",
+        "licenses": {
+          "BSD-3-Clause": 1,
+          "NOASSERTION": 32
+        },
+        "package_count": 33,
+        "relationship_count": 96,
+        "sha256": "f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce"
+      }
+    },
+    "worker": {
+      "cdx": {
+        "component_count": 45,
+        "components_without_license": 44,
+        "dependency_count": 1,
+        "file": "worker.cdx.json",
+        "format": "CycloneDX 1.7",
+        "licenses": {
+          "BSD-3-Clause": 1
+        },
+        "serial_number": "urn:uuid:daff9baa-2c4f-4c35-bd03-9448319d7d36",
+        "sha256": "b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2",
+        "target_binding": {
+          "match": true,
+          "metadata_component_type": "file",
+          "metadata_component_version": "sha256:513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48",
+          "real_file_sha256": "513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48"
+        }
+      },
+      "spdx": {
+        "creators": [
+          "Organization: Anchore, Inc",
+          "Tool: syft-1.51.1"
+        ],
+        "file": "worker.spdx.json",
+        "format": "SPDX-2.3 (CC0-1.0)",
+        "licenses": {
+          "BSD-3-Clause": 1,
+          "NOASSERTION": 44
+        },
+        "package_count": 45,
+        "relationship_count": 132,
+        "sha256": "4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e"
+      }
+    }
+  },
+  "files": [
+    {
+      "match": true,
+      "relative_path": "DEFECT-RECORD-20260913-validator-passes.md",
+      "vm_sha256": "c94e1bdef475fa405a15beb7e0813e52dceb04d4a0935cb8f3a7db07cd532a4e",
+      "vm_size_bytes": 4511,
+      "windows_sha256": "c94e1bdef475fa405a15beb7e0813e52dceb04d4a0935cb8f3a7db07cd532a4e"
+    },
+    {
+      "match": true,
+      "relative_path": "api.cdx.json",
+      "vm_sha256": "d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a",
+      "vm_size_bytes": 60083,
+      "windows_sha256": "d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a"
+    },
+    {
+      "match": true,
+      "relative_path": "api.spdx.json",
+      "vm_sha256": "a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c",
+      "vm_size_bytes": 86474,
+      "windows_sha256": "a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c"
+    },
+    {
+      "match": true,
+      "relative_path": "artifact-hashes.txt",
+      "vm_sha256": "0663f6c97cb11516c4b9f5ed3eb7012aaea4acffa69edc1113b19c2f76355117",
+      "vm_size_bytes": 1743,
+      "windows_sha256": "0663f6c97cb11516c4b9f5ed3eb7012aaea4acffa69edc1113b19c2f76355117"
+    },
+    {
+      "match": true,
+      "relative_path": "buildinfo-all-artifacts.txt",
+      "vm_sha256": "cd5231a58dbe9dc25156936020d52c1519f48d104f6fb585d0a1a879308bcc50",
+      "vm_size_bytes": 14394,
+      "windows_sha256": "cd5231a58dbe9dc25156936020d52c1519f48d104f6fb585d0a1a879308bcc50"
+    },
+    {
+      "match": true,
+      "relative_path": "buildinfo-api.txt",
+      "vm_sha256": "3388a5936fd47076b89ef8fa4d1fd8c2053fff29d41b213482b4fb9a4a2c2d82",
+      "vm_size_bytes": 5251,
+      "windows_sha256": "3388a5936fd47076b89ef8fa4d1fd8c2053fff29d41b213482b4fb9a4a2c2d82"
+    },
+    {
+      "match": true,
+      "relative_path": "buildinfo-migrate.txt",
+      "vm_sha256": "36c3e5fbce1a7cf24f25e5907d727a9c5d185ffcf95d34639abde2532ec69980",
+      "vm_size_bytes": 3236,
+      "windows_sha256": "36c3e5fbce1a7cf24f25e5907d727a9c5d185ffcf95d34639abde2532ec69980"
+    },
+    {
+      "match": true,
+      "relative_path": "buildinfo-worker.txt",
+      "vm_sha256": "c56c7a9d23b30ff856f84bb8c528084930a4a98e9e8df3e75090660d09b3c3e1",
+      "vm_size_bytes": 4260,
+      "windows_sha256": "c56c7a9d23b30ff856f84bb8c528084930a4a98e9e8df3e75090660d09b3c3e1"
+    },
+    {
+      "match": true,
+      "relative_path": "capture-cross-reference.sh",
+      "vm_sha256": "b83fdc64ae85ad5937bc503cde8f1d5b0810cc6c49da6e67de0167f1b3c59027",
+      "vm_size_bytes": 2105,
+      "windows_sha256": "b83fdc64ae85ad5937bc503cde8f1d5b0810cc6c49da6e67de0167f1b3c59027"
+    },
+    {
+      "match": true,
+      "relative_path": "commands.txt",
+      "vm_sha256": "db6d3343904ae38a5a6562a8c36e995c06ae9cd64b610d803ae02b5fed432c85",
+      "vm_size_bytes": 7487,
+      "windows_sha256": "db6d3343904ae38a5a6562a8c36e995c06ae9cd64b610d803ae02b5fed432c85"
+    },
+    {
+      "match": true,
+      "relative_path": "cross-reference-dependency-remediation.txt",
+      "vm_sha256": "3f9ad7273982f2519585b42f557d452d285059f9ff3314c61e1f273a94e9a712",
+      "vm_size_bytes": 5746,
+      "windows_sha256": "3f9ad7273982f2519585b42f557d452d285059f9ff3314c61e1f273a94e9a712"
+    },
+    {
+      "match": true,
+      "relative_path": "environment-probe.txt",
+      "vm_sha256": "b9d3aadd37d8821bc68415d91b768efcc11c4f76271480ec74f4f382ce0fa7cd",
+      "vm_size_bytes": 26249,
+      "windows_sha256": "b9d3aadd37d8821bc68415d91b768efcc11c4f76271480ec74f4f382ce0fa7cd"
+    },
+    {
+      "match": true,
+      "relative_path": "generate-sbom-dependency-upgrade-20260913T015815Z.sh",
+      "vm_sha256": "cc4e5812e05ca69eccb2dbd8eb30719d1b6536dbbdd7eebb73dfb00ca77cc18b",
+      "vm_size_bytes": 24389,
+      "windows_sha256": "cc4e5812e05ca69eccb2dbd8eb30719d1b6536dbbdd7eebb73dfb00ca77cc18b"
+    },
+    {
+      "match": true,
+      "relative_path": "generator-console.txt",
+      "vm_sha256": "f0079555e3a554e8d93aaf3bd0684359ada3626aabfbdf5271f9fc7500bd8236",
+      "vm_size_bytes": 8937,
+      "windows_sha256": "f0079555e3a554e8d93aaf3bd0684359ada3626aabfbdf5271f9fc7500bd8236"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/api-cdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/api-spdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/migrate-cdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/migrate-spdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/module-crosscheck.err.log",
+      "vm_sha256": "50f5d28fcede49a481abee6c1d145e2ddd1113ba459cb52baa4bd85c2b25f389",
+      "vm_size_bytes": 292,
+      "windows_sha256": "50f5d28fcede49a481abee6c1d145e2ddd1113ba459cb52baa4bd85c2b25f389"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/syft-binary-extract.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/syft-image-save.log",
+      "vm_sha256": "948c1d0d8f1aeb1f58dc6eab263a1443365242f635d1d8521609afedb784ebd4",
+      "vm_size_bytes": 229,
+      "windows_sha256": "948c1d0d8f1aeb1f58dc6eab263a1443365242f635d1d8521609afedb784ebd4"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/syft-version.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/validator.log",
+      "vm_sha256": "b2bf5d3699254ccb1f5603a713a51042f9bc2062d25cb34bada7138d3b981b06",
+      "vm_size_bytes": 176,
+      "windows_sha256": "b2bf5d3699254ccb1f5603a713a51042f9bc2062d25cb34bada7138d3b981b06"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/worker-cdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "logs/worker-spdx.log",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "migrate.cdx.json",
+      "vm_sha256": "f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec",
+      "vm_size_bytes": 34611,
+      "windows_sha256": "f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec"
+    },
+    {
+      "match": true,
+      "relative_path": "migrate.spdx.json",
+      "vm_sha256": "f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce",
+      "vm_size_bytes": 49939,
+      "windows_sha256": "f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce"
+    },
+    {
+      "match": true,
+      "relative_path": "module-crosscheck-source.txt",
+      "vm_sha256": "66d904c0106c2517d0a30c81c99159335371314d51c2dd8c73f5caad34d14e66",
+      "vm_size_bytes": 2080,
+      "windows_sha256": "66d904c0106c2517d0a30c81c99159335371314d51c2dd8c73f5caad34d14e66"
+    },
+    {
+      "match": true,
+      "relative_path": "module-crosscheck-summary.txt",
+      "vm_sha256": "b727272df9bd44377e25a89ebad0d1ceec0dcaa4c8c9daca9dabb3ce1c6eee44",
+      "vm_size_bytes": 2138,
+      "windows_sha256": "b727272df9bd44377e25a89ebad0d1ceec0dcaa4c8c9daca9dabb3ce1c6eee44"
+    },
+    {
+      "match": true,
+      "relative_path": "module-crosscheck.txt",
+      "vm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vm_size_bytes": 0,
+      "windows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "match": true,
+      "relative_path": "pilot-syft-invocation.sh",
+      "vm_sha256": "efd3f66f2b8cc2c5c6b89fbcea7b2811c6cb6997b1105ad637f160925f18d4c3",
+      "vm_size_bytes": 2865,
+      "windows_sha256": "efd3f66f2b8cc2c5c6b89fbcea7b2811c6cb6997b1105ad637f160925f18d4c3"
+    },
+    {
+      "match": true,
+      "relative_path": "pilot-syft-invocation.txt",
+      "vm_sha256": "b0a025a3715f1ae43614e24b1dd2520a0b69257a0db7487f86db22c3b6c9166e",
+      "vm_size_bytes": 4619,
+      "windows_sha256": "b0a025a3715f1ae43614e24b1dd2520a0b69257a0db7487f86db22c3b6c9166e"
+    },
+    {
+      "match": true,
+      "relative_path": "probe-environment.sh",
+      "vm_sha256": "46d1d1dce8d2a09e1b748358a91e40f9589c9f8944abfddca93b5c724258cac5",
+      "vm_size_bytes": 2953,
+      "windows_sha256": "46d1d1dce8d2a09e1b748358a91e40f9589c9f8944abfddca93b5c724258cac5"
+    },
+    {
+      "match": true,
+      "relative_path": "scan-stability.txt",
+      "vm_sha256": "9b765b21b8acc19331c13af5fb5ba7ade7537c51e530500955a432b58198ba72",
+      "vm_size_bytes": 838,
+      "windows_sha256": "9b765b21b8acc19331c13af5fb5ba7ade7537c51e530500955a432b58198ba72"
+    },
+    {
+      "match": true,
+      "relative_path": "syft-binary-sha256.txt",
+      "vm_sha256": "8575f1077f91d61f93cbbd8caa5ac30d9887e9953c8d48121312a8d35df3806a",
+      "vm_size_bytes": 572,
+      "windows_sha256": "8575f1077f91d61f93cbbd8caa5ac30d9887e9953c8d48121312a8d35df3806a"
+    },
+    {
+      "match": true,
+      "relative_path": "syft-image-identity.txt",
+      "vm_sha256": "259e3be06e1f8ba0996ceb6bc3bd103afecdcd6d9082414374cb9aaf059cddc5",
+      "vm_size_bytes": 401,
+      "windows_sha256": "259e3be06e1f8ba0996ceb6bc3bd103afecdcd6d9082414374cb9aaf059cddc5"
+    },
+    {
+      "match": true,
+      "relative_path": "syft-version.txt",
+      "vm_sha256": "d9fb5be8078be2ac21ff48110999fdffead8ce3a2c8e55ad4412fa878e65dc2e",
+      "vm_size_bytes": 250,
+      "windows_sha256": "d9fb5be8078be2ac21ff48110999fdffead8ce3a2c8e55ad4412fa878e65dc2e"
+    },
+    {
+      "match": true,
+      "relative_path": "validate-sbom-scope-dependency-upgrade-20260913T015815Z-v2.py",
+      "vm_sha256": "268153ca6943425f4659b0b68b50b2d749b98f12272002223eea5dd7f66dc652",
+      "vm_size_bytes": 26305,
+      "windows_sha256": "268153ca6943425f4659b0b68b50b2d749b98f12272002223eea5dd7f66dc652"
+    },
+    {
+      "match": true,
+      "relative_path": "validate-sbom-scope-dependency-upgrade-20260913T015815Z.py",
+      "vm_sha256": "670fef7d38c470db6d8b8681a218e1ad1cd45327b3156bb681a28eda6139f6bc",
+      "vm_size_bytes": 22859,
+      "windows_sha256": "670fef7d38c470db6d8b8681a218e1ad1cd45327b3156bb681a28eda6139f6bc"
+    },
+    {
+      "match": true,
+      "relative_path": "validation-v2.json",
+      "vm_sha256": "2b0b46db042235344c2a860d4ae9600603d4a23ae5cccfa19d83d5fd1179e3a1",
+      "vm_size_bytes": 27363,
+      "windows_sha256": "2b0b46db042235344c2a860d4ae9600603d4a23ae5cccfa19d83d5fd1179e3a1"
+    },
+    {
+      "match": true,
+      "relative_path": "validation-v2.txt",
+      "vm_sha256": "e2f824fbfc2bcd6faf66a173953dc7d36ce974d03f701c60e90549a522dfcbb3",
+      "vm_size_bytes": 15536,
+      "windows_sha256": "e2f824fbfc2bcd6faf66a173953dc7d36ce974d03f701c60e90549a522dfcbb3"
+    },
+    {
+      "match": true,
+      "relative_path": "validation.json",
+      "vm_sha256": "7e61b4e14e37271b9be133b19caa1fb1b868a89a89f8a521fb55db48a91c54cf",
+      "vm_size_bytes": 2045,
+      "windows_sha256": "7e61b4e14e37271b9be133b19caa1fb1b868a89a89f8a521fb55db48a91c54cf"
+    },
+    {
+      "match": true,
+      "relative_path": "validation.txt",
+      "vm_sha256": "f1f9c0c5dd56364d4dd0884711e0ebc500a5afeeecf11834463ec95e86965467",
+      "vm_size_bytes": 14884,
+      "windows_sha256": "f1f9c0c5dd56364d4dd0884711e0ebc500a5afeeecf11834463ec95e86965467"
+    },
+    {
+      "match": false,
+      "relative_path": "windows-side-hashes.sha256",
+      "vm_sha256": "c46f97a4fbd118d396c253140abcf6572c3ea62a0c75a119f40c32f752811a66",
+      "vm_size_bytes": 4112,
+      "windows_sha256": null
+    },
+    {
+      "match": true,
+      "relative_path": "worker.cdx.json",
+      "vm_sha256": "b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2",
+      "vm_size_bytes": 47752,
+      "windows_sha256": "b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2"
+    },
+    {
+      "match": true,
+      "relative_path": "worker.spdx.json",
+      "vm_sha256": "4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e",
+      "vm_size_bytes": 68963,
+      "windows_sha256": "4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e"
+    }
+  ],
+  "files_summary": {
+    "all_match": false,
+    "count": 46,
+    "mismatches": [
+      "windows-side-hashes.sha256"
+    ],
+    "note": "This table covers every file that existed in the evidence directory when sbom-manifest.json and REPORT.md were generated. The builder script itself, REPORT.md, sbom-manifest.json and crosscheck-local-vm.sha256 are added to the directory afterwards and are cross-checked in crosscheck-local-vm.sha256 by the final verification step.",
+    "windows_manifest": "windows-side-hashes.sha256",
+    "windows_manifest_sha256_as_computed_on_vm": "c46f97a4fbd118d396c253140abcf6572c3ea62a0c75a119f40c32f752811a66",
+    "windows_manifest_sha256_as_computed_on_windows": "c46f97a4fbd118d396c253140abcf6572c3ea62a0c75a119f40c32f752811a66"
+  },
+  "generated_utc": "2026-09-13T02:16:10Z",
+  "generator": "build-manifest-and-report-dependency-upgrade-20260913T015815Z.py",
+  "limitations": [
+    "Scan target kind: a FILE (compiled Go binary). syft reads the module table embedded in the binary, so the inventory is the set of modules LINKED into that binary - not the full go.mod/go.sum closure. The three binaries differ: api 53, worker 42, migrate 30 embedded modules.",
+    "Consequence: modules that are in go.mod but not linked into worker or migrate (here go-chi/chi v5.3.2 and xuri/excelize v2.11.0) cannot appear in those two binaries' SBOMs. Four upgraded-module checks therefore report NOT-LINKED for worker/migrate.",
+    "No VCS metadata is embedded: 'go version -m' shows no vcs.* build setting and the main module version is '(devel)', because the source tree on the VM is not a git repository. Build provenance cannot be tied to a commit hash from the artifacts.",
+    "Module versions come from the binary's own buildinfo (stamped at link time) and were cross-checked against backend/go.mod and backend/go.sum: every linked upgraded module carries the same h1: hash as the go.sum entry for that version. That cross-check is evidence of agreement, not proof that the binary was built from exactly this tree.",
+    "Licences: syft does not resolve licence files for Go modules on a binary target, so the library components carry no licence field and SPDX reports NOASSERTION (55/44/32). This matches the pre-existing sbom/ behaviour and is a tool-capability limit, not an absence of licences in the dependencies.",
+    "No vulnerability analysis is in scope here (SBOM generation only).",
+    "The container image could not be byte-compared with upstream Docker Hub (unreachable); the mirror digest is recorded instead. The syft executable sha256 is the identity anchor for the tool actually executed.",
+    "The cross-reference evidence root dependency-remediation-20260913T014342Z exists only on the acceptance VM (not in the Windows worktree), so the Windows-side copy of this scope cannot resolve that path."
+  ],
+  "schema": "blockchain-platform/scoped-sbom-manifest/1",
+  "scope": {
+    "artifact_count": 3,
+    "artifacts": [
+      "api",
+      "worker",
+      "migrate"
+    ],
+    "cross_reference_evidence_root": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/dependency-remediation-20260913T014342Z",
+    "cross_reference_note": "The dependency-upgrade remediation root exists on the acceptance VM. It is NOT present in the Windows git worktree.",
+    "cross_reference_present_on_windows_worktree": false,
+    "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z",
+    "evidence_dir_relative": "acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z",
+    "host": "dataserver",
+    "project_root": "/home/euripides/projects/blockchain-platform",
+    "purpose": "Scoped SBOM bound to the three DEPLOYED Go binaries that were rebuilt in the 2026-09-13 dependency upgrade, so the SBOM describes the shipped artifacts and not a superseded build.",
+    "sbom_document_count": 6,
+    "scan_target_kind": "FILE (compiled Go binary)",
+    "scan_target_kind_note": "The syft target of every scan in this scope is a binary file passed on the command line (backend/bin/<name>). No container image, directory or source tree was scanned. CycloneDX metadata.component.type = 'file' and metadata.component.version = 'sha256:<binary sha256>' in each document."
+  },
+  "source_level_evidence": {
+    "go_mod": "/home/euripides/projects/blockchain-platform/backend/go.mod",
+    "go_mod_sha256": "87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c",
+    "go_sum": "/home/euripides/projects/blockchain-platform/backend/go.sum",
+    "go_sum_sha256": "654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb",
+    "modules": [
+      {
+        "expected_version": "5.3.2",
+        "go_mod_version": "v5.3.2",
+        "go_mod_version_ok": true,
+        "go_sum_h1": "h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=",
+        "module": "github.com/go-chi/chi/v5"
+      },
+      {
+        "expected_version": "2.11.0",
+        "go_mod_version": "v2.11.0",
+        "go_mod_version_ok": true,
+        "go_sum_h1": "h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=",
+        "module": "github.com/xuri/excelize/v2"
+      },
+      {
+        "expected_version": "5.9.2",
+        "go_mod_version": "v5.9.2",
+        "go_mod_version_ok": true,
+        "go_sum_h1": "h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=",
+        "module": "github.com/jackc/pgx/v5"
+      },
+      {
+        "expected_version": "0.56.0",
+        "go_mod_version": "v0.56.0",
+        "go_mod_version_ok": true,
+        "go_sum_h1": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+        "module": "golang.org/x/crypto"
+      }
+    ]
+  },
+  "tool": {
+    "distribution": "container image (the same image the pre-existing sbom/ flow used)",
+    "image_created": "2026-08-27T17:00:22.866987799Z",
+    "image_id": "sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c",
+    "image_ref": "docker.1ms.run/anchore/syft:latest",
+    "image_size_bytes": "29444736",
+    "invocation": "docker run --rm --user $(id -u):$(id -g) --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v <project>:/w -w /w <image> <target> -o <format>",
+    "invocation_deviation_from_old_flow": "The pre-existing sbom/ flow ran 'sudo -n docker run' (container as root, then a chown of the outputs). That requires sudo, which this task forbids. This scope runs plain 'docker run' as the invoking unprivileged account (uid 1000, docker group) with --user $(id -u):$(id -g), so no root is used anywhere and no chown is needed. The syft version and the container image are the same ones.",
+    "name": "syft",
+    "repo_digests": "[\"docker.1ms.run/anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c\",\"anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c\"]",
+    "syft_executable_extracted_entry": "syft (size=87220386 bytes)",
+    "syft_executable_extracted_from_layer": "blobs/sha256/c9c058baf33d66ab42d904f2880fff7c8f6e5f6436c904610f77a5ec57389d3c",
+    "syft_executable_sha256": "abca2def61de9952fa06d3977bb1e064818facb9badfce502b450d3d6846a91f",
+    "syft_executable_sha256_method": "The anchore/syft image is distroless (no /bin/sh, no coreutils sha256sum) and no syft binary is installed on the host, so the executable was extracted from 'docker save' output and hashed directly. See syft-binary-sha256.txt.",
+    "vendor": "Anchore",
+    "version": "1.51.1",
+    "version_block": {
+      "Application": "syft",
+      "BuildDate": "2026-08-27T16:55:02Z",
+      "Compiler": "gc",
+      "GitCommit": "91a0032987d91b7411b52f6f5c185c5e7f775495",
+      "GitDescription": "v1.51.1",
+      "GoVersion": "go1.26.3",
+      "Platform": "linux/amd64",
+      "SchemaVersion": "16.1.10",
+      "Version": "1.51.1"
+    }
+  },
+  "upgraded_module_verification": {
+    "expected": [
+      {
+        "module": "github.com/go-chi/chi/v5",
+        "version": "5.3.2"
+      },
+      {
+        "module": "github.com/xuri/excelize/v2",
+        "version": "2.11.0"
+      },
+      {
+        "module": "github.com/jackc/pgx/v5",
+        "version": "5.9.2"
+      },
+      {
+        "module": "golang.org/x/crypto",
+        "version": "0.56.0"
+      }
+    ],
+    "interpretation": "golang.org/x/crypto v0.56.0 and github.com/jackc/pgx/v5 v5.9.2 appear at the upgraded version in all six documents. github.com/go-chi/chi/v5 v5.3.2 and github.com/xuri/excelize/v2 v2.11.0 appear at the upgraded version in the two api documents and are ABSENT from the worker and migrate documents because those modules are not linked into those two binaries (their buildinfo does not list them). This is a real limitation of a per-binary SBOM scope, reported explicitly rather than smoothed over; the upgrade of those two modules is evidenced at source level (backend/go.mod + backend/go.sum) and by the api SBOMs.",
+    "not_linked": [
+      {
+        "document": "worker.cdx",
+        "expected_version": "5.3.2",
+        "module": "github.com/go-chi/chi/v5",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "worker.cdx",
+        "expected_version": "2.11.0",
+        "module": "github.com/xuri/excelize/v2",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "worker.spdx",
+        "expected_version": "5.3.2",
+        "module": "github.com/go-chi/chi/v5",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "worker.spdx",
+        "expected_version": "2.11.0",
+        "module": "github.com/xuri/excelize/v2",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "migrate.cdx",
+        "expected_version": "5.3.2",
+        "module": "github.com/go-chi/chi/v5",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "migrate.cdx",
+        "expected_version": "2.11.0",
+        "module": "github.com/xuri/excelize/v2",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "migrate.spdx",
+        "expected_version": "5.3.2",
+        "module": "github.com/go-chi/chi/v5",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      },
+      {
+        "document": "migrate.spdx",
+        "expected_version": "2.11.0",
+        "module": "github.com/xuri/excelize/v2",
+        "reason": "module is not linked into this binary; its buildinfo does not carry it"
+      }
+    ],
+    "real_gaps": [],
+    "result": "PASS"
+  },
+  "verification_status": {
+    "every_document_bound_to_its_binary": true,
+    "sbom_documents_parse_as_json": true,
+    "sbom_documents_unchanged_since_generation": true,
+    "target_binaries_unchanged_before_and_after_scan": true,
+    "upstream_image_byte_comparison": "NOT_VERIFIED - Docker Hub unreachable from this host",
+    "vcs_revision_embedded_in_binaries": false
+  }
+}

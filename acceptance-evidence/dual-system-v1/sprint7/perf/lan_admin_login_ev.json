@@ -1,0 +1,28 @@
+{
+  "label": "lan_admin_login_ev",
+  "url": "http://127.0.0.1:8080/api/admin/v1/login-events?limit=50",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000994749,
+  "requests": 11025,
+  "rps": 551.2225835943096,
+  "errors": 8,
+  "status_counts": {
+    "200": 11017
+  },
+  "p50_ms": 9.863785,
+  "p90_ms": 28.353658,
+  "p95_ms": 37.893924000000005,
+  "p99_ms": 66.36704999999999,
+  "min_ms": 1.665854,
+  "max_ms": 171.156735,
+  "avg_ms": 14.457558141678044,
+  "avg_response_bytes": 43456.44408163265,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded"
+  ]
+}

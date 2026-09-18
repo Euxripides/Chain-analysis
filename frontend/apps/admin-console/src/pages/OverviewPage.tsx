@@ -370,7 +370,7 @@ export default function OverviewPage() {
             <div className="toolbar">
               <StatusBadge tone={data.status === "ok" ? "ok" : "warn"}>{data.status === "ok" ? "正常" : "注意"}</StatusBadge>
               <span style={{ color: "var(--c-slate)", fontSize: "var(--fs-12)" }}>
-                当前身份角色：{data.my_roles.join(" / ") || "—"}
+                当前身份角色：{(data.my_roles ?? []).join(" / ") || "—"}
               </span>
               <span className="shell__spacer" />
               <Link className="btn btn--sm" to="/system">

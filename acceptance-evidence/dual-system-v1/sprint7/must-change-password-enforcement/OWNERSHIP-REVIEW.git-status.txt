@@ -1,0 +1,210 @@
+﻿ M acceptance-evidence/dual-system-v1/section27-conformance.md
+ M acceptance-evidence/dual-system-v1/tests/run-iam-e2e.sh
+ M acceptance-evidence/dual-system-v1/tests/run-sprint5-e2e.sh
+ M acceptance-evidence/dual-system-v1/tests/run-sprint6-e2e.sh
+ M backend/cmd/migrate/main.go
+ M backend/cmd/objectprobe/main.go
+ M backend/go.mod
+ M backend/go.sum
+ M backend/internal/addressmeta/service.go
+ M backend/internal/api/actions.go
+ M backend/internal/api/adminv1.go
+ M backend/internal/api/authmw.go
+ M backend/internal/api/authv1.go
+ M backend/internal/api/bootstrap.go
+ M backend/internal/api/canvas.go
+ M backend/internal/api/export.go
+ M backend/internal/api/export_v2.go
+ M backend/internal/api/handlers.go
+ M backend/internal/api/investigation.go
+ M backend/internal/api/objectaccess.go
+ M backend/internal/api/report.go
+ M backend/internal/api/respond.go
+ M backend/internal/api/server.go
+ M backend/internal/api/sprint5.go
+ M backend/internal/api/sprint5_downloads.go
+ M backend/internal/api/sprint5_explorer.go
+ M backend/internal/api/sprint5_exports.go
+ M backend/internal/api/sprint6_governance.go
+ M backend/internal/api/sprint6_provider.go
+ M backend/internal/api/sse.go
+ M backend/internal/api/subjectintel.go
+ M backend/internal/api/userv2.go
+ M backend/internal/api/v12.go
+ M backend/internal/app/app.go
+ M backend/internal/casework/cases.go
+ M backend/internal/casework/service.go
+ M backend/internal/clickhouse/bench_test.go
+ M backend/internal/config/config.go
+ M backend/internal/config/performance_test.go
+ M backend/internal/dataset/service.go
+ M backend/internal/download/finalize.go
+ M backend/internal/download/runner.go
+ M backend/internal/download/v14.go
+ M backend/internal/explorer/service.go
+ M backend/internal/iam/loginevent.go
+ M backend/internal/iam/service.go
+ M backend/internal/iam/session.go
+ M backend/internal/investigation/runtime.go
+ M backend/internal/investigation/service.go
+ M backend/internal/policy/engine.go
+ M backend/internal/store/jobs.go
+ M backend/internal/store/meta.go
+ M backend/internal/store/meta_v2.go
+ M backend/internal/update/service.go
+ M deploy/.env.example
+ M docs/implementation/dual-system-progress.md
+ M frontend/apps/admin-console/src/App.tsx
+ M frontend/apps/admin-console/src/pages/LoginPage.tsx
+ M frontend/apps/user-console/src/App.tsx
+ M frontend/apps/user-console/src/pages/DownloadNewPage.tsx
+ M frontend/apps/user-console/src/pages/LoginPage.tsx
+ M frontend/apps/user-console/src/sprint5/common.tsx
+ M frontend/apps/user-console/vite.config.ts
+ M frontend/package.json
+ M frontend/packages/api-client/auth.tsx
+ M frontend/packages/ui/Dialog.tsx
+ M frontend/pnpm-lock.yaml
+ M frontend/src/App.tsx
+ M frontend/src/api/client.ts
+ M frontend/src/components/PerformanceMode.tsx
+ M frontend/src/features/api-control/ApiControlPage.tsx
+ M frontend/src/features/api-control/CountProviders.tsx
+ M frontend/src/features/api-control/TrendChart.tsx
+ M frontend/src/main.tsx
+ M frontend/src/pages/DataExplorerPage.tsx
+ M frontend/src/pages/DownloadPage.tsx
+ M frontend/src/pages/FundFlowPage.tsx
+ M frontend/src/pages/InvestigationsPage.tsx
+ M frontend/src/pages/JobDetailPage.tsx
+ M frontend/src/pages/JobsPage.tsx
+ M frontend/src/pages/SystemPage.tsx
+ M openapi/admin-v1.yaml
+ M openapi/common/errors.yaml
+ M openapi/user-v2.yaml
+ M scripts/gen_openapi_index.py
+?? .sync/
+?? .work/
+?? acceptance-evidence/dual-system-v1/.preserved-local-20260912T2030Z/
+?? acceptance-evidence/dual-system-v1/RELEASE-DECISION.md
+?? acceptance-evidence/dual-system-v1/SECTION27-31-INDEPENDENT-AUDIT-20260913.md
+?? acceptance-evidence/dual-system-v1/section31-deliverables.md
+?? acceptance-evidence/dual-system-v1/sprint7/
+?? acceptance-evidence/dual-system-v1/tests/r3-collect-audit.py
+?? acceptance-evidence/dual-system-v1/tests/r3-summarize.py
+?? acceptance-evidence/dual-system-v1/tests/run-fault-drill-guarded.sh
+?? acceptance-evidence/dual-system-v1/tests/run-guarded-fault-suite.sh
+?? acceptance-evidence/dual-system-v1/tests/run-r3-legacy-ui.sh
+?? acceptance-evidence/dual-system-v1/tests/run-sprint7-qa.sh
+?? acceptance-evidence/dual-system-v1/tests/run-sprint7-rerun.sh
+?? acceptance-evidence/dual-system-v1/tests/run-sprint7-sec-negative.sh
+?? acceptance-evidence/dual-system-v1/tests/run-sprint7-ui.sh
+?? acceptance-evidence/dual-system-v1/tests/sprint7/
+?? backend/cmd/auditverify/
+?? backend/cmd/exportmigrate/
+?? backend/cmd/fixture-identity/
+?? backend/cmd/fixture-membership/
+?? backend/cmd/loadprobe/
+?? backend/cmd/objectprobe/statstrict.go
+?? backend/cmd/objectprobe/statstrict_test.go
+?? backend/fixture-membership.exe
+?? backend/internal/api/LEGACY-V1-P0-FIX.md
+?? backend/internal/api/export_download_audit_test.go
+?? backend/internal/api/export_object_store.go
+?? backend/internal/api/export_object_store_test.go
+?? backend/internal/api/legacy_v1_p0_test.go
+?? backend/internal/api/membership_scope_live_test.go
+?? backend/internal/api/mustchangepw.go
+?? backend/internal/api/mustchangepw_live_test.go
+?? backend/internal/api/mustchangepw_test.go
+?? backend/internal/api/sessionscope_test.go
+?? backend/internal/api/sprint5_downloads_import.go
+?? backend/internal/casework/scope_tenant_test.go
+?? backend/internal/casework/service_live_test.go
+?? backend/internal/config/export_bucket_test.go
+?? backend/internal/dataset/scope_tenant_test.go
+?? backend/internal/download/scope.go
+?? backend/internal/exportmigrate/
+?? backend/internal/iam/workspace_scope_test.go
+?? backend/internal/store/jobs_scope_live_test.go
+?? backend/migrations/postgres/0056_s7_scope_backfill_constraints.sql
+?? backend/migrations/postgres/0057_s7_indexes_partitions.sql
+?? backend/migrations/postgres/0058_export_object_migrations.sql
+?? backend/migrations/rollback/
+?? deploy/blockchain-containers-watchdog.service
+?? deploy/blockchain-containers-watchdog.timer
+?? deploy/blockchain-e2e-tls.service
+?? docs/adr/ADR-019-export-bucket-dual-read-and-switch.md
+?? docs/capacity-forecast.md
+?? docs/data-dictionary.md
+?? docs/implementation/r3-legacy-ui-audience-fix.md
+?? docs/implementation/sprint7-report.md
+?? docs/manuals/
+?? frontend/apps/admin-console/src/lib/returnTo.ts
+?? frontend/apps/user-console/src/import/
+?? frontend/apps/user-console/src/workers/
+?? frontend/playwright.b2raw.config.ts
+?? frontend/playwright.p1.config.ts
+?? frontend/playwright.p1v2.config.ts
+?? frontend/playwright.r10.config.ts
+?? frontend/playwright.r10v2.config.ts
+?? frontend/playwright.r10v3.config.ts
+?? frontend/playwright.r10v4.config.ts
+?? frontend/playwright.r10v5.config.ts
+?? frontend/playwright.r10v6.config.ts
+?? frontend/playwright.r3.config.ts
+?? frontend/playwright.r9.config.ts
+?? frontend/playwright.r9v2.config.ts
+?? frontend/playwright.r9v3.config.ts
+?? frontend/playwright.r9v4.config.ts
+?? frontend/playwright.udl01v5.config.ts
+?? frontend/playwright.udl01v5b.config.ts
+?? frontend/playwright.udl01v5c.config.ts
+?? frontend/playwright.udl01v6.config.ts
+?? frontend/scripts/r9-make-fixtures-v2.mjs
+?? frontend/scripts/r9-make-fixtures-v3.mjs
+?? frontend/scripts/r9-make-fixtures-v4.mjs
+?? frontend/scripts/r9-make-fixtures-v5.mjs
+?? frontend/scripts/r9-make-fixtures-v5b.mjs
+?? frontend/scripts/r9-make-fixtures-v5c.mjs
+?? frontend/scripts/r9-make-fixtures.mjs
+?? frontend/scripts/verify-xlsx-tarball.mjs
+?? frontend/src/auth/
+?? frontend/src/components/BackendLoginDialog.tsx
+?? frontend/src/lib/
+?? frontend/tests/b2-raw-ui-export.spec.ts
+?? frontend/tests/dual-system-r7-jobs-scope.spec.ts
+?? frontend/tests/p1-workspace-scope-v2.spec.ts
+?? frontend/tests/p1-workspace-scope.spec.ts
+?? frontend/tests/r10-export-excelize.spec.ts
+?? frontend/tests/r10-helpers.ts
+?? frontend/tests/r10-legacy-export-import.spec.ts
+?? frontend/tests/r10v2-export-excelize.spec.ts
+?? frontend/tests/r10v2-legacy-export-import.spec.ts
+?? frontend/tests/r10v3-export-excelize.spec.ts
+?? frontend/tests/r10v3-legacy-export-import.spec.ts
+?? frontend/tests/r10v4-export-excelize.spec.ts
+?? frontend/tests/r10v4-legacy-export-import.spec.ts
+?? frontend/tests/r10v5-export-excelize.spec.ts
+?? frontend/tests/r10v5-legacy-export-import.spec.ts
+?? frontend/tests/r10v6-export-excelize.spec.ts
+?? frontend/tests/r10v6-legacy-export-import.spec.ts
+?? frontend/tests/r3-chart-axes.spec.ts
+?? frontend/tests/r3-helpers.ts
+?? frontend/tests/r3-legacy-ui-audience.spec.ts
+?? frontend/tests/r3-legacy-ui-negative.spec.ts
+?? frontend/tests/r3-nav-return-to.spec.ts
+?? frontend/tests/r9-uc-download-import-v2.spec.ts
+?? frontend/tests/r9-uc-download-import-v3.spec.ts
+?? frontend/tests/r9-uc-download-import-v4.spec.ts
+?? frontend/tests/r9-uc-download-import.spec.ts
+?? frontend/tests/tron-v4.spec.ts
+?? frontend/tests/udl01-worker-isolation-v5.spec.ts
+?? frontend/tests/udl01-worker-isolation-v5b.spec.ts
+?? frontend/tests/udl01-worker-isolation-v6.spec.ts
+?? home/
+?? scripts/backup/
+?? scripts/e2e/
+?? scripts/perf/
+?? scripts/release/
+?? scripts/s7/

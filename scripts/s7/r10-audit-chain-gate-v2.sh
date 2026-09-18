@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# r10-audit-chain-gate-v2.sh — v1 的升级版：把**应用凭据验链**从只记录提升为硬判据。
+#
+# v1（原样保留，不 hot-edit）实测到的真实运维缺陷：auditverify 用应用凭据（DATABASE_URL，
+# user=blockchain_api）运行时报 permission denied for table audit_integrity_incidents (SQLSTATE 42501)，
+# 根因 blockchain_api 是 blockchain_app 的成员但 rolinherit=false（必须显式 SET ROLE）。
+# 修复：auditverify 增加 -db-role（默认取 DB_RUNTIME_ROLE）并在 AfterConnect 执行 SET ROLE，
+# 不新增任何 GRANT（最小授权不变）。v2 因此要求：应用凭据 + SET ROLE 必须 rc=0、valid=true、
+# 且证据里 session_user=应用凭据、current_user=运行角色 —— 即 DR 恢复后可用应用凭据验链可机器判定。
+# 其余 G0/G1/G3-G6 与 v1 逐字相同。
+#
+# 判定原则（对齐根的要求）：
+#   - 用**从冻结源码构建**的 auditverify（不是部署目录里的旧二进制、不是"接口 200"）做密码学校验；
+#   - 只对可信段 2344+ 判定；seq 1-2343 永久缺失（0055 / ADR-018）如实标注，**绝不声称完整历史**；
+#   - 链头必须等于库中最大 seq 行的 event_hash（证明新写的 export.completed 真在链上，而不是旁路表）；
+#   - 用应用凭据跑验链会 permission denied —— 这是**真实运维缺陷**，如实记录（observation），
+#     不用"换个只读用户"把它掩盖过去；正式校验使用 audit 表属主凭据。
+set -uo pipefail
+R=/home/euripides/projects/blockchain-platform
+EV="${1:?usage: r10-audit-chain-gate-v1.sh <evidence_dir> [expect_api_sha]}"
+EXPECT_API_SHA="${2:-484e2707e6574cce10e41e68047176ff5255aa231d1615c4b10cddd3fe5db2e4}"
+SEALED_TAIL="3db79aeb77ce12ae8ccab3540891a7ff241bfc34af8f4a9dcdfd283578686ad1"
+TRUSTED_FROM=2344
+exec > >(tee "$EV/audit-chain-gate.log") 2>&1
+PASS=0; FAIL=0
+ok(){ PASS=$((PASS+1)); echo "PASS[$PASS] $1 :: $2"; }
+bad(){ FAIL=$((FAIL+1)); echo "FAIL[$FAIL] $1 :: $2"; }
+chk(){ if [ "$1" = "$2" ]; then ok "$3" "have=$1"; else bad "$3" "have=$1 want=$2"; fi; }
+pgq(){ docker exec -i deploy-postgres-1 psql -U blockchain -d blockchain_platform -q -tA -v ON_ERROR_STOP=1; }
+one(){ pgq <<< "$1" | head -1 | tr -d '[:space:]'; }
+
+echo "gate_start_utc=$(date -u +%FT%TZ) script_sha256=$(sha256sum "$0" | cut -d' ' -f1)"
+echo "expect_api_sha=$EXPECT_API_SHA evidence=$EV"
+
+APIPID=$(systemctl --user show -p MainPID --value blockchain-api)
+API_SHA=$(sha256sum /proc/$APIPID/exe | cut -d' ' -f1)
+chk "$API_SHA" "$EXPECT_API_SHA" "G0 running api sha equals expected artifact" "pid=$APIPID"
+
+AV="$EV/auditverify.build"
+if [ ! -x "$AV" ]; then bad "G1 frozen auditverify binary present" "missing $AV"; echo "GATE_FAIL=$FAIL"; exit 1; fi
+ok "G1 frozen auditverify present" "sha16=$(sha256sum "$AV" | cut -c1-16)"
+
+set -a; . "$R/deploy/.env"; set +a
+
+echo "=== G2 应用凭据 + SET ROLE 验链（v2 硬判据：DR 恢复后必须能用应用凭据验链） ==="
+if [ -z "${DB_RUNTIME_ROLE:-}" ]; then
+  bad "G2.0 DB_RUNTIME_ROLE present" "empty (app credential cannot reach the audit tables without SET ROLE)"
+else
+  DATABASE_URL="$DATABASE_URL" "$AV" -db-role "$DB_RUNTIME_ROLE" -chain audit -timeout 180s \
+    > "$EV/auditverify-appcred.json" 2> "$EV/auditverify-appcred.err"
+  APP_RC=$?
+  APP_ERR=$(head -c 200 "$EV/auditverify-appcred.err" | tr -d '\n')
+  chk "$APP_RC" "0" "G2.1 应用凭据(含 SET ROLE) rc=0" "err=$APP_ERR"
+  python3 - "$EV/auditverify-appcred.json" "$EV/auditverify-appcred-verdict.json" <<'PY' > "$EV/auditverify-appcred-verdict.txt" 2>&1
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+r = (d.get("results") or [{}])[0]
+out = {"ok": d.get("ok"), "db_role": d.get("db_role"), "session_user": d.get("session_user"),
+       "current_user": d.get("current_user"), "valid": r.get("valid"), "checked": r.get("checked"),
+       "broken_at_seq": r.get("broken_at_seq"), "head_hash": r.get("head_hash"),
+       "integrity_status": r.get("integrity_status"), "verified_from_seq": r.get("verified_from_seq")}
+checks = {"app_ok": out["ok"] is True, "valid": out["valid"] is True,
+          "broken_none": out["broken_at_seq"] is None, "checked_positive": (out["checked"] or 0) > 0,
+          "session_user_is_app_credential": out["session_user"] == "blockchain_api",
+          "current_user_is_runtime_role": out["current_user"] == out["db_role"]}
+out["checks"] = checks
+json.dump(out, open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+print(json.dumps(out, ensure_ascii=False, indent=1))
+sys.exit(0 if all(checks.values()) else 1)
+PY
+  AVC=$?
+  chk "$AVC" "0" "G2.2 应用凭据验链 ok/valid/无断点/session=应用凭据/current=运行角色" "appcred_verdict_rc"
+fi
+
+echo "=== G3 冻结源码构建的 auditverify：完整密码学校验（属主凭据，只读） ==="
+DATABASE_URL="$MIGRATION_DATABASE_URL" "$AV" -chain audit -timeout 180s > "$EV/auditverify-frozen.json" 2> "$EV/auditverify-frozen.err"
+AV_RC=$?
+cat "$EV/auditverify-frozen.json"
+chk "$AV_RC" "0" "G3 auditverify rc=0 (链自洽)" "rc=$AV_RC"
+
+python3 - "$EV" "$SEALED_TAIL" "$TRUSTED_FROM" <<'PY' > "$EV/audit-chain-gate-verdict.txt" 2>&1
+import json, os, sys
+ev, sealed_tail, trusted_from = sys.argv[1], sys.argv[2], int(sys.argv[3])
+d = json.load(open(os.path.join(ev, "auditverify-frozen.json"), encoding="utf-8"))
+res = (d.get("results") or [{}])[0]
+sb = res.get("sealed_boundary") or {}
+out = {
+    "ok": d.get("ok"), "chain": res.get("chain"), "checked": res.get("checked"),
+    "valid": res.get("valid"), "broken_at_seq": res.get("broken_at_seq"),
+    "integrity_status": res.get("integrity_status"), "prefix_status": res.get("prefix_status"),
+    "verified_from_seq": res.get("verified_from_seq"), "head_hash": res.get("head_hash"),
+    "sealed_tail_hash": sb.get("sealed_tail_hash"), "gap": [sb.get("gap_from_seq"), sb.get("gap_to_seq")],
+    "errors": res.get("errors"),
+}
+checks = {
+    "ok_true": d.get("ok") is True,
+    "valid_true": res.get("valid") is True,
+    "no_broken_seq": res.get("broken_at_seq") is None,
+    "status_acceptable": res.get("integrity_status") in ("intact", "sealed_incident"),
+    "verified_from_is_trusted_anchor": res.get("verified_from_seq") == trusted_from,
+    "sealed_tail_matches_adr018": sb.get("sealed_tail_hash") == sealed_tail,
+    "errors_empty": not (res.get("errors") or []),
+}
+out["checks"] = checks
+json.dump(out, open(os.path.join(ev, "audit-chain-gate-machine.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+print(json.dumps(out, ensure_ascii=False, indent=1))
+sys.exit(0 if all(checks.values()) else 1)
+PY
+VRC=$?
+chk "$VRC" "0" "G4 冻结验链器判定：ok/valid/无断点/状态可接受/可信锚点/封存尾哈希/无错误" "verdict_rc=$VRC"
+
+HEAD_REPORTED=$(python3 -c 'import json,sys;print((json.load(open(sys.argv[1])).get("results") or [{}])[0].get("head_hash") or "")' "$EV/auditverify-frozen.json")
+DB_HEAD=$(one "SELECT event_hash FROM audit_events_v2 WHERE chain='audit' ORDER BY seq DESC LIMIT 1;")
+chk "$HEAD_REPORTED" "$DB_HEAD" "G5 链头 == 库中最大 seq 行的 event_hash（新写事件真在链上）" "head16=${HEAD_REPORTED:0:16}"
+
+echo "=== G6 SQL 侧独立复核（不依赖验链器） ==="
+FIRST_SEQ=$(one "SELECT seq FROM audit_events_v2 WHERE chain='audit' ORDER BY seq LIMIT 1;")
+FIRST_PREV=$(one "SELECT prev_hash FROM audit_events_v2 WHERE chain='audit' ORDER BY seq LIMIT 1;")
+GAPS=$(one "SELECT count(*) FROM (SELECT seq, lag(seq) OVER (ORDER BY seq) AS p FROM audit_events_v2 WHERE chain='audit') t WHERE p IS NOT NULL AND seq <> p+1;")
+LINKS=$(one "SELECT count(*) FROM (SELECT seq, prev_hash, lag(event_hash) OVER (ORDER BY seq) AS pe FROM audit_events_v2 WHERE chain='audit') t WHERE pe IS NOT NULL AND prev_hash <> pe;")
+BELOW=$(one "SELECT count(*) FROM audit_events_v2 WHERE chain='audit' AND seq < $TRUSTED_FROM;")
+chk "$FIRST_SEQ" "$TRUSTED_FROM" "G6.1 首个 seq == 可信锚点 2344" "first_seq=$FIRST_SEQ"
+chk "$FIRST_PREV" "$SEALED_TAIL" "G6.2 首行 prev_hash == sealed_tail_hash(ADR-018)" "prev16=${FIRST_PREV:0:16}"
+chk "$GAPS" "0" "G6.3 可信段无 seq 空洞" "gaps=$GAPS"
+chk "$LINKS" "0" "G6.4 可信段无 prev_hash 断链" "broken=$LINKS"
+chk "$BELOW" "0" "G6.5 锚点以下 0 行（1-2343 永久缺失，未回填未伪造）" "below=$BELOW"
+
+echo "=== RESULT PASS=$PASS FAIL=$FAIL ==="
+[ "$FAIL" -eq 0 ] || exit 1
+exit 0

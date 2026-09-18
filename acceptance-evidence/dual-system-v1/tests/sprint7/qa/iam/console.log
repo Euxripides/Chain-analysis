@@ -1,0 +1,43 @@
+== AUTH-001/002/003 本地登录与会话 ==
+  PASS  AUTH-001 admin 登录成功                    200
+  PASS  AUTH-001 会话 Cookie 为 HttpOnly            1
+  PASS  SMOKE-01 GET /session 成功                   True
+  PASS  SMOKE-02 audience=admin                        admin
+  PASS  SMOKE-03 角色含 owner                       True
+  PASS  SMOKE-04 权限数 > 100                       yes
+== AUTH-009/010 伪造身份与转发头 ==
+  PASS  SMOKE-05 无会话访问后台 API             401
+  PASS  AUTH-009 伪造 X-User-* 头被忽略          401
+  PASS  AUTH-009 伪造头访问 /api/v1/me 为匿名  anonymous
+== RBAC-008 / SEC-001 受众隔离与 CSRF ==
+  PASS  SMOKE-06 用户层登录成功                 200
+  PASS  RBAC-008 用户层会话访问后台 API 被拒 401
+  PASS  SMOKE-07 用户层会话可访问 /api/v2      200
+  PASS  SEC-001 写操作缺少 CSRF 头被拒         403
+  PASS  SEC-001 写操作携带正确 CSRF 头通过   200
+== SMOKE 后台端点授权与能力边界 ==
+  PASS  SMOKE-08 admin 可读 /overview                200
+  PASS  SMOKE-08 admin 可读 /users                   200
+  PASS  SMOKE-08 admin 可读 /roles                   200
+  PASS  SMOKE-08 admin 可读 /login-events            200
+  PASS  SMOKE-08 admin 可读 /audit/events            200
+  PASS  SMOKE-09 未启用能力显式 501（OIDC 未接入） 501
+  PASS  SMOKE-09b Sprint 6 已实现的 /alerts 可读 200
+  PASS  SMOKE-10 未声明端点返回 404             404
+  PASS  SMOKE-11 角色端点不接受未定义方法  405
+== AUDIT-001/004 审计事件与哈希链 ==
+  PASS  AUDIT-001 审计事件已产生                yes
+  PASS   audit 哈希链校验                                    checked=48077 valid=True integrity=sealed_incident reason=-
+  PASS   login 哈希链校验                                    checked=3017 valid=True integrity=intact reason=-
+== AUTH-002/003 登录记录覆盖成功与失败 ==
+  PASS  AUTH-002 记录 bad_password 原因码         True
+  PASS  AUTH-003 记录 unknown_account 原因码      True
+  PASS  AUTH-002 失败事件结果标记为 failure   True
+  PASS  AUTH-002 账号以掩码形式入库           True
+  PASS  AUDIT-002 响应不回显明文密码（仅本响应，非全量扫描） 0
+  PASS  AUDIT-004 登录事件带链哈希             True
+== AUTH-012 开放重定向防护 ==
+  PASS  AUTH-012 return_to 开放重定向被中和    /home
+
+==================== 结果 ====================
+PASS=33 FAIL=0

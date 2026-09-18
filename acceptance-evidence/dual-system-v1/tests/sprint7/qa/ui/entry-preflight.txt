@@ -1,0 +1,18 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 646
+
+entry=https://127.0.0.1:8448
+checked_at=2026-09-13T02:53:22+07:00
+scheme=https OK
+health=200
+--- TLS 证书（本地自签，仅回环）---
+subject=CN = blockchain-e2e-loopback
+notBefore=Sep 12 19:52:11 2026 GMT
+notAfter=Dec 15 19:52:11 2028 GMT
+sha256 Fingerprint=94:E6:B2:BF:ED:66:02:41:C7:39:AF:41:81:14:6A:04:F8:04:E3:F9:FD:B3:62:71:7E:4E:B7:3D:3F:0F:A7:C6
+--- 监听归属（8448 仅回环；8088 为公网 tunnel 目标，保持原状）---
+LISTEN 0      5          127.0.0.1:8448       0.0.0.0:*          
+LISTEN 0      511        127.0.0.1:8088       0.0.0.0:*          
+--- 公网入口未被本脚本改动 ---
+public_entry_health=200

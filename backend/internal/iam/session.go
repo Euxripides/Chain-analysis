@@ -31,6 +31,11 @@ var ErrSessionInvalid = errors.New("session invalid")
 // 以便 API 层写审计、返回不同的用户提示。
 var ErrSessionReuse = errors.New("session token reuse detected")
 
+// ErrWorkspaceAccessRevoked 表示会话绑定的工作区成员资格已被撤销（P1-20260913）。
+// 撤权必须让既有会话立即 fail closed：调用方据此撤销会话并写安全审计，
+// 而不是让持有人继续用旧会话读取该工作区的数据。
+var ErrWorkspaceAccessRevoked = errors.New("workspace membership revoked")
+
 // 会话撤销原因。重放检测依赖 'rotated' 与其他原因的区分，不要随意改名。
 const (
 	RevokeReasonRotated        = "rotated"
@@ -39,6 +44,8 @@ const (
 	RevokeReasonSelfRevokedAll = "self_revoked_all"
 	RevokeReasonAdmin          = "revoked_by_admin"
 	RevokeReasonPasswordChange = "password_changed"
+	// RevokeReasonWorkspaceRevoked：会话绑定的工作区成员资格被撤销（P1-20260913）。
+	RevokeReasonWorkspaceRevoked = "workspace_membership_revoked"
 )
 
 // SessionConfig 由环境变量注入；默认值对本地开发可用，生产必须显式设置 Cookie 安全属性。
@@ -54,6 +61,97 @@ type SessionConfig struct {
 	Path            string
 	// NamePrefix 支持 __Host- 前缀（要求 Secure + Path=/ + 无 Domain）。
 	NamePrefix string
+	// SecureMode 决定 Secure 属性与 __Host- 前缀如何生效（S7-SEC-01 R-05）：
+	//   "always" —— 始终 Secure（要求入口全为 HTTPS，否则 Cookie 不会被浏览器接受）；
+	//   "never"  —— 始终不 Secure（仅限本机 HTTP 调试）；
+	//   "auto"（默认）—— 按**请求入口协议**决定：X-Forwarded-Proto=https 或直接 TLS 时
+	//                才使用 Secure + NamePrefix，HTTP 入口退回不带前缀的普通 Cookie。
+	// 这样公网 HTTPS 入口得到 __Host- 前缀 + Secure（§23.2），而内网 HTTP 测试链路行为不变。
+	SecureMode string
+}
+
+// SecureModeAuto / Always / Never 见 SessionConfig.SecureMode。
+const (
+	SecureModeAuto   = "auto"
+	SecureModeAlways = "always"
+	SecureModeNever  = "never"
+)
+
+// SecureFor 依据入口协议判定本次响应是否应写 Secure Cookie。
+func (c SessionConfig) SecureFor(scheme string) bool {
+	switch c.SecureMode {
+	case SecureModeAlways:
+		return true
+	case SecureModeNever:
+		return false
+	default:
+		// auto：显式配置的 Secure=true 视为 always 的历史语义。
+		if c.Secure {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(scheme), "https")
+	}
+}
+
+// CookieNameFor 返回指定安全上下文下的 Cookie 名。
+// __Host- 前缀要求 Secure + Path=/ + 无 Domain，因此不安全的上下文里必须去掉前缀，
+// 否则浏览器会直接拒绝该 Cookie。
+func (c SessionConfig) CookieNameFor(audience string, secure bool) string {
+	base := c.UserCookieName
+	if audience == AudienceAdmin {
+		base = c.AdminCookieName
+	}
+	if c.NamePrefix == "" || !secure {
+		return base
+	}
+	return c.NamePrefix + base
+}
+
+// CSRFSecretCookieFor 返回 CSRF（double-submit）Cookie 名。
+//
+// **刻意不加 NamePrefix（__Host-）**：
+//   - 前端按**固定名**读取该 Cookie 来填充 X-CSRF-Token
+//     （frontend/packages/api-client/client.ts: csrfCookieName = cs_<audience>_session_csrf）。
+//     服务端若下发 __Host- 前缀名，前端取不到值 → 所有写请求 403 csrf_failed
+//     （S7 实测：加前缀后 7 条浏览器用例因"创建失败：请求校验失败"失败）。
+//   - CSRF 令牌不是凭据：其有效性由服务端做"请求头 == Cookie == 会话绑定哈希"三方比对
+//     （ValidateCSRF），第三方写入同名值也无法通过校验。
+//   - 真正的凭据（会话令牌）仍然使用 __Host- 前缀 + Secure，防护目标不受影响。
+//
+// Secure 属性仍按入口安全上下文设置。
+func (c SessionConfig) CSRFSecretCookieFor(audience string, secure bool) string {
+	_ = secure
+	return c.CSRFCookieBaseName(audience) + "_csrf"
+}
+
+// CSRFCookieBaseName 返回不含前缀的 CSRF Cookie 基名（与会话 Cookie 基名一致）。
+func (c SessionConfig) CSRFCookieBaseName(audience string) string {
+	if audience == AudienceAdmin {
+		return c.AdminCookieName
+	}
+	return c.UserCookieName
+}
+
+// CookieNameCandidates 返回读取时应当尝试的 Cookie 名（先安全名，再普通名）。
+// 这样部署从 HTTP 切到 HTTPS（或反向回滚）时，既有会话不会因为改名而全部失效。
+func (c SessionConfig) CookieNameCandidates(audience string) []string {
+	secureName := c.CookieNameFor(audience, true)
+	plainName := c.CookieNameFor(audience, false)
+	if secureName == plainName {
+		return []string{plainName}
+	}
+	return []string{secureName, plainName}
+}
+
+// CSRFSecretCookieCandidates 返回读取时应尝试的 CSRF Cookie 名：
+// 先无前缀名（当前写入形态），再带前缀名（兼容曾用过前缀写入的旧会话）。
+func (c SessionConfig) CSRFSecretCookieCandidates(audience string) []string {
+	plain := c.CSRFCookieBaseName(audience) + "_csrf"
+	prefixed := c.CookieNameFor(audience, true) + "_csrf"
+	if prefixed == plain {
+		return []string{plain}
+	}
+	return []string{plain, prefixed}
 }
 
 func DefaultSessionConfig() SessionConfig {
@@ -65,7 +163,7 @@ func DefaultSessionConfig() SessionConfig {
 		AbsoluteTTL:     7 * 24 * time.Hour,
 		Secure:          false,
 		SameSite:        http.SameSiteLaxMode,
-		Path: "/",
+		Path:            "/",
 	}
 }
 
@@ -111,6 +209,9 @@ type Session struct {
 	Identity        Identity          `json:"identity"`
 	Roles           []string          `json:"roles"`
 	Attributes      map[string]string `json:"attributes,omitempty"`
+	// WorkspaceMember 表示会话绑定的工作区当前仍是该身份的 active 成员资格。
+	// P1-20260913：撤权后既有会话必须 fail closed（见 Authenticate）。
+	WorkspaceMember bool `json:"-"`
 }
 
 // SessionRequest 聚合创建会话所需的请求侧信息（IP / UA / Client Hints）。
@@ -283,6 +384,11 @@ func (m *SessionManager) Authenticate(ctx context.Context, token, audience strin
 	if sess.Identity.LockedUntil != nil && sess.Identity.LockedUntil.After(now) {
 		return Session{}, ErrSessionInvalid
 	}
+	// P1-20260913：工作区成员资格被撤销后，既有会话必须立即失效（fail closed），
+	// 而不是等会话自然过期。workspace_id 为空的历史会话不受影响（无工作区作用域）。
+	if !sess.WorkspaceMember {
+		return sess, ErrWorkspaceAccessRevoked
+	}
 	roles, err := m.repo.EffectiveRoles(ctx, sess.IdentityID)
 	if err != nil {
 		return Session{}, err
@@ -321,7 +427,11 @@ func (m *SessionManager) loadByToken(ctx context.Context, tokenHash string) (Ses
                i.id, i.organization_id, i.email, i.display_name, i.status,
                i.is_platform_admin, i.mfa_required, i.must_change_password, i.failed_login_count,
                i.locked_until, i.last_login_at, i.password_changed_at, i.created_at, i.updated_at,
-               EXISTS (SELECT 1 FROM credentials c WHERE c.identity_id = i.id AND c.kind = 'password' AND c.revoked_at IS NULL)
+               EXISTS (SELECT 1 FROM credentials c WHERE c.identity_id = i.id AND c.kind = 'password' AND c.revoked_at IS NULL),
+               (s.workspace_id IS NULL OR EXISTS (
+                   SELECT 1 FROM workspace_memberships wm
+                   WHERE wm.identity_id = s.identity_id AND wm.workspace_id = s.workspace_id
+                     AND wm.status = 'active'))
         FROM sessions s JOIN identities i ON i.id = s.identity_id
         WHERE s.token_hash = $1`, tokenHash).
 		Scan(&sess.ID, &sess.FamilyID, &sess.ParentID, &sess.ReplacedBy,
@@ -334,7 +444,7 @@ func (m *SessionManager) loadByToken(ctx context.Context, tokenHash string) (Ses
 			&sess.Identity.Status, &sess.Identity.IsPlatformAdmin, &sess.Identity.MFARequired,
 			&sess.Identity.MustChangePassword, &sess.Identity.FailedLoginCount, &sess.Identity.LockedUntil,
 			&sess.Identity.LastLoginAt, &sess.Identity.PasswordChangedAt, &sess.Identity.CreatedAt,
-			&sess.Identity.UpdatedAt, &sess.Identity.HasPassword)
+			&sess.Identity.UpdatedAt, &sess.Identity.HasPassword, &sess.WorkspaceMember)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrSessionInvalid
 	}
@@ -377,26 +487,51 @@ func subtleEqual(a, b string) bool {
 	return diff == 0
 }
 
-// SetCookies 写入会话 Cookie。HttpOnly 的会话 Cookie 不可被 JS 读取（§28.4 验收）。
+// SetCookies 写入会话 Cookie（沿用配置里的静态 Secure 判定，保留给测试与兼容调用）。
 func (m *SessionManager) SetCookies(w http.ResponseWriter, audience, token, csrf string) {
+	m.SetCookiesFor(w, audience, token, csrf, m.cfg.Secure)
+}
+
+// SetCookiesFor 按**本次请求的安全上下文**写入会话 Cookie。
+//
+// secure=true 时会同时使用 NamePrefix（例如 __Host-）与 Secure 属性；
+// secure=false 时二者都必须去掉：__Host- 前缀要求 Secure，浏览器会拒绝不满足条件的 Cookie。
+// HttpOnly 的会话 Cookie 不可被 JS 读取（§28.4 验收）。
+func (m *SessionManager) SetCookiesFor(w http.ResponseWriter, audience, token, csrf string, secure bool) {
+	name := m.cfg.CookieNameFor(audience, secure)
+	csrfName := m.cfg.CSRFSecretCookieFor(audience, secure)
 	http.SetCookie(w, &http.Cookie{
-		Name: m.cfg.CookieName(audience), Value: token, Path: m.cfg.Path, Domain: m.cfg.Domain,
-		HttpOnly: true, Secure: m.cfg.Secure, SameSite: m.cfg.SameSite,
+		Name: name, Value: token, Path: m.cfg.Path, Domain: m.cfg.Domain,
+		HttpOnly: true, Secure: secure, SameSite: m.cfg.SameSite,
 		MaxAge: int(m.cfg.AbsoluteTTL.Seconds()),
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name: m.cfg.CSRFSecretCookie(audience), Value: csrf, Path: m.cfg.Path, Domain: m.cfg.Domain,
-		HttpOnly: false, Secure: m.cfg.Secure, SameSite: m.cfg.SameSite,
+		Name: csrfName, Value: csrf, Path: m.cfg.Path, Domain: m.cfg.Domain,
+		HttpOnly: false, Secure: secure, SameSite: m.cfg.SameSite,
 		MaxAge: int(m.cfg.AbsoluteTTL.Seconds()),
 	})
 }
 
-// ClearCookies 退出登录时清除 Cookie。
+// ClearCookies 退出登录时清除 Cookie（沿用配置里的静态 Secure 判定）。
 func (m *SessionManager) ClearCookies(w http.ResponseWriter, audience string) {
-	for _, name := range []string{m.cfg.CookieName(audience), m.cfg.CSRFSecretCookie(audience)} {
+	m.ClearCookiesFor(w, audience, m.cfg.Secure)
+}
+
+// ClearCookiesFor 清除**两种命名形态**的 Cookie：无论是带前缀（HTTPS 入口写入）
+// 还是不带前缀（HTTP 入口或切换前写入），都要一并清除，否则会出现"退出后仍有残留会话 Cookie"。
+func (m *SessionManager) ClearCookiesFor(w http.ResponseWriter, audience string, secure bool) {
+	names := m.cfg.CookieNameCandidates(audience)
+	for _, name := range names {
 		http.SetCookie(w, &http.Cookie{
 			Name: name, Value: "", Path: m.cfg.Path, Domain: m.cfg.Domain,
-			HttpOnly: name == m.cfg.CookieName(audience), Secure: m.cfg.Secure,
+			HttpOnly: true, Secure: secure,
+			SameSite: m.cfg.SameSite, MaxAge: -1,
+		})
+	}
+	for _, name := range m.cfg.CSRFSecretCookieCandidates(audience) {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Value: "", Path: m.cfg.Path, Domain: m.cfg.Domain,
+			HttpOnly: false, Secure: secure,
 			SameSite: m.cfg.SameSite, MaxAge: -1,
 		})
 	}
@@ -438,6 +573,29 @@ func (m *SessionManager) Rotate(ctx context.Context, sess Session) (Created, err
 		return Created{}, fmt.Errorf("retire rotated session: %w", err)
 	}
 	return created, nil
+}
+
+// RebindWorkspace 把会话的 workspace 作用域切换到另一个工作区。
+//
+// 调用方必须先完成成员资格判定（iam.ResolveLoginWorkspace）：本方法只做持久化，
+// 并用 SQL 再确认一次目标工作区属于同一组织，避免把会话绑到跨组织工作区。
+// 目标为空、会话已撤销、或工作区不属于该组织时 fail closed，不改变任何行。
+func (m *SessionManager) RebindWorkspace(ctx context.Context, sess Session, workspaceID string) error {
+	ws := strings.TrimSpace(workspaceID)
+	if ws == "" {
+		return ErrWorkspaceNotMember
+	}
+	tag, err := m.repo.Pool().Exec(ctx, `UPDATE sessions SET workspace_id = $1
+        WHERE id = $2 AND organization_id = $3 AND revoked_at IS NULL
+          AND EXISTS (SELECT 1 FROM workspaces w WHERE w.id = $1 AND w.organization_id = $3)`,
+		ws, sess.ID, sess.OrganizationID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrWorkspaceNotMember
+	}
+	return nil
 }
 
 // RevokeFamily 撤销整个令牌族，返回被撤销的会话数。

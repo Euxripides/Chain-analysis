@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const ProjectionVersion = "1.0"
@@ -21,11 +21,11 @@ type rowQuery interface {
 	RowsForExport(context.Context, string, string, string, int, int) ([]map[string]any, error)
 }
 type Service struct {
-	pool  *pgxpool.Pool
+	pool  *dbtx.Pool
 	query rowQuery
 }
 
-func New(pool *pgxpool.Pool, q rowQuery) *Service { return &Service{pool: pool, query: q} }
+func New(pool *dbtx.Pool, q rowQuery) *Service { return &Service{pool: pool, query: q} }
 
 type Event struct {
 	ID                string         `json:"id"`

@@ -1,0 +1,186 @@
+{
+  "images": {
+    "id": "images",
+    "name": "容器镜像引用形态 / tag 可变性 / digest / 严重度",
+    "verdict": "FAIL",
+    "headline": "The deployment does NOT satisfy plan §29.1 (immutable images usable as release evidence). compose pins no digests, and no registry-verifiable manifest digest exists on this host.",
+    "measured": {
+      "in_scope_totals": {
+        "CRITICAL": 20,
+        "HIGH": 203,
+        "MEDIUM": 331,
+        "LOW": 201,
+        "UNKNOWN": 8,
+        "TOTAL": 763,
+        "images": 4,
+        "findings_with_no_fix": 83
+      },
+      "reproduces_prior_round": true,
+      "compose_pins_digest": false,
+      "compose_sha256_pin_occurrences": 0,
+      "compose_image_lines": [
+        "compose.yaml:3 image: postgres:18",
+        "compose.yaml:20 image: clickhouse/clickhouse-server:26.7",
+        "compose.yaml:43 image: minio/minio:latest",
+        "compose.yaml:56 image: nats:2-alpine"
+      ],
+      "images_pinned_by_digest": 0,
+      "images_referenced_by_repointable_tag": 5,
+      "per_image": [
+        {
+          "ref": "postgres:18",
+          "container": "deploy-postgres-1",
+          "reference_form": "tag",
+          "tag_is_repointable": true,
+          "has_referenceable_repo_digest": false,
+          "image_id_config_digest": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "repodigest_equals_config_digest": true,
+          "floating_latest": false,
+          "counts": {
+            "C": 14,
+            "H": 101,
+            "M": 154,
+            "L": 143,
+            "U": 3,
+            "total": 415,
+            "no_fix": 56
+          }
+        },
+        {
+          "ref": "clickhouse/clickhouse-server:26.7",
+          "container": "deploy-clickhouse-1",
+          "reference_form": "tag",
+          "tag_is_repointable": true,
+          "has_referenceable_repo_digest": false,
+          "image_id_config_digest": "sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+          "repodigest_equals_config_digest": true,
+          "floating_latest": false,
+          "counts": {
+            "C": 0,
+            "H": 0,
+            "M": 68,
+            "L": 30,
+            "U": 0,
+            "total": 98,
+            "no_fix": 21
+          }
+        },
+        {
+          "ref": "nats:2-alpine",
+          "container": "deploy-nats-1",
+          "reference_form": "tag",
+          "tag_is_repointable": true,
+          "has_referenceable_repo_digest": false,
+          "image_id_config_digest": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+          "repodigest_equals_config_digest": true,
+          "floating_latest": false,
+          "counts": {
+            "C": 0,
+            "H": 2,
+            "M": 8,
+            "L": 12,
+            "U": 1,
+            "total": 23,
+            "no_fix": 0
+          }
+        },
+        {
+          "ref": "minio/minio:latest",
+          "container": "deploy-minio-1",
+          "reference_form": "tag",
+          "tag_is_repointable": true,
+          "has_referenceable_repo_digest": false,
+          "image_id_config_digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "repodigest_equals_config_digest": true,
+          "floating_latest": true,
+          "counts": {
+            "C": 6,
+            "H": 100,
+            "M": 101,
+            "L": 16,
+            "U": 4,
+            "total": 227,
+            "no_fix": 6
+          }
+        }
+      ],
+      "digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect)",
+      "digest_recheck_at_utc": "2026-09-12T22:5xZ (docker images --digests; same values)",
+      "last_tag_time_utc": "2026-08-31T11:1xZ (all four images)"
+    },
+    "interpretation": {
+      "key_point": "Resolving a digest is NOT the same as having an immutable image. Any tag — including version tags like 18, 26.7 and 2-alpine — can be re-pointed. The resolved digest is only a point-in-time snapshot.",
+      "no_registry_manifest_digest": "For all 4 images RepoDigests equals the image config digest byte-for-byte. A genuine registry manifest digest would be a DIFFERENT value. docker manifest inspect also failed, so no manifest digest can be resolved from a registry here.",
+      "consequence": "Because compose pins no digest and no referenceable registry manifest digest exists, any 'docker compose pull' or redeploy can silently swap in different content.",
+      "reconciliation_note": "An independent review reported container-level RepoDigests as <none>; this round measured the image-level field as non-empty but identical to the config digest. Both observations lead to the same substantive conclusion and are recorded here rather than smoothed over."
+    },
+    "scanner_provenance": {
+      "tool": "trivy",
+      "version": "0.74.0",
+      "scanner_image_digest": "sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "db_version": 2,
+      "db_updated_at": "2026-09-12T13:01:09Z",
+      "db_repository": "docker.m.daocloud.io/aquasec/trivy-db:2 (fallback mirror; byte-equality with upstream NOT verified)"
+    },
+    "out_of_scope": [
+      {
+        "ref": "opensecurity/mobile-security-framework-mobsf:latest",
+        "container": "mobsf",
+        "image_id_config_digest": "sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+        "floating_latest": true,
+        "note": "Unrelated host service. NOT part of this project's release gate; excluded from every total."
+      }
+    ],
+    "not_verified": [
+      {
+        "id": "NV-I1",
+        "item": "Upstream vulnerability-DB byte-equality",
+        "reason": "mirror.gcr.io timed out and ghcr.io denied; the daocloud pull-through mirror was used and its byte-for-byte equality with upstream was NOT verified",
+        "commands_tried": "trivy image --download-db-only --db-repository mirror.gcr.io/aquasec/trivy-db (timeout); --db-repository ghcr.io/aquasec/trivy-db (DENIED)",
+        "action": "re-scan against upstream when reachable"
+      },
+      {
+        "id": "NV-I2",
+        "item": "Existence of a referenceable registry manifest digest on this host",
+        "reason": "4/4 images have RepoDigest == config digest; docker manifest inspect failed",
+        "commands_tried": "docker image inspect <tag> --format '{{json .RepoDigests}}|{{.Id}}'; docker images --digests; docker manifest inspect postgres:18",
+        "action": "re-pull via a trusted registry so a real manifest digest is recorded, or pin the config digest explicitly"
+      },
+      {
+        "id": "NV-I3",
+        "item": "Application build-product vulnerability scan coverage",
+        "reason": "backend/bin/{api,worker,migrate} and the two frontend dist bundles were inventoried, hashed and secret-scanned, but NO vulnerability scanner was run against them",
+        "commands_tried": "none",
+        "action": "run trivy fs or grype over the built binaries and dist bundles"
+      },
+      {
+        "id": "NV-I4",
+        "item": "Host systemd configuration surface",
+        "reason": "no scanner here supports systemd units, and no blockchain-* unit is installed on the host at all, so systemd-analyze security cannot run",
+        "commands_tried": "systemctl list-unit-files | grep -i blockchain (empty); ls /etc/systemd/system/ | grep -i blockchain (empty); systemctl is-active blockchain-*.service (8x inactive)",
+        "action": "decide whether the units ship; if so install them and run systemd-analyze security"
+      },
+      {
+        "id": "NV-I5",
+        "item": "Host nginx configuration surface",
+        "reason": "checkov, trivy config and KICS all lack nginx-configuration support",
+        "commands_tried": "trivy config -> 'Detected config files num=0'; checkov -d -> resource_count 0",
+        "action": "add an nginx-specific linter such as gixy to CI"
+      },
+      {
+        "id": "NV-I6",
+        "item": "mobsf image scan",
+        "reason": "scan stalled downloading the Java DB from the unreachable mirror.gcr.io; the image is also explicitly out of project scope",
+        "action": "not required for this project's release gate"
+      }
+    ],
+    "not_risk_accepted": "The 20 CRITICAL and 203 HIGH base-image findings are NOT accepted, waived or written off by this report. 83 of the findings have no upstream fix and require per-item decisions.",
+    "to_close": [
+      "Pin every release-relevant image by digest (or move to a commitment-backed immutable tag) in deploy/compose.yaml, re-scan and record the pinned digests",
+      "obtain a verifiable upstream manifest digest",
+      "triage the 20 CRITICAL / 203 HIGH (83 without upstream fixes) with explicit per-item decisions",
+      "close NV-I3 by scanning the application build products",
+      "add image scanning and digest-pin verification to CI"
+    ]
+  }
+}

@@ -21,6 +21,25 @@ type Service struct {
 
 func New(ch *clickhouse.Conn) *Service { return &Service{CH: ch} }
 
+// exportScanSlots serialises export scans against the shared ClickHouse
+// instance. The export shape is the only query in this service that can hold
+// gigabytes on the server (measured 7.19 GiB peak at the 2,000,000 row cap),
+// so overlapping scans would push the 19.28 GiB server past its ceiling again
+// and the OvercommitTracker would abort them arbitrarily. One slot keeps the
+// whole export footprint inside the single-query cap in exportScanSettings.
+var exportScanSlots = make(chan struct{}, 1)
+
+// acquireExportScanSlot waits for the export scan slot, or gives up as soon as
+// the request itself is cancelled so a queued export never outlives its caller.
+func acquireExportScanSlot(ctx context.Context) (func(), error) {
+	select {
+	case exportScanSlots <- struct{}{}:
+		return func() { <-exportScanSlots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // 各表结构体（列顺序与建表一致；clickhouse-go ScanStruct 使用 ch tag）
 type txRow struct {
 	Chain            string    `ch:"chain" json:"chain"`
@@ -338,6 +357,67 @@ func (s *Service) Activity(ctx context.Context, chain, address string, limit, of
 	return rows, nil
 }
 
+// FlowTokenTransfers 是"资金流画像"这类分析的读路径：它**不走导出形状**。
+//
+// 背景（P1-1）：flow-profile 实测 9.9 秒，根因是它借用了 RowsForExport —— 导出形状是
+// "SELECT * ... FINAL ... ORDER BY timestamp DESC LIMIT 50000"：
+//   - FINAL 退化成整表合并读（实测 85,074,805 行 / 6.9-10.6 GiB），from_address/to_address 上的
+//     bloom_filter 跳数索引完全用不上；
+//   - 还要按 timestamp 排序 5 万行，而排序键是 (chain, tx_hash, log_index, token_address)。
+//
+// 这里改成：用 ReplacingMergeTree 排序键上的显式去重（argMax by source_ingested_at）代替 FINAL，
+// 让跳数索引能把粒度裁到 2.4%（实测 181/7520），并且只投影分析真正用到的列。
+// 语义与 FINAL 一致：每个 (chain, tx_hash, log_index, token_address) 保留版本最大的那一行
+// （重复行来自多 Provider 重复摄取：实测同一地址原始 34,189 行 ↔ 17,691 个键）。
+func (s *Service) FlowTokenTransfers(ctx context.Context, chain, subject string, limit int) ([]map[string]any, error) {
+	if chain != "tron" {
+		subject = strings.ToLower(subject)
+	}
+	if limit <= 0 || limit > 50000 {
+		limit = 50000
+	}
+	// 交互读预算：到点必须有结论，超了由调用方翻译成可操作错误。
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
+	// 注意别名：去重列**不能**与真实列同名。同名时 ClickHouse 会把内层 WHERE 里的
+	// from_address/to_address 解析成聚合别名，直接 ILLEGAL_AGGREGATION（Code 184，实测踩过）。
+	// 因此内层用 fr_addr/to_addr/sym/amt/ts 这些独立别名，外层再改回分析器认识的列名。
+	const q = `SELECT d.fr_addr AS from_address, d.to_addr AS to_address, d.sym AS token_symbol,
+       d.token_address AS token_address, toString(d.amt) AS amount, d.tx_hash AS tx_hash, d.ts AS timestamp
+FROM (
+    SELECT tx_hash, log_index, token_address,
+           argMax(from_address, source_ingested_at) AS fr_addr,
+           argMax(to_address, source_ingested_at) AS to_addr,
+           argMax(token_symbol, source_ingested_at) AS sym,
+           argMax(amount, source_ingested_at) AS amt,
+           argMax(timestamp, source_ingested_at) AS ts
+    FROM blockchain.token_transfers
+    WHERE chain = ? AND (from_address = ? OR to_address = ?)
+    GROUP BY tx_hash, log_index, token_address
+) AS d
+ORDER BY d.ts DESC
+LIMIT ?`
+	rows, err := s.CH.DB().Query(ctx, q, chain, subject, subject, limit)
+	if err != nil {
+		return nil, clickhouse.DescribeInteractiveScanError(err)
+	}
+	defer rows.Close()
+	out := make([]map[string]any, 0, 1024)
+	for rows.Next() {
+		var from, to, symbol, contract, amount, tx string
+		var ts time.Time
+		if err := rows.Scan(&from, &to, &symbol, &contract, &amount, &tx, &ts); err != nil {
+			return nil, fmt.Errorf("clickhouse [ScanFlowRow]: %w", err)
+		}
+		out = append(out, map[string]any{
+			"from_address": from, "to_address": to, "token_symbol": symbol,
+			"token_address": contract, "amount": amount, "tx_hash": tx, "timestamp": ts,
+		})
+	}
+	return out, rows.Err()
+}
+
 // RowsForExport 导出查询：按链过滤，可选按地址过滤，流式上限。
 func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject string, limit, offset int) ([]map[string]any, error) {
 	return s.RowsForExportRange(ctx, dataset, chain, subject, limit, offset, nil, nil, nil, nil)
@@ -347,6 +427,14 @@ func (s *Service) RowsForExport(ctx context.Context, dataset, chain, subject str
 // requested block/time range. Nil bounds preserve the legacy address export.
 func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subject string, limit, offset int,
 	fromBlock, toBlock *int64, fromTime, toTime *time.Time) ([]map[string]any, error) {
+	// Export scans run one at a time with an explicit, bounded ClickHouse
+	// memory budget; see exportScanSettings for the measured Code 241 defect.
+	release, slotErr := acquireExportScanSlot(ctx)
+	if slotErr != nil {
+		return nil, slotErr
+	}
+	defer release()
+	ctx = clickhouse.ExportScanContext(ctx)
 	switch dataset {
 	case "transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions":
 	default:
@@ -399,6 +487,14 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 	if len(subjects) == 0 {
 		return nil, nil
 	}
+	// Bounded exactly like RowsForExportRange: one ZIP worker per dataset can
+	// otherwise hold millions of rows in server memory at the same time.
+	release, slotErr := acquireExportScanSlot(ctx)
+	if slotErr != nil {
+		return nil, slotErr
+	}
+	defer release()
+	ctx = clickhouse.ExportScanContext(ctx)
 	if chain != "tron" {
 		for i := range subjects {
 			subjects[i] = strings.ToLower(subjects[i])
@@ -441,7 +537,9 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 func (s *Service) queryRows(ctx context.Context, dataset, q string, args ...any) ([]map[string]any, error) {
 	rows, err := s.CH.DB().Query(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		// Surface a server memory refusal as the typed ErrScanTooLarge instead
+		// of an opaque driver error (measured Code 241 on the export scan).
+		return nil, clickhouse.DescribeScanError(err)
 	}
 	defer rows.Close()
 	out := []map[string]any{}

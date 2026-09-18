@@ -18,16 +18,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/featureflag"
 )
 
 // Sprint 6 治理面：告警生命周期、功能开关、配置版本、保留/删除/备份恢复、版本与审计导出。
 // 全部挂在 /api/admin/v1，统一权限、preview/command、审计与 If-Match 并发控制。
 
 func (s *Server) registerAdminGovernanceRoutes(r chi.Router) {
-	// 告警生命周期（A-ALERT-01）
-	r.Get("/alerts", s.require("admin:alert:read", s.handleAdminAlerts))
-	r.Get("/alerts/{id}", s.require("admin:alert:read", s.handleAdminAlertDetail))
-	r.Post("/alerts/{id}/commands/{command}", s.require("admin:alert:manage", s.handleAdminAlertCommand))
+	// 告警生命周期（A-ALERT-01）。
+	// §7.3：`admin.alert_center` 开关在**真实请求路径**上求值（不只是后台试算）。
+	r.Get("/alerts", s.require("admin:alert:read", s.requireFlag("admin.alert_center", "admin:alert:read", s.handleAdminAlerts)))
+	r.Get("/alerts/{id}", s.require("admin:alert:read", s.requireFlag("admin.alert_center", "admin:alert:read", s.handleAdminAlertDetail)))
+	r.Post("/alerts/{id}/commands/{command}", s.require("admin:alert:manage", s.requireFlag("admin.alert_center", "admin:alert:manage", s.handleAdminAlertCommand)))
 
 	// 功能开关（A-FLAG-01）
 	r.Get("/feature-flags", s.require("admin:flag:read", s.handleAdminFeatureFlags))
@@ -260,7 +263,8 @@ func (s *Server) s6AlertRelatedChain(ctx context.Context, alert s6Alert) map[str
 					out["checkpoint"] = map[string]any{"shard_id": shardID, "found": false, "reason": "该 Shard 没有 checkpoint 行"}
 				}
 				var objectRef string
-				if err := s.deps.Store.Pool.QueryRow(ctx, `SELECT coalesce(raw_object,'') FROM shards WHERE id=$1`, shardID).Scan(&objectRef); err == nil && objectRef != "" {
+				// 表名是 download_shards（不存在"shards"）：写错会让语句失败并把请求事务打成 aborted。
+				if err := s.deps.Store.Pool.QueryRow(ctx, `SELECT coalesce(raw_object,'') FROM download_shards WHERE id=$1`, shardID).Scan(&objectRef); err == nil && objectRef != "" {
 					entry := map[string]any{"object_ref": objectRef, "exists": false}
 					if s.deps.Raw != nil {
 						if size, err := s.deps.Raw.Stat(ctx, objectRef); err == nil {
@@ -358,20 +362,22 @@ type s6Flag struct {
 	ScopeType        string    `json:"scope_type"`
 	ScopeOrgID       string    `json:"scope_org_id,omitempty"`
 	ScopeWorkspaceID string    `json:"scope_workspace_id,omitempty"`
+	ScopeUserID      string    `json:"scope_user_id,omitempty"`
 	Rules            []any     `json:"rules"`
 	Revision         int64     `json:"revision"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 const s6FlagSelect = `SELECT key, description, environment, enabled, default_value, percentage, scope_type,
-       coalesce(scope_org_id::text,''), coalesce(scope_workspace_id::text,''), rules, revision, updated_at
+       coalesce(scope_org_id::text,''), coalesce(scope_workspace_id::text,''), coalesce(scope_user_id::text,''),
+       rules, revision, updated_at
   FROM feature_flags`
 
 func scanS6Flag(row pgx.Row) (s6Flag, error) {
 	var f s6Flag
 	var rules []byte
 	if err := row.Scan(&f.Key, &f.Description, &f.Environment, &f.Enabled, &f.DefaultValue, &f.Percentage,
-		&f.ScopeType, &f.ScopeOrgID, &f.ScopeWorkspaceID, &rules, &f.Revision, &f.UpdatedAt); err != nil {
+		&f.ScopeType, &f.ScopeOrgID, &f.ScopeWorkspaceID, &f.ScopeUserID, &rules, &f.Revision, &f.UpdatedAt); err != nil {
 		return s6Flag{}, err
 	}
 	_ = json.Unmarshal(rules, &f.Rules)
@@ -413,6 +419,7 @@ type s6FlagInput struct {
 	ScopeType        string `json:"scope_type"`
 	ScopeOrgID       string `json:"scope_org_id"`
 	ScopeWorkspaceID string `json:"scope_workspace_id"`
+	ScopeUserID      string `json:"scope_user_id"`
 	Reason           string `json:"reason"`
 }
 
@@ -464,6 +471,36 @@ func (s *Server) handleAdminUpsertFeatureFlag(w http.ResponseWriter, r *http.Req
 		validationError(w, r, "scope_type 取值非法", []fieldError{{Field: "scope_type", Code: "invalid", Message: "global|organization|workspace|user"}})
 		return
 	}
+	// S7-DB-01：作用域目标必须存在，且各作用域类型使用各自的目标列。
+	// 修复前 scope_type='user' 没有任何列能承载目标用户，实现误用 scope_org_id（组织 UUID）
+	// 与 subject_id 比较，用户级灰度恒不生效；这里补齐 scope_user_id 并做输入校验。
+	scopeOrgID := strings.TrimSpace(in.ScopeOrgID)
+	scopeWorkspaceID := strings.TrimSpace(in.ScopeWorkspaceID)
+	scopeUserID := strings.TrimSpace(in.ScopeUserID)
+	switch scopeType {
+	case "organization":
+		if scopeOrgID == "" {
+			validationError(w, r, "organization 作用域必须提供 scope_org_id", []fieldError{{Field: "scope_org_id", Code: "required", Message: "必填"}})
+			return
+		}
+	case "workspace":
+		if scopeWorkspaceID == "" {
+			validationError(w, r, "workspace 作用域必须提供 scope_workspace_id", []fieldError{{Field: "scope_workspace_id", Code: "required", Message: "必填"}})
+			return
+		}
+		// 工作区作用域必须同时记录所属组织（0056 的 feature_flags_ws_implies_org_check）。
+		if scopeOrgID == "" {
+			if err := s.deps.Store.Pool.QueryRow(ctx, `SELECT organization_id::text FROM workspaces WHERE id=$1::uuid`, scopeWorkspaceID).Scan(&scopeOrgID); err != nil {
+				validationError(w, r, "scope_workspace_id 不存在或无法解析所属组织", []fieldError{{Field: "scope_workspace_id", Code: "not_found", Message: "工作区不存在"}})
+				return
+			}
+		}
+	case "user":
+		if scopeUserID == "" {
+			validationError(w, r, "user 作用域必须提供 scope_user_id", []fieldError{{Field: "scope_user_id", Code: "required", Message: "必填"}})
+			return
+		}
+	}
 	if in.Percentage != nil && (*in.Percentage < 0 || *in.Percentage > 100) {
 		validationError(w, r, "percentage 必须在 0-100 之间", []fieldError{{Field: "percentage", Code: "invalid", Message: "0-100"}})
 		return
@@ -490,10 +527,10 @@ func (s *Server) handleAdminUpsertFeatureFlag(w http.ResponseWriter, r *http.Req
 			percentage = *in.Percentage
 		}
 		if err := s.deps.Store.Pool.QueryRow(ctx, `
-			INSERT INTO feature_flags (key, description, environment, enabled, default_value, percentage, scope_type, scope_org_id, scope_workspace_id, updated_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING key`,
+			INSERT INTO feature_flags (key, description, environment, enabled, default_value, percentage, scope_type, scope_org_id, scope_workspace_id, scope_user_id, updated_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING key`,
 			key, in.Description, environment, enabled, def, percentage, scopeType,
-			s6NullUUID(in.ScopeOrgID), s6NullUUID(in.ScopeWorkspaceID), s6NullUUID(PrincipalFrom(ctx).IdentityID)).Scan(&after.Key); err != nil {
+			s6NullUUID(scopeOrgID), s6NullUUID(scopeWorkspaceID), s6NullUUID(scopeUserID), s6NullUUID(PrincipalFrom(ctx).IdentityID)).Scan(&after.Key); err != nil {
 			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "功能开关创建失败", nil)
 			return
 		}
@@ -508,57 +545,72 @@ func (s *Server) handleAdminUpsertFeatureFlag(w http.ResponseWriter, r *http.Req
 			  scope_type = $7,
 			  scope_org_id = $8,
 			  scope_workspace_id = $9,
-			  revision = revision + 1, updated_by = $10, updated_at = now()
+			  scope_user_id = $10,
+			  revision = revision + 1, updated_by = $11, updated_at = now()
 			WHERE key = $1`, key, in.Description, environment, in.Enabled, in.DefaultValue, in.Percentage,
-			scopeType, s6NullUUID(in.ScopeOrgID), s6NullUUID(in.ScopeWorkspaceID), s6NullUUID(PrincipalFrom(ctx).IdentityID)); err != nil {
+			scopeType, s6NullUUID(scopeOrgID), s6NullUUID(scopeWorkspaceID), s6NullUUID(scopeUserID), s6NullUUID(PrincipalFrom(ctx).IdentityID)); err != nil {
 			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "功能开关更新失败", nil)
 			return
 		}
 	}
 	after, _ = scanS6Flag(s.deps.Store.Pool.QueryRow(ctx, s6FlagSelect+" WHERE key=$1", key))
 	if isNew {
+		s.invalidateFlagCache()
 		s.s6Audit(r, "admin.flag.create", "admin.system", "feature_flag", key, map[string]any{"after": after, "reason": in.Reason})
 	} else {
+		s.invalidateFlagCache()
 		s.s6AuditChange(r, "admin.flag.update", "admin.system", "feature_flag", key, current, after, map[string]any{"reason": in.Reason})
 	}
 	respondOK(w, r, after)
 }
 
-// s6EvaluateFlag 计算开关对某个主体的取值（确定性哈希分桶，评估结果可重现）。
+// s6ResolveEvalScope 推导评估记录应落库的组织/工作区作用域（S7-DB-01）。
+// 规则：显式给出的值优先；否则仅当主体是真实用户 UUID 且其活跃成员关系唯一时推导；
+// 推导不出来时保持为空（由 0056 的一致性约束保证"有工作区必有组织"）。
+func s6ResolveEvalScope(ctx context.Context, s *Server, subjectType, subjectID, orgID, workspaceID string) (string, string) {
+	if orgID != "" && workspaceID != "" {
+		return orgID, workspaceID
+	}
+	if subjectType != "user" || subjectID == "" {
+		return orgID, workspaceID
+	}
+	if _, err := parseS6UUID(subjectID); err != nil {
+		return orgID, workspaceID
+	}
+	if orgID == "" {
+		var derived string
+		err := s.deps.Store.Pool.QueryRow(ctx, `
+			SELECT (array_agg(organization_id::text))[1] FROM organization_memberships
+			 WHERE identity_id=$1::uuid AND status='active'
+			 HAVING count(*) = 1`, subjectID).Scan(&derived)
+		if err == nil {
+			orgID = derived
+		}
+	}
+	if workspaceID == "" {
+		var derived string
+		err := s.deps.Store.Pool.QueryRow(ctx, `
+			SELECT (array_agg(workspace_id::text))[1] FROM workspace_memberships
+			 WHERE identity_id=$1::uuid AND status='active'
+			 HAVING count(*) = 1`, subjectID).Scan(&derived)
+		if err == nil {
+			workspaceID = derived
+		}
+	}
+	return orgID, workspaceID
+}
+
+// s6EvaluateFlag 计算开关对某个主体的取值（后台「试算」入口）。
+//
+// §7.3：算法只有一份 —— 它就是 internal/featureflag.Evaluate，真实请求路径用的是同一个函数。
+// 这里保留薄封装只为让 api 包内的调用点与旧签名一致（试算接口的响应字段不变）。
 func s6EvaluateFlag(flag s6Flag, subjectID, organizationID, workspaceID, environment string) (bool, string, int) {
-	if flag.Environment != "" && flag.Environment != "all" && flag.Environment != environment {
-		return flag.DefaultValue, "environment_mismatch", 0
-	}
-	if !flag.Enabled {
-		return flag.DefaultValue, "disabled", 0
-	}
-	switch flag.ScopeType {
-	case "organization":
-		if flag.ScopeOrgID == "" || flag.ScopeOrgID != organizationID {
-			return flag.DefaultValue, "scope_mismatch", 0
-		}
-	case "workspace":
-		if flag.ScopeWorkspaceID == "" || flag.ScopeWorkspaceID != workspaceID {
-			return flag.DefaultValue, "scope_mismatch", 0
-		}
-	case "user":
-		if flag.ScopeOrgID != "" && flag.ScopeOrgID != subjectID {
-			return flag.DefaultValue, "scope_mismatch", 0
-		}
-	}
-	if flag.Percentage >= 100 {
-		return true, "scope_match_full_rollout", 100
-	}
-	if flag.Percentage <= 0 {
-		return flag.DefaultValue, "scope_match_zero_rollout", 0
-	}
-	sum := sha256.Sum256([]byte(flag.Key + ":" + subjectID))
-	bucket := int(sum[0])<<8 | int(sum[1])
-	bucket = bucket % 100
-	if bucket < flag.Percentage {
-		return true, "percentage_bucket_hit", bucket
-	}
-	return false, "percentage_bucket_miss", bucket
+	d := featureflag.Evaluate(featureflag.Flag{
+		Key: flag.Key, Environment: flag.Environment, Enabled: flag.Enabled, DefaultValue: flag.DefaultValue,
+		Percentage: flag.Percentage, ScopeType: flag.ScopeType, ScopeOrgID: flag.ScopeOrgID,
+		ScopeWorkspaceID: flag.ScopeWorkspaceID, ScopeUserID: flag.ScopeUserID, Revision: flag.Revision,
+	}, subjectID, organizationID, workspaceID, environment)
+	return d.Allowed, d.Reason, d.Bucket
 }
 
 func (s *Server) handleAdminFlagEvaluations(w http.ResponseWriter, r *http.Request) {
@@ -627,12 +679,16 @@ func (s *Server) handleAdminFlagCommand(w http.ResponseWriter, r *http.Request) 
 		if subjectType == "" {
 			subjectType = "user"
 		}
-		result, reason, bucket := s6EvaluateFlag(flag, in.SubjectID, in.OrganizationID, in.WorkspaceID, s.cfg.Env)
+		// S7-DB-01：评估记录必须落到可核对的作用域，否则无法证明"只影响目标 scope"。
+		// 调用方未显式给出时，按主体用户的活跃成员关系推导（唯一才推导，不猜测、不编造）。
+		evalOrgID, evalWorkspaceID := s6ResolveEvalScope(ctx, s, subjectType, strings.TrimSpace(in.SubjectID),
+			strings.TrimSpace(in.OrganizationID), strings.TrimSpace(in.WorkspaceID))
+		result, reason, bucket := s6EvaluateFlag(flag, in.SubjectID, evalOrgID, evalWorkspaceID, s.cfg.Env)
 		if _, err := s.deps.Store.Pool.Exec(ctx, `
 			INSERT INTO feature_flag_evaluations (flag_key, flag_revision, environment, subject_type, subject_id, organization_id, workspace_id, result, reason, bucket)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 			flag.Key, flag.Revision, s.cfg.Env, subjectType, in.SubjectID,
-			s6NullUUID(in.OrganizationID), s6NullUUID(in.WorkspaceID), result, reason, bucket); err != nil {
+			s6NullUUID(evalOrgID), s6NullUUID(evalWorkspaceID), result, reason, bucket); err != nil {
 			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "开关评估失败", nil)
 			return
 		}
@@ -663,6 +719,7 @@ func (s *Server) handleAdminFlagCommand(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		after, _ := scanS6Flag(s.deps.Store.Pool.QueryRow(ctx, s6FlagSelect+" WHERE key=$1", key))
+		s.invalidateFlagCache()
 		s.s6AuditChange(r, "admin.flag.rollback", "admin.system", "feature_flag", key, flag, after, map[string]any{"reason": in.Reason})
 		respondOK(w, r, after)
 	default:
@@ -1160,18 +1217,20 @@ func (s *Server) s6RetentionPreview(ctx context.Context, policyKey, resourceType
 	case "raw_object":
 		var count int64
 		var bytes int64
-		_ = s.deps.Store.Pool.QueryRow(ctx, `
-			SELECT count(*), coalesce(sum(size_bytes),0) FROM raw_objects WHERE created_at < $1`, cutoff).Scan(&count, &bytes)
-		if count == 0 {
-			// 兜底统计：raw_objects 表在部分部署中为空，改用 shards 的对象引用。
-			_ = s.deps.Store.Pool.QueryRow(ctx, `
-				SELECT count(*), coalesce(sum(coalesce(downloaded_bytes,0)),0) FROM shards
-				WHERE raw_object IS NOT NULL AND raw_object <> '' AND updated_at < $1`, cutoff).Scan(&count, &bytes)
+		// 原始对象的权威清单在 download_shards.raw_object（download_shards 才是真实表名）。
+		// 这里曾经先查一张不存在的 raw_objects 表：语句失败 → 请求事务 aborted → 提交门
+		// 把整个预览改写成 409，页面上永远拿不到保留/删除候选项（2026-09-16 定位）。
+		if err := s.deps.Store.Pool.QueryRow(ctx, `
+			SELECT count(*), coalesce(sum(coalesce(downloaded_bytes,0)),0) FROM download_shards
+			WHERE raw_object IS NOT NULL AND raw_object <> '' AND updated_at < $1`, cutoff).Scan(&count, &bytes); err != nil {
+			// 统计失败必须返回错误：保留预览是删除动作的前置依据，
+			// 用 0 当"没有可删对象"会误导运维（且失败本身已经把事务打成 aborted）。
+			return nil, fmt.Errorf("raw object retention scan: %w", err)
 		}
 		preview["scanned_objects"] = count
 		preview["matched_objects"] = count
 		preview["matched_bytes"] = bytes
-		preview["source"] = "postgres:shards.raw_object"
+		preview["source"] = "postgres:download_shards.raw_object"
 	case "export_object":
 		var count int64
 		var bytes int64
@@ -2017,6 +2076,10 @@ func (s *Server) handleAdminAuditExport(w http.ResponseWriter, r *http.Request) 
 		if err := rows.Scan(&seq, &occurredAt, &actorType, &actorID, &actorEmail, &orgID, &workspaceID, &action,
 			&category, &resourceType, &resourceID, &result, &permissionKey, &policyDecision, &riskLevel, &sensitive,
 			&traceID, &requestID, &routeTemplate, &prevHash, &eventHash, &before, &after, &changes, &detail, &clientIP); err != nil {
+			// Close the open result set before this UPDATE: pgx allows one
+			// in-flight statement per connection and on a *dbtx.Pool bound to the
+			// request transaction the UPDATE would otherwise fail with "conn busy".
+			rows.Close()
 			_, _ = s.deps.Store.Pool.Exec(ctx, "UPDATE audit_exports SET status='failed', error='scan failed', completed_at=now() WHERE id=$1", exportID)
 			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "审计事件读取失败", nil)
 			return

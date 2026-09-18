@@ -1,0 +1,28 @@
+{
+  "label": "lan_notifications",
+  "url": "http://127.0.0.1:8080/api/v2/notifications?limit=20",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.00211066,
+  "requests": 34757,
+  "rps": 1737.6666188287152,
+  "errors": 6,
+  "status_counts": {
+    "200": 34751
+  },
+  "p50_ms": 3.359184,
+  "p90_ms": 8.467433,
+  "p95_ms": 10.756675,
+  "p99_ms": 16.416204,
+  "min_ms": 1.301824,
+  "max_ms": 34.711188,
+  "avg_ms": 4.529498959461419,
+  "avg_response_bytes": 6637.768017953218,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded"
+  ]
+}

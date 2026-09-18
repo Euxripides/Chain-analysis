@@ -1,0 +1,150 @@
+==================== S7-SEC-01 / ADR-017 §5 应用账号与超级用户分离实测 ====================
+采集时间: 2026-09-12T23:49:16+07:00
+DB: PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+
+---- [1] 连接账号（应用实际登录用的账号）属性 ----
+  rolname   | rolsuper | rolcreatedb | rolcreaterole | rolcanlogin | rolbypassrls | rolreplication | rolconnlimit 
+------------+----------+-------------+---------------+-------------+--------------+----------------+--------------
+ blockchain | t        | t           | t             | t           | t            | t              |           -1
+(1 row)
+
+
+---- [2] 运行角色 blockchain_app 属性 ----
+    rolname     | rolsuper | rolcreatedb | rolcreaterole | rolcanlogin | rolbypassrls | rolreplication | rolconnlimit 
+----------------+----------+-------------+---------------+-------------+--------------+----------------+--------------
+ blockchain_app | f        | f           | f             | f           | f            | f              |           -1
+(1 row)
+
+
+---- [3] 全部非系统角色 ----
+    rolname     | rolsuper | rolcanlogin | rolbypassrls 
+----------------+----------+-------------+--------------
+ blockchain     | t        | t           | t
+ blockchain_app | f        | f           | f
+(2 rows)
+
+
+---- [4] blockchain_app 的角色成员关系（是否被授予其他角色） ----
+ member_of | admin_option 
+-----------+--------------
+(0 rows)
+
+
+---- [5] blockchain_app 拥有的对象数（期望 0） ----
+tables=0
+sequences=0
+schemas=0
+
+---- [6] blockchain_app 是否有 CREATE ON SCHEMA public（DDL 能力） ----
+public_create=false
+public_usage=true
+
+---- [7] blockchain_app 权限统计（按表） ----
+tables_with_any_priv=149
+default_acl_entries=2
+-- 权限种类分布 --
+ privilege_type | count 
+----------------+-------
+ INSERT         |   149
+ SELECT         |   149
+ UPDATE         |   135
+ DELETE         |   134
+(4 rows)
+
+
+---- [8] 关键表逐表权限 ----
+         tablename         | sel | ins | upd | del | trun |   owner    
+---------------------------+-----+-----+-----+-----+------+------------
+ audit_chain_anchors       | t   | t   | f   | f   | f    | blockchain
+ audit_events_v2           | t   | t   | f   | f   | f    | blockchain
+ audit_integrity_incidents | t   | t   | f   | f   | f    | blockchain
+ case_comments             | t   | t   | t   | t   | f    | blockchain
+ cases                     | t   | t   | t   | t   | f    | blockchain
+ configuration_settings    | t   | t   | t   | t   | f    | blockchain
+ gpt_action_api_keys       | t   | t   | t   | t   | f    | blockchain
+ identities                | t   | t   | t   | t   | f    | blockchain
+ login_events              | t   | t   | f   | f   | f    | blockchain
+ provider_secrets          | t   | t   | t   | t   | f    | blockchain
+ sessions                  | t   | t   | t   | t   | f    | blockchain
+(11 rows)
+
+
+---- [9] 关键表：任何角色是否对审计表有 UPDATE/DELETE/TRUNCATE ----
+  grantee   | privilege_type 
+------------+----------------
+ blockchain | DELETE
+ blockchain | DELETE
+ blockchain | TRUNCATE
+ blockchain | TRUNCATE
+ blockchain | UPDATE
+ blockchain | UPDATE
+(6 rows)
+
+(空结果 = 没有任何角色被授予)
+
+---- [10] 审计表上的保护机制（触发器 + 规则） ----
+              tgname               | tgenabled |                                                                     pg_get_triggerdef                                                                      
+-----------------------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ audit_events_v2_append_only       | O         | CREATE TRIGGER audit_events_v2_append_only BEFORE DELETE OR UPDATE ON public.audit_events_v2 FOR EACH ROW EXECUTE FUNCTION audit_append_only_guard()
+ audit_chain_anchors_immutable_trg | O         | CREATE TRIGGER audit_chain_anchors_immutable_trg BEFORE UPDATE ON public.audit_chain_anchors FOR EACH ROW EXECUTE FUNCTION audit_chain_anchors_immutable()
+ audit_chain_anchors_no_delete     | O         | CREATE TRIGGER audit_chain_anchors_no_delete BEFORE DELETE ON public.audit_chain_anchors FOR EACH ROW EXECUTE FUNCTION audit_append_only_guard()
+(3 rows)
+
+
+---- [11] 应用当前连接的运行角色（pg_stat_activity） ----
+  usename   | count 
+------------+-------
+ blockchain |    17
+(1 row)
+
+-- 会话中是否执行过 SET ROLE（日志/统计） --
+setting=none
+
+---- [12] 实测：以 blockchain_app 尝试各种越权操作 ----
+SELECT count(*) FROM audit_events_v2                       => SET 1326 
+UPDATE audit_events_v2 SET action='x' WHERE seq=1          => SET ERROR:  permission denied for table audit_events_v2 
+DELETE FROM audit_events_v2 WHERE seq=1                    => SET ERROR:  permission denied for table audit_events_v2 
+TRUNCATE audit_events_v2                                   => ERROR:  permission denied for table audit_events_v2 SET 
+TRUNCATE cases                                             => SET ERROR:  permission denied for table cases 
+DROP TABLE cases                                           => SET ERROR:  must be owner of table cases 
+CREATE TABLE s7_probe(id int)                              => SET ERROR:  permission denied for schema public 
+ALTER TABLE cases ADD COLUMN s7_probe int                  => SET ERROR:  must be owner of table cases 
+CREATE ROLE s7_probe_role                                  => SET ERROR:  permission denied to create role 
+GRANT blockchain_app TO blockchain                         => SET ERROR:  permission denied to grant role "blockchain_app" 
+UPDATE audit_chain_anchors SET chain='x'                   => SET ERROR:  permission denied for table audit_chain_anchors 
+
+---- [13] 实测：连接账号 blockchain 自身的超级用户能力（对照） ----
+blockchain_is_superuser=true
+blockchain_can_create_role=true
+-- 应用连接串是否可能 RESET ROLE 回到超级用户：检视连接初始化 SQL --
+/home/euripides/projects/blockchain-platform/backend/internal/store/db.go:21:// NewWithRuntimeRole 在 runtimeRole 非空时，对每个新连接执行 SET ROLE。
+/home/euripides/projects/blockchain-platform/backend/internal/store/db.go:34:			_, err := conn.Exec(ctx, "SET ROLE "+role)
+/home/euripides/projects/blockchain-platform/backend/internal/config/config.go:429:	// DatabaseRuntimeRole 非空时，API/Worker/MCP 的每个数据库连接都会先 SET ROLE 到该角色，
+/home/euripides/projects/blockchain-platform/backend/internal/config/config.go:817:		DatabaseRuntimeRole: env("DB_RUNTIME_ROLE", ""),
+
+---- [14] 部署脚本中的角色创建来源（迁移 0054） ----
+11:--   引入受限运行角色 blockchain_app，应用连接建立后 SET ROLE 到该角色；
+20:    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'blockchain_app') THEN
+21:        CREATE ROLE blockchain_app NOLOGIN;
+26:GRANT USAGE ON SCHEMA public TO blockchain_app;
+29:GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO blockchain_app;
+30:GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO blockchain_app;
+31:ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO blockchain_app;
+32:ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO blockchain_app;
+41:REVOKE UPDATE, DELETE, TRUNCATE ON audit_events_v2 FROM blockchain_app;
+42:REVOKE UPDATE, DELETE, TRUNCATE ON login_events FROM blockchain_app;
+43:REVOKE DELETE, TRUNCATE ON audit_chain_heads FROM blockchain_app;
+44:REVOKE DELETE, TRUNCATE ON audit_chain_anchors FROM blockchain_app;
+45:REVOKE UPDATE, DELETE, TRUNCATE ON approval_request_events FROM blockchain_app;
+46:REVOKE UPDATE, DELETE, TRUNCATE ON user_activity_events FROM blockchain_app;
+55:    IF has_table_privilege('blockchain_app', 'audit_events_v2', 'TRUNCATE') THEN
+58:    IF has_table_privilege('blockchain_app', 'audit_events_v2', 'UPDATE') THEN
+61:    IF has_table_privilege('blockchain_app', 'audit_events_v2', 'DELETE') THEN
+64:    IF NOT has_table_privilege('blockchain_app', 'audit_events_v2', 'INSERT') THEN
+67:    IF NOT has_table_privilege('blockchain_app', 'audit_events_v2', 'SELECT') THEN
+70:    IF has_table_privilege('blockchain_app', 'download_jobs', 'TRUNCATE') THEN
+74:    IF NOT has_table_privilege('blockchain_app', 'audit_chain_heads', 'UPDATE') THEN
+77:    IF NOT has_table_privilege('blockchain_app', 'audit_chain_heads', 'SELECT') THEN
+80:    IF NOT has_table_privilege('blockchain_app', 'download_jobs', 'INSERT') THEN
+
+---- [15] 生成结论用的原始查询完成 ----

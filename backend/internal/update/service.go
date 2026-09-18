@@ -81,6 +81,11 @@ type PreviewRequest struct {
 	Datasets        []string   `json:"datasets"`
 	PageSize        int        `json:"preview_page_size"`
 	TargetTimestamp *time.Time `json:"target_timestamp,omitempty"`
+
+	// 租户作用域由 API 层从已认证主体注入，绝不接受客户端 JSON（§6.4）。
+	// 为空时 Preview 会拒绝服务，而不是回退到 Store.DefaultOrgWorkspace。
+	OrganizationID string `json:"-"`
+	WorkspaceID    string `json:"-"`
 }
 
 type PreviewItem struct {
@@ -162,9 +167,10 @@ func (s *Service) Preview(ctx context.Context, req PreviewRequest) (*PreviewResp
 	if err != nil {
 		return nil, err
 	}
-	orgID, wsID, err := s.Store.DefaultOrgWorkspace(ctx)
-	if err != nil {
-		return nil, err
+	// P0 修复：作用域来自调用方（已认证主体），不再取默认组织。
+	orgID, wsID := req.OrganizationID, req.WorkspaceID
+	if orgID == "" || wsID == "" {
+		return nil, errors.New("update preview requires an explicit tenant scope")
 	}
 	req.Addresses = addresses
 	req.Chain = chain
@@ -525,9 +531,12 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 	if chain == "" {
 		chain = "bsc"
 	}
-	_, wsID, err := s.Store.DefaultOrgWorkspace(ctx)
-	if err != nil {
-		return nil, err
+	// P0 修复：确认操作把结果写回**预览自己**的租户作用域。
+	// P0 残余修复（R-2）：组织 ID 也必须取回并注入下方每一处 Ensure。
+	// 只取 workspace 而丢弃 organization，会让 Ensure 在缺少组织时退化到默认组织。
+	orgID, wsID, err := s.Store.UpdatePreviewScope(ctx, previewID)
+	if err != nil || wsID == "" || orgID == "" {
+		return nil, fmt.Errorf("preview tenant scope unavailable (org=%q ws=%q): %w", orgID, wsID, err)
 	}
 	var jobIDs []string
 	if chain == "tron" {
@@ -579,7 +588,7 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 				} else if !last.IsZero() {
 					rangeSpec = dataset.RangeSpec{Type: "time", From: &last, To: &targetTime}
 				}
-				resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{Source: "update", Priority: 90, Subjects: []string{addr}, Chain: chain, Datasets: []string{name}, Range: rangeSpec})
+				resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{Source: "update", Priority: 90, OrganizationID: orgID, WorkspaceID: wsID, Subjects: []string{addr}, Chain: chain, Datasets: []string{name}, Range: rangeSpec})
 				if err != nil {
 					return nil, err
 				}
@@ -639,6 +648,7 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 			from := minFrom
 			resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{
 				Source: "update", Priority: 90,
+				OrganizationID: orgID, WorkspaceID: wsID,
 				Subjects: []string{addr}, Chain: chain, Datasets: gaps,
 				Range: dataset.RangeSpec{Type: "block", FromBlock: &from, ToBlock: &target},
 			})
@@ -652,6 +662,7 @@ func (s *Service) Confirm(ctx context.Context, previewID string) ([]string, erro
 		if refreshBalances {
 			resp, err := s.DS.Ensure(ctx, dataset.EnsureRequest{
 				Source: "update", Priority: 90,
+				OrganizationID: orgID, WorkspaceID: wsID,
 				Subjects: []string{addr}, Chain: chain, Datasets: []string{"balances"},
 				Range: dataset.RangeSpec{Type: "full"},
 			})

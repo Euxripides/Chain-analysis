@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   BackLink,
@@ -830,6 +830,10 @@ export default function AddressDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const dialog = useDialog();
   const { client } = useAuth();
+  // P1-1 第 3 项：活动是长表路径（实测 8.09s @ limit=200 全量窗口），默认收窄到最近 30 天。
+  // 服务端的 Filter 一直支持 from_time/to_time（会写成 WHERE timestamp >=/<=），此前只是前端
+  // 从不传、handler 也不透传，所以每次都是全量拉。选「全部」会退回较慢的全量查询。
+  const [windowDays, setWindowDays] = useState(30);
   const [bulkRows, setBulkRows] = useState<ActivityRow[] | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const requestedTab = searchParams.get("tab") ?? "overview";
@@ -845,18 +849,31 @@ export default function AddressDetailPage() {
     ? `/api/v2/explorer/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`
     : null;
 
+  /**
+   * 时间窗锚点必须是**稳定值**：它进入 useApi 的 queryKey。
+   * 曾经在这里直接调用 Date.now()：每次渲染都产生新的毫秒级时间戳 → queryKey 每次都变 →
+   * load 的 identity 每次渲染都变 → useEffect 反复 abort 上一次请求并重新发起，
+   * 请求被无限取消、loading 永远为 true，地址详情的活动表**永远是骨架屏**，
+   * 同时把 /activity 打成请求风暴（2026-09-16 实测：一次页面停留里连着 ERR_ABORTED）。
+   * 用 useMemo 绑定到 windowDays：窗口不变就不变。
+   */
+  const activityFromTime = useMemo(
+    () => (windowDays > 0 ? new Date(Date.now() - windowDays * 86_400_000).toISOString() : undefined),
+    [windowDays],
+  );
   const overview = useApi<OverviewData>(base ? `${base}/overview` : null, [chain, address]);
   const assets = useApi<AssetsPayload>(tab === "assets" && base ? `${base}/assets` : null, [chain, address, tab]);
   const activityActive = tab === "transactions" || tab === "transfers" || tab === "internal";
   const activity = useApi<{ items: ActivityRow[] }>(
     activityActive && base ? `${base}/activity` : null,
-    [chain, address, tab, cursor, direction, token],
+    [chain, address, tab, cursor, direction, token, windowDays],
     activityActive
       ? {
           limit: 200,
           cursor: cursor || undefined,
           direction: direction || undefined,
           token: tab === "transfers" ? token || undefined : undefined,
+          from_time: activityFromTime,
         }
       : undefined,
   );
@@ -980,6 +997,7 @@ export default function AddressDetailPage() {
             cursor: cursorValue || undefined,
             direction: direction || undefined,
             token: token || undefined,
+            from_time: activityFromTime,
             // 全量视图跳过逐行元数据富化，仅保留本地索引原始列，避免 50 页被 Contract/Case 查询拖慢。
             full: 1,
           },
@@ -1157,6 +1175,21 @@ export default function AddressDetailPage() {
               <option value="in">流入 in</option>
               <option value="out">流出 out</option>
               <option value="self">自转 self</option>
+            </select>
+            <select
+              className="select"
+              style={{ flex: "0 1 150px", minWidth: 0 }}
+              aria-label="时间窗筛选"
+              value={String(windowDays)}
+              onChange={(event) => {
+                setWindowDays(Number(event.target.value));
+                updateParams({ cursor: null });
+              }}
+            >
+              <option value="7">最近 7 天</option>
+              <option value="30">最近 30 天</option>
+              <option value="90">最近 90 天</option>
+              <option value="0">全部时间（较慢）</option>
             </select>
             {tab === "transfers" ? (
               <>

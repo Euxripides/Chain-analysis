@@ -14,12 +14,19 @@ export function useApi<T>(
   deps: unknown[] = [],
   query?: Record<string, string | number | boolean | undefined | null>,
 ) {
-  const { client } = useAuth();
+  const { client, session } = useAuth();
   const [data, setData] = useState<T | null>(null);
   const [meta, setMeta] = useState<S5Meta>({});
   const [loading, setLoading] = useState(Boolean(path));
   const [error, setError] = useState<string | null>(null);
-  const queryKey = JSON.stringify(query ?? {});
+  /**
+   * 缓存键（React Query 在旧工作台的角色）：必须包含组织 / 工作区 / 对象路径 / 过滤条件。
+   * 少了 org/workspace 就会在切换工作区后复用上一个工作区的缓存（P1-20260913）。
+   */
+  const scopeKey = JSON.stringify({ org: session?.organization_id ?? "", ws: session?.workspace_id ?? "" });
+  const queryKey = JSON.stringify({ org: session?.organization_id ?? "", ws: session?.workspace_id ?? "", path: path ?? "", query: query ?? {} });
+  // 记录当前 data 属于哪个作用域：作用域一变立刻清空，避免闪现上一个工作区的数据。
+  const dataScopeRef = useRef(scopeKey);
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
@@ -31,6 +38,12 @@ export function useApi<T>(
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    // 作用域（组织/工作区）变化时先清空：新工作区在响应到达前不得显示旧数据。
+    if (dataScopeRef.current !== scopeKey) {
+      dataScopeRef.current = scopeKey;
+      setData(null);
+      setMeta({});
+    }
     setLoading(true);
     setError(null);
     try {
@@ -46,7 +59,7 @@ export function useApi<T>(
       if (!controller.signal.aborted) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, path, queryKey, ...deps]);
+  }, [client, path, queryKey, scopeKey, ...deps]);
 
   useEffect(() => {
     void load();
@@ -99,17 +112,36 @@ export interface JobEvent {
 /**
  * 任务 SSE：浏览器原生 EventSource 会在断线后自动携带 Last-Event-ID；
  * 同时用 REST 快照校准，旧 revision 事件不覆盖新状态（§18.11）。
+ *
+ * 工作区作用域隔离（P1-20260913-SSE）：
+ *   1. 连接按 `组织:工作区` 建立，作用域变化时 effect 重跑 -> 旧连接立即 close，
+ *      游标（lastEventID）归零，绝不把 wsA 的 Last-Event-ID 带进 wsB 的连接；
+ *   2. 每帧回调前再比对一次"打开连接时的作用域"与"当前作用域"，不一致就丢弃该帧
+ *      并关闭连接 —— 页面即使因为任何原因还没卸载，也不可能消费旧工作区的事件。
+ * 这两条都是真实的服务端作用域边界（/api/v2/jobs/{id}/events 由后端按会话工作区过滤）。
  */
 export function useJobStream(jobID: string | null, onEvent: (event: JobEvent) => void) {
+  const { session } = useAuth();
+  const scope = `${session?.organization_id ?? ""}:${session?.workspace_id ?? ""}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
   const [connected, setConnected] = useState(false);
   const [lastEventID, setLastEventID] = useState("0");
   const handlerRef = useRef(onEvent);
   handlerRef.current = onEvent;
 
   useEffect(() => {
-    if (!jobID) return;
+    setConnected(false);
+    setLastEventID("0");
+    if (!jobID || scope === ":") return;
+    const openedScope = scope;
     const source = new EventSource(`/api/v2/jobs/${encodeURIComponent(jobID)}/events`, { withCredentials: true });
     const update = (message: MessageEvent<string>) => {
+      if (scopeRef.current !== openedScope) {
+        source.close();
+        setConnected(false);
+        return;
+      }
       if (message.lastEventId) setLastEventID(message.lastEventId);
       try {
         const parsed = JSON.parse(message.data) as JobEvent;
@@ -129,9 +161,9 @@ export function useJobStream(jobID: string | null, onEvent: (event: JobEvent) =>
       source.removeEventListener("snapshot", snapshot as EventListener);
       source.close();
     };
-  }, [jobID]);
+  }, [jobID, scope]);
 
-  return { connected, lastEventID };
+  return { connected, lastEventID, scope };
 }
 
 /** 大整数/十进制字符串展示：绝不经过 JS number 丢失精度。 */

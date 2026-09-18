@@ -1,0 +1,92 @@
+### CROSS-REFERENCE to the dependency-upgrade remediation evidence root  utc=2026-09-13T02:12:31Z
+### reference root = /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/dependency-remediation-20260913T014342Z
+### This file is a read-only capture (names/sizes/hashes/versions only).
+
+--- top-level listing (names, sizes, mtimes; no content of unknown files) ---
+total 192
+drwxrwxr-x 15 euripides euripides  4096 Sep 13 09:01 .
+drwxrwxr-x  9 euripides euripides  4096 Sep 13 08:47 ..
+-rw-rw-r--  1 euripides euripides    32 Sep 13 08:47 00-go-version.txt
+-rw-rw-r--  1 euripides euripides   264 Sep 13 08:47 01-baseline-sha.txt
+-rw-rw-r--  1 euripides euripides  6197 Sep 13 08:47 02-modlist-pre.txt
+-rw-rw-r--  1 euripides euripides   264 Sep 13 08:48 03-after-sha.txt
+-rw-rw-r--  1 euripides euripides  6148 Sep 13 08:48 04-modlist-post.txt
+-rw-rw-r--  1 euripides euripides   131 Sep 13 08:48 05-direct-requires.txt
+-rw-rw-r--  1 euripides euripides    10 Sep 13 08:48 06-go-directive.txt
+-rw-rw-r--  1 euripides euripides  6148 Sep 13 08:49 07-modlist-verify.txt
+-rw-rw-r--  1 euripides euripides    21 Sep 13 08:49 08-go-mod-verify.txt
+-rw-rw-r--  1 euripides euripides     1 Sep 13 08:49 09-tidy-diff.txt
+-rw-rw-r--  1 euripides euripides   146 Sep 13 08:49 10-current-sha.txt
+-rw-rw-r--  1 euripides euripides    11 Sep 13 08:49 11-go-directive-verify.txt
+-rw-r--r--  1 euripides euripides  1733 Sep 13 08:49 12-stage1-console-observed.txt
+-rw-rw-r--  1 euripides euripides     2 Sep 13 08:49 13-stage1b-strict-verify.exitcode
+-rw-rw-r--  1 euripides euripides  1533 Sep 13 08:49 13-stage1b-strict-verify-raw.txt
+-rw-r--r--  1 euripides euripides  2521 Sep 13 08:49 14-DEFECT-RECORD.md
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 09:00 argv-exposure-scope-20260913T020056Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:51 build-20260913T015005Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:55 corrective-20260913T015556Z
+-rw-r--r--  1 euripides euripides  4911 Sep 13 09:01 DEFECT-RECORD-2026-09-13-round2-D10-argv.md
+-rw-r--r--  1 euripides euripides  4705 Sep 13 09:01 DEFECT-RECORD-2026-09-13-round2-D10-correction-D11.md
+-rw-r--r--  1 euripides euripides  4018 Sep 13 08:59 DEFECT-RECORD-2026-09-13-round2.md
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:58 deploy-20260913T015815Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:57 frontend-xlsx-20260913T015712Z
+-rw-rw-r--  1 euripides euripides  2650 Sep 12 23:27 go.mod.pre-dependency-upgrade.bak
+-rw-rw-r--  1 euripides euripides 19064 Sep 12 22:54 go.sum.pre-dependency-upgrade.bak
+-rw-r--r--  1 euripides euripides 11365 Sep 13 08:59 HANDOVER-20260913-1005-dependency.md
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:58 postdeploy-regression-20260913T015858Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:57 protocol-corrective-20260913T015751Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:57 protocol-postverify-20260913T015638Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 09:01 safe-psql-20260913T020109Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:52 scan-20260913T015214Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:55 strict-postverify-20260913T015441Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:55 strict-postverify-secret-20260913T015525Z
+drwxrwxr-x  2 euripides euripides  4096 Sep 13 08:59 strict-validator-20260913T015910Z
+
+--- subdirectory names ---
+argv-exposure-scope-20260913T020056Z
+build-20260913T015005Z
+corrective-20260913T015556Z
+deploy-20260913T015815Z
+frontend-xlsx-20260913T015712Z
+postdeploy-regression-20260913T015858Z
+protocol-corrective-20260913T015751Z
+protocol-postverify-20260913T015638Z
+safe-psql-20260913T020109Z
+scan-20260913T015214Z
+strict-postverify-20260913T015441Z
+strict-postverify-secret-20260913T015525Z
+strict-validator-20260913T015910Z
+
+--- key hash/version files (small text files only) ---
+== 00-go-version.txt (sha256 a2e9ab7f897170401c0be97faade5de382483d84597b8537ef9bf726420afe9b) ==
+go version go1.26.7 linux/amd64
+
+== 01-baseline-sha.txt (sha256 2d2dfc2e5bccfdca2362e09b05a3d462c22aed45d2a03e30017bd6f91f444d8f) ==
+4e0f98fa4e9258cd07c1acc6f0ce5bd762cba5ba9343bcbd28b1f1a33644c36c  go.mod
+34147fb9944ea49b8470e4c0e0da85eb53ce60706975b2d5fe34c2011ee4b6b2  go.sum
+-rw-rw-r-- 2 euripides euripides  2650 Sep 12 23:27 go.mod
+-rw-rw-r-- 2 euripides euripides 19064 Sep 12 22:54 go.sum
+
+== 03-after-sha.txt (sha256 433917802778d3d0169a8851936750289e80543569b93677ab6d2d866cb6e5eb) ==
+87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c  go.mod
+654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb  go.sum
+-rw-rw-r-- 2 euripides euripides  2601 Sep 13 08:48 go.mod
+-rw-rw-r-- 2 euripides euripides 18871 Sep 13 08:48 go.sum
+
+== 06-go-directive.txt (sha256 616114e27019e3ae223fe065832aeaa48a58eb9eff5b0d21610c9a24a45a2895) ==
+go 1.26.0
+
+== 08-go-mod-verify.txt (sha256 b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd) ==
+all modules verified
+
+== 10-current-sha.txt (sha256 afa51e6cffe0dbb17f7c27269290dd8f2b3a3345f40c6aef39f27378a8951d7b) ==
+87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c  go.mod
+654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb  go.sum
+
+== 11-go-directive-verify.txt (sha256 7eec5196bf4228ef1b8c968ad38f83568f121e7b327bdf84bc126e089ddf743c) ==
+go 1.26.0 
+
+--- live check: does the recorded base go.mod/go.sum digest still hold? ---
+87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c  /home/euripides/projects/blockchain-platform/backend/go.mod
+654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb  /home/euripides/projects/blockchain-platform/backend/go.sum
+(compare with 01-baseline-sha.txt / 10-current-sha.txt above)

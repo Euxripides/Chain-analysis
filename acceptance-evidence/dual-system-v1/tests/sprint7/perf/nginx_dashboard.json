@@ -1,0 +1,28 @@
+{
+  "label": "nginx_dashboard",
+  "url": "http://127.0.0.1:8088/api/v2/dashboard",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000148812,
+  "requests": 51930,
+  "rps": 2596.480680625848,
+  "errors": 51930,
+  "status_counts": {
+    "401": 51922
+  },
+  "p50_ms": 1.52603,
+  "p90_ms": 7.547448,
+  "p95_ms": 9.711614,
+  "p99_ms": 15.270323000000001,
+  "min_ms": 0.222088,
+  "max_ms": 65.22567699999999,
+  "avg_ms": 3.0390936916811397,
+  "avg_response_bytes": 224.96533795493934,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded"
+  ]
+}

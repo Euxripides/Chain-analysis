@@ -1,0 +1,14 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 182
+
+{
+  "passed": 37,
+  "failed": 0,
+  "skipped": 21,
+  "flaky": 0,
+  "rc": 0,
+  "status": "PASS",
+  "criteria": "failed==0 and rc==0 and passed>0",
+  "entry": "https://127.0.0.1:8448"
+}

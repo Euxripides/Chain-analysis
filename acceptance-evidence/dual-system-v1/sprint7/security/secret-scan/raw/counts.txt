@@ -1,0 +1,72 @@
+2026-09-12T23:50:37+07:00 | AUDIT-002 secret scan START  sec=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/secret-scan
+2026-09-12T23:50:37+07:00 | [0] 扫描目标规模
+2026-09-12T23:50:37+07:00 | api_log      = /tmp/api.log  bytes=8566393 lines=38878
+2026-09-12T23:50:37+07:00 | worker_log   = /tmp/worker.log  bytes=29158011 lines=125882
+2026-09-12T23:50:37+07:00 | [1] wrote /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/secret-scan/raw/api-log-scan.txt (223 lines, 63001 bytes)
+2026-09-12T23:50:40+07:00 | [1] wrote /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/secret-scan/raw/worker-log-scan.txt (52516 lines, 16610641 bytes)
+2026-09-12T23:50:42+07:00 | [1b] wrote /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/secret-scan/raw/entropy-residual-api.txt (682 bytes)
+2026-09-12T23:50:48+07:00 | [1b] wrote /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/secret-scan/raw/entropy-residual-worker.txt (684 bytes)
+2026-09-12T23:50:48+07:00 | [1c] masked markers: api=220 worker=146
+2026-09-12T23:50:49+07:00 | [1d] known-secret negative control leaks=0 (raw/known-secret-negative-control.txt)
+# per-keyword matched-LINE counts (case-insensitive)
+# generated: 2026-09-12T23:50:49+07:00
+password         api=0        worker=0       
+passwd           api=0        worker=0       
+pwd              api=0        worker=0       
+token            api=44       worker=52425   
+secret           api=32       worker=0       
+api_key          api=110      worker=73      
+apikey           api=0        worker=0       
+api-key          api=17       worker=0       
+authorization    api=0        worker=0       
+bearer           api=0        worker=0       
+cookie           api=0        worker=0       
+set-cookie       api=0        worker=0       
+private_key      api=0        worker=0       
+access_key       api=0        worker=0       
+credential       api=1        worker=0       
+2026-09-12T23:50:56+07:00 | [2] audit table: rows=1340 detail_hits=186 before_hits=11 after_hits=11
+2026-09-12T23:51:50+07:00 | [3] selftest=PASS valpath=300 bare=52687 (a)=52976 (b)=11 (c)=0
+# ===== AUDIT-002 counts =====
+# generated_at: 2026-09-12T23:51:50+07:00
+# started_at  : 2026-09-12T23:50:37+07:00
+api_log_path=/tmp/api.log
+api_log_bytes=8566393
+api_log_lines=38878
+api_log_keyword_matched_lines=207
+api_log_strongsignal_cookie=0
+api_log_strongsignal_setcookie=0
+api_log_strongsignal_authz=0
+api_log_strongsignal_jwt=0
+api_log_strongsignal_connstr=0
+api_log_strongsignal_assign24=0
+api_log_entropy_residual=0
+worker_log_path=/tmp/worker.log
+worker_log_bytes=29158011
+worker_log_lines=125882
+worker_log_keyword_matched_lines=52500
+worker_log_strongsignal_cookie=0
+worker_log_strongsignal_setcookie=0
+worker_log_strongsignal_authz=0
+worker_log_strongsignal_jwt=0
+worker_log_strongsignal_connstr=0
+worker_log_strongsignal_assign24=0
+worker_log_entropy_residual=0
+db_scan_enabled=1
+db_table=public.audit_events_v2
+db_table_rows=1340
+db_hits_detail=186
+db_hits_before=11
+db_hits_after=11
+db_strongsignal_jwt=0
+classifier_selftest=PASS
+classifier_valuepath=300
+classifier_bare=52687
+classifier_strong=0
+class_a_keyname=52976
+class_b_masked=11
+class_c_plaintext=0
+total_keyword_hits=52987
+finished_at=2026-09-12T23:51:51+07:00
+2026-09-12T23:51:53+07:00 | AUDIT-002 secret scan DONE  selftest=PASS (a)=52976 (b)=11 (c)=0
+RESULT: PASS — 0 条真实明文秘密命中，§23.8 门禁满足

@@ -1,0 +1,82 @@
+=== utc=2026-09-13T02:18:16Z host=dataserver ===
+=== the 12 pre-existing artifacts recorded in sbom-artifact-hashes.txt, re-hashed now ===
+a88121ed7c9b7bbdac8f7746d72d8b1b6e95abe9577753ef8d9e48ec6dd72740  backend.cdx.json
+aa9b008c9da0ebcf3ece0bff161bb681d953ff6117a5dc8b75e53d6e6c75b550  backend.spdx.json
+3b1f94f01b7ec6aae5f2198d37ffbb05c429f76e50c53565bce28ec749618b46  frontend.cdx.json
+554ead9edfc7580a608c16c73d3f3794b8d9e5bbb756d39d702adda918fc3199  frontend.spdx.json
+d9fb5be8078be2ac21ff48110999fdffead8ce3a2c8e55ad4412fa878e65dc2e  syft-version.txt
+bcd8fcf0c63c82524123a94464691d33076aa7952b120aee443d7c4335e0be59  syft-image-info.txt
+b347082638a7510a0c713ffc98a442b6ce6cdaf5f271e79d79c5c0ba921099f6  commands.txt
+585d491765129d134646a5cd36d68877f7cf744abfa27cb4d3e204b5bad6ac7a  SUMMARY.md
+04e803f223cf0cf38efc63049ec28f4512740aad753dfa62ceb3d2e943105b47  validation.txt
+fa90ea03825d33bafee1136df261c7bd13a807e302e498bbaa27733a8358777c  backend-scan-stability.txt
+122374f909770875f12bade70ff88b93a830f1d40ea2bfb8780f252d04470e4a  SCAN-TARGET-CORRECTION.md
+51b25701e0dd6a1eddf61148e222babf99f7f017087795365f0c42d02695d485  sbom_report.py
+
+=== pre-existing files (outside the new scope dir) modified after 2026-09-13 09:00:00 ===
+(nothing listed above => no pre-existing file was modified by this scope)
+
+=== newest mtimes among PRE-EXISTING files ===
+2026-09-13+00:01:05.0453533920 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/SUMMARY.md
+2026-09-13+00:01:05.0453533920 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/validation.txt
+2026-09-13+00:01:05.1543543650 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/sbom-artifact-hashes.txt
+2026-09-13+00:07:02.0343829710 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/SCAN-TARGET-STABILITY-REVIEW-NOTE.md
+
+=== counts ===
+pre-existing files in the parent sbom dir: 30
+files in the new scope dir:                54
+=== every file of the new scope dir (relative) ===
+api.cdx.json
+api.spdx.json
+artifact-hashes.txt
+buildinfo-all-artifacts.txt
+buildinfo-api.txt
+buildinfo-migrate.txt
+buildinfo-worker.txt
+build-manifest-and-report-dependency-upgrade-20260913T015815Z.py
+capture-cross-reference.sh
+commands.txt
+CROSSCHECK-CORRECTION-20260913.md
+crosscheck-local-vm-dependency-upgrade-20260913T015815Z.py
+crosscheck-local-vm.sha256
+cross-reference-dependency-remediation.txt
+DEFECT-RECORD-20260913-validator-passes.md
+environment-probe.txt
+generate-sbom-dependency-upgrade-20260913T015815Z.sh
+generator-console.txt
+logs/api-cdx.log
+logs/api-spdx.log
+logs/migrate-cdx.log
+logs/migrate-spdx.log
+logs/module-crosscheck.err.log
+logs/syft-binary-extract.log
+logs/syft-image-save.log
+logs/syft-version.log
+logs/validator.log
+logs/worker-cdx.log
+logs/worker-spdx.log
+migrate.cdx.json
+migrate.spdx.json
+module-crosscheck-source.txt
+module-crosscheck-summary.txt
+module-crosscheck.txt
+pilot-syft-invocation.sh
+pilot-syft-invocation.txt
+probe-environment.sh
+REPORT.md
+sbom-manifest.json
+scan-stability.txt
+syft-binary-sha256.txt
+syft-image-identity.txt
+syft-version.txt
+validate-sbom-scope-dependency-upgrade-20260913T015815Z.py
+validate-sbom-scope-dependency-upgrade-20260913T015815Z-v2.py
+validation.json
+validation.txt
+validation-v2.json
+validation-v2.txt
+verify-no-modifications.sh
+windows-side-hashes-round2.sha256
+windows-side-hashes.sha256
+worker.cdx.json
+worker.spdx.json

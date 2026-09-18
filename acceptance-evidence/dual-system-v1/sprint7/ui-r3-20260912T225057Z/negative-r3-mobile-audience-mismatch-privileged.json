@@ -1,0 +1,9 @@
+{
+  "case": "owner-role identity, user-audience session, X-Auth-Audience: user -> admin route",
+  "login_status": 200,
+  "login_audience": "user",
+  "status": 403,
+  "request_id": "f3d47dc2-e740-44e6-bfb7-14a8a80fd0e4",
+  "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:52:17.033Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"audience_mismatch\"}}}\n",
+  "invariant": "会话受众本身是独立闸门：权限再高，user 受众也不得调用 admin:* 路由"
+}

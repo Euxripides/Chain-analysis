@@ -1,0 +1,11 @@
+[Unit]
+Description=每月 1 日 03:30 触发区块链平台月度备份
+
+[Timer]
+OnCalendar=*-*-01 03:30:00
+Persistent=true
+AccuracySec=5min
+Unit=blockchain-backup.service
+
+[Install]
+WantedBy=timers.target

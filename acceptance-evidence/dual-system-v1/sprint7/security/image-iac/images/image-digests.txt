@@ -1,0 +1,24 @@
+=== exit markers (image scan) ===
+169:INNER_DONE=1
+170:DOCKER_RUN_EXIT=0
+
+=== produced files ===
+total 6028
+drwxrwxr-x 2 euripides euripides    4096 Sep 12 23:49 .
+drwxrwxr-x 5 euripides euripides    4096 Sep 12 23:33 ..
+-rw-r--r-- 1 root      root       775263 Sep 12 23:48 clickhouse-clickhouse-server-26.7.json
+-rw-r--r-- 1 root      root        92684 Sep 12 23:48 clickhouse-clickhouse-server-26.7.txt
+-rw-rw-r-- 1 euripides euripides      97 Sep 12 23:49 image-digests.txt
+-rw-r--r-- 1 root      root      2201110 Sep 12 23:48 minio-minio-latest.json
+-rw-r--r-- 1 root      root       288678 Sep 12 23:48 minio-minio-latest.txt
+-rw-r--r-- 1 root      root       165095 Sep 12 23:48 nats-2-alpine.json
+-rw-r--r-- 1 root      root        22218 Sep 12 23:48 nats-2-alpine.txt
+-rw-r--r-- 1 root      root      2151542 Sep 12 23:48 postgres-18.json
+-rw-r--r-- 1 root      root       431122 Sep 12 23:48 postgres-18.txt
+-rw-rw-r-- 1 euripides euripides   11383 Sep 12 23:48 trivy-images-run.log
+
+=== image digests (host docker) ===
+postgres:18	["postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"]|sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280|2026-08-25T00:41:16.064197635Z
+clickhouse/clickhouse-server:26.7	["clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e"]|sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e|2026-08-21T14:21:02.953425965Z
+nats:2-alpine	["nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3"]|sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3|2026-08-27T18:29:05.681698961Z
+minio/minio:latest	["minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"]|sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e|2025-09-07T18:42:37.017942402Z

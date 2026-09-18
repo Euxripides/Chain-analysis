@@ -1,0 +1,13 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 751
+
+preserved_at=2026-09-13T03:12:53+07:00
+state=s5-drill2 被人工停止（systemctl --user stop）；未产出 PASS/FAIL 行，EVIDENCE_DIR 为空
+NOTE=本轮**不**判定为 PASS，也**不**判定为「测试未开始」；它是一次中止的运行，原始日志完整保留。
+observation_by_supervisor=04:10:56 docker top 观察到 PG backend PID3291991 CPU81.5% STAT=Rs，
+  说明当时确实有真实 PG backend 在高 CPU 执行 before 快照 SQL；
+  因此「heredoc 未收到 => stdin 死锁」的结论**证据不足**，可能是慢查询。
+root_cause_status=UNRESOLVED（执行中 / 锁等待 / IO / stdin 四种可能未区分；下一轮用 pg_stat_activity + statement_timeout + EXPLAIN 取证）
+--- log ---
+11 /tmp/s5-drill2.log

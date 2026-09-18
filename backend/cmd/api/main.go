@@ -26,18 +26,36 @@ func main() {
 		log.Error("bootstrap failed", "err", err)
 		os.Exit(1)
 	}
-	if recovered, err := infra.Store.FailInterruptedExports(ctx); err != nil {
-		log.Error("failed to reconcile interrupted exports", "err", err)
-	} else if recovered > 0 {
-		log.Warn("reconciled interrupted exports", "count", recovered)
+	// P1-B safe standby startup. A second API instance started beside the running
+	// production process must not mutate anything while it boots. API_STANDBY_STARTUP=1
+	// keeps the two things the cross-instance acceptance gate exercises -- the HTTP
+	// API and the event-bus forwarder -- and skips the startup export reconciliation
+	// plus the three background loops. The switch changes no route, no middleware,
+	// no handler and no readiness check; that is exactly what the standby negative
+	// calibration asserts. API_STARTUP_FAIL_INTERRUPTED_EXPORTS=0 disables only the
+	// export reconciliation, for a normal instance started while exports are quiet.
+	standby := os.Getenv("API_STANDBY_STARTUP") == "1"
+	switch {
+	case standby:
+		log.Warn("standby startup: skipping interrupted-export reconciliation and background loops")
+	case os.Getenv("API_STARTUP_FAIL_INTERRUPTED_EXPORTS") == "0":
+		log.Warn("interrupted-export reconciliation disabled by API_STARTUP_FAIL_INTERRUPTED_EXPORTS=0")
+	default:
+		if recovered, err := infra.Store.FailInterruptedExports(ctx); err != nil {
+			log.Error("failed to reconcile interrupted exports", "err", err)
+		} else if recovered > 0 {
+			log.Warn("reconciled interrupted exports", "count", recovered)
+		}
 	}
 
 	// V1.3：API 侧只需要 Method 索引刷新（异步补全与回填在 Worker 进程执行）
 	runCtx, cancelBackground := context.WithCancel(ctx)
 	defer cancelBackground()
-	infra.StartMethodBackground(runCtx, cfg, log, false)
-	infra.StartRPCBackground(runCtx, cfg, log, false)
-	infra.StartOutboxBackground(runCtx, log)
+	if !standby {
+		infra.StartMethodBackground(runCtx, cfg, log, false)
+		infra.StartRPCBackground(runCtx, cfg, log, false)
+		infra.StartOutboxBackground(runCtx, log)
+	}
 
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,

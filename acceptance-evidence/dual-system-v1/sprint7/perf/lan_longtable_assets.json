@@ -1,0 +1,28 @@
+{
+  "label": "lan_longtable_assets",
+  "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.004491895,
+  "requests": 370,
+  "rps": 18.495845930107286,
+  "errors": 8,
+  "status_counts": {
+    "200": 362
+  },
+  "p50_ms": 420.47848799999997,
+  "p90_ms": 538.774714,
+  "p95_ms": 581.033126,
+  "p99_ms": 789.31078,
+  "min_ms": 23.081117000000003,
+  "max_ms": 890.94195,
+  "avg_ms": 432.176584332432,
+  "avg_response_bytes": 7556.994594594595,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded"
+  ]
+}

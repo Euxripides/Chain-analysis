@@ -1,0 +1,51 @@
+{
+  "case": "anonymous -> V1 backend page",
+  "service_denials": [
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "status": 401,
+      "request_id": "13791996-3465-4700-95a6-2b493cfeace7",
+      "trace_id": "9f3e92d4-feaa-4ad8-b25e-daf33ec7384c",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T23:02:51.867Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "status": 401,
+      "request_id": "51709d7d-77ce-49c2-9b5e-895417324000",
+      "trace_id": "54e997ee-1a7a-4183-892f-88c06f7d860f",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T23:02:51.869Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/control/states",
+      "status": 401,
+      "request_id": "3abdf905-964e-4399-9d22-2a1fe6e47f21",
+      "trace_id": "5d7f13cd-3310-4633-949e-3fce17e3fa11",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T23:02:52.927Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    },
+    {
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h&provider=all&chain=all",
+      "status": 401,
+      "request_id": "ee16892a-13e3-41ba-a997-30159fb5bd5d",
+      "trace_id": "5ddc074e-87e8-4f4a-b454-b6865733670c",
+      "audience_header": "admin",
+      "csrf_header": null,
+      "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T23:02:52.927Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n"
+    }
+  ],
+  "denied_request_ids": [
+    "13791996-3465-4700-95a6-2b493cfeace7",
+    "51709d7d-77ce-49c2-9b5e-895417324000",
+    "3abdf905-964e-4399-9d22-2a1fe6e47f21",
+    "ee16892a-13e3-41ba-a997-30159fb5bd5d"
+  ]
+}

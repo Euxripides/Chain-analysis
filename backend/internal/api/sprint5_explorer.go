@@ -23,8 +23,11 @@ import (
 
 var (
 	evmAddressRe = regexp.MustCompile(`^0x[0-9a-f]{40}$`)
-	evmTxHashRe  = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
-	hexHashRe    = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+	// evmSearchChains 是 0x 地址可能出现的链。搜索必须带上 chain 谓词，
+	// 否则会退化成跨全部链的全表扫描（见 searchChainIndex 的注释）。
+	evmSearchChains = []string{"eth", "bsc"}
+	evmTxHashRe     = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+	hexHashRe       = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 )
 
 type explorerSubject struct {
@@ -100,11 +103,21 @@ func (s *Server) handleExplorerOverview(w http.ResponseWriter, r *http.Request) 
 	}
 	if s.deps.CH != nil {
 		// address_activity 主键前缀 (chain,address) 上一跳聚合，热路径 <1s。
+		//
+		// 去重语义（ReplacingMergeTree 的最终态）保持不变，但不再用 FINAL：
+		// 去重键就是排序键 (chain,address,timestamp,tx_hash,activity_type,counterparty,token_address)，
+		// chain/address 已由谓词固定，所以 uniqExact(其余列) 与 count() FINAL 同值，而不做
+		// FINAL 合并读。2026-09-17 同地址实测：count() FINAL 1.330 s -> 0.270 s（30211 = 30211）、
+		// uniqExact(counterparty) 0.330 s -> 0.070 s（297 = 297）、
+		// countIf(dataset='transactions') 0.391 s -> 0.048 s（1232 = 1232）；min/max 与去重无关，
+		// 两者耗时相同（0.230 s / 0.241 s）且输出一致，因此同样只去掉 FINAL。
 		var activityCount, activityTx, activityTransfer int64
 		err := s.deps.CH.DB().QueryRow(ctx, `
-			SELECT toInt64(count()), min(timestamp), max(timestamp), toUInt64(uniqExact(counterparty)),
-			       toInt64(countIf(dataset='transactions')), toInt64(countIf(dataset='token_transfers'))
-			FROM blockchain.address_activity FINAL
+			SELECT toInt64(uniqExact(timestamp, tx_hash, activity_type, counterparty, token_address)),
+			       min(timestamp), max(timestamp), toUInt64(uniqExact(counterparty)),
+			       toInt64(uniqExactIf((timestamp, tx_hash, activity_type, counterparty, token_address), dataset='transactions')),
+			       toInt64(uniqExactIf((timestamp, tx_hash, activity_type, counterparty, token_address), dataset='token_transfers'))
+			FROM blockchain.address_activity
 			WHERE chain = ? AND address = ?`, sub.Chain, sub.Normalized).
 			Scan(&activityCount, &tkFirst, &tkLast, &counterparties, &activityTx, &activityTransfer)
 		if err == nil && activityCount > 0 {
@@ -232,15 +245,32 @@ func (s *Server) localHistoricalNetFlow(ctx context.Context, sub explorerSubject
 		return []map[string]any{}, nil
 	}
 	// 热路径：address_activity 以 (chain,address) 为主键前缀，避免对 8M+ 转账做全量聚合。
+	//
+	// sumIf 类聚合**不能**直接去掉 FINAL：重复行会被重复累加，金额会翻倍。这里改用
+	// 与 FINAL 等价的显式去重——先按去重键（= 排序键，chain/address 已由谓词固定）
+	// 取 source_ingested_at 最大的一行，再在外层按 token_address 求和。
+	// 2026-09-17 同地址实测：1.174 s -> 0.214 s，且输出逐字节相同
+	// （in_raw 97151338.270417 / out_raw 97151338.170417 / cnt 18563）。
+	// 注意别名：argMax 的输出不能与真实列同名，否则 ClickHouse 会把外层引用解析成聚合别名
+	// （ILLEGAL_AGGREGATION，Code 184），因此内层统一用 sym/dec/ds/dir/amt，外层再改名。
 	rows, err := s.deps.CH.DB().Query(ctx, `
-		SELECT token_address, any(token_symbol) AS symbol, any(token_decimals) AS decimals,
-		       any(dataset) AS dataset,
-		       toString(sumIf(amount, direction IN ('in','self'))) AS in_raw,
-		       toString(sumIf(amount, direction IN ('out','self'))) AS out_raw,
+		SELECT d.token_address AS token_address, any(d.sym) AS symbol, any(d.dec) AS decimals,
+		       any(d.ds) AS dataset,
+		       toString(sumIf(d.amt, d.dir IN ('in','self'))) AS in_raw,
+		       toString(sumIf(d.amt, d.dir IN ('out','self'))) AS out_raw,
 		       toInt64(count()) AS cnt
-		FROM blockchain.address_activity FINAL
-		WHERE chain = ? AND address = ?
-		GROUP BY token_address ORDER BY cnt DESC LIMIT 100`, sub.Chain, sub.Normalized)
+		FROM (
+			SELECT timestamp, tx_hash, activity_type, counterparty, token_address,
+			       argMax(token_symbol, source_ingested_at) AS sym,
+			       argMax(token_decimals, source_ingested_at) AS dec,
+			       argMax(dataset, source_ingested_at) AS ds,
+			       argMax(direction, source_ingested_at) AS dir,
+			       argMax(amount, source_ingested_at) AS amt
+			FROM blockchain.address_activity
+			WHERE chain = ? AND address = ?
+			GROUP BY timestamp, tx_hash, activity_type, counterparty, token_address
+		) AS d
+		GROUP BY d.token_address ORDER BY cnt DESC LIMIT 100`, sub.Chain, sub.Normalized)
 	if err == nil {
 		defer rows.Close()
 		out := []map[string]any{}
@@ -376,8 +406,12 @@ func (s *Server) localExplorerCoverage(ctx context.Context, sub explorerSubject)
 	if s.deps.Store == nil {
 		return map[string]any{"items": items, "source": "postgres:dataset_coverage"}
 	}
+	// dataset_coverage **没有** from_timestamp / to_timestamp 列（时间窗只落在 download_shards 上）。
+	// 曾经把它们写进 SELECT：语句失败 -> 事务 aborted -> 提交门把请求改写成 409，
+	// 覆盖信息在界面上永远是空的（2026-09-16 定位）。这里只选真实存在的列，
+	// 时间字段如实返回 null，而不是编造一个值。
 	rows, err := s.deps.Store.Pool.Query(ctx, `
-		SELECT dataset, min(from_block), max(to_block), min(from_timestamp), max(to_timestamp), max(updated_at)
+		SELECT dataset, min(from_block), max(to_block), max(updated_at)
 		FROM dataset_coverage WHERE chain=$1 AND subject=$2
 		GROUP BY dataset ORDER BY dataset`, sub.Chain, sub.Normalized)
 	if err == nil {
@@ -385,8 +419,9 @@ func (s *Server) localExplorerCoverage(ctx context.Context, sub explorerSubject)
 		for rows.Next() {
 			var ds string
 			var fromBlock, toBlock *int64
-			var fromTS, toTS, updated *time.Time
-			if err := rows.Scan(&ds, &fromBlock, &toBlock, &fromTS, &toTS, &updated); err != nil {
+			var updated *time.Time
+			var fromTS, toTS *time.Time
+			if err := rows.Scan(&ds, &fromBlock, &toBlock, &updated); err != nil {
 				continue
 			}
 			items = append(items, map[string]any{"dataset": ds, "from_block": fromBlock, "to_block": toBlock,
@@ -452,10 +487,21 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 			Token:     strings.TrimSpace(r.URL.Query().Get("token")),
 			MinAmount: strings.TrimSpace(r.URL.Query().Get("min_amount")),
 			MaxAmount: strings.TrimSpace(r.URL.Query().Get("max_amount")),
+			// P1-1 第 3 项：活动是长表路径（实测 8.09s @ limit=200，全量窗口）。服务层的
+			// Filter 早已支持时间窗（service.go 会把它写成 WHERE timestamp >=/<= ），
+			// 只是 handler 从来没有把这两个参数透传进来，前端也就只能全量拉。
+			FromTime: parseTimeQuery(r, "from_time"),
+			ToTime:   parseTimeQuery(r, "to_time"),
 		},
 	}
-	res, qerr := s.explorer.Query(r.Context(), req)
+	// P1-1：活动读是长表路径（实测 8.09s @ limit=200），统一套交互扫描预算。
+	readCtx, cancelRead := explorerReadContext(r.Context())
+	defer cancelRead()
+	res, qerr := s.explorer.Query(readCtx, req)
 	if qerr != nil {
+		if explorerScanRefusal(w, r, readCtx, qerr, "活动查询") {
+			return
+		}
 		if errors.Is(qerr, explorer.ErrInvalidCursor) || errors.Is(qerr, explorer.ErrInvalidFilter) {
 			validationError(w, r, "查询参数不合法", []fieldError{{Field: "cursor", Code: "invalid", Message: qerr.Error()}})
 			return
@@ -488,35 +534,28 @@ func (s *Server) handleExplorerCounterparties(w http.ResponseWriter, r *http.Req
 	}
 	items := []map[string]any{}
 	if s.deps.CH != nil {
+		// S7-PERF-01 修复（真实缺陷，见 acceptance-evidence/.../perf/explorer-counterparties-defect.md）：
+		// 原实现对 transactions 与 token_transfers 做 UNION ALL 后再 sum()。
+		// 两个分支的金额类型不同（transactions.value_raw 经 toInt256OrZero 得到 Int256，
+		// token_transfers.amount 是 Decimal(76,38)），UNION 结果是 Variant(Int256, Decimal(76,38))，
+		// 外层 sum() 直接报 Code:43 ILLEGAL_TYPE_OF_ARGUMENT →
+		// 该端点**100% 返回 503**（实测 query_log 中 ExceptionBeforeStart，耗时 3ms）。
+		//
+		// 改用已物化的 address_activity（含 counterparty/direction/amount 三个维度）：
+		//   * 语义等价：对手方与笔数与原 UNION 查询逐行一致（已用同一地址实测比对）；
+		//   * 单一金额类型，无 Variant；
+		//   * 排序键以 (chain, address) 开头，实测 0.17s（原查询 12.24s 且失败）。
 		rows, qerr := s.deps.CH.DB().Query(r.Context(), `
 			SELECT counterparty,
-			       sum(tx_count) AS tx_count,
-			       toString(sum(in_raw)) AS in_raw,
-			       toString(sum(out_raw)) AS out_raw,
-			       min(first_seen) AS first_seen,
-			       max(last_seen) AS last_seen
-			FROM (
-				SELECT if(from_address = ?, to_address, from_address) AS counterparty,
-				       count() AS tx_count,
-				       sumIf(toInt256OrZero(value_raw), to_address = ?) AS in_raw,
-				       sumIf(toInt256OrZero(value_raw), from_address = ?) AS out_raw,
-				       min(timestamp) AS first_seen, max(timestamp) AS last_seen
-				FROM blockchain.transactions FINAL
-				WHERE chain = ? AND (from_address = ? OR to_address = ?)
-				GROUP BY counterparty
-				UNION ALL
-				SELECT if(from_address = ?, to_address, from_address) AS counterparty,
-				       count() AS tx_count,
-				       sumIf(amount, to_address = ?) AS in_raw,
-				       sumIf(amount, from_address = ?) AS out_raw,
-				       min(timestamp) AS first_seen, max(timestamp) AS last_seen
-				FROM blockchain.token_transfers FINAL
-				WHERE chain = ? AND (from_address = ? OR to_address = ?)
-				GROUP BY counterparty
-			)
+			       toInt64(count()) AS tx_count,
+			       toString(sumIf(amount, direction IN ('in','self'))) AS in_raw,
+			       toString(sumIf(amount, direction IN ('out','self'))) AS out_raw,
+			       min(timestamp) AS first_seen,
+			       max(timestamp) AS last_seen
+			FROM blockchain.address_activity
+			WHERE chain = ? AND address IN (?, ?)
 			GROUP BY counterparty ORDER BY tx_count DESC LIMIT ?`,
-			sub.Normalized, sub.Normalized, sub.Normalized, sub.Chain, sub.Normalized, sub.Normalized,
-			sub.Normalized, sub.Normalized, sub.Normalized, sub.Chain, sub.Normalized, sub.Normalized, limit)
+			sub.Chain, sub.Normalized, sub.Address, limit)
 		if qerr != nil {
 			respondError(w, r, http.StatusServiceUnavailable, "DATA_UNAVAILABLE", "本地索引暂不可用", nil)
 			return
@@ -527,7 +566,11 @@ func (s *Server) handleExplorerCounterparties(w http.ResponseWriter, r *http.Req
 			var txCount int64
 			var firstSeen, lastSeen *time.Time
 			if err := rows.Scan(&counterparty, &txCount, &inRaw, &outRaw, &firstSeen, &lastSeen); err != nil {
-				continue
+				// S7-PERF-01：原先这里静默 continue，导致"ClickHouse 返回 50 行、接口返回 0 条"
+				// 这类缺陷无法被发现。扫描失败必须显式记录。
+				s.deps.Log.Error("explorer counterparties scan failed", "err", err)
+				respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "对手方聚合结果解析失败", nil)
+				return
 			}
 			items = append(items, map[string]any{
 				"counterparty": counterparty, "transaction_count": txCount,
@@ -538,8 +581,8 @@ func (s *Server) handleExplorerCounterparties(w http.ResponseWriter, r *http.Req
 	}
 	subject := map[string]any{"type": "address", "chain": sub.Chain, "address": sub.Address, "normalized_address": sub.Normalized}
 	respondOK(w, r, explorerEnvelope(subject, items, map[string]any{"count": len(items)}, nil,
-		map[string]any{"scope": "本地已入库 transactions + token_transfers 按对手方聚合"},
-		"clickhouse:blockchain.transactions", "clickhouse:blockchain.token_transfers"))
+		map[string]any{"scope": "本地已入库地址活动（address_activity）按对手方聚合", "direction": "in/out 含 self（自转同时计入两侧）"},
+		"clickhouse:blockchain.address_activity"))
 }
 
 func (s *Server) handleExplorerSemantic(w http.ResponseWriter, r *http.Request) {
@@ -835,24 +878,45 @@ func (s *Server) searchChainIndex(ctx context.Context, q string, want func(strin
 	if want("address") && (evmAddressRe.MatchString(lower) || tron.ValidateTronAddress(q) == nil) {
 		*scopes = append(*scopes, "address")
 		addr := lower
+		// 按地址形态先确定**可能出现的链**：这既是语义正确性，也是性能前提——
+		// 少了 chain 谓词，ClickHouse 只能对全部链（含 3400 万行 bsc）做全表扫描，
+		// 实测 80 秒后超时并**静默返回空结果**（2026-09-16 的 USER-009 真实缺陷）。
+		chains := evmSearchChains
 		if tron.ValidateTronAddress(q) == nil {
 			if n, err := tron.NormalizeTronAddress(q); err == nil {
 				addr = n
 			}
+			chains = []string{"tron"}
 		}
-		rows, err := s.deps.CH.DB().Query(ctx, `
-			SELECT chain, count() AS c FROM (
-				SELECT chain FROM blockchain.transactions FINAL WHERE from_address=? OR to_address=?
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chains)), ",")
+		args := make([]any, 0, 2*len(chains)+2)
+		for _, c := range chains {
+			args = append(args, c)
+		}
+		// 每个 (from_address=? OR to_address=?) 需要两个绑定值。
+		args = append(args, addr, addr)
+		for _, c := range chains {
+			args = append(args, c)
+		}
+		args = append(args, addr, addr)
+		// 不用 FINAL：ReplacingMergeTree 的 FINAL 会强制合并去重，实测比不用的版本慢 30 倍；
+		// 去重改为在聚合层做（uniqExact(tx_hash)），口径是"涉及该地址的本地索引交易数"。
+		query := fmt.Sprintf(`
+			SELECT chain, uniqExact(tx_hash) AS c FROM (
+				SELECT chain, tx_hash FROM blockchain.transactions
+				 WHERE chain IN (%s) AND tx_hash != '' AND (from_address=? OR to_address=?)
 				UNION ALL
-				SELECT chain FROM blockchain.token_transfers FINAL WHERE from_address=? OR to_address=?
-			) GROUP BY chain ORDER BY c DESC LIMIT 5`, addr, addr, addr, addr)
+				SELECT chain, tx_hash FROM blockchain.token_transfers
+				 WHERE chain IN (%s) AND tx_hash != '' AND (from_address=? OR to_address=?)
+			) GROUP BY chain ORDER BY c DESC LIMIT 5`, placeholders, placeholders)
+		rows, err := s.deps.CH.DB().Query(ctx, query, args...)
 		if err == nil {
 			for rows.Next() {
 				var chainSlug string
 				var count uint64
 				if rows.Scan(&chainSlug, &count) == nil {
 					*items = append(*items, searchHit{Type: "address", ID: chainSlug + ":" + addr,
-						Title: addr, Subtitle: chainSlug + " · " + fmt.Sprint(count) + " 条本地索引记录",
+						Title: addr, Subtitle: chainSlug + " · " + fmt.Sprint(count) + " 笔本地索引交易",
 						Chain: chainSlug, URL: "/addresses/" + chainSlug + "/" + addr})
 				}
 			}
@@ -862,13 +926,16 @@ func (s *Server) searchChainIndex(ctx context.Context, q string, want func(strin
 	if want("transaction") && (evmTxHashRe.MatchString(lower) || hexHashRe.MatchString(q)) {
 		*scopes = append(*scopes, "transaction")
 		hash := strings.TrimPrefix(lower, "0x")
+		// 同样不用 FINAL：全链 FINAL 扫描实测 58 秒（无 FINAL 2 秒），
+		// 且慢查询会以"空结果"的形式被静默吞掉。这里只需要"哪些链有这个哈希"
+		// 的存在性，DISTINCT 已经保证结果正确。
 		rows, err := s.deps.CH.DB().Query(ctx, `
 			SELECT DISTINCT chain FROM (
-				SELECT chain FROM blockchain.transactions FINAL WHERE lower(tx_hash)=?
+				SELECT chain FROM blockchain.transactions WHERE lower(tx_hash)=?
 				UNION ALL
-				SELECT chain FROM blockchain.token_transfers FINAL WHERE lower(tx_hash)=?
+				SELECT chain FROM blockchain.token_transfers WHERE lower(tx_hash)=?
 				UNION ALL
-				SELECT chain FROM blockchain.logs FINAL WHERE lower(tx_hash)=?
+				SELECT chain FROM blockchain.logs WHERE lower(tx_hash)=?
 			) LIMIT 5`, hash, hash, hash)
 		if err == nil {
 			for rows.Next() {

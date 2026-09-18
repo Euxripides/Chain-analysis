@@ -15,9 +15,9 @@
 | `auth.login.failure` | 是 |
 | `auth.login.success` | 是 |
 | `auth.logout` | 是 |
-| `auth.mfa.failure` | **否**（常量已定义但无调用点，功能未实现） |
+| `auth.mfa.failure` | 是 |
 | `auth.mfa.recovery_used` | **否**（常量已定义但无调用点，功能未实现） |
-| `auth.mfa.success` | **否**（常量已定义但无调用点，功能未实现） |
+| `auth.mfa.success` | 是 |
 | `auth.password.changed` | 是 |
 | `auth.password.reset` | 是 |
 | `auth.session.expired` | **否**（常量已定义但无调用点，功能未实现） |
@@ -25,8 +25,9 @@
 | `auth.session.refresh` | 是 |
 | `auth.session.revoked` | 是 |
 | `auth.session.touch` | **否**（常量已定义但无调用点，功能未实现） |
+| `auth.workspace.switch` | 是 |
 
-共定义 16 个事件常量，其中 **10** 个在当前代码中真的会被写入；其余 6 个属于尚未实现的能力（如 MFA），不得据此认为已支持。
+共定义 17 个事件常量，其中 **13** 个在当前代码中真的会被写入；其余 4 个属于尚未实现的能力（如 MFA），不得据此认为已支持。
 
 ## 2. 业务与管理写操作
 
@@ -34,7 +35,6 @@
 
 | 权限键 | 端点 |
 |---|---|
-| `admin:audit:export` | `POST /api/admin/v1/audit/export` |
 | `admin:audit:read` | `GET /api/admin/v1/audit/events`, `GET /api/admin/v1/audit/events/{id}` |
 | `admin:audit:verify` | `GET /api/admin/v1/audit/chains`, `POST /api/admin/v1/audit/verify` |
 | `admin:dashboard:read` | `GET /api/admin/v1/overview` |
@@ -54,6 +54,7 @@
 | `admin:user:disable` | `POST /api/admin/v1/users/{id}/commands/disable`, `POST /api/admin/v1/users/{id}/commands/enable` |
 | `admin:user:password:reset` | `POST /api/admin/v1/users/{id}/commands/reset-password` |
 | `admin:user:read` | `GET /api/admin/v1/users`, `GET /api/admin/v1/users/{id}` |
+| `admin:user:reset_mfa` | `POST /api/admin/v1/users/{id}/commands/reset-mfa` |
 | `admin:user:update` | `PATCH /api/admin/v1/users/{id}` |
 | `admin:workspace:manage` | `PATCH /api/admin/v1/workspaces/{id}`, `POST /api/admin/v1/workspaces` |
 | `admin:workspace:read` | `GET /api/admin/v1/workspaces` |
@@ -75,7 +76,7 @@
 | `comment:create` | `POST /api/v2/cases/{id}/comments` |
 | `comment:list` | `GET /api/v2/cases/{id}/comments` |
 | `dashboard:read` | `GET /api/v2/dashboard` |
-| `download:create` | `GET /api/v2/meta/datasets`, `POST /api/v2/downloads`, `POST /api/v2/downloads/preview` |
+| `download:create` | `GET /api/v2/meta/datasets`, `POST /api/v2/downloads`, `POST /api/v2/downloads/preview`, `POST /api/v2/downloads/validate-addresses` |
 | `evidence:list` | `GET /api/v2/investigations/{id}/evidence` |
 | `evidence:read` | `GET /api/v2/evidence/{id}` |
 | `evidence:review` | `POST /api/v2/evidence/{id}/commands/dispute`, `POST /api/v2/evidence/{id}/commands/supersede`, `POST /api/v2/evidence/{id}/commands/verify` |

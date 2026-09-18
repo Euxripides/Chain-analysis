@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -89,21 +90,26 @@ func (s *Server) registerUserV2(r chi.Router) {
 
 	// ---- Sprint 5：Explorer / 下载 / 任务 / 导出 / Canvas（§28.7）----
 	// Explorer v2：所有 Tab 返回统一 envelope（来源/口径/Coverage），cursor 由服务端生成。
-	r.Get("/explorer/addresses/{chain}/{address}/overview", s.require("explorer:read", s.handleExplorerOverview))
-	r.Get("/explorer/addresses/{chain}/{address}/assets", s.require("explorer:read", s.handleExplorerAssets))
-	r.Get("/explorer/addresses/{chain}/{address}/activity", s.require("explorer:read", s.handleExplorerActivity))
-	r.Get("/explorer/addresses/{chain}/{address}/counterparties", s.require("explorer:read", s.handleExplorerCounterparties))
-	r.Get("/explorer/addresses/{chain}/{address}/semantic", s.require("explorer:read", s.handleExplorerSemantic))
-	r.Get("/explorer/addresses/{chain}/{address}/flow-profile", s.require("explorer:read", s.handleExplorerFlowProfile))
+	//
+	// §7.3：整条 Explorer 读路径挂在 `user.explorer_v2` 开关之下，开关在**真实请求路径**上求值。
+	// 关掉时返回 503 FEATURE_DISABLED（稳定 error code + flag key），而不是静默降级成空数据。
+	r.Get("/explorer/addresses/{chain}/{address}/overview", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerOverview)))
+	r.Get("/explorer/addresses/{chain}/{address}/assets", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerAssets)))
+	r.Get("/explorer/addresses/{chain}/{address}/activity", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerActivity)))
+	r.Get("/explorer/addresses/{chain}/{address}/counterparties", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerCounterparties)))
+	r.Get("/explorer/addresses/{chain}/{address}/semantic", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerSemantic)))
+	r.Get("/explorer/addresses/{chain}/{address}/flow-profile", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerFlowProfile)))
 
 	// v2 元数据：链/Dataset 选项来自服务端 registry。
 	r.Get("/meta/chains", s.require("explorer:read", s.handleUserChains))
 	r.Get("/meta/datasets", s.require("download:create", s.handleUserDatasets))
-	r.Get("/explorer/transactions/{chain}/{hash}", s.require("explorer:read", s.handleExplorerTransaction))
-	r.Get("/explorer/transactions/{chain}/{hash}/logs", s.require("explorer:read", s.handleExplorerTransactionLogs))
-	r.Get("/explorer/transactions/{chain}/{hash}/trace", s.require("explorer:read", s.handleExplorerTransactionTrace))
+	r.Get("/explorer/transactions/{chain}/{hash}", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransaction)))
+	r.Get("/explorer/transactions/{chain}/{hash}/logs", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionLogs)))
+	r.Get("/explorer/transactions/{chain}/{hash}/trace", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionTrace)))
 
 	// 下载 v2：preview/create 分离；默认 prefer_local 复用本地，refresh 需要显式权限。
+	// §18.10：CSV/XLSX 导入先在浏览器显示解析摘要，再由服务端再次验证（只读、不建任务）。
+	r.Post("/downloads/validate-addresses", s.require("download:create", s.handleDownloadValidateAddresses))
 	r.Post("/downloads/preview", s.require("download:create", s.handleDownloadPreview))
 	r.Post("/downloads", s.require("download:create", s.handleDownloadCreate))
 
@@ -210,10 +216,11 @@ func (s *Server) handleUserProfile(w http.ResponseWriter, r *http.Request) {
 		"email":                identity.Email,
 		"display_name":         identity.DisplayName,
 		"status":               identity.Status,
-		"roles":                p.Roles,
+		"roles":                jsonStrings(p.Roles),
 		"organization_id":      identity.OrganizationID,
 		"must_change_password": identity.MustChangePassword,
 		"mfa_required":         identity.MFARequired,
+		"mfa_enrolled":         identity.MFAEnrolled,
 		"last_login_at":        identity.LastLoginAt,
 		"created_at":           identity.CreatedAt,
 	})
@@ -450,15 +457,49 @@ func (e errorString) Error() string { return string(e) }
 
 // writeAuditNow 同步写入一条业务审计（用于关键的用户自助操作）。
 func (s *Server) writeAuditNow(r *http.Request, action, category, resourceType, resourceID string, detail map[string]any) {
-	if s.audit == nil {
+	if s.audit == nil && s.auditSink == nil {
 		return
 	}
 	p := PrincipalFrom(r.Context())
 	meta := metaFrom(r.Context())
 	ev := auditEventFor(r, p, meta, action, category, resourceType, resourceID, "success", detail)
-	if err := s.audit.Write(r.Context(), ev); err != nil {
+	if err := s.emitAudit(r.Context(), ev); err != nil {
 		s.deps.Log.Error("audit write failed", "action", action, "err", err)
 	}
+}
+
+// writeAuditCtx 与 writeAuditNow 同语义，供**没有 *http.Request 的后台 goroutine** 使用。
+//
+// D-R10V4-01（R10 v4 实测发现的真实缺陷）：导出完成事件原先只经 Store.InsertAudit 写
+// legacy audit_events 表，而 export.create/download/download_ticket/reuse 走 writeAuditNow
+// 写 audit_events_v2。结果是 v2 不可抵赖审计链缺 export.completed 一环（§27 审计完整性）。
+// 这里让后台完成路径也能写入 v2 链；principal/meta/origin 由调用方在派生 ctx 时带入。
+//
+// R10v8 修补（同一缺陷的第二个面）：仅"写进 v2"还不够，request 维度必须是**真实请求**。
+// 旧实现用 r0() 合成请求，导致 export.completed 记录的路由是 /api/auth/v1/refresh（假）。
+// 现在改为读取随 ctx 传递的真实 method/path；来源缺失时留空，绝不伪造。
+func (s *Server) writeAuditCtx(ctx context.Context, action, category, resourceType, resourceID string, detail map[string]any) {
+	if s.audit == nil && s.auditSink == nil {
+		return
+	}
+	ev := auditEventFor(auditRequestFor(ctx), PrincipalFrom(ctx), metaFrom(ctx), action, category, resourceType, resourceID, "success", detail)
+	if err := s.emitAudit(ctx, ev); err != nil {
+		s.deps.Log.Error("audit write failed", "action", action, "err", err)
+	}
+}
+
+// backgroundAuditCtx 把请求侧 principal/meta/origin 复制到脱离请求生命周期的 ctx。
+// 导出 goroutine 用 context.Background() 起，直接传请求 ctx 会在请求结束后被取消，
+// 因此必须在**派生时**把审计所需的值拷贝进来（origin 优先取中间件已写入的真实值，
+// 缺失时回退到本次 r 的 method/path——两者都是真实来源，不是合成值）。
+func backgroundAuditCtx(r *http.Request) context.Context {
+	ctx := withPrincipal(context.Background(), PrincipalFrom(r.Context()))
+	ctx = withRequestMeta(ctx, metaFrom(r.Context()))
+	method, path := auditOriginFrom(r.Context())
+	if method == "" && path == "" {
+		method, path = r.Method, r.URL.Path
+	}
+	return withAuditOrigin(ctx, method, path)
 }
 
 // sessionAudience helper 保留给后续端点使用。

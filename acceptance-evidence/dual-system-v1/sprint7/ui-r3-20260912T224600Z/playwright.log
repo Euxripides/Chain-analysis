@@ -1,0 +1,97 @@
+
+Running 24 tests using 1 worker
+
+  ✓   1 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (4.7s)
+  ✓   2 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:91:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (4.5s)
+  ✓   3 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:120:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (3.4s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T224600Z
+  ✓   4 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:154:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (3.6s)
+  ✓   5 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:33:1 › 1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒 (5.2s)
+  ✘   6 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch (1.9s)
+  ✓   7 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:85:1 › 3. 匿名访问后台页：401 (4.6s)
+  ✓   8 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:107:1 › 4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.5s)
+  ✓   9 [r3-desktop] › tests/r3-nav-return-to.spec.ts:32:3 › R-3 后台登录回跳与 return_to 白名单 › 匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query） (3.6s)
+  ✓  10 [r3-desktop] › tests/r3-nav-return-to.spec.ts:75:3 › R-3 后台登录回跳与 return_to 白名单 › 已认证状态下入口直接回原页（/system?view=settings） (2.5s)
+  ✓  11 [r3-desktop] › tests/r3-nav-return-to.spec.ts:84:3 › R-3 后台登录回跳与 return_to 白名单 › 未认证访问 /admin/* 时 return_to 不丢（search 保留） (1.6s)
+  ✓  12 [r3-desktop] › tests/r3-nav-return-to.spec.ts:110:5 › R-3 后台登录回跳与 return_to 白名单 › return_to 开放重定向防护 › 恶意 return_to 一律落到白名单内（不会被外域接走） (13.0s)
+  ✓  13 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (3.9s)
+  ✓  14 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:91:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (3.4s)
+  ✓  15 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:120:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (4.3s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T224600Z
+  ✓  16 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:154:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (3.4s)
+  ✓  17 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:33:1 › 1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒 (4.7s)
+  ✘  18 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch (1.9s)
+  ✓  19 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:85:1 › 3. 匿名访问后台页：401 (4.2s)
+  ✓  20 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:107:1 › 4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.2s)
+  ✓  21 [r3-mobile] › tests/r3-nav-return-to.spec.ts:32:3 › R-3 后台登录回跳与 return_to 白名单 › 匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query） (3.1s)
+  ✓  22 [r3-mobile] › tests/r3-nav-return-to.spec.ts:75:3 › R-3 后台登录回跳与 return_to 白名单 › 已认证状态下入口直接回原页（/system?view=settings） (2.8s)
+  ✓  23 [r3-mobile] › tests/r3-nav-return-to.spec.ts:84:3 › R-3 后台登录回跳与 return_to 白名单 › 未认证访问 /admin/* 时 return_to 不丢（search 保留） (1.5s)
+  ✓  24 [r3-mobile] › tests/r3-nav-return-to.spec.ts:110:5 › R-3 后台登录回跳与 return_to 白名单 › return_to 开放重定向防护 › 恶意 return_to 一律落到白名单内（不会被外域接走） (13.2s)
+
+
+  1) [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "audience_mismatch"
+    Received string:    "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:27.639Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"missing_permission\"}}}
+    "
+
+      80 |   expect(result.status, "用户受众会话调用 admin:* 路由必须是 403").toBe(403);
+      81 |   expect(result.body).toContain("permission_denied");
+    > 82 |   expect(result.body).toContain("audience_mismatch");
+         |                       ^
+      83 | });
+      84 |
+      85 | test("3. 匿名访问后台页：401", async ({ browser }, testInfo) => {
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:82:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "audience_mismatch"
+    Received string:    "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:47:18.393Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"missing_permission\"}}}
+    "
+
+      80 |   expect(result.status, "用户受众会话调用 admin:* 路由必须是 403").toBe(403);
+      81 |   expect(result.body).toContain("permission_denied");
+    > 82 |   expect(result.body).toContain("audience_mismatch");
+         |                       ^
+      83 | });
+      84 |
+      85 | test("3. 匿名访问后台页：401", async ({ browser }, testInfo) => {
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:82:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-mobile/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-negative-2-用户-46707-调后台接口：403-audience-mismatch-r3-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch 
+    [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:60:1 › 2. 用户层会话显式声明 user 受众调后台接口：403 audience_mismatch 
+  22 passed (1.7m)

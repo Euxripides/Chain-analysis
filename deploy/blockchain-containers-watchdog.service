@@ -1,0 +1,8 @@
+# S7-DR-01：依赖容器看门狗（systemd 用户单元）
+[Unit]
+Description=Blockchain Platform dependency containers watchdog
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/euripides/projects/blockchain-platform/scripts/backup/containers-watchdog.sh

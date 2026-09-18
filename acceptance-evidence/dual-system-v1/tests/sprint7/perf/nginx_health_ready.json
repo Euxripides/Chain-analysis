@@ -1,0 +1,28 @@
+{
+  "label": "nginx_health_ready",
+  "url": "http://127.0.0.1:8088/health/ready",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.001924674,
+  "requests": 14984,
+  "rps": 749.1279086495773,
+  "errors": 7,
+  "status_counts": {
+    "200": 14977
+  },
+  "p50_ms": 9.144943000000001,
+  "p90_ms": 16.50381,
+  "p95_ms": 20.145982,
+  "p99_ms": 30.148221,
+  "min_ms": 2.181238,
+  "max_ms": 51.630964,
+  "avg_ms": 10.654808421649761,
+  "avg_response_bytes": 88.95842231713829,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded"
+  ]
+}

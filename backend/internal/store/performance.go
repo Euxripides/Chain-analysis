@@ -56,7 +56,16 @@ func (s *Store) SetAnkrRuntimeState(ctx context.Context, st model.PerformanceRun
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	_, err = tx.Exec(ctx, `UPDATE ankr_performance_control SET requested_mode=$1,effective_mode=$2,target_concurrency=$3,active_concurrency=$4,mode_reason=$5,mode_changed_at=$6,updated_at=now() WHERE singleton=TRUE`, st.RequestedMode, st.EffectiveMode, st.TargetConcurrency, st.ActiveConcurrency, st.ModeReason, st.ModeChangedAt)
+	// WAL 优化（2026-09-17）：这是 5 秒心跳路径（internal/download/performance.go 调用），
+	// 实测 12 次 UPDATE/分钟，而 singleton 行的值绝大多数时间不变；每一行新版本都会产生
+	// WAL 与死元组，24h 清理前会一直堆积。加 WHERE 守卫：只有业务值真的变化时才写。
+	//
+	// 有意**不参与**比较的两列：
+	//   - mode_changed_at：调用方每次都会传一个新时间戳（st.ModeChangedAt 为空时还会就地赋
+	//     time.Now()），参与比较会让守卫恒真；不参与之后它的语义更准确——“最后一次模式真正
+	//     发生变化的时间”，而不是“最后一次心跳时间”。
+	//   - updated_at：在 SET 里被赋成 now()，参与比较同样会让守卫恒真、完全失效。
+	_, err = tx.Exec(ctx, `UPDATE ankr_performance_control SET requested_mode=$1,effective_mode=$2,target_concurrency=$3,active_concurrency=$4,mode_reason=$5,mode_changed_at=$6,updated_at=now() WHERE singleton=TRUE AND (requested_mode IS DISTINCT FROM $1 OR effective_mode IS DISTINCT FROM $2 OR target_concurrency IS DISTINCT FROM $3 OR active_concurrency IS DISTINCT FROM $4 OR mode_reason IS DISTINCT FROM $5)`, st.RequestedMode, st.EffectiveMode, st.TargetConcurrency, st.ActiveConcurrency, st.ModeReason, st.ModeChangedAt)
 	if err != nil {
 		return err
 	}

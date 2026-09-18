@@ -76,6 +76,35 @@ export default function OrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * 次要资源按权限分别加载（§7.5）。
+   *
+   * 这里曾经把 workspaces / members / roles 塞进同一个 Promise.all：只要其中**一个**权限缺失
+   * （审计员没有 admin:member:read），403 就被当成整页失败，页面只剩
+   * "当前身份没有该操作的权限"，连它本来有权查看的组织与工作区也一起消失。
+   * 2026-09-16 由 tests/dual-system-nav-permission.spec.ts 在真实浏览器上暴露。
+   *
+   * 现在的规则：没有权限的区块**不发请求、不渲染**；有权限的区块各自加载；
+   * 只有主资源（组织列表，admin:org:read）失败才让整页进入错误态。
+   */
+  const loadSecondary = useCallback(
+    async (orgID: string) => {
+      const [wsRes, memberRes, roleRes] = await Promise.all([
+        can("admin:workspace:read")
+          ? client.get<WorkspaceRow[]>("/api/admin/v1/workspaces", { query: { organization_id: orgID } })
+          : null,
+        can("admin:member:read")
+          ? client.get<MemberRow[]>("/api/admin/v1/members", { query: { organization_id: orgID } })
+          : null,
+        can("admin:role:read") ? client.get<RoleRow[]>("/api/admin/v1/roles") : null,
+      ]);
+      setWorkspaces(wsRes?.data ?? []);
+      setMembers(memberRes?.data ?? []);
+      setRoles(roleRes?.data ?? []);
+    },
+    [can, client],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -85,20 +114,13 @@ export default function OrganizationsPage() {
       setOrgs(list);
       const orgID = selectedOrg || list[0]?.id || "";
       setSelectedOrg(orgID);
-      const [wsRes, memberRes, roleRes] = await Promise.all([
-        client.get<WorkspaceRow[]>("/api/admin/v1/workspaces", { query: { organization_id: orgID } }),
-        client.get<MemberRow[]>("/api/admin/v1/members", { query: { organization_id: orgID } }),
-        client.get<RoleRow[]>("/api/admin/v1/roles"),
-      ]);
-      setWorkspaces(wsRes.data ?? []);
-      setMembers(memberRes.data ?? []);
-      setRoles(roleRes.data ?? []);
+      await loadSecondary(orgID);
     } catch (err) {
       setError(err instanceof ApiError ? err.userMessage : "无法加载组织数据");
     } finally {
       setLoading(false);
     }
-  }, [client, selectedOrg]);
+  }, [client, loadSecondary, selectedOrg]);
 
   useEffect(() => {
     void load();
@@ -301,11 +323,14 @@ export default function OrganizationsPage() {
         </Card>
       ) : (
         <>
+          {/* 指标卡也只显示有权读取的数据源，避免用 0 冒充"没有数据"（§7.5）。 */}
           <div className="metric-grid">
             <Metric label="可见组织" value={orgs.length} />
-            <Metric label="当前组织成员" value={members.length} />
-            <Metric label="当前组织工作区" value={workspaces.length} />
-            <Metric label="案件总数" value={workspaces.reduce((sum, w) => sum + w.case_count, 0)} />
+            {can("admin:member:read") ? <Metric label="当前组织成员" value={members.length} /> : null}
+            {can("admin:workspace:read") ? <Metric label="当前组织工作区" value={workspaces.length} /> : null}
+            {can("admin:workspace:read") ? (
+              <Metric label="案件总数" value={workspaces.reduce((sum, w) => sum + w.case_count, 0)} />
+            ) : null}
           </div>
 
           <Card title="组织" flush>
@@ -349,6 +374,7 @@ export default function OrganizationsPage() {
             />
           </Card>
 
+          {can("admin:workspace:read") ? (
           <Card title={`工作区（${current?.name ?? "—"}）`} flush>
             <DataTable<WorkspaceRow>
               rows={workspaces}
@@ -363,7 +389,9 @@ export default function OrganizationsPage() {
               ]}
             />
           </Card>
+          ) : null}
 
+          {can("admin:member:read") ? (
           <Card title={`成员与角色（${members.length}）`} flush>
             <DataTable<MemberRow>
               rows={members}
@@ -383,10 +411,12 @@ export default function OrganizationsPage() {
                 {
                   key: "roles",
                   header: "角色",
-                  render: (r) =>
-                    r.roles.length ? (
+                  render: (r) => {
+                    // 后端可能把"无角色绑定"序列化成 JSON null：成员列表不能因此整页打崩。
+                    const bindings = Array.isArray(r.roles) ? r.roles : [];
+                    return bindings.length ? (
                       <span className="toolbar">
-                        {r.roles.map((role) => (
+                        {bindings.map((role) => (
                           <StatusBadge key={role} tone="info">
                             {role}
                           </StatusBadge>
@@ -394,7 +424,8 @@ export default function OrganizationsPage() {
                       </span>
                     ) : (
                       <span style={{ color: "var(--c-warn, #d97706)" }}>无角色</span>
-                    ),
+                    );
+                  },
                 },
                 {
                   key: "status",
@@ -422,7 +453,9 @@ export default function OrganizationsPage() {
               ]}
             />
           </Card>
+          ) : null}
 
+          {can("admin:role:read") ? (
           <Card title="可用角色">
             <div className="toolbar">
               {roles.map((r) => (
@@ -432,6 +465,7 @@ export default function OrganizationsPage() {
               ))}
             </div>
           </Card>
+          ) : null}
         </>
       )}
     </>

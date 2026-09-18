@@ -1,0 +1,104 @@
+==== Sprint 4 E2E 开始 2026-09-13T01:43:26+07:00 build=no-git ====
+== SETUP：登录 investigator / reviewer / viewer / owner ==
+  PASS SETUP      investigator 用户层登录
+  PASS SETUP      reviewer 用户层登录
+  PASS SETUP      viewer 用户层登录
+  PASS SETUP      Owner 后台登录
+  investigator=2f545a30-cc3f-46d7-8f5b-e70ea0c01f43 reviewer=fa8716ff-8972-4726-97fb-d1b5f3f52249 workspace=
+
+== USER-001 新建案件：页面/API/DB/审计一致 ==
+  PASS USER-001   POST /api/v2/cases 创建成功
+  PASS USER-001   案件包含案件编号
+  PASS USER-001   DB cases 行与 API 一致（name/status/classification）
+  PASS USER-001   case_members 自动包含创建人 lead 与指定 reviewer
+  PASS USER-001   case.create 已写入 audit_events_v2
+  PASS USER-001   business activity 已写入 case_activity
+  PASS USER-001   案件出现在列表 API 中
+
+== revision 冲突：PATCH stale -> 412，不覆盖数据 ==
+  PASS USER-007   PATCH 案件 stale revision -> 412
+  PASS USER-007   stale 请求未覆盖名称
+
+== 案件成员/对象/动态/评论 ==
+  PASS FIXTURE    添加案件对象（TRON Address 规范化）
+  PASS SEC-002    评论中的 HTML 标签被服务端移除
+  PASS USER-001   案件动态 API 返回事件
+  PASS USER-010   workspace-members 可选成员
+
+== USER-004 调查暂停/恢复：Checkpoint 保留、不重复结果 ==
+  PASS USER-004   Coverage 预览命中本地索引（0 Provider 成本路径）
+  PASS USER-004   创建调查幂等重放返回既有对象
+  PASS USER-004   start 命令 -> running
+  PASS USER-004   pause 命令 -> paused
+  PASS USER-004   暂停期间后台未偷偷推进（仍为 paused）
+  PASS USER-004   resume 命令 -> running
+  PASS USER-004   后台分析收敛到 waiting_review
+  PASS USER-004   本地索引复用产生 Finding/Evidence（不触达 Provider）
+  PASS USER-004   暂停时未创建野 run；恢复后 run 数受控（<=1）
+  PASS USER-004   运行 Checkpoint 仍保留（data_reused=true）
+
+== USER-005 Finding 复核 + USER-006 Evidence 版本替代 ==
+  PASS USER-005   存在带 Evidence 引用的 candidate Finding
+  PASS USER-005   Finding 引用了可复核 Evidence
+  PASS USER-005   viewer 确认 Finding -> 403
+  PASS USER-005   reviewer verify Evidence
+  PASS USER-005   reviewer confirm Finding -> confirmed
+  PASS USER-005   confirmed Finding 至少一条 verified Evidence
+  PASS USER-005   finding:review 已写入审计
+  PASS USER-006   新 Evidence 版本创建成功且 status=collected
+  PASS USER-006   新版本 supersedes_id 指向原版本
+  PASS USER-006   原 Evidence 状态变为 superseded 但内容 hash 不变
+  PASS USER-006   新版本表记录 supersedes 链
+
+== USER-008 报告审批/签署/下载票据（Investigator -> Reviewer -> approved report） ==
+  PASS USER-008   Investigator 生成报告 revision
+  PASS USER-008   新报告 status=generated 且绑定 content_hash
+  PASS USER-008   Investigator 提交复核 -> in_review
+  PASS USER-008   stale status_revision 批准 -> 412
+  PASS USER-008   提交人不能批准自己的报告 -> 403
+  PASS USER-008   Reviewer 批准 -> approved
+  PASS USER-008   report_approvals 绑定 revision + content_hash
+  PASS USER-008   Reviewer 签署 -> signed
+  PASS USER-008   签署产生不可空 signature_hash
+  PASS USER-008   60 秒一次性下载票据签发
+  PASS USER-008   票据返回 SHA-256 与审批绑定 hash 一致
+  PASS USER-008   GET 票据下载 200
+  PASS USER-008   下载文件 SHA-256 与 DB/API 一致
+  PASS USER-008   票据重复使用 -> 410
+  PASS USER-008   重新生成产生新 revision，不覆盖已批准 artifact
+  PASS USER-008   原报告仍可读取且 status=signed
+
+== USER-009 全局搜索：只返回有权对象 + 类型分组 ==
+  PASS USER-009   搜索命中本人案件
+  PASS USER-009   搜索结果声明类型分组
+  PASS USER-009   跨工作区案件不会出现在搜索结果
+
+== USER-010 通知跳转与安全失败 ==
+  PASS USER-010   reviewer 收到报告复核通知
+  PASS USER-010   通知 open 返回可访问目标
+  PASS USER-010   他人打开该通知 -> 404（安全失败）
+  PASS USER-010   reviewer Inbox 包含已处理的 report 复核项
+
+== 数据层：PostgreSQL / ClickHouse / MinIO / 运行日志 ==
+  PASS DATA       Evidence source_refs 的 tx_hash 在 ClickHouse 真实存在
+  PASS DATA       报告 artifact 存在于 MinIO blockchain-reports
+  PASS DATA       报告文件与 DB size_bytes 一致
+  PASS RUNTIME    API 日志无 panic/fatal
+  PASS RUNTIME    API 日志包含 Sprint 4 调查命令
+  PASS AUDIT-001  审计哈希链可验证区间 valid=true
+  PASS AUDIT-001  审计链完整性状态已明确声明（intact 或已封存缺口）
+  PASS AUDIT-001  审计链校验声明了可信起点 seq
+  PASS AUDIT-001  关键动作已落审计：case.create
+  PASS AUDIT-001  关键动作已落审计：investigation:create
+  PASS AUDIT-001  关键动作已落审计：investigation:start
+  PASS AUDIT-001  关键动作已落审计：finding:review
+  PASS AUDIT-001  关键动作已落审计：report:create
+  PASS AUDIT-001  关键动作已落审计：report:approve
+  PASS AUDIT-001  关键动作已落审计：report:download
+  PASS AUDIT-001  跨组织读对象有 object_denied 审计
+  PASS AUTHZ      viewer 创建案件 -> 403
+  PASS AUTHZ      viewer 跨组织读取案件 -> 404（不泄露存在性）
+  PASS AUTHZ      无会话访问 /api/v2/cases -> 401
+  PASS AUTHZ      用户层会话访问后台 -> 401
+
+==== 结果：PASS=81 FAIL=0 NOT_VERIFIED=0 ====

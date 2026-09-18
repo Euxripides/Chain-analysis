@@ -1,0 +1,672 @@
+{
+  "generated_utc": "2026-09-12T22:52:34.730Z",
+  "scanner_provenance": {
+    "tool": "trivy",
+    "version": "0.74.0",
+    "scanner_image": "aquasec/trivy:latest",
+    "scanner_image_resolved_digest": "sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "scanner_image_created": "2026-08-14T11:27:20.641164516Z",
+    "vulnerability_db_version": 2,
+    "vulnerability_db_updated_at": "2026-09-12T13:01:09.044712903Z",
+    "vulnerability_db_next_update": "2026-09-13T13:01:09.044712565Z",
+    "vulnerability_db_downloaded_at": "2026-09-12T16:47:08.604622754Z",
+    "db_repository_used": "docker.m.daocloud.io/aquasec/trivy-db:2 (fallback mirror)",
+    "provenance_caveat": "mirror.gcr.io and ghcr.io were unreachable; the daocloud mirror is a pull-through cache of the same OCI artifact but byte-for-byte equality with upstream was NOT verified, so very-fresh CVE gaps are possible.",
+    "command_template": "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v <out>:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json|table --output /out/<name>.json|txt <ref>",
+    "exit_codes": "JSON_EXIT_* = 0 and TABLE_EXIT_* = 0 for all four in-scope images (raw/trivy-images-run.log)",
+    "note_no_pull": "All scanner images were already present locally. NO docker pull/build/rm/stop/restart was performed at any point."
+  },
+  "in_scope_totals": {
+    "CRITICAL": 20,
+    "HIGH": 203,
+    "MEDIUM": 331,
+    "LOW": 201,
+    "UNKNOWN": 8,
+    "TOTAL": 763,
+    "images": 4,
+    "images_detail": [
+      {
+        "image_ref": "postgres:18",
+        "repo_digest": "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+        "mutable_tag": false,
+        "counts": {
+          "CRITICAL": 14,
+          "HIGH": 101,
+          "MEDIUM": 154,
+          "LOW": 143,
+          "UNKNOWN": 3
+        }
+      },
+      {
+        "image_ref": "clickhouse/clickhouse-server:26.7",
+        "repo_digest": "clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+        "mutable_tag": false,
+        "counts": {
+          "CRITICAL": 0,
+          "HIGH": 0,
+          "MEDIUM": 68,
+          "LOW": 30,
+          "UNKNOWN": 0
+        }
+      },
+      {
+        "image_ref": "nats:2-alpine",
+        "repo_digest": "nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+        "mutable_tag": false,
+        "counts": {
+          "CRITICAL": 0,
+          "HIGH": 2,
+          "MEDIUM": 8,
+          "LOW": 12,
+          "UNKNOWN": 1
+        }
+      },
+      {
+        "image_ref": "minio/minio:latest",
+        "repo_digest": "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "mutable_tag": true,
+        "counts": {
+          "CRITICAL": 6,
+          "HIGH": 100,
+          "MEDIUM": 101,
+          "LOW": 16,
+          "UNKNOWN": 4
+        }
+      }
+    ]
+  },
+  "out_of_scope": [
+    {
+      "image_ref": "opensecurity/mobile-security-framework-mobsf:latest",
+      "status": "OUT OF PROJECT SCOPE — host extra inventory only",
+      "reason": "Independent, unrelated host service. NOT part of the blockchain-platform release gate; excluded from every P0/P1 and image total.",
+      "resolved_digest": "opensecurity/mobile-security-framework-mobsf@sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+      "mutable_tag": true,
+      "running_container": "mobsf",
+      "scan_status": "SCAN_FAILED_OR_INCOMPLETE — the trivy image scan stalled downloading the Java DB from the unreachable mirror.gcr.io. NO severity counts are claimed for this image."
+    }
+  ],
+  "mutable_tag_findings": [
+    {
+      "image_ref": "minio/minio:latest",
+      "in_project_scope": true,
+      "problem": "Uses the mutable tag 'latest'. Plan §29.1 requires that a mutable 'latest' must NOT be used as release evidence.",
+      "resolved_digest_now": "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "image_created": "2025-09-07T18:42:37.017942402Z",
+      "declared_in": "deploy/compose.yaml:43 (image: minio/minio:latest)",
+      "action_to_close": "Pin by digest in deploy/compose.yaml (or move to an immutable version tag), re-scan, and record the pinned digest."
+    }
+  ],
+  "images": [
+    {
+      "image_ref": "postgres:18",
+      "running_container": "deploy-postgres-1",
+      "in_project_release_scope": true,
+      "repo_digest": "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+      "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+      "image_created": "2026-08-25T00:41:16.064197635Z",
+      "scan_tool": "trivy 0.74.0 (aquasec/trivy:latest @ sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969)",
+      "scan_status": "OK",
+      "severity_counts": {
+        "CRITICAL": 14,
+        "HIGH": 101,
+        "MEDIUM": 154,
+        "LOW": 143,
+        "UNKNOWN": 3
+      },
+      "severity_total": 415,
+      "findings_with_no_fix_available": 56,
+      "os_family": "debian",
+      "result_targets": [
+        {
+          "target": "postgres:18 (debian 13.6)",
+          "class": "os-pkgs",
+          "type": "debian",
+          "vulns": 369
+        },
+        {
+          "target": "usr/local/bin/gosu",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 46
+        }
+      ],
+      "top_packages": [
+        {
+          "package": "stdlib",
+          "installed": "v1.24.6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 45,
+          "fixed_version": "1.24.13, 1.25.7, 1.26.0-rc.3"
+        },
+        {
+          "package": "libperl5.40",
+          "installed": "5.40.1-6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 17,
+          "fixed_version": "5.40.1-6+deb13u1"
+        },
+        {
+          "package": "perl",
+          "installed": "5.40.1-6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 17,
+          "fixed_version": "5.40.1-6+deb13u1"
+        },
+        {
+          "package": "perl-base",
+          "installed": "5.40.1-6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 17,
+          "fixed_version": "5.40.1-6+deb13u1"
+        },
+        {
+          "package": "perl-modules-5.40",
+          "installed": "5.40.1-6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 17,
+          "fixed_version": "5.40.1-6+deb13u1"
+        },
+        {
+          "package": "libxml2",
+          "installed": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 11,
+          "fixed_version": null
+        },
+        {
+          "package": "libssl3t64",
+          "installed": "3.5.6-1~deb13u2",
+          "worst_severity": "HIGH",
+          "advisory_count": 10,
+          "fixed_version": "3.5.7-1~deb13u2"
+        },
+        {
+          "package": "openssl",
+          "installed": "3.5.6-1~deb13u2",
+          "worst_severity": "HIGH",
+          "advisory_count": 10,
+          "fixed_version": "3.5.7-1~deb13u2"
+        },
+        {
+          "package": "openssl-provider-legacy",
+          "installed": "3.5.6-1~deb13u2",
+          "worst_severity": "HIGH",
+          "advisory_count": 10,
+          "fixed_version": "3.5.7-1~deb13u2"
+        },
+        {
+          "package": "libpcre2-8-0",
+          "installed": "10.46-1~deb13u1",
+          "worst_severity": "HIGH",
+          "advisory_count": 7,
+          "fixed_version": "10.46-1~deb13u2"
+        },
+        {
+          "package": "libsqlite3-0",
+          "installed": "3.46.1-7+deb13u1",
+          "worst_severity": "HIGH",
+          "advisory_count": 7,
+          "fixed_version": "3.46.1-7+deb13u2"
+        },
+        {
+          "package": "libsystemd0",
+          "installed": "257.13-1~deb13u1",
+          "worst_severity": "HIGH",
+          "advisory_count": 7,
+          "fixed_version": null
+        }
+      ],
+      "raw_artifacts": {
+        "json": "images/postgres-18.json",
+        "table": "images/postgres-18.txt"
+      },
+      "tag_analysis": {
+        "tag_reference": "postgres:18",
+        "tag_is_repointable": true,
+        "tag_is_repointable_note": "EVERY tag (including version tags such as 18, 26.7, 2-alpine) can be re-pushed to point at a different digest. A resolved digest is only a point-in-time snapshot and does NOT make the tag immutable.",
+        "floating_latest_style_tag": false,
+        "compose_references_tag_not_digest": true,
+        "compose_reference": "deploy/compose.yaml declares \"postgres:18\" (tag form, no @sha256)",
+        "runtime_pins_digest": false,
+        "resolved_digest": "postgres@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+        "resolved_digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect, UTC)",
+        "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+        "verdict": "MUTABLE TAG (version/series tag) — re-pointable; §29.1 requires pinning by digest or an immutable tag for release evidence"
+      }
+    },
+    {
+      "image_ref": "clickhouse/clickhouse-server:26.7",
+      "running_container": "deploy-clickhouse-1",
+      "in_project_release_scope": true,
+      "repo_digest": "clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+      "image_id": "sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+      "image_created": "2026-08-21T14:21:02.953425965Z",
+      "scan_tool": "trivy 0.74.0 (aquasec/trivy:latest @ sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969)",
+      "scan_status": "OK",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 68,
+        "LOW": 30,
+        "UNKNOWN": 0
+      },
+      "severity_total": 98,
+      "findings_with_no_fix_available": 21,
+      "os_family": "ubuntu",
+      "result_targets": [
+        {
+          "target": "clickhouse/clickhouse-server:26.7 (ubuntu 22.04)",
+          "class": "os-pkgs",
+          "type": "ubuntu",
+          "vulns": 98
+        }
+      ],
+      "top_packages": [
+        {
+          "package": "libc-bin",
+          "installed": "2.35-0ubuntu3.14",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 6,
+          "fixed_version": null
+        },
+        {
+          "package": "libc6",
+          "installed": "2.35-0ubuntu3.14",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 6,
+          "fixed_version": null
+        },
+        {
+          "package": "locales",
+          "installed": "2.35-0ubuntu3.14",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 6,
+          "fixed_version": null
+        },
+        {
+          "package": "perl-base",
+          "installed": "5.34.0-3ubuntu1.7",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 6,
+          "fixed_version": "5.34.0-3ubuntu1.8"
+        },
+        {
+          "package": "libssl3",
+          "installed": "3.0.2-0ubuntu1.26",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 5,
+          "fixed_version": "3.0.2-0ubuntu1.29"
+        },
+        {
+          "package": "openssl",
+          "installed": "3.0.2-0ubuntu1.26",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 5,
+          "fixed_version": "3.0.2-0ubuntu1.29"
+        },
+        {
+          "package": "bsdutils",
+          "installed": "1:2.37.2-4ubuntu3.5",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": "2.37.2-4ubuntu3.6"
+        },
+        {
+          "package": "busybox",
+          "installed": "1:1.30.1-7ubuntu3.1",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": null
+        },
+        {
+          "package": "libblkid1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": "2.37.2-4ubuntu3.6"
+        },
+        {
+          "package": "libmount1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": "2.37.2-4ubuntu3.6"
+        },
+        {
+          "package": "libsmartcols1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": "2.37.2-4ubuntu3.6"
+        },
+        {
+          "package": "libuuid1",
+          "installed": "2.37.2-4ubuntu3.5",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 4,
+          "fixed_version": "2.37.2-4ubuntu3.6"
+        }
+      ],
+      "raw_artifacts": {
+        "json": "images/clickhouse-clickhouse-server-26.7.json",
+        "table": "images/clickhouse-clickhouse-server-26.7.txt"
+      },
+      "tag_analysis": {
+        "tag_reference": "clickhouse/clickhouse-server:26.7",
+        "tag_is_repointable": true,
+        "tag_is_repointable_note": "EVERY tag (including version tags such as 18, 26.7, 2-alpine) can be re-pushed to point at a different digest. A resolved digest is only a point-in-time snapshot and does NOT make the tag immutable.",
+        "floating_latest_style_tag": false,
+        "compose_references_tag_not_digest": true,
+        "compose_reference": "deploy/compose.yaml declares \"clickhouse/clickhouse-server:26.7\" (tag form, no @sha256)",
+        "runtime_pins_digest": false,
+        "resolved_digest": "clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+        "resolved_digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect, UTC)",
+        "image_id": "sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e",
+        "verdict": "MUTABLE TAG (version/series tag) — re-pointable; §29.1 requires pinning by digest or an immutable tag for release evidence"
+      }
+    },
+    {
+      "image_ref": "nats:2-alpine",
+      "running_container": "deploy-nats-1",
+      "in_project_release_scope": true,
+      "repo_digest": "nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+      "image_id": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+      "image_created": "2026-08-27T18:29:05.681698961Z",
+      "scan_tool": "trivy 0.74.0 (aquasec/trivy:latest @ sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969)",
+      "scan_status": "OK",
+      "severity_counts": {
+        "CRITICAL": 0,
+        "HIGH": 2,
+        "MEDIUM": 8,
+        "LOW": 12,
+        "UNKNOWN": 1
+      },
+      "severity_total": 23,
+      "findings_with_no_fix_available": 0,
+      "os_family": "alpine",
+      "result_targets": [
+        {
+          "target": "nats:2-alpine (alpine 3.22.5)",
+          "class": "os-pkgs",
+          "type": "alpine",
+          "vulns": 20
+        },
+        {
+          "target": "usr/local/bin/nats-server",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 3
+        }
+      ],
+      "top_packages": [
+        {
+          "package": "libcrypto3",
+          "installed": "3.5.7-r0",
+          "worst_severity": "HIGH",
+          "advisory_count": 10,
+          "fixed_version": "3.5.8-r0"
+        },
+        {
+          "package": "libssl3",
+          "installed": "3.5.7-r0",
+          "worst_severity": "HIGH",
+          "advisory_count": 10,
+          "fixed_version": "3.5.8-r0"
+        },
+        {
+          "package": "golang.org/x/crypto",
+          "installed": "v0.55.0",
+          "worst_severity": "MEDIUM",
+          "advisory_count": 3,
+          "fixed_version": "0.56.0"
+        }
+      ],
+      "raw_artifacts": {
+        "json": "images/nats-2-alpine.json",
+        "table": "images/nats-2-alpine.txt"
+      },
+      "tag_analysis": {
+        "tag_reference": "nats:2-alpine",
+        "tag_is_repointable": true,
+        "tag_is_repointable_note": "EVERY tag (including version tags such as 18, 26.7, 2-alpine) can be re-pushed to point at a different digest. A resolved digest is only a point-in-time snapshot and does NOT make the tag immutable.",
+        "floating_latest_style_tag": false,
+        "compose_references_tag_not_digest": true,
+        "compose_reference": "deploy/compose.yaml declares \"nats:2-alpine\" (tag form, no @sha256)",
+        "runtime_pins_digest": false,
+        "resolved_digest": "nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+        "resolved_digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect, UTC)",
+        "image_id": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+        "verdict": "MUTABLE TAG (version/series tag) — re-pointable; §29.1 requires pinning by digest or an immutable tag for release evidence"
+      }
+    },
+    {
+      "image_ref": "minio/minio:latest",
+      "running_container": "deploy-minio-1",
+      "in_project_release_scope": true,
+      "repo_digest": "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "image_id": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "image_created": "2025-09-07T18:42:37.017942402Z",
+      "scan_tool": "trivy 0.74.0 (aquasec/trivy:latest @ sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969)",
+      "scan_status": "OK",
+      "severity_counts": {
+        "CRITICAL": 6,
+        "HIGH": 100,
+        "MEDIUM": 101,
+        "LOW": 16,
+        "UNKNOWN": 4
+      },
+      "severity_total": 227,
+      "findings_with_no_fix_available": 6,
+      "os_family": "redhat",
+      "result_targets": [
+        {
+          "target": "minio/minio:latest (redhat 9.6)",
+          "class": "os-pkgs",
+          "type": "redhat",
+          "vulns": 37
+        },
+        {
+          "target": "usr/bin/mc",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 86
+        },
+        {
+          "target": "usr/bin/minio",
+          "class": "lang-pkgs",
+          "type": "gobinary",
+          "vulns": 104
+        }
+      ],
+      "top_packages": [
+        {
+          "package": "stdlib",
+          "installed": "v1.24.6",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 90,
+          "fixed_version": "1.24.13, 1.25.7, 1.26.0-rc.3"
+        },
+        {
+          "package": "google.golang.org/grpc",
+          "installed": "v1.71.0",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 10,
+          "fixed_version": "1.79.3"
+        },
+        {
+          "package": "github.com/minio/minio",
+          "installed": "v0.0.0-20250907161309-07c3a429bfed+dirty",
+          "worst_severity": "CRITICAL",
+          "advisory_count": 7,
+          "fixed_version": null
+        },
+        {
+          "package": "golang.org/x/crypto",
+          "installed": "v0.40.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 40,
+          "fixed_version": "0.43.0"
+        },
+        {
+          "package": "golang.org/x/net",
+          "installed": "v0.42.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 20,
+          "fixed_version": "0.55.0"
+        },
+        {
+          "package": "github.com/prometheus/prometheus",
+          "installed": "v0.303.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 8,
+          "fixed_version": "0.311.3"
+        },
+        {
+          "package": "libacl",
+          "installed": "2.3.1-4.el9",
+          "worst_severity": "HIGH",
+          "advisory_count": 2,
+          "fixed_version": "2.4.0-1.el9_8"
+        },
+        {
+          "package": "golang.org/x/text",
+          "installed": "v0.27.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 2,
+          "fixed_version": "0.39.0"
+        },
+        {
+          "package": "github.com/apache/thrift",
+          "installed": "v0.21.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 2,
+          "fixed_version": "0.23.0"
+        },
+        {
+          "package": "go.opentelemetry.io/otel/sdk",
+          "installed": "v1.35.0",
+          "worst_severity": "HIGH",
+          "advisory_count": 2,
+          "fixed_version": "1.40.0"
+        },
+        {
+          "package": "libcap",
+          "installed": "2.48-9.el9_2",
+          "worst_severity": "HIGH",
+          "advisory_count": 1,
+          "fixed_version": "2.48-10.el9_8.1"
+        },
+        {
+          "package": "github.com/buger/jsonparser",
+          "installed": "v1.1.1",
+          "worst_severity": "HIGH",
+          "advisory_count": 1,
+          "fixed_version": "1.1.2"
+        }
+      ],
+      "raw_artifacts": {
+        "json": "images/minio-minio-latest.json",
+        "table": "images/minio-minio-latest.txt"
+      },
+      "tag_analysis": {
+        "tag_reference": "minio/minio:latest",
+        "tag_is_repointable": true,
+        "tag_is_repointable_note": "EVERY tag (including version tags such as 18, 26.7, 2-alpine) can be re-pushed to point at a different digest. A resolved digest is only a point-in-time snapshot and does NOT make the tag immutable.",
+        "floating_latest_style_tag": true,
+        "compose_references_tag_not_digest": true,
+        "compose_reference": "deploy/compose.yaml declares \"minio/minio:latest\" (tag form, no @sha256)",
+        "runtime_pins_digest": false,
+        "resolved_digest": "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "resolved_digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect, UTC)",
+        "image_id": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "verdict": "MUTABLE TAG ('latest') — explicitly disallowed as release evidence by plan §29.1"
+      }
+    },
+    {
+      "image_ref": "opensecurity/mobile-security-framework-mobsf:latest",
+      "running_container": "mobsf",
+      "in_project_release_scope": false,
+      "repo_digest": "opensecurity/mobile-security-framework-mobsf@sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+      "image_id": "sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+      "image_created": "2026-08-10T06:16:06.712524046Z",
+      "scan_tool": "trivy 0.74.0 (aquasec/trivy:latest @ sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969)",
+      "scan_status": "SCAN_FAILED_OR_INCOMPLETE",
+      "severity_counts": null,
+      "severity_total": null,
+      "findings_with_no_fix_available": null,
+      "os_family": null,
+      "result_targets": null,
+      "top_packages": [],
+      "raw_artifacts": {
+        "json": "images/mobsf-latest.json",
+        "table": "images/mobsf-latest.txt"
+      },
+      "tag_analysis": {
+        "tag_reference": "opensecurity/mobile-security-framework-mobsf:latest",
+        "tag_is_repointable": true,
+        "tag_is_repointable_note": "EVERY tag (including version tags such as 18, 26.7, 2-alpine) can be re-pushed to point at a different digest. A resolved digest is only a point-in-time snapshot and does NOT make the tag immutable.",
+        "floating_latest_style_tag": true,
+        "compose_references_tag_not_digest": null,
+        "compose_reference": null,
+        "runtime_pins_digest": false,
+        "resolved_digest": "opensecurity/mobile-security-framework-mobsf@sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+        "resolved_digest_captured_at_utc": "2026-09-12T22:33Z (docker image inspect, UTC)",
+        "image_id": "sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee",
+        "verdict": "MUTABLE TAG ('latest') — explicitly disallowed as release evidence by plan §29.1"
+      }
+    }
+  ],
+  "scope_definition": {
+    "in_scope": [
+      "postgres:18 (deploy-postgres-1)",
+      "clickhouse/clickhouse-server:26.7 (deploy-clickhouse-1)",
+      "minio/minio:latest (deploy-minio-1)",
+      "nats:2-alpine (deploy-nats-1)",
+      "nginx 1.24.0 (host)",
+      "backend/bin/api",
+      "backend/bin/worker",
+      "backend/bin/migrate",
+      "frontend/apps/admin-console/dist",
+      "frontend/apps/user-console/dist"
+    ],
+    "out_of_scope": [
+      "opensecurity/mobile-security-framework-mobsf:latest (unrelated host service)"
+    ],
+    "tag_pinning_status": {
+      "compose_references_digests": false,
+      "evidence": "deploy/compose.yaml uses image: postgres:18 / clickhouse/clickhouse-server:26.7 / minio/minio:latest / nats:2-alpine — all tag form, no @sha256 anywhere",
+      "images_pinned_by_digest": 0,
+      "images_referenced_by_repointable_tag": 5,
+      "action_to_close": "Pin every release-relevant image by digest in deploy/compose.yaml, re-scan, and record the pinned digests."
+    }
+  },
+  "totals_clarification": {
+    "severity_counts_unchanged": true,
+    "note": "Severity counts in this report are as measured. They are NOT adjusted, and this report does NOT constitute a release-gate clearance.",
+    "not_a_clearance": true
+  },
+  "not_verified": [
+    {
+      "item": "Vulnerability-DB byte-equality with upstream",
+      "reason": "mirror.gcr.io and ghcr.io were unreachable; docker.m.daocloud.io/aquasec/trivy-db:2 was used as a pull-through mirror and its byte-for-byte equality with the upstream artifact was NOT verified",
+      "commands_tried": "trivy image --download-db-only --db-repository mirror.gcr.io/aquasec/trivy-db (timeout); --db-repository ghcr.io/aquasec/trivy-db (denied)",
+      "action": "re-run against upstream when reachable, or verify the mirror digest out-of-band"
+    },
+    {
+      "item": "Application build-product vulnerability scan coverage",
+      "reason": "backend/bin/{api,worker,migrate} and the frontend dist bundles were inventoried and hashed, and secret-scanned, but NO vulnerability scanner (trivy fs / grype / govulncheck against the built artifact) was run against them",
+      "action": "run trivy fs or grype on the built binaries and dist bundles"
+    },
+    {
+      "item": "Host systemd and nginx configuration surface",
+      "reason": "no scanner used in this round supports systemd units or nginx configuration; and no blockchain-* unit is installed on the host at all, so systemd-analyze security cannot be run",
+      "action": "install the units (or decide they do not ship), then run systemd-analyze security; add an nginx linter such as gixy"
+    },
+    {
+      "item": "mobsf image scan",
+      "reason": "scan stalled downloading the Java DB from the unreachable mirror.gcr.io; the image is also explicitly out of project scope",
+      "action": "not required for this project's release gate"
+    }
+  ]
+}

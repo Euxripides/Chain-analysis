@@ -1,0 +1,76 @@
+S7-SEC-01 follow-up: SCOPED SBOM for the 2026-09-13 dependency-upgrade rebuild
+host=dataserver  utc_start=2026-09-13T02:09:19Z
+project=/home/euripides/projects/blockchain-platform
+evidence_dir=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z
+scope_artifacts=backend/bin/api backend/bin/worker backend/bin/migrate  (3 files, exact paths)
+SCAN_TARGET_KIND=FILE (compiled Go binary) -- NOT a container image, NOT a directory, NOT a source tree
+invoker=euripides uid=1000 gid=1000   sudo_used=NO   root_used=NO
+==========================================================
+### STEP: syft version + image identity   utc=2026-09-13T02:09:19Z
+CMD: docker image inspect docker.1ms.run/anchore/syft:latest --format id/RepoDigests/Created/Size
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/syft-image-identity.txt
+
+CMD: docker run --rm --user 1000:1000 docker.1ms.run/anchore/syft:latest version
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/syft-version.txt (stderr: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/syft-version.log)
+
+### STEP: syft executable sha256 (extracted from the saved image archive)   utc=2026-09-13T02:09:19Z
+CMD: docker save docker.1ms.run/anchore/syft:latest -o /tmp/sbom-dep-upgrade-20260913T015815Z/syft-image.tar
+EXIT_CODE: 0
+NOTE: sha256 of the saved archive describes the archive, NOT the executable; the archive hash is in /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/syft-image-save.log
+CMD: python3 extract_syft_binary_sha256.py (reads the saved image archive, streams each layer, hashes the /syft file)
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/syft-binary-sha256.txt
+
+### STEP: pre-scan artifact identity   utc=2026-09-13T02:09:21Z
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/buildinfo-<artifact>.txt (one per artifact) + /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/buildinfo-all-artifacts.txt
+[api] 8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a  56147343 bytes
+[worker] 513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48  42685594 bytes
+[migrate] 28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4  30859300 bytes
+
+### STEP: api cdx   utc=2026-09-13T02:09:21Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/api -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/api.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/api-cdx.log
+
+### STEP: api spdx   utc=2026-09-13T02:09:23Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/api -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/api.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/api-spdx.log
+
+### STEP: worker cdx   utc=2026-09-13T02:09:26Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/worker -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/worker.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/worker-cdx.log
+
+### STEP: worker spdx   utc=2026-09-13T02:09:28Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/worker -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/worker.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/worker-spdx.log
+
+### STEP: migrate cdx   utc=2026-09-13T02:09:31Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/migrate -o cyclonedx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/migrate.cdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/migrate-cdx.log
+
+### STEP: migrate spdx   utc=2026-09-13T02:09:33Z
+CMD: docker run --rm --user 1000:1000 --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp -v /home/euripides/projects/blockchain-platform:/w -w /w docker.1ms.run/anchore/syft:latest backend/bin/migrate -o spdx-json=/w/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/migrate.spdx.json
+EXIT_CODE: 0
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/logs/migrate-spdx.log
+
+### STEP: post-scan artifact identity (scan-target stability proof)   utc=2026-09-13T02:09:35Z
+### STEP: artifact hashes   utc=2026-09-13T02:09:35Z
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/artifact-hashes.txt
+
+### STEP: source-level module evidence   utc=2026-09-13T02:09:35Z
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/module-crosscheck-source.txt
+
+### STEP: JSON validation + upgraded-module presence check   utc=2026-09-13T02:09:35Z
+EXIT_CODE: 1
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/validation.txt, /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/module-crosscheck.json
+EXIT_CODE: 1
+RAW_OUTPUT: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/module-crosscheck.txt
+==========================================================
+### DONE  utc=2026-09-13T02:09:36Z

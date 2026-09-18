@@ -715,7 +715,8 @@ func (s *Service) writeAuditAsync(ctx context.Context, actor Actor, action, cate
 		return nil
 	}
 	event := auditEvent(actor, action, category, resourceType, resourceID, "success", risk, detail)
-	return s.audit.Write(ctx, event)
+	// WriteOrLog：读路径审计失败必须留痕，不能因为调用方丢弃返回值而静默消失。
+	return s.audit.WriteOrLog(ctx, event)
 }
 
 // ---- Investigation v2 compatibility ---------------------------------------

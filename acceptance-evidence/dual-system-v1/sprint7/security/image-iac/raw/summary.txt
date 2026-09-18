@@ -1,0 +1,244 @@
+==== IMAGE SEVERITY MATRIX ====
+image	CRITICAL	HIGH	MEDIUM	LOW	UNKNOWN	TOTAL
+postgres-18	14	101	154	143	3	415
+clickhouse-clickhouse-server-26.7	0	0	68	30	0	98
+nats-2-alpine	0	2	8	12	1	23
+minio-minio-latest	6	100	101	16	4	227
+
+==== MISCONFIG (trivy config) ====
+repo-root findings: 0 severities: {"CRITICAL":0,"HIGH":0,"MEDIUM":0,"LOW":0,"UNKNOWN":0}
+repo-root targets: []
+deploy findings: 0 severities: {"CRITICAL":0,"HIGH":0,"MEDIUM":0,"LOW":0,"UNKNOWN":0}
+
+==== CRITICAL/HIGH DETAIL ====
+--- postgres-18 (postgres:18) CRIT=14 HIGH=101 ---
+CRITICAL | CVE-2026-13221 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-42496 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-8376 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-6653 | libxml2 | 2.12.7+dfsg+really2.9.14-2.1+deb13u3 | ->no-fix | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-13221 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-42496 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-8376 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-13221 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-42496 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-8376 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-13221 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-42496 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2026-8376 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+CRITICAL | CVE-2025-68121 | stdlib | v1.24.6 | ->1.24.13, 1.25.7, 1.26.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-76642 | bsdutils | 1:2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | bsdutils | 1:2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | bsdutils | 1:2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | bsdutils | 1:2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | dirmngr | 2.4.7-21+deb13u1+b4 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gnupg-l10n | 2.4.7-21+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gnupg | 2.4.7-21+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gpg-agent | 2.4.7-21+deb13u1+b4 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gpgconf | 2.4.7-21+deb13u1+b4 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gpg | 2.4.7-21+deb13u1+b4 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-24882 | gpgsm | 2.4.7-21+deb13u1+b4 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-41992 | gzip | 1.13-1 | ->1.13-1+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-54369 | libacl1 | 2.3.2-2+b1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | libblkid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | libblkid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | libblkid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | libblkid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | liblastlog2-2 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | liblastlog2-2 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | liblastlog2-2 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | liblastlog2-2 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | libmount1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | libmount1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | libmount1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | libmount1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2025-69720 | libncursesw6 | 6.5+20250216-2 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-86145 | libpcre2-8-0 | 10.46-1~deb13u1 | ->10.46-1~deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-89161 | libpcre2-8-0 | 10.46-1~deb13u1 | ->10.46-1~deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-42497 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-48962 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57432 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57433 | libperl5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-9538 | libperl5.40 | 5.40.1-6 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | libsmartcols1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | libsmartcols1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | libsmartcols1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | libsmartcols1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-11822 | libsqlite3-0 | 3.46.1-7+deb13u1 | ->3.46.1-7+deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-11824 | libsqlite3-0 | 3.46.1-7+deb13u1 | ->3.46.1-7+deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-14456 | libssl3t64 | 3.5.6-1~deb13u2 | ->3.5.7-1~deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-16742 | libsystemd0 | 257.13-1~deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2025-69720 | libtinfo6 | 6.5+20250216-2 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-16742 | libudev1 | 257.13-1~deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | libuuid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | libuuid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | libuuid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | libuuid1 | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-74860 | libxml2 | 2.12.7+dfsg+really2.9.14-2.1+deb13u3 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-86140 | libxml2 | 2.12.7+dfsg+really2.9.14-2.1+deb13u3 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | login | 1:4.16.0-2+really2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | login | 1:4.16.0-2+really2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | login | 1:4.16.0-2+really2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | login | 1:4.16.0-2+really2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-76642 | mount | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | mount | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | mount | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | mount | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2025-69720 | ncurses-base | 6.5+20250216-2 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2025-69720 | ncurses-bin | 6.5+20250216-2 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-14456 | openssl-provider-legacy | 3.5.6-1~deb13u2 | ->3.5.7-1~deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-14456 | openssl | 3.5.6-1~deb13u2 | ->3.5.7-1~deb13u2 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-42497 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-48962 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57432 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57433 | perl-base | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-9538 | perl-base | 5.40.1-6 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-42497 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-48962 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57432 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57433 | perl-modules-5.40 | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-9538 | perl-modules-5.40 | 5.40.1-6 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-42497 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-48962 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57432 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-57433 | perl | 5.40.1-6 | ->5.40.1-6+deb13u1 | postgres:18 (debian 13.6)
+HIGH | CVE-2026-9538 | perl | 5.40.1-6 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2025-61726 | stdlib | v1.24.6 | ->1.24.12, 1.25.6 | usr/local/bin/gosu
+HIGH | CVE-2025-61729 | stdlib | v1.24.6 | ->1.24.11, 1.25.5 | usr/local/bin/gosu
+HIGH | CVE-2026-25679 | stdlib | v1.24.6 | ->1.25.8, 1.26.1 | usr/local/bin/gosu
+HIGH | CVE-2026-27145 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/local/bin/gosu
+HIGH | CVE-2026-32280 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/local/bin/gosu
+HIGH | CVE-2026-32281 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/local/bin/gosu
+HIGH | CVE-2026-32283 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/local/bin/gosu
+HIGH | CVE-2026-33811 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/local/bin/gosu
+HIGH | CVE-2026-33814 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/local/bin/gosu
+HIGH | CVE-2026-33818 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-39820 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/local/bin/gosu
+HIGH | CVE-2026-39821 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-39822 | stdlib | v1.24.6 | ->1.25.12, 1.26.5, 1.27.0-rc.2 | usr/local/bin/gosu
+HIGH | CVE-2026-39836 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/local/bin/gosu
+HIGH | CVE-2026-42499 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/local/bin/gosu
+HIGH | CVE-2026-42504 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/local/bin/gosu
+HIGH | CVE-2026-56853 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-56858 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-56859 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-56860 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-56862 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/local/bin/gosu
+HIGH | CVE-2026-76642 | util-linux | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78408 | util-linux | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78409 | util-linux | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+HIGH | CVE-2026-78410 | util-linux | 2.41.5-0+deb13u1 | ->no-fix | postgres:18 (debian 13.6)
+
+--- clickhouse-clickhouse-server-26.7 (clickhouse/clickhouse-server:26.7) CRIT=0 HIGH=0 ---
+
+--- nats-2-alpine (nats:2-alpine) CRIT=0 HIGH=2 ---
+HIGH | CVE-2026-14456 | libcrypto3 | 3.5.7-r0 | ->3.5.8-r0 | nats:2-alpine (alpine 3.22.5)
+HIGH | CVE-2026-14456 | libssl3 | 3.5.7-r0 | ->3.5.8-r0 | nats:2-alpine (alpine 3.22.5)
+
+--- minio-minio-latest (minio/minio:latest) CRIT=6 HIGH=100 ---
+CRITICAL | CVE-2026-33322 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+CRITICAL | CVE-2026-33419 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+CRITICAL | CVE-2026-33186 | google.golang.org/grpc | v1.71.0 | ->1.79.3 | usr/bin/mc
+CRITICAL | CVE-2026-33186 | google.golang.org/grpc | v1.72.0 | ->1.79.3 | usr/bin/minio
+CRITICAL | CVE-2025-68121 | stdlib | v1.24.6 | ->1.24.13, 1.25.7, 1.26.0-rc.3 | usr/bin/mc
+CRITICAL | CVE-2025-68121 | stdlib | v1.24.6 | ->1.24.13, 1.25.7, 1.26.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-41602 | github.com/apache/thrift | v0.21.0 | ->0.23.0 | usr/bin/minio
+HIGH | CVE-2026-43871 | github.com/apache/thrift | v0.21.0 | ->0.24.0 | usr/bin/minio
+HIGH | CVE-2026-32285 | github.com/buger/jsonparser | v1.1.1 | ->1.1.2 | usr/bin/minio
+HIGH | CVE-2026-34986 | github.com/go-jose/go-jose/v4 | v4.1.0 | ->4.1.4 | usr/bin/minio
+HIGH | CVE-2025-62506 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->0.0.0-20251015170045-c1a49490c78e | usr/bin/minio
+HIGH | CVE-2026-34204 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+HIGH | CVE-2026-39414 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+HIGH | CVE-2026-40344 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+HIGH | CVE-2026-41145 | github.com/minio/minio | v0.0.0-20250907161309-07c3a429bfed+dirty | ->no-fix | usr/bin/minio
+HIGH | CVE-2026-42151 | github.com/prometheus/prometheus | v0.303.0 | ->0.311.3 | usr/bin/mc
+HIGH | CVE-2026-42151 | github.com/prometheus/prometheus | v0.303.0 | ->0.311.3 | usr/bin/minio
+HIGH | CVE-2026-42154 | github.com/prometheus/prometheus | v0.303.0 | ->0.311.3, 0.305.2 | usr/bin/mc
+HIGH | CVE-2026-42154 | github.com/prometheus/prometheus | v0.303.0 | ->0.311.3, 0.305.2 | usr/bin/minio
+HIGH | CVE-2026-79921 | github.com/rabbitmq/amqp091-go | v1.10.0 | ->1.13.0 | usr/bin/minio
+HIGH | CVE-2026-24051 | go.opentelemetry.io/otel/sdk | v1.35.0 | ->1.40.0 | usr/bin/minio
+HIGH | CVE-2026-39883 | go.opentelemetry.io/otel/sdk | v1.35.0 | ->1.43.0 | usr/bin/minio
+HIGH | CVE-2025-47913 | golang.org/x/crypto | v0.40.0 | ->0.43.0 | usr/bin/mc
+HIGH | CVE-2025-47913 | golang.org/x/crypto | v0.37.0 | ->0.43.0 | usr/bin/minio
+HIGH | CVE-2026-39828 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39828 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-39829 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39829 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-39830 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39830 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-39831 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39831 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-39832 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39832 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-39835 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-39835 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-42508 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-42508 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-46595 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-46595 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-46597 | golang.org/x/crypto | v0.40.0 | ->0.52.0 | usr/bin/mc
+HIGH | CVE-2026-46597 | golang.org/x/crypto | v0.37.0 | ->0.52.0 | usr/bin/minio
+HIGH | CVE-2026-56854 | golang.org/x/crypto | v0.40.0 | ->0.55.0 | usr/bin/mc
+HIGH | CVE-2026-56854 | golang.org/x/crypto | v0.37.0 | ->0.55.0 | usr/bin/minio
+HIGH | CVE-2026-25681 | golang.org/x/net | v0.42.0 | ->0.55.0 | usr/bin/mc
+HIGH | CVE-2026-25681 | golang.org/x/net | v0.39.0 | ->0.55.0 | usr/bin/minio
+HIGH | CVE-2026-27136 | golang.org/x/net | v0.42.0 | ->0.55.0 | usr/bin/mc
+HIGH | CVE-2026-27136 | golang.org/x/net | v0.39.0 | ->0.55.0 | usr/bin/minio
+HIGH | CVE-2026-33814 | golang.org/x/net | v0.42.0 | ->0.53.0 | usr/bin/mc
+HIGH | CVE-2026-33814 | golang.org/x/net | v0.39.0 | ->0.53.0 | usr/bin/minio
+HIGH | CVE-2026-39821 | golang.org/x/net | v0.42.0 | ->0.55.0 | usr/bin/mc
+HIGH | CVE-2026-39821 | golang.org/x/net | v0.39.0 | ->0.55.0 | usr/bin/minio
+HIGH | CVE-2026-46600 | golang.org/x/net | v0.42.0 | ->0.56.0 | usr/bin/mc
+HIGH | CVE-2026-46600 | golang.org/x/net | v0.39.0 | ->0.56.0 | usr/bin/minio
+HIGH | CVE-2026-56852 | golang.org/x/text | v0.27.0 | ->0.39.0 | usr/bin/mc
+HIGH | CVE-2026-56852 | golang.org/x/text | v0.24.0 | ->0.39.0 | usr/bin/minio
+HIGH | CVE-2026-84304 | google.golang.org/grpc | v1.71.0 | ->1.83.1 | usr/bin/mc
+HIGH | CVE-2026-84304 | google.golang.org/grpc | v1.72.0 | ->1.83.1 | usr/bin/minio
+HIGH | CVE-2026-84445 | google.golang.org/grpc | v1.71.0 | ->1.82.2, 1.83.2, 1.85.0-dev.0.20260825072537-93e31b48545e | usr/bin/mc
+HIGH | CVE-2026-84445 | google.golang.org/grpc | v1.72.0 | ->1.82.2, 1.83.2, 1.85.0-dev.0.20260825072537-93e31b48545e | usr/bin/minio
+HIGH | GHSA-hrxh-6v49-42gf | google.golang.org/grpc | v1.71.0 | ->1.82.1 | usr/bin/mc
+HIGH | GHSA-hrxh-6v49-42gf | google.golang.org/grpc | v1.72.0 | ->1.82.1 | usr/bin/minio
+HIGH | CVE-2026-54369 | libacl | 2.3.1-4.el9 | ->2.4.0-1.el9_8 | minio/minio:latest (redhat 9.6)
+HIGH | CVE-2026-4878 | libcap | 2.48-9.el9_2 | ->2.48-10.el9_8.1 | minio/minio:latest (redhat 9.6)
+HIGH | CVE-2025-61726 | stdlib | v1.24.6 | ->1.24.12, 1.25.6 | usr/bin/mc
+HIGH | CVE-2025-61726 | stdlib | v1.24.6 | ->1.24.12, 1.25.6 | usr/bin/minio
+HIGH | CVE-2025-61729 | stdlib | v1.24.6 | ->1.24.11, 1.25.5 | usr/bin/mc
+HIGH | CVE-2025-61729 | stdlib | v1.24.6 | ->1.24.11, 1.25.5 | usr/bin/minio
+HIGH | CVE-2026-25679 | stdlib | v1.24.6 | ->1.25.8, 1.26.1 | usr/bin/mc
+HIGH | CVE-2026-25679 | stdlib | v1.24.6 | ->1.25.8, 1.26.1 | usr/bin/minio
+HIGH | CVE-2026-27145 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/bin/mc
+HIGH | CVE-2026-27145 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/bin/minio
+HIGH | CVE-2026-32280 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/mc
+HIGH | CVE-2026-32280 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/minio
+HIGH | CVE-2026-32281 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/mc
+HIGH | CVE-2026-32281 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/minio
+HIGH | CVE-2026-32283 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/mc
+HIGH | CVE-2026-32283 | stdlib | v1.24.6 | ->1.25.9, 1.26.2 | usr/bin/minio
+HIGH | CVE-2026-33811 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/mc
+HIGH | CVE-2026-33811 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/minio
+HIGH | CVE-2026-33814 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/mc
+HIGH | CVE-2026-33814 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/minio
+HIGH | CVE-2026-33818 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-33818 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-39820 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/mc
+HIGH | CVE-2026-39820 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/minio
+HIGH | CVE-2026-39821 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-39821 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-39822 | stdlib | v1.24.6 | ->1.25.12, 1.26.5, 1.27.0-rc.2 | usr/bin/mc
+HIGH | CVE-2026-39822 | stdlib | v1.24.6 | ->1.25.12, 1.26.5, 1.27.0-rc.2 | usr/bin/minio
+HIGH | CVE-2026-39836 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/mc
+HIGH | CVE-2026-39836 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/minio
+HIGH | CVE-2026-42499 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/mc
+HIGH | CVE-2026-42499 | stdlib | v1.24.6 | ->1.25.10, 1.26.3 | usr/bin/minio
+HIGH | CVE-2026-42504 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/bin/mc
+HIGH | CVE-2026-42504 | stdlib | v1.24.6 | ->1.25.11, 1.26.4 | usr/bin/minio
+HIGH | CVE-2026-56853 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-56853 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-56858 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-56858 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-56859 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-56859 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-56860 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-56860 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+HIGH | CVE-2026-56862 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/mc
+HIGH | CVE-2026-56862 | stdlib | v1.24.6 | ->1.25.13, 1.26.6, 1.27.0-rc.3 | usr/bin/minio
+

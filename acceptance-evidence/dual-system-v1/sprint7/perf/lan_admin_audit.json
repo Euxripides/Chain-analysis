@@ -1,0 +1,28 @@
+{
+  "label": "lan_admin_audit",
+  "url": "http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000987396,
+  "requests": 8330,
+  "rps": 416.4794384934175,
+  "errors": 8,
+  "status_counts": {
+    "200": 8322
+  },
+  "p50_ms": 15.702218,
+  "p90_ms": 30.603756999999998,
+  "p95_ms": 41.233419,
+  "p99_ms": 71.335903,
+  "min_ms": 0.49412,
+  "max_ms": 187.445481,
+  "avg_ms": 19.132320219207728,
+  "avg_response_bytes": 54477.94609843937,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded"
+  ]
+}

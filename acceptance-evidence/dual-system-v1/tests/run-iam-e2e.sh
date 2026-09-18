@@ -53,7 +53,11 @@ echo "== SMOKE 后台端点授权与能力边界 =="
 for ep in overview users roles login-events audit/events; do
   check "SMOKE-08 admin 可读 /$ep" "$(code -b "$JAR" "$BASE/api/admin/v1/$ep")" "200"
 done
-check "SMOKE-09 未实现端点显式 501" "$(code -b "$JAR" "$BASE/api/admin/v1/alerts")" "501"
+# SMOKE-09（2026-09-12 / S7 更新）：原断言把 /api/admin/v1/alerts 当作"未实现端点"，
+# 但该端点在 Sprint 6（S6-BE-03 告警生命周期）已实现，继续断言 501 等于在检查陈旧契约。
+# 现拆成两条：未启用的能力必须显式 501（OIDC），已实现的能力必须可读（alerts 200）。
+check "SMOKE-09 未启用能力显式 501（OIDC 未接入）" "$(code -b "$JAR" "$BASE/api/auth/v1/oidc/start")" "501"
+check "SMOKE-09b Sprint 6 已实现的 /alerts 可读" "$(code -b "$JAR" "$BASE/api/admin/v1/alerts")" "200"
 check "SMOKE-10 未声明端点返回 404" "$(code -b "$JAR" "$BASE/api/admin/v1/definitely-not-a-route")" "404"
 check "SMOKE-11 角色端点不接受未定义方法" "$(code -b "$JAR" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{}' "$BASE/api/admin/v1/roles")" "405"
 
@@ -71,8 +75,16 @@ if not d.get('success'):
 r=d['data']
 # valid 只描述"实际被校验到的区间"；链路是否完整必须由 integrity_status 明确声明。
 integ=r.get('integrity_status') or 'missing'
-ok=r['valid'] and integ in ('intact','sealed_incident')
-print('  %s  %-46s checked=%s valid=%s integrity=%s reason=%s' % ('PASS ' if ok else 'FAIL ', '$chain 哈希链校验', r['checked'], r['valid'], integ, r['reason'] or '-'))
+# 三种合法状态（ADR-018 / ADR-019）：
+#   intact            无缺口、无声明
+#   sealed_incident   存在已封存的不可恢复缺口（边界之后逐行验证）
+#   declared_events   无缺口，但存在逐条声明的完整性事实（缺失行 / 内容不可复算行）
+# 后两种都必须携带非零的声明计数——状态名本身不能当"通过"用。
+lost = r.get('declared_lost_count') or 0
+anom = r.get('declared_anomaly_count') or 0
+declared_ok = (integ != 'declared_events') or (lost + anom > 0)
+ok = bool(r['valid']) and integ in ('intact','sealed_incident','declared_events') and declared_ok
+print('  %s  %-46s checked=%s valid=%s integrity=%s declared_lost=%s declared_anomaly=%s reason=%s' % ('PASS ' if ok else 'FAIL ', '$chain 哈希链校验', r['checked'], r['valid'], integ, lost, anom, r['reason'] or '-'))
 sys.exit(0 if ok else 1)
 " || FAIL=$((FAIL+1))
   [ "$chain" = "audit" ] && { echo "$RES" | grep -q '"valid":true' && PASS=$((PASS+1)) || true; }

@@ -203,6 +203,9 @@ const (
 	PageIngested  = "INGESTED"
 	PageValidated = "VALIDATED"
 	PageFailed    = "FAILED"
+	// PageFailedFinal 表示该页的原始 spool 对象已不可恢复（例如文件已被清理），
+	// 不再参与重放 —— 否则 finalizer 会每 30 秒重放一次并永久失败。
+	PageFailedFinal = "FAILED_FINAL"
 )
 
 // BenchmarkRun V1.1 极限性能 Benchmark 记录（§48）。

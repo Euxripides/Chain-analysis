@@ -1,0 +1,8 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 278
+
+preserved_at=2026-09-13T02:59:58+07:00
+reason=保留 S7 首轮 sprint5 证据（DATA-007 因看门狗未持有而假失败）
+37f6545c5cbb04c34472ab9566b6fe9e65e4b95101c31668730baf07b3ded7f8  run.log
+702fc6c2ca061e11073f2150d62747579c1b38c7950a27ff415ecadc24463171  result.json

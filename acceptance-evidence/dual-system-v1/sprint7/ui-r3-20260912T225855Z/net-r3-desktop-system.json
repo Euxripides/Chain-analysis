@@ -1,0 +1,121 @@
+{
+  "entry": "https://127.0.0.1:8448",
+  "captured_at": "2026-09-12T22:59:12.338Z",
+  "summary": {
+    "total": 8,
+    "statuses": {
+      "200": 8
+    },
+    "denied": []
+  },
+  "requests": [
+    {
+      "at": "2026-09-12T22:59:10.375Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/src/api/client.ts?t=1789253128188",
+      "status": 200,
+      "requestId": null,
+      "traceId": null,
+      "audienceHeader": null,
+      "csrfHeader": null,
+      "responseBody": "const BASE = \"/api/v1\";\nfunction csrfCookieValue(audience) {\n  if (typeof document === \"undefined\") return \"\";\n  const match = document.cookie.match(\n    new RegExp(`(?:^|; )cs_${audience}_session_csrf=([^;]*)`)\n  );\n  return match ? decodeURIComponent(match[1]) : \"\";\n}\nfunction newIdempotencyKey() {\n  if (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\") {\n    return crypto.randomUUID();\n  }\n  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;\n}\nasync function http(path, init, audience = \"user\") {\n  const method = (init?.method ?? \"GET\").toUpperCase();\n  const headers = {\n    \"Content-Type\": \"application/json\",\n    ...init?.headers ?? {},\n    \"X-Auth-Audience\": audience\n  };\n  if (method !== \"GET\" && method !== \"HEAD\") {\n    const csrf = csrfCookieValue(audience);\n    if (csrf) headers[\"X-CSRF-Token\"] = csrf;\n  }\n  const res = await fetch(BASE + path, { ...init, headers, credentials: \"same-origin\" });\n  if (!res.ok) {\n    let msg = res.statusText;\n    try {\n      const body = await res.json();\n      msg = body.error?.message ?? body.error ?? msg;\n    } catch {\n    }\n    throw new Error(msg);\n  }\n  return res.json();\n}\nexport const apiControlHttp = (path, init) => http(\"/api-control\" + path, init, \"admin\");\nexport const countOracleHttp = (path) => http(\"/count-oracle\" + path, void 0, \"admin\");\nexport const api = {\n  getFlowProfile: (chain, address) => http(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/flow-profile`),\n  getSemanticEvents: (chain, address) => http(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/semantic-events`),\n  // admin:dataset:manage —— 必须带 admin 受众（否则后台 cookie 不会被解析）。\n  rebuildSemanticEvents: (chain, address) => http(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/semantic-events/rebuild`, { method: \"POST\", body: \"{}\" }, \"admin\"),\n  getAdvancedAnalysis: (chain, address) => http(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/advanced`),\n  rebuildAdvancedAnalysis: (chain, address) => http(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/advanced/rebuild`, { method: \"POST\", body: \"{}\" }, \"admin\"),\n  listInvestigationReports: (id) => http(`/investigations/${encodeURIComponent(id)}/reports`),\n  generateInvestigationReport: (id) => http(`/investigations/${encodeURIComponent(id)}/reports`, { method: \"POST\", body: \"{}\" }),\n  listInvestigationSubjects: (id) => http(`/investigations/${encodeURIComponent(id)}/subjects`),\n  addInvestigationSubject: (id, input) => http(`/investigations/${encodeURIComponent(id)}/subjects`, { method: \"POST\", body: JSON.stringify(input) }),\n  listInvestigations: () => http(\"/investigations\"),\n  getInvestigationRuntime: (id) => http(`/investigations/${id}/runtime`),\n  getInvestigationArtifacts: (id) => http(`/investigations/${id}/artifacts`),\n  createInvestigation: (payload) => http(\"/investigations\", {\n    method: \"POST\",\n    headers: {\n      \"Content-Type\": \"application/json\",\n      \"Idempotency-Key\": newIdempotencyKey()\n    },\n    body: JSON.stringify(payload)\n  }),\n  controlInvestigation: (id, action, revision) => http(\n    `/investigations/${id}/${action}`,\n    {\n      method: \"POST\",\n      headers: {\n        \"Content-Type\": \"application/json\",\n        \"If-Match\": String(revision)\n      },\n      body: \"{}\"\n    }\n  ),\n  ensure: (payload) => http(\n    \"/datasets/ensure\",\n    { method: \"POST\", body: JSON.stringify(payload) }\n  ),\n  preview: (payload) => http(\"/datasets/coverage/preview\", {\n    method: \"POST\",\n    body: JSON.stringify(payload)\n  }),\n  listJobs: (status = \"\") => http(\n    `/download-jobs?limit=100${status ? \"&status=\" + status : \"\"}`\n  ),\n  getJob: (id) => http(`/download-jobs/${id}`),\n  pause: (id) => http(`/download-jobs/${id}/pause`, { method: \"POST\" }),\n  resume: (id) => http(`/download-jobs/${id}/resume`, { method: \"POST\" }),\n"
+    },
+    {
+      "at": "2026-09-12T22:59:10.522Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/auth/v1/session",
+      "status": 200,
+      "requestId": "b1722380-04b3-427a-a42e-932c1ee7fd47",
+      "traceId": "30dc92d3-c6e3-4a74-abd0-b6cc993e85fe",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"success\":true,\"data\":{\"absolute_expires_at\":\"2026-09-19T22:59:09Z\",\"audience\":\"admin\",\"csrf_token\":\"9cn7aAk5VIJGdPqXkD5XsxFr_YZbMvnE9q3b73eudHE\",\"display_name\":\"\\u003cimg src=x onerror=\\\"window.__xss=1\\\"\\u003eSCRI PT\",\"email\":\"admin@local\",\"expires_at\":\"2026-09-13T10:59:09Z\",\"mfa_satisfied\":true,\"must_change_password\":true,\"organization_id\":\"d3b152f2-44c0-441c-b047-be24c137a84b\",\"permissions\":[\"address:read\",\"admin:alert:manage\",\"admin:alert:read\",\"admin:apikey:create\",\"admin:apikey:read\",\"admin:apikey:revoke\",\"admin:approval:decide\",\"admin:approval:read\",\"admin:audit:export\",\"admin:audit:read\",\"admin:audit:seal\",\"admin:audit:verify\",\"admin:backup:create\",\"admin:backup:read\",\"admin:backup:restore\",\"admin:budget:read\",\"admin:budget:update\",\"admin:config:history:read\",\"admin:config:read\",\"admin:config:update\",\"admin:cost:read\",\"admin:coverage:read\",\"admin:dashboard:read\",\"admin:dataset:manage\",\"admin:dataset:read\",\"admin:deletion:approve\",\"admin:deletion:read\",\"admin:deletion:request\",\"admin:export:delete\",\"admin:export:list\",\"admin:export:read\",\"admin:flag:read\",\"admin:flag:update\",\"admin:job:cancel\",\"admin:job:control\",\"admin:job:list\",\"admin:job:read\",\"admin:job:retry\",\"admin:killswitch:engage\",\"admin:killswitch:read\",\"admin:killswitch:release\",\"admin:login-event:read\",\"admin:member:manage\",\"admin:member:read\",\"admin:metrics:read\",\"admin:notification-channel:manage\",\"admin:notification-channel:read\",\"admin:org:manage\",\"admin:org:read\",\"admin:performance:read\",\"admin:performance:update\",\"admin:permission:read\",\"admin:provider:key:rotate\",\"admin:provider:read\",\"admin:provider:update\",\"admin:request:read\",\"admin:retention:manage\",\"admin:retention:read\",\"admin:risk:manage\",\"admin:risk:read\",\"admin:role:manage\",\"admin:role:read\",\"admin:routing:read\",\"admin:routing:update\",\"admin:session:read\",\"admin:session:revoke\",\"admin:storage:manage\",\"admin:storage:read\",\"admin:system:read\",\"admin:user:create\",\"admin:user:disable\",\"admin:user:invite\",\"admin:user:password:reset\",\"admin:user:read\",\"admin:user:update\",\"admin:version:manage\",\"admin:version:read\",\"admin:workspace:manage\",\"admin:workspace:read\",\"canvas:branch\",\"canvas:create\",\"canvas:delete\",\"canvas:list\",\"canvas:read\",\"canvas:snapshot\",\"canvas:snapshot:create\",\"canvas:update\",\"case:activity:read\",\"case:archive\",\"case:comment:create\",\"case:create\",\"case:delete\",\"case:list\",\"case:member:list\",\"case:member:manage\",\"case:read\",\"case:state:update\",\"case:subject:manage\",\"case:update\",\"comment:create\",\"comment:list\",\"dashboard:read\",\"download:control\",\"download:create\",\"download:delete\",\"download:preview\",\"download:read\",\"download:refresh\",\"download:reuse\",\"evidence:create\",\"evidence:delete\",\"evidence:download\",\"evidence:list\",\"evidence:read\",\"evidence:review\",\"evidence:sensitive:read\",\"evidence:snapshot:create\",\"explorer:fetch\",\"explorer:read\",\"export:create\",\"export:delete\",\"export:download\",\"export:list\",\"export:read\",\"finding:create\",\"finding:list\",\"finding:read\",\"finding:review\",\"finding:update\",\"inbox:assign\",\"inbox:read\",\"investigation:approve\",\"investigation:cancel\",\"investigation:create\",\"investigation:delete\",\"investigation:list\",\"investigation:pause\",\"investigation:read\",\"investigation:resume\",\"investigation:retry\",\"investigation:run\",\"investigation:start\",\"investigation:submit_review\",\"investigation:update\",\"job:admin\",\"job:control\",\"job:diagnose\",\"job:list:self\",\"job:list:workspace\",\"job:read\",\"job:retry\",\"notification:list\",\"notification:manage\",\"notification:read\",\"notification:update\",\"preference:update\",\"profile:read\",\"profile:update\",\"profile:update:self\",\"report:approve\",\"report:create\",\"report:delete\",\"report:download\",\"report:list\",\"report:read\",\"report:review\",\"report:sign\",\"search:global\",\"search:read\",\"security:update\",\"session:self:revoke\",\"subject:create\",\"subject:list\",\"subject:remove\",\"subject:update\",\"token:read\",\"transaction:read\"],\"roles\":[\"owner\"],\"session_id\":\"ebbb0f5b-accf-4673-aa7c-810c72cc5459\",\"user\":{\"display_name\":\"\\u003cimg src=x onerror=\\\"window."
+    },
+    {
+      "at": "2026-09-12T22:59:10.995Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/providers/ankr/status",
+      "status": 200,
+      "requestId": "9b21e590-e8e6-47b8-a621-7ac7a01977dd",
+      "traceId": "50d22d3d-72c2-4584-9b3c-7c36254df13c",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"provider\":\"ankr\",\"state\":\"NORMAL\",\"last_check\":\"2026-09-13T05:59:10.964047768+07:00\",\"error\":\"\",\"consecutive_failures\":0,\"recent_error_rate\":0,\"current_concurrency\":0}\n"
+    },
+    {
+      "at": "2026-09-12T22:59:11.025Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/provider-accounts",
+      "status": 200,
+      "requestId": "19cbe8be-d987-4830-bd9e-94024a26044a",
+      "traceId": "b3ef4cdc-bad1-4d06-a803-3cf31333a4a8",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"accounts\":[{\"provider\":\"ankr\",\"status\":\"STALE\",\"configured\":true,\"connected\":true,\"official_available\":true,\"stale\":true,\"plan\":\"GREEN\",\"remaining_credits\":169633400,\"balance_usd\":16.96334,\"balance_kind\":\"remaining\",\"account_address\":\"\",\"synced_at\":\"2026-09-10T02:04:56.853093+07:00\",\"token_expires_at\":\"2026-09-10T14:04:54.633734+07:00\",\"source\":\"Ankr Management MCP\",\"reason\":\"Ankr account authorization is required\",\"console_url\":\"https://www.ankr.com/rpc/\"}]}\n"
+    },
+    {
+      "at": "2026-09-12T22:59:11.025Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/coverage/stats",
+      "status": 200,
+      "requestId": "30987e68-9395-492d-8fb2-db4df75c7a5d",
+      "traceId": "8fe83f46-e82c-4508-a700-bcf95ff715b2",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"stats\":{\"balances:blocks\":4000005,\"balances:ranges\":5,\"balances:rows\":86,\"internal_transactions:blocks\":605,\"internal_transactions:ranges\":5,\"internal_transactions:rows\":2357,\"logs:blocks\":125334376,\"logs:ranges\":15,\"logs:rows\":13946100,\"token_transfers:blocks\":2099312719,\"token_transfers:ranges\":4909,\"token_transfers:rows\":41172742,\"transactions:blocks\":1012497487,\"transactions:ranges\":3190,\"transactions:rows\":27599663}}\n"
+    },
+    {
+      "at": "2026-09-12T22:59:11.025Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/tokens/enrichment",
+      "status": 200,
+      "requestId": "8be050d2-f99c-472d-80f8-1f90ef4c3bcc",
+      "traceId": "0a8ad9c2-3b13-4a63-b6e2-860ec426d88f",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"token_contracts\":17594,\"complete\":17101,\"partial\":6,\"unknown\":486,\"conflict\":1,\"failed\":0,\"logo_available\":665,\"queue_depth\":0}\n"
+    },
+    {
+      "at": "2026-09-12T22:59:11.025Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/errors?range=24h",
+      "status": 200,
+      "requestId": "810c644a-70ce-4b0e-bb46-2feaa259f587",
+      "traceId": "f688ab72-46f6-4230-9e60-d551e1d6d8c8",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"freshness\":\"2026-09-13T05:59:10.982423938+07:00\",\"items\":[{\"avg_ms\":1262.1507896924356,\"cost_source\":\"内部估算\",\"credits\":3063600,\"error_class\":\"none\",\"errors\":13,\"estimated_cost_usd\":0.3063567280769348,\"logical_calls\":6996,\"p95_ms\":3673.1000000000013,\"requests\":6006},{\"avg_ms\":419.6084656084656,\"cost_source\":\"内部估算\",\"credits\":132300,\"error_class\":\"request_timeout\",\"errors\":189,\"estimated_cost_usd\":0.01323000993579626,\"logical_calls\":189,\"p95_ms\":1358.2,\"requests\":189},{\"avg_ms\":1324.3795454545455,\"cost_source\":\"内部估算\",\"credits\":98500,\"error_class\":\"upstream\",\"errors\":440,\"estimated_cost_usd\":0.0098500344902277,\"logical_calls\":440,\"p95_ms\":2400.749999999998,\"requests\":440},{\"avg_ms\":1066.8714285714286,\"cost_source\":\"内部估算\",\"credits\":28000,\"error_class\":\"method_unsupported\",\"errors\":140,\"estimated_cost_usd\":0.002799997804686427,\"logical_calls\":140,\"p95_ms\":2030.6499999999999,\"requests\":140},{\"avg_ms\":5833.75,\"cost_source\":\"内部估算\",\"credits\":3000,\"error_class\":\"timeout\",\"errors\":12,\"estimated_cost_usd\":0.0003000000142492354,\"logical_calls\":15,\"p95_ms\":9500.549999999992,\"requests\":12}]}\n"
+    },
+    {
+      "at": "2026-09-12T22:59:11.034Z",
+      "method": "GET",
+      "url": "https://127.0.0.1:8448/api/v1/api-control/overview?range=24h",
+      "status": 200,
+      "requestId": "a270ee99-3e34-4fb5-bf2c-a8a129ac621d",
+      "traceId": "66a98bdc-664d-4d78-81a4-d1fed5cbca07",
+      "audienceHeader": "admin",
+      "csrfHeader": null,
+      "responseBody": "{\"control\":{\"automatic_protection\":true,\"background_paused\":false,\"error_rate\":0,\"kill_switch\":false,\"manual_mode\":null,\"manual_reason\":null,\"manual_until\":null,\"p95_ms\":0,\"reason\":\"最近 5 分钟指标正常\",\"since\":\"2026-09-12T23:18:20.708511+07:00\",\"state\":\"NORMAL\",\"window_failures\":0,\"window_requests\":0},\"freshness\":\"2026-09-13T05:59:10.990528922+07:00\",\"metrics\":{\"cache_hits\":9,\"credits\":3325400,\"errors\":794,\"estimated_cost_usd\":0.3325364291667938,\"logical_calls\":7780,\"p50_ms\":516,\"p95_ms\":3518.25,\"p99_ms\":13932.100000000004,\"provider_calls\":6787,\"retries\":288,\"success_rate\":0.883166568569747},\"scope\":{\"account\":\"Ankr 官网按同一账户/项目/API Key 汇总全部客户端请求\",\"capture_started_at\":\"2026-08-31T18:25:35.08376+07:00\",\"comparison_reason\":\"未接入 Ankr 官方遥测明细，且官网账户总账与本地捕获范围不同\",\"credits\":\"本地按方法单价估算的已消耗积分，不是账户剩余积分\",\"official_comparable\":false,\"usage\":\"仅统计本平台已接入 provider_usage 审计链路的调用\"},\"sources\":{\"account\":\"官方数据（如已配置）\",\"cost\":\"本地估算\",\"usage\":\"本地审计\"},\"trend\":[{\"cost_usd\":0.0028900003526359797,\"errors\":14,\"p95_ms\":2673.75,\"requests\":86,\"time\":\"2026-09-12T12:00:00+07:00\"},{\"cost_usd\":0.018200058490037918,\"errors\":76,\"p95_ms\":4377.999999999991,\"requests\":530,\"time\":\"2026-09-12T13:00:00+07:00\"},{\"cost_usd\":0.008400003425776958,\"errors\":36,\"p95_ms\":3118.3499999999995,\"requests\":254,\"time\":\"2026-09-12T14:00:00+07:00\"},{\"cost_usd\":0.006650006864219904,\"errors\":29,\"p95_ms\":3679.75,\"requests\":196,\"time\":\"2026-09-12T15:00:00+07:00\"},{\"cost_usd\":0.0018999995663762093,\"errors\":8,\"p95_ms\":2201,\"requests\":56,\"time\":\"2026-09-12T16:00:00+07:00\"},{\"cost_usd\":0.009880024008452892,\"errors\":36,\"p95_ms\":2952,\"requests\":271,\"time\":\"2026-09-12T17:00:00+07:00\"},{\"cost_usd\":0.02731994539499283,\"errors\":83,\"p95_ms\":3986.2000000000025,\"requests\":664,\"time\":\"2026-09-12T18:00:00+07:00\"},{\"cost_usd\":0.10596796870231628,\"errors\":141,\"p95_ms\":2389.399999999994,\"requests\":1687,\"time\":\"2026-09-12T19:00:00+07:00\"},{\"cost_usd\":0.05434951186180115,\"errors\":97,\"p95_ms\":4228.299999999986,\"requests\":964,\"time\":\"2026-09-12T20:00:00+07:00\"},{\"cost_usd\":0.01240003015846014,\"errors\":50,\"p95_ms\":11564,\"requests\":341,\"time\":\"2026-09-12T21:00:00+07:00\"},{\"cost_usd\":0.012140023522078991,\"errors\":43,\"p95_ms\":13070.600000000002,\"requests\":310,\"time\":\"2026-09-12T22:00:00+07:00\"},{\"cost_usd\":0.007770002819597721,\"errors\":28,\"p95_ms\":8982.100000000002,\"requests\":186,\"time\":\"2026-09-12T23:00:00+07:00\"},{\"cost_usd\":0.004949998576194048,\"errors\":20,\"p95_ms\":2788.3999999999955,\"requests\":144,\"time\":\"2026-09-13T00:00:00+07:00\"},{\"cost_usd\":0.04619954526424408,\"errors\":94,\"p95_ms\":1400.5999999999967,\"requests\":794,\"time\":\"2026-09-13T01:00:00+07:00\"},{\"cost_usd\":0.004130001179873943,\"errors\":6,\"p95_ms\":713.7999999999978,\"requests\":59,\"time\":\"2026-09-13T02:00:00+07:00\"},{\"cost_usd\":0.0044099981896579266,\"errors\":13,\"p95_ms\":1986,\"requests\":104,\"time\":\"2026-09-13T03:00:00+07:00\"},{\"cost_usd\":0.004979999270290136,\"errors\":20,\"p95_ms\":1156.05,\"requests\":141,\"time\":\"2026-09-13T04:00:00+07:00\"}],\"window\":{\"from\":\"2026-09-12T05:59:10.964013437+07:00\",\"to\":\"2026-09-13T05:59:10.964013437+07:00\"}}\n"
+    }
+  ],
+  "heading": "状态总览",
+  "api_overview": {
+    "logical_calls": 7780
+  },
+  "cookies": [
+    {
+      "name": "__Host-cs_admin_session",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true
+    },
+    {
+      "name": "cs_admin_session_csrf",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+payload=https://evil.example.com -> next=/home
+payload=//evil.example.com -> next=/home
+payload=http://evil.example.com/x -> next=/home
+payload=javascript:alert(1) -> next=/home
+payload=/app-v2/../../etc/passwd -> next=/../../etc/passwd
+payload=/%2F%2Fevil.example.com -> next=/%2F%2Fevil.example.com

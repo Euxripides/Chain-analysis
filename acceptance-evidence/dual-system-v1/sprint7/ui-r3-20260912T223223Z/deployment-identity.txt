@@ -1,0 +1,21 @@
+captured_at=2026-09-13T05:32:23+07:00
+project=/home/euripides/projects/blockchain-platform
+--- systemctl --user show -p ExecStart ---
+MainPID=3413432
+ExecStart={ path=/home/euripides/projects/blockchain-platform/backend/bin/api ; argv[]=/home/euripides/projects/blockchain-platform/backend/bin/api ; ignore_errors=no ; start_time=[Sun 2026-09-13 04:14:09 +07] ; stop_time=[n/a] ; pid=3413432 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+
+MainPID=3413434
+ExecStart={ path=/home/euripides/projects/blockchain-platform/backend/bin/worker ; argv[]=/home/euripides/projects/blockchain-platform/backend/bin/worker ; ignore_errors=no ; start_time=[Sun 2026-09-13 04:14:09 +07] ; stop_time=[n/a] ; pid=3413434 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+--- /proc/<PID>/exe ---
+blockchain-api.service MainPID=3413432 exe=/home/euripides/projects/blockchain-platform/backend/bin/api
+blockchain-worker.service MainPID=3413434 exe=/home/euripides/projects/blockchain-platform/backend/bin/worker
+--- sha256(binary on disk) ---
+e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7  /home/euripides/projects/blockchain-platform/backend/bin/api
+9c41079d5c59067e0585166d049219de0f14fd93069b3c3a194dff0ecf9fccb6  /home/euripides/projects/blockchain-platform/backend/bin/worker
+--- sha256(/proc/<PID>/exe) ---
+e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7  /proc/3413432/exe
+9c41079d5c59067e0585166d049219de0f14fd93069b3c3a194dff0ecf9fccb6  /proc/3413434/exe

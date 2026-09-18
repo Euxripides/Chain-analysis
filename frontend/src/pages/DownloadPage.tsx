@@ -49,8 +49,11 @@ export default function DownloadPage() {
   const [subjectMeta, setSubjectMeta] = useState<Record<string, { case_name: string; tags: string[] }>>({})
   const [subjectChains, setSubjectChains] = useState<Record<string, string>>({})
 
-  useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
-  useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
+  // fail-closed：只有 Array.isArray 才接收，其余（undefined/null/对象/字符串）一律保持 []。
+  // 2026-09-13 实测缺陷：已认证用户在空工作区拿到 200 {"cases":null}，上一版直接 setCases(null)，
+  // 随后 cases.map / tags.map 抛 TypeError，整页白屏（未认证反而因 401 走 catch 而正常）。
+  useEffect(() => { api.listCases().then((d) => setCases(Array.isArray(d?.cases) ? d.cases : [])).catch(() => {}) }, [])
+  useEffect(() => { api.listTags().then((d) => setTags(Array.isArray(d?.tags) ? d.tags : [])).catch(() => {}) }, [])
 
   const addresses = useMemo(() => {
     const lines = addressText.split(/[\n,;\s]+/).map((value) => normalizeAddress(value, chain)).filter(Boolean)

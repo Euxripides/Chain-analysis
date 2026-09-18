@@ -1,0 +1,28 @@
+{
+  "label": "lan_dashboard",
+  "url": "http://127.0.0.1:8080/api/v2/dashboard",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000168525,
+  "requests": 25638,
+  "rps": 1281.8891984811414,
+  "errors": 8,
+  "status_counts": {
+    "200": 25630
+  },
+  "p50_ms": 4.731382,
+  "p90_ms": 11.425576,
+  "p95_ms": 14.502523,
+  "p99_ms": 21.935647,
+  "min_ms": 0.138897,
+  "max_ms": 47.387497,
+  "avg_ms": 6.2152376300803125,
+  "avg_response_bytes": 1256.6077697168266,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded"
+  ]
+}

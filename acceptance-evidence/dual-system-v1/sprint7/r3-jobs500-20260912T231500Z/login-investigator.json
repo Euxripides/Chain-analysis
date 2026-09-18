@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "audience": "user",
+    "csrf_token": "<redacted>",
+    "must_change_password": true,
+    "next": "/home",
+    "roles": [
+      "investigator"
+    ],
+    "session_id": "b3364a7f-0225-40ec-9fe8-c0f8ad8a29f7",
+    "state": "authenticated",
+    "user": {
+      "display_name": "<img src=x onerror=\"window.__xss=1\">SCRI PT",
+      "email": "fixture-investigator@fixture.local",
+      "id": "2f545a30-cc3f-46d7-8f5b-e70ea0c01f43"
+    }
+  },
+  "meta": {
+    "request_id": "72bc1899-e66a-4d55-80da-53e41ee768f1",
+    "trace_id": "67ef6d41-1773-4af9-8181-e5dc17dfdd9e",
+    "server_time": "2026-09-12T23:06:29.910Z",
+    "next_cursor": null
+  },
+  "error": null,
+  "_redaction_note": "csrf_token 已脱敏；会话令牌从未出现在响应体（仅 HttpOnly Cookie），且登录用的临时 cookie jar 已删除。"
+}

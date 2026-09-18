@@ -1,0 +1,27 @@
+### backend/bin/api scan-target verification  utc=2026-09-12T17:00:19Z
+target_path_in_container=/w/backend/bin/api
+host_path=/home/euripides/projects/blockchain-platform/backend/bin/api
+sha256_before_syft=bae72e0a5063643866d5fe2e259ba4239d8f6ca94ab0191b7c59496fcc040142
+sha256_after_syft=bae72e0a5063643866d5fe2e259ba4239d8f6ca94ab0191b7c59496fcc040142
+size_bytes=55518192
+mtime_before=2026-09-13 00:00:03.746838473 +0700
+mtime_after=2026-09-13 00:00:03.746838473 +0700
+file_unchanged_across_scan_window=yes
+syft_metadata_component_version=sha256:bae72e0a5063643866d5fe2e259ba4239d8f6ca94ab0191b7c59496fcc040142
+syft_version_equals_file_sha256=yes
+syft_cdx_exit=0
+syft_spdx_exit=0
+TARGET_VERIFICATION=PASS
+
+### Semantics note (measured, not assumed)
+syft's metadata.component.version for a FILE target is the sha256 of that file:
+  - control experiment: 23-byte plain.txt -> syft wrote sha256:<its exact sha256> (MATCH)
+  - first pass scanned <project>/bin/api and syft wrote sha256:33440571... = that stale file's real sha256
+  - corrected pass scanned backend/bin/api and syft wrote sha256:bae72e0a5063643866d5fe2e259ba4239d8f6ca94ab0191b7c59496fcc040142 = that file's real sha256
+### Correction of an earlier mis-reading:
+The earlier note in this file claimed an unexplained June/September 'race' because syft's
+version field did not equal the sha256 of backend/bin/api. That inference was WRONG: the field
+did not match because syft had been pointed at a DIFFERENT file (<project>/bin/api), not because
+the scan target was unstable. The real, still-valid observation is that backend/bin/api was
+rebuilt at 2026-09-12 23:54:22 local by the concurrent deploy loop; the FINAL artifacts were
+produced strictly after that rebuild, with before/after hash equality proven above.

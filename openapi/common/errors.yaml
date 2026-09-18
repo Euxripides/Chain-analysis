@@ -52,20 +52,113 @@ KnownErrorCodes:
   AUTHN_SESSION_INVALID: 401
   AUTHN_SESSION_REUSE: 401
   AUTHN_UNAUTHENTICATED: 401
-  AUTHN_MFA_UNAVAILABLE: 501
+  AUTHN_MFA_UNAVAILABLE: 503
+  # MFA/TOTP（ADR-017 §3、AUTH-004）：注册、登录第二步与自助关闭的真实错误码。
+  # 说明：AUTHN_MFA_UNAVAILABLE 是「该部署未接线 MFA 存储」，属可恢复的运行态，
+  # 不是「功能未实现」（未实现的占位端点才会返回 501 NOT_IMPLEMENTED）。
+  AUTHN_MFA_INVALID: 401
+  AUTHN_MFA_CHALLENGE_INVALID: 401
+  AUTHN_MFA_NOT_ENROLLED: 409
+  AUTHN_MFA_ALREADY_ENROLLED: 409
+  RATE_LIMIT_MFA_ATTEMPTS: 429
   AUTHN_OIDC_NOT_CONFIGURED: 501
+  # Sprint 7 C1-SEC: server-side enforcement of identities.must_change_password.
+  AUTHN_PASSWORD_CHANGE_REQUIRED: 403
   AUTHZ_ACCOUNT_DISABLED: 403
   AUTHZ_ACCOUNT_LOCKED: 423
   AUTHZ_CSRF_FAILED: 403
   AUTHZ_FORBIDDEN: 403
   AUTHZ_PERMISSION_DENIED: 403
+  # Sprint 7 C1-RACE: session workspace staleness guard (defence in depth).
+  AUTHZ_WORKSPACE_SCOPE_STALE: 409
+  # 会话工作区切换在提交时发现会话行已被并发改变（RebindWorkspace 冲突），
+  # 由 POST /api/auth/v1/session/workspace 返回；客户端应重新读取会话后重试。
+  AUTHZ_WORKSPACE_SWITCH_CONFLICT: 409
   VALIDATION_INVALID_ARGUMENT: 400
   VALIDATION_UNKNOWN_ROLE: 422
   RESOURCE_NOT_FOUND: 404
   CONFLICT_CONFIRMATION_REQUIRED: 428
   CONFLICT_LAST_OWNER: 422
   CONFLICT_DUPLICATE: 409
+  # 目标对象处于不允许该操作的状态（如审批未通过就执行、边界声明与实际数据不一致）。
+  CONFLICT_STATE: 409
   RATE_LIMIT_EXCEEDED: 429
   INTERNAL_ERROR: 500
   INTERNAL_NOT_READY: 503
   NOT_IMPLEMENTED: 501
+  # §7.3：被功能开关（feature_flags）关闭的能力面。开关在**真实请求路径**上求值，
+  # 关闭时返回 503 + details{flag, reason, revision}；reason 取值：
+  # disabled / scope_mismatch / environment_mismatch / scope_match_zero_rollout /
+  # percentage_bucket_miss / flag_not_found / evaluation_error。
+  # 拒绝与放行都会写入 feature_flag_evaluations（真实流量证据）。
+  # 安全与恢复路径（Kill Switch 审批/执行/恢复）不受开关影响，见 ADR-021。
+  FEATURE_DISABLED: 503
+
+# ---------------------------------------------------------------------------
+# Sprint 7 API-layer authorization guards.
+#
+# These are enforced by the Go middleware layer (backend/internal/api), not by an individual
+# endpoint, so they apply to every business operation documented in user-v2.yaml,
+# admin-v1.yaml and auth-v1.yaml. Both answer the standard ErrorEnvelope above.
+# ---------------------------------------------------------------------------
+
+# Server-side enforcement of identities.must_change_password (sprint7 C1-SEC).
+# A session whose identity still carries must_change_password = true is refused on every
+# business surface BEFORE any business logic runs. The self-service surface stays reachable so
+# the holder can repair the state, and health/metrics/docs are untouched.
+MustChangePasswordGuard:
+  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
+  refused_status: 403
+  guarded_surfaces:
+    - /api/v1/
+    - /api/v2/
+    - /api/admin/v1/
+  fail_closed: true
+  fail_closed_note: >-
+    Any /api/ path that is neither allowlisted nor part of the self-service auth surface is
+    guarded, so a future surface is refused by default without a code change.
+  reachable_while_flagged:
+    - GET /api/auth/v1/session
+    - POST /api/auth/v1/logout
+    - POST /api/auth/v1/password/change
+    - GET /api/auth/v1/methods
+  unchanged_behaviour:
+    - every other /api/auth/v1 route keeps its previous behaviour
+    - /health/live, /health/ready, /metrics, /openapi.json, /docs, /redoc are outside the guard
+  audit: >-
+    action authorization.denied, category authorization, result deny, http_status 403,
+    error_code AUTHN_PASSWORD_CHANGE_REQUIRED, deny_reason must_change_password, plus the
+    route and the request id. No password, password hash or session token is ever recorded.
+  response:
+    description: >-
+      The authenticated identity must change its password first. details.reason is
+      must_change_password and details.password_change_endpoint names the self-service route
+      that clears the flag.
+    content:
+      application/json:
+        schema:
+          $ref: '#/ErrorEnvelope'
+
+# Session workspace staleness guard (sprint7 C1-RACE, defence in depth).
+# A state-changing request authenticated while the session was in workspace A must not commit
+# into A after the same session was switched to B.
+SessionWorkspaceScopeGuard:
+  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
+  refused_status: 409
+  scope: state-changing methods only (GET, HEAD and OPTIONS are never checked)
+  condition: >-
+    the live sessions row is missing or revoked, or its workspace no longer equals the
+    principal's workspace, or the row cannot be read at all (fail closed)
+  cost: one primary-key lookup on sessions per state-changing request
+  audit: >-
+    action authorization.denied, category authorization, result deny, http_status 409,
+    error_code AUTHZ_WORKSPACE_SCOPE_STALE, deny_reason session_workspace_changed or
+    session_missing or session_scope_unverifiable, plus the route and the request id.
+  response:
+    description: >-
+      The session workspace changed while this request was in flight; reload the session and
+      retry. The message names no object, workspace or session identifier.
+    content:
+      application/json:
+        schema:
+          $ref: '#/ErrorEnvelope'

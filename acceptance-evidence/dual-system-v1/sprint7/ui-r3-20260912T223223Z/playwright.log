@@ -1,0 +1,221 @@
+
+Running 14 tests using 1 worker
+
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘   1 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (2.5s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘   2 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (2.5s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘   3 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (2.0m)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✓   4 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:131:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (3.6s)
+  ✓   5 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:22:1 › 用户层会话访问 /api-control 仍被拒绝（403） (4.5s)
+  ✓   6 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:42:1 › 匿名访问 /api-control 仍被拒绝（401） (3.7s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✓   7 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:61:1 › 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.2s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘   8 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 (2.1s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘   9 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 (2.3s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✘  10 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） (2.0m)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✓  11 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:131:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出 (3.5s)
+  ✓  12 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:22:1 › 用户层会话访问 /api-control 仍被拒绝（403） (3.9s)
+  ✓  13 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:42:1 › 匿名访问 /api-control 仍被拒绝（401） (3.4s)
+R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z
+  ✓  14 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:61:1 › 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝 (1.2s)
+
+
+  1) [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 
+
+    TypeError: Cannot read properties of undefined (reading 'freshness')
+
+      64 |       freshness: string;
+      65 |     };
+    > 66 |     expect(overview.freshness, "overview 必须带真实新鲜度时间戳").toBeTruthy();
+         |                     ^
+      67 |
+      68 |     await expect(page.getByText("请求量")).toBeVisible();
+      69 |     await expect(page.locator(".ac-hero-metrics")).toContainText(compact.format(overview.metrics.logical_calls), { timeout: 25_000 });
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:66:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-desktop/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-desktop/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 
+
+    TypeError: Cannot read properties of undefined (reading 'metrics')
+
+       95 |     const overview = (await overviewResponse.json()).data as { metrics: { logical_calls: number } };
+       96 |
+    >  97 |     await expect(page.getByText(`${compact.format(overview.metrics.logical_calls)} Calls`).first()).toBeVisible({ timeout: 25_000 });
+          |                                                            ^
+       98 |     // 缺陷的可视症状：接口失败时页面弹出"状态数据未完整加载"弹窗。
+       99 |     await expect(page.getByRole("alertdialog").filter({ hasText: "状态数据未完整加载" })).toHaveCount(0);
+      100 |     await page.waitForTimeout(1200);
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:97:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-desktop/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-desktop/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.scrollIntoViewIfNeeded: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for locator('input[name="kill-reason"]')
+
+
+      114 |     await expect(page.getByRole("heading", { name: "API 控制中心" })).toBeVisible();
+      115 |     const kill = page.locator('input[name="kill-reason"]');
+    > 116 |     await kill.scrollIntoViewIfNeeded();
+          |                ^
+      117 |     await expect(kill).toBeVisible();
+      118 |     await kill.fill("R-3 验收：仅打开确认弹窗，不提交");
+      119 |     const trigger = page.getByRole("button", { name: /启用停机|解除停机/ });
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:116:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-desktop/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-desktop/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 
+
+    TypeError: Cannot read properties of undefined (reading 'freshness')
+
+      64 |       freshness: string;
+      65 |     };
+    > 66 |     expect(overview.freshness, "overview 必须带真实新鲜度时间戳").toBeTruthy();
+         |                     ^
+      67 |
+      68 |     await expect(page.getByText("请求量")).toBeVisible();
+      69 |     await expect(page.locator(".ac-hero-metrics")).toContainText(compact.format(overview.metrics.logical_calls), { timeout: 25_000 });
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:66:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-mobile/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-mobile/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--a8886-真实接口全部成功、关键数据来自接口、无-401-403-r3-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 
+
+    TypeError: Cannot read properties of undefined (reading 'metrics')
+
+       95 |     const overview = (await overviewResponse.json()).data as { metrics: { logical_calls: number } };
+       96 |
+    >  97 |     await expect(page.getByText(`${compact.format(overview.metrics.logical_calls)} Calls`).first()).toBeVisible({ timeout: 25_000 });
+          |                                                            ^
+       98 |     // 缺陷的可视症状：接口失败时页面弹出"状态数据未完整加载"弹窗。
+       99 |     await expect(page.getByRole("alertdialog").filter({ hasText: "状态数据未完整加载" })).toHaveCount(0);
+      100 |     await page.waitForTimeout(1200);
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:97:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-mobile/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-mobile/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--12f06-打开、无失败弹窗、关键数据来自接口、无-401-403-r3-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.scrollIntoViewIfNeeded: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for locator('input[name="kill-reason"]')
+
+
+      114 |     await expect(page.getByRole("heading", { name: "API 控制中心" })).toBeVisible();
+      115 |     const kill = page.locator('input[name="kill-reason"]');
+    > 116 |     await kill.scrollIntoViewIfNeeded();
+          |                ^
+      117 |     await expect(kill).toBeVisible();
+      118 |     await kill.fill("R-3 验收：仅打开确认弹窗，不提交");
+      119 |     const trigger = page.getByRole("button", { name: /启用停机|解除停机/ });
+        at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-audience.spec.ts:116:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-mobile/error-context.md
+
+    Error Context: test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-mobile/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/r3-legacy-ui-audience-R-3--c39ea--api-control：弹窗可开关（不做任何写操作）-r3-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 
+    [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 
+    [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） 
+    [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403 
+    [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403 
+    [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:112:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：弹窗可开关（不做任何写操作） 
+  8 passed (4.8m)

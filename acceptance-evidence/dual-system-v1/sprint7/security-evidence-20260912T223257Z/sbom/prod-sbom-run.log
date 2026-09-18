@@ -1,0 +1,74 @@
++ STAGE=/tmp/prod-sbom-stage
++ rm -rf /tmp/prod-sbom-stage
++ mkdir -p /tmp/prod-sbom-stage
++ ln /home/euripides/projects/blockchain-platform/backend/bin/api /tmp/prod-sbom-stage/api
++ ln /home/euripides/projects/blockchain-platform/backend/bin/worker /tmp/prod-sbom-stage/worker
++ ln /home/euripides/projects/blockchain-platform/backend/bin/migrate /tmp/prod-sbom-stage/migrate
++ ln /home/euripides/projects/blockchain-platform/backend/go.mod /tmp/prod-sbom-stage/go.mod
++ ln /home/euripides/projects/blockchain-platform/backend/go.sum /tmp/prod-sbom-stage/go.sum
++ echo '=== staged (hardlinks; same inode as originals) ==='
+=== staged (hardlinks; same inode as originals) ===
++ ls -la /tmp/prod-sbom-stage
+total 125704
+drwxrwxr-x  2 euripides euripides     4096 Sep 13 05:58 .
+drwxrwxrwt 85 root      root         28672 Sep 13 05:58 ..
+-rwxrwxr-x  2 euripides euripides 55570964 Sep 13 04:14 api
+-rw-rw-r--  2 euripides euripides     2650 Sep 12 23:27 go.mod
+-rw-rw-r--  2 euripides euripides    19064 Sep 12 22:54 go.sum
+-rwxrwxr-x  2 euripides euripides 30685163 Sep 13 03:50 migrate
+-rwxrwxr-x  2 euripides euripides 42397378 Sep 13 04:14 worker
++ sha256sum /tmp/prod-sbom-stage/api /tmp/prod-sbom-stage/worker /tmp/prod-sbom-stage/migrate /tmp/prod-sbom-stage/go.mod /tmp/prod-sbom-stage/go.sum
+e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7  /tmp/prod-sbom-stage/api
+9c41079d5c59067e0585166d049219de0f14fd93069b3c3a194dff0ecf9fccb6  /tmp/prod-sbom-stage/worker
+ab10efe36791e49ea820fb7b293c6aa4104bf93788dacacc87f7f7895ca19b4f  /tmp/prod-sbom-stage/migrate
+4e0f98fa4e9258cd07c1acc6f0ce5bd762cba5ba9343bcbd28b1f1a33644c36c  /tmp/prod-sbom-stage/go.mod
+34147fb9944ea49b8470e4c0e0da85eb53ce60706975b2d5fe34c2011ee4b6b2  /tmp/prod-sbom-stage/go.sum
++ echo
+
++ echo '=== syft on the production-only staging dir ==='
+=== syft on the production-only staging dir ===
++ docker run --rm -v /tmp/prod-sbom-stage:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/sbom:/out anchore/syft:latest dir:/w -o cyclonedx-json=/out/backend-prod.cdx.json
+[0001]  WARN no explicit name and version provided for directory source, deriving artifact ID from the given path (which is not ideal)
++ echo PROD_CDX_EXIT=0
+PROD_CDX_EXIT=0
++ docker run --rm -v /tmp/prod-sbom-stage:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/sbom:/out anchore/syft:latest dir:/w -o spdx-json=/out/backend-prod.spdx.json
+[0000]  WARN no explicit name and version provided for directory source, deriving artifact ID from the given path (which is not ideal)
++ echo PROD_SPDX_EXIT=0
+PROD_SPDX_EXIT=0
++ echo
+
++ echo '=== component counts ==='
+=== component counts ===
++ python3 -
++ python3 -c '
+import json, collections
+base='\''/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/sbom'\''
+d=json.load(open(base+'\''/backend-prod.cdx.json'\''))
+comps=d.get('\''components'\'') or []
+print('\''PROD cdx components:'\'', len(comps))
+print('\''by type:'\'', dict(collections.Counter(c.get('\''type'\'') for c in comps)))
+paths=collections.Counter()
+for c in comps:
+    for p in (c.get('\''properties'\'') or []):
+        if p.get('\''name'\'')=='\''syft:location:0:path'\'': paths[p.get('\''value'\'')]+=1
+print('\''by source path:'\'')
+for k,v in paths.most_common(10): print('\''   %-28s %d'\'' % (k, v))
+names=sorted(set(c.get('\''name'\'') for c in comps))
+print('\''distinct package names:'\'', len(names))
+for n in names:
+    if any(k in n for k in ('\''excelize'\'','\''chi'\'','\''pgx'\'','\''crypto'\'')): print('\''   KEY:'\'', n)
+'
+PROD cdx components: 190
+by type: {'library': 186, 'file': 4}
+by source path:
+   /api                         55
+   /go.mod                      55
+   /worker                      44
+   /migrate                     32
+distinct package names: 61
+   KEY: github.com/go-chi/chi/v5
+   KEY: github.com/jackc/pgx/v5
+   KEY: github.com/xuri/excelize/v2
+   KEY: golang.org/x/crypto
++ echo PROD_SBOM_DONE=1
+PROD_SBOM_DONE=1

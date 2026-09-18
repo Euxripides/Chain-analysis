@@ -10,6 +10,14 @@ info:
     auth-v1.yaml 是完整级契约，可作为写法参考。
 x-contract-level: index-only
 x-generated-by: scripts/gen_openapi_index.py
+x-must-change-password-guard:
+  refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
+  refused_status: 403
+  see: './common/errors.yaml#/MustChangePasswordGuard'
+x-session-workspace-scope-guard:
+  refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
+  refused_status: 409
+  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'
 servers:
   - url: /
 security:
@@ -294,26 +302,6 @@ paths:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
   /api/admin/v1/audit/export:
     post:
-      operationId: postAuditExport
-      tags: [admin-v1]
-      x-required-permission: admin:audit:export
-      responses:
-        '501':
-          description: 该能力尚未实现（NOT_IMPLEMENTED）
-          content:
-            application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-        '401':
-          description: 未认证或会话失效
-          content:
-            application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-        '403':
-          description: 缺少所需权限
-          content:
-            application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
-    post:
       operationId: adminAuditExport
       tags: [admin-v1]
       x-required-permission: admin:audit:export
@@ -420,21 +408,64 @@ paths:
   /api/admin/v1/audit/integrity/incidents/requests:
     post:
       operationId: adminAuditIntegrityRequest
+      summary: 发起完整性事件登记（连续缺口的边界封存，或稀疏事实声明）
+      description: |
+        两种 kind：
+        * 省略 / unrecoverable_gap：封存连续的不可恢复前缀缺口（ADR-018）；
+        * declared_integrity_events：**逐条**声明 append-only 链上不可修复、也不允许被忽略的事实
+          （缺失行 lost 与内容哈希不可复算行 content_anomaly，见 ADR-019）。
+        两者都需要 step-up 口令，并且必须由**第二名**具备 admin:approval:decide 的人员批准后
+        才可执行；执行时重新扫描并逐条比对 seq 与哈希，任何漂移都中止且不写入任何行。
+        已声明过的 seq 不会被重复声明（重复请求返回 declaration_needed=false 与只读扫描结果）。
       tags: [admin-v1]
       x-required-permission: admin:audit:seal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chain, reason, step_up_password]
+              properties:
+                chain: { type: string, enum: [audit, login], default: audit }
+                kind:
+                  type: string
+                  enum: [unrecoverable_gap, declared_integrity_events]
+                  description: 省略时按 unrecoverable_gap（缺口封存）处理
+                reason: { type: string, description: 必填；写入不可变事件链与审计 }
+                step_up_password: { type: string, writeOnly: true }
       responses:
         '200':
-          description: 成功（响应体模型待补充）
+          description: |
+            封存路径返回既有 incident（already_sealed=true）；声明路径在无可声明事实时返回
+            declaration_needed=false 与只读扫描结果
           content:
             application/json:
               schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '201':
+          description: 审批请求已创建（approval + 只读扫描结果 + declaration_ref）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '400':
+          description: 参数不合法（如缺少 reason、chain 非法）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
         '401':
           description: 未认证或会话失效
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
         '403':
-          description: 缺少所需权限
+          description: 缺少所需权限或 step-up 口令不正确
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: |
+            CONFLICT_STATE：封存路径发现幸存区间内部断层；声明路径发现 prev_hash 链接断裂
+            （真实篡改，不允许用声明掩盖）
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
@@ -2237,6 +2268,27 @@ paths:
       operationId: adminEnableUser
       tags: [admin-v1]
       x-required-permission: admin:user:disable
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/users/{id}/commands/reset-mfa:
+    post:
+      operationId: adminResetMFA
+      tags: [admin-v1]
+      x-required-permission: admin:user:reset_mfa
       responses:
         '200':
           description: 成功（响应体模型待补充）

@@ -11,12 +11,13 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/minio/minio-go/v7"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
@@ -41,6 +42,17 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
+	// 租户/操作者作用域由服务端注入（§21.2），绝不接受客户端提交。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, wsErr := s.writableWorkspace(r.Context(), scope)
+	if wsErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": wsErr.Error()})
+		return
+	}
+	actor := PrincipalFrom(r.Context())
 	// V1.2：多地址导出走异步 ZIP 管线（§47-§53）
 	if len(req.Addresses) > 0 || len(req.Datasets) > 0 {
 		s.createExportV2(w, r, exportV2Request{
@@ -48,6 +60,7 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 			Subject: req.Subject, Chain: req.Chain, Addresses: req.Addresses,
 			Datasets: req.Datasets, IncludeMeta: req.IncludeMeta, ForceZip: req.ForceZip,
 			IncludeDecodedInput: req.IncludeDecodedInput,
+			OrgID:               scope.OrganizationID, WSID: wsID, UserID: actor.IdentityID,
 		})
 		return
 	}
@@ -65,7 +78,22 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	if req.JobID != "" {
 		jobID = &req.JobID
 	}
-	exp, err := s.deps.Store.CreateExport(r.Context(), jobID, req.Dataset, req.Format)
+	// P4 (2026-09-15): this branch used to call Store.CreateExport, which inserts
+	// neither organization_id nor workspace_id; both are NOT NULL since migration
+	// 0044, so the route could not create a row at all and the legacy csv/ndjson/
+	// xlsx writers were unreachable. It now records the same server-injected scope
+	// and creator the v2 branch records, which is also what the pre-Put live
+	// authorization revalidation reads.
+	legacySnapshot, _ := json.Marshal(map[string]any{
+		"dataset": req.Dataset, "format": req.Format,
+		"subject": strings.TrimSpace(req.Subject),
+		"chain":   strings.ToLower(strings.TrimSpace(req.Chain)),
+	})
+	var legacyCreator *string
+	if actor.IdentityID != "" {
+		legacyCreator = &actor.IdentityID
+	}
+	exp, err := s.deps.Store.CreateExportV2(r.Context(), wsID, scope.OrganizationID, legacyCreator, jobID, req.Dataset, req.Format, false, legacySnapshot)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -75,11 +103,15 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	if chain != "tron" {
 		subject = strings.ToLower(subject)
 	}
-	go s.runExport(context.Background(), exp, subject, chain)
+	go s.runExport(backgroundAuditCtx(r), exp, subject, chain)
 	writeJSON(w, http.StatusAccepted, exp)
 }
 
 func (s *Server) handleGetExport(w http.ResponseWriter, r *http.Request) {
+	// 导出对象带租户归属（exports.organization_id / workspace_id）：跨租户统一 404。
+	if !s.scopedObject(w, r, "export", chi.URLParam(r, "id")) {
+		return
+	}
 	exp, err := s.deps.Store.GetExport(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -92,12 +124,82 @@ func (s *Server) handleGetExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, exp)
 }
 
+// handleExportDownloadScoped 是 /exports/{id}/download 的认证入口。
+//
+// 对象级授权必须放在这里而不是 handleDownloadExport 内部：后者同时被
+// /api/v1/download/{ticket} 的票据路径复用（票据本身就是短时能力令牌，
+// 没有 session 主体），在内部加作用域检查会把票据链路一起打断。
+func (s *Server) handleExportDownloadScoped(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "export", chi.URLParam(r, "id")) {
+		return
+	}
+	s.handleDownloadExport(w, r)
+}
+
+// auditRequestDetached 返回一个"与客户端断连解耦"的请求：context 保留原请求的值
+// （principal / meta / origin / request_id / trace_id），但**不会**因为客户端关闭连接而被取消。
+//
+// 真实缺陷（2026-09-13 生产日志实测）：全量导出下载的成功审计在 io.CopyBuffer 返回之后才写，
+// 此时客户端已收完字节并关闭连接，r.Context() 已取消，审计 INSERT 直接失败：
+//
+//	{"level":"ERROR","msg":"audit write failed","action":"export.download","err":"context canceled"}
+//
+// 结果是下载成功但审计链上**没有这一条记录**；Range（响应体很小）与 HEAD（无响应体）不受影响，
+// 所以只看 httptest 的旧证据完全看不出来。票据下载路径复用同一个 serveExportObject，同样丢审计。
+// 审计写入必须反映"这次下载确实发生了"，而不是"连接还活着"。
+func auditRequestDetached(r *http.Request) *http.Request {
+	// dbtx.WithoutTx: WithoutCancel keeps context VALUES, so without this the
+	// detached audit write would still find the P1-A request transaction and roll
+	// back with the business write it is supposed to record -- including the deny
+	// row that explains a rolled back commit.
+	return r.WithContext(dbtx.WithoutTx(context.WithoutCancel(r.Context())))
+}
+
+// auditExportDownloadFailed：DATA-008 语义——对象在所有读桶中都不存在时，绝不宣称成功，
+// 且必须留下可操作线索（与 sprint5_exports.go 的票据路径同一口径）。
+func (s *Server) auditExportDownloadFailed(r *http.Request, exp *model.Export, path string) {
+	s.writeAuditNow(r, "export.download_failed", "export", "export", exp.ID,
+		map[string]any{"reason": "object_missing", "object_ref": exp.ObjectRef, "path": path, "action": "notify_admin"})
+}
+
 func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 	exp, err := s.deps.Store.GetExport(r.Context(), chi.URLParam(r, "id"))
 	if err != nil || exp == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "export not found"})
 		return
 	}
+	s.serveExportObject(w, r, exp, nil)
+}
+
+// handleDownloadExportTicket 供 /api/v1/download/{ticket} 的一次性票据路径复用；
+// 与直接认证路径共用同一个 serveExportObject，只在成功审计上附加 ticket=true 标记，
+// 保证两条路径的 action 与字段口径完全一致（D-R10V9-01）。
+func (s *Server) handleDownloadExportTicket(w http.ResponseWriter, r *http.Request) {
+	exp, err := s.deps.Store.GetExport(r.Context(), chi.URLParam(r, "id"))
+	if err != nil || exp == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "export not found"})
+		return
+	}
+	s.serveExportObject(w, r, exp, map[string]any{"ticket": true})
+}
+
+// serveExportObject 提供导出对象的流式下载（全量 GET / Range GET / HEAD）。
+//
+// D-R10V9-01（本轮实测发现的真实验收缺陷）：直接路径 /api/v1/exports/{id}/download 原先
+// **只在失败时**写审计，成功的全量/Range/HEAD 没有任何服务端业务审计，导致"谁在何时下载了
+// 哪个对象、命中哪个真实桶"在 v2 审计链上不可查询；而 ticket 路径有审计 → 两套不可查询口径。
+// 现在三条路径统一写 action=export.download，字段口径与读/写 helper 的 auditFields 一致：
+//
+//	object_bucket      = **真实 MinIO 桶名**（loc.Name，如 blockchain-exports）
+//	object_bucket_role = 逻辑角色（"raw" / "export"）
+//
+// 成功审计的时机（不虚报）：
+//   - HEAD：响应头成功形成后即可审计（无响应体，不存在流失败）；
+//   - GET / Range：只有流式拷贝**完整结束**（io.Copy 无错且写出字节数 == 期望长度）才写成功；
+//     客户端中断 / 写端错误写 export.download_failed（reason=client_abort|stream_failed）+ bytes_written。
+//
+// extra 供调用方附加来源标记（如 ticket=true），nil 表示直接认证路径。
+func (s *Server) serveExportObject(w http.ResponseWriter, r *http.Request, exp *model.Export, extra map[string]any) {
 	if exp.Status != "COMPLETED" {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "export not ready: " + exp.Status})
 		return
@@ -141,14 +243,23 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		reader, size, err := s.deps.Raw.OpenRange(r.Context(), exp.ObjectRef, start, end)
+		// F-R10-BUCKET：Range 也走双读（迁移前后对象可能在新桶）。
+		reader, size, loc, err := s.openExportObjectRange(r.Context(), exp.ObjectRef, start, end)
 		if err != nil {
-			if errors.Is(err, rawstore.ErrInvalidRange) {
+			switch {
+			case errors.Is(err, rawstore.ErrInvalidRange):
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
 				writeJSON(w, http.StatusRequestedRangeNotSatisfiable, map[string]any{"error": err.Error()})
-				return
+			case isExportObjectMissing(err):
+				s.auditExportDownloadFailed(auditRequestDetached(r), exp, "range")
+				respondError(w, r, http.StatusServiceUnavailable, "DATA_OBJECT_MISSING",
+					"导出对象在对象存储中缺失，请管理员检查 MinIO 与导出记录",
+					map[string]any{"export_id": exp.ID, "object_ref": exp.ObjectRef})
+			default:
+				// 非对象级缺失（桶不存在/权限/网络/5xx）：fail closed 且必须留可操作审计线索。
+				s.auditExportStorageFault(auditRequestDetached(r), exp, "range", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}
 		defer reader.Close()
@@ -159,31 +270,292 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", fmt.Sprint(end-start+1))
 		w.WriteHeader(http.StatusPartialContent)
 		buf := make([]byte, 1024*1024)
-		if _, err := io.CopyBuffer(w, reader, buf); err != nil {
-			s.deps.Log.Error("export range stream failed", "export_id", exp.ID, "err", err)
+		want := end - start + 1
+		written, copyErr := io.CopyBuffer(w, reader, buf)
+		if copyErr != nil {
+			s.deps.Log.Error("export range stream failed", "export_id", exp.ID, "err", copyErr)
 		}
+		s.auditExportStreamResult(auditRequestDetached(r), exp, loc, "range", want, written, copyErr, extra)
 		return
 	}
 
-	reader, size, err := s.deps.Raw.Open(r.Context(), exp.ObjectRef)
+	reader, size, loc, err := s.openExportObject(r.Context(), exp.ObjectRef)
 	if err != nil {
+		if isExportObjectMissing(err) {
+			s.auditExportDownloadFailed(auditRequestDetached(r), exp, "download")
+			respondError(w, r, http.StatusServiceUnavailable, "DATA_OBJECT_MISSING",
+				"导出对象在对象存储中缺失，请管理员检查 MinIO 与导出记录",
+				map[string]any{"export_id": exp.ID, "object_ref": exp.ObjectRef})
+			return
+		}
+		// 非对象级缺失（桶不存在/权限/网络/5xx）：fail closed 且必须留可操作审计线索。
+		s.auditExportStorageFault(auditRequestDetached(r), exp, "download", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
 	defer reader.Close()
 	w.Header().Set("Content-Length", fmt.Sprint(size))
 	if r.Method == http.MethodHead {
+		// HEAD 无响应体：头成功形成即代表该对象可读，可写成功审计。
+		s.auditExportDownloadSucceeded(auditRequestDetached(r), exp, loc, "head", size, extra)
 		return
 	}
 	buf := make([]byte, 1024*1024)
-	if _, err := io.CopyBuffer(w, reader, buf); err != nil {
-		s.deps.Log.Error("export stream failed", "export_id", exp.ID, "err", err)
+	written, copyErr := io.CopyBuffer(w, reader, buf)
+	if copyErr != nil {
+		s.deps.Log.Error("export stream failed", "export_id", exp.ID, "err", copyErr)
 	}
+	s.auditExportStreamResult(auditRequestDetached(r), exp, loc, "full", size, written, copyErr, extra)
+}
+
+// auditExportStorageFault 记录"非对象级缺失"的存储故障（桶不存在 / 权限 / 网络 / 5xx）。
+//
+// 这类故障必须 fail closed（绝不回退到 RAW、绝不伪装成对象缺失），同时也必须留下与
+// DATA-008 同级的可操作线索：旧实现在这条分支上只返回 500、不写任何业务审计，
+// 导致"桶被误配/被删"在审计链上完全不可见（本轮实测并由根复核确认的缺陷）。
+// 注意：此处拿不到命中桶（打开就已失败），因此只记录 object_ref，不记录 object_bucket。
+func (s *Server) auditExportStorageFault(r *http.Request, exp *model.Export, path string, openErr error) {
+	reason := "storage_fault"
+	var bm bucketMissingError
+	if errors.As(openErr, &bm) {
+		reason = "bucket_missing"
+	}
+	detail := map[string]any{
+		"reason":     reason,
+		"export_id":  exp.ID,
+		"object_ref": exp.ObjectRef,
+		"path":       path,
+		"action":     "notify_admin",
+	}
+	if openErr != nil {
+		detail["storage_error"] = openErr.Error()
+	}
+	s.writeAuditNow(r, "export.download_failed", "export", "export", exp.ID, detail)
+}
+
+// auditExportDownloadSucceeded 写一条成功的下载业务审计（真实桶名 + 逻辑角色 + 对象键 + 字节数）。
+func (s *Server) auditExportDownloadSucceeded(r *http.Request, exp *model.Export, loc exportLocation, path string, bytes int64, extra map[string]any) {
+	detail := map[string]any{
+		"export_id":          exp.ID,
+		"object_ref":         loc.Key,
+		"object_bucket":      loc.Name,
+		"object_bucket_role": string(loc.Bucket),
+		"bytes":              bytes,
+		"method":             r.Method,
+		"path":               path,
+	}
+	for k, v := range extra {
+		detail[k] = v
+	}
+	s.writeAuditNow(r, "export.download", "export", "export", exp.ID, detail)
+}
+
+// auditExportStreamResult 只在流**完整结束**时写成功；否则写明确的失败审计并保留已写字节数。
+// 绝不因为对象打开成功就把一次被中断的传输记成"下载成功"。
+func (s *Server) auditExportStreamResult(r *http.Request, exp *model.Export, loc exportLocation, path string, want, written int64, copyErr error, extra map[string]any) {
+	if copyErr == nil && written == want {
+		s.auditExportDownloadSucceeded(r, exp, loc, path, written, extra)
+		return
+	}
+	reason := "stream_failed"
+	if isClientAbort(copyErr) {
+		reason = "client_abort"
+	}
+	detail := map[string]any{
+		"reason":             reason,
+		"export_id":          exp.ID,
+		"object_ref":         loc.Key,
+		"object_bucket":      loc.Name,
+		"object_bucket_role": string(loc.Bucket),
+		"bytes_written":      written,
+		"bytes_expected":     want,
+		"method":             r.Method,
+		"path":               path,
+		"action":             "notify_admin",
+	}
+	if copyErr != nil {
+		detail["stream_error"] = copyErr.Error()
+	}
+	for k, v := range extra {
+		detail[k] = v
+	}
+	s.writeAuditNow(r, "export.download_failed", "export", "export", exp.ID, detail)
+}
+
+// isClientAbort 区分"客户端主动断开"与"服务端流式写失败"，两者都不得记成功，但线索不同。
+func isClientAbort(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, io.ErrClosedPipe) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{"broken pipe", "connection reset", "client disconnected", "unexpected eof"} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // runExport 流式导出：查询 → 流式写入 MinIO（不把结果集全部装入内存）。
+// errExportIntentGone is returned by a pipeline whose durable intent row no longer
+// exists: the request that asked for the artifact did not commit.
+var errExportIntentGone = errors.New("export intent row is gone: the request did not commit")
+
+// exportIntentCommitted reports whether the durable intent row of an export still
+// exists in the database.
+//
+// P4 (2026-09-15): object storage does NOT participate in the request
+// transaction, and the export pipeline runs in its own goroutine. The gate can
+// therefore roll the request back while the goroutine keeps going: the
+// watchdog-protected P4 gate measured exactly that, a refused request (409, zero
+// committed rows) leaving exports/4a380557-....zip in MinIO with no row behind it.
+// The durable intent of an export artifact is the COMMITTED exports row, so the
+// pipeline now checks it before it does any work and again immediately before it
+// writes an object. dbtx.WithoutTx is required here: the goroutine context is
+// derived from the request context, which still carries the request transaction
+// as a value, and a check inside that transaction would see an uncommitted row.
+// exportIntentOverride is a test-only seam, honoured ONLY inside a `go test`
+// binary. testing.Testing() is false for every `go build` product, so a
+// production process cannot divert the gate even if this variable is assigned;
+// the static contract test pins that.
+var exportIntentOverride func(context.Context, string) (bool, string)
+
+// exportIntentGate is the single dispatcher every object write calls.
+func (s *Server) exportIntentGate(ctx context.Context, exportID string) (bool, string) {
+	if exportIntentOverride != nil && testing.Testing() {
+		return exportIntentOverride(ctx, exportID)
+	}
+	return s.exportIntentSettled(ctx, exportID)
+}
+
+// exportIntentSettleWait bounds how long the pre-Put gate waits for an intent
+// row that is still being committed by its request.
+const exportIntentSettleWait = 6 * time.Second
+
+// exportIntentSettlePoll is the re-check interval inside that window.
+const exportIntentSettlePoll = 100 * time.Millisecond
+
+// exportIntentSettled re-runs the real exportIntentLive check while the durable
+// intent row may still be committing, and returns the first non-transient
+// answer. It is the same enforcement, not a weaker one.
+//
+// Measured 2026-09-15 on the P4 all-format v5 run (p4-allfmt-p4allfmt5-...): the
+// ZIP pipeline streams its artifact into the object store as soon as its writer
+// starts, and that writer is launched INSIDE the request handler, so the first
+// pre-Put check can beat the request commit by a few milliseconds. A legitimate
+// 11.9 M row ZIP was refused at zip-put with intent_row_missing 3 s after its
+// request while its exports row was committed, and the identical scenario had
+// completed minutes earlier in isolation: a lost race, not a refusal.
+//
+// Only intent_row_missing is retried. A rolled back request never produces a
+// row, so a refused request is still refused; it is decided at the end of the
+// bounded window instead of at its start. Every other reason -- scope change,
+// organization change, membership revocation, terminal status -- is final by
+// construction and returns immediately.
+func (s *Server) exportIntentSettled(ctx context.Context, exportID string) (bool, string) {
+	deadline := time.Now().Add(exportIntentSettleWait)
+	ok, reason := s.exportIntentLive(ctx, exportID)
+	for !ok && reason == "intent_row_missing" && time.Now().Before(deadline) && ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+		case <-time.After(exportIntentSettlePoll):
+		}
+		ok, reason = s.exportIntentLive(ctx, exportID)
+	}
+	return ok, reason
+}
+
+// exportIntentLive is the enforcement every object write goes through, evaluated
+// IMMEDIATELY before the Put and never earlier:
+//
+//   - the durable intent row must still be there -- it exists only if the request
+//     that asked for the artifact actually committed, because a rolled back
+//     request takes its exports row with it;
+//   - the row must still be owned by a running pipeline, so a row that was
+//     cancelled or already finished cannot be used to write a second artifact;
+//   - the scope the export belongs to must still exist and still belong to the
+//     export organization (the live scope revalidation): a workspace that is
+//     gone, or moved out of the export organization, must not produce bytes;
+//   - the authorization subject must still be authorized: a row that records a
+//     creator (every session-scoped route) requires that identity to still hold
+//     an ACTIVE workspace membership in that workspace, so a concurrent
+//     membership revocation stops the write. Rows whose creator is NULL come
+//     from the machine-scope GPT Actions route, which has no session principal;
+//     for those the workspace/organization coherence above is the whole
+//     authorization check, the same rule systemScope applied at creation.
+//
+// The lookup runs on dbtx.WithoutTx because the pipeline context is derived from
+// the request context and still carries the request transaction as a value: a
+// check inside that transaction would see an uncommitted row and prove nothing.
+//
+// It returns a reason string so the abort is diagnosable in the logs.
+func (s *Server) exportIntentLive(ctx context.Context, exportID string) (bool, string) {
+	if s.deps.Store == nil || s.deps.Store.Pool == nil || strings.TrimSpace(exportID) == "" {
+		return false, "no_store_or_id"
+	}
+	var status, orgID, wsID, liveWS, liveOrg, creator string
+	var creatorActive bool
+	err := s.deps.Store.Pool.QueryRow(dbtx.WithoutTx(ctx),
+		"SELECT e.status, COALESCE(e.organization_id::text,''), COALESCE(e.workspace_id::text,''), "+
+			"COALESCE(w.id::text,''), COALESCE(w.organization_id::text,''), COALESCE(e.created_by::text,''), "+
+			"(e.created_by IS NOT NULL AND EXISTS (SELECT 1 FROM workspace_memberships wm "+
+			"WHERE wm.workspace_id = e.workspace_id AND wm.identity_id = e.created_by AND wm.status='active')) "+
+			"FROM exports e LEFT JOIN workspaces w ON w.id = e.workspace_id WHERE e.id=$1::uuid", exportID).
+		Scan(&status, &orgID, &wsID, &liveWS, &liveOrg, &creator, &creatorActive)
+	if err != nil {
+		return false, "intent_row_missing"
+	}
+	if status != "RUNNING" && status != "PENDING" {
+		return false, "intent_not_running:" + status
+	}
+	if strings.TrimSpace(wsID) == "" || strings.TrimSpace(liveWS) == "" {
+		return false, "scope_gone"
+	}
+	if strings.TrimSpace(orgID) == "" || liveOrg != orgID {
+		return false, "scope_org_changed"
+	}
+	if strings.TrimSpace(creator) != "" && !creatorActive {
+		return false, "authz_membership_revoked"
+	}
+	return true, ""
+}
+
+// exportIntentCommitted is the boolean form of the gate used by the ZIP path
+// before it starts streaming its artifact into the object store. It goes through
+// exportIntentGate so it inherits the same bounded settle window and can never
+// refuse a legitimate export that merely raced its own request commit.
+func (s *Server) exportIntentCommitted(ctx context.Context, exportID string) bool {
+	ok, reason := s.exportIntentGate(ctx, exportID)
+	if !ok && s.deps.Log != nil {
+		s.deps.Log.Warn("export pipeline stops: no committed durable intent",
+			"export_id", exportID, "reason", reason)
+	}
+	return ok
+}
+
+// exportAbortNoIntent is the single log line every aborted pipeline writes, so the
+// reason a refused request produced no artifact is always visible in the logs.
+func (s *Server) exportAbortNoIntent(exportID, where string) {
+	if s.deps.Log != nil {
+		s.deps.Log.Warn("export pipeline stopped: the durable intent row is gone, so the authorization that created this export did not commit",
+			"export_id", exportID, "stage", where)
+	}
+}
+
 func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chain string) {
 	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "RUNNING", "", "", 0, "")
+	// NOTE (P4, 2026-09-15): there is deliberately NO start-of-pipeline intent
+	// check here. The pipeline goroutine is launched inside the request handler,
+	// i.e. BEFORE the request transaction commits, so a check that runs outside
+	// that transaction can observe "no row" for a perfectly legitimate export.
+	// Measured on the all-format gate run p4-allfmt-20260914T235024Z: 6 of 8
+	// accepted exports aborted at start with intent_row_missing while their rows
+	// were committed. The single enforcement point is the pre-Put gate in
+	// putExportStream, which runs after the pipeline has done real work and the
+	// request has long committed.
 	var job *model.DownloadJob
 	if exp.JobID != nil {
 		var err error
@@ -241,13 +613,14 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 	s.attachTokenMetadata(ctx, chain, rows)
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, exp.Format)
 	var size int64
+	var loc exportLocation
 	switch exp.Format {
 	case "csv":
-		size, err = writeCSV(ctx, s, key, rows)
+		size, loc, err = writeCSV(ctx, s, exp.ID, key, rows)
 	case "json":
-		size, err = writeNDJSON(ctx, s, key, rows)
+		size, loc, err = writeNDJSON(ctx, s, exp.ID, key, rows)
 	case "xlsx":
-		size, err = writeXLSX(ctx, s, key, rows)
+		size, loc, err = writeXLSX(ctx, s, exp.ID, key, rows)
 	}
 	if err != nil {
 		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())
@@ -261,9 +634,16 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 	}
 	_ = s.deps.Store.UpdateExport(ctx, exp.ID, "COMPLETED", key, sha, int64(len(rows)), "")
 	observability.ExportJobs.WithLabelValues(exp.Format, "COMPLETED").Inc()
-	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, map[string]any{
+	completedDetail := map[string]any{
 		"dataset": exp.Dataset, "format": exp.Format, "rows": len(rows), "bytes": size,
-	})
+	}
+	// ADR-019 §2.2：完成事件必须带落桶证据（PG 的 object_ref 只有 key，没有桶）。
+	for k, v := range loc.auditFields() {
+		completedDetail[k] = v
+	}
+	s.deps.Store.InsertAudit(ctx, nil, "export.completed", "export", exp.ID, completedDetail)
+	// D-R10V4-01：同一完成事件必须同时进入 v2 不可抵赖审计链；legacy 写入保留（不改既有行为）。
+	s.writeAuditCtx(ctx, "export.completed", "export", "export", exp.ID, completedDetail)
 }
 
 func dedupeExportRows(dataset string, rows []map[string]any) []map[string]any {
@@ -308,7 +688,7 @@ func exportJobBounds(dataset string, job *model.DownloadJob) (*int64, *int64, *t
 	return job.FromBlock, job.ToBlock, nil, nil
 }
 
-func writeCSV(ctx context.Context, s *Server, key string, rows []map[string]any) (int64, error) {
+func writeCSV(ctx context.Context, s *Server, exportID, key string, rows []map[string]any) (int64, exportLocation, error) {
 	pr, pw := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
@@ -329,16 +709,16 @@ func writeCSV(ctx context.Context, s *Server, key string, rows []map[string]any)
 		done <- bw.Flush()
 		_ = pw.Close()
 	}()
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "text/csv"})
+	size, loc, err := s.putExportStream(ctx, exportID, key, pr, -1, "text/csv")
 	_ = pr.CloseWithError(err)
 	werr := <-done
 	if err != nil {
-		return 0, err
+		return 0, loc, err
 	}
-	return info.Size, werr
+	return size, loc, werr
 }
 
-func writeNDJSON(ctx context.Context, s *Server, key string, rows []map[string]any) (int64, error) {
+func writeNDJSON(ctx context.Context, s *Server, exportID, key string, rows []map[string]any) (int64, exportLocation, error) {
 	pr, pw := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
@@ -354,16 +734,16 @@ func writeNDJSON(ctx context.Context, s *Server, key string, rows []map[string]a
 		done <- bw.Flush()
 		_ = pw.Close()
 	}()
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "application/x-ndjson"})
+	size, loc, err := s.putExportStream(ctx, exportID, key, pr, -1, "application/x-ndjson")
 	_ = pr.CloseWithError(err)
 	werr := <-done
 	if err != nil {
-		return 0, err
+		return 0, loc, err
 	}
-	return info.Size, werr
+	return size, loc, werr
 }
 
-func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any) (int64, error) {
+func writeXLSX(ctx context.Context, s *Server, exportID, key string, rows []map[string]any) (int64, exportLocation, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 	var cols []string
@@ -382,7 +762,7 @@ func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any
 			name = fmt.Sprintf("Sheet%d", sheetIdx+1)
 		}
 		if err := writeXLSXSheet(f, name, rows, cols, start, end); err != nil {
-			return 0, err
+			return 0, exportLocation{Key: key}, err
 		}
 		sheetIdx++
 	}
@@ -392,13 +772,13 @@ func writeXLSX(ctx context.Context, s *Server, key string, rows []map[string]any
 		done <- f.Write(pw)
 		_ = pw.Close()
 	}()
-	info, err := s.deps.Raw.Client().PutObject(ctx, s.deps.Raw.Bucket(), key, pr, -1, minio.PutObjectOptions{ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+	size, loc, err := s.putExportStream(ctx, exportID, key, pr, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	_ = pr.CloseWithError(err)
 	werr := <-done
 	if err != nil {
-		return 0, err
+		return 0, loc, err
 	}
-	return info.Size, werr
+	return size, loc, werr
 }
 
 // writeXLSXSheet 流式写单个 sheet，承载 rows[start:end)。首表（start==0）在第 1

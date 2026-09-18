@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
@@ -238,6 +239,10 @@ func (s *Server) clickhouseCoverageLayer(ctx context.Context, job *model.Downloa
 	if s.deps.CH == nil {
 		return map[string]any{"layer": "ClickHouseCoverage", "items": items, "note": "clickhouse disabled"}
 	}
+	// 交互路径的扫描预算：单条 count 再慢也只吃自己的额度，不会把 60 s 的请求预算打满。
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
 	seen := map[string]bool{}
 	for _, sub := range subjects {
 		for _, ds := range datasets {
@@ -251,10 +256,35 @@ func (s *Server) clickhouseCoverageLayer(ctx context.Context, job *model.Downloa
 			}
 			seen[key] = true
 			count := int64(-1)
+			// 不用 FINAL：ReplacingMergeTree 的 FINAL 会在**交互路径上做全表归并**。
+			// 实测（2026-09-16，bsc token_transfers，单个地址）：FINAL 18.9 s，显式去重 0.30 s，
+			// 两者计数完全一致（5426）。诊断链按 地址×数据集 逐个查，5 个地址就能把
+			// 60 s 的请求预算打满（该端点因此恒定 60004 ms 并触发路由超时中间件）。
+			// 去重键与 ORDER BY (chain, tx_hash, log_index, token_address) 对齐，
+			// 与 query.ActionFlowSummary 采用同一形态。
+			// count() 的类型是 UInt64：clickhouse-go v2 **拒绝**把 UInt64 扫进 *int64
+			// （"converting UInt64 to *int64 is unsupported"）。此前这里直接扫 &count(int64)，
+			// 错误被 `_ =` 吞掉，于是 clickhouse_rows 永远是 -1 —— 一层**永远没有数据**的
+			// "真实数据"页面（2026-09-16 定位）。改成先扫 uint64 再转换。
+			var rows uint64
 			if datasetName == "token_transfers" {
-				_ = s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM blockchain.token_transfers FINAL WHERE chain=? AND (from_address=? OR to_address=?)`, job.Chain, sub.Subject, sub.Subject).Scan(&count)
+				if err := s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM (
+					SELECT tx_hash, log_index, token_address FROM blockchain.token_transfers
+					 WHERE chain=? AND (from_address=? OR to_address=?)
+					 GROUP BY tx_hash, log_index, token_address)`, job.Chain, sub.Subject, sub.Subject).Scan(&rows); err == nil {
+					count = int64(rows)
+				} else if s.deps.Log != nil {
+					s.deps.Log.Warn("diagnostics clickhouse count failed", "err", err, "chain", job.Chain, "subject", sub.Subject)
+				}
 			} else if datasetName == "transactions" {
-				_ = s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM blockchain.transactions FINAL WHERE chain=? AND (from_address=? OR to_address=?)`, job.Chain, sub.Subject, sub.Subject).Scan(&count)
+				if err := s.deps.CH.DB().QueryRow(ctx, `SELECT count() FROM (
+					SELECT tx_hash FROM blockchain.transactions
+					 WHERE chain=? AND (from_address=? OR to_address=?)
+					 GROUP BY tx_hash)`, job.Chain, sub.Subject, sub.Subject).Scan(&rows); err == nil {
+					count = int64(rows)
+				} else if s.deps.Log != nil {
+					s.deps.Log.Warn("diagnostics clickhouse count failed", "err", err, "chain", job.Chain, "subject", sub.Subject)
+				}
 			}
 			var fromBlock, toBlock *int64
 			var updated *time.Time

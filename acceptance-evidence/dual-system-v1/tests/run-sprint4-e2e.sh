@@ -44,10 +44,26 @@ code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 csrf() { grep "$1" "$2" 2>/dev/null | awk '{print $7}'; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(sys.argv[1]))" "$1"; }
 
+# 多工作区身份登录必须显式选择工作区（P1-20260913）：服务端不替用户猜作用域。
+# 夹具账号同时属于 acme-lab 与 acme-lab-other，不带 workspace_id 会得到
+# AUTHN_WORKSPACE_SELECTION_REQUIRED。这里按邮箱解析目标工作区并随登录一并提交。
+if [ -z "${FIXTURE_WORKSPACE_ID:-}" ] && [ -r /tmp/dual-system-fixture.env ]; then
+  set -a; . /tmp/dual-system-fixture.env; set +a
+fi
+login_workspace() {
+  case "$1" in
+    *@fixture.local) printf '%s' "${FIXTURE_WORKSPACE_ID:-}" ;;
+    *) printf '' ;;
+  esac
+}
 login() { # login <jar> <email> <password> <audience>
   local jar=$1 email=$2 pass=$3 aud=${4:-user}
+  local ws; ws=$(login_workspace "$email")
+  local body="{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\""
+  [ -n "$ws" ] && body="$body,\"workspace_id\":\"$ws\""
+  body="$body}"
   curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
-    -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
+    -d "$body" "$BASE/api/auth/v1/login"
 }
 
 exec > >(tee -a "$EVIDENCE_DIR/run.log") 2>&1

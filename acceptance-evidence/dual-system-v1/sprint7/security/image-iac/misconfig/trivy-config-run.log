@@ -1,0 +1,86 @@
+### S7-SEC-01 misconfig scan (trivy config) - CORRECTED FLAGS
+timestamp_utc=2026-09-12T16:47:29Z
+NOTE: trivy 0.74.0 'trivy config' does NOT accept --scanners (that flag belongs to fs/image).
+      Misconfig scanner selection uses --misconfig-scanners; checks bundle via --checks-bundle-repository.
+NOTE: default checks bundle mirror.gcr.io is UNREACHABLE from this VM; using docker.m.daocloud.io/aquasec/trivy-checks:2
+REPO=/home/euripides/projects/blockchain-platform mounted READ-ONLY at /w ; evidence dir mounted RW at /out
+
+CMD: sudo -n docker run --rm --entrypoint /bin/sh -v /home/euripides/projects/blockchain-platform:/w:ro -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/image-iac:/out -v trivy-cache:/root/.cache/trivy aquasec/trivy:latest /out/raw/scan-misconfig-inner.sh
+
++ echo '== trivy version =='
++ trivy --version
+== trivy version ==
+Version: 0.74.0
+Vulnerability DB:
+  Version: 2
+  UpdatedAt: 2026-09-12 13:01:09.044712903 +0000 UTC
+  NextUpdate: 2026-09-13 13:01:09.044712565 +0000 UTC
+  DownloadedAt: 2026-09-12 16:47:08.604622754 +0000 UTC
++ echo
++ echo '== vuln DB metadata =='
++ cat /root/.cache/trivy/db/metadata.json
+
+== vuln DB metadata ==
+{"Version":2,"NextUpdate":"2026-09-13T13:01:09.044712565Z","UpdatedAt":"2026-09-12T13:01:09.044712903Z","DownloadedAt":"2026-09-12T16:47:08.604622754Z"}
+
+== misconfig scanners in use ==
+misconfig-scanners = azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible
+checks-bundle-repository = docker.m.daocloud.io/aquasec/trivy-checks:2
+
+== [A] misconfig JSON: repo root /w ==
++ echo
++ echo '== misconfig scanners in use =='
++ echo 'misconfig-scanners = azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible'
++ echo 'checks-bundle-repository = docker.m.daocloud.io/aquasec/trivy-checks:2'
++ echo
++ echo '== [A] misconfig JSON: repo root /w =='
++ trivy config /w --misconfig-scanners azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --skip-dirs '**/node_modules' --skip-dirs '**/.git' --skip-dirs '**/dist' --skip-dirs '**/build' --skip-dirs '**/vendor' --skip-dirs '**/acceptance-evidence' --skip-dirs '**/.venv' --skip-dirs '**/coverage' --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/misconfig/trivy-config.json
+2026-09-12T16:47:29Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T16:47:29Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T16:47:29Z	INFO	[checks-client] Downloading the checks bundle...
+8.00 KiB / 234.65 KiB [-->___________________________________________________________] 3.41% ? p/s ?16.00 KiB / 234.65 KiB [---->________________________________________________________] 6.82% ? p/s ?16.00 KiB / 234.65 KiB [---->________________________________________________________] 6.82% ? p/s ?24.00 KiB / 234.65 KiB [---->__________________________________________] 10.23% 26.65 KiB p/s ETA 7s24.00 KiB / 234.65 KiB [---->__________________________________________] 10.23% 26.65 KiB p/s ETA 7s32.00 KiB / 234.65 KiB [------>________________________________________] 13.64% 26.65 KiB p/s ETA 7s64.00 KiB / 234.65 KiB [------------>__________________________________] 27.28% 29.22 KiB p/s ETA 5s72.00 KiB / 234.65 KiB [-------------->________________________________] 30.68% 29.22 KiB p/s ETA 5s112.00 KiB / 234.65 KiB [--------------------->________________________] 47.73% 29.22 KiB p/s ETA 4s143.30 KiB / 234.65 KiB [---------------------------->_________________] 61.07% 35.88 KiB p/s ETA 2s175.30 KiB / 234.65 KiB [---------------------------------->___________] 74.71% 35.88 KiB p/s ETA 1s207.30 KiB / 234.65 KiB [---------------------------------------->_____] 88.35% 35.88 KiB p/s ETA 0s207.30 KiB / 234.65 KiB [---------------------------------------->_____] 88.35% 40.43 KiB p/s ETA 0s207.30 KiB / 234.65 KiB [---------------------------------------->_____] 88.35% 40.43 KiB p/s ETA 0s207.30 KiB / 234.65 KiB [---------------------------------------->_____] 88.35% 40.43 KiB p/s ETA 0s234.65 KiB / 234.65 KiB [-----------------------------------------------] 100.00% 79.39 KiB p/s 3.2s2026-09-12T16:47:40Z	INFO	Detected config files	num=0
+CONFIG_JSON_EXIT=0
+
+== [B] misconfig TABLE: repo root /w ==
++ echo 'CONFIG_JSON_EXIT=0'
++ echo
++ echo '== [B] misconfig TABLE: repo root /w =='
++ trivy config /w --misconfig-scanners azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --skip-dirs '**/node_modules' --skip-dirs '**/.git' --skip-dirs '**/dist' --skip-dirs '**/build' --skip-dirs '**/vendor' --skip-dirs '**/acceptance-evidence' --skip-dirs '**/.venv' --skip-dirs '**/coverage' --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/misconfig/trivy-config.txt
+2026-09-12T16:47:40Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T16:47:40Z	INFO	[checks-client] Using existing checks from cache	path="/root/.cache/trivy/policy/content"
+2026-09-12T16:47:41Z	INFO	Detected config files	num=0
+2026-09-12T16:47:41Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+CONFIG_TABLE_EXIT=0
+
+== [C] misconfig JSON: deploy/ only ==
++ echo 'CONFIG_TABLE_EXIT=0'
++ echo
++ echo '== [C] misconfig JSON: deploy/ only =='
++ trivy config /w/deploy --misconfig-scanners azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/misconfig/trivy-config-deploy.json
+2026-09-12T16:47:41Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T16:47:41Z	INFO	[checks-client] Using existing checks from cache	path="/root/.cache/trivy/policy/content"
+2026-09-12T16:47:43Z	INFO	Detected config files	num=0
+CONFIG_DEPLOY_JSON_EXIT=0
+
+== [D] misconfig TABLE: deploy/ only ==
++ echo 'CONFIG_DEPLOY_JSON_EXIT=0'
++ echo
++ echo '== [D] misconfig TABLE: deploy/ only =='
++ trivy config /w/deploy --misconfig-scanners azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot,ansible --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2 --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/misconfig/trivy-config-deploy.txt
+2026-09-12T16:47:43Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T16:47:43Z	INFO	[checks-client] Using existing checks from cache	path="/root/.cache/trivy/policy/content"
+2026-09-12T16:47:44Z	INFO	Detected config files	num=0
+2026-09-12T16:47:44Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+CONFIG_DEPLOY_TABLE_EXIT=0
+
+== [E] github actions / workflows dir present? ==
++ echo 'CONFIG_DEPLOY_TABLE_EXIT=0'
++ echo
++ echo '== [E] github actions / workflows dir present? =='
++ ls -la /w/.github/workflows
+ls: /w/.github/workflows: No such file or directory
+(no .github/workflows)
+INNER_DONE=1
++ echo '(no .github/workflows)'
++ echo 'INNER_DONE=1'
+DOCKER_RUN_EXIT=0

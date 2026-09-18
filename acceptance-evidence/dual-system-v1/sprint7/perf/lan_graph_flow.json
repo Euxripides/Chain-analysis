@@ -1,0 +1,26 @@
+{
+  "label": "lan_graph_flow",
+  "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 21.059533964,
+  "requests": 8,
+  "rps": 0.37987545278425994,
+  "errors": 8,
+  "status_counts": {},
+  "p50_ms": 21050.655211999998,
+  "p90_ms": 21058.218915,
+  "p95_ms": 21058.218915,
+  "p99_ms": 21058.218915,
+  "min_ms": 21049.607935,
+  "max_ms": 21058.468619,
+  "avg_ms": 21053.351672875,
+  "avg_response_bytes": 0,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded"
+  ]
+}

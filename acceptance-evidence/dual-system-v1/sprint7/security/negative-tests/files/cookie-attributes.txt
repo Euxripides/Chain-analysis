@@ -1,0 +1,4 @@
+== admin / entry=http ==
+== admin / entry=https ==
+== user / entry=http ==
+== user / entry=https ==

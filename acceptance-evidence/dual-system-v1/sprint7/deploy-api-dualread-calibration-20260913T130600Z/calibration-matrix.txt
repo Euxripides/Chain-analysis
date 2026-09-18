@@ -1,0 +1,46 @@
+deploy-api-dualread.sh — 隔离负向校准证据（生产 API 未被触碰）
+日期: 2026-09-13 ~13:02-13:05Z (20:02-20:05 +07)  VM: dataserver
+
+脚本版本冻结:
+  v1 (根审查前) sha256 = 8c552525e2dc62432498a4fde36b647a1ad6190227ad0cffdbd67c7f63cb78dc
+      保留于 scripts/release/.pre-v2-20260913T130200Z/deploy-api-dualread.v1.sh
+  v2 (本轮修正后, 用于生产) sha256 = e05dc270f50a91e6f3a73c7119c33d68016da5b6437487a30ab0158946120db8
+
+校准环境（全部隔离，绝不注入真实 API 故障）:
+  unit      : cal-dualread-standin.service (临时 user unit, ExecStart=/tmp/calib-dualread/bin/api, 未 enable)
+  stand-in  : Go 小程序 v1/v2, 只监听 127.0.0.1:18080, 提供 /health/ready 与 4 个伪 JSON 路由
+              v1 sha=68599352dfb5eadaf47346d4204d6e37f2b70a719f9a77993b37888bfd1a0e45
+              v2 sha=104f21ede96de6614156587ce568e7d174be6e6bf176eebc28ba6169ac402cc3
+  census    : /tmp/calib-dualread/pgstub.sh 可控 stub（ok / post-fail / post-changed），不连真实 PG
+  env/backup/stage/EV 全部位于 /tmp/calib-dualread
+
+用例矩阵（期望 vs 实测）:
+  K1/K11  正常切换            rc=0  PASS       bin -> v2, unit active, ready 200, census identical
+  K2b     backup 目录已存在    rc=2  ABORT      abort_stage=backup_dir_exists, live 未变, 既有备份未被改动(内容 keep)
+  K3      staging 路径已存在   rc=2  ABORT      abort_stage=stage_exists, live 未变
+  K4      env 文件缺失         rc=2  ABORT      abort_stage=env_file_missing, live 未变
+  K5      env 复制/SHA 失败    rc=2  ABORT      abort_stage=env_sha (CALIB_TAMPER_ENV_BACKUP=1), live 未变
+  K6      校准互锁 vs 生产unit rc=2  ABORT      abort_stage=calib_interlock; 生产 bin sha 保持 484e2707...
+  K7      post census 失败     rc=5  完整回滚   census_pre_rc=0, census_post_rc=1 -> rollback
+                                              rollback_bin_sha=old, active, ready_rc=0, rollback_exe_sha=old
+  K8      post census 变化     rc=5  完整回滚   census_pre_rc=0, census_post_rc=0, census_diff=changed -> rollback
+  K9x4    伪 ready JSON        rc=2  ABORT      dupe(重复键) / missing(缺 nats) / extra(多 zookeeper) / notready
+                                              全部在 pre_ready 被拒, live 未变
+  K10     新构建启动即崩溃      rc=5  完整回滚   restart_rc=0 但 post_active=failed -> rollback 后 active+ready+old sha
+
+根审查 5 项要求的对应证据:
+  R1 备份/staging 非破坏 — K2b/K3 证明"已存在即 pre-abort"，脚本内不再出现任何 rm/cp -f 覆盖备份或 staging；
+     每次运行使用唯一 TS 的 BACKUP_DIR 与 STAGE，旧备份永不被触碰。
+  R2 env 冻结 — K4/K5 证明缺失与 SHA 不一致都会 pre-abort；K1 记录 env_src_sha == env_backup_sha、
+     仅记录非敏感键 EXPORT_WRITE_BUCKET/EXPORT_READ_ORDER/EXPORT_BUCKET/RAW_BUCKET 的存在性与取值，
+     并在运行进程 environ 中确认未显式设置写桶（proc_export_write_bucket_set=0 → 默认 raw）。
+  R3 普查 — pre/post 各写文件并校验 rc；K7 证明 post rc!=0 触发回滚，K8 证明内容变化触发回滚；
+     口径为最小权限应用角色 SET ROLE blockchain_app，输出仅 status 计数。
+  R4 readiness 解析 — python3 严格 JSON：拒绝重复键、拒绝缺字段/多字段、四项必须全 ok、status 必须 ready；
+     K9 的 4 个伪 JSON 全部被拒（grep 碎片匹配或 json 宽松解析会误 PASS 的情形已被覆盖）。
+  R5 校准点覆盖 — 上述 K1-K11 即根要求的 5 类校准点，stand-in 只用临时 unit + 可控 census stub。
+
+生产未受影响（校准前后独立核对）:
+  backend/bin/api sha256 = 484e2707e6574cce10e41e68047176ff5255aa231d1615c4b10cddd3fe5db2e4（未变）
+  blockchain-api.service MainPID=187707 ActiveState=active, /health/ready=200
+  校准期间未对生产执行任何 restart / 替换 / env 改动 / 数据写入。

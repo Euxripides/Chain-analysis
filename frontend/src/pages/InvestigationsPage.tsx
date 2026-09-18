@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useScopedQuery as useQuery } from "../lib/sessionScope";
 import { Link } from "react-router-dom";
 import { Activity, Bot, Check, ChevronLeft, ChevronRight, CircleDot, FileText, Info, Network, Pause, Play, RefreshCw, Search, Square, Zap } from "lucide-react";
 import { api, type Investigation } from "../api/client";

@@ -1,0 +1,13 @@
+### SCAN-TARGET STABILITY for the scoped SBOM  utc=2026-09-13T02:09:35Z
+The three scanned files must be byte-identical before and after the syft runs,
+otherwise the SBOM would not describe the artifact that is deployed.
+
+--- api ---
+post  size=56147343 mtime=2026-09-13 08:58:16.036342337 +0700
+8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a  /home/euripides/projects/blockchain-platform/backend/bin/api
+--- worker ---
+post  size=42685594 mtime=2026-09-13 08:58:16.178347206 +0700
+513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48  /home/euripides/projects/blockchain-platform/backend/bin/worker
+--- migrate ---
+post  size=30859300 mtime=2026-09-13 08:58:16.284350840 +0700
+28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4  /home/euripides/projects/blockchain-platform/backend/bin/migrate

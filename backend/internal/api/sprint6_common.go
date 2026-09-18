@@ -316,6 +316,11 @@ func (s *Server) s6DecideApproval(ctx context.Context, id, decision, note, actor
 }
 
 // s6FinishApproval 结束审批流程（executed / failed / cancelled / restored）。
+//
+// 允许的状态必须与 approval_requests_status_check 完全一致：写一个约束里没有的值，
+// 语句会失败并把请求事务打成 aborted，最终被提交门改写成 409 —— 2026-09-16 的
+// Kill Switch 无法恢复（status='restored' 缺约束）就是这样发生的，因此这里
+// **必须**在失败时留日志：调用方普遍写成 `_ = s.s6FinishApproval(...)`。
 func (s *Server) s6FinishApproval(ctx context.Context, id, status string, result map[string]any) error {
 	body, err := json.Marshal(result)
 	if err != nil {
@@ -325,6 +330,9 @@ func (s *Server) s6FinishApproval(ctx context.Context, id, status string, result
 		UPDATE approval_requests SET status=$2, result=$3::jsonb,
 		       executed_at = CASE WHEN $2 IN ('executed','failed','restored') THEN now() ELSE executed_at END
 		WHERE id=$1`, id, status, string(body))
+	if err != nil && s.deps.Log != nil {
+		s.deps.Log.Error("finish approval failed", "err", err, "approval_id", id, "status", status)
+	}
 	return err
 }
 

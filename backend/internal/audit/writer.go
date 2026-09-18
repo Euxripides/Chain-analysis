@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 )
 
 // Event 是审计 v2 的写入模型。字段与 0042_audit_v2.sql 一一对应。
@@ -93,10 +95,24 @@ func NewWriter(pool *pgxpool.Pool, env string, log *slog.Logger) *Writer {
 // Enabled 表示审计是否真正落库（fail-closed 判断用）。
 func (w *Writer) Enabled() bool { return w != nil && w.pool != nil }
 
-// Write 在独立事务中写入一条审计事件。
+// Write 写入一条审计事件。
+//
+// 默认在独立事务中写入：审计行不加入业务事务，业务回滚不会带走自己的拒绝行
+// （api.emitAudit 通过 dbtx.WithoutTx 保证这一点）。
+//
+// 唯一的例外是 **commit gate 请求内**（dbtx.IsGateRequest）：那种请求的整个 handler
+// 都跑在一个事务里，而该事务里的同事务审计写入（auditTx -> WriteTx -> ChainAppend）
+// 已经持有 audit_chain_heads 的行锁。此时若再另开一条连接去写审计，就会与自己的请求
+// 事务互等——请求要等这条审计写完才能返回，请求事务却要等 handler 返回才能提交，
+// 直到 HTTP 超时（60s）才解开，而这条审计被静默丢弃。实测见
+// acceptance-evidence/dual-system-v1/ROUND-20260916-defect-closure.md（D-15）。
+// 因此 gate 请求内的审计写入加入请求事务：同一个事务、同一把锁，不再等待。
 func (w *Writer) Write(ctx context.Context, e Event) error {
 	if !w.Enabled() {
 		return nil
+	}
+	if tx := dbtx.FromContext(ctx); tx != nil && dbtx.IsGateRequest(ctx) {
+		return w.WriteTx(ctx, tx, e)
 	}
 	started := time.Now()
 	tx, err := w.pool.Begin(ctx)
@@ -218,6 +234,19 @@ func (w *Writer) WriteTx(ctx context.Context, tx DB, e Event) error {
 	return err
 }
 
+// WriteOrLog 与 Write 相同，但写入失败时记录日志后再返回错误。
+//
+// 读路径的审计（evidence:sensitive:read、report:download 等）只能"业务成功 + 明确审计告警"，
+// 不能因为调用方丢弃返回值而完全静默：2026-09-16 的 D-15 事故里，被 60s 超时打断的
+// evidence:sensitive:read 就是这样整条消失的。
+func (w *Writer) WriteOrLog(ctx context.Context, e Event) error {
+	if err := w.Write(ctx, e); err != nil {
+		w.log.Error("audit write failed", "action", e.Action, "category", e.Category, "err", err)
+		return err
+	}
+	return nil
+}
+
 // WriteTxOrLog 用于"审计失败不得静默"的场景：返回错误让业务事务回滚。
 // 对于允许降级的低风险读取审计，调用方可用 WriteAsync 明确降级并计数。
 func (w *Writer) WriteTxOrLog(ctx context.Context, tx DB, e Event) error {
@@ -240,12 +269,12 @@ func (w *Writer) chainPayload(e Event) map[string]any {
 		"occurred_at_unix_micro": e.OccurredAt.UTC().UnixMicro(),
 		"environment":            e.Environment,
 		"actor_type":             e.ActorType,
-		"actor_id":               e.ActorID,
+		"actor_id":               UUIDPayloadValue(e.ActorID),
 		"actor_email":            e.ActorEmail,
-		"organization_id":        e.OrganizationID,
-		"workspace_id":           e.WorkspaceID,
-		"session_id":             e.SessionID,
-		"device_id":              e.DeviceID,
+		"organization_id":        UUIDPayloadValue(e.OrganizationID),
+		"workspace_id":           UUIDPayloadValue(e.WorkspaceID),
+		"session_id":             UUIDPayloadValue(e.SessionID),
+		"device_id":              UUIDPayloadValue(e.DeviceID),
 		"action":                 e.Action,
 		"category":               e.Category,
 		"resource_type":          e.ResourceType,
@@ -315,6 +344,25 @@ func nullUUID(s string) any {
 	}
 	if _, err := uuid.Parse(s); err != nil {
 		return nil
+	}
+	return s
+}
+
+// UUIDPayloadValue 返回与「落库后再读回」逐字一致的字符串。
+//
+// 为什么必须有它：UUID 列落库走 nullUUID（非 UUID 文本 -> NULL），校验器读回时是
+// COALESCE(col::text,”) -> ""。若哈希载荷使用未归一化的原始文本，就会出现
+// 「写入时哈希了一个永远无法落库的值、校验时永远复算不出来」的永久链损坏。
+// 2026-09-13 真实发生过：请求带了非 UUID 的工作区 id，两条 authorization.workspace_switched
+// 事件的 workspace_id 落库为 NULL 而哈希载荷是 "not-a-uuid"（见 ADR-019）。
+//
+// 对合法 UUID 与空串，本函数是恒等映射——只在"无法落库"的输入上收敛到 ""。
+func UUIDPayloadValue(s string) string {
+	if s == "" {
+		return ""
+	}
+	if _, err := uuid.Parse(s); err != nil {
+		return ""
 	}
 	return s
 }

@@ -1,0 +1,573 @@
+{
+  "build_api_sha": "0971a2b269d179b710dd8f2f6c5359464e31d2608f9f1ad7059c22b97c6e2f83",
+  "concurrency": "8",
+  "duration": "20s",
+  "results": [
+    {
+      "label": "lan_admin_audit",
+      "url": "http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000987396,
+      "requests": 8330,
+      "rps": 416.4794384934175,
+      "errors": 8,
+      "status_counts": {
+        "200": 8322
+      },
+      "p50_ms": 15.702218,
+      "p90_ms": 30.603756999999998,
+      "p95_ms": 41.233419,
+      "p99_ms": 71.335903,
+      "min_ms": 0.49412,
+      "max_ms": 187.445481,
+      "avg_ms": 19.132320219207728,
+      "avg_response_bytes": 54477.94609843937,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/audit/events?limit=50\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_admin_jobs",
+      "url": "http://127.0.0.1:8080/api/admin/v1/jobs?limit=20",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000927979,
+      "requests": 2060,
+      "rps": 102.99522112988456,
+      "errors": 8,
+      "status_counts": {
+        "200": 2052
+      },
+      "p50_ms": 64.472924,
+      "p90_ms": 132.781792,
+      "p95_ms": 152.296728,
+      "p99_ms": 181.40257000000003,
+      "min_ms": 0.677863,
+      "max_ms": 236.285779,
+      "avg_ms": 77.56852016019432,
+      "avg_response_bytes": 18325.555339805825,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_admin_login_ev",
+      "url": "http://127.0.0.1:8080/api/admin/v1/login-events?limit=50",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000994749,
+      "requests": 11025,
+      "rps": 551.2225835943096,
+      "errors": 8,
+      "status_counts": {
+        "200": 11017
+      },
+      "p50_ms": 9.863785,
+      "p90_ms": 28.353658,
+      "p95_ms": 37.893924000000005,
+      "p99_ms": 66.36704999999999,
+      "min_ms": 1.665854,
+      "max_ms": 171.156735,
+      "avg_ms": 14.457558141678044,
+      "avg_response_bytes": 43456.44408163265,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/login-events?limit=50\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_admin_overview",
+      "url": "http://127.0.0.1:8080/api/admin/v1/overview",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000759805,
+      "requests": 11448,
+      "rps": 572.37825520699,
+      "errors": 8,
+      "status_counts": {
+        "200": 11440
+      },
+      "p50_ms": 11.758371,
+      "p90_ms": 22.696787999999998,
+      "p95_ms": 27.909520999999998,
+      "p99_ms": 39.367349000000004,
+      "min_ms": 1.8114540000000001,
+      "max_ms": 59.405781999999995,
+      "avg_ms": 13.94714159739692,
+      "avg_response_bytes": 911.3626834381552,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_cases_list",
+      "url": "http://127.0.0.1:8080/api/v2/cases?limit=20",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000806286,
+      "requests": 30972,
+      "rps": 1548.5375717917696,
+      "errors": 8,
+      "status_counts": {
+        "200": 30964
+      },
+      "p50_ms": 3.839655,
+      "p90_ms": 9.241638,
+      "p95_ms": 11.772311,
+      "p99_ms": 17.96843,
+      "min_ms": 1.449399,
+      "max_ms": 66.087006,
+      "avg_ms": 5.077641818900938,
+      "avg_response_bytes": 21634.41043523182,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/cases?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/cases?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/cases?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/cases?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/cases?limit=20\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_dashboard",
+      "url": "http://127.0.0.1:8080/api/v2/dashboard",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000168525,
+      "requests": 25638,
+      "rps": 1281.8891984811414,
+      "errors": 8,
+      "status_counts": {
+        "200": 25630
+      },
+      "p50_ms": 4.731382,
+      "p90_ms": 11.425576,
+      "p95_ms": 14.502523,
+      "p99_ms": 21.935647,
+      "min_ms": 0.138897,
+      "max_ms": 47.387497,
+      "avg_ms": 6.2152376300803125,
+      "avg_response_bytes": 1256.6077697168266,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/dashboard\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_graph_counter",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001291594,
+      "requests": 6403,
+      "rps": 320.1293261441564,
+      "errors": 6403,
+      "status_counts": {
+        "503": 6395
+      },
+      "p50_ms": 22.30087,
+      "p90_ms": 42.865906,
+      "p95_ms": 49.440103,
+      "p99_ms": 66.90706899999999,
+      "min_ms": 2.644746,
+      "max_ms": 192.72838000000002,
+      "avg_ms": 24.946205461658483,
+      "avg_response_bytes": 308.6139309698579,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_graph_flow",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 21.059533964,
+      "requests": 8,
+      "rps": 0.37987545278425994,
+      "errors": 8,
+      "status_counts": {},
+      "p50_ms": 21050.655211999998,
+      "p90_ms": 21058.218915,
+      "p95_ms": 21058.218915,
+      "p99_ms": 21058.218915,
+      "min_ms": 21049.607935,
+      "max_ms": 21058.468619,
+      "avg_ms": 21053.351672875,
+      "avg_response_bytes": 0,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/flow-profile\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_graph_overview",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001512624,
+      "requests": 149,
+      "rps": 7.449436590171361,
+      "errors": 8,
+      "status_counts": {
+        "200": 141
+      },
+      "p50_ms": 906.442406,
+      "p90_ms": 1126.147839,
+      "p95_ms": 1273.0213310000001,
+      "p99_ms": 4588.660683,
+      "min_ms": 94.028582,
+      "max_ms": 4656.609502,
+      "avg_ms": 1073.5045112416108,
+      "avg_response_bytes": 7807.993288590604,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/overview\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_jobs_list",
+      "url": "http://127.0.0.1:8080/api/v2/jobs?limit=20",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001662736,
+      "requests": 2784,
+      "rps": 139.18842831947248,
+      "errors": 8,
+      "status_counts": {
+        "200": 2776
+      },
+      "p50_ms": 45.904329000000004,
+      "p90_ms": 98.804394,
+      "p95_ms": 118.388993,
+      "p99_ms": 144.611843,
+      "min_ms": 2.216961,
+      "max_ms": 184.864825,
+      "avg_ms": 57.351734501795946,
+      "avg_response_bytes": 14570.011494252874,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/jobs?limit=20\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_longtable_assets",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.004491895,
+      "requests": 370,
+      "rps": 18.495845930107286,
+      "errors": 8,
+      "status_counts": {
+        "200": 362
+      },
+      "p50_ms": 420.47848799999997,
+      "p90_ms": 538.774714,
+      "p95_ms": 581.033126,
+      "p99_ms": 789.31078,
+      "min_ms": 23.081117000000003,
+      "max_ms": 890.94195,
+      "avg_ms": 432.176584332432,
+      "avg_response_bytes": 7556.994594594595,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/assets\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_longtable_p1",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.002782877,
+      "requests": 24,
+      "rps": 1.1998330506099808,
+      "errors": 8,
+      "status_counts": {
+        "200": 16
+      },
+      "p50_ms": 8301.717808,
+      "p90_ms": 8611.709791,
+      "p95_ms": 8617.830329,
+      "p99_ms": 8617.937676,
+      "min_ms": 3062.3027180000004,
+      "max_ms": 8635.670331,
+      "avg_ms": 6667.248365458335,
+      "avg_response_bytes": 118244,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/activity?limit=200\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_longtable_p2",
+      "url": "http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.002176268,
+      "requests": 66008,
+      "rps": 3300.0409113282994,
+      "errors": 66008,
+      "status_counts": {
+        "404": 66001
+      },
+      "p50_ms": 1.7403119999999999,
+      "p90_ms": 4.433419,
+      "p95_ms": 5.795357999999999,
+      "p99_ms": 9.303993,
+      "min_ms": 0.027826,
+      "max_ms": 63.755100999999996,
+      "avg_ms": 2.4000898403072375,
+      "avg_response_bytes": 18.997985092716036,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/explorer/activity?chain=tron&address=TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj&limit=200&cursor=eyJwYWdlIjoyfQ\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "lan_notifications",
+      "url": "http://127.0.0.1:8080/api/v2/notifications?limit=20",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.00211066,
+      "requests": 34757,
+      "rps": 1737.6666188287152,
+      "errors": 6,
+      "status_counts": {
+        "200": 34751
+      },
+      "p50_ms": 3.359184,
+      "p90_ms": 8.467433,
+      "p95_ms": 10.756675,
+      "p99_ms": 16.416204,
+      "min_ms": 1.301824,
+      "max_ms": 34.711188,
+      "avg_ms": 4.529498959461419,
+      "avg_response_bytes": 6637.768017953218,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8080/api/v2/notifications?limit=20\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "nginx_admin_overview",
+      "url": "http://127.0.0.1:8088/api/admin/v1/overview",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001448401,
+      "requests": 11785,
+      "rps": 589.2073295757317,
+      "errors": 8,
+      "status_counts": {
+        "200": 11777
+      },
+      "p50_ms": 11.262158,
+      "p90_ms": 22.48367,
+      "p95_ms": 27.334461,
+      "p99_ms": 37.839196,
+      "min_ms": 4.222653,
+      "max_ms": 65.964374,
+      "avg_ms": 13.548162243190534,
+      "avg_response_bytes": 911.3809079338141,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/admin/v1/overview\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "nginx_dashboard",
+      "url": "http://127.0.0.1:8088/api/v2/dashboard",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000148812,
+      "requests": 51930,
+      "rps": 2596.480680625848,
+      "errors": 51930,
+      "status_counts": {
+        "401": 51922
+      },
+      "p50_ms": 1.52603,
+      "p90_ms": 7.547448,
+      "p95_ms": 9.711614,
+      "p99_ms": 15.270323000000001,
+      "min_ms": 0.222088,
+      "max_ms": 65.22567699999999,
+      "avg_ms": 3.0390936916811397,
+      "avg_response_bytes": 224.96533795493934,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/api/v2/dashboard\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "nginx_health_ready",
+      "url": "http://127.0.0.1:8088/health/ready",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001924674,
+      "requests": 14984,
+      "rps": 749.1279086495773,
+      "errors": 7,
+      "status_counts": {
+        "200": 14977
+      },
+      "p50_ms": 9.144943000000001,
+      "p90_ms": 16.50381,
+      "p95_ms": 20.145982,
+      "p99_ms": 30.148221,
+      "min_ms": 2.181238,
+      "max_ms": 51.630964,
+      "avg_ms": 10.654808421649761,
+      "avg_response_bytes": 88.95842231713829,
+      "error_samples": [
+        "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded",
+        "Get \"http://127.0.0.1:8088/health/ready\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "wan_admin_overview",
+      "url": "https://aurore.online/api/admin/v1/overview",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.000490225,
+      "requests": 113,
+      "rps": 5.649861514831945,
+      "errors": 8,
+      "status_counts": {
+        "200": 105
+      },
+      "p50_ms": 1226.725101,
+      "p90_ms": 2221.9501990000003,
+      "p95_ms": 2872.6627740000004,
+      "p99_ms": 3381.10623,
+      "min_ms": 257.127192,
+      "max_ms": 4907.084043,
+      "avg_ms": 1405.0644051946902,
+      "avg_response_bytes": 847.433628318584,
+      "error_samples": [
+        "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded",
+        "Get \"https://aurore.online/api/admin/v1/overview\": context deadline exceeded"
+      ]
+    },
+    {
+      "label": "wan_dashboard",
+      "url": "https://aurore.online/api/v2/dashboard",
+      "method": "GET",
+      "concurrency": 8,
+      "wall_seconds": 20.001133896,
+      "requests": 206,
+      "rps": 10.299416076665418,
+      "errors": 206,
+      "status_counts": {
+        "401": 198
+      },
+      "p50_ms": 640.830708,
+      "p90_ms": 1187.10095,
+      "p95_ms": 1236.6430340000002,
+      "p99_ms": 1453.423916,
+      "min_ms": 59.191824,
+      "max_ms": 1934.40271,
+      "avg_ms": 768.7371905291265,
+      "avg_response_bytes": 216.2621359223301,
+      "error_samples": [
+        "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+        "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+        "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+        "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded",
+        "Get \"https://aurore.online/api/v2/dashboard\": context deadline exceeded"
+      ]
+    }
+  ],
+  "budget": {
+    "pg_api_p95_ms": 200,
+    "response_body_max_bytes": 1048576
+  },
+  "violations": {
+    "p95_over_200ms": [
+      "lan_graph_flow",
+      "lan_graph_overview",
+      "lan_longtable_assets",
+      "lan_longtable_p1",
+      "wan_admin_overview",
+      "wan_dashboard"
+    ],
+    "body_over_1mb": [],
+    "with_errors": [
+      "lan_admin_audit",
+      "lan_admin_jobs",
+      "lan_admin_login_ev",
+      "lan_admin_overview",
+      "lan_cases_list",
+      "lan_dashboard",
+      "lan_graph_counter",
+      "lan_graph_flow",
+      "lan_graph_overview",
+      "lan_jobs_list",
+      "lan_longtable_assets",
+      "lan_longtable_p1",
+      "lan_longtable_p2",
+      "lan_notifications",
+      "nginx_admin_overview",
+      "nginx_dashboard",
+      "nginx_health_ready",
+      "wan_admin_overview",
+      "wan_dashboard"
+    ]
+  }
+}

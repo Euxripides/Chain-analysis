@@ -1,0 +1,11 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 659
+
+run=2026-09-13T02:57:52+07:00
+entry=https://127.0.0.1:8448 (local loopback TLS; socat -> 127.0.0.1:8088)
+before: passed=33 failed=4 skipped=21 (http://127.0.0.1:8088 entry)
+after : passed=37 failed=0 skipped=21
+root_cause=http entry -> Playwright APIRequestContext drops Secure/__Host- cookies -> 401 on page.request assertions
+e9ff0afebc908379d2591095d21244b13f881f90f2db6983bbd70fd3e67dab4e  acceptance-evidence/dual-system-v1/tests/sprint7/qa/ui/run-20260913T0300Z-https-entry/playwright.log
+273a1d214eebadc8f1ce03ec70d760f6598732b83b7f789c7df908c9502c95a1  acceptance-evidence/dual-system-v1/tests/sprint7/qa/ui/run-20260913T0300Z-https-entry/result.json

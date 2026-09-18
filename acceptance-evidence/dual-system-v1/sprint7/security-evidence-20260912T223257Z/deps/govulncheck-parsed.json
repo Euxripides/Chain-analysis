@@ -1,0 +1,193 @@
+{
+  "scanner": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.8.0",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2026-09-10T14:48:42Z",
+    "go_version": "go1.26.7",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  },
+  "module_count": 56,
+  "raw_finding_entries": 68,
+  "distinct_vulnerabilities": 12,
+  "reachability_breakdown_distinct": {
+    "module": 4,
+    "symbol": 3,
+    "package": 5
+  },
+  "osv_record_count": 241,
+  "vulnerabilities": [
+    {
+      "osv_id": "GO-2026-5932",
+      "aliases": [],
+      "summary": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+      "reachability": "module",
+      "traces": 1,
+      "module": "golang.org/x/crypto",
+      "found_version": "",
+      "fixed_version": "",
+      "example_trace": "",
+      "go_fixed_version": ""
+    },
+    {
+      "osv_id": "GO-2026-6303",
+      "aliases": [
+        "CVE-2026-56854"
+      ],
+      "summary": "Source-address critical option not enforced for non-public-key auth callbacks in golang.org/x/crypto/ssh",
+      "reachability": "module",
+      "traces": 1,
+      "module": "golang.org/x/crypto",
+      "found_version": "",
+      "fixed_version": "0.55.0",
+      "example_trace": "",
+      "go_fixed_version": "v0.55.0"
+    },
+    {
+      "osv_id": "GO-2026-6354",
+      "aliases": [
+        "CVE-2026-78662"
+      ],
+      "summary": "Prevent DoS on deadlocked undecided channel in golang.org/x/crypto/ssh",
+      "reachability": "module",
+      "traces": 1,
+      "module": "golang.org/x/crypto",
+      "found_version": "",
+      "fixed_version": "0.56.0",
+      "example_trace": "",
+      "go_fixed_version": "v0.56.0"
+    },
+    {
+      "osv_id": "GO-2026-6355",
+      "aliases": [
+        "CVE-2026-56855"
+      ],
+      "summary": "Prevent DoS on deadlocked established channel in golang.org/x/crypto/ssh",
+      "reachability": "module",
+      "traces": 1,
+      "module": "golang.org/x/crypto",
+      "found_version": "",
+      "fixed_version": "0.56.0",
+      "example_trace": "",
+      "go_fixed_version": "v0.56.0"
+    },
+    {
+      "osv_id": "GO-2026-5960",
+      "aliases": [
+        "CVE-2026-54063",
+        "GHSA-h69g-9hx6-f3v4"
+      ],
+      "summary": "Excelize: Unbounded Row Index Allocation in Worksheet Parser (checkSheet OOM/Panic DoS) in github.com/xuri/excelize",
+      "reachability": "symbol",
+      "traces": 6,
+      "module": "github.com/xuri/excelize/v2",
+      "found_version": "",
+      "fixed_version": "2.11.0",
+      "example_trace": "stream.go:115",
+      "go_fixed_version": "v2.11.0"
+    },
+    {
+      "osv_id": "GO-2025-3770",
+      "aliases": [
+        "GHSA-vrw8-fxc6-2r93"
+      ],
+      "summary": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
+      "reachability": "symbol",
+      "traces": 45,
+      "module": "github.com/go-chi/chi/v5",
+      "found_version": "5.2.1",
+      "fixed_version": "5.2.2",
+      "example_trace": "mux.go:522",
+      "go_fixed_version": "v5.2.2"
+    },
+    {
+      "osv_id": "GO-2026-5774",
+      "aliases": [
+        "GHSA-3fxj-6jh8-hvhx"
+      ],
+      "summary": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
+      "reachability": "package",
+      "traces": 2,
+      "module": "github.com/go-chi/chi/v5",
+      "found_version": "5.2.1",
+      "fixed_version": "5.3.0",
+      "example_trace": "",
+      "go_fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-5775",
+      "aliases": [
+        "GHSA-9g5q-2w5x-hmxf"
+      ],
+      "summary": "Chi Middleware vulnerable to IP spoofing via X-Forwarded-For header in github.com/go-chi/chi",
+      "reachability": "package",
+      "traces": 2,
+      "module": "github.com/go-chi/chi/v5",
+      "found_version": "",
+      "fixed_version": "5.3.0",
+      "example_trace": "",
+      "go_fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-5777",
+      "aliases": [
+        "GHSA-rjr7-jggh-pgcp"
+      ],
+      "summary": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
+      "reachability": "package",
+      "traces": 2,
+      "module": "github.com/go-chi/chi/v5",
+      "found_version": "",
+      "fixed_version": "5.3.0",
+      "example_trace": "",
+      "go_fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-4771",
+      "aliases": [
+        "CVE-2026-33815",
+        "GHSA-xgrm-4fwx-7qm8"
+      ],
+      "summary": "CVE-2026-33815 in github.com/jackc/pgx",
+      "reachability": "package",
+      "traces": 2,
+      "module": "github.com/jackc/pgx/v5",
+      "found_version": "",
+      "fixed_version": "5.9.0",
+      "example_trace": "",
+      "go_fixed_version": "v5.9.0"
+    },
+    {
+      "osv_id": "GO-2026-4772",
+      "aliases": [
+        "CVE-2026-33816",
+        "GHSA-9jj7-4m8r-rfcm"
+      ],
+      "summary": "CVE-2026-33816 in github.com/jackc/pgx",
+      "reachability": "package",
+      "traces": 2,
+      "module": "github.com/jackc/pgx/v5",
+      "found_version": "",
+      "fixed_version": "5.9.0",
+      "example_trace": "",
+      "go_fixed_version": "v5.9.0"
+    },
+    {
+      "osv_id": "GO-2026-5004",
+      "aliases": [
+        "CVE-2026-41889",
+        "GHSA-j88v-2chj-qfwx"
+      ],
+      "summary": "SQL Injection via placeholder confusion with dollar quoted string literals in github.com/jackc/pgx",
+      "reachability": "symbol",
+      "traces": 3,
+      "module": "github.com/jackc/pgx",
+      "found_version": "",
+      "fixed_version": "",
+      "example_trace": "internal/sanitize/sanitize.go:433",
+      "go_fixed_version": "v5.9.2"
+    }
+  ]
+}

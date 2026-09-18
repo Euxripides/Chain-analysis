@@ -1,0 +1,8 @@
+purpose: sha256 of the syft EXECUTABLE /syft as shipped inside image /tmp/sbom-dep-upgrade-20260913T015815Z/syft-image.tar
+method:  stream each layer of the saved image archive, hash the top-most file entry named 'syft'
+note:    the anchore/syft image is distroless (no /bin/sh, no coreutils), so this cannot be done in-container
+layout:  docker-archive, layers=3
+layer:   blobs/sha256/c9c058baf33d66ab42d904f2880fff7c8f6e5f6436c904610f77a5ec57389d3c
+entry:   syft (size=87220386 bytes)
+sha256:  abca2def61de9952fa06d3977bb1e064818facb9badfce502b450d3d6846a91f
+RESULT: OK

@@ -268,7 +268,7 @@ func (s *Service) CreateCase(ctx context.Context, actor Actor, req CreateCaseReq
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	workspaceID, err := s.resolveWorkspace(ctx, tx, p.OrganizationID, p.WorkspaceID)
+	workspaceID, err := s.resolveWorkspace(ctx, tx, p)
 	if err != nil {
 		return Case{}, err
 	}

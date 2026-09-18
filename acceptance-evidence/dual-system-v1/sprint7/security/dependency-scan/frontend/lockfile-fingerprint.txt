@@ -1,0 +1,20 @@
+# lockfile integrity proof - pnpm audit must not mutate the lockfile
+# host: dataserver  time: 2026-09-12T23:37:21+07:00
+# cwd: /home/euripides/projects/blockchain-platform/frontend
+
+## command: md5sum pnpm-lock.yaml   (before pnpm audit)
+5d3380128e266db079a91119e0201ffb  pnpm-lock.yaml
+size_mtime: 54095 1789228465
+
+## command: cp -p pnpm-lock.yaml /tmp/pnpm-lock.yaml.s7sec-before   (read-only safety copy)
+exit=0
+
+## command: pnpm audit --json   (CI=true, exit code below)
+exit=1
+
+## command: md5sum pnpm-lock.yaml   (after pnpm audit)
+5d3380128e266db079a91119e0201ffb  pnpm-lock.yaml
+size_mtime: 54095 1789228465
+
+## VERDICT: IDENTICAL
+lockfile UNCHANGED by the audit - audit is non-mutating, evidence is reproducible.

@@ -1,0 +1,18 @@
+# direct source usage of the two vulnerable frontend packages
+# host: dataserver  time: 2026-09-12T23:39:23+07:00  cwd: /home/euripides/projects/blockchain-platform/frontend
+
+## grep -rn "from 'xlsx'" (src + apps + packages)
+src/utils/detail-table.ts:115:    const XLSX = await import('xlsx')
+src/pages/DownloadPage.tsx:90:          const XLSX = await import('xlsx')
+grep_exit=0
+
+## grep -rn echarts
+src/features/api-control/TrendChart.tsx:2:import * as echarts from 'echarts/core'
+src/features/api-control/TrendChart.tsx:3:import { LineChart, BarChart } from 'echarts/charts'
+src/features/api-control/TrendChart.tsx:4:import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+src/features/api-control/TrendChart.tsx:5:import { CanvasRenderer } from 'echarts/renderers'
+grep_exit=0
+
+## file counts
+xlsx import sites: 0
+echarts import sites: 1

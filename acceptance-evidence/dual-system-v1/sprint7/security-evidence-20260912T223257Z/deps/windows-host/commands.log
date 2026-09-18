@@ -1,0 +1,52 @@
+=== TOOL VERSIONS ===
+node: v24.15.0
+pnpm: 11.8.0
+go:   go version go1.23.2 windows/386
+cwd:  E:\Code\远程虚拟机\harness\blockchain-platform
+
+=== PRE-SCAN INTEGRITY FINGERPRINTS (prove read-only) ===
+PRE  0091B9F57798ADB2F39290557D67DFB9A17CC48138170F5F179FDBA092EF3465  backend\go.mod
+PRE  34147FB9944EA49B8470E4C0E0DA85EB53CE60706975B2D5FE34C2011EE4B6B2  backend\go.sum
+PRE  A11D5A0EC48EF455271427D048A066DC99A2B607F71BEAA170188B22766A94B5  frontend\pnpm-lock.yaml
+PRE  1EE8EE3F9525C4FE466CB55F1154E288C698450ACC45E4FEE2B753330EAEEBA9  frontend\package.json
+PRE  8843BD33BC2B0FE8917AA47347A68EC00F7A51C690D921BC668303E7025C4ED8  frontend\apps\admin-console\package.json
+PRE  51EB7E3AAD2A476D1C89E74EE5BE4E3D361B93146A419C95F370E5F538AA5C58  frontend\apps\user-console\package.json
+PRE  9F921F97695FC2A9E706C3C392A9673AD00F12D6CACF276DDD533937DD896276  frontend\packages\api-client\package.json
+PRE  0A66620AF36D6A39079BDDB95B524F63F28A29D5C0AD8F37887B12D1835AB558  frontend\packages\design-tokens\package.json
+PRE  34A00CBA0F1F0F5B38F04D8BC1CE7C764233A15BB28178E0D9060698D947D5C9  frontend\packages\ui\package.json
+
+=== [1] pnpm audit --json (frontend workspace) ===
+pnpm-audit EXIT=1
+--- stderr ---
+--- json size: 192 bytes ---
+
+=== [2] pnpm licenses list --json ===
+pnpm-licenses EXIT=0  size=58429
+
+=== [3] go list -m all ===
+go-list-m-all EXIT=0
+module lines: 159
+
+=== [4] govulncheck install attempt ===
+govulncheck pre-present: 
+go install EXIT=0
+go: downloading golang.org/x/vuln v1.8.0
+go: golang.org/x/vuln@v1.8.0 requires go >= 1.26.0; switching to go1.26.8
+go: downloading go1.26.8 (windows/386)
+go: downloading golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518
+go: downloading golang.org/x/mod v0.41.0
+go: downloading golang.org/x/tools v0.50.0
+go: downloading golang.org/x/sync v0.23.0
+GOPATH bin candidate: C:\Users\Euripides\go\bin\govulncheck.exe  exists=True
+
+=== [5] POST-SCAN INTEGRITY FINGERPRINTS ===
+POST 0091B9F57798ADB2F39290557D67DFB9A17CC48138170F5F179FDBA092EF3465  backend\go.mod
+POST 34147FB9944EA49B8470E4C0E0DA85EB53CE60706975B2D5FE34C2011EE4B6B2  backend\go.sum
+POST A11D5A0EC48EF455271427D048A066DC99A2B607F71BEAA170188B22766A94B5  frontend\pnpm-lock.yaml
+POST 1EE8EE3F9525C4FE466CB55F1154E288C698450ACC45E4FEE2B753330EAEEBA9  frontend\package.json
+POST 8843BD33BC2B0FE8917AA47347A68EC00F7A51C690D921BC668303E7025C4ED8  frontend\apps\admin-console\package.json
+POST 51EB7E3AAD2A476D1C89E74EE5BE4E3D361B93146A419C95F370E5F538AA5C58  frontend\apps\user-console\package.json
+POST 9F921F97695FC2A9E706C3C392A9673AD00F12D6CACF276DDD533937DD896276  frontend\packages\api-client\package.json
+POST 0A66620AF36D6A39079BDDB95B524F63F28A29D5C0AD8F37887B12D1835AB558  frontend\packages\design-tokens\package.json
+POST 34A00CBA0F1F0F5B38F04D8BC1CE7C764233A15BB28178E0D9060698D947D5C9  frontend\packages\ui\package.json
+DONE_PHASE1=1

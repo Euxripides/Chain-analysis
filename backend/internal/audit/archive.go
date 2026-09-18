@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ArchiveBucket 是审计锚点与归档对象的专用 bucket。
@@ -40,14 +40,14 @@ type Anchor struct {
 
 // Archiver 负责每日生成哈希链锚点并归档到 MinIO（S3-BE-02）。
 type Archiver struct {
-	pool    *pgxpool.Pool
+	pool    *dbtx.Pool
 	store   ObjectPutter
 	objects ObjectGetter
 	log     *slog.Logger
 	env     string
 }
 
-func NewArchiver(pool *pgxpool.Pool, store ObjectPutter, env string, log *slog.Logger) *Archiver {
+func NewArchiver(pool *dbtx.Pool, store ObjectPutter, env string, log *slog.Logger) *Archiver {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -160,7 +160,8 @@ func (a *Archiver) archiveChain(ctx context.Context, chain string, day, from, to
 		return nil, err
 	}
 	// Sprint 6 审计修复：锚点区间不得跨越已封存的完整性边界。
-	if incident, err := LoadIncident(ctx, a.pool, chain); err != nil {
+	// 只取缺口事件（LoadGapIncident）：同链的稀疏声明不是边界。
+	if incident, err := LoadGapIncident(ctx, a.pool, chain); err != nil {
 		return nil, err
 	} else if incident != nil && fromSeq < incident.TrustedFromSeq {
 		if toSeq < incident.TrustedFromSeq {
@@ -291,7 +292,7 @@ type OutboxStats struct {
 	FailedTotal     int64
 }
 
-func ReadOutboxStats(ctx context.Context, pool *pgxpool.Pool) (OutboxStats, error) {
+func ReadOutboxStats(ctx context.Context, pool *dbtx.Pool) (OutboxStats, error) {
 	var st OutboxStats
 	if pool == nil {
 		return st, nil

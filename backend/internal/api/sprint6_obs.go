@@ -59,8 +59,10 @@ func (s *Server) handleAdminObservabilityOverview(w http.ResponseWriter, r *http
 		SELECT count(*), count(*) FILTER (WHERE status <> 'success'), coalesce(sum(coalesce(rows,0)),0), coalesce(sum(coalesce(bytes,0)),0)
 		FROM provider_usage WHERE request_time >= $1`, since).Scan(&providerCalls, &providerErrors, &providerRows, &providerBytes)
 	var pipelineRows int64
+	// download_jobs 没有 downloaded_rows 列（分页行数记在 download_shards 上）。
+	// 写错列名会让语句失败并把事务打成 aborted，进而把整个请求变成 409（见 sprint6_control.go 注释）。
 	_ = s.deps.Store.Pool.QueryRow(ctx, `
-		SELECT coalesce(sum(downloaded_rows),0) FROM download_jobs WHERE updated_at >= $1`, since).Scan(&pipelineRows)
+		SELECT coalesce(sum(downloaded_rows),0) FROM download_shards WHERE updated_at >= $1`, since).Scan(&pipelineRows)
 	var jobWallSeconds float64
 	_ = s.deps.Store.Pool.QueryRow(ctx, `
 		SELECT coalesce(avg(extract(epoch from (updated_at - created_at))),0)::float8 FROM download_jobs
@@ -406,9 +408,13 @@ func (s *Server) s6EvaluateSLOs(ctx context.Context) []s6SLO {
 	// 7) Session 撤销生效 < 5s（从审计事件到撤销时间）。
 	var revokeLatency float64
 	var revokeSamples int64
+	// sessions.id 是 uuid、audit_events_v2.resource_id 是 text：不转型会直接报
+	// "operator does not exist: uuid = text"，语句失败 -> 请求事务 aborted -> 整个 SLO
+	// 请求被提交门改写成 409。用 ::text 比较（而不是把 resource_id 转 uuid）：
+	// resource_id 并不总是合法 UUID。
 	_ = s.deps.Store.Pool.QueryRow(ctx, `
 		SELECT count(*), coalesce(avg(extract(epoch from (s.revoked_at - a.occurred_at))), 0)::float8
-		FROM audit_events_v2 a JOIN sessions s ON s.id = a.resource_id
+		FROM audit_events_v2 a JOIN sessions s ON s.id::text = a.resource_id
 		WHERE a.action = 'admin:session:revoke' AND a.occurred_at > now() - interval '7 days' AND s.revoked_at IS NOT NULL`).
 		Scan(&revokeSamples, &revokeLatency)
 	slos = append(slos, s6SLO{

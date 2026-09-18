@@ -1,0 +1,8 @@
+# ===== AUDIT-002 脱敏标记统计 (masked markers) =====
+# generated : 2026-09-12T23:50:48+07:00
+# 方法      : 统计含 '***' 掩码的行，并列出被掩码的键/上下文(distinct)
+api_log_masked_lines=220
+worker_log_masked_lines=146
+# ---- 被掩码的键/上下文 (distinct) ----
+"endpoint":"https://rpc.ankr.com/tron_jsonrpc/***"
+"endpoint":"rpc.ankr.com/bsc/***"

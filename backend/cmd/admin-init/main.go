@@ -36,7 +36,13 @@ func main() {
 	cfg := config.Load()
 	log := logger.New("info")
 
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	// 初始化需要写 identities/credentials 的权限：优先使用迁移（运维）账号。
+	// 应用账号在 S7 降权之后是受限角色，用它执行本工具会因权限不足失败。
+	dsn := cfg.MigrationDatabaseURL
+	if dsn == "" {
+		dsn = cfg.DatabaseURL
+	}
+	st, err := store.New(ctx, dsn)
 	if err != nil {
 		log.Error("postgres connect failed", "err", err)
 		os.Exit(1)

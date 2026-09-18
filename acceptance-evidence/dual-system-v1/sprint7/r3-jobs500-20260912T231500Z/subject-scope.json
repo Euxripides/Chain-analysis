@@ -1,0 +1,48 @@
+{
+  "investigator": {
+    "audience": "user",
+    "roles": [
+      "investigator"
+    ],
+    "identity_id_prefix": "2f545a30",
+    "organization_id_prefix": "627c131a",
+    "workspace_id_prefix": "14dfbf1b",
+    "permissions_total": 85,
+    "has_job_read_like": [
+      "download:control",
+      "download:create",
+      "download:preview",
+      "download:read",
+      "download:refresh",
+      "download:reuse",
+      "evidence:download",
+      "export:download",
+      "job:control",
+      "job:diagnose"
+    ],
+    "note": "只留 id 前 8 位前缀与权限键名，无口令/token/完整 UUID"
+  },
+  "admin": {
+    "audience": "admin",
+    "roles": [
+      "owner"
+    ],
+    "identity_id_prefix": "6e192e52",
+    "organization_id_prefix": "d3b152f2",
+    "workspace_id_prefix": "000e31bb",
+    "permissions_total": 177,
+    "has_job_read_like": [
+      "admin:job:cancel",
+      "admin:job:control",
+      "admin:job:list",
+      "admin:job:read",
+      "admin:job:retry",
+      "download:control",
+      "download:create",
+      "download:delete",
+      "download:preview",
+      "download:read"
+    ],
+    "note": "只留 id 前 8 位前缀与权限键名，无口令/token/完整 UUID"
+  }
+}

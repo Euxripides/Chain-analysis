@@ -1,0 +1,12 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 135
+
+{
+  "suite": "run-sprint5-e2e.sh",
+  "build_sha": "working-tree",
+  "pass": 105,
+  "fail": 1,
+  "not_verified": 0,
+  "status": "FAIL"
+}

@@ -141,15 +141,18 @@ func (s *Server) requireExportScope(r *http.Request, id string) (map[string]any,
 		exportID, status, format, objectRef, sha string
 		rows                                     int64
 		zip                                      bool
-		orgID, wsID                              *string
+		orgID, wsID, jobID                       *string
 		createdAt, updatedAt                     time.Time
 		expiresAt                                *time.Time
 		errorMsg                                 string
 	)
+	// R10 缺陷修复（2026-09-13）：原先没有 SELECT/Scan job_id，导致复用路径（export.reuse）的响应
+	// 里没有 job_id，前端「导出任务已创建」弹窗显示 job_id —、地址数 0、Dataset —。
+	// job_id 是 exports 表的真实列，且本查询已做 org/ws 作用域校验，属 scope-safe 返回。
 	err := s.deps.Store.Pool.QueryRow(r.Context(), `
 		SELECT id::text, status, format, zip, object_ref, rows, sha256, error,
-		       organization_id::text, workspace_id::text, created_at, updated_at, expires_at
-		FROM exports WHERE id=$1`, id).Scan(&exportID, &status, &format, &zip, &objectRef, &rows, &sha, &errorMsg, &orgID, &wsID, &createdAt, &updatedAt, &expiresAt)
+		       organization_id::text, workspace_id::text, job_id::text, created_at, updated_at, expires_at
+		FROM exports WHERE id=$1`, id).Scan(&exportID, &status, &format, &zip, &objectRef, &rows, &sha, &errorMsg, &orgID, &wsID, &jobID, &createdAt, &updatedAt, &expiresAt)
 	if err != nil {
 		return nil, false
 	}
@@ -160,7 +163,7 @@ func (s *Server) requireExportScope(r *http.Request, id string) (map[string]any,
 	item := map[string]any{
 		"id": exportID, "status": status, "format": format, "zip": zip,
 		"object_ref": objectRef, "rows": rows, "sha256": sha, "error": errorMsg,
-		"organization_id": orgID, "workspace_id": wsID,
+		"organization_id": orgID, "workspace_id": wsID, "job_id": jobID,
 		"created_at": createdAt, "updated_at": updatedAt,
 		"download_available": downloadAvailable,
 	}
@@ -169,10 +172,18 @@ func (s *Server) requireExportScope(r *http.Request, id string) (map[string]any,
 	}
 	// DATA-008：对象缺失必须显式暴露，不能只凭 DB status=COMPLETED 宣称可下载。
 	if downloadAvailable && objectRef != "" && s.deps.Raw != nil {
-		if _, statErr := s.deps.Raw.Stat(context.Background(), objectRef); statErr != nil {
+		// F-R10-BUCKET：导出对象可能在新桶或旧桶，存在性检查必须双读；
+		// 非 404（权限/网络）同样按不可下载处理，绝不把故障当作“对象存在”。
+		if _, loc, statErr := s.statExportObject(context.Background(), objectRef); statErr != nil {
 			item["download_available"] = false
 			item["object_missing"] = true
 			item["action_required"] = "restore_minio_object_or_regenerate_export"
+		} else {
+			// D-R10V9-01：object_bucket 必须是**真实 MinIO 桶名**（与读/写 helper 的审计口径一致），
+			// 逻辑角色另记 object_bucket_role。旧实现把逻辑角色写进 object_bucket，导致 API 响应
+			// 与审计链出现过"export"这种无法与物理桶对齐的取值。
+			item["object_bucket"] = loc.Name
+			item["object_bucket_role"] = string(loc.Bucket)
 		}
 	}
 	return item, true

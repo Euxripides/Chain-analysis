@@ -1,0 +1,28 @@
+{
+  "label": "lan_graph_counter",
+  "url": "http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.001291594,
+  "requests": 6403,
+  "rps": 320.1293261441564,
+  "errors": 6403,
+  "status_counts": {
+    "503": 6395
+  },
+  "p50_ms": 22.30087,
+  "p90_ms": 42.865906,
+  "p95_ms": 49.440103,
+  "p99_ms": 66.90706899999999,
+  "min_ms": 2.644746,
+  "max_ms": 192.72838000000002,
+  "avg_ms": 24.946205461658483,
+  "avg_response_bytes": 308.6139309698579,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/v2/explorer/addresses/tron/TCFNp179Lg46D16zKoumd4Poa2WFFdtqYj/counterparties\": context deadline exceeded"
+  ]
+}

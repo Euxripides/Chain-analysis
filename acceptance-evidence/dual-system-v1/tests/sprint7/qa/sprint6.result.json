@@ -1,0 +1,12 @@
+{
+  "suite": "run-sprint6-e2e.sh",
+  "build_sha": "working-tree",
+  "pass": 159,
+  "fail": 0,
+  "not_verified": 0,
+  "blocking_failures": 0,
+  "blocking_not_verified": 0,
+  "criteria": "fail==0 and not_verified==0 and pass>0",
+  "status": "PASS",
+  "finished_at": "2026-09-13T01:49:22.523189+07:00"
+}

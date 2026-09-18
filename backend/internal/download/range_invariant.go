@@ -79,8 +79,10 @@ func tokenHashP0(token string) string {
 }
 
 type tokenBinding struct {
-	start, end uint64
-	shards     map[string]struct{}
+	start, end     uint64
+	subject        string
+	dataset        string
+	shards         map[string]struct{}
 }
 type tokenRegistry struct {
 	mu     sync.Mutex
@@ -88,7 +90,18 @@ type tokenRegistry struct {
 }
 
 func newTokenRegistry() *tokenRegistry { return &tokenRegistry{owners: map[string]tokenBinding{}} }
-func (r *tokenRegistry) claim(token, shard string, start, end uint64) error {
+
+// claim 把 provider 返回的 pageToken 绑定到"它属于哪条地址流"。
+//
+// 绑定键是 (subject, dataset, start_block)，**不是**完整区间：同一个地址、
+// 同一个 dataset、同一个起始块的游标，在 end_block 不同时仍然指向上游同一
+// 个分页位置（例如重复创建的任务 head block 不同，或同一地址被两个任务
+// 覆盖）。旧实现要求 end 也完全相同，于是把这类完全合法的响应判成
+// "page token belongs to another shard" 并让 Shard 非重试失败 —— 现场
+// DL-20260915-0002/0003/0009 因此永久卡住（2026-09-15）。
+//
+// 仍然硬失败的：游标被另一条地址流、另一个 dataset、或另一个起始块使用。
+func (r *tokenRegistry) claim(token, shard, subject, dataset string, start, end uint64) error {
 	h := tokenHashP0(token)
 	if h == "" {
 		return nil
@@ -96,18 +109,15 @@ func (r *tokenRegistry) claim(token, shard string, start, end uint64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if old, ok := r.owners[h]; ok {
-		// A TRON Ankr block cursor describes the shared upstream range, not the
-		// business shard consuming the response. Same-range address shards must
-		// be allowed to reuse it; a different range is still a hard attribution
-		// violation.
-		if old.start != start || old.end != end {
-			return fmt.Errorf("%w: token_hash=%s old_range=[%d,%d) new_range=[%d,%d) new_shard=%s", ErrTokenCrossShard, h, old.start, old.end, start, end, shard)
+		if old.start != start || old.subject != subject || old.dataset != dataset {
+			return fmt.Errorf("%w: token_hash=%s old=[subject=%s dataset=%s range=%d..%d) new=[subject=%s dataset=%s range=%d..%d) new_shard=%s",
+				ErrTokenCrossShard, h, old.subject, old.dataset, old.start, old.end, subject, dataset, start, end, shard)
 		}
 		old.shards[shard] = struct{}{}
 		r.owners[h] = old
 		return nil
 	}
-	r.owners[h] = tokenBinding{start: start, end: end, shards: map[string]struct{}{shard: {}}}
+	r.owners[h] = tokenBinding{start: start, end: end, subject: subject, dataset: dataset, shards: map[string]struct{}{shard: {}}}
 	return nil
 }
 func (r *tokenRegistry) releaseShard(shard string) {

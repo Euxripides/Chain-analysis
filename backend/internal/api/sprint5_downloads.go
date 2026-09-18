@@ -32,6 +32,13 @@ type downloadV2Request struct {
 	ReusePolicy     string              `json:"reuse_policy"`
 	PerformanceMode string              `json:"performance_mode"`
 	Priority        int                 `json:"priority"`
+
+	// §18.10 / §22/§23：导入文件的案件/标签语义。客户端只能提交名称，
+	// 租户作用域一律由服务端从会话主体注入（§6.4）。
+	CaseName          string                           `json:"case_name"`
+	Tags              []string                         `json:"tags"`
+	CreateMissingMeta bool                             `json:"create_missing_meta"`
+	SubjectMeta       map[string]downloadV2SubjectMeta `json:"subject_meta"`
 }
 
 type downloadV2Plan struct {
@@ -89,6 +96,49 @@ func (s *Server) parseDownloadV2(w http.ResponseWriter, r *http.Request) (downlo
 	if req.Priority <= 0 {
 		req.Priority = 100
 	}
+	req.CaseName = strings.TrimSpace(req.CaseName)
+	// 标签超额一律显式拒绝，绝不静默截断后照常创建。
+	req.Tags = trimDedupeStrings(req.Tags)
+	if len(req.Tags) > downloadImportMaxTags {
+		validationError(w, r, "tags 数量超出上限", []fieldError{{Field: "tags", Code: "too_many", Message: "单次最多 20 个标签"}})
+		return req, false
+	}
+	if len(req.SubjectMeta) > downloadImportMaxAddresses {
+		validationError(w, r, "subject_meta 条目超过单次地址上限", []fieldError{{Field: "subject_meta", Code: "too_many", Message: "单次最多 100 个地址"}})
+		return req, false
+	}
+	normalizedMeta := make(map[string]downloadV2SubjectMeta, len(req.SubjectMeta))
+	for key, meta := range req.SubjectMeta {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			validationError(w, r, "subject_meta 含空地址键", []fieldError{{Field: "subject_meta", Code: "invalid", Message: "地址键不能为空"}})
+			return req, false
+		}
+		meta.CaseName = strings.TrimSpace(meta.CaseName)
+		meta.Tags = trimDedupeStrings(meta.Tags)
+		if len(meta.Tags) > downloadImportMaxTags {
+			validationError(w, r, "subject_meta tags 数量超出上限", []fieldError{{Field: "subject_meta", Code: "too_many", Message: trimmedKey}})
+			return req, false
+		}
+		normalizedMeta[trimmedKey] = meta
+	}
+	req.SubjectMeta = normalizedMeta
+	// §21.2 最小权限：只有 download:create 的调用方不得借 create_missing_meta 造案件/标签。
+	if req.CreateMissingMeta {
+		caseRequested := req.CaseName != ""
+		tagRequested := len(req.Tags) > 0
+		for _, meta := range req.SubjectMeta {
+			if meta.CaseName != "" {
+				caseRequested = true
+			}
+			if len(meta.Tags) > 0 {
+				tagRequested = true
+			}
+		}
+		if !s.authorizeMetaCreate(w, r, caseRequested, tagRequested) {
+			return req, false
+		}
+	}
 	return req, true
 }
 
@@ -123,11 +173,39 @@ func (s *Server) prepareDownloadPlan(w http.ResponseWriter, r *http.Request, req
 			return nil, false
 		}
 	}
+	// §18.10：前端只用服务端 accepted 的 normalized 地址；subject_meta 的键必须
+	// 能在本次请求的地址集合中归一化命中，否则拒绝（不允许跨请求/跨工作区注入元数据）。
+	subjectMeta := map[string]dataset.SubjectMeta{}
+	if len(req.SubjectMeta) > 0 {
+		allowed := make(map[string]bool, len(addresses))
+		for _, a := range addresses {
+			allowed[a] = true
+		}
+		origin := make(map[string]string, len(req.SubjectMeta))
+		for key, meta := range req.SubjectMeta {
+			list, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, []string{strings.ToLower(strings.TrimSpace(key))})
+			if err != nil || len(list) == 0 || !allowed[list[0]] {
+				validationError(w, r, "subject_meta 含未通过服务端校验的地址", []fieldError{{Field: "subject_meta", Code: "invalid", Message: key}})
+				return nil, false
+			}
+			normalizedKey := list[0]
+			// 大小写/链归一化后命中同一地址的两个不同原始键 → 语义不确定，拒绝而不是后者覆盖前者。
+			if prev, ok := origin[normalizedKey]; ok && prev != key {
+				validationError(w, r, "subject_meta 含归一化冲突：多个键映射到同一规范化地址",
+					[]fieldError{{Field: "subject_meta", Code: "conflict", Message: prev + " / " + key}})
+				return nil, false
+			}
+			origin[normalizedKey] = key
+			subjectMeta[normalizedKey] = dataset.SubjectMeta{CaseName: meta.CaseName, Tags: meta.Tags}
+		}
+	}
 	ensureReq := dataset.EnsureRequest{
 		OrganizationID: p.OrganizationID, WorkspaceID: p.WorkspaceID, CreatedByIdentity: p.IdentityID,
 		Source: "user_download", Priority: req.Priority,
 		PerformanceMode: req.PerformanceMode, Subjects: addresses, Chain: req.Chain,
 		Datasets: datasets, Range: req.Range, ReusePolicy: req.ReusePolicy,
+		CaseName: req.CaseName, Tags: req.Tags,
+		CreateMissingMeta: req.CreateMissingMeta, SubjectMeta: subjectMeta,
 	}
 	preview, err := s.svc.PreviewLocal(r.Context(), ensureReq)
 	if err != nil {
@@ -213,6 +291,17 @@ func (s *Server) downloadEstimate(ctx context.Context, chainSlug string, address
 	}
 	if s.deps.CH == nil || missingBlocks <= 0 {
 		out["basis"] = "no_missing_blocks"
+		return out
+	}
+	// P4-CH-01: the ClickHouse FINAL scan below is external work that a
+	// PostgreSQL rollback cannot undo. Revalidate the caller scope first, so a
+	// request the commit gate is about to refuse does not charge a 20+ second
+	// scan to a scope the platform has already invalidated. The gate's release
+	// re-read stays the only enforcement point; this only decides whether the
+	// external call is worth starting.
+	if recheckErr := s.scopeCommitGateRecheck(ctx, PrincipalFrom(ctx)); recheckErr != nil {
+		out["basis"] = "scope_not_revalidated"
+		out["scope_recheck"] = recheckErr.Error()
 		return out
 	}
 	var localRows int64

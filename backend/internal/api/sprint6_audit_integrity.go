@@ -191,6 +191,9 @@ func (s *Server) handleAdminAuditIntegrityRequest(w http.ResponseWriter, r *http
 		Chain          string `json:"chain"`
 		Reason         string `json:"reason"`
 		StepUpPassword string `json:"step_up_password"`
+		// Kind 为空时按缺口封存处理（向后兼容）；declared_integrity_events
+		// 走稀疏声明路径（ADR-019），可声明缺失行与内容不可复算行。
+		Kind string `json:"kind"`
 	}
 	_ = decodeJSON(r, &in)
 	if in.Chain == "" {
@@ -202,6 +205,10 @@ func (s *Server) handleAdminAuditIntegrityRequest(w http.ResponseWriter, r *http
 	}
 	if strings.TrimSpace(in.Reason) == "" {
 		validationError(w, r, "必须填写封存原因", []fieldError{{Field: "reason", Code: "required", Message: "原因必填"}})
+		return
+	}
+	if in.Kind == audit.IncidentKindDeclared {
+		s.handleAdminAuditIntegrityDeclareRequest(w, r, in.Chain, in.Reason, in.StepUpPassword)
 		return
 	}
 	ctx := r.Context()
@@ -368,6 +375,27 @@ func (s *Server) handleAdminAuditIntegrityExecute(w http.ResponseWriter, r *http
 	chain := approval.TargetID
 	if !s6ValidChain(chain) {
 		respondError(w, r, http.StatusConflict, "CONFLICT_STATE", "审批请求的目标链非法", nil)
+		return
+	}
+	if kind, _ := approval.Payload["kind"].(string); kind == audit.IncidentKindDeclared {
+		p := PrincipalFrom(ctx)
+		reason := strings.TrimSpace(in.Reason)
+		if reason == "" {
+			reason, _ = approval.Payload["reason"].(string)
+		}
+		if reason == "" {
+			reason = "双人审批通过后声明稀疏完整性事实（ADR-019）"
+		}
+		incident, refs, err := s.s6ExecuteDeclaredEvents(ctx, approval, chain, reason, p.IdentityID, p.Email)
+		if err != nil {
+			respondError(w, r, http.StatusConflict, "CONFLICT_STATE", err.Error(), nil)
+			return
+		}
+		_ = s.s6FinishApproval(ctx, id, "executed", map[string]any{"declaration_refs": refs})
+		s.s6AuditWithApproval(r, "admin.audit.integrity.declare.execute", "admin.security", "audit_chain", chain, id,
+			map[string]any{"declaration_refs": refs, "incident_ref": incident.IncidentRef})
+		respondOK(w, r, map[string]any{"declaration_refs": refs, "incident_ref": incident.IncidentRef,
+			"declared_lost_count": incident.GapEventCount})
 		return
 	}
 	observed, err := audit.DetectGap(ctx, s.deps.Store.Pool, chain)
@@ -623,4 +651,206 @@ func (s *Server) handleAdminAuditAnchorObject(w http.ResponseWriter, r *http.Req
 		"head_hash": headHash, "from_seq": fromSeq, "to_seq": toSeq, "event_count": eventCount,
 		"manifest": json.RawMessage(body),
 	})
+}
+
+// ---- 稀疏声明（ADR-019 / 迁移 0063） ----
+
+// s6DeclaredRefFromSummary 把扫描结果里的两个集合整理成可比较形态。
+func s6DeclaredEventsOf(items []audit.DeclaredEvent) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		out = append(out, map[string]any{"seq": it.Seq, "observed_event_hash": it.ObservedEventHash})
+	}
+	return out
+}
+
+// s6PayloadDeclaredEvents 从审批载荷读回声明集合（seq -> observed_event_hash）。
+func s6PayloadDeclaredEvents(payload map[string]any, key string) map[int64]string {
+	out := map[int64]string{}
+	raw, ok := payload[key].([]any)
+	if !ok {
+		return out
+	}
+	for _, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		seq, ok := s6PayloadInt(m, "seq")
+		if !ok {
+			continue
+		}
+		hash, _ := m["observed_event_hash"].(string)
+		out[seq] = hash
+	}
+	return out
+}
+
+// handleAdminAuditIntegrityDeclareRequest 发起一次稀疏声明（step-up + 双人审批）。
+//
+// 与缺口封存的区别：这里声明的是「逐条事实」而不是「连续缺口」——缺失行可以稀疏地
+// 夹在真实数据之间，内容不可复算行则本来就存在。两者都是 append-only 链上不可修复、
+// 也不允许被忽略的事实（ADR-019）。
+func (s *Server) handleAdminAuditIntegrityDeclareRequest(w http.ResponseWriter, r *http.Request, chain, reason, stepUp string) {
+	ctx := r.Context()
+	scan, err := audit.ScanChain(ctx, s.deps.Store.Pool, chain)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "全链扫描失败", nil)
+		return
+	}
+	if scan.Blocking() {
+		respondError(w, r, http.StatusConflict, "CONFLICT_STATE",
+			"存在 prev_hash 链接断裂（真实篡改），必须先定位处置，不能用声明掩盖",
+			map[string]any{"link_breaks": s6DeclaredEventsOf(scan.LinkBreaks)})
+		return
+	}
+	// 已经声明过的事实不再重复声明（声明表是 append-only 的，重复登记只会制造噪声）。
+	// 校验器按 seq 读声明，过滤掉已声明项后仍为空的扫描结果意味着"无可声明事实"。
+	if declared, derr := audit.LoadDeclaredEvents(ctx, s.deps.Store.Pool, chain); derr == nil {
+		scan.MissingSeqs = s6FilterUndeclared(scan.MissingSeqs, declared)
+		scan.ContentAnomalies = s6FilterUndeclared(scan.ContentAnomalies, declared)
+	}
+	if len(scan.MissingSeqs) == 0 && len(scan.ContentAnomalies) == 0 {
+		respondOK(w, r, map[string]any{"declaration_needed": false, "scan": scan})
+		return
+	}
+	if !s.s6StepUpOrFail(w, r, stepUp, "admin.audit.integrity.declare.request") {
+		return
+	}
+	p := PrincipalFrom(ctx)
+	ref := audit.DeclaredRefFor(chain, "all", s6SeqList(scan.MissingSeqs, scan.ContentAnomalies))
+	payload := map[string]any{
+		"kind":                audit.IncidentKindDeclared,
+		"chain":               chain,
+		"declaration_ref":     ref,
+		"reason":              reason,
+		"lost":                s6DeclaredEventsOf(scan.MissingSeqs),
+		"content_anomalies":   s6DeclaredEventsOf(scan.ContentAnomalies),
+		"detection_method":    "audit.ScanChain（逐行复算整条链并收敛全部问题）",
+		"head_seq":            scan.HeadSeq,
+		"checked":             scan.Checked,
+		"forbidden_actions":   []string{"回填缺失的审计行", "重写既有行的 event_hash", "把已声明事实记为完整"},
+	}
+	approval, err := s.s6CreateApproval(ctx, s6IntegritySealOperation, "audit_chain", chain, payload,
+		p.IdentityID, p.Email, 24*time.Hour)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "审批请求创建失败", nil)
+		return
+	}
+	if err := s.s6IntegrityEvent(ctx, ref, chain, "requested", p.IdentityID, p.Email, reason, map[string]any{
+		"approval_request_id": approval.ID,
+		"lost_count":          len(scan.MissingSeqs),
+		"anomaly_count":       len(scan.ContentAnomalies),
+	}); err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "声明事件记录失败", nil)
+		return
+	}
+	s.s6AuditWithApproval(r, "admin.audit.integrity.declare.request", "admin.security", "audit_chain", chain, approval.ID,
+		map[string]any{
+			"reason": reason, "declaration_ref": ref,
+			"lost_count": len(scan.MissingSeqs), "anomaly_count": len(scan.ContentAnomalies),
+			"step_up_method": "password",
+		})
+	respondCreated(w, r, map[string]any{
+		"approval":     approval,
+		"scan":         scan,
+		"declaration_ref": ref,
+	})
+}
+
+// s6SeqList 汇总两段 seq，用于生成确定性引用名。
+func s6SeqList(groups ...[]audit.DeclaredEvent) []int64 {
+	out := []int64{}
+	for _, g := range groups {
+		for _, e := range g {
+			out = append(out, e.Seq)
+		}
+	}
+	return out
+}
+
+// s6ExecuteDeclaredEvents 执行一次稀疏声明：重新扫描，逐条比对审批时的集合与哈希，
+// 一致才写入（任何漂移都中止，不写入任何行）。
+func (s *Server) s6ExecuteDeclaredEvents(ctx context.Context, approval s6Approval, chain, reason, actorID, actorEmail string) (*audit.Incident, []string, error) {
+	scan, err := audit.ScanChain(ctx, s.deps.Store.Pool, chain)
+	if err != nil {
+		return nil, nil, err
+	}
+	if scan.Blocking() {
+		return nil, nil, errors.New("扫描发现 prev_hash 链接断裂，已中止声明")
+	}
+	wantLost := s6PayloadDeclaredEvents(approval.Payload, "lost")
+	wantAnomalies := s6PayloadDeclaredEvents(approval.Payload, "content_anomalies")
+	nowLost := map[int64]string{}
+	for _, e := range scan.MissingSeqs {
+		nowLost[e.Seq] = e.ObservedEventHash
+	}
+	nowAnomalies := map[int64]string{}
+	for _, e := range scan.ContentAnomalies {
+		nowAnomalies[e.Seq] = e.ObservedEventHash
+	}
+	if !s6SameDeclaredSet(wantLost, nowLost) || !s6SameDeclaredSet(wantAnomalies, nowAnomalies) {
+		return nil, nil, errors.New("审批时的声明集合与当前扫描结果不一致，已中止（不会写入任何行）")
+	}
+	refs := []string{}
+	var first *audit.Incident
+	groups := []struct {
+		disposition string
+		events      []audit.DeclaredEvent
+	}{
+		{audit.DispositionLost, scan.MissingSeqs},
+		{audit.DispositionContentAnomaly, scan.ContentAnomalies},
+	}
+	for _, g := range groups {
+		if len(g.events) == 0 {
+			continue
+		}
+		inc, err := audit.SealDeclaredEvents(ctx, s.deps.Store.Pool, audit.SealDeclaredParams{
+			Chain:             chain,
+			Disposition:       g.disposition,
+			Events:            g.events,
+			Reason:            reason,
+			SealedBy:          actorID,
+			SealedByEmail:     actorEmail,
+			ApprovalRequestID: approval.ID,
+			DetectionMethod:   "audit.ScanChain（逐行复算整条链并收敛全部问题）",
+			Evidence: map[string]any{
+				"chain": chain, "head_seq": scan.HeadSeq, "checked": scan.Checked,
+				"row_count": scan.RowCount, "scanned_at": scan.ScannedAt,
+			},
+		})
+		if err != nil {
+			return nil, refs, err
+		}
+		refs = append(refs, inc.IncidentRef)
+		if first == nil {
+			first = inc
+		}
+	}
+	return first, refs, nil
+}
+
+// s6SameDeclaredSet 比较 seq -> hash 集合（顺序无关，缺失/多出/哈希不同都算不一致）。
+func s6SameDeclaredSet(a, b map[int64]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for seq, hash := range a {
+		if b[seq] != hash {
+			return false
+		}
+	}
+	return true
+}
+
+// s6FilterUndeclared 去掉已经声明过的 seq（同 seq 同哈希才算已声明）。
+func s6FilterUndeclared(items []audit.DeclaredEvent, declared map[int64]audit.DeclaredEvent) []audit.DeclaredEvent {
+	out := make([]audit.DeclaredEvent, 0, len(items))
+	for _, it := range items {
+		if d, ok := declared[it.Seq]; ok && d.ObservedEventHash == it.ObservedEventHash {
+			continue
+		}
+		out = append(out, it)
+	}
+	return out
 }

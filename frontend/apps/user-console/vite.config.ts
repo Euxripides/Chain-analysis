@@ -11,6 +11,10 @@ export default defineConfig({
   root,
   base: "/app-v2/",
   plugins: [react()],
+  // 计划 1852：导入解析跑在 Web Worker 里；Worker 内部动态 import("xlsx") 会产生代码分割，
+  // 而 Vite 默认的 worker.format="iife" 不支持代码分割构建，因此显式用 ES module worker
+  // （与 parse-client.ts 的 new Worker(url, { type: "module" }) 一致；CSP script-src 'self' 允许同源模块）。
+  worker: { format: "es" },
   resolve: {
     // 顺序敏感：先匹配具体文件，再匹配包入口（对象形式的 alias 是前缀匹配）。
     alias: [

@@ -1,0 +1,7 @@
+job_id=484a0b82-59dd-433c-b6e6-15a3642ba155
+download_subjects_for_job=1
+job_row=DL-20260913-0016|RUNNING|8b41836b-6d53-45e4-9a8a-3248a6e24e28
+case_links_after=0
+tag_links_after=0
+cases_named_created=0
+tags_named_created=0

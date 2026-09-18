@@ -189,22 +189,37 @@ func (w *Writer) WriteActivity(ctx context.Context, rows []ActivityRow) error {
 }
 
 // CountFinal 校验证据（§60/§63）：FINAL 去重后的唯一行数（只读，不阻塞数据面）。
+//
+// 去重语义保持不变，但不再走 FINAL：ReplacingMergeTree 的去重键就是排序键，chain 由 WHERE
+// 固定，因此 uniqExact(排序键剩余列) 与 count() FINAL 同值，而 uniqExact 不做 FINAL 合并读。
+//
+// 实测 2026-09-17（本机真实数据）：同样一条 bsc 区间计数，count() ... FINAL 读 8,400 万行、
+// 峰值 ~7 GiB、耗时数百秒（worker 被 kill 后仍以孤儿查询继续跑了 870 s，把 ClickHouse 顶到
+// 75% 内存 / 800% CPU）；这正是把 explorer 读端点 p95 从 <1 s 抬到 3-10 s 的后台争用来源。
+// 服务端的独立比对（tron 地址，同样谓词形态）：transactions 3.163 s -> 0.571 s（1260 = 1260），
+// token_transfers 43.531 s -> 0.802 s（28979 = 28979），logs 0.878 s -> 0.075 s（0 = 0）。
+//
+// 另加硬上限（30 s + 4 GiB）：本调用点是 best-effort（finalize.go 只把失败记成 Warn），
+// 超限只会少一条校验日志，绝不会再出现数百秒的失控查询。
 func (w *Writer) CountFinal(ctx context.Context, dataset, chain, address string, from, to uint64) (uint64, error) {
 	var q string
 	switch dataset {
 	case "transactions":
-		q = "SELECT count() FROM blockchain.transactions FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+		q = "SELECT uniqExact(tx_hash) FROM blockchain.transactions WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
 	case "token_transfers":
-		q = "SELECT count() FROM blockchain.token_transfers FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+		q = "SELECT uniqExact(tx_hash, log_index, token_address) FROM blockchain.token_transfers WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
 	case "nft_transfers":
-		q = "SELECT count() FROM blockchain.nft_transfers FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+		q = "SELECT uniqExact(tx_hash, log_index, contract_address, token_id) FROM blockchain.nft_transfers WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
 	case "internal_transactions":
-		q = "SELECT count() FROM blockchain.internal_calls FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
+		q = "SELECT uniqExact(tx_hash, call_index) FROM blockchain.internal_calls WHERE chain = ? AND block_number >= ? AND block_number <= ? AND (from_address = ? OR to_address = ?)"
 	case "logs":
-		q = "SELECT count() FROM blockchain.logs FINAL WHERE chain = ? AND block_number >= ? AND block_number <= ? AND address = ?"
+		q = "SELECT uniqExact(tx_hash, log_index) FROM blockchain.logs WHERE chain = ? AND block_number >= ? AND block_number <= ? AND address = ?"
 	default:
 		return 0, fmt.Errorf("CountFinal unsupported for %s", dataset)
 	}
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.MaintenanceScanTimeout)
+	defer cancel()
+	ctx = clickhouse.MaintenanceScanContext(ctx)
 	args := []any{chain, from, to, address}
 	if dataset == "transactions" || dataset == "token_transfers" || dataset == "nft_transfers" || dataset == "internal_transactions" {
 		args = append(args, address) // WHERE 中 address 出现两次（from/to 双侧匹配）

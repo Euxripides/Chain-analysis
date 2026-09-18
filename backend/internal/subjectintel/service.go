@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var validTypes = map[string]bool{"ADDRESS": true, "DOMAIN": true, "IP": true, "SOCIAL_ACCOUNT": true, "APK": true, "ORGANIZATION": true, "FILE": true, "CONTRACT": true, "TRANSACTION": true}
 var validSources = map[string]bool{"SYSTEM": true, "USER": true, "PROVIDER": true, "OSINT": true, "HEURISTIC": true, "AGENT": true, "CASE": true}
 
-type Service struct{ pool *pgxpool.Pool }
+type Service struct{ pool *dbtx.Pool }
 
-func New(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func New(pool *dbtx.Pool) *Service { return &Service{pool: pool} }
 
 type Subject struct {
 	ID              string         `json:"id"`

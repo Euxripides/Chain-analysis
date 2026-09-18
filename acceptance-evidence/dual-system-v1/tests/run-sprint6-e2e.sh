@@ -39,7 +39,7 @@ if [ -z "$VIEW_EMAIL" ]; then VIEW_EMAIL=fixture-viewer@fixture.local; fi
 VIEW_PW="$VIEWER_PASSWORD"
 if [ -z "$PROJECT" ]; then PROJECT=/home/euripides/projects/blockchain-platform; fi
 if [ -z "$EVIDENCE_DIR" ]; then EVIDENCE_DIR="$PROJECT/acceptance-evidence/dual-system-v1/tests/sprint6"; fi
-if [ -z "$PGPASS" ]; then PGPASS=change_me_pg_2026; fi
+if [ -z "$PGPASS" ]; then echo "missing required env var: PGPASS"; exit 2; fi
 if [ -z "$S6_BUILD_SHA" ]; then S6_BUILD_SHA=working-tree; fi
 if [ -z "$API_LOG" ]; then API_LOG=/tmp/api.log; fi
 FILES_DIR="$EVIDENCE_DIR/files"
@@ -70,11 +70,35 @@ nv() { printf '  NOT_VERIFIED %-12s %s\n' "$1" "$2" | tee -a "$EVIDENCE_DIR/run.
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(sys.argv[1]))" "$1" 2>/dev/null; }
 sql() { $PG "$1"; }
 
+# 多工作区身份登录必须显式选择工作区（P1-20260913）：服务端不替用户猜作用域。
+# 夹具账号同时属于 acme-lab 与 acme-lab-other，不带 workspace_id 会得到
+# AUTHN_WORKSPACE_SELECTION_REQUIRED。这里按邮箱解析目标工作区并随登录一并提交。
+if [ -z "${FIXTURE_WORKSPACE_ID:-}" ] && [ -r /tmp/dual-system-fixture.env ]; then
+  set -a; . /tmp/dual-system-fixture.env; set +a
+fi
+login_workspace() {
+  case "$1" in
+    *@fixture.local) printf '%s' "${FIXTURE_WORKSPACE_ID:-}" ;;
+    *) printf '' ;;
+  esac
+}
 login() { # login <jar> <email> <password> <audience>
   local jar="$1" email="$2" pass="$3" aud="$4"
   if [ -z "$aud" ]; then aud=admin; fi
-  curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
-    -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
+  local body="{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}"
+  local out
+  out=$(curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" -d "$body" "$BASE/api/auth/v1/login")
+  # 多工作区身份：服务端按契约返回 409 AUTHN_WORKSPACE_SELECTION_REQUIRED + 可选列表；
+  # 客户端必须**显式选择**后重试（P1-20260913）。这里必须先无工作区登录再按需重试：
+  # 新建账号只在默认组织有成员关系，硬塞夹具工作区会得到 workspace_not_member。
+  if printf '%s' "$out" | grep -q 'AUTHN_WORKSPACE_SELECTION_REQUIRED'; then
+    local ws; ws=$(login_workspace "$email")
+    if [ -n "$ws" ]; then
+      out=$(curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
+        -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\",\"workspace_id\":\"$ws\"}" "$BASE/api/auth/v1/login")
+    fi
+  fi
+  printf '%s' "$out"
 }
 csrf() { grep "$1" "$2" 2>/dev/null | awk '{print $7}'; }
 adm() { # adm <jar> <csrf> <method> <path> [json]
@@ -446,7 +470,10 @@ if [ "$ALREADY_SEALED" = "True" ]; then
   # 幂等路径：边界已封存时不得重复写入，请求端点必须如实返回 already_sealed。
   REQ=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/incidents/requests "{\"chain\":\"audit\",\"reason\":\"AUDIT-004 复跑：确认边界不可重复封存\",\"step_up_password\":\"$ADMIN_PW\"}")
   check "AUDIT-004d" "已封存边界不可重复封存（幂等，already_sealed=true）" "$(echo "$REQ" | jget "d['data']['already_sealed']")" "True"
-  check "AUDIT-004e" "重复封存不产生第二条边界事件行" "$(sql "select count(*) from audit_integrity_incidents where chain='audit'")" "1"
+  # ADR-019：同一条链上可以同时存在「缺口封存事件」与「稀疏声明事件」，
+  # 因此"重复封存不产生第二条"必须按 kind 精确断言，而不是数这张表的全部行。
+  check "AUDIT-004e" "重复封存不产生第二条缺口边界事件行" \
+    "$(sql "select count(*) from audit_integrity_incidents where chain='audit' and kind='unrecoverable_gap'")" "1"
 else
   # 负向：缺少 step-up 密码必须被拒绝。
   check "AUDIT-004d" "缺少 step-up 的封存请求被拒绝（403）" "$(adm_code "$JA" "$CS_A" POST /api/admin/v1/audit/integrity/incidents/requests "{\"chain\":\"audit\",\"reason\":\"负向：无 step-up\"}")" "403"
@@ -487,7 +514,21 @@ if [ -n "$W_CHECKED" ] && [ "$W_CHECKED" -gt 0 ]; then WOK=yes; else WOK=no; fi
 check "AUDIT-004p" "边界之后复算条数 > 0" "$WOK" "yes"
 check "AUDIT-004p2" "复算条数等于校验区间长度（逐行、无跳号）" "$(echo "$VERIFY" | jget "d['data']['checked']==d['data']['to_seq']-d['data']['verified_from_seq']+1")" "True"
 check "AUDIT-004q" "缺口区间仍无任何行（未回填历史审计行）" "$(sql "select count(*) from audit_events_v2 where chain='audit' and seq between $GAP_FROM and $GAP_TO")" "0"
-check "AUDIT-004r" "控制链 login 无缺口，integrity_status=intact（边界机制非全局放行）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['integrity_status']")" "intact"
+# 控制链 login：ADR-018 时代的期望是 intact（当时它没有任何缺口）。
+# ADR-019 之后它有了 8 条**已逐条声明**的历史缺失行，因此状态为 declared_events。
+# 断言不放宽：既接受 intact，也接受 declared_events —— 但后者必须同时满足
+# 「声明计数>0」且「声明明细与库内一致」，否则视为放行开关（假通过）。
+LOGIN_VERIFY=$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}')
+LOGIN_INTEG=$(echo "$LOGIN_VERIFY" | jget "d['data']['integrity_status']")
+LOGIN_LOST=$(echo "$LOGIN_VERIFY" | jget "d['data'].get('declared_lost_count') or 0")
+LOGIN_DB_DECL=$(sql "select count(*) from audit_integrity_declared_events where chain='login' and disposition='lost'")
+case "$LOGIN_INTEG" in
+  intact) LOGIN_CTRL=ok ;;
+  declared_events)
+    if [ "${LOGIN_LOST:-0}" -gt 0 ] && [ "${LOGIN_LOST:-0}" = "${LOGIN_DB_DECL:-0}" ]; then LOGIN_CTRL=ok; else LOGIN_CTRL="weak:$LOGIN_LOST/$LOGIN_DB_DECL"; fi ;;
+  *) LOGIN_CTRL="unexpected:$LOGIN_INTEG" ;;
+esac
+check "AUDIT-004r" "控制链 login 无缺口，状态为 intact 或 declared_events（且声明计数与库内一致）" "$LOGIN_CTRL" "ok"
 check "AUDIT-004r2" "控制链 login 全链可验证（valid=true）" "$(adm "$JA" "$CS_A" POST /api/admin/v1/audit/verify '{"chain":"login"}' | jget "d['data']['valid']")" "True"
 check "AUDIT-004s" "边界校验不带出未解释告警以外的错误" "$(echo "$VERIFY" | jget "'none' if d['data']['errors']==[] else d['data']['errors']")" "none"
 
@@ -580,7 +621,13 @@ MIG_MAX=$(sql "select max(name) from schema_migrations")
 if [[ "$MIG_MAX" > "postgres/0050" ]]; then MIGOK=applied; else MIGOK="$MIG_MAX"; fi
 check "RUNTIME-a" "0051/0052/0053 迁移已应用" "$MIGOK" "applied"
 check "RUNTIME-b" "S6 治理表全部存在" "$(sql "select count(*) from information_schema.tables where table_schema='public' and table_name in ('configuration_settings','configuration_revisions','feature_flags','feature_flag_evaluations','kill_switch_engagements','approval_request_events','provider_descriptors','provider_secrets','routing_policies','routing_policy_revisions','retention_policies','retention_runs','deletion_requests','backup_jobs','restore_previews','audit_exports')")" "16"
-if [ -f "$API_LOG" ]; then PANIC=$(grep -ciE "panic|fatal" "$API_LOG"); else PANIC=missing; fi
+# 2026-09-17 修正（工具缺陷，实测发现）：原判定 `grep -ciE "panic|fatal"` 会把**第三方错误文本**里的 "FATAL:"
+# 也算成 API panic —— 例如 PostgreSQL 的 `server error: FATAL: the database system is not accepting connections`
+# 被包在一条 WARN 日志里；而 $API_LOG 是聚合器按 `journalctl --since "-6 hours"` 导出的快照，
+# 于是"6 小时前的一次瞬时故障"会把本轮判 FAIL。实测：QA 窗口（01:30–01:42）内 panic/fatal 命中 **0 条**，
+# 被判 FAIL 的 7 条全部是 00:49 的 PG FATAL 文本。现在只匹配真正的 panic 特征：
+# JSON 级别为 FATAL/PANIC，或 Go panic 栈标记（`panic:` / `goroutine N [running]`）。
+if [ -f "$API_LOG" ]; then PANIC=$(grep -ciE '"level":"(FATAL|PANIC)"|panic:|goroutine [0-9]+ \[running\]' "$API_LOG"); else PANIC=missing; fi
 if [ "$PANIC" = "missing" ]; then nv "RUNTIME-c" "运行日志不存在，未验证 panic/fatal"; else check "RUNTIME-c" "API 日志无 panic/fatal" "$PANIC" "0"; fi
 check "RUNTIME-d" "保留/删除执行默认关闭" "$(sql "select value::text from configuration_settings where key='governance.deletion.execution_enabled'")" "false"
 

@@ -1,0 +1,125 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+log_format blockchain_proxy '$http_cf_connecting_ip [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent rt=$request_time urt=$upstream_response_time host="$host" cf_ray="$http_cf_ray" ua="$http_user_agent"';
+
+server {
+    listen 127.0.0.1:8088;
+    server_name _;
+	access_log /var/log/nginx/blockchain-platform.access.log blockchain_proxy;
+	error_log /var/log/nginx/blockchain-platform.error.log warn;
+    client_max_body_size 100m;
+
+    # Streamable HTTP MCP endpoint. Keep buffering disabled for SSE-capable clients.
+    location = /mcp {
+        proxy_pass http://127.0.0.1:8090/mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+    }
+
+    location = /mcp-health {
+        proxy_pass http://127.0.0.1:8090/health;
+        proxy_set_header Host $host;
+    }
+
+    # Public GPT Actions discovery and human-readable API documentation.
+    location = /openapi.json {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location = /docs {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location = /redoc {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # API and large exports bypass Vite's development proxy. Buffering is
+    # disabled so Range responses flow directly from API/MinIO to the tunnel.
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 3600s;
+        proxy_read_timeout 3600s;
+    }
+
+    # 后台管理系统（Admin Console）。与用户层系统共用同一份可信数据，
+    # 但使用独立会话 Cookie（cs_admin_session）与独立权限命名空间 admin:*。
+    location ^~ /admin/ {
+    # §27 SEC-002：CSP 作为 XSS 的第二道防线。
+    # 两个前端由 Vite 构建，index.html 只引用外部 module 脚本，无需 'unsafe-inline' 的 script-src；
+    # 样式仍需要 'unsafe-inline'（React 通过 style 属性做动态布局）。
+    # frame-ancestors 'none' 防点击劫持；base-uri/form-action 限制被注入的 <base> 与表单外发。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        proxy_pass http://127.0.0.1:3002/admin/;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_connect_timeout 10s;
+    }
+
+    # 用户层系统（Investigator Console）。灰度期与旧 SPA 并存（§29.3）。
+    location ^~ /app-v2/ {
+    # §27 SEC-002：CSP 作为 XSS 的第二道防线。
+    # 两个前端由 Vite 构建，index.html 只引用外部 module 脚本，无需 'unsafe-inline' 的 script-src；
+    # 样式仍需要 'unsafe-inline'（React 通过 style 属性做动态布局）。
+    # frame-ancestors 'none' 防点击劫持；base-uri/form-action 限制被注入的 <base> 与表单外发。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        proxy_pass http://127.0.0.1:3001/app-v2/;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_connect_timeout 10s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+}

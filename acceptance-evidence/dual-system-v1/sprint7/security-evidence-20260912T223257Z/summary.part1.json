@@ -1,0 +1,24 @@
+{
+  "evidence_id": "security-evidence-20260912T223257Z",
+  "overall_verdict": "FAIL",
+  "key_numbers_for_release_decision": {
+    "dependency P0 (CRITICAL)": 2,
+    "dependency P1 (HIGH)": 5,
+    "dependency P2 (MODERATE)": 3,
+    "dependency P3 (LOW)": 1,
+    "dependency unrated": 4,
+    "frontend xlsx advisories with no npm fix": 2,
+    "in-scope image CRITICAL": 20,
+    "in-scope image HIGH": 203,
+    "in-scope image total findings": 763,
+    "in-scope images with mutable latest tag": 1,
+    "production secrets embedded in shipped binaries": 7,
+    "runtime log secret hits": 0,
+    "log lines scanned": 191904,
+    "IaC files actually scanned by checkov": 0,
+    "IaC files actually scanned by trivy config": 0,
+    "IaC files actually scanned by KICS": 1,
+    "KICS MEDIUM findings on compose.yaml": 10,
+    "systemd units with any sandbox hardening": "0 of 8"
+  }
+}

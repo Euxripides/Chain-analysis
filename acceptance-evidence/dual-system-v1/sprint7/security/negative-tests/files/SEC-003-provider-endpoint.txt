@@ -1,0 +1,2 @@
+provider=ankr-multichain original_endpoint=https://rpc.ankr.com/multichain
+patch_status=401 endpoint_after=https://rpc.ankr.com/multichain

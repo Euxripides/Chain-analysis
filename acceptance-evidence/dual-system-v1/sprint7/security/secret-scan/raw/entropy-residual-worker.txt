@@ -1,0 +1,18 @@
+# ===== AUDIT-002 independent high-entropy sweep (keyword-independent) =====
+# target    : /tmp/worker.log
+# label     : worker.log
+# generated : 2026-09-12T23:50:42+07:00
+# 方法      : 抽取 >=32 字符的 [A-Za-z0-9+/=_-] token；剔除已知非秘密类别后列出残差
+# 剔除类别  : UUID / 32+位hex摘要 / 含斜杠路径 / 0x+64hex / TRON base58(T+33) / 纯数字
+# distinct_long_tokens : 1470
+# excluded_uuid        : 1424
+# excluded_hex>=32     : 0
+# excluded_path        : 3
+# excluded_eth_addr    : 0
+# excluded_0x64hex     : 0
+# excluded_tron_b58    : 43
+# excluded_numeric     : 0
+# residual_count       : 0
+# ---- 残差(全部) ----
+# ---- 残差条数 ----
+0

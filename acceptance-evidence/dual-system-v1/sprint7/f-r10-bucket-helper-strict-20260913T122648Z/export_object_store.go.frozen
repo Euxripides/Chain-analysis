@@ -1,0 +1,434 @@
+package api
+
+// F-R10-BUCKET / ADR-019：导出产物的**唯一**读写入口。
+//
+// 既有缺陷（实测 inventory f-r10-bucket-inventory-20260913T121059Z）：6 个导出写入点全部写
+// RAW_BUCKET（blockchain-raw），EXPORT_BUCKET（blockchain-exports）只有治理审计导出在用，
+// 导致 270 个产品导出对象（2,749,993,808 bytes）100% 落在 raw 桶。
+//
+// 本文件提供三个能力：
+//   - 写：putExportStream 按 EXPORT_WRITE_BUCKET 落到**显式**桶，写后回读校验，并返回真实落点；
+//   - 读：openExportObject / openExportObjectRange / statExportObject 按 EXPORT_READ_ORDER
+//     （默认 "export,raw"）双读，命中即返回并记录命中桶；
+//   - 错误语义（ADR-019 §2.1 的严格口径）：**只有对象级缺失**（NoSuchKey/NoSuchObject）才继续
+//     下一个桶；NoSuchBucket、AccessDenied、SignatureDoesNotMatch、网络、5xx 等一律立即失败，
+//     绝不回退，也绝不降级成"对象缺失"。
+//
+// 关于 NoSuchBucket 的实测依据（minio-go v7.0.90 api-error-response.go:120-151）：
+//   - GET（有响应体）时 MinIO 返回 XML <Code>NoSuchBucket</Code>，可正确识别；
+//   - HEAD（StatObject 走 HTTP HEAD，无响应体）时 xml 解码失败，库会**按 objectName 是否为空
+//     兜底编造 Code**：objectName != "" 就编造成 "NoSuchKey"。
+// 也就是说仅看错误码**无法**区分"对象不存在"和"桶不存在"。因此在判定"对象缺失"之前，
+// 必须先用 BucketExists 证明确实检查了**存在的桶**；桶不存在即 fail closed（部署/权限故障），
+// 不允许静默回退到 RAW——否则 EXPORT_BUCKET 未创建/写错会被永久掩盖。
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/minio/minio-go/v7"
+
+	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
+)
+
+// exportBucket 是导出对象的逻辑角色（不是 MinIO bucket 名）。
+type exportBucket string
+
+const (
+	exportBucketRaw    exportBucket = "raw"
+	exportBucketExport exportBucket = "export"
+)
+
+// errExportObjectMissing 表示对象在所有**已确认存在**的读桶中都不存在（对象级 404 语义）。
+var errExportObjectMissing = errors.New("export object missing in every existing read bucket")
+
+// exportLocation 是一次读/写真实命中的桶与 key，用于日志与审计（不允许静默）。
+type exportLocation struct {
+	// Bucket 是逻辑角色（raw/export），用于审计与断言。
+	Bucket exportBucket
+	// Name 是 MinIO 的真实 bucket 名（如 blockchain-exports），必须与 object storage inventory
+	// 逐字对应，因此它才是 object_bucket 的证据字段。
+	Name string
+	Key  string
+}
+
+// auditFields 是该次读/写落点的可审计字段（ADR-019 §2.2）。
+// object_bucket 记录**真实桶名**（与 MinimIO inventory 逐字一致），object_bucket_role 另记逻辑角色。
+func (l exportLocation) auditFields() map[string]any {
+	return map[string]any{
+		"object_bucket":      l.Name,
+		"object_bucket_role": string(l.Bucket),
+		"object_ref":         l.Key,
+	}
+}
+
+// isExportObjectMissing 让调用方区分“对象确实不存在”（503 DATA_OBJECT_MISSING）
+// 与“存储层故障/权限问题/桶不存在”（500，且不宣称对象缺失）。
+func isExportObjectMissing(err error) bool {
+	return errors.Is(err, errExportObjectMissing)
+}
+
+// isObjectNotFoundCode 只接受**对象级**缺失错误码。
+// 明确排除：NoSuchBucket（桶不存在＝部署/配置故障）、AccessDenied、SignatureDoesNotMatch、
+// 以及任何无法识别的错误——这些都必须 fail closed。
+// 不按裸 HTTP 404 判定：HEAD 场景下 404 会被库兜底成 NoSuchKey，裸状态码无法区分桶级/对象级，
+// 因此桶的存在性由 verifyBucketExists 单独证明（见文件头说明）。
+func isObjectNotFoundCode(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch minio.ToErrorResponse(err).Code {
+	case "NoSuchKey", "NoSuchObject":
+		return true
+	default:
+		return false
+	}
+}
+
+// verifyBucketExists 在被判定为“对象缺失”之前证明该桶**确实存在**。
+// 返回 (false, err) 或 (false, nil) 都表示不可回退：调用方必须 fail closed。
+func (s *Server) verifyBucketExists(ctx context.Context, name string) (bool, error) {
+	if s.deps.Raw == nil || s.deps.Raw.Client() == nil {
+		return false, fmt.Errorf("object storage client is not configured")
+	}
+	exists, err := s.deps.Raw.Client().BucketExists(ctx, name)
+	if err != nil {
+		return false, fmt.Errorf("verify bucket %s: %w", name, err)
+	}
+	return exists, nil
+}
+
+// errBucketMissing 是“桶不存在”这一类配置/部署故障的显式错误。
+type bucketMissingError struct{ bucket string }
+
+func (e bucketMissingError) Error() string {
+	return fmt.Sprintf("object storage bucket %q does not exist (deployment/configuration fault, refusing to fall back)", e.bucket)
+}
+
+// parseExportReadOrder 严格解析 EXPORT_READ_ORDER（逗号分隔），保留原序。
+//
+// 运行期与 config.Validate 同严格度：只接受**恰好两个规范 token**，raw 与 export 各一次，
+// 不允许空白变体、未知项、重复项或缺失任一桶。任何违反都返回错误（fail closed）——
+// 只在启动期校验是不够的：配置对象可能被测试/嵌入代码在运行期改写，
+// 若这里"忽略非法项后继续"，就会出现"以为在双读其实只读了一个桶"的伪证据。
+func parseExportReadOrder(spec string) ([]exportBucket, error) {
+	seen := make(map[exportBucket]bool, 2)
+	out := make([]exportBucket, 0, 2)
+	for _, part := range strings.Split(spec, ",") {
+		var b exportBucket
+		switch part {
+		case "export":
+			b = exportBucketExport
+		case "raw":
+			b = exportBucketRaw
+		default:
+			return nil, fmt.Errorf("EXPORT_READ_ORDER entries must be raw or export exactly, no whitespace variants (got %q)", part)
+		}
+		if seen[b] {
+			return nil, fmt.Errorf("EXPORT_READ_ORDER contains duplicate %q", part)
+		}
+		seen[b] = true
+		out = append(out, b)
+	}
+	if len(out) != 2 || !seen[exportBucketRaw] || !seen[exportBucketExport] {
+		return nil, fmt.Errorf("EXPORT_READ_ORDER must contain both raw and export exactly once (got %q)", spec)
+	}
+	return out, nil
+}
+
+// checkExportBuckets 运行期复核桶配置，与 config.Validate 同严格度：
+// 存储客户端必须可用，RAW_BUCKET / EXPORT_BUCKET 必须非空且**不同名**。
+// 两个逻辑桶指向同一个真实桶时必须失败——否则"双读/切写"的审计字段会自相矛盾。
+func (s *Server) checkExportBuckets() error {
+	if s.deps.Raw == nil || s.deps.Raw.Client() == nil {
+		return fmt.Errorf("object storage client is not configured")
+	}
+	if s.deps.Cfg == nil {
+		return fmt.Errorf("config is not available; cannot resolve export buckets")
+	}
+	raw := s.deps.Raw.Bucket()
+	exportBucket := s.deps.Cfg.ExportBucket
+	if raw == "" {
+		return fmt.Errorf("RAW_BUCKET is not configured")
+	}
+	if exportBucket == "" {
+		return fmt.Errorf("EXPORT_BUCKET is not configured")
+	}
+	if strings.TrimSpace(raw) == strings.TrimSpace(exportBucket) {
+		return fmt.Errorf("RAW_BUCKET and EXPORT_BUCKET must differ (both are %q)", raw)
+	}
+	return nil
+}
+
+// exportBucketName 解析逻辑桶对应的真实 MinIO bucket 名。未配置即失败（fail closed），
+// 绝不用另一个桶的名字兜底。
+func (s *Server) exportBucketName(b exportBucket) (string, error) {
+	if s.deps.Raw == nil || s.deps.Raw.Client() == nil {
+		return "", fmt.Errorf("object storage client is not configured")
+	}
+	switch b {
+	case exportBucketRaw:
+		if name := strings.TrimSpace(s.deps.Raw.Bucket()); name != "" {
+			return name, nil
+		}
+		return "", fmt.Errorf("RAW_BUCKET is not configured")
+	case exportBucketExport:
+		if s.deps.Cfg != nil {
+			if name := strings.TrimSpace(s.deps.Cfg.ExportBucket); name != "" {
+				return name, nil
+			}
+		}
+		return "", fmt.Errorf("EXPORT_BUCKET is not configured")
+	default:
+		return "", fmt.Errorf("unknown export bucket %q", string(b))
+	}
+}
+
+// exportWriteBucket 是写入目标：EXPORT_WRITE_BUCKET=raw|export（默认 raw＝既有行为）。
+// 非法值/缺失配置在此处直接报错，绝不静默落到 raw。
+func (s *Server) exportWriteBucket() (exportBucket, error) {
+	if s.deps.Cfg == nil {
+		return "", fmt.Errorf("config is not available; cannot resolve EXPORT_WRITE_BUCKET")
+	}
+	switch s.deps.Cfg.ExportWriteBucket {
+	case "export":
+		return exportBucketExport, nil
+	case "raw":
+		return exportBucketRaw, nil
+	default:
+		return "", fmt.Errorf("EXPORT_WRITE_BUCKET must be raw or export (got %q)", s.deps.Cfg.ExportWriteBucket)
+	}
+}
+
+// exportReadOrder 是读取顺序：EXPORT_READ_ORDER（默认 export,raw）。
+// 严格解析，非法即报错；不提供"忽略非法项后继续"的宽松路径。
+func (s *Server) exportReadOrder() ([]exportBucket, error) {
+	if s.deps.Cfg == nil {
+		return nil, fmt.Errorf("config is not available; cannot resolve EXPORT_READ_ORDER")
+	}
+	return parseExportReadOrder(s.deps.Cfg.ExportReadOrder)
+}
+
+func (s *Server) exportWriteLocation(key string) (exportLocation, error) {
+	if err := s.checkExportBuckets(); err != nil {
+		return exportLocation{Key: key}, err
+	}
+	b, err := s.exportWriteBucket()
+	if err != nil {
+		return exportLocation{Key: key}, err
+	}
+	name, err := s.exportBucketName(b)
+	if err != nil {
+		return exportLocation{Bucket: b, Key: key}, err
+	}
+	return exportLocation{Bucket: b, Name: name, Key: key}, nil
+}
+
+func (s *Server) logExportReadHit(loc exportLocation) {
+	if s.deps.Log == nil {
+		return
+	}
+	// ADR-019 §2.1：命中桶必须记录，不允许静默。
+	s.deps.Log.Info("export object read",
+		"object_bucket", loc.Name, "object_bucket_role", string(loc.Bucket), "object_ref", loc.Key)
+}
+
+// countReader 统计真正被 SDK 从上游读走的字节数。
+// 用它而不是 SDK 返回的 info.Size，是因为 minio-go 对 STREAMING-AWS4-HMAC-SHA256-PAYLOAD
+// 传输会用 aws-chunked 分帧（实测：5 字节对象在线上 Content-Length=177），
+// 只有从源头计数才是**解码后的真实对象字节数**。
+type countReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// putExportStream 把导出流写入显式配置的桶，写后回读校验，返回写入字节数与真实落点。
+//
+// 回读校验的强度必须表述准确：**只证明对象存在且字节数与写入量一致（size-verified）**，
+// 不是 byte-exact。内容级一致由调用方在写入后用 objectSHA256 回读复算 SHA-256 并写入
+// PG / export.completed 审计链（ADR-019 §3.5）来证明；本函数不声称 byte-exact。
+func (s *Server) putExportStream(ctx context.Context, key string, r io.Reader, size int64, contentType string) (int64, exportLocation, error) {
+	loc, err := s.exportWriteLocation(key)
+	if err != nil {
+		return 0, exportLocation{Key: key}, err
+	}
+	counted := &countReader{r: r}
+	if _, err := s.deps.Raw.Client().PutObject(ctx, loc.Name, key, counted, size, minio.PutObjectOptions{ContentType: contentType}); err != nil {
+		return 0, loc, fmt.Errorf("put export object %s/%s: %w", loc.Name, key, err)
+	}
+	back, err := s.deps.Raw.Client().StatObject(ctx, loc.Name, key, minio.StatObjectOptions{})
+	if err != nil {
+		return 0, loc, fmt.Errorf("read back export object %s/%s after put: %w", loc.Name, key, err)
+	}
+	if back.Size != counted.n {
+		return 0, loc, fmt.Errorf("export object %s/%s size mismatch after put: wrote %d, read back %d", loc.Name, key, counted.n, back.Size)
+	}
+	if s.deps.Log != nil {
+		s.deps.Log.Info("export object written",
+			"object_bucket", loc.Name, "object_bucket_role", string(loc.Bucket), "object_ref", key, "bytes", counted.n)
+	}
+	return counted.n, loc, nil
+}
+
+// openExportObject 双读全量对象：按 EXPORT_READ_ORDER 顺序返回第一个存在的对象。
+func (s *Server) openExportObject(ctx context.Context, key string) (io.ReadCloser, int64, exportLocation, error) {
+	if err := s.checkExportBuckets(); err != nil {
+		return nil, 0, exportLocation{Key: key}, err
+	}
+	order, err := s.exportReadOrder()
+	if err != nil {
+		return nil, 0, exportLocation{Key: key}, err
+	}
+	tried := make([]string, 0, len(order))
+	for _, b := range order {
+		name, err := s.exportBucketName(b)
+		if err != nil {
+			return nil, 0, exportLocation{Bucket: b, Key: key}, err
+		}
+		loc := exportLocation{Bucket: b, Name: name, Key: key}
+		obj, err := s.deps.Raw.Client().GetObject(ctx, name, key, minio.GetObjectOptions{})
+		if err != nil && !isObjectNotFoundCode(err) {
+			return nil, 0, loc, fmt.Errorf("open export object %s/%s: %w", name, key, err)
+		}
+		if err == nil {
+			info, statErr := obj.Stat()
+			if statErr == nil {
+				s.logExportReadHit(loc)
+				return obj, info.Size, loc, nil
+			}
+			_ = obj.Close()
+			err = statErr
+		}
+		if !isObjectNotFoundCode(err) {
+			// 非对象级缺失（NoSuchBucket/AccessDenied/网络/5xx）：立即失败，绝不回退。
+			return nil, 0, loc, fmt.Errorf("stat export object %s/%s: %w", name, key, err)
+		}
+		// 判断为“对象缺失”之前，必须先证明确实检查了一个**存在的桶**。
+		exists, berr := s.verifyBucketExists(ctx, name)
+		if berr != nil {
+			return nil, 0, loc, berr
+		}
+		if !exists {
+			return nil, 0, loc, bucketMissingError{bucket: name}
+		}
+		tried = append(tried, name)
+	}
+	return nil, 0, exportLocation{Key: key},
+		fmt.Errorf("%w: %s (tried buckets: %s)", errExportObjectMissing, key, strings.Join(tried, ", "))
+}
+
+// exportRangeReader 把 Range 读取限制在 [start,end] 字节区间内。
+type exportRangeReader struct {
+	io.Reader
+	io.Closer
+}
+
+// openExportObjectRange 双读 Range（HTTP 206 断点续传）。
+//
+// 与 rawstore.OpenRange 语义一致：对象存在但区间非法时返回 rawstore.ErrInvalidRange
+// 与对象真实大小，**不回退到另一个桶**（对象已找到，失败原因是调用方的区间）。
+func (s *Server) openExportObjectRange(ctx context.Context, key string, start, end int64) (io.ReadCloser, int64, exportLocation, error) {
+	if err := s.checkExportBuckets(); err != nil {
+		return nil, 0, exportLocation{Key: key}, err
+	}
+	order, err := s.exportReadOrder()
+	if err != nil {
+		return nil, 0, exportLocation{Key: key}, err
+	}
+	tried := make([]string, 0, len(order))
+	for _, b := range order {
+		name, err := s.exportBucketName(b)
+		if err != nil {
+			return nil, 0, exportLocation{Bucket: b, Key: key}, err
+		}
+		loc := exportLocation{Bucket: b, Name: name, Key: key}
+		obj, err := s.deps.Raw.Client().GetObject(ctx, name, key, minio.GetObjectOptions{})
+		if err != nil && !isObjectNotFoundCode(err) {
+			return nil, 0, loc, fmt.Errorf("open export range %s/%s: %w", name, key, err)
+		}
+		if err == nil {
+			info, statErr := obj.Stat()
+			if statErr == nil {
+				if start < 0 || start >= info.Size {
+					_ = obj.Close()
+					return nil, info.Size, loc, fmt.Errorf("%w: start %d outside object size %d", rawstore.ErrInvalidRange, start, info.Size)
+				}
+				if end < 0 || end >= info.Size {
+					end = info.Size - 1
+				}
+				if end < start {
+					_ = obj.Close()
+					return nil, info.Size, loc, fmt.Errorf("%w: end %d before start %d", rawstore.ErrInvalidRange, end, start)
+				}
+				if _, err := obj.Seek(start, io.SeekStart); err != nil {
+					_ = obj.Close()
+					return nil, info.Size, loc, err
+				}
+				s.logExportReadHit(loc)
+				return &exportRangeReader{Reader: io.LimitReader(obj, end-start+1), Closer: obj}, info.Size, loc, nil
+			}
+			_ = obj.Close()
+			err = statErr
+		}
+		if !isObjectNotFoundCode(err) {
+			return nil, 0, loc, fmt.Errorf("stat export range %s/%s: %w", name, key, err)
+		}
+		exists, berr := s.verifyBucketExists(ctx, name)
+		if berr != nil {
+			return nil, 0, loc, berr
+		}
+		if !exists {
+			return nil, 0, loc, bucketMissingError{bucket: name}
+		}
+		tried = append(tried, name)
+	}
+	return nil, 0, exportLocation{Key: key},
+		fmt.Errorf("%w: %s (tried buckets: %s)", errExportObjectMissing, key, strings.Join(tried, ", "))
+}
+
+// statExportObject 双读 stat（DATA-008 存在性检查），返回真实大小与命中桶。
+func (s *Server) statExportObject(ctx context.Context, key string) (int64, exportLocation, error) {
+	if err := s.checkExportBuckets(); err != nil {
+		return 0, exportLocation{Key: key}, err
+	}
+	order, err := s.exportReadOrder()
+	if err != nil {
+		return 0, exportLocation{Key: key}, err
+	}
+	tried := make([]string, 0, len(order))
+	for _, b := range order {
+		name, err := s.exportBucketName(b)
+		if err != nil {
+			return 0, exportLocation{Bucket: b, Key: key}, err
+		}
+		loc := exportLocation{Bucket: b, Name: name, Key: key}
+		info, err := s.deps.Raw.Client().StatObject(ctx, name, key, minio.StatObjectOptions{})
+		if err == nil {
+			s.logExportReadHit(loc)
+			return info.Size, loc, nil
+		}
+		if !isObjectNotFoundCode(err) {
+			// NoSuchBucket/AccessDenied/Signature/网络/5xx：立即失败，不宣称对象缺失。
+			return 0, loc, fmt.Errorf("stat export object %s/%s: %w", name, key, err)
+		}
+		exists, berr := s.verifyBucketExists(ctx, name)
+		if berr != nil {
+			return 0, loc, berr
+		}
+		if !exists {
+			return 0, loc, bucketMissingError{bucket: name}
+		}
+		tried = append(tried, name)
+	}
+	return 0, exportLocation{Key: key},
+		fmt.Errorf("%w: %s (tried buckets: %s)", errExportObjectMissing, key, strings.Join(tried, ", "))
+}

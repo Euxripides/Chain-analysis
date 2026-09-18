@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@chain/api-client";
 import {
@@ -15,6 +15,9 @@ import {
   useDialog,
 } from "@chain/ui";
 import { formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
+import { IMPORT_FILE_EXTENSIONS, IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../import/parse-core";
+import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddressFileInWorker } from "../import/parse-client";
+
 
 /* ============================================================================
  * U-DL-01 /downloads/new：真实顺序 对象 → 链与范围 → Dataset → 复用策略 →
@@ -54,6 +57,8 @@ interface DownloadBody {
   range: RangeBody;
   reuse_policy: ReusePolicy;
   performance_mode: PerformanceMode;
+  /** §23 per-address 案件/标签覆盖；键为服务端 normalized 地址。 */
+  subject_meta?: Record<string, { case_name: string; tags: string[] }>;
 }
 
 interface PreviewCoverageItem {
@@ -137,6 +142,80 @@ function parseAddressInput(raw: string) {
   return { tokens: tokens.length, list, duplicates };
 }
 
+/* ---- §18.10 导入：CSV/XLSX 解析（浏览器） + 服务端再次验证 ---- */
+
+export interface ServerAddressVerdict {
+  index: number;
+  row: number;
+  input: string;
+  chain: string;
+  code: string;
+  message: string;
+}
+
+export interface ServerFieldRejection {
+  row: number;
+  index: number;
+  field: string;
+  code: string;
+  count: number;
+  limit: number;
+  message: string;
+}
+
+export interface ServerMetaVerdict {
+  name: string;
+  kind: string;
+  status: "resolved" | "missing" | "will_create" | "denied";
+  case_id?: string | null;
+  tag_id?: string | null;
+  required_permission?: string;
+}
+
+export interface ServerValidateResult {
+  accepted: Array<{ index: number; row: number; input: string; chain: string; normalized: string; case_name: string; tags: string[] }>;
+  rejected: ServerAddressVerdict[];
+  field_rejections: ServerFieldRejection[];
+  scope: { organization_id: string; workspace_id: string };
+  grants: { "download:create": boolean; "case:create": boolean; "case:update": boolean; create_missing_meta_requested: boolean };
+  summary: {
+    submitted: number; accepted: number; rejected: number; blank: number; invalid: number;
+    duplicate: number; cap_rejected: number; tags_over_limit: number; field_rejections: number;
+    meta_denied: number; max_addresses: number; max_tags: number;
+    chains: Record<string, number>; distinct_chains: number;
+  };
+  meta: { cases: ServerMetaVerdict[]; tags: ServerMetaVerdict[] };
+  source: string;
+}
+/**
+ * 按链分组：契约 1043 要求"每个地址可单独选择链"，而服务端一次请求只接受同一条链。
+ *
+ * **纯函数**：只依赖入参。若改成读组件 state，首次"预览"触发导入后 setState 尚未生效，
+ * 就会用旧集合提交（服务端过滤/normalize 之后更是如此）。
+ */
+export function groupAddressesByChain(rows: ImportedAddress[], defaultChain: string): Array<{ chain: string; items: ImportedAddress[] }> {
+  const groups = new Map<string, ImportedAddress[]>();
+  for (const item of rows) {
+    const key = item.chain || defaultChain;
+    if (!key) continue;
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  }
+  return [...groups.entries()].map(([chain, items]) => ({ chain, items }));
+}
+
+/**
+ * 以"预览指纹 + 链 + 地址集合"派生稳定幂等键：同一批地址重试时复用同一个 key，
+ * 避免第一次部分成功后重试又创建一遍。
+ */
+export async function stableIdempotencyKey(scope: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(scope));
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+
 function toIso(localValue: string): string {
   if (!localValue) return "";
   const date = new Date(localValue);
@@ -167,6 +246,9 @@ export default function DownloadNewPage() {
   const [addressText, setAddressText] = useState("");
   const [addresses, setAddresses] = useState<string[]>([]);
   const [parsedFrom, setParsedFrom] = useState("");
+  /** 服务端再次验证后的权威条目（含 per-address chain/case/tags）。 */
+  const [imported, setImported] = useState<ImportedAddress[]>([]);
+  const [serverVerdict, setServerVerdict] = useState<ServerValidateResult | null>(null);
   const [chain, setChain] = useState("");
   const [rangeType, setRangeType] = useState<RangeType>("full");
   const [fromBlock, setFromBlock] = useState("");
@@ -177,11 +259,13 @@ export default function DownloadNewPage() {
   const [reusePolicy, setReusePolicy] = useState<ReusePolicy>("prefer_local");
   const [performanceMode, setPerformanceMode] = useState<PerformanceMode>("safe");
   const [preview, setPreview] = useState<DownloadPreviewData | null>(null);
+  const [previews, setPreviews] = useState<Array<{ chain: string; data: DownloadPreviewData }>>([]);
   const [previewFingerprint, setPreviewFingerprint] = useState<string | null>(null);
   const [lastTrace, setLastTrace] = useState<string | null>(null);
 
   const datasetsTouched = useRef(false);
   const lastNotifiedError = useRef<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   /* 加载错误：ErrorState 只显示通用文案，原始错误正文只允许出现在 Dialog。 */
   useEffect(() => {
@@ -211,7 +295,7 @@ export default function DownloadNewPage() {
   }, [datasetItems]);
 
   const buildPayload = useCallback(
-    (addrs: string[]): DownloadBody => {
+    (addrs: string[], groupChain: string, groupItems: ImportedAddress[]): DownloadBody => {
       let range: RangeBody;
       if (rangeType === "block") {
         range = { type: "block", from_block: Number(fromBlock), to_block: Number(toBlock) };
@@ -220,51 +304,252 @@ export default function DownloadNewPage() {
       } else {
         range = { type: "full" };
       }
-      return { chain, addresses: addrs, datasets, range, reuse_policy: reusePolicy, performance_mode: performanceMode };
+      const subjectMeta: Record<string, { case_name: string; tags: string[] }> = {};
+      for (const item of groupItems) {
+        if (item.caseName || item.tags.length > 0) subjectMeta[item.normalized] = { case_name: item.caseName, tags: item.tags };
+      }
+      const body: DownloadBody = { chain: groupChain, addresses: addrs, datasets, range, reuse_policy: reusePolicy, performance_mode: performanceMode };
+      if (Object.keys(subjectMeta).length > 0) body.subject_meta = subjectMeta;
+      return body;
     },
-    [chain, datasets, fromBlock, fromTime, performanceMode, rangeType, reusePolicy, toBlock, toTime],
+    [datasets, fromBlock, fromTime, performanceMode, rangeType, reusePolicy, toBlock, toTime],
   );
 
   const importedAddressText = parsedFrom !== "" && parsedFrom === addressText.trim();
 
-  const importAddresses = useCallback(async (): Promise<string[] | null> => {
+  // 见 groupAddressesByChain：纯函数，必须用**本次调用返回的 rows**，不能读闭包里的旧 state。
+
+  /**
+   * 服务端再次验证（§18.10 1042）：本地只做拆分与摘要，接受/拒绝与规范化地址
+   * 一律以服务端 verdict 为准；被拒条目在 Dialog 中原样呈现，不静默丢弃。
+   */
+  const revalidateOnServer = useCallback(async (rows: ImportedAddress[]): Promise<ServerValidateResult | null> => {
+    const response = await run(async () => {
+      try {
+        return await client.post<ServerValidateResult>("/api/v2/downloads/validate-addresses", {
+          chain,
+          items: rows.map((row) => ({ address: row.input, chain: row.chain, case: row.caseName, tags: row.tags })),
+          create_missing_meta: false,
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
+        throw error;
+      }
+    });
+    return response ? response.data : null;
+  }, [chain, client, run]);
+
+  const applyServerVerdict = useCallback(async (verdict: ServerValidateResult): Promise<ImportedAddress[] | null> => {
+    // 只有本工作区**确实存在**（resolved）或本次已获授权创建（will_create）的案件/标签
+    // 才会留在 payload 里。否则 create_missing_meta=false 时 EnsureLinked 会以
+    // "case/tag not found" 直接失败——文案说"不绑定"但实际仍提交是不可接受的。
+    const caseStatus = new Map(verdict.meta.cases.map((item) => [item.name, item.status]));
+    const tagStatus = new Map(verdict.meta.tags.map((item) => [item.name, item.status]));
+    const usable = (status: string | undefined): boolean => status === "resolved" || status === "will_create";
+    const droppedCases = new Set<string>();
+    const droppedTags = new Set<string>();
+    const accepted: ImportedAddress[] = verdict.accepted.map((item) => {
+      let caseName = item.case_name;
+      if (caseName && !usable(caseStatus.get(caseName))) {
+        droppedCases.add(caseName);
+        caseName = "";
+      }
+      const tags = item.tags.filter((tag) => {
+        if (usable(tagStatus.get(tag))) return true;
+        droppedTags.add(tag);
+        return false;
+      });
+      return { input: item.input, normalized: item.normalized, chain: item.chain, caseName, tags };
+    });
+    const details = [
+      { label: "服务端提交", value: String(verdict.summary.submitted) },
+      { label: "服务端接受", value: String(verdict.summary.accepted) },
+      { label: "服务端拒绝", value: String(verdict.summary.rejected) },
+      { label: "链分布", value: Object.entries(verdict.summary.chains).map(([k, v]) => `${k}:${v}`).join("、") || "—" },
+      { label: "作用域", value: `org ${verdict.scope.organization_id.slice(0, 8)}… / ws ${verdict.scope.workspace_id.slice(0, 8)}…` },
+      { label: "校验来源", value: verdict.source },
+      { label: "本次会话权限", value: `download:create=${verdict.grants["download:create"]} · case:create=${verdict.grants["case:create"]} · case:update=${verdict.grants["case:update"]}` },
+    ];
+    const metaText = (item: ServerMetaVerdict): string => {
+      switch (item.status) {
+        case "resolved": return `本工作区已存在（${((item.case_id ?? item.tag_id) ?? "").slice(0, 8)}…）`;
+        case "will_create": return "本工作区不存在，create_missing_meta=true 且已授权创建";
+        case "denied": return `本工作区不存在，且没有创建权限（需 ${item.required_permission ?? "—"}）—— 已从本次提交中移除`;
+        default: return "本工作区不存在 —— 已从本次提交中移除，不会出现在创建请求里";
+      }
+    };
+    for (const item of verdict.meta.cases) details.push({ label: `案件 ${item.name}`, value: metaText(item) });
+    for (const item of verdict.meta.tags) details.push({ label: `标签 ${item.name}`, value: metaText(item) });
+    verdict.rejected.slice(0, 20).forEach((item) => {
+      details.push({ label: `拒绝 第${item.row}行 ${item.code}`, value: item.input || "（空）" });
+    });
+    if (verdict.rejected.length > 20) {
+      details.push({ label: "其余拒绝条目", value: `${verdict.rejected.length - 20} 条` });
+    }
+    for (const item of verdict.field_rejections ?? []) {
+      details.push({
+        label: `字段拒绝 第${item.row}行 ${item.field} ${item.code}`,
+        value: `${item.message}（${item.count}/${item.limit}）`,
+      });
+    }
+    if ((verdict.summary.tags_over_limit ?? 0) > 0) {
+      details.push({ label: "标签超额行", value: `${verdict.summary.tags_over_limit} 行；这些行不会绑定任何标签（非静默截断）` });
+    }
+    if ((verdict.summary.meta_denied ?? 0) > 0) {
+      details.push({ label: "元数据创建被拒", value: `${verdict.summary.meta_denied} 项：当前会话无创建权限` });
+    }
+    if (droppedCases.size > 0) {
+      details.push({ label: "本次不绑定的案件", value: [...droppedCases].join("、") });
+    }
+    if (droppedTags.size > 0) {
+      details.push({ label: "本次不绑定的标签", value: [...droppedTags].join("、") });
+    }
+    if (droppedCases.size > 0 || droppedTags.size > 0) {
+      details.push({ label: "实际提交", value: "上述名称已从创建请求的 payload 中移除（不会被提交）" });
+    }
+    const answer = await dialog.open({
+      kind: accepted.length === 0 ? "error" : verdict.rejected.length > 0 ? "warning" : "success",
+      title: "服务端地址校验结果",
+      body: accepted.length === 0
+        ? "服务端未接受任何地址，请修正文件后重试。"
+        : "只有服务端 accepted 的规范化地址会进入预览与创建；被拒条目不会静默丢弃。",
+      details,
+      actions: accepted.length === 0
+        ? [{ label: "知道了", result: "ok", variant: "primary" }]
+        : [
+            { label: "取消", result: "", variant: "default" },
+            { label: "使用服务端结果", result: "use", variant: "primary" },
+          ],
+    });
+    if (answer !== "use" || accepted.length === 0) return null;
+    setImported(accepted);
+    setAddresses(accepted.map((item) => item.normalized));
+    setServerVerdict(verdict);
+    const normalizedText = accepted.map((item) => item.normalized).join("\n");
+    setAddressText(normalizedText);
+    setParsedFrom(normalizedText);
+    setPreview(null);
+    setPreviews([]);
+    setPreviewFingerprint(null);
+    return accepted;
+  }, [dialog]);
+
+  const importAddresses = useCallback(async (): Promise<ImportedAddress[] | null> => {
     const parsed = parseAddressInput(addressText);
     if (parsed.tokens === 0) {
       dialog.notify("warning", "没有可导入的地址", "请粘贴至少一个地址，支持换行、逗号、分号或空白分隔。");
       return null;
     }
-    const capped = parsed.list.slice(0, 100);
+    const capped = parsed.list.slice(0, IMPORT_MAX_ADDRESSES);
     const details = [
       { label: "原始条目", value: String(parsed.tokens) },
       { label: "本地去重后", value: String(parsed.list.length) },
       { label: "重复条目", value: String(parsed.duplicates) },
-      { label: "本次导入", value: `${capped.length} 个地址` },
+      { label: "本次送校验", value: `${capped.length} 个地址` },
     ];
-    if (parsed.list.length > 100) {
-      details.push({ label: "超出单次上限", value: `${parsed.list.length - 100} 个未导入（上限 100）` });
+    if (parsed.list.length > IMPORT_MAX_ADDRESSES) {
+      details.push({ label: "超出单次上限", value: `${parsed.list.length - IMPORT_MAX_ADDRESSES} 个未导入（上限 ${IMPORT_MAX_ADDRESSES}）` });
     }
     const answer = await dialog.open({
-      kind: parsed.list.length > 100 ? "warning" : "info",
-      title: "地址导入解析摘要",
+      kind: parsed.list.length > IMPORT_MAX_ADDRESSES ? "warning" : "info",
+      title: "地址导入解析摘要（浏览器）",
       body: "服务端最终以 chain + 规范化地址 作为去重键，本地仅做初步拆分与大小写去重。",
       details,
       actions: [
         { label: "取消", result: "", variant: "default" },
-        { label: "使用这些地址", result: "use", variant: "primary" },
+        { label: "提交服务端校验", result: "use", variant: "primary" },
       ],
     });
     if (answer !== "use") return null;
-    const normalizedText = capped.join("\n");
-    setAddressText(normalizedText);
-    setAddresses(capped);
-    setParsedFrom(normalizedText);
-    return capped;
-  }, [addressText, dialog]);
+    const verdict = await revalidateOnServer(capped.map((value) => ({ input: value, normalized: "", chain: "", caseName: "", tags: [] })));
+    if (!verdict) return null;
+    return applyServerVerdict(verdict);
+  }, [addressText, dialog, revalidateOnServer, applyServerVerdict]);
 
-  const ensureAddresses = useCallback(async (): Promise<string[] | null> => {
-    if (addresses.length > 0 && importedAddressText) return addresses;
+  const importAddressesFromFile = useCallback(async (file: File): Promise<ImportedAddress[] | null> => {
+    // 计划 1852 / §23.7：解析在隔离 Worker 中执行，主线程只等消息；
+    // 有界超时到点即 terminate（真停止，不是"忽略结果"），用户也可随时取消。
+    const timeoutMs = importParseTimeoutMs();
+    const controller = new AbortController();
+    let settled = false;
+    // 进度与取消的唯一入口是弹窗（AGENTS.md：提示不得嵌入页面）。
+    const progress = dialog.open({
+      kind: "info",
+      title: "正在隔离解析文件",
+      body: `${file.name} 在 Web Worker 中解析，页面保持可交互；超过 ${formatParseBudget(timeoutMs)}会自动中止，也可以立即取消。`,
+      details: [
+        { label: "文件名", value: file.name },
+        { label: "文件大小", value: `${file.size} 字节` },
+      ],
+      actions: [{ label: "取消解析", result: "cancel", variant: "primary" }],
+    });
+    void progress.then(() => {
+      if (!settled) controller.abort();
+    });
+    let parsed: { rows: ImportedAddress[]; summary: LocalParseSummary };
+    try {
+      const result = await parseAddressFileInWorker(file, chain, { signal: controller.signal, timeoutMs });
+      parsed = { rows: result.rows, summary: result.summary };
+    } catch (error) {
+      settled = true;
+      dialog.dismiss();
+      const failure = error instanceof ImportParseError ? error : null;
+      if (failure?.code === "PARSE_CANCELLED") {
+        dialog.notify("warning", "解析已取消", `${file.name} 的解析已终止（Worker 已停止），未导入任何地址。`);
+      } else if (failure?.code === "PARSE_TIMEOUT") {
+        dialog.notify(
+          "error",
+          "解析超时已中止",
+          `${file.name} 在 ${formatParseBudget(timeoutMs)}内没有完成，解析 Worker 已被终止（未导入任何地址）。请拆分文件或减少行数后重试。`,
+        );
+      } else if (failure?.code === "FORMAT_REJECTED") {
+        dialog.notify("error", "文件解析失败", `无法读取 ${file.name}：${failure.message}`);
+      } else {
+        dialog.notify("error", "文件解析失败", `无法读取 ${file.name}：${failure ? failure.message : String(error)}`);
+      }
+      return null;
+    }
+    settled = true;
+    dialog.dismiss();
+    const { rows, summary } = parsed;
+    const details = [
+      { label: "文件名", value: file.name },
+      { label: "文件类型", value: file.name.toLowerCase().endsWith(".csv") ? "CSV" : "XLSX/Excel" },
+      { label: "扫描行数", value: String(summary.rows) },
+      { label: "空白行", value: String(summary.blank) },
+      { label: "识别表头", value: summary.usedHeaderRow ? "address 表头（列映射）" : "无表头（整表当地址清单）" },
+      { label: "可选列", value: [summary.chainColumn ? "chain" : null, summary.caseColumn ? "case" : null, summary.tagColumn ? "tags" : null].filter(Boolean).join("、") || "无" },
+      { label: "链分布（本地）", value: Object.entries(summary.perChain).map(([k, v]) => `${k}:${v}`).join("、") || "—" },
+      { label: "带案件/标签的行", value: String(summary.metaRows) },
+      { label: "本次送校验", value: `${rows.length} 个地址` },
+    ];
+    if (summary.truncated > 0) {
+      details.push({ label: "超出单次上限", value: `${summary.truncated} 行未导入（上限 ${IMPORT_MAX_ADDRESSES}）` });
+    }
+    const answer = await dialog.open({
+      kind: rows.length === 0 || summary.truncated > 0 ? "warning" : "info",
+      title: "地址导入解析摘要（浏览器）",
+      body: rows.length === 0
+        ? "文件里没有可用的地址行，请检查文件内容与列名。"
+        : "本地摘要只做拆分与计数；接受/拒绝与规范化地址以服务端再次验证为准。",
+      details,
+      actions: rows.length === 0
+        ? [{ label: "知道了", result: "ok", variant: "primary" }]
+        : [
+            { label: "取消", result: "", variant: "default" },
+            { label: "提交服务端校验", result: "use", variant: "primary" },
+          ],
+    });
+    if (answer !== "use" || rows.length === 0) return null;
+    const verdict = await revalidateOnServer(rows);
+    if (!verdict) return null;
+    return applyServerVerdict(verdict);
+  }, [applyServerVerdict, chain, dialog, revalidateOnServer]);
+
+  const ensureAddresses = useCallback(async (): Promise<ImportedAddress[] | null> => {
+    if (imported.length > 0 && importedAddressText) return imported;
     return importAddresses();
-  }, [addresses, importAddresses, importedAddressText]);
+  }, [importAddresses, imported, importedAddressText]);
 
   const validateForm = useCallback(
     (addrs: string[]): boolean => {
@@ -341,8 +626,8 @@ export default function DownloadNewPage() {
   }, []);
 
   const showPreviewDialog = useCallback(
-    async (data: DownloadPreviewData) => {
-      const details = previewDetails(data);
+    async (data: DownloadPreviewData, groupChain?: string) => {
+      const details = groupChain ? [{ label: "链", value: groupChain }, ...previewDetails(data)] : previewDetails(data);
       if (!data.provider_work_required) {
         await dialog.open({
           kind: "info",
@@ -364,33 +649,49 @@ export default function DownloadNewPage() {
     [dialog, previewDetails],
   );
 
-  const handlePreview = useCallback(async (): Promise<{ data: DownloadPreviewData; fingerprint: string } | null> => {
-    const addrs = await ensureAddresses();
-    if (!addrs) return null;
-    if (!validateForm(addrs)) return null;
-    const payload = buildPayload(addrs);
-    const fingerprint = JSON.stringify(payload);
-    const response = await run(async () => {
+  const handlePreview = useCallback(async (): Promise<{ items: Array<{ chain: string; data: DownloadPreviewData }>; fingerprint: string } | null> => {
+    const importedRows = await ensureAddresses();
+    if (!importedRows) return null;
+    if (!validateForm(importedRows.map((row) => row.normalized))) return null;
+    // 必须用本次返回的 rows 直接分组：首次"预览"会触发导入并 setState，
+    // 此刻组件 state 仍是旧值，读闭包会提交被服务端驳回之前的旧集合。
+    const groups = groupAddressesByChain(importedRows, chain);
+    if (groups.length === 0) {
+      dialog.notify("warning", "请选择链", "每个地址都需要确定一条链后才能预览。");
+      return null;
+    }
+    // 契约 1043：一次请求只接受同一条链，因此按链分组分别预览。
+    const payloads = groups.map((group) => buildPayload(group.items.map((item) => item.normalized), group.chain, group.items));
+    const fingerprint = JSON.stringify(payloads);
+    const responses = await Promise.all(payloads.map((payload) => run(async () => {
       try {
         return await client.post<DownloadPreviewData>("/api/v2/downloads/preview", payload);
       } catch (error) {
         if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
         throw error;
       }
-    });
-    if (!response) return null;
-    setPreview(response.data);
+    })));
+    if (responses.some((response) => !response)) return null;
+    const items = responses.map((response, index) => ({ chain: payloads[index].chain, data: response!.data }));
+    setPreviews(items);
+    setPreview(items[0].data);
     setPreviewFingerprint(fingerprint);
-    await showPreviewDialog(response.data);
-    return { data: response.data, fingerprint };
-  }, [buildPayload, client, ensureAddresses, run, showPreviewDialog, validateForm]);
+    for (const item of items) await showPreviewDialog(item.data, item.chain);
+    return { items, fingerprint };
+  }, [buildPayload, chain, client, dialog, ensureAddresses, run, showPreviewDialog, validateForm]);
 
   const handleCreate = useCallback(async () => {
-    const addrs = await ensureAddresses();
-    if (!addrs) return;
-    if (!validateForm(addrs)) return;
-    const payload = buildPayload(addrs);
-    const fingerprint = JSON.stringify(payload);
+    const importedRows = await ensureAddresses();
+    if (!importedRows) return;
+    if (!validateForm(importedRows.map((row) => row.normalized))) return;
+    const groups = groupAddressesByChain(importedRows, chain);
+    if (groups.length === 0) {
+      dialog.notify("warning", "请选择链", "每个地址都需要确定一条链后才能创建。");
+      return;
+    }
+    const payloads = groups.map((group) => buildPayload(group.items.map((item) => item.normalized), group.chain, group.items));
+    const payload = payloads[0];
+    const fingerprint = JSON.stringify(payloads);
     if (!preview || previewFingerprint !== fingerprint) {
       dialog.notify("info", "需要先完成真实预览", "创建前必须调用 /api/v2/downloads/preview 确认 Coverage 与成本，参数变化后会重新预览。");
       await handlePreview();
@@ -404,16 +705,17 @@ export default function DownloadNewPage() {
           ? "refresh 将新增 Provider 取数工作并产生成本，不复用本地已完成覆盖。"
           : "默认 prefer_local：优先复用本地数据或已有任务，服务端会再次校验 Coverage 与复用候选。",
       details: [
-        { label: "链", value: payload.chain },
-        { label: "地址数", value: String(payload.addresses.length) },
+        { label: "链分组", value: payloads.map((item) => `${item.chain}:${item.addresses.length}`).join("、") },
+        { label: "地址总数", value: String(payloads.reduce((sum, item) => sum + item.addresses.length, 0)) },
         { label: "Dataset", value: payload.datasets.join("、") },
         { label: "范围", value: rangeText(payload) },
         { label: "复用策略", value: payload.reuse_policy },
         { label: "性能模式", value: payload.performance_mode },
-        { label: "预览结论", value: preview.provider_work_required ? "需要新增 Provider 工作" : "将复用本地数据/已有任务" },
+        { label: "预览结论", value: previews.some((item) => item.data.provider_work_required) ? "需要新增 Provider 工作" : "将复用本地数据/已有任务" },
+        { label: "各组结论", value: previews.map((item) => `${item.chain}:${item.data.provider_work_required ? "需 Provider" : "复用本地"}`).join("、") || "—" },
         {
           label: "预估缺口 / 成本",
-          value: `${formatRawAmount(String(preview.missing_blocks), 0)} 区块 / ${preview.estimate.estimated_cost_usd ?? "—"} USD`,
+          value: `${formatRawAmount(String(previews.reduce((sum, item) => sum + item.data.missing_blocks, 0)), 0)} 区块 / ${previews.map((item) => item.data.estimate.estimated_cost_usd ?? "—").join(" + ")} USD`,
         },
       ],
       actions: [
@@ -423,38 +725,60 @@ export default function DownloadNewPage() {
     });
     if (confirm !== "create") return;
 
-    const response = await run(async () => {
-      try {
-        return await client.post<DownloadCreateData>("/api/v2/downloads", payload, {
-          idempotencyKey: crypto.randomUUID(),
-        });
-      } catch (error) {
-        if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
-        throw error;
-      }
-    });
-    if (!response) return;
-    const data = response.data;
-    const title = data.status === "ready" ? "本地数据已覆盖" : data.reused ? "已复用现有任务" : "下载任务已创建";
+    // 多链是**多个独立请求**：某一组失败不能抹掉已经真实创建的组。
+    // 幂等键由"预览指纹 + 链 + 地址集合"派生：同一批地址重试复用同一 key，
+    // 服务端幂等层会返回既有任务而不是再创建一份。
+    type GroupOutcome = { chain: string; ok: boolean; data?: DownloadCreateData; error?: string };
+    const outcomes: GroupOutcome[] = [];
+    for (const [index, groupPayload] of payloads.entries()) {
+      const idempotencyKey = await stableIdempotencyKey(`${fingerprint}|${groupPayload.chain}|${groupPayload.addresses.join(",")}`);
+      const response = await run(async () => {
+        try {
+          return await client.post<DownloadCreateData>("/api/v2/downloads", groupPayload, { idempotencyKey });
+        } catch (error) {
+          if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
+          throw error;
+        }
+      });
+      if (response) outcomes.push({ chain: groupPayload.chain, ok: true, data: response.data });
+      else outcomes.push({ chain: groupPayload.chain, ok: false, error: "创建失败（错误详情见上方 Dialog 或 Trace）" });
+    }
+    const succeeded = outcomes.filter((item): item is GroupOutcome & { data: DownloadCreateData } => item.ok && item.data !== undefined);
+    const failed = outcomes.filter((item) => !item.ok);
+    const jobIDs = succeeded.map((item) => item.data.job_id).filter((value): value is string => Boolean(value));
+    const allReady = succeeded.length > 0 && succeeded.every((item) => item.data.status === "ready");
+    const anyReused = succeeded.some((item) => item.data.reused);
+    const title = failed.length === 0
+      ? (allReady ? "本地数据已覆盖" : anyReused ? "已复用现有任务" : "下载任务已创建")
+      : `部分创建成功（${succeeded.length}/${outcomes.length}）`;
     const answer = await dialog.open({
-      kind: "success",
+      kind: failed.length === 0 ? "success" : "warning",
       title,
-      body: data.status === "ready" ? "本地 Coverage 已完整命中，未创建任务、未调用 Provider。" : undefined,
+      body: failed.length === 0
+        ? (allReady ? "本地 Coverage 已完整命中，未创建任务、未调用 Provider。" : undefined)
+        : `失败组：${failed.map((item) => item.chain).join("、")}。已成功的组不会回滚、也不会被自动删除；重新点击创建会复用同一幂等键，已成功组返回既有任务而不是新建。`,
       details: [
-        { label: "created", value: String(data.created) },
-        { label: "reused", value: String(data.reused) },
-        { label: "status", value: data.status },
-        { label: "provider_work_required", value: String(data.provider_work_required) },
-        { label: "coverage", value: percent(data.coverage) },
-        { label: "job_id", value: data.job_id ?? "—" },
-        { label: "job_no", value: data.job_no ?? "—" },
+        ...outcomes.flatMap((item) => item.ok && item.data
+          ? [
+              { label: `${item.chain} status`, value: item.data.status },
+              { label: `${item.chain} created/reused`, value: `${item.data.created} / ${item.data.reused}` },
+              { label: `${item.chain} job`, value: `${item.data.job_id ?? "—"}${item.data.job_no ? ` · ${item.data.job_no}` : ""}` },
+            ]
+          : [
+              { label: `${item.chain} 失败`, value: item.error ?? "创建失败" },
+            ]),
+        { label: "provider_work_required", value: String(succeeded.some((item) => item.data.provider_work_required)) },
+        { label: "coverage", value: succeeded.map((item) => `${item.chain}:${percent(item.data.coverage)}`).join("、") || "—" },
+        { label: "已创建任务数", value: String(jobIDs.length) },
       ],
-      actions: data.job_id
-        ? [{ label: "查看任务", result: "view", variant: "primary" as const }]
+      actions: jobIDs.length > 0
+        ? [
+            { label: failed.length > 0 ? "稍后重试失败组" : jobIDs.length === 1 ? "查看任务" : "查看任务中心", result: "view", variant: "primary" as const },
+          ]
         : [{ label: "知道了", result: "ok", variant: "primary" as const }],
     });
-    if (answer === "view" && data.job_id) navigate(`/jobs/${data.job_id}`);
-  }, [buildPayload, client, dialog, ensureAddresses, handlePreview, navigate, preview, previewFingerprint, run, validateForm]);
+    if (answer === "view" && jobIDs.length > 0) navigate(jobIDs.length === 1 && failed.length === 0 ? `/jobs/${jobIDs[0]}` : "/jobs");
+  }, [buildPayload, chain, client, dialog, ensureAddresses, handlePreview, navigate, preview, previewFingerprint, previews, run, validateForm]);
 
   const chooseReusePolicy = useCallback(
     async (next: ReusePolicy) => {
@@ -537,6 +861,21 @@ export default function DownloadNewPage() {
                 <button type="button" className="btn btn--sm" onClick={() => void importAddresses()}>
                   解析导入
                 </button>
+                <button type="button" className="btn btn--sm btn--ghost" onClick={() => importFileRef.current?.click()}>
+                  导入 CSV / XLSX
+                </button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept={IMPORT_FILE_EXTENSIONS.join(",")}
+                  aria-label="导入地址文件"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void importAddressesFromFile(file);
+                  }}
+                />
                 <button
                   type="button"
                   className="btn btn--sm btn--ghost"
@@ -544,12 +883,22 @@ export default function DownloadNewPage() {
                   onClick={() => {
                     setAddressText("");
                     setAddresses([]);
+                    setImported([]);
+                    setServerVerdict(null);
                     setParsedFrom("");
+                    setPreview(null);
+                    setPreviews([]);
+                    setPreviewFingerprint(null);
                   }}
                 >
                   清空
                 </button>
               </div>
+              {serverVerdict && (
+                <p className="field-hint" data-testid="server-verdict-summary">
+                  {`服务端复核：接受 ${serverVerdict.summary.accepted} · 拒绝 ${serverVerdict.summary.rejected} · 链 ${Object.entries(serverVerdict.summary.chains).map(([k, v]) => `${k}:${v}`).join("、") || "—"} · 来源 ${serverVerdict.source}`}
+                </p>
+              )}
             </div>
           </Card>
 

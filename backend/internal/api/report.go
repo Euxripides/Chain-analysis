@@ -9,6 +9,9 @@ import (
 )
 
 func (s *Server) handleGenerateInvestigationReport(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	if s.reports == nil {
 		writeArchitectureError(w, http.StatusServiceUnavailable, "REPORT_UNAVAILABLE", "report service unavailable")
 		return
@@ -21,6 +24,10 @@ func (s *Server) handleGenerateInvestigationReport(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusCreated, report)
 }
 func (s *Server) handleListInvestigationReports(w http.ResponseWriter, r *http.Request) {
+	// reports.List 只按 investigation_id 过滤，没有租户条件：先授权父调查。
+	if !s.scopedObject(w, r, "investigation", chi.URLParam(r, "id")) {
+		return
+	}
 	if s.reports == nil {
 		writeArchitectureError(w, http.StatusServiceUnavailable, "REPORT_UNAVAILABLE", "report service unavailable")
 		return
@@ -33,6 +40,9 @@ func (s *Server) handleListInvestigationReports(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"items": reports})
 }
 func (s *Server) handleDownloadInvestigationReport(w http.ResponseWriter, r *http.Request) {
+	if !s.scopedObject(w, r, "report", chi.URLParam(r, "id")) {
+		return
+	}
 	if s.reports == nil {
 		writeArchitectureError(w, http.StatusServiceUnavailable, "REPORT_UNAVAILABLE", "report service unavailable")
 		return

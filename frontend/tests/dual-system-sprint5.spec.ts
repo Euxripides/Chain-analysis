@@ -37,11 +37,26 @@ test.beforeEach(({}, testInfo) => {
   }
 });
 
+/**
+ * P1-20260913：多工作区身份登录时，服务端返回 409 AUTHN_WORKSPACE_SELECTION_REQUIRED
+ * 并附可选列表，页面按仓库规范用弹窗要求**显式选择**工作区（绝不静默取默认）。
+ * 夹具账号（fixture-*）同时属于 acme-lab 与 acme-lab-other，因此这一步是必经路径，
+ * 不是可选分支：不处理它，登录永远不会完成，后续断言全部误报为页面缺陷。
+ */
+async function resolveWorkspaceSelection(page: Page, slug = "acme-lab") {
+  const dialog = page.getByRole("dialog").filter({ hasText: "请选择工作区" });
+  await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+  if (await dialog.isVisible().catch(() => false)) {
+    await dialog.getByRole("button", { name: new RegExp(slug) }).first().click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+  }
+}
 async function uiLogin(page: Page, email: string, password: string, base = "/app-v2") {
   await page.goto(`${base}/login`, { waitUntil: "domcontentloaded" });
   await page.locator("#identifier").fill(email);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: /^登录(后台)?$/ }).click();
+  await resolveWorkspaceSelection(page);
   await expect(page.locator(".auth-card")).toHaveCount(0, { timeout: 20_000 });
   const notice = page.getByRole("dialog").filter({ hasText: "需要修改初始密码" });
   if (await notice.isVisible().catch(() => false)) {
@@ -98,11 +113,16 @@ async function expectDialogTitle(page: Page, pattern: RegExp) {
 }
 
 async function closeDialog(page: Page) {
-  const dialog = page.getByRole("dialog");
-  if (await dialog.isVisible().catch(() => false)) {
+  // 导入流程会**叠**两层弹窗（本地解析摘要 → 服务端校验结果）：
+  // 用 getByRole("dialog") 单数定位会触发 strict 模式冲突，被 catch 吞掉后一个都没关，
+  // 后续按钮点击被遮罩吃掉（2026-09-16 实测：预览请求根本没发出去）。
+  // 这里逐层按 Escape 关闭，直到没有可见弹窗为止。
+  for (let i = 0; i < 5; i += 1) {
+    if ((await page.getByRole("dialog").count()) === 0) break;
     await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+    await page.waitForTimeout(150);
   }
+  await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 5_000 });
 }
 
 test.describe("S5-FE-01 搜索 / Explorer / 地址 / 交易", () => {
@@ -172,11 +192,25 @@ test.describe("S5-FE-02 下载表单 / 任务列表 / 任务详情", () => {
     test.skip(!COVERED_ADDRESS || !COVERED_FROM || !COVERED_TO, "需要 Coverage HIT 夹具");
     await uiLogin(page, INV_EMAIL!, INV_PASSWORD!);
     await page.goto("/app-v2/downloads/new", { waitUntil: "domcontentloaded" });
+    // 导入的服务端复核是**按链作用域**的（chain + normalized address 才是去重键）。
+    // 因此必须先选定链：表单默认会自动选中"第一个可用链"，若它不是本地址所属链，
+    // 服务端会逐条拒绝，界面只会显示 INVALID_ADDRESS —— 这一点已作为 UX 发现记录
+    // （ROUND-20260916 §3 UI-3），用例按当前契约先选链。
+    await page.locator("#download-chain").selectOption(COVERED_CHAIN);
     await page.locator("#download-addresses").fill(COVERED_ADDRESS);
     await page.getByRole("button", { name: "解析导入" }).click();
     const importDialog = await expectDialogTitle(page, /地址导入解析摘要/);
-    await importDialog.getByRole("button", { name: "使用这些地址" }).click();
-    await page.locator("#download-chain").selectOption(COVERED_CHAIN);
+    await importDialog.getByRole("button", { name: "提交服务端校验" }).click();
+    // 服务端复核结果必须显式呈现接受/拒绝计数：被拒条目不得静默丢弃。
+    const verdictDialog = await expectDialogTitle(page, /服务端地址校验结果/);
+    await expect(verdictDialog).toContainText("服务端接受");
+    // 链分布必须把该地址记在所选链下（tron:1），且不得出现任何"拒绝 第N行"条目。
+    await expect(verdictDialog).toContainText(`${COVERED_CHAIN}:1`);
+    await expect(verdictDialog).not.toContainText("拒绝 第");
+    // 第三段交互：服务端结果弹窗里的「使用服务端结果」才是导入的落地点
+    //（旧文案是「使用这些地址」）。按 Escape 关闭等于取消导入，地址数会停在 0。
+    await verdictDialog.getByRole("button", { name: "使用服务端结果" }).click();
+    await expect(page.getByText(/地址列表（已导入 1 个）/)).toBeVisible({ timeout: 10_000 });
     // 默认会勾选 transactions+token_transfers；本用例只验证 token_transfers 的 Coverage HIT。
     const transactionsCheckbox = page.getByRole("checkbox", { name: "普通交易（transactions）" });
     if (await transactionsCheckbox.isChecked()) await transactionsCheckbox.uncheck();
@@ -351,8 +385,15 @@ test.describe("S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / U
     await expect(page).not.toHaveURL(/\/search$/);
     // Dialog 可通过键盘关闭，焦点不困在遮罩里。
     await page.keyboard.press("Shift+Tab");
+    // 详情页在数据到达过程中会重渲染（活动/运行态/覆盖率是多个独立查询）。
+    // 2026-09-16 实测：CI 全量跑测时 ClickHouse 正被同一环境的下载任务拖慢，
+    // `focus()` 解析到的按钮被后续渲染替换，Playwright 报 "element was detached from the DOM,
+    // retrying" 直到 60 s 超时；单独复跑与整套复跑各一次都是 PASS（3.6 s）。
+    // 这里等页面自己稳定下来再定位，判据（焦点陷阱、Escape 关闭）一个都没放宽。
+    await page.waitForLoadState("networkidle").catch(() => {});
     const trigger = page.getByRole("button", { name: /说明|数据口径/ }).first();
     if (await trigger.count()) {
+      await expect(trigger).toBeVisible({ timeout: 10_000 });
       await trigger.focus();
       await trigger.press("Enter");
       const dialog = await page.getByRole("dialog").waitFor({ state: "visible", timeout: 5_000 });

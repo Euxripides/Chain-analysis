@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS",
+    "message": "The audit endpoint (at https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk) doesn't exist."
+  }
+}

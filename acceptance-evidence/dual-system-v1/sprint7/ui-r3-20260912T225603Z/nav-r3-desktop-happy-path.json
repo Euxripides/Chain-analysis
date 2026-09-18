@@ -1,0 +1,18 @@
+{
+  "requested": "/api-control?tab=control",
+  "entrance_href": "/admin/login?return_to=%2Fapi-control%3Ftab%3Dcontrol",
+  "login_page": {
+    "href": "https://127.0.0.1:8448/admin/login?return_to=%2Fapi-control%3Ftab%3Dcontrol",
+    "origin": "https://127.0.0.1:8448",
+    "pathname": "/admin/login",
+    "search": "?return_to=%2Fapi-control%3Ftab%3Dcontrol"
+  },
+  "final": {
+    "href": "https://127.0.0.1:8448/api-control?tab=control",
+    "origin": "https://127.0.0.1:8448",
+    "pathname": "/api-control",
+    "search": "?tab=control"
+  },
+  "query_preserved": true,
+  "dialog_gone": true
+}

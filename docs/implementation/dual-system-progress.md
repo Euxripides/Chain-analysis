@@ -1,6 +1,100 @@
 # 双系统开发进度对照（对照 dual-system-development-plan.md 全量）
 
+## 0. 2026-09-16 夜场（DR 演练 / 镜像扫描 / 回滚演练脚本）
+
+同日晚间对 **备份—恢复链路与依赖镜像**做了真机演练与扫描，又暴露出 4 个真实工具缺陷（其中 2 个让 DR 门禁**结构性无法取证**），
+逐条定位到行并修复；详细清单与证据见 `ROUND-20260916-defect-closure.md` §4。
+
+- **D-25 恢复库"数据在、业务角色用不了"**：`restore-drill.sh` 用 `pg_restore --no-owner --no-privileges`，
+  丢弃 GRANT 后运行时角色 `blockchain_app`（API/Worker 走 `SET ROLE`）读不到 `audit_events_v2`，演练被判 FAIL。
+  已改为保留 ACL，并新增"运行时角色可用性"断言；修复后实测恢复库中 `blockchain_app` 读到 93,075 行（= manifest 备份点）。
+- **D-26 备份缺 MinIO 语义基线**：`backup-all.sh` 从不调用 `minio-metadata-verify.sh capture`，
+  导致 DR 门禁第 4 项（版本/ILM/标签/元数据）在任何备份上都无法取证。已在备份流程内新增 capture 步骤（失败即 `__INCOMPLETE`）。
+- **D-27 kill9 `/jsz` 探针用错参数**：`/jsz?streams=EVENTS&consumers=1` 在 NATS 2.14.6 返回 HTTP 400，被写成"端点不可用"；
+  改正后实测 `messages=477757, durable_consumers=0`（EVENTS 流没有 durable consumer，服务端不存在重投窗口）。
+- **D-28 元数据维度无法单轮闭环**：新增 `RESTORE_DRILL_MINIO_META_VERIFY=1`，在**本轮目标桶**上就地取证并做 5 项交叉校验。
+
+实测结果（冻结版本 `7831bff0…`）：
+
+- **备份**：`20260916T150033Z`，39 GB / 177,899 个文件，`complete=true`、`pg_snapshot_consistent=true`。
+- **恢复演练（首轮，脚本 `928c0a841c89…`）**：manifest 177,899/177,899 全对；PG `pg_restore` 退出码 0、**RTO 58.83 s**；
+  CH `RESTORE` 退出码 0、**RTO 477.02 s**，四张大表 `count(FINAL)` 与生产**完全一致**（transactions 24,962,612、token_transfers 67,644,164、
+  address_activity 75,229,670、logs 9,473,112）；MinIO **5 桶逐对象比对零差异**（blockchain-raw 177,347 个对象，RTO 280.01 s）；
+  判定 FAIL 的唯一原因是 D-25（已修）。
+- **恢复演练（次轮，脚本 `f74540ad…`）**：验证 D-25 修复生效（运行时角色可读恢复库），其余同上。
+- **镜像漏洞扫描**（`scripts/s7/run-s7-scan-image-iac.sh`，本地漏洞库 `UpdatedAt=2026-09-16T13:02:23Z`）：
+  `postgres:18` 14 CRITICAL/106 HIGH、`minio/minio:latest` 6/100、`minio/mc:latest` 2/45、`nats:2-alpine` 0/2、
+  `clickhouse/clickhouse-server:26.7` 0/0 —— 合计 **22 CRITICAL / 253 HIGH（可修 19 / 188）**，属发布阻断 B-7 的实测依据。
+- **IaC**：trivy `config` 对本仓库 IaC 面检出配置文件数 **0**（k8s 对照样本可正常报 3 条），因此**不主张** IaC 已扫描通过。
+- **回滚演练脚本**：新增 `scripts/release/rollback-drill.sh`（`ba3f5662…`），真实回滚 API/Worker 与两套前端并测 RTO，
+  带 trap 保证异常退出也回到冻结版本；待窗口内执行。
+
+> 结论不变：**NO-GO for cutover**。§27 矩阵仍为 **63 PASS + 2 发布阻断**（DATA-007、DATA-009），
+> 其余发布门禁（B-2/B-3/B-4/B-5/B-6/B-7）逐条状态见 `section27-conformance.md` §4 与 `RELEASE-WINDOW-REQUEST-20260916.md`。
+
+---
+
+## 0.1 2026-09-16 日场（缺陷关闭 + 稀疏声明）
+
+本轮对照 `docs/dual-system-completion-acceptance-criteria.md` 复核并关闭了两类**真实缺陷**，
+同时修掉了让套件"整体红"的夹具/编排阻断。完整清单与证据见
+`acceptance-evidence/dual-system-v1/ROUND-20260916-defect-closure.md`。
+
+- **D-01 地址搜索永远返回空**：搜索对 `transactions`/`token_transfers` 用 `FINAL` 且无 `chain` 谓词
+  → 实测 80 s 超时，错误被 `if err == nil` 吞掉，于是"超时"表现为"查不到"。已按地址形态限定链、
+  去掉 `FINAL`、去重下沉到聚合层；同一地址由"0 结果"变为 0.37 s 返回 `tron · 17431 笔`。
+- **D-02 后台创建用户 100% 失败**：`sprint6_identity.go` 查询用了 `workspace_memberships.id`
+  （该表没有 id 列），语句失败使请求事务 aborted，提交门再把结果改写成误导性的
+  `409 AUTHZ_WORKSPACE_SCOPE_STALE`。已修 SQL 并区分"没有成员关系"与"查询失败"；
+  提交门新增 `handler_status` 诊断字段（D-03）。
+- **D-04/D-05 审计链不可验证**：写入侧把不可落库的 UUID 文本放进哈希载荷（`audit.UUIDPayloadValue`
+  已修）；两条既有行与登录链 8 处稀疏空洞按 **ADR-019 稀疏声明**逐条登记（不改写任何历史行）。
+  两条链的 `valid` 由 `false` 变为 `true`，并如实回报 `declared_anomaly_count=2` /
+  `declared_lost_count=8`。
+- **D-06 尾部缺失检查的读竞态**（本轮自查发现并修复）。
+- **D-07 夹具与编排四处阻断**：`admin-fixture`/`admin-init` 用受限应用账号、多工作区身份登录未带
+  `workspace_id`、运行日志套件读 `/tmp/api.log` 而 API 写在 journald、声明类套件缺 `PGPASS`。
+  修完后 sprint4 由 `PASS=0` 变为 `PASS=81 / FAIL=0`。
+
+- **D-15 evidence 状态命令固定卡 60 s 且丢一条审计**（本轮实测发现，P0 可用性 + 审计完整性）：
+  提交门把整个 handler 放进一个事务，请求内先写的同事务审计（`evidence:review`）拿到了
+  `audit_chain_heads` 行锁，随后 `GetEvidence` 的读审计（`evidence:sensitive:read`）又另开一条连接去取
+  同一把锁 —— 请求与自己的事务互等，60.0 s 后被 HTTP 超时解开，该审计行被静默丢弃。
+  修复见 **ADR-020**：gate 请求内的审计写入加入请求事务（`dbtx.WithGate`），
+  `WithoutTx` 同时清除标记（中间件拒绝行语义不变），读路径审计失败改为 `WriteOrLog` 不再静默。
+  实测 `verify` **60.011 s → 0.046 s**，同请求恢复记录两条审计，两条哈希链仍 `valid=true`。
+
+- **D-17 两套控制台导航未按权限裁剪**（§7.5）：后台 `navGroups()` 是静态列表、用户端 `navGroups(permissions)`
+  收了权限参数却没用（`ROUTE_PERMISSIONS` 定义了从未消费）→ 低权限角色仍看到打不开的入口。
+  已改为"入口权限从路由表反查、两套前端同源过滤"，并修掉 `OrganizationsPage` 把次要资源 403 当整页失败的写法；
+  新增双向浏览器用例 `dual-system-nav-permission.spec.ts`（Owner 基线 + Platform Admin/Auditor 逐路径对照），实测 4/0。
+- **D-18 系统角色「有写无读」权限缺口**（§7.1/§7.4）：Platform Admin 能创建/审批删除请求却列不出来
+  （缺 `admin:deletion:read`），Security Admin 能处置告警与审批却列不出来（缺 `admin:alert:read`、`admin:approval:read`）。
+  迁移 `0065_role_read_permission_gaps.sql` 按通用规则补齐并自检；补后双向导航用例转绿。
+
+- **D-19 功能开关没有接入真实请求路径**（§7.3 / §16.7）：平台有完整开关后台能力，但没有任何业务请求读过
+  `feature_flags`（关掉 `user.explorer_v2` 后 Explorer 照样返回数据）。已按 ADR-021 接线三条能力面
+  （Explorer 读端点、后台告警中心、控制面只读视图），关闭时返回 `503 FEATURE_DISABLED`，真实流量求值写入
+  `feature_flag_evaluations`；Kill Switch 等安全/恢复路径**不挂开关**（契约测试静态断言）。
+  实测套件 `run-sprint7-featureflags.sh`：PASS 21 / FAIL 0。
+
+> **发布结论未变**：`APP_ENV` 仍为 `development`、OIDC 范围未决、功能开关未接入请求路径、
+> 百万行导出/DR/重扫与灰度切流未执行、无批准人签署 → 仍为 **NO-GO for cutover**。
+
+---
+
 > 结论：**Sprint 1 / 2 / 3 / 4 / 5 / 6 均已完成**（Sprint 6 见 `docs/implementation/sprint6-report.md`）。
+> **Sprint 7 已于 2026-09-13 执行完毕**（见 `docs/implementation/sprint7-report.md`）：
+> DB 硬化（0056/0057）、安全取证与 6 项真实缺陷修复、分层性能、备份恢复与 Kill -9 演练、§27 全量复跑、手册全部完成。
+>
+> **2026-09-16 晚更新（取代上面这几行里的旧数字）**：§27 矩阵已按冻结版本 `7831bff0…` 完整重建
+> （`acceptance-evidence/dual-system-v1/section27-conformance.md`）：65 个 Test ID → **63 PASS + 2 发布阻断**，
+> 矩阵内 `FAIL=0 / BLOCKED=0 / NOT_VERIFIED=0 / PARTIAL=0`。旧的"浏览器 4 条 FAIL"与"6 条 P1"表述已不适用：
+> 浏览器主档位 37/0、扩展档位（含 user-mobile）57/0。
+> **结论：未达结项条件**——发布决策仍为 **NO-GO for cutover**（保持灰度、不切换 `/` 入口）；
+> 当前阻断项为矩阵 §4 的 B-1…B-6（DATA-007 订阅者幂等、DATA-009 恢复演练、§11 性能预算、RPO/PITR、
+> 回滚门禁、production 切换/灰度/签署），逐条关闭条件见 `RELEASE-DECISION.md` 与矩阵 §4。
+> 发布范围决定见 `docs/implementation/release-scope-decision-20260916.md`（OIDC 与三个未接线开关均不在本次范围）。
 > Sprint 6 的审计修复阻断项已闭环：不可恢复缺口的**不可变完整性事件边界**已实现并部署，
 > AUDIT-004 不再有 NOT_VERIFIED 项（见 `docs/adr/ADR-018-audit-integrity-incident-boundary.md`
 > 与该报告 §6bis）。
@@ -36,7 +130,7 @@
 | S4 | 用户案件与调查闭环 | 8 | 8 | 0 | 0 | **100%** |
 | S5 | Explorer、下载、任务、导出、图谱 | 8 | 8 | 0 | 0 | **100%** |
 | S6 | 后台控制、治理与可观测性 | 9 | 9 | 0 | 0 | **100%**（含审计修复阻断项：缺口已封存，NOT_VERIFIED 0） |
-| S7 | 硬化、真实数据验收与切流 | 8 | 0 | 0 | 8 | 0%（未开始） |
+| S7 | 硬化、真实数据验收与切流 | 8 | 7 | 1 | 0 | ~90%（7 任务完成；切流受发布门禁阻断，见 `sprint7-report.md`） |
 
 ### Sprint 1（摘要）
 | 任务 | 状态 | 缺口 |

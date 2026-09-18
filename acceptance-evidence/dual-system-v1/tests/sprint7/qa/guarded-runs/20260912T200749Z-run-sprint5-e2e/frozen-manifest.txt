@@ -1,0 +1,12 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 439
+
+run_dir=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/tests/sprint7/qa/guarded-runs/20260912T200749Z-run-sprint5-e2e
+started_at=2026-09-13T03:07:49+07:00
+host=dataserver
+branch=n/a (VM 部署目录非 git 仓库)
+9d30ed356a55520201b418beb46290f5e94c908432394e4cd4804bbffa766301  guard.sh
+d499673fb4b4b057edfe3884c5a74c25b9ba0ab0cac22d26b749a118b54cd0ba  suite.sh
+guard.sh 14804 bytes
+suite.sh 65180 bytes

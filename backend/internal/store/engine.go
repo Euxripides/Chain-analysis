@@ -96,6 +96,30 @@ func (s *Store) FailPage(ctx context.Context, pageID, errMsg string) error {
 	return err
 }
 
+// FailPageFinal 把一个不可恢复的页标记为终态失败：PagesNeedingIngest 只挑选
+// DURABLE / 30 秒前的 FAILED，因此 FAILED_FINAL 页不会被无限重放。
+func (s *Store) FailPageFinal(ctx context.Context, pageID, errMsg string) error {
+	_, err := s.Pool.Exec(ctx, "UPDATE download_pages SET status=$2, error=$3, updated_at=now() WHERE id=$1", pageID, model.PageFailedFinal, errMsg)
+	return err
+}
+
+// PageIngestSummary 汇总一个 Shard 的页面终态：
+//   ingested  = INGESTED/VALIDATED
+//   pending   = 仍可被重放的页（DURABLE 或 30 秒前的 FAILED）
+//   permanent = FAILED_FINAL（原始 spool 对象不可恢复）
+//
+// finalizer 用 permanent>0 && pending==0 判定"这个 Shard 永远不会再进展"。
+func (s *Store) PageIngestSummary(ctx context.Context, shardID string) (ingested, pending, permanent int64, lastErr string, err error) {
+	err = s.Pool.QueryRow(ctx,
+		"SELECT COUNT(*) FILTER (WHERE status IN ('INGESTED','VALIDATED')), "+
+			"COUNT(*) FILTER (WHERE status='DURABLE' OR (status='FAILED' AND updated_at < now() - interval '30 seconds')), "+
+			"COUNT(*) FILTER (WHERE status=$2), "+
+			"COALESCE(MAX(error) FILTER (WHERE status=$2),'') "+
+			"FROM download_pages WHERE shard_id=$1", shardID, model.PageFailedFinal).
+		Scan(&ingested, &pending, &permanent, &lastErr)
+	return
+}
+
 func (s *Store) PagesByShard(ctx context.Context, shardID string) ([]model.Page, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT id, job_id, shard_id, dataset, page_no, query_hash, status, page_size, wire_bytes, decoded_bytes, raw_path, raw_sha256, "+
 		"rows_fetched, rows_parsed, rows_inserted, unique_rows, next_page_token_hash, from_block, to_block, "+

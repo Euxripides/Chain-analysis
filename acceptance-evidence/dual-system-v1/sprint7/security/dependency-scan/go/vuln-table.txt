@@ -1,0 +1,18 @@
+SECTION        ID             SEVERITY(OSV db_specific)  MODULE                             FOUND              FIXED              REACHABLE ALIASES
+Symbol Results GO-2026-5960                              github.com/xuri/excelize/v2        github.com/xuri/ex github.com/xuri/ex YES       CVE-2026-54063,GHSA-h69g-9hx6-f3v4
+Symbol Results GO-2026-5004                              github.com/jackc/pgx/v5            github.com/jackc/p github.com/jackc/p YES       CVE-2026-41889,GHSA-j88v-2chj-qfwx
+Symbol Results GO-2025-3770                              github.com/go-chi/chi/v5           github.com/go-chi/ github.com/go-chi/ YES       CVE-2025-71405,GHSA-vrw8-fxc6-2r93
+Package Result GO-2026-5777                              github.com/go-chi/chi/v5           github.com/go-chi/ github.com/go-chi/ no        CVE-2026-72816,GHSA-rjr7-jggh-pgcp
+Package Result GO-2026-5775                              github.com/go-chi/chi/v5           github.com/go-chi/ github.com/go-chi/ no        CVE-2026-72817,GHSA-9g5q-2w5x-hmxf
+Package Result GO-2026-5774                              github.com/go-chi/chi/v5           github.com/go-chi/ github.com/go-chi/ no        CVE-2026-72815,GHSA-3fxj-6jh8-hvhx
+Package Result GO-2026-4772                              github.com/jackc/pgx/v5            github.com/jackc/p github.com/jackc/p no        CVE-2026-33816,GHSA-9jj7-4m8r-rfcm
+Package Result GO-2026-4771                              github.com/jackc/pgx/v5            github.com/jackc/p github.com/jackc/p no        CVE-2026-33815,GHSA-xgrm-4fwx-7qm8
+Module Results GO-2026-6355                              golang.org/x/crypto                golang.org/x/crypt golang.org/x/crypt no        CVE-2026-56855
+Module Results GO-2026-6354                              golang.org/x/crypto                golang.org/x/crypt golang.org/x/crypt no        CVE-2026-78662
+Module Results GO-2026-6303                              golang.org/x/crypto                golang.org/x/crypt golang.org/x/crypt no        CVE-2026-56854
+Module Results GO-2026-5932                              golang.org/x/crypto                golang.org/x/crypt N/A                no        
+
+TOTAL_BLOCKS= 12
+Symbol Results = 3
+Package Results = 5
+Module Results = 4

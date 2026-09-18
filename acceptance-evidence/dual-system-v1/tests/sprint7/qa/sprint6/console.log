@@ -1,0 +1,179 @@
+==== Sprint 6 E2E 开始 2026-09-13T01:48:16+07:00 build=working-tree ====
+  PASS SETUP        Owner/平台管理员/审计员/普通用户 会话建立
+---- ADMIN-001 创建用户并绑定工作区角色 ----
+  PASS ADMIN-001a   创建用户返回 UUID
+  PASS ADMIN-001b   一次性初始密码只返回一次
+  PASS ADMIN-001c   DB 中 identity 已建立
+  PASS ADMIN-001d   工作区成员关系已建立
+  PASS ADMIN-001e   有效权限按角色来源返回（viewer > 0 项）
+  PASS ADMIN-001f   绑定 scope 落到工作区
+  PASS ADMIN-001g   新账号可登录并建立会话
+  PASS ADMIN-001h   创建用户写入审计
+---- ADMIN-002 停用用户影响预览 ----
+  PASS ADMIN-002a   影响预览返回活跃会话数（新账号已登录=1）
+  PASS ADMIN-002b   影响预览包含任务/审批/案件/密钥维度
+  PASS ADMIN-002c   未带 confirm 的停用被拒绝（428）
+  PASS ADMIN-002d   确认后停用成功
+  PASS ADMIN-002e   DB 中状态为 disabled
+  PASS ADMIN-002f   停用同时撤销全部会话
+  PASS ADMIN-002g   停用写入审计
+---- ADMIN-003 Provider 连接测试 ----
+  PASS ADMIN-003a   Provider 描述符列表非空
+  PASS ADMIN-003b   连接测试使用受控探针方法
+  PASS ADMIN-003c   连接测试返回 Trace ID
+  PASS ADMIN-003d   连接测试写入 Usage（DB 证据）
+  PASS ADMIN-003e   密钥列表只返回摘要（无明文）
+  PASS ADMIN-003f   Provider 描述符记录最近测试结果
+---- ADMIN-004 Provider 断开影响与 step-up ----
+  PASS ADMIN-004a   存在运行任务时断开必须 step-up（403）
+  PASS ADMIN-004b   带 step-up 断开成功
+  PASS ADMIN-004c   响应包含受影响链/Dataset/任务/fallback
+  PASS ADMIN-004d   DB 中 Provider 已断开
+  PASS ADMIN-004e   断开与 step-up 写入审计
+---- ADMIN-005 性能模式切换 requested/effective/reason ----
+  PASS ADMIN-005a   返回 requested/effective/reason 三要素
+  PASS ADMIN-005b   预览返回目标并发与预估原因
+  PASS ADMIN-005c   apply 返回值与 DB requested_mode 一致
+  PASS ADMIN-005d   回读 requested 已生效
+  PASS ADMIN-005e   effective 与 reason 为非空真实值
+  PASS ADMIN-005f   性能模式变更写入审计
+---- ADMIN-006 Kill Switch 双人审批与恢复 ----
+  PASS ADMIN-006-0  控制面当前没有生效中的 Kill Switch（复跑前置）
+  PASS ADMIN-006a   影响预览保留 Checkpoint
+  PASS ADMIN-006b   影响预览默认不删除任务
+  PASS ADMIN-006c   创建请求返回 engagement + approval
+  PASS ADMIN-006d   请求人自审批被拒绝（403）
+  PASS ADMIN-006e   未审批先执行被拒绝（412）
+  PASS ADMIN-006f   第二位管理员审批通过
+  PASS ADMIN-006g   DB 记录 requester<>approver
+  PASS ADMIN-006h   执行后 Kill Switch 生效
+  PASS ADMIN-006i   DB 中 kill_switch=true
+  PASS ADMIN-006j   恢复后 kill_switch=false
+  PASS ADMIN-006k   恢复后自动健康检查通过
+  PASS ADMIN-006l   Kill Switch 全流程写入审计
+  PASS ADMIN-006m   审批流程事件落库
+---- ADMIN-007 预算超阈值触发动作与告警 ----
+  PASS ADMIN-007a   创建预算返回 UUID
+  PASS ADMIN-007b   预算评估判定已超动作阈值
+  PASS ADMIN-007c   触发优先级为 P1
+  PASS ADMIN-007d   生成了预算告警（DB）
+  PASS ADMIN-007e   登记了配置动作（DB）
+  PASS ADMIN-007f   预算评估写入审计
+---- 从告警定位到 request/provider/shard/checkpoint/object ----
+  PASS ALERT-TRACE-a 告警详情返回 alert + related 两段
+  PASS ALERT-TRACE-b 关联链包含 Provider 命中或明确的未命中原因
+  PASS ALERT-TRACE-c 由告警可定位到 Provider 使用记录
+  PASS ALERT-TRACE-d 关联链返回 job/shard 层
+---- ADMIN-008 审计导出与 hash 校验 ----
+  PASS ADMIN-008-0  缺少 step-up 的审计导出被拒绝（403）
+  PASS ADMIN-008a   导出返回 UUID/行数/SHA-256
+  PASS ADMIN-008b   下载文件行数与导出计数一致
+  PASS ADMIN-008c   下载文件 SHA-256 与响应一致
+  PASS ADMIN-008d   导出内容为可解析 JSONL（含 seq/hash 链字段）
+  PASS ADMIN-008e   DB manifest 记录同一 hash
+  PASS ADMIN-008f   导出写入审计（含条件与行数）
+---- ADMIN-009 配置并发修改 ----
+  PASS ADMIN-009a   缺少 If-Match 返回 428
+  PASS ADMIN-009b   携带正确版本成功（200）
+  PASS ADMIN-009c   复用旧版本被拒绝（412）
+  PASS ADMIN-009d   版本号递增一次（未静默覆盖）
+  PASS ADMIN-009e   配置版本历史写入
+---- ADMIN-010 功能开关灰度与回滚 ----
+  PASS ADMIN-010a   灰度设为 50% 成功（200）
+  PASS ADMIN-010b   灰度试算返回确定性分桶与原因
+  PASS ADMIN-010c   第二名用户独立评估（互不干扰）
+  PASS ADMIN-010d   评估记录落库（可追溯）
+  PASS ADMIN-010e   回滚百分比归零
+  PASS ADMIN-010f   回滚后同一用户不再命中
+  PASS ADMIN-010g   开关变更写入审计
+---- AUDIT-002 日志与审计秘密扫描 ----
+  PASS AUDIT-002a   验收日志中 0 处密码/密钥明文
+  PASS AUDIT-002b   审计表 detail/before/after 无秘密明文
+  PASS AUDIT-002c   密钥轮换只存引用与指纹，不返回明文
+  PASS AUDIT-002d   运行日志无秘密明文
+---- AUDIT-003 应用 DB 角色拒绝修改/删除/清空审计 ----
+  PASS AUDIT-003a   受限运行角色 blockchain_app 存在
+  PASS AUDIT-003b   运行角色权限为 INSERT/SELECT 允许、UPDATE/TRUNCATE 拒绝
+  PASS AUDIT-003c   UPDATE 审计事件被运行角色拒绝
+  PASS AUDIT-003d   DELETE 审计事件被运行角色拒绝
+  PASS AUDIT-003e   TRUNCATE 审计事件被运行角色拒绝
+  PASS AUDIT-003f   DROP 审计表被运行角色拒绝
+  PASS AUDIT-003g   运行角色仍可读取审计表（正向对照）
+  PASS AUDIT-003h   受限角色下审计写入仍然成功
+  PASS AUDIT-003i   边界三表运行角色权限矩阵正确
+  PASS AUDIT-003j   运行角色 UPDATE 边界事件被拒绝
+  PASS AUDIT-003k   运行角色 DELETE 边界事件被拒绝
+  PASS AUDIT-003l   运行角色 TRUNCATE 边界事件被拒绝
+  PASS AUDIT-003m   运行角色 DROP 边界表被拒绝
+  PASS AUDIT-003n   运行角色改写边界哈希证据被拒绝
+  PASS AUDIT-003o   运行角色改动边界引用锚点被拒绝
+  PASS AUDIT-003p   既有每日锚点不可改写（UPDATE 被拒绝）
+  PASS AUDIT-003q   既有每日锚点不可删除（DELETE 被拒绝）
+  PASS AUDIT-003r   运行角色清空锚点表被拒绝（TRUNCATE）
+  PASS AUDIT-003s   运行角色仍可读取边界记录（正向对照）
+---- AUDIT-004 完整性边界：缺口检测、封存、边界之后逐项验证 ----
+  PASS AUDIT-004a   缺口检测返回结构化观测并定位真实缺口区间
+  PASS AUDIT-004b   封存尾哈希等于幸存首行的 prev_hash（旧链尾唯一保留证据）
+  PASS AUDIT-004c   缺口区间内不存在任何事件行（未回填历史）
+  PASS AUDIT-004d   已封存边界不可重复封存（幂等，already_sealed=true）
+  PASS AUDIT-004e   重复封存不产生第二条边界事件行
+  PASS AUDIT-004j   边界事件落库（chain/kind/缺口/可信起点）
+  PASS AUDIT-004k   边界证据哈希与封存尾哈希均为 64 位十六进制
+  PASS AUDIT-004k2  边界创建/审批事件链已落库且带哈希链接
+  PASS AUDIT-004k3  边界事件链序号连续且 prev_hash 首尾相接
+  PASS AUDIT-004k5  封存审批已执行且请求人≠审批人
+  PASS AUDIT-004k6  边界审批与封存由两个不同主体完成
+  PASS AUDIT-004k7  边界事件链签名了 approved 与 sealed 两个阶段
+  PASS AUDIT-004k4  边界引用了保留的旧锚点（原样保留、未改写）
+  PASS AUDIT-004l   封存后 integrity_status=sealed_incident（不是 intact）
+  PASS AUDIT-004m   prefix_status=sealed_unrecoverable（旧链不连续已声明）
+  PASS AUDIT-004n   实际校验起点等于新链可信起点
+  PASS AUDIT-004o   边界之后逐行复算通过（valid=true）
+  PASS AUDIT-004p   边界之后复算条数 > 0
+  PASS AUDIT-004p2  复算条数等于校验区间长度（逐行、无跳号）
+  PASS AUDIT-004q   缺口区间仍无任何行（未回填历史审计行）
+  PASS AUDIT-004r   控制链 login 无缺口，integrity_status=intact（边界机制非全局放行）
+  PASS AUDIT-004r2  控制链 login 全链可验证（valid=true）
+  PASS AUDIT-004s   边界校验不带出未解释告警以外的错误
+  PASS AUDIT-004t   链头 seq 与库中最大 seq 一致（同一快照）
+  PASS AUDIT-004u   链头 last_hash 与最后一条事件 event_hash 一致
+  PASS AUDIT-004v   边界后当日锚点存在
+  PASS AUDIT-004v2  当日锚点区间不跨越已封存边界（自可信起点开始）
+  PASS AUDIT-004w   边界后锚点整段复算通过（verified=true）
+  PASS AUDIT-004w2  边界后锚点 head_hash 与复算结果一致
+  PASS AUDIT-004w3  边界后锚点复算条数等于其声明事件数
+  PASS AUDIT-004x   边界前锚点标记为封存不可恢复并引用边界事件
+  PASS AUDIT-004x2  保留锚点的归档对象哈希与记录一致（未被替换）
+  PASS AUDIT-004x3  所有锚点均可归因（unexplained=0）
+  PASS AUDIT-004x4  归档对象可回读且 SHA-256 与锚点 content_hash 一致
+  PASS AUDIT-004x5  归档对象 manifest 含 chain/区间/head_hash（可独立复算）
+  PASS AUDIT-004y   完整性报告声明缺口并给出可信起点
+  PASS AUDIT-004y2  完整性报告如实陈述不可恢复事实
+  PASS AUDIT-004z   反回填控制生效（缺口区间行数=0，冲突计数为 0）
+  PASS AUDIT-004z2  边界事件不可改写（运行角色 UPDATE 被拒绝）
+  PASS AUDIT-004T-a 改写事件后边界之后区间校验失败
+  PASS AUDIT-004T-b 校验器定位到被改写的 seq
+  PASS AUDIT-004T-c 还原后边界之后区间校验重新通过
+  PASS AUDIT-004T-d 还原后 integrity_status 仍为 sealed_incident（缺口不会被掩盖）
+---- S6-OBS-01 dashboard / SLO / alerts ----
+  PASS S6-OBS-01a   总览返回 as_of/窗口/健康/吞吐/队列/告警/成本
+  PASS S6-OBS-01b   吞吐按来源拆分（未合并为单值）
+  PASS S6-OBS-01c   §25.3 SLO 全部登记
+  PASS S6-OBS-01d   SLO 评估可执行并返回计数
+  PASS S6-OBS-01e   指标直读返回 cs_* 指标族
+---- 权限负向：审计员只读 / 普通用户越权 ----
+  PASS RBAC-S6a     审计员写入 Provider 被拒绝（403）
+  PASS RBAC-S6b     审计员读取备份列表允许（200）
+  PASS RBAC-S6b2    审计员读取版本与迁移允许（200）
+  PASS RBAC-S6b3    审计员读取审计导出列表允许（200）
+  PASS RBAC-S6c     审计员发起 Kill Switch 被拒绝（403）
+  PASS RBAC-S6d     审计员修改配置被拒绝（403）
+  PASS RBAC-S6e     用户受众会话访问后台 API 被拒绝（401 未认证）
+  PASS RBAC-S6f     审计员角色不持有 Sprint 6 写权限（DB）
+---- 运行时与迁移证据 ----
+  PASS RUNTIME-a    0051/0052/0053 迁移已应用
+  PASS RUNTIME-b    S6 治理表全部存在
+  PASS RUNTIME-c    API 日志无 panic/fatal
+  PASS RUNTIME-d    保留/删除执行默认关闭
+result.json written: {'suite': 'run-sprint6-e2e.sh', 'build_sha': 'working-tree', 'pass': 159, 'fail': 0, 'not_verified': 0, 'blocking_failures': 0, 'blocking_not_verified': 0, 'criteria': 'fail==0 and not_verified==0 and pass>0', 'status': 'PASS', 'finished_at': '2026-09-13T01:49:22.523189+07:00'}
+==== Sprint 6 E2E 结束 2026-09-13T01:49:22+07:00 PASS=159 FAIL=0 NOT_VERIFIED=0 ====

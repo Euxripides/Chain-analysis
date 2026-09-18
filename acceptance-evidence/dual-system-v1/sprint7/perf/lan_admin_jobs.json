@@ -1,0 +1,28 @@
+{
+  "label": "lan_admin_jobs",
+  "url": "http://127.0.0.1:8080/api/admin/v1/jobs?limit=20",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000927979,
+  "requests": 2060,
+  "rps": 102.99522112988456,
+  "errors": 8,
+  "status_counts": {
+    "200": 2052
+  },
+  "p50_ms": 64.472924,
+  "p90_ms": 132.781792,
+  "p95_ms": 152.296728,
+  "p99_ms": 181.40257000000003,
+  "min_ms": 0.677863,
+  "max_ms": 236.285779,
+  "avg_ms": 77.56852016019432,
+  "avg_response_bytes": 18325.555339805825,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/jobs?limit=20\": context deadline exceeded"
+  ]
+}

@@ -421,7 +421,7 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				seenPageTokens[res.NextPageToken] = struct{}{}
 			}
 		} else if chain != "tron" {
-			if err := sc.tokens.claim(res.NextPageToken, sh.ID, uint64(sh.FromBlock), uint64(sh.ToBlock)+1); err != nil {
+			if err := sc.tokens.claim(res.NextPageToken, sh.ID, address, sh.Dataset, uint64(sh.FromBlock), uint64(sh.ToBlock)+1); err != nil {
 				observability.AnkrTokenCrossShard.WithLabelValues(chain, sh.Dataset).Inc()
 				_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
 				return
@@ -1250,7 +1250,7 @@ func (sc *Scheduler) recompute(ctx context.Context, sh model.Shard) {
 						if sh.Status == model.ShardFailedFinal {
 							status = "failed"
 						}
-						if err := sc.meta.SyncFromCoverage(ctx, job.Chain, subj.Subject, status); err != nil {
+						if err := sc.meta.SyncFromCoverage(ctx, jobOrgID(job), jobWorkspaceID(job), job.Chain, subj.Subject, status); err != nil {
 							sc.log.Error("workspace address stats sync failed", "job_id", sh.JobID, "subject", subj.Subject, "err", err)
 						}
 					}

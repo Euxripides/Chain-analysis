@@ -18,7 +18,7 @@ func BenchmarkBatchInsert(b *testing.B) {
 	}
 	ctx := context.Background()
 	conn, err := ch.Open(&ch.Options{Addr: []string{"127.0.0.1:9000"},
-		Auth: ch.Auth{Database: "blockchain", Username: "blockchain", Password: "change_me_ch_2026"}})
+		Auth: ch.Auth{Database: "blockchain", Username: "blockchain", Password: os.Getenv("CLICKHOUSE_PASSWORD")}})
 	if err != nil {
 		b.Skip("clickhouse unavailable:", err)
 	}

@@ -1,0 +1,17 @@
+2026-09-12T22:46:07Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-09-12T22:46:07Z	INFO	[checks-client] Need to update the checks bundle
+2026-09-12T22:46:07Z	INFO	[checks-client] Downloading the checks bundle...
+64.00 KiB / 234.65 KiB [---------------->___________________________________________] 27.28% ? p/s ?151.29 KiB / 234.65 KiB [-------------------------------------->____________________] 64.48% ? p/s ?234.65 KiB / 234.65 KiB [--------------------------------------------------------->] 100.00% ? p/s ?234.65 KiB / 234.65 KiB [---------------------------------------------] 100.00% 566.62 KiB p/s 600ms2026-09-12T22:46:11Z	INFO	Detected config files	num=0
+2026-09-12T22:46:11Z	WARN	[report] Supported files for scanner(s) not found.	scanners=[misconfig]
+
+Report Summary
+
+┌────────┬──────┬───────────────────┐
+│ Target │ Type │ Misconfigurations │
+├────────┼──────┼───────────────────┤
+│   -    │  -   │         -         │
+└────────┴──────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+

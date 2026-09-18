@@ -1,0 +1,6 @@
+{
+  "case": "user-audience session + X-Auth-Audience: user -> admin route",
+  "status": 403,
+  "request_id": "3afc532d-8b61-49d9-b6ef-08ce0ed4cb7c",
+  "body": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:46:27.639Z\",\"next_cursor\":null},\"error\":{\"code\":\"permission_denied\",\"message\":\"当前身份没有该操作的权限\",\"field_errors\":[],\"retryable\":false,\"details\":{\"permission\":\"admin:dashboard:read\",\"reason\":\"missing_permission\"}}}\n"
+}

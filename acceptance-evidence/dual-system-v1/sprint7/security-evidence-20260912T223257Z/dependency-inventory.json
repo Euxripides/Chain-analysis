@@ -1,0 +1,369 @@
+{
+  "generated_utc": "2026-09-12T22:51:52.015Z",
+  "evidence_root_windows": "E:\\Code\\远程虚拟机\\harness\\blockchain-platform\\acceptance-evidence\\dual-system-v1\\sprint7\\security-evidence-20260912T223257Z",
+  "evidence_root_vm": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z",
+  "scope": "frontend pnpm workspace (frontend/apps/*, frontend/packages/*) + backend go.mod",
+  "priority_mapping": {
+    "P0": "CRITICAL",
+    "P1": "HIGH",
+    "P2": "MODERATE",
+    "P3": "LOW",
+    "provenance": "REPORT CONVENTION, NOT PLAN TEXT. docs/dual-system-development-plan.md:1859 only states 'P0/P1 漏洞为 0' and defines no severity->priority table. This convention matches the one the previous sprint7 round used, restated here explicitly so counts are auditable."
+  },
+  "integrity": {
+    "note": "sha256 before/after every scan; unchanged values prove no dependency file was modified",
+    "frontend_pnpm_lock_yaml_sha256": "a11d5a0ec48ef455271427d048a066dc99a2b607f71beaa170188b22766a94b5",
+    "frontend_package_json_sha256": "1ee8ee3f9525c4fe466cb55f1154e288c698450acc45e4fee2b753330eaeeba9",
+    "backend_go_mod_sha256_windows": "0091b9f57798adb2f39290557d67dfb9a17cc48138170f5f179fdba092ef3465",
+    "backend_go_mod_sha256_vm": "4e0f98fa4e9258cd07c1acc6f0ce5bd762cba5ba9343bcbd28b1f1a33644c36c",
+    "backend_go_mod_diff": "single cosmetic difference: Windows omits the '// indirect' comment on github.com/prometheus/client_model v0.6.2. Same version, no dependency-set difference.",
+    "backend_go_sum_sha256_both_hosts": "34147fb9944ea49b8470e4c0e0da85eb53ce60706975b2d5fe34c2011ee4b6b2",
+    "verification": "deps/windows-host/commands.log PRE/POST blocks; deps/vm-deps-run.log PRE/POST blocks"
+  },
+  "frontend": {
+    "ecosystem": "npm (pnpm workspace)",
+    "manifest": "frontend/pnpm-lock.yaml (54095 bytes)",
+    "workspace_members": [
+      "frontend (root, private)",
+      "frontend/apps/admin-console",
+      "frontend/apps/user-console",
+      "frontend/packages/api-client",
+      "frontend/packages/design-tokens",
+      "frontend/packages/ui"
+    ],
+    "scanner": "pnpm audit",
+    "scanner_version": "pnpm 11.24.0 / node v24.20.0 (VM dataserver)",
+    "registry_used": "https://registry.npmjs.org (explicit --registry override for this command only; no .npmrc modified)",
+    "command": "CI=true pnpm audit --json --registry=https://registry.npmjs.org",
+    "executed_on": "VM dataserver (deployment host)",
+    "exit_code": 1,
+    "exit_code_meaning": "1 = vulnerabilities found (NOT an error). Confirmed by valid advisory JSON, not an error object.",
+    "start_utc": "2026-09-12T22:42:3x Z",
+    "end_utc": "2026-09-12T22:42:36Z",
+    "stdout_artifact": "deps/official-registry-pnpm-audit.json (2165 bytes, sha256 recorded in MANIFEST.md)",
+    "table_artifact": "deps/official-registry-pnpm-audit.txt",
+    "stderr_artifact": "deps/official-registry-pnpm-audit.stderr.txt (0 bytes)",
+    "failed_first_attempt": {
+      "artifact": "deps/windows-host/pnpm-audit.json and deps/windows-attempt1-npmmirror-FAILED-pnpm-audit.json",
+      "sha256": "4b7bccb843bdbb045a531327caa65951450dbaa041611ae82f3e928fedccf9d6",
+      "bytes": 192,
+      "content": "ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS — https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk does not exist",
+      "disposition": "PRESERVED VERBATIM as failure evidence. Not a vulnerability result. The Windows host pnpm resolves the npmmirror registry, which does not expose the npm audit bulk advisory endpoint."
+    },
+    "metadata": {
+      "dependencies": 58,
+      "devDependencies": 117,
+      "optionalDependencies": 53,
+      "totalDependencies": 175,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 2,
+        "critical": 0
+      }
+    },
+    "vulnerabilities": [
+      {
+        "package": "xlsx",
+        "version": "0.18.5",
+        "dependency_type": "direct (production)",
+        "severity": "HIGH",
+        "priority": "P1",
+        "advisory_id": "GHSA-4r6h-8v6p-xvw6",
+        "npm_advisory_id": 1108110,
+        "title": "Prototype Pollution in sheetJS",
+        "cwe": "CWE-1321",
+        "vulnerable_versions": "<0.19.3",
+        "fixed_version": null,
+        "fixed_version_available": false,
+        "evidence_of_no_fix": "pnpm audit returns patched_versions: null AND patched_versions_unpublished: true",
+        "url": "https://github.com/advisories/GHSA-4r6h-8v6p-xvw6",
+        "required_action": "Cannot be closed by upgrading from npm. Requires replacing the library, vendoring the official SheetJS CDN build with integrity verification, or a formal written risk acceptance. Supply-chain approval needed."
+      },
+      {
+        "package": "xlsx",
+        "version": "0.18.5",
+        "dependency_type": "direct (production)",
+        "severity": "HIGH",
+        "priority": "P1",
+        "advisory_id": "GHSA-5pgg-2g8v-p4x9",
+        "npm_advisory_id": 1108111,
+        "title": "SheetJS Regular Expression Denial of Service (ReDoS)",
+        "cwe": "CWE-1333",
+        "vulnerable_versions": "<0.20.2",
+        "fixed_version": null,
+        "fixed_version_available": false,
+        "evidence_of_no_fix": "pnpm audit returns patched_versions: null AND patched_versions_unpublished: true",
+        "url": "https://github.com/advisories/GHSA-5pgg-2g8v-p4x9",
+        "required_action": "Same as GHSA-4r6h-8v6p-xvw6 — no npm fix exists."
+      },
+      {
+        "package": "echarts",
+        "version": "5.6.0",
+        "dependency_type": "direct (production)",
+        "severity": "MODERATE",
+        "priority": "P2",
+        "advisory_id": "GHSA-fgmj-fm8m-jvvx",
+        "npm_advisory_id": 1122144,
+        "title": "Apache ECharts has a cross-site scripting (XSS) vulnerability",
+        "cwe": "CWE-79",
+        "vulnerable_versions": "<6.1.0",
+        "fixed_version": ">=6.1.0",
+        "fixed_version_available": true,
+        "url": "https://github.com/advisories/GHSA-fgmj-fm8m-jvvx",
+        "required_action": "Upgrade echarts to >=6.1.0 (major version bump — verify chart APIs)."
+      }
+    ],
+    "counts": {
+      "P0_critical": 0,
+      "P1_high": 2,
+      "P2_moderate": 1,
+      "P3_low": 0,
+      "unrated": 0,
+      "total": 3
+    }
+  },
+  "backend": {
+    "ecosystem": "Go modules",
+    "manifest": "backend/go.mod (2650 bytes on VM) + backend/go.sum",
+    "modules_resolved": 159,
+    "scanner": "govulncheck",
+    "scanner_version": "v1.8.0",
+    "scanner_config": {
+      "scan_level": "symbol",
+      "scan_mode": "source",
+      "go_version": "go1.26.7",
+      "db": "https://vuln.go.dev",
+      "db_last_modified": "2026-09-10T14:48:42Z"
+    },
+    "commands": [
+      "/usr/local/go/bin/go list -m all  (exit 0, 159 modules) -> deps/go-list-m-all.txt, deps/go-list-m-all.json",
+      "/tmp/gtools/govulncheck ./...  (exit 3 = vulnerabilities found) -> deps/govulncheck.txt",
+      "/tmp/gtools/govulncheck -show verbose ./...  (exit 3) -> deps/govulncheck-verbose.txt",
+      "/tmp/gtools/govulncheck -format json ./...  (exit 0) -> deps/govulncheck.json (731940 bytes)"
+    ],
+    "exit_code_note": "govulncheck exits 3 when vulnerabilities are found; exit 0 on the -format json run because that invocation emits the machine-readable stream. Both are real scan products (732 KB JSON, 12 OSV-linked findings), not install logs.",
+    "govulncheck_own_summary": "Your code is affected by 3 vulnerabilities from 3 modules. This scan also found 5 vulnerabilities in packages you import and 4 vulnerabilities in modules you require, but your code doesn't appear to call these vulnerabilities.",
+    "distinct_vulnerabilities": 12,
+    "reachability_breakdown": {
+      "symbol": 3,
+      "package": 5,
+      "module": 4
+    },
+    "severity_resolution_method": "vuln.go.dev Go records carry NO severity field. Severity was resolved by fetching each GHSA alias from https://api.osv.dev/v1/vulns/<GHSA-ID> (OSV mirrors GHSA severity). 4 x/crypto advisories have no GHSA alias and OSV returns no severity -> recorded UNKNOWN, never guessed.",
+    "severity_source_artifacts": "deps/osv/*.json, deps/osv-ghsa/*.json, deps/osv-severity-table.json",
+    "vulnerabilities": [
+      {
+        "osv_id": "GO-2026-4771",
+        "aliases": [
+          "CVE-2026-33815",
+          "GHSA-xgrm-4fwx-7qm8"
+        ],
+        "module": "github.com/jackc/pgx/v5",
+        "found_version": "v5.7.4",
+        "fixed_version": "5.9.0",
+        "severity": "CRITICAL",
+        "priority": "P0",
+        "reachability": "package",
+        "summary": "Memory-safety vulnerability in github.com/jackc/pgx/v5"
+      },
+      {
+        "osv_id": "GO-2026-4772",
+        "aliases": [
+          "CVE-2026-33816",
+          "GHSA-9jj7-4m8r-rfcm"
+        ],
+        "module": "github.com/jackc/pgx/v5",
+        "found_version": "v5.7.4",
+        "fixed_version": "5.9.0",
+        "severity": "CRITICAL",
+        "priority": "P0",
+        "reachability": "package",
+        "summary": "Memory-safety vulnerability in github.com/jackc/pgx/v5"
+      },
+      {
+        "osv_id": "GO-2026-5960",
+        "aliases": [
+          "CVE-2026-54063",
+          "GHSA-h69g-9hx6-f3v4"
+        ],
+        "module": "github.com/xuri/excelize/v2",
+        "found_version": "v2.9.0",
+        "fixed_version": "v2.11.0",
+        "severity": "HIGH",
+        "priority": "P1",
+        "reachability": "symbol",
+        "summary": "Excelize: Unbounded Row Index Allocation in Worksheet Parser (checkSheet OOM/Panic DoS)",
+        "reachable_example": "internal/api/export.go:442 api.writeXLSXSheet calls excelize.File.NewSheet"
+      },
+      {
+        "osv_id": "GO-2026-5775",
+        "aliases": [
+          "CVE-2026-72817",
+          "GHSA-9g5q-2w5x-hmxf"
+        ],
+        "module": "github.com/go-chi/chi/v5",
+        "found_version": "v5.2.1",
+        "fixed_version": "5.3.0",
+        "severity": "HIGH",
+        "priority": "P1",
+        "reachability": "package"
+      },
+      {
+        "osv_id": "GO-2026-5777",
+        "aliases": [
+          "CVE-2026-72816",
+          "GHSA-rjr7-jggh-pgcp"
+        ],
+        "module": "github.com/go-chi/chi/v5",
+        "found_version": "v5.2.1",
+        "fixed_version": "5.3.0",
+        "severity": "HIGH",
+        "priority": "P1",
+        "reachability": "package"
+      },
+      {
+        "osv_id": "GO-2025-3770",
+        "aliases": [
+          "CVE-2025-71405",
+          "GHSA-vrw8-fxc6-2r93"
+        ],
+        "module": "github.com/go-chi/chi/v5",
+        "found_version": "v5.2.1",
+        "fixed_version": "5.2.2",
+        "severity": "MODERATE",
+        "priority": "P2",
+        "reachability": "symbol",
+        "summary": "Host header injection leading to open redirect in RedirectSlashes"
+      },
+      {
+        "osv_id": "GO-2026-5774",
+        "aliases": [
+          "CVE-2026-72815",
+          "GHSA-3fxj-6jh8-hvhx"
+        ],
+        "module": "github.com/go-chi/chi/v5",
+        "found_version": "v5.2.1",
+        "fixed_version": "5.3.0",
+        "severity": "MODERATE",
+        "priority": "P2",
+        "reachability": "package"
+      },
+      {
+        "osv_id": "GO-2026-5004",
+        "aliases": [
+          "CVE-2026-41889",
+          "GHSA-j88v-2chj-qfwx"
+        ],
+        "module": "github.com/jackc/pgx",
+        "found_version": "v5.7.4",
+        "fixed_version": "5.9.2",
+        "severity": "LOW",
+        "priority": "P3",
+        "reachability": "symbol",
+        "summary": "SQL Injection via placeholder confusion with dollar quoted string literals",
+        "reachable_example": "migrations/migrations.go:57 migrations.ApplyPostgres calls pgxpool.Conn.QueryRow"
+      },
+      {
+        "osv_id": "GO-2026-5932",
+        "aliases": [],
+        "module": "golang.org/x/crypto",
+        "found_version": "v0.54.0",
+        "fixed_version": null,
+        "severity": "UNKNOWN",
+        "priority": "unrated",
+        "reachability": "module",
+        "summary": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+        "severity_note": "No GHSA alias and OSV publishes no severity; NOT guessed."
+      },
+      {
+        "osv_id": "GO-2026-6303",
+        "aliases": [
+          "CVE-2026-56854"
+        ],
+        "module": "golang.org/x/crypto",
+        "found_version": "v0.54.0",
+        "fixed_version": "0.55.0",
+        "severity": "UNKNOWN",
+        "priority": "unrated",
+        "reachability": "module",
+        "severity_note": "No GHSA alias; CVE record absent from OSV (HTTP 404); NOT guessed."
+      },
+      {
+        "osv_id": "GO-2026-6354",
+        "aliases": [
+          "CVE-2026-78662"
+        ],
+        "module": "golang.org/x/crypto",
+        "found_version": "v0.54.0",
+        "fixed_version": "0.56.0",
+        "severity": "UNKNOWN",
+        "priority": "unrated",
+        "reachability": "module",
+        "severity_note": "No GHSA alias; OSV CVE record carries no severity field; NOT guessed."
+      },
+      {
+        "osv_id": "GO-2026-6355",
+        "aliases": [
+          "CVE-2026-56855"
+        ],
+        "module": "golang.org/x/crypto",
+        "found_version": "v0.54.0",
+        "fixed_version": "0.56.0",
+        "severity": "UNKNOWN",
+        "priority": "unrated",
+        "reachability": "module",
+        "severity_note": "No GHSA alias; OSV CVE record carries no severity field; NOT guessed."
+      }
+    ],
+    "counts": {
+      "P0_critical": 2,
+      "P1_high": 3,
+      "P2_moderate": 2,
+      "P3_low": 1,
+      "unrated": 4,
+      "total": 12
+    }
+  },
+  "combined_priority_totals": {
+    "note": "P0 and P1 counted SEPARATELY and never merged.",
+    "P0_critical": 2,
+    "P1_high": 5,
+    "P2_moderate": 3,
+    "P3_low": 1,
+    "unrated": 4,
+    "grand_total": 15,
+    "P0_breakdown": "2 x backend pgx/v5 (GO-2026-4771, GO-2026-4772)",
+    "P1_breakdown": "3 x backend (GO-2026-5960 excelize symbol-reachable; GO-2026-5775, GO-2026-5777 chi) + 2 x frontend (xlsx GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9)"
+  },
+  "reachability_corrected_view": {
+    "note": "Section 23.8 says 'P0/P1 = 0' with no reachability qualifier; this alternative view is provided for the release owner and does NOT replace the raw counts.",
+    "P0_critical_reachable": 0,
+    "P1_high_reachable": 3,
+    "P1_reachable_detail": "GO-2026-5960 (excelize, symbol-reachable) + 2 x xlsx HIGH (frontend production dependency; npm publishes no fix)",
+    "verdict_under_both_views": "FAIL — P0/P1 is above 0 under the raw view (2/5) and under the reachability-corrected view (0/3)."
+  },
+  "not_verified": [
+    {
+      "item": "Frontend advisory coverage beyond pnpm audit",
+      "reason": "No npm-audit-equivalent OSV/Snyk sweep was run for the frontend; pnpm audit is the single source for npm advisories.",
+      "action_to_close": "Run a second independent frontend scanner (osv-scanner or trivy fs) and reconcile."
+    },
+    {
+      "item": "Reachability of the two xlsx HIGH advisories inside the built bundles",
+      "reason": "xlsx is loaded dynamically; no bundle-level call-graph analysis was performed this round.",
+      "action_to_close": "Bundle-level call-graph check or documented dynamic-import path review."
+    },
+    {
+      "item": "Severity for 4 golang.org/x/crypto advisories",
+      "reason": "Neither vuln.go.dev nor OSV/GHSA publish a severity for GO-2026-5932/6303/6354/6355.",
+      "action_to_close": "Manual CVSS review from the upstream CVE records, then record as an explicit rating."
+    },
+    {
+      "item": "Dependency freshness of the deployment host vs. the Windows worktree",
+      "reason": "go.mod differs cosmetically; other repo paths (e.g. artifacts/v142_p0/**) exist only on the VM.",
+      "action_to_close": "Reconcile the deploy tree against the release commit before signing off."
+    }
+  ]
+}

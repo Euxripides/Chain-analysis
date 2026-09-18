@@ -1,11 +1,16 @@
 import { lazy, Suspense, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { AdminSessionProvider, useAdminSession } from "./auth/AdminSession";
+import { useSessionScope } from "./lib/sessionScope";
+import BackendLoginDialog from "./components/BackendLoginDialog";
 import {
   Bell,
   ChevronDown,
   Download,
   Gauge,
   ListChecks,
+  Lock,
+  LogOut,
   Menu,
   Orbit,
   Network,
@@ -31,8 +36,21 @@ const ApiControlPage = lazy(
 const InvestigationsPage = lazy(() => import("./pages/InvestigationsPage"));
 const FundFlowPage = lazy(() => import("./pages/FundFlowPage"));
 
-const navGroups = [
-  { label: "", items: [{ to: "/system", label: "总览", Icon: Gauge }] },
+// requiresAdmin=true 的条目属于**后台管理面**：它们调用的接口是 `admin:*` 权限键，
+// 只能在从 `/admin/login` 签发的 admin 受众会话下工作（R-3）。
+type NavItem = {
+  to: string;
+  label: string;
+  Icon: React.ComponentType<{ size?: number | string; "aria-label"?: string }>;
+  requiresAdmin?: boolean;
+};
+type NavGroup = { label: string; items: NavItem[] };
+
+const navGroups: NavGroup[] = [
+  {
+    label: "",
+    items: [{ to: "/system", label: "总览", Icon: Gauge, requiresAdmin: true }],
+  },
   {
     label: "数据中心",
     items: [
@@ -46,12 +64,24 @@ const navGroups = [
   {
     label: "API 控制",
     items: [
-      { to: "/api-control", label: "API 控制中心", Icon: SlidersHorizontal },
+      {
+        to: "/api-control",
+        label: "API 控制中心",
+        Icon: SlidersHorizontal,
+        requiresAdmin: true,
+      },
     ],
   },
   {
     label: "系统管理",
-    items: [{ to: "/system?view=settings", label: "设置中心", Icon: Settings }],
+    items: [
+      {
+        to: "/system?view=settings",
+        label: "设置中心",
+        Icon: Settings,
+        requiresAdmin: true,
+      },
+    ],
   },
 ];
 
@@ -72,6 +102,24 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const adminSession = useAdminSession();
+  const { scope, user, logout } = useSessionScope();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const backendLocked = adminSession.status === "anonymous";
+  const scopeLabel = !user.authenticated
+    ? "未登录"
+    : user.ws
+      ? `${user.org.slice(0, 8)}… / ${user.ws.slice(0, 8)}…`
+      : "未绑定工作区";
+  const avatarText = (user.audience || "an").slice(0, 2).toUpperCase();
+  const doLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout("user");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
   const routeName =
     routeNames.find(([pattern]) => pattern.test(location.pathname))?.[1] ??
     "数据工作台";
@@ -107,12 +155,35 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <span className="global-provider">
             <i /> Ankr 正常
           </span>
+          {/*
+            会话作用域指示 + 退出登录（P1-20260913-CACHE）。
+            作用域标签来自服务端会话（组织/工作区），不是本地猜测；退出登录会调用
+            服务端注销，随后 cancelQueries + clear 丢弃旧作用域的 React Query 缓存（§30.1）。
+          */}
+          <span
+            className="global-provider"
+            data-testid="workspace-scope"
+            data-org={scope.org}
+            data-ws={scope.ws}
+            title="当前会话绑定的组织 / 工作区"
+          >
+            <i /> {scopeLabel}
+          </span>
+          <button
+            className="icon-button"
+            aria-label="退出登录"
+            data-testid="logout"
+            onClick={() => void doLogout()}
+            disabled={!user.authenticated || loggingOut}
+          >
+            <LogOut size={17} />
+          </button>
           <button className="icon-button notification-button" aria-label="通知">
             <Bell size={17} />
             <em>3</em>
           </button>
           <button className="avatar-button" aria-label="打开用户菜单">
-            AD
+            {avatarText}
           </button>
         </div>
       </header>
@@ -156,7 +227,17 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  title={collapsed ? item.label : undefined}
+                  title={
+                    collapsed
+                      ? item.label
+                      : item.requiresAdmin && backendLocked
+                        ? `${item.label}（需要后台会话，将从后台入口登录）`
+                        : undefined
+                  }
+                  data-requires-admin={item.requiresAdmin ? "true" : undefined}
+                  data-backend-locked={
+                    item.requiresAdmin && backendLocked ? "true" : undefined
+                  }
                   end={
                     item.to === "/" ||
                     item.to === "/system" ||
@@ -174,17 +255,26 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 >
                   <item.Icon size={17} />
                   <span>{item.label}</span>
+                  {item.requiresAdmin && backendLocked && (
+                    <Lock size={13} aria-label="需要后台会话" />
+                  )}
                 </NavLink>
               ))}
             </div>
           ))}
         </nav>
         <div className="workspace-sidebar-foot">
-          <div className="workspace-user">
-            <span>AD</span>
+          <div className="workspace-user" data-testid="workspace-user">
+            <span>{adminSession.probe.authenticated ? "AD" : "--"}</span>
             <div>
-              <b>admin</b>
-              <small>调查工作区</small>
+              <b>{adminSession.probe.authenticated ? adminSession.probe.displayName || adminSession.probe.email || "admin" : "未登录后台"}</b>
+              <small>
+                {adminSession.status === "checking"
+                  ? "正在确认后台会话…"
+                  : adminSession.probe.authenticated
+                    ? "后台会话 · 管理面可用"
+                    : "后台页面需从 /admin/login 登录"}
+              </small>
             </div>
           </div>
           <button
@@ -208,6 +298,39 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * 后台路由闸门（R-3 导航修复）。
+ *
+ * 没有 admin 受众会话时：页面仍按原样渲染（这样"服务端是否拒绝"依然可被真实观测），
+ * 但**叠加一个阻断式弹窗**并给出通往后台入口的路径——不再让用户面对一个
+ * 静默报错的后台页面。授权判定完全不受影响：服务端对 admin:* 接口依旧
+ * 只放行 admin 受众会话。
+ */
+function BackendRoute({ children }: { children: React.ReactNode }) {
+  const adminSession = useAdminSession();
+  const location = useLocation();
+  if (adminSession.status === "checking") {
+    return (
+      <div className="workspace-page">
+        <div className="workspace-skeleton">
+          <i />
+          <i />
+          <i />
+        </div>
+      </div>
+    );
+  }
+  if (adminSession.status === "anonymous") {
+    return (
+      <>
+        {children}
+        <BackendLoginDialog returnTo={location.pathname + location.search} />
+      </>
+    );
+  }
+  return <>{children}</>;
+}
+
 function RouteContent() {
   return (
     <Suspense
@@ -225,8 +348,22 @@ function RouteContent() {
         <Route path="/" element={<DownloadPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/jobs/:id" element={<JobDetailPage />} />
-        <Route path="/system" element={<SystemPage />} />
-        <Route path="/api-control" element={<ApiControlPage />} />
+        <Route
+          path="/system"
+          element={
+            <BackendRoute>
+              <SystemPage />
+            </BackendRoute>
+          }
+        />
+        <Route
+          path="/api-control"
+          element={
+            <BackendRoute>
+              <ApiControlPage />
+            </BackendRoute>
+          }
+        />
         <Route path="/investigations" element={<InvestigationsPage />} />
         <Route path="/fund-flow" element={<FundFlowPage />} />
         <Route
@@ -255,8 +392,10 @@ function RouteContent() {
 
 export default function App() {
   return (
-    <WorkspaceShell>
-      <RouteContent />
-    </WorkspaceShell>
+    <AdminSessionProvider>
+      <WorkspaceShell>
+        <RouteContent />
+      </WorkspaceShell>
+    </AdminSessionProvider>
   );
 }

@@ -31,12 +31,49 @@ check() { # check <ID> <描述> <实际> <期望>
   else printf '  FAIL     %-10s %-44s got=%s want=%s\n' "$1" "$2" "$3" "$4"; FAIL=$((FAIL+1)); fi
 }
 blocked() { printf '  BLOCKED  %-10s %-44s %s\n' "$1" "$2" "$3"; BLOCKED=$((BLOCKED+1)); }
+# PG 只用于选取夹具对象（读），不做断言写入；与其他套件同一入口。
+PG="docker exec deploy-postgres-1 psql -U blockchain -d blockchain_platform -tAc"
+# 覆盖断言：某个 Test ID 的权威检查在别的套件里（同一轮 run-sprint7-qa.sh 已按顺序跑过）。
+# 为什么允许：RBAC-007 的夹具是"另一案件的 Canvas + 他案 Evidence"，由 S5 套件创建与负责；
+# 在 rbac 套件里重建一遍等于把同一段编排抄两份。这里改为**断言那份证据确实存在**：
+# 证据文件缺失或缺少对应 PASS 行 -> FAIL（不是 BLOCKED），因为那是编排顺序问题，不是未知状态。
+covered() { # covered <ID> <证据文件> <必须出现的 PASS 行数> <说明>
+  local id=$1 file=$2 want=$3 desc=$4
+  if [ ! -r "$file" ]; then
+    printf '  FAIL     %-10s %-44s %s\n' "$id" "$desc" "缺少覆盖证据 $file（请先跑 S5 套件）"
+    FAIL=$((FAIL+1)); return
+  fi
+  local got; got=$(grep -c "PASS *$id" "$file" 2>/dev/null || echo 0)
+  if [ "${got:-0}" -ge "$want" ]; then
+    printf '  PASS     %-10s %-44s %s\n' "$id" "$desc" "covered_by=$(basename "$(dirname "$file")")($got)"
+    PASS=$((PASS+1))
+  else
+    printf '  FAIL     %-10s %-44s got=%s want>=%s\n' "$id" "$desc" "$got" "$want"
+    FAIL=$((FAIL+1))
+  fi
+}
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
+# 多工作区身份登录必须显式选择工作区（P1-20260913）：服务端不替用户猜作用域。
+# 夹具账号同时属于 acme-lab 与 acme-lab-other，不带 workspace_id 会得到
+# AUTHN_WORKSPACE_SELECTION_REQUIRED。这里按邮箱解析目标工作区并随登录一并提交。
+if [ -z "${FIXTURE_WORKSPACE_ID:-}" ] && [ -r /tmp/dual-system-fixture.env ]; then
+  set -a; . /tmp/dual-system-fixture.env; set +a
+fi
+login_workspace() {
+  case "$1" in
+    *@fixture.local) printf '%s' "${FIXTURE_WORKSPACE_ID:-}" ;;
+    *) printf '' ;;
+  esac
+}
 login() { # login <jar> <email> <password> <audience>
   local jar=$1 email=$2 pass=$3 aud=${4:-user}
+  local ws; ws=$(login_workspace "$email")
+  local body="{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\""
+  [ -n "$ws" ] && body="$body,\"workspace_id\":\"$ws\""
+  body="$body}"
   curl -s -o /dev/null -w '%{http_code}' -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
-    -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
+    -d "$body" "$BASE/api/auth/v1/login"
 }
 csrf() { grep "$1" "$2" 2>/dev/null | awk '{print $7}'; }
 sid() { curl -s -b "$1" "$BASE/api/auth/v1/session" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["session_id"])' 2>/dev/null; }
@@ -114,7 +151,30 @@ curl -s -o /dev/null -b "$JAR_OWNER" -H "X-CSRF-Token: $OWNER_CSRF" -H 'Content-
 
 echo
 echo "== RBAC-004 无证据权限读取正文 =="
-blocked "RBAC-004" "evidence 端点读取正文被拒" "依赖 S4/S5 的 evidence 端点（当前未实现）"
+# 2026-09-16：写这条 BLOCKED 时 evidence 端点确实还不存在；端点上线后它变成了长期假 BLOCKED。
+# 现在做**真实检查**：同一对象上，缺少 evidence:read 的身份必须 403，有权限的身份必须 200。
+#
+# 负向主体必须是**确实没有** evidence:read 的身份。实测（2026-09-16，按 role_permissions 核对）：
+#   fixture-platform_admin / fixture-auditor 无 evidence:read；viewer / analyst / investigator / reviewer / owner 都有。
+# 所以这里优先用 Platform Admin（§27 场景写的正是"管理员无 evidence 权限"），其次用 Auditor。
+if [ -n "${FIXTURE_PLATFORM_ADMIN_PASSWORD:-}" ]; then
+  NEG_EMAIL=fixture-platform_admin@fixture.local; NEG_PW=$FIXTURE_PLATFORM_ADMIN_PASSWORD
+elif [ -n "${FIXTURE_AUDITOR_PASSWORD:-}" ]; then
+  NEG_EMAIL=fixture-auditor@fixture.local; NEG_PW=$FIXTURE_AUDITOR_PASSWORD
+else
+  NEG_EMAIL=""; NEG_PW=""
+fi
+EV_ID=$($PG "select e.id::text from investigation_evidence e join investigations i on i.id=e.investigation_id where i.organization_id = '$FIXTURE_ORG_ID' order by e.created_at desc limit 1" | tr -d '[:space:]')
+if [ -z "$NEG_PW" ]; then
+  check "RBAC-004" "提供无 evidence:read 的夹具口令（platform_admin 或 auditor）" "missing" "provided"
+elif [ -z "$EV_ID" ]; then
+  check "RBAC-004" "夹具库中存在可读的 Evidence 对象" "none" "evidence"
+else
+  JAR_NEG=$(mktemp); trap 'rm -f "$JAR_NEG"' EXIT
+  login "$JAR_NEG" "$NEG_EMAIL" "$NEG_PW" user >/dev/null
+  check "RBAC-004" "$NEG_EMAIL（无 evidence:read）读取 Evidence 正文 -> 403" "$(code -b "$JAR_NEG" "$BASE/api/v2/evidence/$EV_ID")" "403"
+  check "RBAC-004" "investigator（有 evidence:read）读取同一对象 -> 200" "$(code -b "$JAR_INV" "$BASE/api/v2/evidence/$EV_ID")" "200"
+fi
 # 可验证的一半：敏感读取必须留痕。admin:audit:read 在权限目录中标记为 sensitive=true，
 # 因此即便只是 GET，也必须产生审计事件。
 BEFORE=$(curl -s -b "$JAR_OWNER" "$BASE/api/admin/v1/audit/events?action=admin:audit:read&limit=1" \
@@ -167,7 +227,9 @@ done
 check "RBAC-006" "重新授予后 5 秒内恢复权限（实测 ${GRANTED_AT:-<未恢复>}s）"   "$([ -n "$GRANTED_AT" ] && [ "$GRANTED_AT" -le 5 ] && echo within_sla || echo over_sla)" "within_sla"
 
 echo "== RBAC-007 Canvas 引用跨案件 Evidence =="
-blocked "RBAC-007" "跨案件证据引用保存被拒" "依赖 S5 的 canvas/evidence 端点（当前未实现）"
+# 2026-09-16：RBAC-007 的权威检查（创建他案 Canvas + 引用本案 Evidence → 422 + 不落库 + 审计）在 S5 套件里，
+# 那里同时拥有 canvas/evidence 夹具。这里断言那份证据确实存在（4 条 PASS），而不是把同一段编排再抄一遍。
+covered "RBAC-007" "$EVIDENCE_DIR/../sprint5/run.log" 4 "跨案件证据引用保存被拒（由 S5 套件覆盖）"
 
 echo
 echo "== RBAC-008 API Client / 受众隔离 =="

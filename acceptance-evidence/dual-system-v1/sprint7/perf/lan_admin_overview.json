@@ -1,0 +1,28 @@
+{
+  "label": "lan_admin_overview",
+  "url": "http://127.0.0.1:8080/api/admin/v1/overview",
+  "method": "GET",
+  "concurrency": 8,
+  "wall_seconds": 20.000759805,
+  "requests": 11448,
+  "rps": 572.37825520699,
+  "errors": 8,
+  "status_counts": {
+    "200": 11440
+  },
+  "p50_ms": 11.758371,
+  "p90_ms": 22.696787999999998,
+  "p95_ms": 27.909520999999998,
+  "p99_ms": 39.367349000000004,
+  "min_ms": 1.8114540000000001,
+  "max_ms": 59.405781999999995,
+  "avg_ms": 13.94714159739692,
+  "avg_response_bytes": 911.3626834381552,
+  "error_samples": [
+    "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded",
+    "Get \"http://127.0.0.1:8080/api/admin/v1/overview\": context deadline exceeded"
+  ]
+}

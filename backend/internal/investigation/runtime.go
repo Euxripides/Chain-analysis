@@ -69,10 +69,14 @@ func (r *Runtime) Start(ctx context.Context, id string, actorIdentity ...string)
 		req.Range = dataset.RangeSpec{Type: "time", From: &from, To: &to}
 	}
 	// 服务端注入作用域，覆盖 data_requirement 中可能携带的同名字段（§21.2）。
-	req.OrganizationID = inv.OrganizationID
-	if inv.WorkspaceID != nil {
-		req.WorkspaceID = *inv.WorkspaceID
+	// P0 残余修复（R-2）：调查对象必须自带组织与工作区；缺失即 fail closed，
+	// 否则会顺着 dataset.Ensure 落到默认组织（跨租户写）。
+	if strings.TrimSpace(inv.OrganizationID) == "" || inv.WorkspaceID == nil || strings.TrimSpace(*inv.WorkspaceID) == "" {
+		return nil, fmt.Errorf("investigation.Runtime: 调查 %s 缺少租户作用域（org=%q ws=%v）—— 拒绝以默认组织启动下载",
+			id, inv.OrganizationID, inv.WorkspaceID)
 	}
+	req.OrganizationID = inv.OrganizationID
+	req.WorkspaceID = *inv.WorkspaceID
 	if len(actorIdentity) > 0 {
 		req.CreatedByIdentity = actorIdentity[0]
 	}

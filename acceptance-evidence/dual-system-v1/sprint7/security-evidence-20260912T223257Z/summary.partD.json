@@ -1,0 +1,252 @@
+{
+  "iac": {
+    "id": "iac",
+    "name": "IaC 覆盖（compose / systemd / nginx / 监控）",
+    "verdict": "PARTIAL_FAIL",
+    "headline": "checkov and trivy config scanned ZERO files in deploy/. KICS genuinely covered compose.yaml (10 MEDIUM). systemd units and the nginx config have NO automated coverage at all.",
+    "measured": {
+      "checkov": {
+        "version": "3.3.17",
+        "files_scanned": 0,
+        "resource_count": 0,
+        "passed": 0,
+        "failed": 0,
+        "verdict": "NOT_VERIFIED — no coverage"
+      },
+      "trivy_config": {
+        "version": "0.74.0",
+        "detected_config_files": 0,
+        "verdict": "NOT_VERIFIED — no coverage",
+        "still_zero_after_renaming_to_docker_compose_yml": true
+      },
+      "kics": {
+        "version": "v2.1.20",
+        "files_scanned": 2,
+        "files_parsed": 1,
+        "queries_total": 308,
+        "queries_failed": 0,
+        "total_findings": 10,
+        "severity": {
+          "CRITICAL": 0,
+          "HIGH": 0,
+          "MEDIUM": 10,
+          "LOW": 0,
+          "INFO": 0
+        },
+        "verdict": "REAL coverage of compose.yaml"
+      },
+      "kics_rules": [
+        "Container Capabilities Unrestricted (ce76b7d0)",
+        "Healthcheck Not Set (698ed579)",
+        "Security Opt Not Set (610e266e)"
+      ],
+      "compose_is_only_automated_target": true
+    },
+    "key_findings": [
+      "No blockchain-* systemd unit is installed or active on the deployment host; the platform runs as bare processes (api pid 3413432, worker pid 3413434, vite dev server bound to 0.0.0.0:3000, preview servers on 3001/3002, MCP on 127.0.0.1:8090, host nginx 1.24.0).",
+      "None of the 8 systemd units has ANY sandbox hardening (NoNewPrivileges / ProtectSystem / ProtectHome / PrivateTmp / CapabilityBoundingSet / dedicated User=).",
+      "nginx CSP, X-Content-Type-Options and Referrer-Policy apply only to /admin/ and /app-v2/; location /, /api/, /mcp, /openapi.json, /docs and /redoc have none. No HSTS and no server_tokens off.",
+      "Positive: the nginx log_format uses $uri rather than $request_uri, so query-string secrets never reach the access logs — this is why the log secret scan is clean.",
+      "Positive: every compose port binds to 127.0.0.1 only.",
+      "The deployed nginx config is byte-identical to the repo version (sha256 200ef752...c9ccab)."
+    ],
+    "not_verified": [
+      {
+        "id": "NV-C1",
+        "item": "Automated checkov coverage of deploy/",
+        "reason": "checkov 3.3.17 reported resource_count 0 for both the original compose.yaml and a byte-identical docker-compose.yml copy; --framework docker_compose is not even a valid value in this version (argparse error)",
+        "commands_tried": "checkov -d /w/deploy -o json --compact; checkov -d /w/deploy --framework docker_compose",
+        "action": "pin a checkov version with docker-compose support, or rely on KICS"
+      },
+      {
+        "id": "NV-C2",
+        "item": "Automated trivy config coverage of deploy/",
+        "reason": "trivy 0.74.0 reported 'Detected config files num=0' with and without the docker-compose.yml filename, even after successfully downloading the checks bundle",
+        "commands_tried": "trivy config /w/deploy (unrestricted scanners); trivy config on a byte-identical docker-compose.yml copy with --checks-bundle-repository docker.m.daocloud.io/aquasec/trivy-checks:2",
+        "action": "use a compose-aware scanner (KICS already covers it)"
+      },
+      {
+        "id": "NV-C3",
+        "item": "Automated coverage of the 8 systemd units",
+        "reason": "none of checkov, trivy config or KICS supports systemd units",
+        "commands_tried": "all three scanners were run against deploy/ and parsed zero systemd files",
+        "action": "install the units, then run systemd-analyze security"
+      },
+      {
+        "id": "NV-C4",
+        "item": "Automated coverage of the nginx config",
+        "reason": "no supported scanner in this environment",
+        "commands_tried": "trivy config and checkov over deploy/ (0 files parsed)",
+        "action": "add gixy or an equivalent nginx linter to CI"
+      },
+      {
+        "id": "NV-C5",
+        "item": "deploy/monitoring/dual-system-alerts.yaml semantic review",
+        "reason": "KICS scanned 2 files but parsed only 1; this file was not parsed, and no rule-by-rule review was performed",
+        "action": "review the alert rules against the section 30 requirements"
+      },
+      {
+        "id": "NV-C6",
+        "item": "Whether the deployed systemd/nginx posture matches the repo files",
+        "reason": "the units are not installed at all, so repo files cannot be compared against a running configuration",
+        "action": "decide and document the intended runtime model"
+      }
+    ],
+    "to_close": [
+      "add a compose/systemd/nginx-aware checker to CI (section 23.8 requires IaC checks in CI)",
+      "pin the minio digest",
+      "apply cap_drop, security_opt and the missing healthchecks per KICS",
+      "decide whether the systemd units ship; if yes, install and harden them",
+      "remove --host 0.0.0.0 from blockchain-vite.service",
+      "raise the nginx security headers to server level and add HSTS / server_tokens off"
+    ]
+  },
+  "secrets": {
+    "id": "secrets",
+    "name": "秘密扫描（AUDIT-002 / §23.8）",
+    "verdict": "FAIL",
+    "headline": "Runtime LOGS are clean (0 hits over 69 sources, 191,904 lines, 30 MB). But 7 production secrets are embedded in all three shipped Go binaries, and the same production Postgres / ClickHouse passwords sit in the git-tracked deploy/.env.example.",
+    "measured": {
+      "logs": {
+        "sources": 69,
+        "lines": 191904,
+        "bytes": 30083203,
+        "read_errors": 0,
+        "raw_matches": 0,
+        "plaintext_password_token_key_cookie_hits": 0,
+        "verdict": "PASS"
+      },
+      "build_products": {
+        "products_tested": 114,
+        "distinct_secret_values_tested": 18,
+        "values_found_in_build_products": 7,
+        "verdict": "FAIL"
+      },
+      "repo": {
+        "files_scanned": 1258,
+        "raw_matches": 279,
+        "candidates": 164,
+        "note": "The 164 candidates are overwhelmingly TypeScript/Go type annotations such as password: string, apiKey: string, token: TokenView; 57 of them sit in the non-release .codex-backups tree. The material exception is deploy/.env.example.",
+        "checkov_secrets_findings": 13,
+        "checkov_secrets_triage": "all 13 are the page_token_hash field in artifacts/v142_p0/**/*.json — hashes of pagination cursors, not credentials. FALSE POSITIVES."
+      }
+    },
+    "embedded_secrets": [
+      {
+        "key": "POSTGRES_PASSWORD / POSTGRES_DSN_PASSWORD",
+        "value_len": 17,
+        "value_sha256_16": "8cafc51c210a2240",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "CLICKHOUSE_PASSWORD / CLICKHOUSE_DSN_PASSWORD",
+        "value_len": 17,
+        "value_sha256_16": "8690ac3034f20c0f",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "MINIO_ROOT_PASSWORD",
+        "value_len": 20,
+        "value_sha256_16": "c0b83d9d44f5108f",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "CLICKHOUSE_URL",
+        "value_len": 67,
+        "value_sha256_16": "c3a933ca551eab96",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "NATS_URL",
+        "value_len": 21,
+        "value_sha256_16": "083f1b6f64b76c77",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "ANKR_MANAGEMENT_MCP_URL",
+        "value_len": 24,
+        "value_sha256_16": "a90f0a3debaea02a",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      },
+      {
+        "key": "MIGRATION_DATABASE_URL / DATABASE_URL (embeds the 43-char blockchain_api password 49da98fb5866d6a2)",
+        "value_len": 90,
+        "value_sha256_16": "7eeb2d7fd07ad41f",
+        "found_in": [
+          "backend/bin/api",
+          "backend/bin/worker",
+          "backend/bin/migrate"
+        ]
+      }
+    ],
+    "git_tracked_exposure": {
+      "file": "deploy/.env.example",
+      "git_tracked": true,
+      "contains": [
+        "POSTGRES_PASSWORD (sha16 8cafc51c210a2240)",
+        "CLICKHOUSE_PASSWORD (sha16 8690ac3034f20c0f)"
+      ],
+      "note": ".env is gitignored so deploy/.env itself is not committed, but the same credentials were copied into the tracked .env.example, bypassing that control.",
+      "tracked_env_like_files": [
+        "acceptance-evidence/dual-system-v1/tests/sprint4/ids.env",
+        "deploy/.env.example"
+      ]
+    },
+    "tools_unavailable": {
+      "gitleaks": "MISSING on both Windows and the VM",
+      "trufflehog": "MISSING on both Windows and the VM",
+      "commands_tried": "Get-Command gitleaks / Get-Command trufflehog (Windows); command -v gitleaks trufflehog (VM)"
+    },
+    "not_verified": [
+      {
+        "id": "NV-X1",
+        "item": "gitleaks / trufflehog independent coverage",
+        "reason": "neither binary is installed on either host",
+        "commands_tried": "Get-Command gitleaks; Get-Command trufflehog; command -v gitleaks trufflehog",
+        "action": "install gitleaks in CI and re-run for a second opinion"
+      },
+      {
+        "id": "NV-X2",
+        "item": "Git history secret scan",
+        "reason": "the VM deploy tree is not a git repository; only the Windows worktree's tracked-file list was consulted",
+        "action": "run gitleaks detect over full history in the Windows worktree"
+      },
+      {
+        "id": "NV-X3",
+        "item": "Frontend dist bundle secret coverage beyond regex rules",
+        "reason": "only pattern-based and value-presence checks were run; no entropy analysis over the bundles",
+        "action": "run gitleaks on the built dist output"
+      }
+    ],
+    "to_close": [
+      "stop compiling real credentials as config defaults — fail fast when the env var is absent",
+      "ROTATE POSTGRES_PASSWORD, CLICKHOUSE_PASSWORD, MINIO_ROOT_PASSWORD and the blockchain_api password: they shipped inside binaries and must be treated as compromised",
+      "reduce deploy/.env.example to placeholders and purge history",
+      "add a build-product secret gate to CI"
+    ]
+  }
+}

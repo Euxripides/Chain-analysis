@@ -1,0 +1,219 @@
+{
+  "fetched_utc": "2026-09-12T22:44:33.684753+00:00",
+  "source": "https://api.osv.dev/v1/vulns/<GHSA-ID> (OSV mirrors GHSA severity)",
+  "note": "vuln.go.dev Go records carry no severity field; severity resolved via GHSA alias.",
+  "log": [
+    "GO-2026-5932 -> NO GHSA ALIAS (Go DB has no severity field)",
+    "GO-2026-6303 -> NO GHSA ALIAS (Go DB has no severity field)",
+    "GO-2026-6354 -> NO GHSA ALIAS (Go DB has no severity field)",
+    "GO-2026-6355 -> NO GHSA ALIAS (Go DB has no severity field)",
+    "GO-2026-5960 -> GHSA-h69g-9hx6-f3v4 HTTP 200 severity=HIGH",
+    "GO-2025-3770 -> GHSA-vrw8-fxc6-2r93 HTTP 200 severity=MODERATE",
+    "GO-2026-5774 -> GHSA-3fxj-6jh8-hvhx HTTP 200 severity=MODERATE",
+    "GO-2026-5775 -> GHSA-9g5q-2w5x-hmxf HTTP 200 severity=HIGH",
+    "GO-2026-5777 -> GHSA-rjr7-jggh-pgcp HTTP 200 severity=HIGH",
+    "GO-2026-4771 -> GHSA-xgrm-4fwx-7qm8 HTTP 200 severity=CRITICAL",
+    "GO-2026-4772 -> GHSA-9jj7-4m8r-rfcm HTTP 200 severity=CRITICAL",
+    "GO-2026-5004 -> GHSA-j88v-2chj-qfwx HTTP 200 severity=LOW"
+  ],
+  "severity_table": [
+    {
+      "osv_id": "GO-2026-5932",
+      "alias_used": null,
+      "aliases": [],
+      "severity": "UNKNOWN",
+      "cvss": [],
+      "module": "golang.org/x/crypto",
+      "reachability": "module",
+      "summary": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+      "fixed_version": ""
+    },
+    {
+      "osv_id": "GO-2026-6303",
+      "alias_used": null,
+      "aliases": [
+        "CVE-2026-56854"
+      ],
+      "severity": "UNKNOWN",
+      "cvss": [],
+      "module": "golang.org/x/crypto",
+      "reachability": "module",
+      "summary": "Source-address critical option not enforced for non-public-key auth callbacks in golang.org/x/crypto/ssh",
+      "fixed_version": "v0.55.0"
+    },
+    {
+      "osv_id": "GO-2026-6354",
+      "alias_used": null,
+      "aliases": [
+        "CVE-2026-78662"
+      ],
+      "severity": "UNKNOWN",
+      "cvss": [],
+      "module": "golang.org/x/crypto",
+      "reachability": "module",
+      "summary": "Prevent DoS on deadlocked undecided channel in golang.org/x/crypto/ssh",
+      "fixed_version": "v0.56.0"
+    },
+    {
+      "osv_id": "GO-2026-6355",
+      "alias_used": null,
+      "aliases": [
+        "CVE-2026-56855"
+      ],
+      "severity": "UNKNOWN",
+      "cvss": [],
+      "module": "golang.org/x/crypto",
+      "reachability": "module",
+      "summary": "Prevent DoS on deadlocked established channel in golang.org/x/crypto/ssh",
+      "fixed_version": "v0.56.0"
+    },
+    {
+      "osv_id": "GO-2026-5960",
+      "alias_used": "GHSA-h69g-9hx6-f3v4",
+      "aliases": [
+        "CVE-2026-54063",
+        "GHSA-h69g-9hx6-f3v4"
+      ],
+      "severity": "HIGH",
+      "cvss": [
+        {
+          "type": "CVSS_V3",
+          "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+        }
+      ],
+      "module": "github.com/xuri/excelize/v2",
+      "reachability": "symbol",
+      "summary": "Excelize: Unbounded Row Index Allocation in Worksheet Parser (checkSheet OOM/Panic DoS) in github.com/xuri/excelize",
+      "fixed_version": "v2.11.0"
+    },
+    {
+      "osv_id": "GO-2025-3770",
+      "alias_used": "GHSA-vrw8-fxc6-2r93",
+      "aliases": [
+        "GHSA-vrw8-fxc6-2r93"
+      ],
+      "severity": "MODERATE",
+      "cvss": [
+        {
+          "type": "CVSS_V4",
+          "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+        }
+      ],
+      "module": "github.com/go-chi/chi/v5",
+      "reachability": "symbol",
+      "summary": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
+      "fixed_version": "v5.2.2"
+    },
+    {
+      "osv_id": "GO-2026-5774",
+      "alias_used": "GHSA-3fxj-6jh8-hvhx",
+      "aliases": [
+        "GHSA-3fxj-6jh8-hvhx"
+      ],
+      "severity": "MODERATE",
+      "cvss": [
+        {
+          "type": "CVSS_V4",
+          "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+        }
+      ],
+      "module": "github.com/go-chi/chi/v5",
+      "reachability": "package",
+      "summary": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
+      "fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-5775",
+      "alias_used": "GHSA-9g5q-2w5x-hmxf",
+      "aliases": [
+        "GHSA-9g5q-2w5x-hmxf"
+      ],
+      "severity": "HIGH",
+      "cvss": [
+        {
+          "type": "CVSS_V4",
+          "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N/E:P"
+        }
+      ],
+      "module": "github.com/go-chi/chi/v5",
+      "reachability": "package",
+      "summary": "Chi Middleware vulnerable to IP spoofing via X-Forwarded-For header in github.com/go-chi/chi",
+      "fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-5777",
+      "alias_used": "GHSA-rjr7-jggh-pgcp",
+      "aliases": [
+        "GHSA-rjr7-jggh-pgcp"
+      ],
+      "severity": "HIGH",
+      "cvss": [
+        {
+          "type": "CVSS_V4",
+          "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N/E:P"
+        }
+      ],
+      "module": "github.com/go-chi/chi/v5",
+      "reachability": "package",
+      "summary": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
+      "fixed_version": "v5.3.0"
+    },
+    {
+      "osv_id": "GO-2026-4771",
+      "alias_used": "GHSA-xgrm-4fwx-7qm8",
+      "aliases": [
+        "CVE-2026-33815",
+        "GHSA-xgrm-4fwx-7qm8"
+      ],
+      "severity": "CRITICAL",
+      "cvss": [
+        {
+          "type": "CVSS_V3",
+          "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        }
+      ],
+      "module": "github.com/jackc/pgx/v5",
+      "reachability": "package",
+      "summary": "CVE-2026-33815 in github.com/jackc/pgx",
+      "fixed_version": "v5.9.0"
+    },
+    {
+      "osv_id": "GO-2026-4772",
+      "alias_used": "GHSA-9jj7-4m8r-rfcm",
+      "aliases": [
+        "CVE-2026-33816",
+        "GHSA-9jj7-4m8r-rfcm"
+      ],
+      "severity": "CRITICAL",
+      "cvss": [
+        {
+          "type": "CVSS_V3",
+          "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        }
+      ],
+      "module": "github.com/jackc/pgx/v5",
+      "reachability": "package",
+      "summary": "CVE-2026-33816 in github.com/jackc/pgx",
+      "fixed_version": "v5.9.0"
+    },
+    {
+      "osv_id": "GO-2026-5004",
+      "alias_used": "GHSA-j88v-2chj-qfwx",
+      "aliases": [
+        "CVE-2026-41889",
+        "GHSA-j88v-2chj-qfwx"
+      ],
+      "severity": "LOW",
+      "cvss": [
+        {
+          "type": "CVSS_V4",
+          "score": "CVSS:4.0/AV:N/AC:H/AT:P/PR:L/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N"
+        }
+      ],
+      "module": "github.com/jackc/pgx",
+      "reachability": "symbol",
+      "summary": "SQL Injection via placeholder confusion with dollar quoted string literals in github.com/jackc/pgx",
+      "fixed_version": "v5.9.2"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "captured_at_utc": "2026-09-12T23:03:36.626Z",
+  "channel": "base64 raw bytes -> sftp .tmp -> shell mv -f (atomic)",
+  "verification": "Windows Get-FileHash -Algorithm SHA256 == VM sha256sum, plus byte size",
+  "entries": [
+    {
+      "path": "frontend/src/api/client.ts",
+      "size_sha": "19732|0900441d5cdc1f0085bfd0cda4091a12a8ec92aebb522346c04267211cb94809",
+      "consistent": true
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "size_sha": "11616|b0a9bbd36a4c5d6bc2cb625255c9c7b2ef422c6ff99b583642e83bd90c2e83f7",
+      "consistent": true
+    },
+    {
+      "path": "frontend/src/auth/AdminSession.tsx",
+      "size_sha": "2877|374bc87637830bbf6daaa8abdae8487c670b87bbd1a3e432763e49044817faeb",
+      "consistent": true
+    },
+    {
+      "path": "frontend/src/components/BackendLoginDialog.tsx",
+      "size_sha": "1854|8075f8709cc88c271b98d9ba9e57348c0090a34a8f2a99b1debd680941aaa3b9",
+      "consistent": true
+    },
+    {
+      "path": "frontend/src/pages/SystemPage.tsx",
+      "size_sha": "8851|1a3f36d4a818c8004e554aaf4f51dc3e6fb8cd330ed4b6772e69269a321bce33",
+      "consistent": true
+    },
+    {
+      "path": "frontend/src/features/api-control/TrendChart.tsx",
+      "size_sha": "3542|2f3d491e7990605ef63820eb70533f6f089960a097914e7dcf1de1bc41aaf0f9",
+      "consistent": true
+    },
+    {
+      "path": "frontend/apps/admin-console/src/App.tsx",
+      "size_sha": "12300|da979bf64b88753648350b580fb389f518aa0f73aab7925eb2b6d376f43cff3a",
+      "consistent": true
+    },
+    {
+      "path": "frontend/apps/admin-console/src/pages/LoginPage.tsx",
+      "size_sha": "4422|2b017a66617cca13ea6bb65fbfc77d907f4110351e1885d8c5c74104d006037c",
+      "consistent": true
+    },
+    {
+      "path": "frontend/apps/admin-console/src/lib/returnTo.ts",
+      "size_sha": "4261|db3311ac3967ba6aece8bfe6d36606e7e2701644703f9b3abee2def0697fc254",
+      "consistent": true
+    },
+    {
+      "path": "frontend/tests/r3-helpers.ts",
+      "size_sha": "5401|405a1b89950994407d99b0054d820b38d601a41441d51a40fbad7d5155d86c9a",
+      "consistent": true
+    },
+    {
+      "path": "frontend/tests/r3-legacy-ui-audience.spec.ts",
+      "size_sha": "8068|5d8f77878ec6ddd785950e7c767e0a686e05157263734345589177c62b50c8ca",
+      "consistent": true
+    },
+    {
+      "path": "frontend/tests/r3-legacy-ui-negative.spec.ts",
+      "size_sha": "8956|3a8c06374ab8f88bc6cfc72e68264e184a6cb1373b67632604351a3171776663",
+      "consistent": true
+    },
+    {
+      "path": "frontend/tests/r3-nav-return-to.spec.ts",
+      "size_sha": "7610|a2531f4cd8b6c596d2aa57700227d92137847a69455634a5d99d25d8f4bd2655",
+      "consistent": true
+    },
+    {
+      "path": "frontend/tests/r3-chart-axes.spec.ts",
+      "size_sha": "8403|b5743d108ad33bef982e479671a9fd646445d2a8599723a6ada50629a4035308",
+      "consistent": true
+    },
+    {
+      "path": "frontend/playwright.r3.config.ts",
+      "size_sha": "1324|844cc8eee040765f768d93a7e7a4246e35781912583fd147eb0eb6f69622bb49",
+      "consistent": true
+    },
+    {
+      "path": "acceptance-evidence/dual-system-v1/tests/run-r3-legacy-ui.sh",
+      "size_sha": "7074|b7df084de32fec485f30343e2832705efd085fa1a8e2c4b7d762dd23db03e216",
+      "consistent": true
+    },
+    {
+      "path": "acceptance-evidence/dual-system-v1/tests/r3-summarize.py",
+      "size_sha": "6953|e76e50dc5fb2e7aaf5bf1e11c55294c9af0e1bf51d283ee0fb4cc1c06e378b8f",
+      "consistent": true
+    },
+    {
+      "path": "acceptance-evidence/dual-system-v1/tests/r3-collect-audit.py",
+      "size_sha": "8187|30ea5491f0a9b014bd20aa44c4f60ae92733cde7bcb6ceae25113316b6e5345a",
+      "consistent": true
+    }
+  ],
+  "all_consistent": true
+}

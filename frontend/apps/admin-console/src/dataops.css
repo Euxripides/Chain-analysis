@@ -1,0 +1,53 @@
+/* 对象存储 / 数据质量两页共用样式。沿用"证据控制台"令牌，不引入新配色。 */
+
+.dops { display: flex; flex-direction: column; gap: var(--sp-5); }
+
+.dops-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: var(--sp-3); }
+.dops-kpi {
+  position: relative; background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--radius-md); padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-5); box-shadow: var(--shadow-sm);
+}
+.dops-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c-cobalt); }
+.dops-kpi[data-tone="ok"]::before { background: var(--c-green); }
+.dops-kpi[data-tone="warn"]::before { background: var(--c-amber); }
+.dops-kpi[data-tone="danger"]::before { background: var(--c-danger); }
+.dops-kpi__label { font-size: var(--fs-11); letter-spacing: .06em; text-transform: uppercase; color: var(--c-slate); }
+.dops-kpi__value { font-size: var(--fs-28); font-weight: 600; line-height: 1.15; margin-top: 2px; }
+.dops-kpi__hint { font-size: var(--fs-12); color: var(--c-slate); }
+
+.dops-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); }
+
+.bucket {
+  border: 1px solid var(--c-border); border-radius: var(--radius-md); background: var(--c-surface);
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.bucket__head { display: flex; align-items: center; gap: var(--sp-2); }
+.bucket__name { font-family: var(--font-mono); font-size: var(--fs-13); font-weight: 600; }
+.bucket__desc { font-size: var(--fs-12); color: var(--c-slate); }
+.bucket__figures { display: flex; gap: var(--sp-5); }
+.bucket__figure { display: flex; flex-direction: column; }
+.bucket__figure b { font-size: var(--fs-18); font-variant-numeric: tabular-nums; }
+.bucket__figure span { font-size: var(--fs-11); color: var(--c-slate); text-transform: uppercase; letter-spacing: .06em; }
+.bucket__bar { height: 8px; border-radius: 999px; background: var(--c-surface-sunken); overflow: hidden; }
+.bucket__bar i { display: block; height: 100%; background: var(--c-cobalt); border-radius: 999px; }
+.bucket__flag { margin-left: auto; font-size: var(--fs-11); border-radius: 999px; padding: 2px 8px; }
+.bucket__flag[data-kind="truncated"] { background: var(--c-amber-soft); color: var(--c-amber-text); }
+.bucket__flag[data-kind="error"] { background: var(--c-danger-soft); color: var(--c-danger); }
+
+.hdot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.hdot[data-level="ok"] { background: var(--c-green); }
+.hdot[data-level="info"] { background: var(--c-cobalt); }
+.hdot[data-level="warn"] { background: var(--c-amber); }
+.hdot[data-level="danger"] { background: var(--c-danger); }
+
+.dops-matrix { display: flex; flex-direction: column; }
+.dops-matrix__row {
+  display: grid; grid-template-columns: minmax(90px, .8fr) minmax(90px, .8fr) 1fr 1fr minmax(80px, .6fr);
+  gap: var(--sp-3); align-items: center; padding: 7px 0; border-top: 1px solid var(--c-surface-sunken);
+  font-size: var(--fs-12);
+}
+.dops-matrix__row:first-child { border-top: 0; }
+.dops-matrix__head { color: var(--c-slate); font-size: var(--fs-11); text-transform: uppercase; letter-spacing: .06em; }
+.dops-mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.dops-num { font-variant-numeric: tabular-nums; text-align: right; }
+.dops-note { color: var(--c-slate); font-size: var(--fs-12); }

@@ -1,0 +1,1109 @@
+{
+  "config": {
+    "argv": [
+      "/home/euripides/.nvm/versions/node/v24.20.0/bin/node",
+      "/home/euripides/projects/blockchain-platform/frontend/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "playwright.r3.config.ts",
+      "tests/r3-legacy-ui-audience.spec.ts",
+      "tests/r3-legacy-ui-negative.spec.ts",
+      "tests/r3-nav-return-to.spec.ts",
+      "--reporter=list,json"
+    ],
+    "configFile": "/home/euripides/projects/blockchain-platform/frontend/playwright.r3.config.ts",
+    "rootDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "r3-desktop",
+        "name": "r3-desktop",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/r3-.*\\.spec\\.ts/"
+        ],
+        "timeout": 120000
+      },
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "r3-mobile",
+        "name": "r3-mobile",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/r3-.*\\.spec\\.ts/"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "r3-legacy-ui-audience.spec.ts",
+      "file": "r3-legacy-ui-audience.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "R-3 旧 V1 前端在 admin 受众会话下的可访问性",
+          "file": "r3-legacy-ui-audience.spec.ts",
+          "line": 46,
+          "column": 6,
+          "specs": [
+            {
+              "title": "api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4682,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:48:40.898Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-3ca08a9344598fb8e115",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 51,
+              "column": 3
+            },
+            {
+              "title": "system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3748,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:48:46.330Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-30b7a905708311c6d072",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 91,
+              "column": 3
+            },
+            {
+              "title": "api-control：弹窗可开关（不做任何写操作）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3005,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:48:50.108Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-2bb00a5682ccb1d3dd2c",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 120,
+              "column": 3
+            },
+            {
+              "title": "api-control 与 system 无横向溢出",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3642,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T224838Z\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:48:53.134Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-60ae6ccbfb2c3a017b3b",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 154,
+              "column": 3
+            },
+            {
+              "title": "api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4654,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:34.009Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-c53be473ed2176084fa2",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 51,
+              "column": 3
+            },
+            {
+              "title": "system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4010,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:39.153Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-c04de1521ff4449d2066",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 91,
+              "column": 3
+            },
+            {
+              "title": "api-control：弹窗可开关（不做任何写操作）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4245,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:43.185Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-3d442e6975ed0adb3fd2",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 120,
+              "column": 3
+            },
+            {
+              "title": "api-control 与 system 无横向溢出",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3630,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "R-3 evidence dir: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T224838Z\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:47.451Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "eb29f42c6a136f0a2c2e-938a3c04f6a78f53992c",
+              "file": "r3-legacy-ui-audience.spec.ts",
+              "line": 154,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "r3-legacy-ui-negative.spec.ts",
+      "file": "r3-legacy-ui-negative.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-desktop",
+              "projectName": "r3-desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5167,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:48:56.826Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-b349593638a409c0091d",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 36,
+          "column": 1
+        },
+        {
+          "title": "2a. 普通用户层会话声明 user 受众调后台接口：403",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-desktop",
+              "projectName": "r3-desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1943,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:02.006Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-0a56b7a8e18e0acd4467",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-desktop",
+              "projectName": "r3-desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 224,
+                  "error": {
+                    "message": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m",
+                    "stack": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:114:62",
+                    "location": {
+                      "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                      "column": 62,
+                      "line": 114
+                    },
+                    "snippet": "  112 |   });\n  113 |\n> 114 |   expect(response.status, \"user 受众会话（即使持有 admin 权限）必须是 403\").toBe(403);\n      |                                                              ^\n  115 |   expect(body).toContain(\"permission_denied\");\n  116 |   expect(body, \"拒绝原因必须是 audience_mismatch（而不是缺权限）\").toContain(\"audience_mismatch\");\n  117 |   await context.close();"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                        "column": 62,
+                        "line": 114
+                      },
+                      "message": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m\n\n  112 |   });\n  113 |\n> 114 |   expect(response.status, \"user 受众会话（即使持有 admin 权限）必须是 403\").toBe(403);\n      |                                                              ^\n  115 |   expect(body).toContain(\"permission_denied\");\n  116 |   expect(body, \"拒绝原因必须是 audience_mismatch（而不是缺权限）\").toContain(\"audience_mismatch\");\n  117 |   await context.close();\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:114:62"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:03.961Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/euripides/projects/blockchain-platform/frontend/test-results/r3-legacy-ui-negative-2b-已-b92a7--user：403-audience-mismatch-r3-desktop/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/home/euripides/projects/blockchain-platform/frontend/test-results/r3-legacy-ui-negative-2b-已-b92a7--user：403-audience-mismatch-r3-desktop/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                    "column": 62,
+                    "line": 114
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-f954e32afb613559aa9f",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 89,
+          "column": 1
+        },
+        {
+          "title": "3. 匿名访问后台页：401",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-desktop",
+              "projectName": "r3-desktop",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4685,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:04.895Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-96e281e782d4c16b9c04",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 120,
+          "column": 1
+        },
+        {
+          "title": "4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-desktop",
+              "projectName": "r3-desktop",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1341,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:10.225Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-31cdc73764686c399489",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 142,
+          "column": 1
+        },
+        {
+          "title": "1. 用户层会话访问 /api-control：页面发起的后台接口全部被拒",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-mobile",
+              "projectName": "r3-mobile",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4660,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:51.118Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-a7e287568b5fdfc17e6a",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 36,
+          "column": 1
+        },
+        {
+          "title": "2a. 普通用户层会话声明 user 受众调后台接口：403",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-mobile",
+              "projectName": "r3-mobile",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2225,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:55.789Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-4cc3758382948a3c32a6",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "2b. 已持有 admin:* 权限但会话受众为 user：403 audience_mismatch",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-mobile",
+              "projectName": "r3-mobile",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 207,
+                  "error": {
+                    "message": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m",
+                    "stack": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:114:62",
+                    "location": {
+                      "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                      "column": 62,
+                      "line": 114
+                    },
+                    "snippet": "  112 |   });\n  113 |\n> 114 |   expect(response.status, \"user 受众会话（即使持有 admin 权限）必须是 403\").toBe(403);\n      |                                                              ^\n  115 |   expect(body).toContain(\"permission_denied\");\n  116 |   expect(body, \"拒绝原因必须是 audience_mismatch（而不是缺权限）\").toContain(\"audience_mismatch\");\n  117 |   await context.close();"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                        "column": 62,
+                        "line": 114
+                      },
+                      "message": "Error: user 受众会话（即使持有 admin 权限）必须是 403\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m403\u001b[39m\nReceived: \u001b[31m[Function status]\u001b[39m\n\n  112 |   });\n  113 |\n> 114 |   expect(response.status, \"user 受众会话（即使持有 admin 权限）必须是 403\").toBe(403);\n      |                                                              ^\n  115 |   expect(body).toContain(\"permission_denied\");\n  116 |   expect(body, \"拒绝原因必须是 audience_mismatch（而不是缺权限）\").toContain(\"audience_mismatch\");\n  117 |   await context.close();\n    at /home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts:114:62"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:58.027Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/euripides/projects/blockchain-platform/frontend/test-results/r3-legacy-ui-negative-2b-已-b92a7--user：403-audience-mismatch-r3-mobile/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/home/euripides/projects/blockchain-platform/frontend/test-results/r3-legacy-ui-negative-2b-已-b92a7--user：403-audience-mismatch-r3-mobile/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/euripides/projects/blockchain-platform/frontend/tests/r3-legacy-ui-negative.spec.ts",
+                    "column": 62,
+                    "line": 114
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-8b7d0d908882b16b6d74",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 89,
+          "column": 1
+        },
+        {
+          "title": "3. 匿名访问后台页：401",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-mobile",
+              "projectName": "r3-mobile",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4354,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:49:58.905Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-71a9bde0b1effda1502a",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 120,
+          "column": 1
+        },
+        {
+          "title": "4. 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "r3-mobile",
+              "projectName": "r3-mobile",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1274,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-12T22:50:03.660Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "119791bbfcedd3bfc1a0-800a422d7e8bbfbd22a2",
+          "file": "r3-legacy-ui-negative.spec.ts",
+          "line": 142,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "r3-nav-return-to.spec.ts",
+      "file": "r3-nav-return-to.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "R-3 后台登录回跳与 return_to 白名单",
+          "file": "r3-nav-return-to.spec.ts",
+          "line": 31,
+          "column": 6,
+          "specs": [
+            {
+              "title": "匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3747,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:11.595Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-6e53c683cddcec398874",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 32,
+              "column": 3
+            },
+            {
+              "title": "已认证状态下入口直接回原页（/system?view=settings）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2806,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:15.374Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-43128b7872b23ec3a095",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 75,
+              "column": 3
+            },
+            {
+              "title": "未认证访问 /admin/* 时 return_to 不丢（search 保留）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-desktop",
+                  "projectName": "r3-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1766,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:49:18.216Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-222cb5573dbbb4007046",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 84,
+              "column": 3
+            },
+            {
+              "title": "匿名访问后台页 → 点入口 → 后台登录 → 真实回到原页面（保留 query）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3962,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:50:04.958Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-7e0163dadf56aca37b31",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 32,
+              "column": 3
+            },
+            {
+              "title": "已认证状态下入口直接回原页（/system?view=settings）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2627,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:50:08.934Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-10bcb95570e3ad155499",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 75,
+              "column": 3
+            },
+            {
+              "title": "未认证访问 /admin/* 时 return_to 不丢（search 保留）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "r3-mobile",
+                  "projectName": "r3-mobile",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1531,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T22:50:11.580Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c169e3f0d63e7ffdb3b-ef9a4939ad976b4310dc",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 84,
+              "column": 3
+            }
+          ],
+          "suites": [
+            {
+              "title": "return_to 开放重定向防护",
+              "file": "r3-nav-return-to.spec.ts",
+              "line": 97,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "恶意 return_to 一律落到白名单内（不会被外域接走）",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 120000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "r3-desktop",
+                      "projectName": "r3-desktop",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 13231,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-09-12T22:49:19.996Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "6c169e3f0d63e7ffdb3b-1af19af026d55f67ae7e",
+                  "file": "r3-nav-return-to.spec.ts",
+                  "line": 110,
+                  "column": 5
+                },
+                {
+                  "title": "恶意 return_to 一律落到白名单内（不会被外域接走）",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 120000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "r3-mobile",
+                      "projectName": "r3-mobile",
+                      "results": [
+                        {
+                          "workerIndex": 3,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 13577,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2026-09-12T22:50:13.123Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "6c169e3f0d63e7ffdb3b-efd7f37d594c3504fb7f",
+                  "file": "r3-nav-return-to.spec.ts",
+                  "line": 110,
+                  "column": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-12T22:48:40.280Z",
+    "duration": 106553.234,
+    "expected": 24,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

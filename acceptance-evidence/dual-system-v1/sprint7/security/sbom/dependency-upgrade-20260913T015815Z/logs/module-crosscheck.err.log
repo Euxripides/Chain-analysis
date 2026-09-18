@@ -1,0 +1,3 @@
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/module-crosscheck.json'

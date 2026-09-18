@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 )
 
 // Principal 是授权计算的主体视图。它只包含服务端解析出的身份信息，
@@ -26,6 +26,11 @@ type Principal struct {
 	Permissions    []string `json:"permissions"`
 	Authenticated  bool     `json:"authenticated"`
 	System         bool     `json:"system"`
+	// MustChangePassword mirrors identities.must_change_password for the authenticated
+	// identity. It travels with the session row (iam.SessionManager.loadByToken already
+	// selects it), so the API middleware can fail closed on business surfaces without an
+	// extra database round trip. It is never taken from the client.
+	MustChangePassword bool `json:"must_change_password,omitempty"`
 }
 
 // Has 判断是否具备某权限（仅 RBAC 部分；对象级条件见 Engine.Authorize）。
@@ -57,14 +62,14 @@ type cacheEntry struct {
 
 // Engine 加载并缓存主体权限，提供统一的 Authorize 判定。
 type Engine struct {
-	pool *pgxpool.Pool
+	pool *dbtx.Pool
 	ttl  time.Duration
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 }
 
-func NewEngine(pool *pgxpool.Pool, ttl time.Duration) *Engine {
+func NewEngine(pool *dbtx.Pool, ttl time.Duration) *Engine {
 	if ttl <= 0 {
 		ttl = 30 * time.Second
 	}

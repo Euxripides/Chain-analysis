@@ -1,0 +1,202 @@
+==== S7-SEC-01 渗透负向用例开始 2026-09-12T23:52:46+07:00 ====
+BASE=http://127.0.0.1:8080 NGX=http://127.0.0.1:8088 EVIDENCE_DIR=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/negative-tests
+build_api_sha=753ba724335e4be4231d40ca65809f22403eb3323b79f144b1161f88a6f21c78
+---- SETUP 建立会话 ----
+  PASS         SETUP          Owner/Viewer/Investigator 会话建立（含 CSRF）               ok
+  PASS SETUP          Owner/Viewer/Investigator 会话建立（含 CSRF）
+viewer_id=49d4c0c9-b62f-49e9-b647-122de6f1a429 org=627c131a-3842-4e19-bade-d20ffb8aea8f ws=14dfbf1b-b3d7-4326-8395-b1f7fa9f8872
+---- Cookie 属性实测（§23.2 要求 __Host- 前缀 + Secure + HttpOnly + SameSite）----
+  PASS         AUTH-013a      会话 Cookie 带 HttpOnly                                         ok
+  PASS AUTH-013a      会话 Cookie 带 HttpOnly
+  PASS         AUTH-013b      会话 Cookie 带 SameSite                                         ok
+  PASS AUTH-013b      会话 Cookie 带 SameSite
+  FAIL         AUTH-013c      会话 Cookie 使用 __Host- 前缀（§23.2）                    got=lt2:0 want=ok
+  FAIL AUTH-013c      会话 Cookie 使用 __Host- 前缀（§23.2） got=lt2:0 want=ok
+  FAIL         AUTH-013d      会话 Cookie 带 Secure 属性（§23.2）                        got=lt2:0 want=ok
+  FAIL AUTH-013d      会话 Cookie 带 Secure 属性（§23.2） got=lt2:0 want=ok
+---- AUTH-009 伪造 X-User-Id/X-User-Role ----
+  PASS         AUTH-009a      无 Cookie 伪造 X-User-* 访问后台 → 401                    401
+  PASS AUTH-009a      无 Cookie 伪造 X-User-* 访问后台 → 401
+  PASS         AUTH-009b      Viewer 会话 + 伪造 X-User-Role=owner 访问后台 → 401      401
+  PASS AUTH-009b      Viewer 会话 + 伪造 X-User-Role=owner 访问后台 → 401
+  PASS         AUTH-009c      无 Cookie 伪造 X-User-* 访问用户层 → 401                 401
+  PASS AUTH-009c      无 Cookie 伪造 X-User-* 访问用户层 → 401
+  PASS         AUTH-009d      伪造 X-Org-Id/X-Workspace-Id 不越出会话作用域            scoped
+  PASS AUTH-009d      伪造 X-Org-Id/X-Workspace-Id 不越出会话作用域
+  PASS         AUTH-009e      伪造头被拒后有审计拒绝记录（authorization.denied）  ok
+  PASS AUTH-009e      伪造头被拒后有审计拒绝记录（authorization.denied）
+---- AUTH-010 X-Forwarded-For 与 client_ip ----
+  PASS         AUTH-010a      Cloudflare 路径：client_ip 取 CF-Connecting-IP（XFF 被丢弃） 198.51.100.9
+  PASS AUTH-010a      Cloudflare 路径：client_ip 取 CF-Connecting-IP（XFF 被丢弃）
+  PASS         AUTH-010b      来源链完整记录（peer/client_ip/proxy_chain 均落库）    1
+  PASS AUTH-010b      来源链完整记录（peer/client_ip/proxy_chain 均落库）
+  PASS         AUTH-010c      login_events 记录同一次登录的来源                        ok
+  PASS AUTH-010c      login_events 记录同一次登录的来源
+  PASS         AUTH-010d      API 审计事件携带 client_ip 与 proxy_chain 字段（未脱敏丢失） 3
+  PASS AUTH-010d      API 审计事件携带 client_ip 与 proxy_chain 字段（未脱敏丢失）
+---- AUTH-012 redirect/return 参数白名单 ----
+  PASS         AUTH-012a      6 个开放重定向载荷全部回落到站内路径              6
+  PASS AUTH-012a      6 个开放重定向载荷全部回落到站内路径
+  PASS         AUTH-012b      无载荷落到站外/伪协议（open redirect）                 0
+  PASS AUTH-012b      无载荷落到站外/伪协议（open redirect）
+  PASS         AUTH-012c      OIDC 未启用时不产生站外跳转（无 Location: evil）     0
+  PASS AUTH-012c      OIDC 未启用时不产生站外跳转（无 Location: evil）
+---- SEC-001 CSRF ----
+  PASS         SEC-001a       后台写请求缺 X-CSRF-Token → 403                            403
+  PASS SEC-001a       后台写请求缺 X-CSRF-Token → 403
+  PASS         SEC-001b       错误码为 csrf_failed                                           csrf_failed
+  PASS SEC-001b       错误码为 csrf_failed
+  PASS         SEC-001c       错误 CSRF token → 403                                          403
+  PASS SEC-001c       错误 CSRF token → 403
+  PASS         SEC-001d       正确 CSRF token → 200（正向对照）                        200
+  PASS SEC-001d       正确 CSRF token → 200（正向对照）
+  PASS         SEC-001e       用户层跨站 Origin 写请求无 CSRF → 403                   403
+  PASS SEC-001e       用户层跨站 Origin 写请求无 CSRF → 403
+  PASS         SEC-001f       跨站写请求未产生副作用（无同名案件）             0
+  PASS SEC-001f       跨站写请求未产生副作用（无同名案件）
+  PASS         SEC-001g       带正确 CSRF 时 Origin 未被二次校验（偏离§23.2，残余风险 R-02） 200
+  PASS SEC-001g       带正确 CSRF 时 Origin 未被二次校验（偏离§23.2，残余风险 R-02）
+---- SEC-002 XSS/CSP ----
+  PASS         SEC-002a       CSP 存在且 script-src 无 unsafe-inline                         ok
+  PASS SEC-002a       CSP 存在且 script-src 无 unsafe-inline
+  PASS         SEC-002b       CSP frame-ancestors 'none' 防点击劫持                         ok
+  PASS SEC-002b       CSP frame-ancestors 'none' 防点击劫持
+  PASS         SEC-002c       X-Content-Type-Options: nosniff                                    1
+  PASS SEC-002c       X-Content-Type-Options: nosniff
+  PASS         SEC-002d       用户层同样下发 CSP                                          1
+  PASS SEC-002d       用户层同样下发 CSP
+  PASS         SEC-002h       API 响应为 application/json（不把用户内容当 HTML 输出） 1
+  PASS SEC-002h       API 响应为 application/json（不把用户内容当 HTML 输出）
+  PASS         SEC-002e       评论 API 响应不含 <script 标签                             stripped
+  PASS SEC-002e       评论 API 响应不含 <script 标签
+  PASS         SEC-002f       评论 API 响应不含 onerror 事件属性                       stripped
+  PASS         SEC-002g       落库内容已剥离标签（DB 层同样无标签）             no_tag
+  PASS SEC-002f       评论 API 响应不含 onerror 事件属性
+  PASS SEC-002g       落库内容已剥离标签（DB 层同样无标签）
+  PASS         SEC-002i       前端源码无 dangerouslySetInnerHTML / innerHTML 未净化渲染 0
+  PASS SEC-002i       前端源码无 dangerouslySetInnerHTML / innerHTML 未净化渲染
+---- SEC-003 SSRF ----
+  PASS         SEC-003a       出站 URL 守卫单测通过（localhost/127.0.0.1/10.0.0.1/metadata 被拒） pass
+  PASS SEC-003a       出站 URL 守卫单测通过（localhost/127.0.0.1/10.0.0.1/metadata 被拒）
+  PASS         SEC-003b       守卫实现存在（ValidatePublicHTTPS + blockedIP）            2
+  PASS SEC-003b       守卫实现存在（ValidatePublicHTTPS + blockedIP）
+  PASS         SEC-003c       未认证修改 Provider 端点 → 401                            401
+  PASS SEC-003c       未认证修改 Provider 端点 → 401
+  PASS         SEC-003d       Viewer 会话修改 Provider 端点 → 401（受众隔离）      401
+  PASS SEC-003d       Viewer 会话修改 Provider 端点 → 401（受众隔离）
+  PASS         SEC-003e       Provider 端点写入的 URL 校验现状（§23.5：无校验=纵深缺口 R-03） no_validation
+  PASS SEC-003e       Provider 端点写入的 URL 校验现状（§23.5：无校验=纵深缺口 R-03）
+  PASS         SEC-003f       Provider 端点已还原为原值                                  https://rpc.ankr.com/multichain
+  PASS SEC-003f       Provider 端点已还原为原值
+  PASS         SEC-003g       端点改动写入审计（before/after 可追溯）               ok
+  PASS SEC-003g       端点改动写入审计（before/after 可追溯）
+---- SEC-004 限流 429 + Retry-After ----
+  PASS         SEC-004a       认证失败达到阈值后出现 429                              ok
+  PASS SEC-004a       认证失败达到阈值后出现 429
+  PASS         SEC-004b       429 携带 Retry-After 头                                         1
+  PASS SEC-004b       429 携带 Retry-After 头
+  PASS         SEC-004c       429 响应体含稳定错误码 AUTHN_RATE_LIMITED                 RATE_LIMIT_EXCEEDED
+  PASS SEC-004c       429 响应体含稳定错误码 AUTHN_RATE_LIMITED
+  PASS         SEC-004d       被攻击账号限流期间正常账号仍可登录（bucket 不越权共享） 200
+  PASS SEC-004d       被攻击账号限流期间正常账号仍可登录（bucket 不越权共享）
+  PASS         SEC-004e       限流事件写入 login_events（rate_limited 可追溯）        ok
+  PASS SEC-004e       限流事件写入 login_events（rate_limited 可追溯）
+  PASS         SEC-004f       限流/锁定事件可追溯（account_locked/rate_limited）      ok
+  PASS SEC-004f       限流/锁定事件可追溯（account_locked/rate_limited）
+---- RBAC-008 API Key 访问后台被拒（audience/scope）----
+  PASS         RBAC-008a      API Key 访问后台 API → 401（不建立浏览器会话）     401
+  PASS RBAC-008a      API Key 访问后台 API → 401（不建立浏览器会话）
+  PASS         RBAC-008b      read scope 的 Key 调用 export 作用域端点 → 401           401
+  PASS RBAC-008b      read scope 的 Key 调用 export 作用域端点 → 401
+  PASS         RBAC-008c      read scope 的 Key 通过 read 作用域鉴权（非 401）        accepted
+  PASS RBAC-008c      read scope 的 Key 通过 read 作用域鉴权（非 401）
+  PASS         RBAC-008d      无效 API Key → 401                                             401
+  PASS RBAC-008d      无效 API Key → 401
+  PASS         RBAC-008e      后台浏览器会话不可管理 API Key（需独立管理凭据，401/503） denied
+  PASS RBAC-008e      后台浏览器会话不可管理 API Key（需独立管理凭据，401/503）
+  PASS         RBAC-008f      api_client 角色不含任何 admin:* 权限                       0
+  PASS RBAC-008f      api_client 角色不含任何 admin:* 权限
+  PASS         RBAC-008g      API Key 拒绝事件落审计（authorization.denied 或 api key 401 计数） ok
+  PASS RBAC-008g      API Key 拒绝事件落审计（authorization.denied 或 api key 401 计数）
+  FAIL         RBAC-008h      创建 Key 省略 allowed_ips 字段（契约健壮性，DEF-01） got=500 want=201
+  FAIL RBAC-008h      创建 Key 省略 allowed_ips 字段（契约健壮性，DEF-01） got=500 want=201
+  PASS         RBAC-008i      省略 allowed_ips 时未写出半成品记录                     0
+  PASS RBAC-008i      省略 allowed_ips 时未写出半成品记录
+---- IDOR 跨组织 / 跨工作区 ----
+  PASS         IDOR-a         Viewer 读他人组织案件 → 404                               404
+  PASS IDOR-a         Viewer 读他人组织案件 → 404
+  PASS         IDOR-b         404 响应体不泄露对象存在性（不含案件名）         not_leaked
+  PASS IDOR-b         404 响应体不泄露对象存在性（不含案件名）
+  PASS         IDOR-c         统一错误码 RESOURCE_NOT_FOUND                                 RESOURCE_NOT_FOUND
+  PASS IDOR-c         统一错误码 RESOURCE_NOT_FOUND
+  PASS         IDOR-d         Investigator 跨组织写评论 → 404                            404
+  PASS         IDOR-e         越权写未产生副作用（评论数不变）                   1
+  PASS IDOR-d         Investigator 跨组织写评论 → 404
+  PASS IDOR-e         越权写未产生副作用（评论数不变）
+  PASS         IDOR-f0        临时 Viewer 仅绑定单一工作区（构造非成员场景）  1
+  PASS IDOR-f0        临时 Viewer 仅绑定单一工作区（构造非成员场景）
+  PASS         IDOR-f         同组织非成员工作区案件 → 404/403                      denied
+  PASS IDOR-f         同组织非成员工作区案件 → 404/403
+  PASS         IDOR-f2        成员工作区案件可读（同身份对照组）                allowed
+  PASS IDOR-f2        成员工作区案件可读（同身份对照组）
+  PASS         IDOR-g         伪造 X-Workspace-Id 不提升作用域                           scoped_or_denied
+  PASS IDOR-g         伪造 X-Workspace-Id 不提升作用域
+---- 未认证访问 /api/admin/v1/* ----
+  PASS         UNAUTH-a       10 个后台端点未认证全部 401                              10
+  PASS UNAUTH-a       10 个后台端点未认证全部 401
+  PASS         UNAUTH-b       未认证 401 写入审计（authorization.denied）               ok
+  PASS UNAUTH-b       未认证 401 写入审计（authorization.denied）
+---- 审计只读性（blockchain_app 运行角色）----
+  PASS         AUDIT-a        blockchain_app 对 audit_events_v2 无 UPDATE 权限               f
+  PASS AUDIT-a        blockchain_app 对 audit_events_v2 无 UPDATE 权限
+  PASS         AUDIT-b        blockchain_app 对 audit_events_v2 无 DELETE 权限               f
+  PASS AUDIT-b        blockchain_app 对 audit_events_v2 无 DELETE 权限
+  PASS         AUDIT-c        blockchain_app 对 audit_events_v2 无 TRUNCATE 权限             f
+  PASS AUDIT-c        blockchain_app 对 audit_events_v2 无 TRUNCATE 权限
+  PASS         AUDIT-d        blockchain_app 仍可 INSERT（追加写入不受影响）         t
+  PASS AUDIT-d        blockchain_app 仍可 INSERT（追加写入不受影响）
+  PASS         AUDIT-e        实际 UPDATE/DELETE 被数据库拒绝（permission denied）     ok
+  PASS AUDIT-e        实际 UPDATE/DELETE 被数据库拒绝（permission denied）
+  PASS         AUDIT-f        实际 TRUNCATE 被数据库拒绝                                 1
+  PASS AUDIT-f        实际 TRUNCATE 被数据库拒绝
+  PASS         AUDIT-g        实际 DDL（CREATE/ALTER/DROP）被拒绝                         3
+  PASS AUDIT-g        实际 DDL（CREATE/ALTER/DROP）被拒绝
+  PASS         AUDIT-h        审计表所有者不是运行角色（owner=blockchain）         0
+  PASS AUDIT-h        审计表所有者不是运行角色（owner=blockchain）
+  PASS         AUDIT-i        0055 锚点表同样不可改                                      f
+  PASS AUDIT-i        0055 锚点表同样不可改
+  PASS         AUDIT-j        运行期降权开关已开启（DB_RUNTIME_ROLE=blockchain_app） 1
+  PASS AUDIT-j        运行期降权开关已开启（DB_RUNTIME_ROLE=blockchain_app）
+  PASS         AUDIT-k        运行角色非超级用户、无 BYPASSRLS                        false/false
+  PASS AUDIT-k        运行角色非超级用户、无 BYPASSRLS
+---- 认证绕过：空/篡改/过期/撤销会话 ----
+  PASS         AUTHZ-a        空 Cookie → 401                                                 401
+  PASS AUTHZ-a        空 Cookie → 401
+  PASS         AUTHZ-b        篡改 Cookie（尾字符替换）→ 401                          401
+  PASS AUTHZ-b        篡改 Cookie（尾字符替换）→ 401
+  PASS         AUTHZ-c        原 Cookie 正常（正向对照 200）                            200
+  PASS AUTHZ-c        原 Cookie 正常（正向对照 200）
+  PASS         AUTHZ-d0       过期用例前置：新会话可用（200）                      200
+  PASS AUTHZ-d0       过期用例前置：新会话可用（200）
+  PASS         AUTHZ-d        过期会话 → 401                                               401
+  PASS AUTHZ-d        过期会话 → 401
+  PASS         AUTHZ-e0       撤销用例前置：新会话可用（200）                      200
+  PASS AUTHZ-e0       撤销用例前置：新会话可用（200）
+  PASS         AUTHZ-e        已撤销会话 → 401 且在 5 秒内生效（§23.8）          401
+  PASS AUTHZ-e        已撤销会话 → 401 且在 5 秒内生效（§23.8）
+  PASS         AUTHZ-f        DB 中 revoked_at 非空且原因已记录                         true
+  PASS AUTHZ-f        DB 中 revoked_at 非空且原因已记录
+---- CLEANUP 清理本套件创建的数据 ----
+  PASS         CLEANUP-a      测试 API Key 已删除                                           deleted
+  PASS CLEANUP-a      测试 API Key 已删除
+  PASS         CLEANUP-b      测试案件已删除且 DB 无残留                              0
+  PASS CLEANUP-b      测试案件已删除且 DB 无残留
+  PASS         CLEANUP-e      用户层案件删除路由现状（DEF-02：v2 未注册 DELETE） v2_no_delete_route:405
+  PASS CLEANUP-e      用户层案件删除路由现状（DEF-02：v2 未注册 DELETE）
+  PASS         CLEANUP-c      未把任何真实账号置于锁定状态                         0
+  PASS CLEANUP-c      未把任何真实账号置于锁定状态
+  PASS         CLEANUP-d      Provider 端点为原值（无遗留改动）                      https://rpc.ankr.com/multichain
+  PASS CLEANUP-d      Provider 端点为原值（无遗留改动）
+STATUS=FAIL：存在未通过或未验证项（fail=3 not_verified=0）
+result.json written: {'suite': 'run-sprint7-sec-negative.sh', 'test_id': 'S7-SEC-01', 'pass': 87, 'fail': 3, 'not_verified': 0, 'blocking_failures': 3, 'blocking_not_verified': 0, 'criteria': 'fail==0 and not_verified==0 and pass>0', 'status': 'FAIL', 'started_at': '2026-09-12T16:52:46Z', 'finished_at': '2026-09-12T16:53:09Z'}
+==== S7-SEC-01 渗透负向用例结束 2026-09-12T23:53:09+07:00 PASS=87 FAIL=3 NOT_VERIFIED=0 ====

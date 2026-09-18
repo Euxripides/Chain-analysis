@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // VerifyChainResult 是 §27 AUDIT-004 的校验输出。
@@ -34,6 +34,12 @@ type VerifyChainResult struct {
 	VerifiedFromSeq   int64              `json:"verified_from_seq"`
 	SealedBoundary    *SealedBoundaryRef `json:"sealed_boundary,omitempty"`
 	IntegrityWarnings []string           `json:"integrity_warnings"`
+
+	// 稀疏声明（ADR-019）：逐条列出被显式声明的缺失行与内容不可复算行。
+	// 这些计数与明细必须与 DB 中的声明逐条一致——「已声明」不等于「完整」。
+	DeclaredEvents       []DeclaredEvent `json:"declared_events"`
+	DeclaredLostCount    int64           `json:"declared_lost_count"`
+	DeclaredAnomalyCount int64           `json:"declared_anomaly_count"`
 }
 
 type scanner interface {
@@ -192,7 +198,7 @@ func ChainTables() []string {
 //
 // 注意：valid 只描述「实际被校验到的区间」是否自洽；链路是否完整由 integrity_status /
 // prefix_status 明确表达。封存之后本函数永不返回 intact。
-func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq, toSeq int64) (VerifyChainResult, error) {
+func VerifyChain(ctx context.Context, pool *dbtx.Pool, chain string, fromSeq, toSeq int64) (VerifyChainResult, error) {
 	reader, ok := chainReaders[chain]
 	if !ok {
 		return VerifyChainResult{}, fmt.Errorf("unknown chain %q", chain)
@@ -200,6 +206,7 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 	res := VerifyChainResult{
 		Chain: chain, Valid: true, Errors: []string{}, IntegrityWarnings: []string{},
 		IntegrityStatus: IntegrityIntact, PrefixStatus: PrefixIntact,
+		DeclaredEvents: []DeclaredEvent{},
 	}
 	if fromSeq <= 0 {
 		fromSeq = 1
@@ -208,7 +215,12 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 	res.ToSeq = toSeq
 	res.VerifiedFromSeq = fromSeq
 
-	incident, err := LoadIncident(ctx, pool, chain)
+	// 边界语义只属于 kind='unrecoverable_gap'；稀疏声明走 declared 集合单独处理。
+	incident, err := LoadGapIncident(ctx, pool, chain)
+	if err != nil {
+		return res, err
+	}
+	declared, err := LoadDeclaredEvents(ctx, pool, chain)
 	if err != nil {
 		return res, err
 	}
@@ -270,16 +282,23 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 	}
 	query += " ORDER BY seq"
 
-	rows, err := pool.Query(ctx, query, args...)
-	if err != nil {
-		return res, err
-	}
-	defer rows.Close()
-
+	// The predecessor hash MUST be read before the range result set is opened.
+	// pgx allows exactly one in-flight statement per connection: issuing a second
+	// statement while a Query result set is still open fails with "conn busy",
+	// and the failing Close marks the still-open statement as invalidated in the
+	// statement cache. On a *dbtx.Pool bound to the request transaction (which the
+	// commit gate puts in the context) both statements run on the SAME connection,
+	// so the gate's release re-read then fails with "failed to deallocate cached
+	// statement(s): conn busy" and refuses every legitimate request 409
+	// AUTHZ_WORKSPACE_SCOPE_STALE (P4-ANCHOR-01). One result set per connection.
 	if startSeq > 1 {
 		if incident != nil && startSeq == incident.TrustedFromSeq {
 			// 用保留的封存尾哈希作为起点：这是新旧链唯一可用的密码学衔接证据。
 			prevHash = incident.SealedTailHash
+		} else if d, ok := declared[startSeq-1]; ok && d.Disposition == DispositionLost {
+			// 起点前一行是**已声明**的缺失行：其 event_hash 由本行的 prev_hash 保留，
+			// 这就是该缺失行的链上哈希证据（ADR-019）。
+			prevHash = d.ObservedEventHash
 		} else if err := pool.QueryRow(ctx, fmt.Sprintf(
 			`SELECT event_hash FROM %s WHERE chain = $1 AND seq = $2`, reader.table),
 			chain, startSeq-1).Scan(&prevHash); err != nil {
@@ -293,6 +312,12 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 		}
 	}
 
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return res, err
+	}
+	defer rows.Close()
+
 	expectedSeq := startSeq
 	for rows.Next() {
 		seq, rowPrev, rowHash, payload, err := reader.build(rows)
@@ -300,12 +325,58 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 			return res, err
 		}
 		if seq != expectedSeq {
-			return res.broken(seq, "sequence_gap",
-				fmt.Sprintf("expected seq %d, found %d", expectedSeq, seq)), nil
+			// 缺口只允许在**逐条已声明**的情况下继续；任何未声明的缺失都是 undeclared_gap。
+			declaredLost := make([]DeclaredEvent, 0, seq-expectedSeq)
+			for missing := expectedSeq; missing < seq; missing++ {
+				d, ok := declared[missing]
+				if !ok || d.Disposition != DispositionLost {
+					res.IntegrityStatus = IntegrityUndeclaredGap
+					res.PrefixStatus = PrefixUnsealedGap
+					return res.broken(missing, "sequence_gap",
+						fmt.Sprintf("seq %d 缺失且未被声明为完整性事件（expected %d, found %d）",
+							missing, expectedSeq, seq)), nil
+				}
+				declaredLost = append(declaredLost, d)
+			}
+			// 链接证据：本行 prev_hash 必须等于最后一条被声明缺失行的哈希。
+			if want := declaredLost[len(declaredLost)-1].ObservedEventHash; rowPrev != want {
+				res.IntegrityStatus = IntegrityBoundaryConflict
+				return res.broken(seq, "declared_lost_hash_mismatch",
+					fmt.Sprintf("seq %d 的 prev_hash 与声明证据不一致（声明 %s / 实际 %s）", seq, want, rowPrev)), nil
+			}
+			res.DeclaredEvents = append(res.DeclaredEvents, declaredLost...)
+			res.DeclaredLostCount += int64(len(declaredLost))
+			prevHash = rowPrev
+			expectedSeq = seq
 		}
 		if rowPrev != prevHash {
 			return res.broken(seq, "prev_hash_mismatch",
 				fmt.Sprintf("seq %d: prev_hash 与上一条 event_hash 不一致", seq)), nil
+		}
+		if d, ok := declared[seq]; ok {
+			switch d.Disposition {
+			case DispositionContentAnomaly:
+				// 行存在、链接完好，但内容哈希无法由行内容复算（写入侧缺陷的既成事实）。
+				// 声明里记录的必须是**该行存储的**哈希；不一致说明行被改写 -> 冲突。
+				if d.ObservedEventHash != rowHash {
+					res.IntegrityStatus = IntegrityBoundaryConflict
+					return res.broken(seq, "declared_anomaly_hash_mismatch",
+						fmt.Sprintf("seq %d 的存储哈希与声明不一致（声明 %s / 实际 %s）",
+							seq, d.ObservedEventHash, rowHash)), nil
+				}
+				res.DeclaredEvents = append(res.DeclaredEvents, d)
+				res.DeclaredAnomalyCount++
+				prevHash = rowHash
+				res.HeadHash = rowHash
+				res.Checked++
+				expectedSeq++
+				continue
+			case DispositionLost:
+				// 已声明为缺失却存在行 = 回填/伪造，必须冲突而不是静默接受。
+				res.IntegrityStatus = IntegrityBoundaryConflict
+				return res.broken(seq, "declared_lost_row_present",
+					fmt.Sprintf("seq %d 已被声明为缺失，但链上存在该行（禁止回填历史审计行）", seq)), nil
+			}
 		}
 		canonical, err := Canonicalize(payload)
 		if err != nil {
@@ -323,9 +394,56 @@ func VerifyChain(ctx context.Context, pool *pgxpool.Pool, chain string, fromSeq,
 	if err := rows.Err(); err != nil {
 		return res, err
 	}
+	// 链头可能领先于最后一行（链头已推进而写行失败）。尾部缺失同样必须被声明，
+	// 否则"链头说 5921、链上只到 5920"会完全静默。
+	if toSeq == 0 {
+		var headSeq int64
+		if err := pool.QueryRow(ctx,
+			"SELECT last_seq FROM audit_chain_heads WHERE chain = $1", chain).Scan(&headSeq); err == nil && headSeq >= expectedSeq {
+			// 读一致性：上面那批行是**较早的快照**（游标已关闭但快照更旧），而链头是刚读的。
+			// 并发写入提交在两者之间时，"链头比最后一行大"并不代表真的缺行。
+			// 因此这里在读到链头**之后**重读一次最大 seq，再用它作为判定基准：
+			// 原子写入（链头与行同事务提交）保证了 head 可见 ⇒ 对应行也已可见。
+			var maxSeqNow int64
+			if err := pool.QueryRow(ctx, fmt.Sprintf(
+				"SELECT COALESCE(max(seq),0) FROM %s WHERE chain = $1", reader.table), chain).Scan(&maxSeqNow); err != nil {
+				return res, err
+			}
+			if maxSeqNow > expectedSeq {
+				expectedSeq = maxSeqNow
+			}
+		}
+		if headSeq >= expectedSeq {
+			trailing := make([]DeclaredEvent, 0, headSeq-expectedSeq+1)
+			for missing := expectedSeq; missing <= headSeq; missing++ {
+				d, ok := declared[missing]
+				if !ok || d.Disposition != DispositionLost {
+					res.IntegrityStatus = IntegrityUndeclaredGap
+					res.PrefixStatus = PrefixUnsealedGap
+					return res.broken(missing, "sequence_gap",
+						fmt.Sprintf("链头 seq %d 之前缺少 seq %d 且未被声明为完整性事件", headSeq, missing)), nil
+				}
+				trailing = append(trailing, d)
+			}
+			res.DeclaredEvents = append(res.DeclaredEvents, trailing...)
+			res.DeclaredLostCount += int64(len(trailing))
+			expectedSeq = headSeq + 1
+		}
+	}
 	res.ToSeq = expectedSeq - 1
 	if res.Checked == 0 {
 		res.Reason = "empty_range"
+	}
+	// 没有缺口边界但存在已声明事实时，用 declared_events 明确表达——
+	// 绝不退回 intact，也绝不因此宣称"链完整"。
+	if res.IntegrityStatus == IntegrityIntact && (res.DeclaredLostCount > 0 || res.DeclaredAnomalyCount > 0) {
+		res.IntegrityStatus = IntegrityDeclaredEvents
+	}
+	if res.DeclaredLostCount > 0 || res.DeclaredAnomalyCount > 0 {
+		res.IntegrityWarnings = append(res.IntegrityWarnings, fmt.Sprintf(
+			"链 %s 存在 %d 条已声明的缺失行与 %d 条已声明的内容不可复算行；"+
+				"声明本身是不可变事实记录，不代表链完整，也不改变其余区间的逐行复算结果",
+			chain, res.DeclaredLostCount, res.DeclaredAnomalyCount))
 	}
 	return res, nil
 }
@@ -369,11 +487,13 @@ const anchorSelect = `SELECT chain, anchor_date::text, from_seq, to_seq, head_ha
 //   - sealed_unrecoverable：锚点区间完全落在已封存缺口内，事件行不可恢复，
 //     此时仍核对锚点行与其 MinIO 归档对象哈希（证明保留证据未被替换）；
 //   - spans_boundary / broken：跨越边界或复算失败，一律如实标注，不降级为通过。
-func VerifyAnchors(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, chain string) ([]AnchorVerification, error) {
+func VerifyAnchors(ctx context.Context, pool *dbtx.Pool, getter ObjectGetter, chain string) ([]AnchorVerification, error) {
 	if pool == nil {
 		return nil, errors.New("audit store unavailable")
 	}
-	incident, err := LoadIncident(ctx, pool, chain)
+	// 边界语义只属于不可恢复缺口事件：同一条链上可能同时存在稀疏声明，
+	// 用"最新一条"会把声明区间当成缺口（锚点归因、反回填计数都会跟着错）。
+	incident, err := LoadGapIncident(ctx, pool, chain)
 	if err != nil {
 		return nil, err
 	}
@@ -382,9 +502,9 @@ func VerifyAnchors(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter,
 		return nil, err
 	}
 	type rawAnchor struct {
-		date                                  string
-		from, to, count                       int64
-		head, objectRef, contentHash          string
+		date                         string
+		from, to, count              int64
+		head, objectRef, contentHash string
 	}
 	pending := []rawAnchor{}
 	for rows.Next() {
@@ -461,12 +581,12 @@ func VerifyAnchors(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter,
 // ---- 完整性报告 ----
 
 // BuildIntegrityReport 汇总一条链的观测缺口、封存事件、链校验与锚点逐项结论。
-func BuildIntegrityReport(ctx context.Context, pool *pgxpool.Pool, getter ObjectGetter, chain string) (IntegrityReport, error) {
+func BuildIntegrityReport(ctx context.Context, pool *dbtx.Pool, getter ObjectGetter, chain string) (IntegrityReport, error) {
 	observed, err := DetectGap(ctx, pool, chain)
 	if err != nil {
 		return IntegrityReport{}, err
 	}
-	incident, err := LoadIncident(ctx, pool, chain)
+	incident, err := LoadGapIncident(ctx, pool, chain)
 	if err != nil {
 		return IntegrityReport{}, err
 	}

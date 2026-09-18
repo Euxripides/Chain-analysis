@@ -21,11 +21,26 @@ test.beforeEach(({}, testInfo) => {
   test.skip(testInfo.project.name.startsWith("admin"), "Sprint 4 用户层页面只在 user projects 验证");
 });
 
+/**
+ * P1-20260913：多工作区身份登录时，服务端返回 409 AUTHN_WORKSPACE_SELECTION_REQUIRED
+ * 并附可选列表，页面按仓库规范用弹窗要求**显式选择**工作区（绝不静默取默认）。
+ * 夹具账号（fixture-*）同时属于 acme-lab 与 acme-lab-other，因此这一步是必经路径，
+ * 不是可选分支：不处理它，登录永远不会完成，后续断言全部误报为页面缺陷。
+ */
+async function resolveWorkspaceSelection(page: Page, slug = "acme-lab") {
+  const dialog = page.getByRole("dialog").filter({ hasText: "请选择工作区" });
+  await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+  if (await dialog.isVisible().catch(() => false)) {
+    await dialog.getByRole("button", { name: new RegExp(slug) }).first().click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+  }
+}
 async function uiLogin(page: Page, email: string, password: string) {
   await page.goto("/app-v2/login", { waitUntil: "domcontentloaded" });
   await page.locator("#identifier").fill(email);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: /^登录$/ }).click();
+  await resolveWorkspaceSelection(page);
   await expect(page.locator(".auth-card")).toHaveCount(0, { timeout: 20_000 });
   const notice = page.getByRole("dialog").filter({ hasText: "需要修改初始密码" });
   if (await notice.isVisible().catch(() => false)) {
@@ -48,10 +63,26 @@ async function apiLogin(page: Page, email: string, password: string) {
   await page.request.post(`${origin}/api/auth/v1/logout`, {
     headers: { "X-CSRF-Token": await csrf(page), "X-Auth-Audience": "user" },
   });
-  const res = await page.request.post(`${origin}/api/auth/v1/login`, {
-    headers: { "Content-Type": "application/json", "X-Auth-Audience": "user" },
-    data: { identifier: email, password, audience: "user" },
-  });
+  const headers = { "Content-Type": "application/json", "X-Auth-Audience": "user" };
+  const body = { identifier: email, password, audience: "user" };
+  let res = await page.request.post(`${origin}/api/auth/v1/login`, { headers, data: body });
+  if (res.status() === 409) {
+    // 多工作区身份：服务端按契约要求**显式选择**工作区（P1-20260913），
+    // 不替用户猜默认值。这里按可选列表显式挑一个再重试——与真实前端的第二段一致。
+    const payload = await res.json().catch(() => null);
+    // 服务端把可选工作区放在 error.details.workspaces（不是 options）。
+    // 只认一个键名会让"显式选择后重试"这一步静默失效，用例退化成必然失败。
+    const details = payload?.error?.details ?? {};
+    const options: Array<{ id: string; slug?: string }> = details.workspaces ?? details.options ?? [];
+    const wanted = process.env.E2E_WORKSPACE_SLUG ?? "acme-lab";
+    const picked = options.find((option) => option.slug === wanted) ?? options[0];
+    if (picked) {
+      res = await page.request.post(`${origin}/api/auth/v1/login`, {
+        headers,
+        data: { ...body, workspace_id: picked.id },
+      });
+    }
+  }
   expect(res.ok()).toBeTruthy();
   return (await res.json()).data;
 }

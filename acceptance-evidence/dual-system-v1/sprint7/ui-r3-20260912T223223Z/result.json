@@ -1,0 +1,76 @@
+{
+  "task": "R-3 legacy V1 UI (api-control / system) admin-audience defect",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ui-r3-20260912T223223Z",
+  "entry": "https://127.0.0.1:8448",
+  "playwright_rc": 1,
+  "passed": 8,
+  "failed": 6,
+  "skipped": 0,
+  "flaky": 0,
+  "status": "FAIL",
+  "criteria": "failed==0 and playwright_rc==0 and passed>0",
+  "cases": [
+    {
+      "mark": "✘",
+      "title": "1 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+      "duration": "2.5s"
+    },
+    {
+      "mark": "✘",
+      "title": "2 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+      "duration": "2.5s"
+    },
+    {
+      "mark": "✓",
+      "title": "4 [r3-desktop] › tests/r3-legacy-ui-audience.spec.ts:131:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出",
+      "duration": "3.6s"
+    },
+    {
+      "mark": "✓",
+      "title": "5 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:22:1 › 用户层会话访问 /api-control 仍被拒绝（403）",
+      "duration": "4.5s"
+    },
+    {
+      "mark": "✓",
+      "title": "6 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:42:1 › 匿名访问 /api-control 仍被拒绝（401）",
+      "duration": "3.7s"
+    },
+    {
+      "mark": "✓",
+      "title": "7 [r3-desktop] › tests/r3-legacy-ui-negative.spec.ts:61:1 › 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+      "duration": "1.2s"
+    },
+    {
+      "mark": "✘",
+      "title": "8 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:51:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control：真实接口全部成功、关键数据来自接口、无 401/403",
+      "duration": "2.1s"
+    },
+    {
+      "mark": "✘",
+      "title": "9 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:86:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › system：页面可打开、无失败弹窗、关键数据来自接口、无 401/403",
+      "duration": "2.3s"
+    },
+    {
+      "mark": "✓",
+      "title": "11 [r3-mobile] › tests/r3-legacy-ui-audience.spec.ts:131:3 › R-3 旧 V1 前端在 admin 受众会话下的可访问性 › api-control 与 system 无横向溢出",
+      "duration": "3.5s"
+    },
+    {
+      "mark": "✓",
+      "title": "12 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:22:1 › 用户层会话访问 /api-control 仍被拒绝（403）",
+      "duration": "3.9s"
+    },
+    {
+      "mark": "✓",
+      "title": "13 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:42:1 › 匿名访问 /api-control 仍被拒绝（401）",
+      "duration": "3.4s"
+    },
+    {
+      "mark": "✓",
+      "title": "14 [r3-mobile] › tests/r3-legacy-ui-negative.spec.ts:61:1 › 受众头不能提权：user 令牌放进 admin Cookie 名仍被拒绝",
+      "duration": "1.2s"
+    }
+  ],
+  "audit_denials_count": 0,
+  "audit_denials": []
+}

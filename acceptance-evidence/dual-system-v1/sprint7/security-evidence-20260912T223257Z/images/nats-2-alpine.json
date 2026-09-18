@@ -1,0 +1,2859 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.74.0"
+  },
+  "ReportID": "01a097c1-2113-7352-9e35-93aeeb7d5bd2",
+  "CreatedAt": "2026-09-12T22:33:31.667220662Z",
+  "ArtifactID": "sha256:48bef6b5d419c928f4266edc9c5a2b2f606f5038b264eeb617925ce2cb770219",
+  "ArtifactName": "nats:2-alpine",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 28273152,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.22.5"
+    },
+    "ImageID": "sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
+    "DiffIDs": [
+      "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4",
+      "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219",
+      "sha256:46583c72edd4e69a0559001c0225f68b150d66883df6760af361bd2c44b84e5e",
+      "sha256:0202a55fa57fa2f33b879c9a0b11234b322b17e7ad0afa5fa61a3d8a217a8116"
+    ],
+    "RepoTags": [
+      "nats:2-alpine"
+    ],
+    "RepoDigests": [
+      "nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3"
+    ],
+    "Reference": "nats:2-alpine",
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-08-27T18:29:05.681698961Z",
+      "history": [
+        {
+          "created": "2026-06-22T19:20:21Z",
+          "created_by": "ADD alpine-minirootfs-3.22.5-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-22T19:20:21Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "ENV NATS_SERVER=2.14.6",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "LABEL org.opencontainers.image.title=NATS Server org.opencontainers.image.description=NATS is an open-source, high-performance, cloud native messaging system. org.opencontainers.image.url=https://nats.io org.opencontainers.image.documentation=https://docs.nats.io org.opencontainers.image.source=https://github.com/nats-io/nats-docker org.opencontainers.image.vendor=NATS.io org.opencontainers.image.licenses=Apache-2.0 org.opencontainers.image.version=2.14.6",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "RUN /bin/sh -c set -eux;     apkArch=\"$(apk --print-arch)\";     case \"$apkArch\" in     aarch64) natsArch='arm64'; sha256='3ff6e463762db64186a36cf0276dae8320509e995151ad0153ba9c9f67eee3f9' ;;     armhf) natsArch='arm6'; sha256='4b03d56d86a13f4b31d8246728daf4cf9ec65921e16398f8320641a4e789c1d0' ;;     armv7) natsArch='arm7'; sha256='1dcffbdc6df72f534e2d02f98517e9eefa300a7d76465398814122f5768fbae0' ;;     x86_64) natsArch='amd64'; sha256='61c3d55f69f61ec616b75782250936445f2819e9e5f2ae6159b10a31abd2200c' ;;     x86) natsArch='386'; sha256='131124abe9ca3ab9e9279846ea049e0740d08a8ea216bbbbebc08b596062208c' ;;     s390x) natsArch='s390x'; sha256='7377921f2bb83d35f4eda6f8b7b0b0571e430ce69fc4a5af658c20028e36f7a3' ;;     ppc64le) natsArch='ppc64le'; sha256='c216d08dfa9adeedc784ebc814d2f2379e6afbd090832a68623efcb311c8935a' ;;     loong64) natsArch='loong64'; sha256='e54f531c3f19002273c97b2473a0735f45244539bf36bf5623d46467b2b8a527' ;;     *) echo \u003e\u00262 \"error: $apkArch is not supported!\"; exit 1 ;;     esac;         wget -O nats-server.tar.gz \"https://github.com/nats-io/nats-server/releases/download/v${NATS_SERVER}/nats-server-v${NATS_SERVER}-linux-${natsArch}.tar.gz\";     echo \"${sha256} *nats-server.tar.gz\" | sha256sum -c -;         apk add --no-cache ca-certificates tzdata;         tar -xf nats-server.tar.gz;     rm nats-server.tar.gz;     mv \"nats-server-v${NATS_SERVER}-linux-${natsArch}/nats-server\" /usr/local/bin;     rm -rf \"nats-server-v${NATS_SERVER}-linux-${natsArch}\"; # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "COPY nats-server.conf /etc/nats/nats-server.conf # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "COPY docker-entrypoint.sh /usr/local/bin # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "EXPOSE map[4222/tcp:{} 6222/tcp:{} 8222/tcp:{}]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "ENTRYPOINT [\"docker-entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-27T18:29:05Z",
+          "created_by": "CMD [\"nats-server\" \"--config\" \"/etc/nats/nats-server.conf\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4",
+          "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219",
+          "sha256:46583c72edd4e69a0559001c0225f68b150d66883df6760af361bd2c44b84e5e",
+          "sha256:0202a55fa57fa2f33b879c9a0b11234b322b17e7ad0afa5fa61a3d8a217a8116"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "nats-server",
+          "--config",
+          "/etc/nats/nats-server.conf"
+        ],
+        "Entrypoint": [
+          "docker-entrypoint.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NATS_SERVER=2.14.6"
+        ],
+        "Labels": {
+          "org.opencontainers.image.description": "NATS is an open-source, high-performance, cloud native messaging system.",
+          "org.opencontainers.image.documentation": "https://docs.nats.io",
+          "org.opencontainers.image.licenses": "Apache-2.0",
+          "org.opencontainers.image.source": "https://github.com/nats-io/nats-docker",
+          "org.opencontainers.image.title": "NATS Server",
+          "org.opencontainers.image.url": "https://nats.io",
+          "org.opencontainers.image.vendor": "NATS.io",
+          "org.opencontainers.image.version": "2.14.6"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "4222/tcp": {},
+          "6222/tcp": {},
+          "8222/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8575488,
+        "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+        "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+      },
+      {
+        "Size": 19690496,
+        "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+        "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+      },
+      {
+        "Size": 3584,
+        "Digest": "sha256:099fd7c2b392ffbab539b116e1eb062d06b58687d2cda89f3d9f1573ee4440bd",
+        "DiffID": "sha256:46583c72edd4e69a0559001c0225f68b150d66883df6760af361bd2c44b84e5e"
+      },
+      {
+        "Size": 3584,
+        "Digest": "sha256:fc1ed1af54e9a386928edf3f67e4640811523267e16cbc07711bbc827f8f0580",
+        "DiffID": "sha256:0202a55fa57fa2f33b879c9a0b11234b322b17e7ad0afa5fa61a3d8a217a8116"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "nats:2-alpine (alpine 3.22.5)",
+      "Class": "os-pkgs",
+      "Type": "alpine",
+      "Packages": [
+        {
+          "ID": "alpine-baselayout@3.7.0-r0",
+          "Name": "alpine-baselayout",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout@3.7.0-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "5d7e59cb3cf460c9"
+          },
+          "Version": "3.7.0-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.0-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "alpine-baselayout-data@3.7.0-r0",
+            "busybox-binsh@1.37.0-r20"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:29f99748eea1ffe01f70b34024dc45c46d211f8d",
+          "InstalledFiles": [
+            "etc/motd",
+            "etc/crontabs/root",
+            "etc/modprobe.d/aliases.conf",
+            "etc/modprobe.d/blacklist.conf",
+            "etc/modprobe.d/i386.conf",
+            "etc/profile.d/20locale.sh",
+            "etc/profile.d/README",
+            "etc/profile.d/color_prompt.sh.disabled",
+            "usr/lib/sysctl.d/00-alpine.conf",
+            "var/lock",
+            "var/run",
+            "var/spool/mail",
+            "var/spool/cron/crontabs"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-baselayout-data@3.7.0-r0",
+          "Name": "alpine-baselayout-data",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-baselayout-data@3.7.0-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "ab78613e89e34197"
+          },
+          "Version": "3.7.0-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-baselayout",
+          "SrcVersion": "3.7.0-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:73f5ef65f8333a1784102df973c076d5a7d5b5fe",
+          "InstalledFiles": [
+            "etc/fstab",
+            "etc/group",
+            "etc/hostname",
+            "etc/hosts",
+            "etc/inittab",
+            "etc/modules",
+            "etc/mtab",
+            "etc/nsswitch.conf",
+            "etc/passwd",
+            "etc/profile",
+            "etc/protocols",
+            "etc/services",
+            "etc/shadow",
+            "etc/shells",
+            "etc/sysctl.conf"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-keys@2.5-r0",
+          "Name": "alpine-keys",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-keys@2.5-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "82fba6933d3c7e01"
+          },
+          "Version": "2.5-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-keys",
+          "SrcVersion": "2.5-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:b175e48144ebad03d6ba11d45b25aafc2de310c1",
+          "InstalledFiles": [
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-5243ef4b.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+            "etc/apk/keys/alpine-devel@lists.alpinelinux.org-61666e3f.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5243ef4b.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58199dcc.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58cbb476.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-58e4f17d.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-5e69ca50.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-60ac2099.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-61666e3f.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616a9724.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616abc23.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616ac3bc.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616adfeb.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-616db30d.rsa.pub",
+            "usr/share/apk/keys/alpine-devel@lists.alpinelinux.org-66ba20fe.rsa.pub",
+            "usr/share/apk/keys/aarch64/alpine-devel@lists.alpinelinux.org-58199dcc.rsa.pub",
+            "usr/share/apk/keys/aarch64/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+            "usr/share/apk/keys/armhf/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/armhf/alpine-devel@lists.alpinelinux.org-616a9724.rsa.pub",
+            "usr/share/apk/keys/armv7/alpine-devel@lists.alpinelinux.org-524d27bb.rsa.pub",
+            "usr/share/apk/keys/armv7/alpine-devel@lists.alpinelinux.org-616adfeb.rsa.pub",
+            "usr/share/apk/keys/loongarch64/alpine-devel@lists.alpinelinux.org-66ba20fe.rsa.pub",
+            "usr/share/apk/keys/mips64/alpine-devel@lists.alpinelinux.org-5e69ca50.rsa.pub",
+            "usr/share/apk/keys/ppc64le/alpine-devel@lists.alpinelinux.org-58cbb476.rsa.pub",
+            "usr/share/apk/keys/ppc64le/alpine-devel@lists.alpinelinux.org-616abc23.rsa.pub",
+            "usr/share/apk/keys/riscv64/alpine-devel@lists.alpinelinux.org-60ac2099.rsa.pub",
+            "usr/share/apk/keys/riscv64/alpine-devel@lists.alpinelinux.org-616db30d.rsa.pub",
+            "usr/share/apk/keys/s390x/alpine-devel@lists.alpinelinux.org-58e4f17d.rsa.pub",
+            "usr/share/apk/keys/s390x/alpine-devel@lists.alpinelinux.org-616ac3bc.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-5243ef4b.rsa.pub",
+            "usr/share/apk/keys/x86/alpine-devel@lists.alpinelinux.org-61666e3f.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub",
+            "usr/share/apk/keys/x86_64/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "alpine-release@3.22.5-r0",
+          "Name": "alpine-release",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/alpine-release@3.22.5-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "6f714633fce4a24c"
+          },
+          "Version": "3.22.5-r0",
+          "Arch": "x86_64",
+          "SrcName": "alpine-base",
+          "SrcVersion": "3.22.5-r0",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "alpine-keys@2.5-r0"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:0816c62d13ce925c207b62f1f62da7fec122ef0c",
+          "InstalledFiles": [
+            "etc/alpine-release",
+            "etc/issue",
+            "etc/os-release",
+            "etc/secfixes.d/alpine",
+            "usr/lib/os-release"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "apk-tools@2.14.10-r0",
+          "Name": "apk-tools",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/apk-tools@2.14.10-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e1ba80a371fef02f"
+          },
+          "Version": "2.14.10-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "2.14.10-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "ca-certificates-bundle@20260611-r0",
+            "libapk2@2.14.10-r0",
+            "libcrypto3@3.5.7-r0",
+            "musl@1.2.5-r12",
+            "zlib@1.3.2-r0"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:8c3bc422cccb2bad7084bbed7ff937be79961d60",
+          "InstalledFiles": [
+            "sbin/apk"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "busybox@1.37.0-r20",
+          "Name": "busybox",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox@1.37.0-r20?arch=x86_64\u0026distro=3.22.5",
+            "UID": "506f3663699c0126"
+          },
+          "Version": "1.37.0-r20",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r20",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:3e9d75288280b3c492e91f30e126c2400d1701b3",
+          "InstalledFiles": [
+            "bin/busybox",
+            "etc/securetty",
+            "etc/busybox-paths.d/busybox",
+            "etc/logrotate.d/acpid",
+            "etc/network/if-up.d/dad",
+            "etc/udhcpc/udhcpc.conf",
+            "usr/share/udhcpc/default.script"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "busybox-binsh@1.37.0-r20",
+          "Name": "busybox-binsh",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/busybox-binsh@1.37.0-r20?arch=x86_64\u0026distro=3.22.5",
+            "UID": "82cca645a20a4c54"
+          },
+          "Version": "1.37.0-r20",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r20",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "busybox@1.37.0-r20"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:acd495b3054831a7a33137aa5a2ba6193a08a2d2",
+          "InstalledFiles": [
+            "bin/sh"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "ca-certificates@20260611-r0",
+          "Name": "ca-certificates",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ca-certificates@20260611-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "9e6893c35f042c65"
+          },
+          "Version": "20260611-r0",
+          "Arch": "x86_64",
+          "SrcName": "ca-certificates",
+          "SrcVersion": "20260611-r0",
+          "Licenses": [
+            "MPL-2.0",
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "busybox-binsh@1.37.0-r20",
+            "libcrypto3@3.5.7-r0",
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "Digest": "sha1:f56301064c50957c1f73cdfef4c91dff33588584",
+          "InstalledFiles": [
+            "etc/ca-certificates.conf",
+            "etc/apk/protected_paths.d/ca-certificates.list",
+            "etc/ca-certificates/update.d/certhash",
+            "usr/bin/c_rehash",
+            "usr/sbin/update-ca-certificates",
+            "usr/share/ca-certificates/mozilla/ACCVRAIZ1.crt",
+            "usr/share/ca-certificates/mozilla/AC_RAIZ_FNMT-RCM.crt",
+            "usr/share/ca-certificates/mozilla/AC_RAIZ_FNMT-RCM_SERVIDORES_SEGUROS.crt",
+            "usr/share/ca-certificates/mozilla/ANF_Secure_Server_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/Actalis_Authentication_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/Amazon_Root_CA_1.crt",
+            "usr/share/ca-certificates/mozilla/Amazon_Root_CA_2.crt",
+            "usr/share/ca-certificates/mozilla/Amazon_Root_CA_3.crt",
+            "usr/share/ca-certificates/mozilla/Amazon_Root_CA_4.crt",
+            "usr/share/ca-certificates/mozilla/Atos_TrustedRoot_2011.crt",
+            "usr/share/ca-certificates/mozilla/Atos_TrustedRoot_Root_CA_ECC_TLS_2021.crt",
+            "usr/share/ca-certificates/mozilla/Atos_TrustedRoot_Root_CA_RSA_TLS_2021.crt",
+            "usr/share/ca-certificates/mozilla/Autoridad_de_Certificacion_Firmaprofesional_CIF_A62634068.crt",
+            "usr/share/ca-certificates/mozilla/BJCA_Global_Root_CA1.crt",
+            "usr/share/ca-certificates/mozilla/BJCA_Global_Root_CA2.crt",
+            "usr/share/ca-certificates/mozilla/Buypass_Class_2_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/Buypass_Class_3_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/CA_Disig_Root_R2.crt",
+            "usr/share/ca-certificates/mozilla/CFCA_EV_ROOT.crt",
+            "usr/share/ca-certificates/mozilla/COMODO_ECC_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/COMODO_RSA_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/Certainly_Root_E1.crt",
+            "usr/share/ca-certificates/mozilla/Certainly_Root_R1.crt",
+            "usr/share/ca-certificates/mozilla/Certigna_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/Certum_EC-384_CA.crt",
+            "usr/share/ca-certificates/mozilla/Certum_Trusted_Network_CA.crt",
+            "usr/share/ca-certificates/mozilla/Certum_Trusted_Network_CA_2.crt",
+            "usr/share/ca-certificates/mozilla/Certum_Trusted_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_BR_Root_CA_1_2020.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_BR_Root_CA_2_2023.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_EV_Root_CA_1_2020.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_EV_Root_CA_2_2023.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_Root_Class_3_CA_2_2009.crt",
+            "usr/share/ca-certificates/mozilla/D-TRUST_Root_Class_3_CA_2_EV_2009.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_Assured_ID_Root_G2.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_Assured_ID_Root_G3.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_Global_Root_G2.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_Global_Root_G3.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_TLS_ECC_P384_Root_G5.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_TLS_RSA4096_Root_G5.crt",
+            "usr/share/ca-certificates/mozilla/DigiCert_Trusted_Root_G4.crt",
+            "usr/share/ca-certificates/mozilla/GDCA_TrustAUTH_R5_ROOT.crt",
+            "usr/share/ca-certificates/mozilla/GTS_Root_R1.crt",
+            "usr/share/ca-certificates/mozilla/GTS_Root_R3.crt",
+            "usr/share/ca-certificates/mozilla/GTS_Root_R4.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_ECC_Root_CA_-_R4.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_ECC_Root_CA_-_R5.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_Root_CA_-_R3.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_Root_CA_-_R6.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_Root_E46.crt",
+            "usr/share/ca-certificates/mozilla/GlobalSign_Root_R46.crt",
+            "usr/share/ca-certificates/mozilla/Go_Daddy_Root_Certificate_Authority_-_G2.crt",
+            "usr/share/ca-certificates/mozilla/HARICA_TLS_ECC_Root_CA_2021.crt",
+            "usr/share/ca-certificates/mozilla/HARICA_TLS_RSA_Root_CA_2021.crt",
+            "usr/share/ca-certificates/mozilla/Hellenic_Academic_and_Research_Institutions_ECC_RootCA_2015.crt",
+            "usr/share/ca-certificates/mozilla/Hellenic_Academic_and_Research_Institutions_RootCA_2015.crt",
+            "usr/share/ca-certificates/mozilla/HiPKI_Root_CA_-_G1.crt",
+            "usr/share/ca-certificates/mozilla/Hongkong_Post_Root_CA_3.crt",
+            "usr/share/ca-certificates/mozilla/ISRG_Root_X1.crt",
+            "usr/share/ca-certificates/mozilla/ISRG_Root_X2.crt",
+            "usr/share/ca-certificates/mozilla/IdenTrust_Commercial_Root_CA_1.crt",
+            "usr/share/ca-certificates/mozilla/IdenTrust_Public_Sector_Root_CA_1.crt",
+            "usr/share/ca-certificates/mozilla/Izenpe.com.crt",
+            "usr/share/ca-certificates/mozilla/Microsec_e-Szigno_Root_CA_2009.crt",
+            "usr/share/ca-certificates/mozilla/Microsoft_ECC_Root_Certificate_Authority_2017.crt",
+            "usr/share/ca-certificates/mozilla/Microsoft_RSA_Root_Certificate_Authority_2017.crt",
+            "usr/share/ca-certificates/mozilla/NAVER_Global_Root_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt",
+            "usr/share/ca-certificates/mozilla/OISTE_Server_Root_ECC_G1.crt",
+            "usr/share/ca-certificates/mozilla/OISTE_Server_Root_RSA_G1.crt",
+            "usr/share/ca-certificates/mozilla/OISTE_WISeKey_Global_Root_GB_CA.crt",
+            "usr/share/ca-certificates/mozilla/OISTE_WISeKey_Global_Root_GC_CA.crt",
+            "usr/share/ca-certificates/mozilla/QuoVadis_Root_CA_1_G3.crt",
+            "usr/share/ca-certificates/mozilla/QuoVadis_Root_CA_2_G3.crt",
+            "usr/share/ca-certificates/mozilla/QuoVadis_Root_CA_3_G3.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_EV_Root_Certification_Authority_ECC.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_EV_Root_Certification_Authority_RSA_R2.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_Root_Certification_Authority_ECC.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_Root_Certification_Authority_RSA.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_TLS_ECC_Root_CA_2022.crt",
+            "usr/share/ca-certificates/mozilla/SSL.com_TLS_RSA_Root_CA_2022.crt",
+            "usr/share/ca-certificates/mozilla/SZAFIR_ROOT_CA2.crt",
+            "usr/share/ca-certificates/mozilla/Sectigo_Public_Server_Authentication_Root_E46.crt",
+            "usr/share/ca-certificates/mozilla/Sectigo_Public_Server_Authentication_Root_R46.crt",
+            "usr/share/ca-certificates/mozilla/SecureSign_Root_CA14.crt",
+            "usr/share/ca-certificates/mozilla/SecureSign_Root_CA15.crt",
+            "usr/share/ca-certificates/mozilla/Security_Communication_ECC_RootCA1.crt",
+            "usr/share/ca-certificates/mozilla/Security_Communication_RootCA2.crt",
+            "usr/share/ca-certificates/mozilla/Starfield_Root_Certificate_Authority_-_G2.crt",
+            "usr/share/ca-certificates/mozilla/Starfield_Services_Root_Certificate_Authority_-_G2.crt",
+            "usr/share/ca-certificates/mozilla/SwissSign_RSA_TLS_Root_CA_2022_-_1.crt",
+            "usr/share/ca-certificates/mozilla/T-TeleSec_GlobalRoot_Class_2.crt",
+            "usr/share/ca-certificates/mozilla/T-TeleSec_GlobalRoot_Class_3.crt",
+            "usr/share/ca-certificates/mozilla/TUBITAK_Kamu_SM_SSL_Kok_Sertifikasi_-_Surum_1.crt",
+            "usr/share/ca-certificates/mozilla/TWCA_CYBER_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/TWCA_Global_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/TWCA_Root_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/Telekom_Security_TLS_ECC_Root_2020.crt",
+            "usr/share/ca-certificates/mozilla/Telekom_Security_TLS_RSA_Root_2023.crt",
+            "usr/share/ca-certificates/mozilla/Telia_Root_CA_v2.crt",
+            "usr/share/ca-certificates/mozilla/TrustAsia_Global_Root_CA_G3.crt",
+            "usr/share/ca-certificates/mozilla/TrustAsia_Global_Root_CA_G4.crt",
+            "usr/share/ca-certificates/mozilla/TrustAsia_TLS_ECC_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/TrustAsia_TLS_RSA_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/TunTrust_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/UCA_Extended_Validation_Root.crt",
+            "usr/share/ca-certificates/mozilla/UCA_Global_G2_Root.crt",
+            "usr/share/ca-certificates/mozilla/USERTrust_ECC_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/USERTrust_RSA_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/certSIGN_Root_CA_G2.crt",
+            "usr/share/ca-certificates/mozilla/e-Szigno_Root_CA_2017.crt",
+            "usr/share/ca-certificates/mozilla/e-Szigno_TLS_Root_CA_2023.crt",
+            "usr/share/ca-certificates/mozilla/ePKI_Root_Certification_Authority.crt",
+            "usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_C3.crt",
+            "usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt",
+            "usr/share/ca-certificates/mozilla/emSign_Root_CA_-_C1.crt",
+            "usr/share/ca-certificates/mozilla/emSign_Root_CA_-_G1.crt",
+            "usr/share/ca-certificates/mozilla/vTrus_ECC_Root_CA.crt",
+            "usr/share/ca-certificates/mozilla/vTrus_Root_CA.crt"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "ca-certificates-bundle@20260611-r0",
+          "Name": "ca-certificates-bundle",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ca-certificates-bundle@20260611-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "a5b2d9afcb267a4e"
+          },
+          "Version": "20260611-r0",
+          "Arch": "x86_64",
+          "SrcName": "ca-certificates",
+          "SrcVersion": "20260611-r0",
+          "Licenses": [
+            "MPL-2.0",
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:5723d6ac70aba0f7d6bb675601161c0d7cda255c",
+          "InstalledFiles": [
+            "etc/ssl/cert.pem",
+            "etc/ssl/certs/ca-certificates.crt",
+            "etc/ssl1.1/cert.pem",
+            "etc/ssl1.1/certs"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libapk2@2.14.10-r0",
+          "Name": "libapk2",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libapk2@2.14.10-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "bed8a47b46be6e4"
+          },
+          "Version": "2.14.10-r0",
+          "Arch": "x86_64",
+          "SrcName": "apk-tools",
+          "SrcVersion": "2.14.10-r0",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "ca-certificates-bundle@20260611-r0",
+            "libcrypto3@3.5.7-r0",
+            "libssl3@3.5.7-r0",
+            "musl@1.2.5-r12",
+            "zlib@1.3.2-r0"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:3f15bdb7412351be4395e86ff8ffaac0a3320a74",
+          "InstalledFiles": [
+            "usr/lib/libapk.so.2.14.10"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libcrypto3@3.5.7-r0",
+          "Name": "libcrypto3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "Version": "3.5.7-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.7-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:8a18f7dff609b38d87d4d1f35268eb4f877ca0f7",
+          "InstalledFiles": [
+            "etc/ssl/ct_log_list.cnf",
+            "etc/ssl/ct_log_list.cnf.dist",
+            "etc/ssl/openssl.cnf",
+            "etc/ssl/openssl.cnf.dist",
+            "usr/lib/libcrypto.so.3",
+            "usr/lib/engines-3/afalg.so",
+            "usr/lib/engines-3/capi.so",
+            "usr/lib/engines-3/loader_attic.so",
+            "usr/lib/engines-3/padlock.so",
+            "usr/lib/ossl-modules/legacy.so"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "libssl3@3.5.7-r0",
+          "Name": "libssl3",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "Version": "3.5.7-r0",
+          "Arch": "x86_64",
+          "SrcName": "openssl",
+          "SrcVersion": "3.5.7-r0",
+          "Licenses": [
+            "Apache-2.0"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "libcrypto3@3.5.7-r0",
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:25116e961b76dc73815bcba15a64be51b5df606f",
+          "InstalledFiles": [
+            "usr/lib/libssl.so.3"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "musl@1.2.5-r12",
+          "Name": "musl",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl@1.2.5-r12?arch=x86_64\u0026distro=3.22.5",
+            "UID": "b5a02196ba9bc411"
+          },
+          "Version": "1.2.5-r12",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.5-r12",
+          "Licenses": [
+            "MIT"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:f3cc854c6dadfeb53136d8d03f04d1ff98769bf9",
+          "InstalledFiles": [
+            "lib/ld-musl-x86_64.so.1",
+            "lib/libc.musl-x86_64.so.1"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "musl-utils@1.2.5-r12",
+          "Name": "musl-utils",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/musl-utils@1.2.5-r12?arch=x86_64\u0026distro=3.22.5",
+            "UID": "df612045786a2676"
+          },
+          "Version": "1.2.5-r12",
+          "Arch": "x86_64",
+          "SrcName": "musl",
+          "SrcVersion": "1.2.5-r12",
+          "Licenses": [
+            "MIT",
+            "BSD-2-Clause",
+            "GPL-2.0-or-later"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.5-r12",
+            "scanelf@1.3.8-r1"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:4f12bfa20780e846579acb151853e8db180ba919",
+          "InstalledFiles": [
+            "sbin/ldconfig",
+            "usr/bin/getconf",
+            "usr/bin/getent",
+            "usr/bin/iconv",
+            "usr/bin/ldd"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "scanelf@1.3.8-r1",
+          "Name": "scanelf",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/scanelf@1.3.8-r1?arch=x86_64\u0026distro=3.22.5",
+            "UID": "361702d1dd5d8a58"
+          },
+          "Version": "1.3.8-r1",
+          "Arch": "x86_64",
+          "SrcName": "pax-utils",
+          "SrcVersion": "1.3.8-r1",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:bd6dd1c820d476bcdf8ee38f003bcf2a73323b13",
+          "InstalledFiles": [
+            "usr/bin/scanelf"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "ssl_client@1.37.0-r20",
+          "Name": "ssl_client",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/ssl_client@1.37.0-r20?arch=x86_64\u0026distro=3.22.5",
+            "UID": "dad74aae12b0a043"
+          },
+          "Version": "1.37.0-r20",
+          "Arch": "x86_64",
+          "SrcName": "busybox",
+          "SrcVersion": "1.37.0-r20",
+          "Licenses": [
+            "GPL-2.0-only"
+          ],
+          "Maintainer": "Sören Tempel \u003csoeren+alpine@soeren-tempel.net\u003e",
+          "DependsOn": [
+            "libcrypto3@3.5.7-r0",
+            "libssl3@3.5.7-r0",
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:8bdfbaab4c99a5d77844ca989971c87161126784",
+          "InstalledFiles": [
+            "usr/bin/ssl_client"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "tzdata@2026c-r0",
+          "Name": "tzdata",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/tzdata@2026c-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "6ab862bd01a0d45a"
+          },
+          "Version": "2026c-r0",
+          "Arch": "x86_64",
+          "SrcName": "tzdata",
+          "SrcVersion": "2026c-r0",
+          "Licenses": [
+            "Public-Domain"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "Digest": "sha1:47753d622accf05ad4b6cdb6de1e77842e66705f",
+          "InstalledFiles": [
+            "usr/share/zoneinfo/CET",
+            "usr/share/zoneinfo/CST6CDT",
+            "usr/share/zoneinfo/Cuba",
+            "usr/share/zoneinfo/EET",
+            "usr/share/zoneinfo/EST",
+            "usr/share/zoneinfo/EST5EDT",
+            "usr/share/zoneinfo/Egypt",
+            "usr/share/zoneinfo/Eire",
+            "usr/share/zoneinfo/Factory",
+            "usr/share/zoneinfo/GB",
+            "usr/share/zoneinfo/GB-Eire",
+            "usr/share/zoneinfo/GMT",
+            "usr/share/zoneinfo/GMT+0",
+            "usr/share/zoneinfo/GMT-0",
+            "usr/share/zoneinfo/GMT0",
+            "usr/share/zoneinfo/Greenwich",
+            "usr/share/zoneinfo/HST",
+            "usr/share/zoneinfo/Hongkong",
+            "usr/share/zoneinfo/Iceland",
+            "usr/share/zoneinfo/Iran",
+            "usr/share/zoneinfo/Israel",
+            "usr/share/zoneinfo/Jamaica",
+            "usr/share/zoneinfo/Japan",
+            "usr/share/zoneinfo/Kwajalein",
+            "usr/share/zoneinfo/Libya",
+            "usr/share/zoneinfo/MET",
+            "usr/share/zoneinfo/MST",
+            "usr/share/zoneinfo/MST7MDT",
+            "usr/share/zoneinfo/NZ",
+            "usr/share/zoneinfo/NZ-CHAT",
+            "usr/share/zoneinfo/Navajo",
+            "usr/share/zoneinfo/PRC",
+            "usr/share/zoneinfo/PST8PDT",
+            "usr/share/zoneinfo/Poland",
+            "usr/share/zoneinfo/Portugal",
+            "usr/share/zoneinfo/ROC",
+            "usr/share/zoneinfo/ROK",
+            "usr/share/zoneinfo/Singapore",
+            "usr/share/zoneinfo/Turkey",
+            "usr/share/zoneinfo/UCT",
+            "usr/share/zoneinfo/UTC",
+            "usr/share/zoneinfo/Universal",
+            "usr/share/zoneinfo/W-SU",
+            "usr/share/zoneinfo/WET",
+            "usr/share/zoneinfo/Zulu",
+            "usr/share/zoneinfo/iso3166.tab",
+            "usr/share/zoneinfo/leap-seconds.list",
+            "usr/share/zoneinfo/posixrules",
+            "usr/share/zoneinfo/zone.tab",
+            "usr/share/zoneinfo/zone1970.tab",
+            "usr/share/zoneinfo/Africa/Abidjan",
+            "usr/share/zoneinfo/Africa/Accra",
+            "usr/share/zoneinfo/Africa/Addis_Ababa",
+            "usr/share/zoneinfo/Africa/Algiers",
+            "usr/share/zoneinfo/Africa/Asmara",
+            "usr/share/zoneinfo/Africa/Asmera",
+            "usr/share/zoneinfo/Africa/Bamako",
+            "usr/share/zoneinfo/Africa/Bangui",
+            "usr/share/zoneinfo/Africa/Banjul",
+            "usr/share/zoneinfo/Africa/Bissau",
+            "usr/share/zoneinfo/Africa/Blantyre",
+            "usr/share/zoneinfo/Africa/Brazzaville",
+            "usr/share/zoneinfo/Africa/Bujumbura",
+            "usr/share/zoneinfo/Africa/Cairo",
+            "usr/share/zoneinfo/Africa/Casablanca",
+            "usr/share/zoneinfo/Africa/Ceuta",
+            "usr/share/zoneinfo/Africa/Conakry",
+            "usr/share/zoneinfo/Africa/Dakar",
+            "usr/share/zoneinfo/Africa/Dar_es_Salaam",
+            "usr/share/zoneinfo/Africa/Djibouti",
+            "usr/share/zoneinfo/Africa/Douala",
+            "usr/share/zoneinfo/Africa/El_Aaiun",
+            "usr/share/zoneinfo/Africa/Freetown",
+            "usr/share/zoneinfo/Africa/Gaborone",
+            "usr/share/zoneinfo/Africa/Harare",
+            "usr/share/zoneinfo/Africa/Johannesburg",
+            "usr/share/zoneinfo/Africa/Juba",
+            "usr/share/zoneinfo/Africa/Kampala",
+            "usr/share/zoneinfo/Africa/Khartoum",
+            "usr/share/zoneinfo/Africa/Kigali",
+            "usr/share/zoneinfo/Africa/Kinshasa",
+            "usr/share/zoneinfo/Africa/Lagos",
+            "usr/share/zoneinfo/Africa/Libreville",
+            "usr/share/zoneinfo/Africa/Lome",
+            "usr/share/zoneinfo/Africa/Luanda",
+            "usr/share/zoneinfo/Africa/Lubumbashi",
+            "usr/share/zoneinfo/Africa/Lusaka",
+            "usr/share/zoneinfo/Africa/Malabo",
+            "usr/share/zoneinfo/Africa/Maputo",
+            "usr/share/zoneinfo/Africa/Maseru",
+            "usr/share/zoneinfo/Africa/Mbabane",
+            "usr/share/zoneinfo/Africa/Mogadishu",
+            "usr/share/zoneinfo/Africa/Monrovia",
+            "usr/share/zoneinfo/Africa/Nairobi",
+            "usr/share/zoneinfo/Africa/Ndjamena",
+            "usr/share/zoneinfo/Africa/Niamey",
+            "usr/share/zoneinfo/Africa/Nouakchott",
+            "usr/share/zoneinfo/Africa/Ouagadougou",
+            "usr/share/zoneinfo/Africa/Porto-Novo",
+            "usr/share/zoneinfo/Africa/Sao_Tome",
+            "usr/share/zoneinfo/Africa/Timbuktu",
+            "usr/share/zoneinfo/Africa/Tripoli",
+            "usr/share/zoneinfo/Africa/Tunis",
+            "usr/share/zoneinfo/Africa/Windhoek",
+            "usr/share/zoneinfo/America/Adak",
+            "usr/share/zoneinfo/America/Anchorage",
+            "usr/share/zoneinfo/America/Anguilla",
+            "usr/share/zoneinfo/America/Antigua",
+            "usr/share/zoneinfo/America/Araguaina",
+            "usr/share/zoneinfo/America/Aruba",
+            "usr/share/zoneinfo/America/Asuncion",
+            "usr/share/zoneinfo/America/Atikokan",
+            "usr/share/zoneinfo/America/Atka",
+            "usr/share/zoneinfo/America/Bahia",
+            "usr/share/zoneinfo/America/Bahia_Banderas",
+            "usr/share/zoneinfo/America/Barbados",
+            "usr/share/zoneinfo/America/Belem",
+            "usr/share/zoneinfo/America/Belize",
+            "usr/share/zoneinfo/America/Blanc-Sablon",
+            "usr/share/zoneinfo/America/Boa_Vista",
+            "usr/share/zoneinfo/America/Bogota",
+            "usr/share/zoneinfo/America/Boise",
+            "usr/share/zoneinfo/America/Buenos_Aires",
+            "usr/share/zoneinfo/America/Cambridge_Bay",
+            "usr/share/zoneinfo/America/Campo_Grande",
+            "usr/share/zoneinfo/America/Cancun",
+            "usr/share/zoneinfo/America/Caracas",
+            "usr/share/zoneinfo/America/Catamarca",
+            "usr/share/zoneinfo/America/Cayenne",
+            "usr/share/zoneinfo/America/Cayman",
+            "usr/share/zoneinfo/America/Chicago",
+            "usr/share/zoneinfo/America/Chihuahua",
+            "usr/share/zoneinfo/America/Ciudad_Juarez",
+            "usr/share/zoneinfo/America/Coral_Harbour",
+            "usr/share/zoneinfo/America/Cordoba",
+            "usr/share/zoneinfo/America/Costa_Rica",
+            "usr/share/zoneinfo/America/Coyhaique",
+            "usr/share/zoneinfo/America/Creston",
+            "usr/share/zoneinfo/America/Cuiaba",
+            "usr/share/zoneinfo/America/Curacao",
+            "usr/share/zoneinfo/America/Danmarkshavn",
+            "usr/share/zoneinfo/America/Dawson",
+            "usr/share/zoneinfo/America/Dawson_Creek",
+            "usr/share/zoneinfo/America/Denver",
+            "usr/share/zoneinfo/America/Detroit",
+            "usr/share/zoneinfo/America/Dominica",
+            "usr/share/zoneinfo/America/Edmonton",
+            "usr/share/zoneinfo/America/Eirunepe",
+            "usr/share/zoneinfo/America/El_Salvador",
+            "usr/share/zoneinfo/America/Ensenada",
+            "usr/share/zoneinfo/America/Fort_Nelson",
+            "usr/share/zoneinfo/America/Fort_Wayne",
+            "usr/share/zoneinfo/America/Fortaleza",
+            "usr/share/zoneinfo/America/Glace_Bay",
+            "usr/share/zoneinfo/America/Godthab",
+            "usr/share/zoneinfo/America/Goose_Bay",
+            "usr/share/zoneinfo/America/Grand_Turk",
+            "usr/share/zoneinfo/America/Grenada",
+            "usr/share/zoneinfo/America/Guadeloupe",
+            "usr/share/zoneinfo/America/Guatemala",
+            "usr/share/zoneinfo/America/Guayaquil",
+            "usr/share/zoneinfo/America/Guyana",
+            "usr/share/zoneinfo/America/Halifax",
+            "usr/share/zoneinfo/America/Havana",
+            "usr/share/zoneinfo/America/Hermosillo",
+            "usr/share/zoneinfo/America/Indianapolis",
+            "usr/share/zoneinfo/America/Inuvik",
+            "usr/share/zoneinfo/America/Iqaluit",
+            "usr/share/zoneinfo/America/Jamaica",
+            "usr/share/zoneinfo/America/Jujuy",
+            "usr/share/zoneinfo/America/Juneau",
+            "usr/share/zoneinfo/America/Knox_IN",
+            "usr/share/zoneinfo/America/Kralendijk",
+            "usr/share/zoneinfo/America/La_Paz",
+            "usr/share/zoneinfo/America/Lima",
+            "usr/share/zoneinfo/America/Los_Angeles",
+            "usr/share/zoneinfo/America/Louisville",
+            "usr/share/zoneinfo/America/Lower_Princes",
+            "usr/share/zoneinfo/America/Maceio",
+            "usr/share/zoneinfo/America/Managua",
+            "usr/share/zoneinfo/America/Manaus",
+            "usr/share/zoneinfo/America/Marigot",
+            "usr/share/zoneinfo/America/Martinique",
+            "usr/share/zoneinfo/America/Matamoros",
+            "usr/share/zoneinfo/America/Mazatlan",
+            "usr/share/zoneinfo/America/Mendoza",
+            "usr/share/zoneinfo/America/Menominee",
+            "usr/share/zoneinfo/America/Merida",
+            "usr/share/zoneinfo/America/Metlakatla",
+            "usr/share/zoneinfo/America/Mexico_City",
+            "usr/share/zoneinfo/America/Miquelon",
+            "usr/share/zoneinfo/America/Moncton",
+            "usr/share/zoneinfo/America/Monterrey",
+            "usr/share/zoneinfo/America/Montevideo",
+            "usr/share/zoneinfo/America/Montreal",
+            "usr/share/zoneinfo/America/Montserrat",
+            "usr/share/zoneinfo/America/Nassau",
+            "usr/share/zoneinfo/America/New_York",
+            "usr/share/zoneinfo/America/Nipigon",
+            "usr/share/zoneinfo/America/Nome",
+            "usr/share/zoneinfo/America/Noronha",
+            "usr/share/zoneinfo/America/Nuuk",
+            "usr/share/zoneinfo/America/Ojinaga",
+            "usr/share/zoneinfo/America/Panama",
+            "usr/share/zoneinfo/America/Pangnirtung",
+            "usr/share/zoneinfo/America/Paramaribo",
+            "usr/share/zoneinfo/America/Phoenix",
+            "usr/share/zoneinfo/America/Port-au-Prince",
+            "usr/share/zoneinfo/America/Port_of_Spain",
+            "usr/share/zoneinfo/America/Porto_Acre",
+            "usr/share/zoneinfo/America/Porto_Velho",
+            "usr/share/zoneinfo/America/Puerto_Rico",
+            "usr/share/zoneinfo/America/Punta_Arenas",
+            "usr/share/zoneinfo/America/Rainy_River",
+            "usr/share/zoneinfo/America/Rankin_Inlet",
+            "usr/share/zoneinfo/America/Recife",
+            "usr/share/zoneinfo/America/Regina",
+            "usr/share/zoneinfo/America/Resolute",
+            "usr/share/zoneinfo/America/Rio_Branco",
+            "usr/share/zoneinfo/America/Rosario",
+            "usr/share/zoneinfo/America/Santa_Isabel",
+            "usr/share/zoneinfo/America/Santarem",
+            "usr/share/zoneinfo/America/Santiago",
+            "usr/share/zoneinfo/America/Santo_Domingo",
+            "usr/share/zoneinfo/America/Sao_Paulo",
+            "usr/share/zoneinfo/America/Scoresbysund",
+            "usr/share/zoneinfo/America/Shiprock",
+            "usr/share/zoneinfo/America/Sitka",
+            "usr/share/zoneinfo/America/St_Barthelemy",
+            "usr/share/zoneinfo/America/St_Johns",
+            "usr/share/zoneinfo/America/St_Kitts",
+            "usr/share/zoneinfo/America/St_Lucia",
+            "usr/share/zoneinfo/America/St_Thomas",
+            "usr/share/zoneinfo/America/St_Vincent",
+            "usr/share/zoneinfo/America/Swift_Current",
+            "usr/share/zoneinfo/America/Tegucigalpa",
+            "usr/share/zoneinfo/America/Thule",
+            "usr/share/zoneinfo/America/Thunder_Bay",
+            "usr/share/zoneinfo/America/Tijuana",
+            "usr/share/zoneinfo/America/Toronto",
+            "usr/share/zoneinfo/America/Tortola",
+            "usr/share/zoneinfo/America/Vancouver",
+            "usr/share/zoneinfo/America/Virgin",
+            "usr/share/zoneinfo/America/Whitehorse",
+            "usr/share/zoneinfo/America/Winnipeg",
+            "usr/share/zoneinfo/America/Yakutat",
+            "usr/share/zoneinfo/America/Yellowknife",
+            "usr/share/zoneinfo/America/Argentina/Buenos_Aires",
+            "usr/share/zoneinfo/America/Argentina/Catamarca",
+            "usr/share/zoneinfo/America/Argentina/ComodRivadavia",
+            "usr/share/zoneinfo/America/Argentina/Cordoba",
+            "usr/share/zoneinfo/America/Argentina/Jujuy",
+            "usr/share/zoneinfo/America/Argentina/La_Rioja",
+            "usr/share/zoneinfo/America/Argentina/Mendoza",
+            "usr/share/zoneinfo/America/Argentina/Rio_Gallegos",
+            "usr/share/zoneinfo/America/Argentina/Salta",
+            "usr/share/zoneinfo/America/Argentina/San_Juan",
+            "usr/share/zoneinfo/America/Argentina/San_Luis",
+            "usr/share/zoneinfo/America/Argentina/Tucuman",
+            "usr/share/zoneinfo/America/Argentina/Ushuaia",
+            "usr/share/zoneinfo/America/Indiana/Indianapolis",
+            "usr/share/zoneinfo/America/Indiana/Knox",
+            "usr/share/zoneinfo/America/Indiana/Marengo",
+            "usr/share/zoneinfo/America/Indiana/Petersburg",
+            "usr/share/zoneinfo/America/Indiana/Tell_City",
+            "usr/share/zoneinfo/America/Indiana/Vevay",
+            "usr/share/zoneinfo/America/Indiana/Vincennes",
+            "usr/share/zoneinfo/America/Indiana/Winamac",
+            "usr/share/zoneinfo/America/Kentucky/Louisville",
+            "usr/share/zoneinfo/America/Kentucky/Monticello",
+            "usr/share/zoneinfo/America/North_Dakota/Beulah",
+            "usr/share/zoneinfo/America/North_Dakota/Center",
+            "usr/share/zoneinfo/America/North_Dakota/New_Salem",
+            "usr/share/zoneinfo/Antarctica/Casey",
+            "usr/share/zoneinfo/Antarctica/Davis",
+            "usr/share/zoneinfo/Antarctica/DumontDUrville",
+            "usr/share/zoneinfo/Antarctica/Macquarie",
+            "usr/share/zoneinfo/Antarctica/Mawson",
+            "usr/share/zoneinfo/Antarctica/McMurdo",
+            "usr/share/zoneinfo/Antarctica/Palmer",
+            "usr/share/zoneinfo/Antarctica/Rothera",
+            "usr/share/zoneinfo/Antarctica/South_Pole",
+            "usr/share/zoneinfo/Antarctica/Syowa",
+            "usr/share/zoneinfo/Antarctica/Troll",
+            "usr/share/zoneinfo/Antarctica/Vostok",
+            "usr/share/zoneinfo/Arctic/Longyearbyen",
+            "usr/share/zoneinfo/Asia/Aden",
+            "usr/share/zoneinfo/Asia/Almaty",
+            "usr/share/zoneinfo/Asia/Amman",
+            "usr/share/zoneinfo/Asia/Anadyr",
+            "usr/share/zoneinfo/Asia/Aqtau",
+            "usr/share/zoneinfo/Asia/Aqtobe",
+            "usr/share/zoneinfo/Asia/Ashgabat",
+            "usr/share/zoneinfo/Asia/Ashkhabad",
+            "usr/share/zoneinfo/Asia/Atyrau",
+            "usr/share/zoneinfo/Asia/Baghdad",
+            "usr/share/zoneinfo/Asia/Bahrain",
+            "usr/share/zoneinfo/Asia/Baku",
+            "usr/share/zoneinfo/Asia/Bangkok",
+            "usr/share/zoneinfo/Asia/Barnaul",
+            "usr/share/zoneinfo/Asia/Beirut",
+            "usr/share/zoneinfo/Asia/Bishkek",
+            "usr/share/zoneinfo/Asia/Brunei",
+            "usr/share/zoneinfo/Asia/Calcutta",
+            "usr/share/zoneinfo/Asia/Chita",
+            "usr/share/zoneinfo/Asia/Choibalsan",
+            "usr/share/zoneinfo/Asia/Chongqing",
+            "usr/share/zoneinfo/Asia/Chungking",
+            "usr/share/zoneinfo/Asia/Colombo",
+            "usr/share/zoneinfo/Asia/Dacca",
+            "usr/share/zoneinfo/Asia/Damascus",
+            "usr/share/zoneinfo/Asia/Dhaka",
+            "usr/share/zoneinfo/Asia/Dili",
+            "usr/share/zoneinfo/Asia/Dubai",
+            "usr/share/zoneinfo/Asia/Dushanbe",
+            "usr/share/zoneinfo/Asia/Famagusta",
+            "usr/share/zoneinfo/Asia/Gaza",
+            "usr/share/zoneinfo/Asia/Harbin",
+            "usr/share/zoneinfo/Asia/Hebron",
+            "usr/share/zoneinfo/Asia/Ho_Chi_Minh",
+            "usr/share/zoneinfo/Asia/Hong_Kong",
+            "usr/share/zoneinfo/Asia/Hovd",
+            "usr/share/zoneinfo/Asia/Irkutsk",
+            "usr/share/zoneinfo/Asia/Istanbul",
+            "usr/share/zoneinfo/Asia/Jakarta",
+            "usr/share/zoneinfo/Asia/Jayapura",
+            "usr/share/zoneinfo/Asia/Jerusalem",
+            "usr/share/zoneinfo/Asia/Kabul",
+            "usr/share/zoneinfo/Asia/Kamchatka",
+            "usr/share/zoneinfo/Asia/Karachi",
+            "usr/share/zoneinfo/Asia/Kashgar",
+            "usr/share/zoneinfo/Asia/Kathmandu",
+            "usr/share/zoneinfo/Asia/Katmandu",
+            "usr/share/zoneinfo/Asia/Khandyga",
+            "usr/share/zoneinfo/Asia/Kolkata",
+            "usr/share/zoneinfo/Asia/Krasnoyarsk",
+            "usr/share/zoneinfo/Asia/Kuala_Lumpur",
+            "usr/share/zoneinfo/Asia/Kuching",
+            "usr/share/zoneinfo/Asia/Kuwait",
+            "usr/share/zoneinfo/Asia/Macao",
+            "usr/share/zoneinfo/Asia/Macau",
+            "usr/share/zoneinfo/Asia/Magadan",
+            "usr/share/zoneinfo/Asia/Makassar",
+            "usr/share/zoneinfo/Asia/Manila",
+            "usr/share/zoneinfo/Asia/Muscat",
+            "usr/share/zoneinfo/Asia/Nicosia",
+            "usr/share/zoneinfo/Asia/Novokuznetsk",
+            "usr/share/zoneinfo/Asia/Novosibirsk",
+            "usr/share/zoneinfo/Asia/Omsk",
+            "usr/share/zoneinfo/Asia/Oral",
+            "usr/share/zoneinfo/Asia/Phnom_Penh",
+            "usr/share/zoneinfo/Asia/Pontianak",
+            "usr/share/zoneinfo/Asia/Pyongyang",
+            "usr/share/zoneinfo/Asia/Qatar",
+            "usr/share/zoneinfo/Asia/Qostanay",
+            "usr/share/zoneinfo/Asia/Qyzylorda",
+            "usr/share/zoneinfo/Asia/Rangoon",
+            "usr/share/zoneinfo/Asia/Riyadh",
+            "usr/share/zoneinfo/Asia/Saigon",
+            "usr/share/zoneinfo/Asia/Sakhalin",
+            "usr/share/zoneinfo/Asia/Samarkand",
+            "usr/share/zoneinfo/Asia/Seoul",
+            "usr/share/zoneinfo/Asia/Shanghai",
+            "usr/share/zoneinfo/Asia/Singapore",
+            "usr/share/zoneinfo/Asia/Srednekolymsk",
+            "usr/share/zoneinfo/Asia/Taipei",
+            "usr/share/zoneinfo/Asia/Tashkent",
+            "usr/share/zoneinfo/Asia/Tbilisi",
+            "usr/share/zoneinfo/Asia/Tehran",
+            "usr/share/zoneinfo/Asia/Tel_Aviv",
+            "usr/share/zoneinfo/Asia/Thimbu",
+            "usr/share/zoneinfo/Asia/Thimphu",
+            "usr/share/zoneinfo/Asia/Tokyo",
+            "usr/share/zoneinfo/Asia/Tomsk",
+            "usr/share/zoneinfo/Asia/Ujung_Pandang",
+            "usr/share/zoneinfo/Asia/Ulaanbaatar",
+            "usr/share/zoneinfo/Asia/Ulan_Bator",
+            "usr/share/zoneinfo/Asia/Urumqi",
+            "usr/share/zoneinfo/Asia/Ust-Nera",
+            "usr/share/zoneinfo/Asia/Vientiane",
+            "usr/share/zoneinfo/Asia/Vladivostok",
+            "usr/share/zoneinfo/Asia/Yakutsk",
+            "usr/share/zoneinfo/Asia/Yangon",
+            "usr/share/zoneinfo/Asia/Yekaterinburg",
+            "usr/share/zoneinfo/Asia/Yerevan",
+            "usr/share/zoneinfo/Atlantic/Azores",
+            "usr/share/zoneinfo/Atlantic/Bermuda",
+            "usr/share/zoneinfo/Atlantic/Canary",
+            "usr/share/zoneinfo/Atlantic/Cape_Verde",
+            "usr/share/zoneinfo/Atlantic/Faeroe",
+            "usr/share/zoneinfo/Atlantic/Faroe",
+            "usr/share/zoneinfo/Atlantic/Jan_Mayen",
+            "usr/share/zoneinfo/Atlantic/Madeira",
+            "usr/share/zoneinfo/Atlantic/Reykjavik",
+            "usr/share/zoneinfo/Atlantic/South_Georgia",
+            "usr/share/zoneinfo/Atlantic/St_Helena",
+            "usr/share/zoneinfo/Atlantic/Stanley",
+            "usr/share/zoneinfo/Australia/ACT",
+            "usr/share/zoneinfo/Australia/Adelaide",
+            "usr/share/zoneinfo/Australia/Brisbane",
+            "usr/share/zoneinfo/Australia/Broken_Hill",
+            "usr/share/zoneinfo/Australia/Canberra",
+            "usr/share/zoneinfo/Australia/Currie",
+            "usr/share/zoneinfo/Australia/Darwin",
+            "usr/share/zoneinfo/Australia/Eucla",
+            "usr/share/zoneinfo/Australia/Hobart",
+            "usr/share/zoneinfo/Australia/LHI",
+            "usr/share/zoneinfo/Australia/Lindeman",
+            "usr/share/zoneinfo/Australia/Lord_Howe",
+            "usr/share/zoneinfo/Australia/Melbourne",
+            "usr/share/zoneinfo/Australia/NSW",
+            "usr/share/zoneinfo/Australia/North",
+            "usr/share/zoneinfo/Australia/Perth",
+            "usr/share/zoneinfo/Australia/Queensland",
+            "usr/share/zoneinfo/Australia/South",
+            "usr/share/zoneinfo/Australia/Sydney",
+            "usr/share/zoneinfo/Australia/Tasmania",
+            "usr/share/zoneinfo/Australia/Victoria",
+            "usr/share/zoneinfo/Australia/West",
+            "usr/share/zoneinfo/Australia/Yancowinna",
+            "usr/share/zoneinfo/Brazil/Acre",
+            "usr/share/zoneinfo/Brazil/DeNoronha",
+            "usr/share/zoneinfo/Brazil/East",
+            "usr/share/zoneinfo/Brazil/West",
+            "usr/share/zoneinfo/Canada/Atlantic",
+            "usr/share/zoneinfo/Canada/Central",
+            "usr/share/zoneinfo/Canada/Eastern",
+            "usr/share/zoneinfo/Canada/Mountain",
+            "usr/share/zoneinfo/Canada/Newfoundland",
+            "usr/share/zoneinfo/Canada/Pacific",
+            "usr/share/zoneinfo/Canada/Saskatchewan",
+            "usr/share/zoneinfo/Canada/Yukon",
+            "usr/share/zoneinfo/Chile/Continental",
+            "usr/share/zoneinfo/Chile/EasterIsland",
+            "usr/share/zoneinfo/Etc/GMT",
+            "usr/share/zoneinfo/Etc/GMT+0",
+            "usr/share/zoneinfo/Etc/GMT+1",
+            "usr/share/zoneinfo/Etc/GMT+10",
+            "usr/share/zoneinfo/Etc/GMT+11",
+            "usr/share/zoneinfo/Etc/GMT+12",
+            "usr/share/zoneinfo/Etc/GMT+2",
+            "usr/share/zoneinfo/Etc/GMT+3",
+            "usr/share/zoneinfo/Etc/GMT+4",
+            "usr/share/zoneinfo/Etc/GMT+5",
+            "usr/share/zoneinfo/Etc/GMT+6",
+            "usr/share/zoneinfo/Etc/GMT+7",
+            "usr/share/zoneinfo/Etc/GMT+8",
+            "usr/share/zoneinfo/Etc/GMT+9",
+            "usr/share/zoneinfo/Etc/GMT-0",
+            "usr/share/zoneinfo/Etc/GMT-1",
+            "usr/share/zoneinfo/Etc/GMT-10",
+            "usr/share/zoneinfo/Etc/GMT-11",
+            "usr/share/zoneinfo/Etc/GMT-12",
+            "usr/share/zoneinfo/Etc/GMT-13",
+            "usr/share/zoneinfo/Etc/GMT-14",
+            "usr/share/zoneinfo/Etc/GMT-2",
+            "usr/share/zoneinfo/Etc/GMT-3",
+            "usr/share/zoneinfo/Etc/GMT-4",
+            "usr/share/zoneinfo/Etc/GMT-5",
+            "usr/share/zoneinfo/Etc/GMT-6",
+            "usr/share/zoneinfo/Etc/GMT-7",
+            "usr/share/zoneinfo/Etc/GMT-8",
+            "usr/share/zoneinfo/Etc/GMT-9",
+            "usr/share/zoneinfo/Etc/GMT0",
+            "usr/share/zoneinfo/Etc/Greenwich",
+            "usr/share/zoneinfo/Etc/UCT",
+            "usr/share/zoneinfo/Etc/UTC",
+            "usr/share/zoneinfo/Etc/Universal",
+            "usr/share/zoneinfo/Etc/Zulu",
+            "usr/share/zoneinfo/Europe/Amsterdam",
+            "usr/share/zoneinfo/Europe/Andorra",
+            "usr/share/zoneinfo/Europe/Astrakhan",
+            "usr/share/zoneinfo/Europe/Athens",
+            "usr/share/zoneinfo/Europe/Belfast",
+            "usr/share/zoneinfo/Europe/Belgrade",
+            "usr/share/zoneinfo/Europe/Berlin",
+            "usr/share/zoneinfo/Europe/Bratislava",
+            "usr/share/zoneinfo/Europe/Brussels",
+            "usr/share/zoneinfo/Europe/Bucharest",
+            "usr/share/zoneinfo/Europe/Budapest",
+            "usr/share/zoneinfo/Europe/Busingen",
+            "usr/share/zoneinfo/Europe/Chisinau",
+            "usr/share/zoneinfo/Europe/Copenhagen",
+            "usr/share/zoneinfo/Europe/Dublin",
+            "usr/share/zoneinfo/Europe/Gibraltar",
+            "usr/share/zoneinfo/Europe/Guernsey",
+            "usr/share/zoneinfo/Europe/Helsinki",
+            "usr/share/zoneinfo/Europe/Isle_of_Man",
+            "usr/share/zoneinfo/Europe/Istanbul",
+            "usr/share/zoneinfo/Europe/Jersey",
+            "usr/share/zoneinfo/Europe/Kaliningrad",
+            "usr/share/zoneinfo/Europe/Kiev",
+            "usr/share/zoneinfo/Europe/Kirov",
+            "usr/share/zoneinfo/Europe/Kyiv",
+            "usr/share/zoneinfo/Europe/Lisbon",
+            "usr/share/zoneinfo/Europe/Ljubljana",
+            "usr/share/zoneinfo/Europe/London",
+            "usr/share/zoneinfo/Europe/Luxembourg",
+            "usr/share/zoneinfo/Europe/Madrid",
+            "usr/share/zoneinfo/Europe/Malta",
+            "usr/share/zoneinfo/Europe/Mariehamn",
+            "usr/share/zoneinfo/Europe/Minsk",
+            "usr/share/zoneinfo/Europe/Monaco",
+            "usr/share/zoneinfo/Europe/Moscow",
+            "usr/share/zoneinfo/Europe/Nicosia",
+            "usr/share/zoneinfo/Europe/Oslo",
+            "usr/share/zoneinfo/Europe/Paris",
+            "usr/share/zoneinfo/Europe/Podgorica",
+            "usr/share/zoneinfo/Europe/Prague",
+            "usr/share/zoneinfo/Europe/Riga",
+            "usr/share/zoneinfo/Europe/Rome",
+            "usr/share/zoneinfo/Europe/Samara",
+            "usr/share/zoneinfo/Europe/San_Marino",
+            "usr/share/zoneinfo/Europe/Sarajevo",
+            "usr/share/zoneinfo/Europe/Saratov",
+            "usr/share/zoneinfo/Europe/Simferopol",
+            "usr/share/zoneinfo/Europe/Skopje",
+            "usr/share/zoneinfo/Europe/Sofia",
+            "usr/share/zoneinfo/Europe/Stockholm",
+            "usr/share/zoneinfo/Europe/Tallinn",
+            "usr/share/zoneinfo/Europe/Tirane",
+            "usr/share/zoneinfo/Europe/Tiraspol",
+            "usr/share/zoneinfo/Europe/Ulyanovsk",
+            "usr/share/zoneinfo/Europe/Uzhgorod",
+            "usr/share/zoneinfo/Europe/Vaduz",
+            "usr/share/zoneinfo/Europe/Vatican",
+            "usr/share/zoneinfo/Europe/Vienna",
+            "usr/share/zoneinfo/Europe/Vilnius",
+            "usr/share/zoneinfo/Europe/Volgograd",
+            "usr/share/zoneinfo/Europe/Warsaw",
+            "usr/share/zoneinfo/Europe/Zagreb",
+            "usr/share/zoneinfo/Europe/Zaporozhye",
+            "usr/share/zoneinfo/Europe/Zurich",
+            "usr/share/zoneinfo/Indian/Antananarivo",
+            "usr/share/zoneinfo/Indian/Chagos",
+            "usr/share/zoneinfo/Indian/Christmas",
+            "usr/share/zoneinfo/Indian/Cocos",
+            "usr/share/zoneinfo/Indian/Comoro",
+            "usr/share/zoneinfo/Indian/Kerguelen",
+            "usr/share/zoneinfo/Indian/Mahe",
+            "usr/share/zoneinfo/Indian/Maldives",
+            "usr/share/zoneinfo/Indian/Mauritius",
+            "usr/share/zoneinfo/Indian/Mayotte",
+            "usr/share/zoneinfo/Indian/Reunion",
+            "usr/share/zoneinfo/Mexico/BajaNorte",
+            "usr/share/zoneinfo/Mexico/BajaSur",
+            "usr/share/zoneinfo/Mexico/General",
+            "usr/share/zoneinfo/Pacific/Apia",
+            "usr/share/zoneinfo/Pacific/Auckland",
+            "usr/share/zoneinfo/Pacific/Bougainville",
+            "usr/share/zoneinfo/Pacific/Chatham",
+            "usr/share/zoneinfo/Pacific/Chuuk",
+            "usr/share/zoneinfo/Pacific/Easter",
+            "usr/share/zoneinfo/Pacific/Efate",
+            "usr/share/zoneinfo/Pacific/Enderbury",
+            "usr/share/zoneinfo/Pacific/Fakaofo",
+            "usr/share/zoneinfo/Pacific/Fiji",
+            "usr/share/zoneinfo/Pacific/Funafuti",
+            "usr/share/zoneinfo/Pacific/Galapagos",
+            "usr/share/zoneinfo/Pacific/Gambier",
+            "usr/share/zoneinfo/Pacific/Guadalcanal",
+            "usr/share/zoneinfo/Pacific/Guam",
+            "usr/share/zoneinfo/Pacific/Honolulu",
+            "usr/share/zoneinfo/Pacific/Johnston",
+            "usr/share/zoneinfo/Pacific/Kanton",
+            "usr/share/zoneinfo/Pacific/Kiritimati",
+            "usr/share/zoneinfo/Pacific/Kosrae",
+            "usr/share/zoneinfo/Pacific/Kwajalein",
+            "usr/share/zoneinfo/Pacific/Majuro",
+            "usr/share/zoneinfo/Pacific/Marquesas",
+            "usr/share/zoneinfo/Pacific/Midway",
+            "usr/share/zoneinfo/Pacific/Nauru",
+            "usr/share/zoneinfo/Pacific/Niue",
+            "usr/share/zoneinfo/Pacific/Norfolk",
+            "usr/share/zoneinfo/Pacific/Noumea",
+            "usr/share/zoneinfo/Pacific/Pago_Pago",
+            "usr/share/zoneinfo/Pacific/Palau",
+            "usr/share/zoneinfo/Pacific/Pitcairn",
+            "usr/share/zoneinfo/Pacific/Pohnpei",
+            "usr/share/zoneinfo/Pacific/Ponape",
+            "usr/share/zoneinfo/Pacific/Port_Moresby",
+            "usr/share/zoneinfo/Pacific/Rarotonga",
+            "usr/share/zoneinfo/Pacific/Saipan",
+            "usr/share/zoneinfo/Pacific/Samoa",
+            "usr/share/zoneinfo/Pacific/Tahiti",
+            "usr/share/zoneinfo/Pacific/Tarawa",
+            "usr/share/zoneinfo/Pacific/Tongatapu",
+            "usr/share/zoneinfo/Pacific/Truk",
+            "usr/share/zoneinfo/Pacific/Wake",
+            "usr/share/zoneinfo/Pacific/Wallis",
+            "usr/share/zoneinfo/Pacific/Yap",
+            "usr/share/zoneinfo/US/Alaska",
+            "usr/share/zoneinfo/US/Aleutian",
+            "usr/share/zoneinfo/US/Arizona",
+            "usr/share/zoneinfo/US/Central",
+            "usr/share/zoneinfo/US/East-Indiana",
+            "usr/share/zoneinfo/US/Eastern",
+            "usr/share/zoneinfo/US/Hawaii",
+            "usr/share/zoneinfo/US/Indiana-Starke",
+            "usr/share/zoneinfo/US/Michigan",
+            "usr/share/zoneinfo/US/Mountain",
+            "usr/share/zoneinfo/US/Pacific",
+            "usr/share/zoneinfo/US/Samoa"
+          ],
+          "AnalyzedBy": "apk"
+        },
+        {
+          "ID": "zlib@1.3.2-r0",
+          "Name": "zlib",
+          "Identifier": {
+            "PURL": "pkg:apk/alpine/zlib@1.3.2-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "16432bdae66ef0ed"
+          },
+          "Version": "1.3.2-r0",
+          "Arch": "x86_64",
+          "SrcName": "zlib",
+          "SrcVersion": "1.3.2-r0",
+          "Licenses": [
+            "Zlib"
+          ],
+          "Maintainer": "Natanael Copa \u003cncopa@alpinelinux.org\u003e",
+          "DependsOn": [
+            "musl@1.2.5-r12"
+          ],
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "Digest": "sha1:4fd2a2fb21261d4b23330157168feb0c5628a4c6",
+          "InstalledFiles": [
+            "usr/lib/libz.so.1",
+            "usr/lib/libz.so.1.3.2"
+          ],
+          "AnalyzedBy": "apk"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-14456",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-14456",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:76a42dc17dd513e293e665c70912151fcef112de11228b07bfe6cc4598cdc2ca",
+          "Title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server",
+          "Description": "Issue summary: When an OpenSSL QUIC server (Listener SSL object) processes\nvalid QUIC Initial packets for unknown destination connection IDs, it\ncan allocate and queue new incoming channels without enforcing any limit.\n\nImpact summary: A remote peer that can make many Initial packets reach the\nserver listener faster than the application accepts connections, can cause the\nmemory allocated to store the per-channel state to grow without any limits,\npotentially making the QUIC listener unavailable and causing Denial of Service.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: The function that handles inbound QUIC packets uses\nConnection-Id from the packet header to find an existing connection\n(QUIC channel). If no existing connection is found and the packet\ntype is INITIAL, the function treats the packet as a new connection. It\nallocates a new channel object and inserts it into a queue where it\nwaits to be accepted by the local application with SSL_accept(3ossl).\nThe memory occupied by these initial channel objects may grow\nwithout bounds if the application is not able to call SSL_accept()\nfrequently enough to serve these inbound connection requests.\n\nThe issue is present since OpenSSL 3.5 when the QUIC server implementation\nwas added.\n\nThe fix introduces a limit for pending connections. The default limit is set\nto 256 pending connections (waiting to be accepted by the local application).\nApplications may change the default by calling SSL_set_value_uint(3ossl).\n\nFIPS impact: no\nThe FIPS module is not affected as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "photon": 3,
+            "redhat": 3,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "http://www.openwall.com/lists/oss-security/2026/08/13/4",
+            "https://access.redhat.com/security/cve/CVE-2026-14456",
+            "https://github.com/openssl/openssl/commit/08e7756c3900bcfd77a720e7b74e27d6e4ed01a9",
+            "https://github.com/openssl/openssl/commit/4084152e040329ca0194c4c1750b9b46d00a5b6b",
+            "https://github.com/openssl/openssl/commit/f2f1465f2d2e5c61dfeac4d20fd093797d821139",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-14456",
+            "https://openssl-library.org/news/secadv/20260813.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-14456"
+          ],
+          "PublishedDate": "2026-08-13T15:19:31.82Z",
+          "LastModifiedDate": "2026-08-28T19:46:29.323Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-18798",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-18798",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:a74e37b104954d4db68341f16b578b41850025be9bb2a587f7d3e69429d894f5",
+          "Title": "openssl: QUIC server may trigger double free when processing INITIAL packet",
+          "Description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object\nwhen channel creation fails for initial packet.\n\nImpact summary: Double free leads to heap corruption, which typically results in \ntermination of QUIC server process, leading to Denial of Service. There is so\nfar no evidence that this double free is exploitable for remote code execution,\nthus it is considered highly improbable.\n\nCWE: CWE-415: Double Free\n\nDescription: In order to validate initial packet, OpenSSL QUIC stack default\npacket handler (port_default_packet_handler()) creates a so-called QRX object.\nIf the initial packet validates successfully with QRX object, the default packet\nhandler proceeds to channel (connection object) creation. The QRX object used\nfor packet validation is passed to port_bind_channel(), so it becomes part of\nthe newly created connection. If port_bind_channel() fails, then it also frees\nthe QRX object. Once port_bind_channel() returns, the port_default_packet_handler()\ndetects the failure and proceeds to the error branch, where the same QRX object is\nfreed for the second time.\n\nThe failure in port_bind_channel() function can be induced with a relatively\nlow effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet\ncarries DCID (destination connection ID) which is shorter than 8 bytes, then\nport_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid()\ndetects that the DCID has invalid length.\n\nFIPS impact: no\nThe FIPS module is not affected, as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-415"
+          ],
+          "VendorSeverity": {
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-18798",
+            "https://github.com/openssl/openssl/commit/70cebd74d3592f5272945501b58a60374c4e13af",
+            "https://github.com/openssl/openssl/commit/967582d5037f01a26b6d19beae19af62a1b15c3c",
+            "https://github.com/openssl/openssl/commit/a14a1deac403522fbeafabcb198503cf6caa7dc4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-18798",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-18798"
+          ],
+          "PublishedDate": "2026-08-25T13:17:49.813Z",
+          "LastModifiedDate": "2026-08-28T19:46:29.323Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63072",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63072",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:5451a4d4e898833ad1214f143507756d844a62f9751cd7b1a91b87523e37ea6b",
+          "Title": "openssl: heap buffer overflow in CMS key unwrapping",
+          "Description": "Issue summary: OpenSSL CMS decryption sizes the key-unwrap output buffer based\non querying the unwrapped key size, but the AES-WRAP-PAD unwrap primitive\ncan write and cleanse more bytes than that query reports, causing an 8-byte\nout-of-bounds heap write.\n\nImpact summary: An attacker who supplies a crafted CMS message can trigger a\ndeterministic 8-byte out-of-bounds heap write when the victim decrypts it\nwith CMS_decrypt(), corrupting the heap and typically resulting in a Denial\nof Service.\n\nCWE: CWE-787: Out-of-bounds Write\n\nDescription: The key-wrap OID is potentially attacker-controlled on the wire.\nCMS unwrapping allows both id-aesNNN-wrap-pad and id-aesNNN-wrap ciphers.\nAn attacker can take a legitimate message and change a single OID byte to\nselect the padded variant while leaving the message otherwise valid. Since\nthe unwrap key is derived from the recipient's private operation (ECDH key\nagreement or ML-KEM decapsulation), the RFC 5649 integrity check cannot\npass, and the decryption fails with integrity failure.\n\nThe write is a fixed-size (8-byte), fixed-value (zero) heap overflow\nimmediately past the allocation, requires no special configuration, and is\nreachable from the public CMS_decrypt() function. The consequence is\na heap corruption leading to a Denial of Service. The fix in the CMS code\nsizes the unwrap output buffer for the worst case so a failed unwrap cannot\nwrite past the allocation.\n\nFIPS impact: no\n\nAs the CMS code lives outside the FIPS module boundary, no FIPS\nmodules are affected by this CVE.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-787"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63072",
+            "https://github.com/openssl/openssl/commit/2a3dac874c8057c1f0186849bf1ede1ae7b6b756",
+            "https://github.com/openssl/openssl/commit/87784ad619af36b8807c2044b3940006fccc1e42",
+            "https://github.com/openssl/openssl/commit/9530a5fd1aacaeccdced4478ea2340a480613335",
+            "https://github.com/openssl/openssl/commit/9ec2f6d2ae2bcad907cf7ee38584855bafe4979a",
+            "https://github.com/openssl/openssl/commit/a0c8ec557d9cac078f032d76cdf684fe743eb382",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63072",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63072"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.01Z",
+          "LastModifiedDate": "2026-09-11T21:16:34.287Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63076",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63076",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:61869705a737cb18b3642b8833324a8746bc50ee3fcc7a66ab01c7061cb630cc",
+          "Title": "openssl: invalid pointer dereference in CMP server via crafted protectionAlg",
+          "Description": "Issue summary: OpenSSL CMP password based protection verification only\nchecks whether the protectionAlg parameter was not NULL and not its\nASN.1 type, before treating it as a PBMParameter. A crafted message can\ncontain a parameter of a different type, which is then dereferenced as an\ninvalid pointer.\n\nImpact summary: A remote, unauthenticated attacker can crash an application\nacting as a CMP server that accepts PBM-protected messages, or a CMP client\ntalking to a malicious or intercepted CMP server, resulting in a Denial of\nService.\n\nCWE: CWE-476: NULL Pointer Dereference\n\nDescription: When verifying the password-based MAC protection of a CMP\nmessage, OpenSSL library reads the protectionAlg algorithm parameter with\nX509_ALGOR_get0(), which returns both the parameter type and its value\npointer. The value is then cast to an ASN1_STRING and treated as the\nexpected PBMParameter after only checking that pointer is not NULL. The\nparameter type returned by X509_ALGOR_get0() was never consulted.\n\nThis happens during protection verification, before any MAC is computed, so\nno knowledge of the PBM shared secret is required; the only precondition is\nthat PBM verification is reachable. On the server side this is reached from\nOSSL_CMP_SRV_process_request() for any application that stands up a CMP\nserver accepting PBM-protected messages, and on the client side from CMP\nresponse validation against a malicious or on-path (MITM) server. The\nreliable consequence is a denial of service; there is no memory disclosure,\nno controlled memory write, and no path to code execution. CMP is a\nspecialized feature that an application must explicitly enable.\n\nFIPS impact: no\nAs the CMP code lives outside the FIPS module boundary, no FIPS modules\nare affected by this CVE.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-476"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63076",
+            "https://github.com/openssl/openssl/commit/37882aa2e0256e1072442a8f62f7db45b995c45b",
+            "https://github.com/openssl/openssl/commit/a17cc8d612ecff6d94a9b7ca8b5283ddf5ff570e",
+            "https://github.com/openssl/openssl/commit/a1f348ccb328c3afbd4ba6883f9b7c813c043259",
+            "https://github.com/openssl/openssl/commit/a7af46a92d0ce19a90e669ef56d2576a07924226",
+            "https://github.com/openssl/openssl/commit/cdacfff557389abfa9e4615abded2ec984517d6c",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63076",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63076"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.543Z",
+          "LastModifiedDate": "2026-09-11T21:17:12.46Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-14457",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-14457",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:cbe6a5a78dfcf27b7dbe591dd4fd89a252c1a1fbddf5501f17b3a3196e2637a2",
+          "Title": "openssl: RPK server signature algorithm selection can dereference a missing certificate",
+          "Description": "Issue summary: In a server or client configuration with RFC7250 Raw Public Keys (RPKs)\nenabled, and only the private key (with no associated certificate) configured locally,\na NULL pointer dereference may occur when the remote peer solicits raw public keys and\nalso sends the typically omitted \"signature_algorithms_cert\" TLS extension.\n\nImpact summary: The impact is limited to a possible Denial of Service as a result of\nan application abort, no data disclosure or remote command execution are possible.\n\nCWE: CWE-476: NULL Pointer Dereference\n\nDescription: While a passing comment in sample code in the documentation suggests\nthat key-only RPK configurations are supported, the best-practice RPK configuration\nis to always configure a corresponding certificate (possibly self-signed or\nsigned by any convenient CA).\n\nWhen the private key is configured along with a matching certificate, the\n\"signature_algorithms_cert\" extension is handled reliably even without the\nfix, and peer clients or servers that don't support raw public keys may be\nable to complete a TLS connection by pinning or verifying the corresponding\ncertificate or its public key.\n\nDeployments that prefer to configure just a private key with no certificate\nneed to upgrade to an updated release as noted below.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue, as the SSL protocol implementation\nis outside the OpenSSL FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-476"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-14457",
+            "https://github.com/openssl/openssl/commit/1e8c398db67404babd3e5af999bb6bd86f720c76",
+            "https://github.com/openssl/openssl/commit/581aaa0f0a35d214740f0fe1f5283ec41f1212e1",
+            "https://github.com/openssl/openssl/commit/d0af20478688a6aa2f59d61caa3f82136b181d7f",
+            "https://github.com/openssl/openssl/commit/dad836b071da6579510c968615848ba03cac593b",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-14457",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-14457"
+          ],
+          "PublishedDate": "2026-08-25T13:17:49.533Z",
+          "LastModifiedDate": "2026-09-11T21:14:35.873Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-54874",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-54874",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:0c9bb1b225f0223a1ca9408bfc37c495a0bb8c6dbb843b7cec1f2fdab4a005f3",
+          "Title": "openssl: excessive memory use buffering DTLS records for a future epoch",
+          "Description": "Issue summary: Receiving a DTLS record for a future epoch while a handshake\nis in progress causes OpenSSL to buffer far more memory than the record\nitself requires.\n\nImpact summary: A peer can use a small amount of network traffic to make an\nOpenSSL DTLS endpoint retain a disproportionately large amount of memory,\nwhich may lead to a Denial of Service.\n\nCWE: CWE-405: Asymmetric Resource Consumption (Amplification)\n\nDescription: While a DTLS handshake is in progress, a peer may legitimately\nhave already moved on to the next epoch (for example, having sent its\nChangeCipherSpec and Finished messages) before the local endpoint has\nprocessed the same transition, typically because of reordering on the\nunderlying UDP transport. OpenSSL buffers such early records so that they\ncan be processed once the local endpoint catches up.\n\nBuffering a record currently retains the entire read buffer it arrived in,\nwhich is sized to hold the largest possible DTLS record (around 16\nkilobytes), rather than just the bytes that make up the record itself. Up\nto 100 such records may be buffered per connection. As a result, a peer\nthat sends a stream of small forged records claiming to belong to the next\nepoch can cause an OpenSSL DTLS endpoint to retain around 1.7 megabytes of\nmemory, despite sending only a small fraction of that amount of data over\nthe network.\n\nAn attacker therefore gains a memory amplification factor of around 1200,\nand can multiply the effect across as many associations as it is able to\nopen, making this a remote memory exhaustion Denial of Service risk for\nDTLS servers. Since the memory retained per connection remains bounded,\nand any limit an application already places on the number of concurrent\nassociations also bounds the total exposure, this issue has been assessed\nas Low severity.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue as the affected code is outside\nthe OpenSSL FIPS module boundary.\n\nOpenSSL 4.0, 3.6, 3.5, 3.4, 3.0, 1.1.1 and 1.0.2 are vulnerable to this\nissue.\n\nOpenSSL 4.0 users should upgrade to OpenSSL 4.0.2.\nOpenSSL 3.6 users should upgrade to OpenSSL 3.6.4.\nOpenSSL 3.5 users should upgrade to OpenSSL 3.5.8.\nOpenSSL 3.4 users should upgrade to OpenSSL 3.4.7.\nOpenSSL 3.0 users should upgrade to OpenSSL 3.0.22.\n\nPremium support customers only:\nOpenSSL 1.1.1 users should upgrade to OpenSSL 1.1.1zi\nOpenSSL 1.0.2 users should upgrade to OpenSSL 1.0.2zr\n\nThis issue was reported on 18 May 2026 by Amazon Web Services.\nThe fix has been developed by Matt Caswell.\n\n-- cut (non-publishing metadata for internal use) --\nReported by: Amazon Web Services\nFixed by: Matt Caswell",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-405"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-54874",
+            "https://github.com/openssl/openssl/commit/4808b5d64176451f3d93d87d0ac9c81a9b13fb23",
+            "https://github.com/openssl/openssl/commit/7110cb2f75806d0bf809eb2f90790d477900be40",
+            "https://github.com/openssl/openssl/commit/a0c8ec557d9cac078f032d76cdf684fe743eb382",
+            "https://github.com/openssl/openssl/commit/cc0c6710917cd5eec001b297355d2ba723505107",
+            "https://github.com/openssl/openssl/commit/f52ffc11b90737ac89083909618dc2e1f42c561c",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-54874",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-54874"
+          ],
+          "PublishedDate": "2026-08-25T13:19:24.033Z",
+          "LastModifiedDate": "2026-09-11T21:16:28.067Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63073",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63073",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:d7fcec05b300fd5a50ef6aa655bc4182aeecdb88b92aaf15635e4ac8a4c7f8ef",
+          "Title": "openssl: untrusted sender DN used as format string in CMP response validation",
+          "Description": "Issue summary: OpenSSL CMP response validation passed an unexpected response\nsender distinguished name directly as the format string to `ERR_raise_data()`.\n\nImpact summary: A malicious or intercepted CMP endpoint can crash a CMP client\nthat enforces an expected sender or uses a pinned server certificate whose\nsubject becomes the default expected sender.\n\nCWE: CWE-134 (Use of Externally-Controlled Format String)\n\nDescription: When validating a received CMP message, ossl_cmp_msg_check_update()\nconverts the peer-supplied sender distinguished name with X509_NAME_oneline()\nand passes it directly as the format argument to ERR_raise_data(). Percent\ncharacters survive the conversion, so a sender DN such as \"CN=%s%n\" reaches\nBIO_vsnprintf() as an attacker-controlled format string with no matching variadic\narguments. This path is only reached when the caller configures an expected\nsender or pins a server certificate, which is the normal configuration for a\nCMP client validating server responses.\n\nSince the attacker controls the format string but none of the variadic\narguments, such specifiers as %s and %n dereference or write through unrelated\nstack contents and crash the client. The reliable consequence is a denial of\nservice, when the response comes from a malicious or intercepted CMP endpoint.\nThere is no controlled memory write, arbitrary-address read, or reliable path\nto remote code execution.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue, as the CMP protocol\nimplementation is outside the OpenSSL FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-134"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63073",
+            "https://github.com/openssl/openssl/commit/0cc20b322639919aa423e90799d9a57c3b4b76ca",
+            "https://github.com/openssl/openssl/commit/6a0acc072b4d37a7cac1252a29c1ce1f00c5ec29",
+            "https://github.com/openssl/openssl/commit/7eb2e3ec9d1d4f35c8022fccd4b03398b3f33e21",
+            "https://github.com/openssl/openssl/commit/a7e5a6eea8fd3ccca6b6fbba031a5fbf8a3d93b4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63073",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63073"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.147Z",
+          "LastModifiedDate": "2026-09-11T21:16:45.633Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63074",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63074",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:483ad3107495793e52670333151ba50bdb9567e4a2d787e32a7303cb75ab3583",
+          "Title": "openssl: CMP indefinite cache growth of ExtraCerts",
+          "Description": "Issue summary: The OpenSSL Certificate Management Protocol (CMP) caches\nadditional certificates (extraCerts) sent in a CMP message, but never expunges\nthem (for instance if they are invalid).  If a server reuses an OSSL_CMP_CTX\nfrequently, this cache of extraCerts may grow unboundedly, and a malicious\nclient may flood a CMP server with requests driving this growth.\n\nImpact summary: Users utilizing a CMP server that reuses a single OSSL_CMP_CTX\nfor the lifetime of a server process may observe unbounded memory growth in the\nevent a malicious client repeatedly sends requests containing unique extra\ncertificates, which may lead to OOM conditions.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: If a remote user sends CMP messages to a server with a list of\nextraCerts and the message is rejected, the extraCerts from the message remains\nin the server contexts untrusted certificate stack.  This exposes servers with\nlong lived ctx objects to Denial of Service attacks in which an attacker sends\nmessages intending to be rejected with a large list of additional certificates\nrepeatedly, forcing the server to store them indefinitely.\n   \nThe issue was fixed by removing the added extra certs if the message is\nrejected, using the same method as when the context is configured to not do\ncaching at all.\n\nFIPS impact: no\nAs the CMP code lives outside the FIPS module boundary, no FIPS\nmodules are affected by this CVE.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63074",
+            "https://github.com/openssl/openssl/commit/01e567978a55fba18142a230380c31296049fae7",
+            "https://github.com/openssl/openssl/commit/21a5d9658b0c66daace60e10ea18ff32a448de9f",
+            "https://github.com/openssl/openssl/commit/74ae7f6df47a5767c1010b88c47507dfc5b32c46",
+            "https://github.com/openssl/openssl/commit/75360af9650d4e0c82ba0050c5c9912cd79e54af",
+            "https://github.com/openssl/openssl/commit/f636f9ca0fa1bae5b42f9e787f025c96fb09c43a",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63074",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63074"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.283Z",
+          "LastModifiedDate": "2026-09-11T21:16:58.127Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63075",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63075",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:5da73e08d4e207c45300756df906091eb3f3b4e5b2be54b1d7451a6181c2ec80",
+          "Title": "openssl: QUIC ACK-only packet retention can cause memory exhaustion",
+          "Description": "Issue summary: When OpenSSL processes QUIC traffic from a peer that repeatedly\nsends ack-eliciting packets while not acknowledging ACK-only responses, the\nQUIC stack can retain ACK-only packet metadata for the lifetime of the\nconnection.\n\nImpact summary: A remote peer that can complete a QUIC handshake can\ncause connection-scoped memory growth which may lead to Denial of Service\nthrough memory exhaustion, especially with sustained traffic or many concurrent\nQUIC connections.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: When the OpenSSL QUIC stack sends an ACK-only packet,\nthere is no requirement by the QUIC protocol that the peer will acknowledge\nthat ACK-only packet (i.e. it is itself not ack-eliciting). However, the OpenSSL\nimplementation stores the metadata about the ACK frames regardless.\nIn and of itself that's ok, but if a malicious peer establishes a connection, and\nthen drives the connection such that ACK-only packets are forced from the \nOpenSSL implementation peer (i.e., by sending numerous PING frames),\nand then withholding any subsequent acks for ack-eliciting data, like\nlegitimate data, said malicious peer can force inappropriate memory growth\non the OpenSSL peer, potentially leading to a Denial of Service.\n\nThe fix is to ensure that we account for the transmission of the ACK-only\npacket in the packet histories high and low watermark without actually storing\nthe ACK-only packet metadata itself.\n\nFIPS impact: no\nThe OpenSSL FIPS module is not affected as the QUIC code is\noutside the FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63075",
+            "https://github.com/openssl/openssl/commit/7308946576b12e64b8be53bcf0a120354b2b42bc",
+            "https://github.com/openssl/openssl/commit/7c98d79738549df92868e7dd9be4bbf061eed709",
+            "https://github.com/openssl/openssl/commit/bf84721c2548351176e367e6de505792f0118dc6",
+            "https://github.com/openssl/openssl/commit/c902e5f16d6a9e130e96d3ca6d8f64d71652e393",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63075",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63075"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.413Z",
+          "LastModifiedDate": "2026-09-11T21:17:05.403Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-75803",
+          "PkgID": "libcrypto3@3.5.7-r0",
+          "PkgName": "libcrypto3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "e83dc28845628467"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-75803",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:40e3c5ab8e609f9a6910da0cc1136682711dc4a58476909b948ffcc2e2481cf4",
+          "Title": "Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with an empty  ...",
+          "Description": "Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with an empty\nciphertext can report success without verifying the supplied authentication\ntag when the operation is finalized by calling the EVP_Cipher() function.\n\nImpact summary: Applications calling EVP_Cipher() on an empty ciphertext and\nexpecting the call to check the AEAD tag may accept forged messages.\n\nCWE: CWE-354 (Improper Validation of Integrity Check Value)\n\nDescription: The EVP_Cipher() API call for AEAD ciphers behaves like a one\nshot encryption and decryption call. It also verifies the AEAD tag after the\ndecryption operation. However for AES-OCB and ChaCha20-Poly1305 ciphers\nit skipped the AEAD tag verification when an empty ciphertext was passed to\nthe function. The callers of this function might believe that a successful\nreturn indicates a valid AEAD tag for these ciphers, even when that has not\ntruly been validated in this case.\n\nFIPS impact: no\nThe FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this CVE\nas the affected algorithms are not FIPS approved and thus not implemented\nin the FIPS module.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-354"
+          ],
+          "VendorSeverity": {
+            "azure": 1,
+            "ubuntu": 1
+          },
+          "References": [
+            "https://github.com/openssl/openssl/commit/119ab9555dc62275bbd71f6f49529b1a44feba42",
+            "https://github.com/openssl/openssl/commit/3621257986e27e540bf96a11570929a6e5a9e05b",
+            "https://github.com/openssl/openssl/commit/6c7aa6f8f6449b7fe0137ee8be65fcd239bd7d6a",
+            "https://github.com/openssl/openssl/commit/bdeb0cd994d915342787f117ee75044f0dc36f34",
+            "https://github.com/openssl/openssl/commit/bf95f5f772e9362f87b25cfa2f8cb15d984865b9",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-75803",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-3",
+            "https://www.cve.org/CVERecord?id=CVE-2026-75803"
+          ],
+          "PublishedDate": "2026-08-25T13:19:29.57Z",
+          "LastModifiedDate": "2026-09-11T21:17:17.823Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-14456",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-14456",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:64a55b7fd836385d95117b64ed58f461bab9d3b385033cfeb7409cf5f040658c",
+          "Title": "openssl: OpenSSL: Denial of Service via unbounded memory growth in QUIC server",
+          "Description": "Issue summary: When an OpenSSL QUIC server (Listener SSL object) processes\nvalid QUIC Initial packets for unknown destination connection IDs, it\ncan allocate and queue new incoming channels without enforcing any limit.\n\nImpact summary: A remote peer that can make many Initial packets reach the\nserver listener faster than the application accepts connections, can cause the\nmemory allocated to store the per-channel state to grow without any limits,\npotentially making the QUIC listener unavailable and causing Denial of Service.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: The function that handles inbound QUIC packets uses\nConnection-Id from the packet header to find an existing connection\n(QUIC channel). If no existing connection is found and the packet\ntype is INITIAL, the function treats the packet as a new connection. It\nallocates a new channel object and inserts it into a queue where it\nwaits to be accepted by the local application with SSL_accept(3ossl).\nThe memory occupied by these initial channel objects may grow\nwithout bounds if the application is not able to call SSL_accept()\nfrequently enough to serve these inbound connection requests.\n\nThe issue is present since OpenSSL 3.5 when the QUIC server implementation\nwas added.\n\nThe fix introduces a limit for pending connections. The default limit is set\nto 256 pending connections (waiting to be accepted by the local application).\nApplications may change the default by calling SSL_set_value_uint(3ossl).\n\nFIPS impact: no\nThe FIPS module is not affected as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "photon": 3,
+            "redhat": 3,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "http://www.openwall.com/lists/oss-security/2026/08/13/4",
+            "https://access.redhat.com/security/cve/CVE-2026-14456",
+            "https://github.com/openssl/openssl/commit/08e7756c3900bcfd77a720e7b74e27d6e4ed01a9",
+            "https://github.com/openssl/openssl/commit/4084152e040329ca0194c4c1750b9b46d00a5b6b",
+            "https://github.com/openssl/openssl/commit/f2f1465f2d2e5c61dfeac4d20fd093797d821139",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-14456",
+            "https://openssl-library.org/news/secadv/20260813.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-14456"
+          ],
+          "PublishedDate": "2026-08-13T15:19:31.82Z",
+          "LastModifiedDate": "2026-08-28T19:46:29.323Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-18798",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-18798",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:c927a48f9ced439d93934fc0b60812fe60ef9b50626fca7498f0d05ece33ffd3",
+          "Title": "openssl: QUIC server may trigger double free when processing INITIAL packet",
+          "Description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object\nwhen channel creation fails for initial packet.\n\nImpact summary: Double free leads to heap corruption, which typically results in \ntermination of QUIC server process, leading to Denial of Service. There is so\nfar no evidence that this double free is exploitable for remote code execution,\nthus it is considered highly improbable.\n\nCWE: CWE-415: Double Free\n\nDescription: In order to validate initial packet, OpenSSL QUIC stack default\npacket handler (port_default_packet_handler()) creates a so-called QRX object.\nIf the initial packet validates successfully with QRX object, the default packet\nhandler proceeds to channel (connection object) creation. The QRX object used\nfor packet validation is passed to port_bind_channel(), so it becomes part of\nthe newly created connection. If port_bind_channel() fails, then it also frees\nthe QRX object. Once port_bind_channel() returns, the port_default_packet_handler()\ndetects the failure and proceeds to the error branch, where the same QRX object is\nfreed for the second time.\n\nThe failure in port_bind_channel() function can be induced with a relatively\nlow effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet\ncarries DCID (destination connection ID) which is shorter than 8 bytes, then\nport_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid()\ndetects that the DCID has invalid length.\n\nFIPS impact: no\nThe FIPS module is not affected, as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-415"
+          ],
+          "VendorSeverity": {
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-18798",
+            "https://github.com/openssl/openssl/commit/70cebd74d3592f5272945501b58a60374c4e13af",
+            "https://github.com/openssl/openssl/commit/967582d5037f01a26b6d19beae19af62a1b15c3c",
+            "https://github.com/openssl/openssl/commit/a14a1deac403522fbeafabcb198503cf6caa7dc4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-18798",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-18798"
+          ],
+          "PublishedDate": "2026-08-25T13:17:49.813Z",
+          "LastModifiedDate": "2026-08-28T19:46:29.323Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63072",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63072",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:89a340f88f9da45f4cc6ea874375e22f1903d66e4cba641fa8ae7e0b07134d75",
+          "Title": "openssl: heap buffer overflow in CMS key unwrapping",
+          "Description": "Issue summary: OpenSSL CMS decryption sizes the key-unwrap output buffer based\non querying the unwrapped key size, but the AES-WRAP-PAD unwrap primitive\ncan write and cleanse more bytes than that query reports, causing an 8-byte\nout-of-bounds heap write.\n\nImpact summary: An attacker who supplies a crafted CMS message can trigger a\ndeterministic 8-byte out-of-bounds heap write when the victim decrypts it\nwith CMS_decrypt(), corrupting the heap and typically resulting in a Denial\nof Service.\n\nCWE: CWE-787: Out-of-bounds Write\n\nDescription: The key-wrap OID is potentially attacker-controlled on the wire.\nCMS unwrapping allows both id-aesNNN-wrap-pad and id-aesNNN-wrap ciphers.\nAn attacker can take a legitimate message and change a single OID byte to\nselect the padded variant while leaving the message otherwise valid. Since\nthe unwrap key is derived from the recipient's private operation (ECDH key\nagreement or ML-KEM decapsulation), the RFC 5649 integrity check cannot\npass, and the decryption fails with integrity failure.\n\nThe write is a fixed-size (8-byte), fixed-value (zero) heap overflow\nimmediately past the allocation, requires no special configuration, and is\nreachable from the public CMS_decrypt() function. The consequence is\na heap corruption leading to a Denial of Service. The fix in the CMS code\nsizes the unwrap output buffer for the worst case so a failed unwrap cannot\nwrite past the allocation.\n\nFIPS impact: no\n\nAs the CMS code lives outside the FIPS module boundary, no FIPS\nmodules are affected by this CVE.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-787"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63072",
+            "https://github.com/openssl/openssl/commit/2a3dac874c8057c1f0186849bf1ede1ae7b6b756",
+            "https://github.com/openssl/openssl/commit/87784ad619af36b8807c2044b3940006fccc1e42",
+            "https://github.com/openssl/openssl/commit/9530a5fd1aacaeccdced4478ea2340a480613335",
+            "https://github.com/openssl/openssl/commit/9ec2f6d2ae2bcad907cf7ee38584855bafe4979a",
+            "https://github.com/openssl/openssl/commit/a0c8ec557d9cac078f032d76cdf684fe743eb382",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63072",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63072"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.01Z",
+          "LastModifiedDate": "2026-09-11T21:16:34.287Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63076",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63076",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:c7e27a3c7d2f0b14d4d3ac846f53f912248265e63dba2839cfe7c3f4da953f72",
+          "Title": "openssl: invalid pointer dereference in CMP server via crafted protectionAlg",
+          "Description": "Issue summary: OpenSSL CMP password based protection verification only\nchecks whether the protectionAlg parameter was not NULL and not its\nASN.1 type, before treating it as a PBMParameter. A crafted message can\ncontain a parameter of a different type, which is then dereferenced as an\ninvalid pointer.\n\nImpact summary: A remote, unauthenticated attacker can crash an application\nacting as a CMP server that accepts PBM-protected messages, or a CMP client\ntalking to a malicious or intercepted CMP server, resulting in a Denial of\nService.\n\nCWE: CWE-476: NULL Pointer Dereference\n\nDescription: When verifying the password-based MAC protection of a CMP\nmessage, OpenSSL library reads the protectionAlg algorithm parameter with\nX509_ALGOR_get0(), which returns both the parameter type and its value\npointer. The value is then cast to an ASN1_STRING and treated as the\nexpected PBMParameter after only checking that pointer is not NULL. The\nparameter type returned by X509_ALGOR_get0() was never consulted.\n\nThis happens during protection verification, before any MAC is computed, so\nno knowledge of the PBM shared secret is required; the only precondition is\nthat PBM verification is reachable. On the server side this is reached from\nOSSL_CMP_SRV_process_request() for any application that stands up a CMP\nserver accepting PBM-protected messages, and on the client side from CMP\nresponse validation against a malicious or on-path (MITM) server. The\nreliable consequence is a denial of service; there is no memory disclosure,\nno controlled memory write, and no path to code execution. CMP is a\nspecialized feature that an application must explicitly enable.\n\nFIPS impact: no\nAs the CMP code lives outside the FIPS module boundary, no FIPS modules\nare affected by this CVE.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-476"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "redhat": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63076",
+            "https://github.com/openssl/openssl/commit/37882aa2e0256e1072442a8f62f7db45b995c45b",
+            "https://github.com/openssl/openssl/commit/a17cc8d612ecff6d94a9b7ca8b5283ddf5ff570e",
+            "https://github.com/openssl/openssl/commit/a1f348ccb328c3afbd4ba6883f9b7c813c043259",
+            "https://github.com/openssl/openssl/commit/a7af46a92d0ce19a90e669ef56d2576a07924226",
+            "https://github.com/openssl/openssl/commit/cdacfff557389abfa9e4615abded2ec984517d6c",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63076",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63076"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.543Z",
+          "LastModifiedDate": "2026-09-11T21:17:12.46Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-14457",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-14457",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:621342939a83a5b5f79c74ec31ec1dd4c2dd813c81a302ebf5f6e97b49693cae",
+          "Title": "openssl: RPK server signature algorithm selection can dereference a missing certificate",
+          "Description": "Issue summary: In a server or client configuration with RFC7250 Raw Public Keys (RPKs)\nenabled, and only the private key (with no associated certificate) configured locally,\na NULL pointer dereference may occur when the remote peer solicits raw public keys and\nalso sends the typically omitted \"signature_algorithms_cert\" TLS extension.\n\nImpact summary: The impact is limited to a possible Denial of Service as a result of\nan application abort, no data disclosure or remote command execution are possible.\n\nCWE: CWE-476: NULL Pointer Dereference\n\nDescription: While a passing comment in sample code in the documentation suggests\nthat key-only RPK configurations are supported, the best-practice RPK configuration\nis to always configure a corresponding certificate (possibly self-signed or\nsigned by any convenient CA).\n\nWhen the private key is configured along with a matching certificate, the\n\"signature_algorithms_cert\" extension is handled reliably even without the\nfix, and peer clients or servers that don't support raw public keys may be\nable to complete a TLS connection by pinning or verifying the corresponding\ncertificate or its public key.\n\nDeployments that prefer to configure just a private key with no certificate\nneed to upgrade to an updated release as noted below.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue, as the SSL protocol implementation\nis outside the OpenSSL FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-476"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-14457",
+            "https://github.com/openssl/openssl/commit/1e8c398db67404babd3e5af999bb6bd86f720c76",
+            "https://github.com/openssl/openssl/commit/581aaa0f0a35d214740f0fe1f5283ec41f1212e1",
+            "https://github.com/openssl/openssl/commit/d0af20478688a6aa2f59d61caa3f82136b181d7f",
+            "https://github.com/openssl/openssl/commit/dad836b071da6579510c968615848ba03cac593b",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-14457",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-14457"
+          ],
+          "PublishedDate": "2026-08-25T13:17:49.533Z",
+          "LastModifiedDate": "2026-09-11T21:14:35.873Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-54874",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-54874",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:4390d0af49a57a50f7f67cfbeda26450d57e3ab4e8305428a5e2e87aa7a1bfbc",
+          "Title": "openssl: excessive memory use buffering DTLS records for a future epoch",
+          "Description": "Issue summary: Receiving a DTLS record for a future epoch while a handshake\nis in progress causes OpenSSL to buffer far more memory than the record\nitself requires.\n\nImpact summary: A peer can use a small amount of network traffic to make an\nOpenSSL DTLS endpoint retain a disproportionately large amount of memory,\nwhich may lead to a Denial of Service.\n\nCWE: CWE-405: Asymmetric Resource Consumption (Amplification)\n\nDescription: While a DTLS handshake is in progress, a peer may legitimately\nhave already moved on to the next epoch (for example, having sent its\nChangeCipherSpec and Finished messages) before the local endpoint has\nprocessed the same transition, typically because of reordering on the\nunderlying UDP transport. OpenSSL buffers such early records so that they\ncan be processed once the local endpoint catches up.\n\nBuffering a record currently retains the entire read buffer it arrived in,\nwhich is sized to hold the largest possible DTLS record (around 16\nkilobytes), rather than just the bytes that make up the record itself. Up\nto 100 such records may be buffered per connection. As a result, a peer\nthat sends a stream of small forged records claiming to belong to the next\nepoch can cause an OpenSSL DTLS endpoint to retain around 1.7 megabytes of\nmemory, despite sending only a small fraction of that amount of data over\nthe network.\n\nAn attacker therefore gains a memory amplification factor of around 1200,\nand can multiply the effect across as many associations as it is able to\nopen, making this a remote memory exhaustion Denial of Service risk for\nDTLS servers. Since the memory retained per connection remains bounded,\nand any limit an application already places on the number of concurrent\nassociations also bounds the total exposure, this issue has been assessed\nas Low severity.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue as the affected code is outside\nthe OpenSSL FIPS module boundary.\n\nOpenSSL 4.0, 3.6, 3.5, 3.4, 3.0, 1.1.1 and 1.0.2 are vulnerable to this\nissue.\n\nOpenSSL 4.0 users should upgrade to OpenSSL 4.0.2.\nOpenSSL 3.6 users should upgrade to OpenSSL 3.6.4.\nOpenSSL 3.5 users should upgrade to OpenSSL 3.5.8.\nOpenSSL 3.4 users should upgrade to OpenSSL 3.4.7.\nOpenSSL 3.0 users should upgrade to OpenSSL 3.0.22.\n\nPremium support customers only:\nOpenSSL 1.1.1 users should upgrade to OpenSSL 1.1.1zi\nOpenSSL 1.0.2 users should upgrade to OpenSSL 1.0.2zr\n\nThis issue was reported on 18 May 2026 by Amazon Web Services.\nThe fix has been developed by Matt Caswell.\n\n-- cut (non-publishing metadata for internal use) --\nReported by: Amazon Web Services\nFixed by: Matt Caswell",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-405"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-54874",
+            "https://github.com/openssl/openssl/commit/4808b5d64176451f3d93d87d0ac9c81a9b13fb23",
+            "https://github.com/openssl/openssl/commit/7110cb2f75806d0bf809eb2f90790d477900be40",
+            "https://github.com/openssl/openssl/commit/a0c8ec557d9cac078f032d76cdf684fe743eb382",
+            "https://github.com/openssl/openssl/commit/cc0c6710917cd5eec001b297355d2ba723505107",
+            "https://github.com/openssl/openssl/commit/f52ffc11b90737ac89083909618dc2e1f42c561c",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-54874",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-54874"
+          ],
+          "PublishedDate": "2026-08-25T13:19:24.033Z",
+          "LastModifiedDate": "2026-09-11T21:16:28.067Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63073",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63073",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:183eb179a0a7a1553fd9d0984ee175131d0b25032ee1c2b4a9d8d6c9d5b83ff7",
+          "Title": "openssl: untrusted sender DN used as format string in CMP response validation",
+          "Description": "Issue summary: OpenSSL CMP response validation passed an unexpected response\nsender distinguished name directly as the format string to `ERR_raise_data()`.\n\nImpact summary: A malicious or intercepted CMP endpoint can crash a CMP client\nthat enforces an expected sender or uses a pinned server certificate whose\nsubject becomes the default expected sender.\n\nCWE: CWE-134 (Use of Externally-Controlled Format String)\n\nDescription: When validating a received CMP message, ossl_cmp_msg_check_update()\nconverts the peer-supplied sender distinguished name with X509_NAME_oneline()\nand passes it directly as the format argument to ERR_raise_data(). Percent\ncharacters survive the conversion, so a sender DN such as \"CN=%s%n\" reaches\nBIO_vsnprintf() as an attacker-controlled format string with no matching variadic\narguments. This path is only reached when the caller configures an expected\nsender or pins a server certificate, which is the normal configuration for a\nCMP client validating server responses.\n\nSince the attacker controls the format string but none of the variadic\narguments, such specifiers as %s and %n dereference or write through unrelated\nstack contents and crash the client. The reliable consequence is a denial of\nservice, when the response comes from a malicious or intercepted CMP endpoint.\nThere is no controlled memory write, arbitrary-address read, or reliable path\nto remote code execution.\n\nFIPS impact: no\n\nNo FIPS modules are affected by this issue, as the CMP protocol\nimplementation is outside the OpenSSL FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-134"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63073",
+            "https://github.com/openssl/openssl/commit/0cc20b322639919aa423e90799d9a57c3b4b76ca",
+            "https://github.com/openssl/openssl/commit/6a0acc072b4d37a7cac1252a29c1ce1f00c5ec29",
+            "https://github.com/openssl/openssl/commit/7eb2e3ec9d1d4f35c8022fccd4b03398b3f33e21",
+            "https://github.com/openssl/openssl/commit/a7e5a6eea8fd3ccca6b6fbba031a5fbf8a3d93b4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63073",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63073"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.147Z",
+          "LastModifiedDate": "2026-09-11T21:16:45.633Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63074",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63074",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:f1ab86bd4ae43e76f8b308c40debc01afd191c49ca307064104c4d25770cc1ab",
+          "Title": "openssl: CMP indefinite cache growth of ExtraCerts",
+          "Description": "Issue summary: The OpenSSL Certificate Management Protocol (CMP) caches\nadditional certificates (extraCerts) sent in a CMP message, but never expunges\nthem (for instance if they are invalid).  If a server reuses an OSSL_CMP_CTX\nfrequently, this cache of extraCerts may grow unboundedly, and a malicious\nclient may flood a CMP server with requests driving this growth.\n\nImpact summary: Users utilizing a CMP server that reuses a single OSSL_CMP_CTX\nfor the lifetime of a server process may observe unbounded memory growth in the\nevent a malicious client repeatedly sends requests containing unique extra\ncertificates, which may lead to OOM conditions.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: If a remote user sends CMP messages to a server with a list of\nextraCerts and the message is rejected, the extraCerts from the message remains\nin the server contexts untrusted certificate stack.  This exposes servers with\nlong lived ctx objects to Denial of Service attacks in which an attacker sends\nmessages intending to be rejected with a large list of additional certificates\nrepeatedly, forcing the server to store them indefinitely.\n   \nThe issue was fixed by removing the added extra certs if the message is\nrejected, using the same method as when the context is configured to not do\ncaching at all.\n\nFIPS impact: no\nAs the CMP code lives outside the FIPS module boundary, no FIPS\nmodules are affected by this CVE.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63074",
+            "https://github.com/openssl/openssl/commit/01e567978a55fba18142a230380c31296049fae7",
+            "https://github.com/openssl/openssl/commit/21a5d9658b0c66daace60e10ea18ff32a448de9f",
+            "https://github.com/openssl/openssl/commit/74ae7f6df47a5767c1010b88c47507dfc5b32c46",
+            "https://github.com/openssl/openssl/commit/75360af9650d4e0c82ba0050c5c9912cd79e54af",
+            "https://github.com/openssl/openssl/commit/f636f9ca0fa1bae5b42f9e787f025c96fb09c43a",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63074",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-2",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63074"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.283Z",
+          "LastModifiedDate": "2026-09-11T21:16:58.127Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-63075",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-63075",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:0b8effd09285991e55342cab49249598034419f305b865559c19e302aeb6e839",
+          "Title": "openssl: QUIC ACK-only packet retention can cause memory exhaustion",
+          "Description": "Issue summary: When OpenSSL processes QUIC traffic from a peer that repeatedly\nsends ack-eliciting packets while not acknowledging ACK-only responses, the\nQUIC stack can retain ACK-only packet metadata for the lifetime of the\nconnection.\n\nImpact summary: A remote peer that can complete a QUIC handshake can\ncause connection-scoped memory growth which may lead to Denial of Service\nthrough memory exhaustion, especially with sustained traffic or many concurrent\nQUIC connections.\n\nCWE: CWE-770: Allocation of Resources Without Limits or Throttling\n\nDescription: When the OpenSSL QUIC stack sends an ACK-only packet,\nthere is no requirement by the QUIC protocol that the peer will acknowledge\nthat ACK-only packet (i.e. it is itself not ack-eliciting). However, the OpenSSL\nimplementation stores the metadata about the ACK frames regardless.\nIn and of itself that's ok, but if a malicious peer establishes a connection, and\nthen drives the connection such that ACK-only packets are forced from the \nOpenSSL implementation peer (i.e., by sending numerous PING frames),\nand then withholding any subsequent acks for ack-eliciting data, like\nlegitimate data, said malicious peer can force inappropriate memory growth\non the OpenSSL peer, potentially leading to a Denial of Service.\n\nThe fix is to ensure that we account for the transmission of the ACK-only\npacket in the packet histories high and low watermark without actually storing\nthe ACK-only packet metadata itself.\n\nFIPS impact: no\nThe OpenSSL FIPS module is not affected as the QUIC code is\noutside the FIPS module boundary.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "redhat": 1,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-63075",
+            "https://github.com/openssl/openssl/commit/7308946576b12e64b8be53bcf0a120354b2b42bc",
+            "https://github.com/openssl/openssl/commit/7c98d79738549df92868e7dd9be4bbf061eed709",
+            "https://github.com/openssl/openssl/commit/bf84721c2548351176e367e6de505792f0118dc6",
+            "https://github.com/openssl/openssl/commit/c902e5f16d6a9e130e96d3ca6d8f64d71652e393",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-63075",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://www.cve.org/CVERecord?id=CVE-2026-63075"
+          ],
+          "PublishedDate": "2026-08-25T13:19:26.413Z",
+          "LastModifiedDate": "2026-09-11T21:17:05.403Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-75803",
+          "PkgID": "libssl3@3.5.7-r0",
+          "PkgName": "libssl3",
+          "PkgIdentifier": {
+            "PURL": "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64\u0026distro=3.22.5",
+            "UID": "4537cda1539525e2"
+          },
+          "InstalledVersion": "3.5.7-r0",
+          "FixedVersion": "3.5.8-r0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:f7ee36c9aa34bbb665f975c76e5c0d1607f0674b94c84cfb0061f87006ea5d10",
+            "DiffID": "sha256:6f09edfb3f6d7173733adc8eec8ea00626550dc6fc2dcf07d40e13f5c1e907c4"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-75803",
+          "DataSource": {
+            "ID": "alpine",
+            "Name": "Alpine Secdb",
+            "URL": "https://secdb.alpinelinux.org/"
+          },
+          "Fingerprint": "sha256:33647925f5759ac3f548f2dcad85a950a96ff400b1d6d747bda7dd57df7c1b27",
+          "Title": "Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with an empty  ...",
+          "Description": "Issue summary: ChaCha20-Poly1305 and AES-OCB decryption with an empty\nciphertext can report success without verifying the supplied authentication\ntag when the operation is finalized by calling the EVP_Cipher() function.\n\nImpact summary: Applications calling EVP_Cipher() on an empty ciphertext and\nexpecting the call to check the AEAD tag may accept forged messages.\n\nCWE: CWE-354 (Improper Validation of Integrity Check Value)\n\nDescription: The EVP_Cipher() API call for AEAD ciphers behaves like a one\nshot encryption and decryption call. It also verifies the AEAD tag after the\ndecryption operation. However for AES-OCB and ChaCha20-Poly1305 ciphers\nit skipped the AEAD tag verification when an empty ciphertext was passed to\nthe function. The callers of this function might believe that a successful\nreturn indicates a valid AEAD tag for these ciphers, even when that has not\ntruly been validated in this case.\n\nFIPS impact: no\nThe FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this CVE\nas the affected algorithms are not FIPS approved and thus not implemented\nin the FIPS module.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-354"
+          ],
+          "VendorSeverity": {
+            "azure": 1,
+            "ubuntu": 1
+          },
+          "References": [
+            "https://github.com/openssl/openssl/commit/119ab9555dc62275bbd71f6f49529b1a44feba42",
+            "https://github.com/openssl/openssl/commit/3621257986e27e540bf96a11570929a6e5a9e05b",
+            "https://github.com/openssl/openssl/commit/6c7aa6f8f6449b7fe0137ee8be65fcd239bd7d6a",
+            "https://github.com/openssl/openssl/commit/bdeb0cd994d915342787f117ee75044f0dc36f34",
+            "https://github.com/openssl/openssl/commit/bf95f5f772e9362f87b25cfa2f8cb15d984865b9",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-75803",
+            "https://openssl-library.org/news/secadv/20260825.txt",
+            "https://ubuntu.com/security/notices/USN-8678-1",
+            "https://ubuntu.com/security/notices/USN-8678-3",
+            "https://www.cve.org/CVERecord?id=CVE-2026-75803"
+          ],
+          "PublishedDate": "2026-08-25T13:19:29.57Z",
+          "LastModifiedDate": "2026-09-11T21:17:17.823Z"
+        }
+      ]
+    },
+    {
+      "Target": "usr/local/bin/nats-server",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Packages": [
+        {
+          "ID": "github.com/nats-io/nats-server/v2@v2.14.6",
+          "Name": "github.com/nats-io/nats-server/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/nats-io/nats-server/v2@v2.14.6",
+            "UID": "da1967a7a97869cd"
+          },
+          "Version": "v2.14.6",
+          "Relationship": "root",
+          "DependsOn": [
+            "github.com/antithesishq/antithesis-sdk-go@v0.7.2-default-no-op",
+            "github.com/klauspost/compress@v1.19.2",
+            "github.com/minio/highwayhash@v1.0.4",
+            "github.com/nats-io/jwt/v2@v2.8.2",
+            "github.com/nats-io/nkeys@v0.4.16",
+            "github.com/nats-io/nuid@v1.0.1",
+            "golang.org/x/crypto@v0.55.0",
+            "golang.org/x/sys@v0.47.0",
+            "golang.org/x/time@v0.15.0",
+            "stdlib@v1.26.7"
+          ],
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "stdlib@v1.26.7",
+          "Name": "stdlib",
+          "Identifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.7",
+            "UID": "da24ee7a17b93805"
+          },
+          "Version": "v1.26.7",
+          "Relationship": "direct",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/antithesishq/antithesis-sdk-go@v0.7.2-default-no-op",
+          "Name": "github.com/antithesishq/antithesis-sdk-go",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/antithesishq/antithesis-sdk-go@v0.7.2-default-no-op",
+            "UID": "b9102c0ae87804fd"
+          },
+          "Version": "v0.7.2-default-no-op",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/klauspost/compress@v1.19.2",
+          "Name": "github.com/klauspost/compress",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/klauspost/compress@v1.19.2",
+            "UID": "81e143c91b10d7dc"
+          },
+          "Version": "v1.19.2",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/minio/highwayhash@v1.0.4",
+          "Name": "github.com/minio/highwayhash",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/minio/highwayhash@v1.0.4",
+            "UID": "a58e1db149d688b3"
+          },
+          "Version": "v1.0.4",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/nats-io/jwt/v2@v2.8.2",
+          "Name": "github.com/nats-io/jwt/v2",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/nats-io/jwt/v2@v2.8.2",
+            "UID": "5bf40e7edc016903"
+          },
+          "Version": "v2.8.2",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/nats-io/nkeys@v0.4.16",
+          "Name": "github.com/nats-io/nkeys",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/nats-io/nkeys@v0.4.16",
+            "UID": "1137f83ea4416101"
+          },
+          "Version": "v0.4.16",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "github.com/nats-io/nuid@v1.0.1",
+          "Name": "github.com/nats-io/nuid",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/nats-io/nuid@v1.0.1",
+            "UID": "680a1b9f7657ae19"
+          },
+          "Version": "v1.0.1",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "golang.org/x/crypto@v0.55.0",
+          "Name": "golang.org/x/crypto",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.55.0",
+            "UID": "9453a3eb064bce5"
+          },
+          "Version": "v0.55.0",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "golang.org/x/sys@v0.47.0",
+          "Name": "golang.org/x/sys",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/sys@v0.47.0",
+            "UID": "d085d8d1b7fb677e"
+          },
+          "Version": "v0.47.0",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        },
+        {
+          "ID": "golang.org/x/time@v0.15.0",
+          "Name": "golang.org/x/time",
+          "Identifier": {
+            "PURL": "pkg:golang/golang.org/x/time@v0.15.0",
+            "UID": "b85b3b1092e96082"
+          },
+          "Version": "v0.15.0",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "AnalyzedBy": "gobinary"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-56855",
+          "VendorIDs": [
+            "GO-2026-6355"
+          ],
+          "PkgID": "golang.org/x/crypto@v0.55.0",
+          "PkgName": "golang.org/x/crypto",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.55.0",
+            "UID": "9453a3eb064bce5"
+          },
+          "InstalledVersion": "v0.55.0",
+          "FixedVersion": "0.56.0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-56855",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Fingerprint": "sha256:673e41fa80c1eea14b79f581b613a5ab43449595b5ff1af96f9a157fba021a8a",
+          "Title": "golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Denial of Service via crafted messages",
+          "Description": "Previously, after a channel has been established, a malicious peer could send crafted messages that would deadlock the entire connection. Now, we handle all RFC 4254 channel messages; global requests are handled explicitly. Then, treat all other messages as a protocol error and tear the connection down instead of buffering and blocking.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "redhat": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-56855",
+            "https://go.dev/cl/826524",
+            "https://go.dev/issue/81317",
+            "https://groups.google.com/g/golang-announce/c/1y3fb2np35U",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-56855",
+            "https://pkg.go.dev/vuln/GO-2026-6355",
+            "https://www.cve.org/CVERecord?id=CVE-2026-56855"
+          ],
+          "PublishedDate": "2026-09-02T20:17:36.397Z",
+          "LastModifiedDate": "2026-09-04T16:34:56.823Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-78662",
+          "VendorIDs": [
+            "GO-2026-6354"
+          ],
+          "PkgID": "golang.org/x/crypto@v0.55.0",
+          "PkgName": "golang.org/x/crypto",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.55.0",
+            "UID": "9453a3eb064bce5"
+          },
+          "InstalledVersion": "v0.55.0",
+          "FixedVersion": "0.56.0",
+          "Status": "fixed",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-78662",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Fingerprint": "sha256:c4279cb9319c8112cdda920edb3f5efd3d2eb155c7935da11eb6be06063fbcab",
+          "Title": "golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Denial of Service via channel request flooding",
+          "Description": "Previously, a channel registered in the mux's chanList is not usable until it is established. A malicious peer was able flood the channel's incomingRequests, deadlocking the entire connection. Now, we add an atomic established state, set when a channel becomes usable. Until such a time, handlePacket drops every packet other than the open confirmation/failure, without blocking and without tearing down the connection.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "redhat": 2
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-78662",
+            "https://go.dev/cl/826504",
+            "https://go.dev/issue/81316",
+            "https://groups.google.com/g/golang-announce/c/1y3fb2np35U",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-78662",
+            "https://pkg.go.dev/vuln/GO-2026-6354",
+            "https://www.cve.org/CVERecord?id=CVE-2026-78662"
+          ],
+          "PublishedDate": "2026-09-02T20:17:37.167Z",
+          "LastModifiedDate": "2026-09-04T16:33:34.057Z"
+        },
+        {
+          "VulnerabilityID": "GO-2026-5932",
+          "PkgID": "golang.org/x/crypto@v0.55.0",
+          "PkgName": "golang.org/x/crypto",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.55.0",
+            "UID": "9453a3eb064bce5"
+          },
+          "InstalledVersion": "v0.55.0",
+          "Status": "affected",
+          "Layer": {
+            "Digest": "sha256:43d7fdc09fd6e3dc4e82b2a4b77f69aa1ca5601b07e7a4d4f49c091b10dfb82a",
+            "DiffID": "sha256:d8a31dbb12bcdab078d5943e949e1e75d3c7547a76e77afb6b6cc063d02d4219"
+          },
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Fingerprint": "sha256:36f076885c84c3bdb4e957fbf30701e33be9bf57bf1f4b032bdfe49fa8d504af",
+          "Title": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+          "Description": "The golang.org/x/crypto/openpgp package is unsafe by design, has numerous known security issues, is not maintained, and should not be used.\n\nIf you are required to interoperate with OpenPGP systems and need a maintained package, consider github.com/ProtonMail/go-crypto/openpgp which is a maintained fork that aims to be a drop-in replacement for this package.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/issue/44226",
+            "https://pkg.go.dev/vuln/GO-2026-5932"
+          ]
+        }
+      ]
+    }
+  ]
+}

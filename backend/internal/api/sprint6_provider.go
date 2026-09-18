@@ -47,7 +47,11 @@ func (s *Server) registerAdminProviderRoutes(r chi.Router) {
 	r.Get("/providers/{id}", s.require("admin:provider:read", s.handleAdminProviderDetail))
 	r.Patch("/providers/{id}", s.require("admin:provider:update", s.handleAdminProviderUpdate))
 	r.Get("/providers/{id}/secrets", s.require("admin:provider:read", s.handleAdminProviderSecrets))
-	r.Post("/providers/{id}/commands/{command}", s.require("admin:provider:read", s.handleAdminProviderCommand))
+	// S7 修复：入口放行"读 / 改配置 / 轮换密钥"三类主体，具体命令在 handler 内精确鉴权。
+	// 仅写 admin:provider:read 会让被授予 admin:provider:key:rotate 的 security_admin 永远 403。
+	r.Post("/providers/{id}/commands/{command}", s.requireAny(
+		[]string{"admin:provider:read", "admin:provider:update", "admin:provider:key:rotate"},
+		s.handleAdminProviderCommand))
 
 	r.Get("/routing-policies", s.require("admin:routing:read", s.handleAdminRoutingPolicies))
 	r.Get("/routing-policies/{id}", s.require("admin:routing:read", s.handleAdminRoutingPolicyDetail))
@@ -373,6 +377,25 @@ func (s *Server) handleAdminProviderCommand(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	ctx := r.Context()
+	// S7 审计修复：本路由用 admin:provider:read 兜底（因为 {command} 是路径变量），
+	// 但 connect / disconnect / rotate-secret 都是**状态改写**，其中轮换密钥在
+	// policy 目录里是 RiskCritical。修复前只持有 admin:provider:read 的主体即可轮换密钥，
+	// 属于"读权限承载写动作"的越权路径。这里按命令做精确鉴权（与 catalog 键一致）。
+	var needed string
+	switch command {
+	case "test":
+		needed = "admin:provider:read"
+	case "connect", "disconnect":
+		needed = "admin:provider:update"
+	case "rotate-secret":
+		needed = "admin:provider:key:rotate"
+	default:
+		needed = ""
+	}
+	if needed != "" && !PrincipalFrom(ctx).Has(needed) {
+		respondError(w, r, http.StatusForbidden, "FORBIDDEN", "缺少执行该 Provider 命令所需的权限", map[string]any{"required_permission": needed})
+		return
+	}
 	provider, err := s.s6LoadProvider(ctx, key)
 	if errors.Is(err, pgx.ErrNoRows) {
 		respondError(w, r, http.StatusNotFound, "NOT_FOUND", "Provider 不存在", nil)

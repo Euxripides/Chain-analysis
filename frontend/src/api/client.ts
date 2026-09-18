@@ -79,6 +79,36 @@ export type EntityRelationship = {id:string;investigation_id:string;source_subje
 
 const BASE = "/api/v1";
 
+/**
+ * 会话受众（§3.3 / §28.4 S2-BE-03）。
+ *
+ * 后台接口（`admin:*` 权限键）与用户层业务接口使用**不同的 Cookie 与不同的受众**：
+ *   - `user`  → `cs_user_session`  / `cs_user_session_csrf`
+ *   - `admin` → `cs_admin_session` / `cs_admin_session_csrf`
+ *
+ * 服务端 `authmw.audienceForPath` 只按**路径前缀**推断受众（`/api/admin/*` → admin，
+ * 其余 → user），因此挂在 `/api/v1/api-control/*`、`/api/v1/providers/*`、
+ * `/api/v1/count-oracle/*`、`/api/v1/tokens/enrichment` 等路径下的**后台接口**
+ * 必须由客户端显式声明 `X-Auth-Audience: admin`，否则服务端会去读 user Cookie。
+ *
+ * `X-Auth-Audience` 是**收窄信号**，不是授权绕过：
+ *   - 它只决定服务端读取哪一套 Cookie；会话令牌本身仍要 `Sessions().Authenticate`
+ *     校验"会话记录的受众 == 声明受众"，不匹配直接拒绝；
+ *   - 授权结论仍由 Policy 引擎给出（user 会话即使被授予 `admin:*` 也会
+ *     `audience_mismatch` 403）。
+ * 它与用户层/后台新前端（`frontend/packages/api-client/client.ts`）使用的是同一套契约。
+ */
+export type Audience = "user" | "admin";
+
+/** 读取可被 JS 访问的 CSRF double-submit Cookie（会话 Cookie 本身是 HttpOnly）。 */
+function csrfCookieValue(audience: Audience): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )cs_${audience}_session_csrf=([^;]*)`),
+  );
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 function newIdempotencyKey() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -86,16 +116,28 @@ function newIdempotencyKey() {
   return `web-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
 }
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
+async function http<T>(
+  path: string,
+  init?: RequestInit,
+  audience: Audience = "user",
+): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+    "X-Auth-Audience": audience,
+  };
+  // 写请求必须带与该受众绑定的 CSRF 令牌（服务端 `require()` → `checkCSRF`）。
+  if (method !== "GET" && method !== "HEAD") {
+    const csrf = csrfCookieValue(audience);
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
+  const res = await fetch(BASE + path, { ...init, headers, credentials: "same-origin" });
   if (!res.ok) {
     let msg = res.statusText;
     try {
       const body = await res.json();
-      msg = body.error ?? msg;
+      msg = body.error?.message ?? body.error ?? msg;
     } catch {
       /* ignore */
     }
@@ -104,19 +146,21 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** 后台（admin 受众）业务接口。 */
 export const apiControlHttp = <T>(path: string, init?: RequestInit) =>
-  http<T>("/api-control" + path, init);
+  http<T>("/api-control" + path, init, "admin");
 
 // V1.3：Count Provider Port 只读端点（§72）。
 export const countOracleHttp = <T>(path: string) =>
-  http<T>("/count-oracle" + path);
+  http<T>("/count-oracle" + path, undefined, "admin");
 
 export const api = {
   getFlowProfile: (chain:string,address:string) => http<FlowProfile>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/flow-profile`),
   getSemanticEvents: (chain:string,address:string) => http<SemanticResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/semantic-events`),
-  rebuildSemanticEvents: (chain:string,address:string) => http<SemanticResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/semantic-events/rebuild`,{method:"POST",body:"{}"}),
+  // admin:dataset:manage —— 必须带 admin 受众（否则后台 cookie 不会被解析）。
+  rebuildSemanticEvents: (chain:string,address:string) => http<SemanticResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/semantic-events/rebuild`,{method:"POST",body:"{}"},"admin"),
   getAdvancedAnalysis: (chain:string,address:string) => http<AdvancedAnalysisResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/advanced`),
-  rebuildAdvancedAnalysis: (chain:string,address:string) => http<AdvancedAnalysisResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/advanced/rebuild`,{method:"POST",body:"{}"}),
+  rebuildAdvancedAnalysis: (chain:string,address:string) => http<AdvancedAnalysisResult>(`/analysis/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/advanced/rebuild`,{method:"POST",body:"{}"},"admin"),
   listInvestigationReports: (id:string) => http<{items:InvestigationReport[]}>(`/investigations/${encodeURIComponent(id)}/reports`),
   generateInvestigationReport: (id:string) => http<InvestigationReport>(`/investigations/${encodeURIComponent(id)}/reports`,{method:"POST",body:"{}"}),
   listInvestigationSubjects: (id:string) => http<{subjects:InvestigationSubject[];relationships:EntityRelationship[]}>(`/investigations/${encodeURIComponent(id)}/subjects`),
@@ -180,20 +224,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ subject, dataset }),
     }),
-  providerStatus: () => http<Record<string, unknown>>("/providers/ankr/status"),
+  providerStatus: () =>
+    http<Record<string, unknown>>("/providers/ankr/status", undefined, "admin"),
   getAnkrProductionProfile: () =>
-    http<AnkrProductionProfile>("/providers/ankr/production-profile"),
+    http<AnkrProductionProfile>("/providers/ankr/production-profile", undefined, "admin"),
   getAnkrFetchRuntime: () =>
-    http<PerformanceModeState>("/providers/ankr/fetch-runtime"),
+    http<PerformanceModeState>("/providers/ankr/fetch-runtime", undefined, "admin"),
   setAnkrPerformanceMode: (mode: PerformanceMode) =>
-    http<PerformanceModeState>("/providers/ankr/performance-mode", {
-      method: "POST",
-      body: JSON.stringify({ mode }),
-    }),
+    http<PerformanceModeState>(
+      "/providers/ankr/performance-mode",
+      { method: "POST", body: JSON.stringify({ mode }) },
+      "admin",
+    ),
   setJobPerformanceMode: (id: string, mode: PerformanceMode) =>
     http<PerformanceModeState & { job_id: string }>(
       "/download-jobs/" + id + "/performance-mode",
       { method: "POST", body: JSON.stringify({ mode }) },
+      "admin",
     ),
   providerUsage: (hours = 24) =>
     http<{
@@ -208,7 +255,7 @@ export const api = {
           bytes: number;
         }
       >;
-    }>(`/providers/ankr/usage?hours=${hours}`),
+    }>(`/providers/ankr/usage?hours=${hours}`, undefined, "admin"),
   createExport: (jobId: string, dataset: string, format: string) =>
     http<ExportRow>("/exports", {
       method: "POST",
@@ -234,8 +281,14 @@ export const api = {
     ),
 
   // ---- V1.2 ----
+  // R10 实测缺陷（2026-09-13）：未认证时 /cases 返回 401（走 catch），但**已认证**用户在空工作区
+  // 拿到的是 200 {"cases":null}（Go nil slice 序列化为 null）。调用方（DownloadPage / DataExplorerPage）
+  // 直接 cases.map → "Cannot read properties of null (reading 'map')"，整页白屏。
+  // 在 API 边界统一归一化为 []，避免每个页面各写一遍防御。
   listCases: () =>
-    http<{ cases: { id: string; name: string; color?: string }[] }>("/cases"),
+    http<{ cases: { id: string; name: string; color?: string }[] | null }>("/cases").then((d) => ({
+      cases: Array.isArray(d?.cases) ? d.cases : [],
+    })),
   createCase: (name: string) =>
     http<{ id: string; name: string }>("/cases", {
       method: "POST",
@@ -247,8 +300,11 @@ export const api = {
   branchCanvas: (id:string,payload:unknown) => http<AnalysisCanvas>(`/canvases/${id}/branch`,{method:"POST",body:JSON.stringify(payload)}),
   createCanvasSnapshot: (id:string,name:string) => http<CanvasSnapshot>(`/canvases/${id}/snapshots`,{method:"POST",body:JSON.stringify({name})}),
   listCanvasSnapshots: (id:string) => http<{items:CanvasSnapshot[]}>(`/canvases/${id}/snapshots`),
+  // 同 listCases：空工作区返回 200 {"tags":null}，必须归一化为 []（见上）。
   listTags: () =>
-    http<{ tags: { id: string; name: string; color?: string }[] }>("/tags"),
+    http<{ tags: { id: string; name: string; color?: string }[] | null }>("/tags").then((d) => ({
+      tags: Array.isArray(d?.tags) ? d.tags : [],
+    })),
   createTag: (name: string) =>
     http<{ id: string; name: string }>("/tags", {
       method: "POST",
@@ -266,6 +322,7 @@ export const api = {
     }>(
       `/addresses/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/metadata`,
       { method: "PATCH", body: JSON.stringify(payload) },
+      "admin",
     ),
   explorerAddresses: (params: string) =>
     http<{ addresses: unknown[]; next_cursor: string }>(
@@ -281,15 +338,17 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   updatePreview: (payload: unknown) =>
-    http<Record<string, unknown>>("/updates/preview", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    http<Record<string, unknown>>(
+      "/updates/preview",
+      { method: "POST", body: JSON.stringify(payload) },
+      "admin",
+    ),
   updateConfirm: (previewId: string) =>
-    http<{ job_ids: string[] }>("/updates/" + previewId + "/confirm", {
-      method: "POST",
-      body: "{}",
-    }),
+    http<{ job_ids: string[] }>(
+      "/updates/" + previewId + "/confirm",
+      { method: "POST", body: "{}" },
+      "admin",
+    ),
   exportV2: (payload: unknown) =>
     http<ExportRow>("/exports", {
       method: "POST",
@@ -314,5 +373,70 @@ export const api = {
       failed: number;
       logo_available: number;
       queue_depth: number;
-    }>("/tokens/enrichment"),
+    }>("/tokens/enrichment", undefined, "admin"),
 };
+
+
+/**
+ * 后台会话探测：以 admin 受众调用 `GET /api/auth/v1/session`。
+ *
+ * 这是**只读探测**：它不签发、不提升任何权限，只是问服务端"当前浏览器是否持有
+ * 一个 admin 受众的有效会话"。未持有时服务端返回 401，页面据此走后台登录入口。
+ */
+export type AdminSessionProbe = {
+  authenticated: boolean;
+  email?: string;
+  displayName?: string;
+  roles?: string[];
+  mustChangePassword?: boolean;
+};
+
+export async function probeAdminSession(signal?: AbortSignal): Promise<AdminSessionProbe> {
+  try {
+    const res = await fetch("/api/auth/v1/session", {
+      headers: { Accept: "application/json", "X-Auth-Audience": "admin" },
+      credentials: "same-origin",
+      signal,
+    });
+    if (!res.ok) return { authenticated: false };
+    type SessionPayload = {
+      audience?: string;
+      email?: string;
+      display_name?: string;
+      roles?: string[];
+      must_change_password?: boolean;
+    };
+    const body = (await res.json()) as SessionPayload & { data?: SessionPayload };
+    const data: SessionPayload = body.data ?? body;
+    return {
+      authenticated: data.audience === "admin",
+      email: data.email,
+      displayName: data.display_name,
+      roles: data.roles,
+      mustChangePassword: data.must_change_password,
+    };
+  } catch {
+    // 网络/解析失败一律按"没有后台会话"处理（fail closed）。
+    return { authenticated: false };
+  }
+}
+
+/** 带 admin 受众的只读 GET（供页面级非 api.* 端点使用，例如 /api/v1/coverage/stats）。 */
+export async function adminGetJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(BASE + path, {
+    headers: { Accept: "application/json", "X-Auth-Audience": "admin" },
+    credentials: "same-origin",
+    signal,
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const body = await res.json();
+      msg = body.error?.message ?? body.error ?? msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  return res.json() as Promise<T>;
+}

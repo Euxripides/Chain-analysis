@@ -1,0 +1,68 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 10604
+
+
+Running 58 tests using 1 worker
+
+  ✓   1 [user-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › mobile (390px) 无页面级横向滚动 (5.9s)
+  ✓   2 [user-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › tablet (768px) 无页面级横向滚动 (5.6s)
+  ✓   3 [user-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › laptop (1024px) 无页面级横向滚动 (5.6s)
+  ✓   4 [user-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › desktop (1440px) 无页面级横向滚动 (5.7s)
+  ✓   5 [user-desktop] › tests/dual-system-quality.spec.ts:130:3 › UX-002 四断点布局 › 后台管理系统在四个断点下无横向滚动 (10.0s)
+  ✓   6 [user-desktop] › tests/dual-system-quality.spec.ts:148:3 › UX-003 颜色对比度与状态可辨识 › 所有可见文本满足 WCAG AA 对比度 (4.1s)
+  ✓   7 [user-desktop] › tests/dual-system-quality.spec.ts:177:3 › UX-003 颜色对比度与状态可辨识 › 状态徽标带形状前缀，不只依赖颜色 (2.1s)
+  ✓   8 [user-desktop] › tests/dual-system-quality.spec.ts:193:3 › UX-004 长表渲染预算 › 表格按页窗口渲染，DOM 行数不随数据量线性增长 (1.8s)
+  ✓   9 [user-desktop] › tests/dual-system-quality.spec.ts:226:3 › SEC-002 XSS / Markdown 注入 › 注入的 HTML 载荷以纯文本渲染，不执行 (3.4s)
+  ✓  10 [user-desktop] › tests/dual-system-sprint4.spec.ts:106:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互 (55.5s)
+  ✓  11 [user-desktop] › tests/dual-system-sprint4.spec.ts:274:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败 (2.2s)
+  ✓  12 [user-desktop] › tests/dual-system-sprint5.spec.ts:113:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情 (11.5s)
+  ✓  13 [user-desktop] › tests/dual-system-sprint5.spec.ts:147:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab (2.4s)
+  ✓  14 [user-desktop] › tests/dual-system-sprint5.spec.ts:171:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog (3.1s)
+  ✓  15 [user-desktop] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE (2.1s)
+  ✓  16 [user-desktop] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖 (13.0s)
+  -  17 [user-desktop] › tests/dual-system-sprint5.spec.ts:306:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出
+  ✓  18 [user-desktop] › tests/dual-system-sprint5.spec.ts:326:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸 (2.3s)
+  ✓  19 [user-desktop] › tests/dual-system-sprint5.spec.ts:371:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互 (17.9s)
+  -  20 [user-desktop] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染
+  -  21 [user-desktop] › tests/dual-system-sprint6.spec.ts:80:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示
+  -  22 [user-desktop] › tests/dual-system-sprint6.spec.ts:93:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-02 移动/平板宽度下 S6 页面无横向溢出且 Dialog 可关闭
+  -  23 [user-desktop] › tests/dual-system-sprint6.spec.ts:112:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-003/004 Provider 连接测试与密钥摘要均为真实交互
+  -  24 [user-desktop] › tests/dual-system-sprint6.spec.ts:132:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-006 Kill Switch 影响预览为真实数据且审批规则可见
+  -  25 [user-desktop] › tests/dual-system-sprint6.spec.ts:145:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-010 功能开关页面可试算并展示评估记录
+  -  26 [user-desktop] › tests/dual-system-sprint6.spec.ts:158:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-004/UI 完整性边界页面展示缺口声明与逐项验证，并可只读检测
+  -  27 [user-desktop] › tests/dual-system-sprint6.spec.ts:187:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-002/UI 页面与弹窗中不出现密钥明文
+  -  28 [user-desktop] › tests/dual-system-sprint6.spec.ts:197:3 › S6-FE 后台 Sprint 6 页面 › S6-OBS-01 可观测性页面展示 P0 告警、SLO 与吞吐拆分
+  -  29 [user-desktop] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用
+  ✓  30 [admin-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › mobile (390px) 无页面级横向滚动 (5.5s)
+  ✓  31 [admin-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › tablet (768px) 无页面级横向滚动 (5.7s)
+  ✓  32 [admin-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › laptop (1024px) 无页面级横向滚动 (5.4s)
+  ✓  33 [admin-desktop] › tests/dual-system-quality.spec.ts:103:5 › UX-002 四断点布局 › desktop (1440px) 无页面级横向滚动 (5.5s)
+  ✓  34 [admin-desktop] › tests/dual-system-quality.spec.ts:130:3 › UX-002 四断点布局 › 后台管理系统在四个断点下无横向滚动 (9.6s)
+  ✓  35 [admin-desktop] › tests/dual-system-quality.spec.ts:148:3 › UX-003 颜色对比度与状态可辨识 › 所有可见文本满足 WCAG AA 对比度 (5.3s)
+  ✓  36 [admin-desktop] › tests/dual-system-quality.spec.ts:177:3 › UX-003 颜色对比度与状态可辨识 › 状态徽标带形状前缀，不只依赖颜色 (2.9s)
+  ✓  37 [admin-desktop] › tests/dual-system-quality.spec.ts:193:3 › UX-004 长表渲染预算 › 表格按页窗口渲染，DOM 行数不随数据量线性增长 (1.9s)
+  ✓  38 [admin-desktop] › tests/dual-system-quality.spec.ts:226:3 › SEC-002 XSS / Markdown 注入 › 注入的 HTML 载荷以纯文本渲染，不执行 (3.2s)
+  -  39 [admin-desktop] › tests/dual-system-sprint4.spec.ts:106:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+  -  40 [admin-desktop] › tests/dual-system-sprint4.spec.ts:274:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+  -  41 [admin-desktop] › tests/dual-system-sprint5.spec.ts:113:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情
+  -  42 [admin-desktop] › tests/dual-system-sprint5.spec.ts:147:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab
+  -  43 [admin-desktop] › tests/dual-system-sprint5.spec.ts:171:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog
+  -  44 [admin-desktop] › tests/dual-system-sprint5.spec.ts:221:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE
+  -  45 [admin-desktop] › tests/dual-system-sprint5.spec.ts:246:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖
+  -  46 [admin-desktop] › tests/dual-system-sprint5.spec.ts:306:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出
+  -  47 [admin-desktop] › tests/dual-system-sprint5.spec.ts:326:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸
+  -  48 [admin-desktop] › tests/dual-system-sprint5.spec.ts:371:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互
+  ✓  49 [admin-desktop] › tests/dual-system-sprint5.spec.ts:416:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染 (14.7s)
+  ✓  50 [admin-desktop] › tests/dual-system-sprint6.spec.ts:80:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-01 十七个 Sprint 6 页面均渲染真实数据且无内联提示 (10.7s)
+  ✓  51 [admin-desktop] › tests/dual-system-sprint6.spec.ts:93:3 › S6-FE 后台 Sprint 6 页面 › S6-FE-02 移动/平板宽度下 S6 页面无横向溢出且 Dialog 可关闭 (2.0s)
+  ✓  52 [admin-desktop] › tests/dual-system-sprint6.spec.ts:112:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-003/004 Provider 连接测试与密钥摘要均为真实交互 (2.6s)
+  ✓  53 [admin-desktop] › tests/dual-system-sprint6.spec.ts:132:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-006 Kill Switch 影响预览为真实数据且审批规则可见 (2.2s)
+  ✓  54 [admin-desktop] › tests/dual-system-sprint6.spec.ts:145:3 › S6-FE 后台 Sprint 6 页面 › ADMIN-010 功能开关页面可试算并展示评估记录 (1.4s)
+  ✓  55 [admin-desktop] › tests/dual-system-sprint6.spec.ts:158:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-004/UI 完整性边界页面展示缺口声明与逐项验证，并可只读检测 (6.1s)
+  ✓  56 [admin-desktop] › tests/dual-system-sprint6.spec.ts:187:3 › S6-FE 后台 Sprint 6 页面 › AUDIT-002/UI 页面与弹窗中不出现密钥明文 (2.4s)
+  ✓  57 [admin-desktop] › tests/dual-system-sprint6.spec.ts:197:3 › S6-FE 后台 Sprint 6 页面 › S6-OBS-01 可观测性页面展示 P0 告警、SLO 与吞吐拆分 (2.7s)
+  ✓  58 [admin-desktop] › tests/dual-system-sprint6.spec.ts:208:3 › S6-QA 审计员只读 › RBAC-S6 审计员访问后台只读页面不报错、写操作入口不可用 (2.1s)
+
+  21 skipped
+  37 passed (4.2m)

@@ -16,12 +16,26 @@ const PASSWORD = process.env.E2E_USER_PASSWORD;
 
 test.skip(!PASSWORD, "需要 E2E_USER_PASSWORD 才能执行真实登录验收");
 
+/**
+ * P1-20260913：多工作区身份登录时，服务端返回 409 AUTHN_WORKSPACE_SELECTION_REQUIRED
+ * 并附可选列表，页面按仓库规范用弹窗要求**显式选择**工作区（绝不静默取默认）。
+ * 夹具账号（fixture-*）同时属于 acme-lab 与 acme-lab-other，因此这一步是必经路径。
+ */
+async function resolveWorkspaceSelection(page: Page, slug = "acme-lab") {
+  const dialog = page.getByRole("dialog").filter({ hasText: "请选择工作区" });
+  await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+  if (await dialog.isVisible().catch(() => false)) {
+    await dialog.getByRole("button", { name: new RegExp(slug) }).first().click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+  }
+}
 async function loginAs(page: Page, path: "user" | "admin") {
   const loginPath = path === "user" ? "/app-v2/login" : "/admin/login";
   await page.goto(loginPath, { waitUntil: "domcontentloaded" });
   await page.locator("#identifier").fill(EMAIL);
   await page.locator("#password").fill(PASSWORD!);
   await page.getByRole("button", { name: /^登录(后台)?$/ }).click();
+  await resolveWorkspaceSelection(page);
   await expect(page.locator(".auth-card")).toHaveCount(0, { timeout: 20_000 });
   const notice = page.getByRole("dialog").filter({ hasText: "需要修改初始密码" });
   if (await notice.isVisible().catch(() => false)) {

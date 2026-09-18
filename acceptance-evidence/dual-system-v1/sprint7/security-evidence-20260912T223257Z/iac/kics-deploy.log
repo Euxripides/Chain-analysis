@@ -1,0 +1,128 @@
+[38;2;34;187;51m
+                                                                                                                                                   
+                                                                                                                                                                                                    
+   MLLLLLM             MLLLLLLLLL   LLLLLLL             KLLLLLLLLLLLLLLLL       LLLLLLLLLLLLLLLLLLLLLLL 
+   MMMMMMM           MMMMMMMMMML    MMMMMMMK       LMMMMMMMMMMMMMMMMMMMML   KLMMMMMMMMMMMMMMMMMMMMMMMMM 
+   MMMMMMM         MMMMMMMMML       MMMMMMMK     LMMMMMMMMMMMMMMMMMMMMMML  LMMMMMMMMMMMMMMMMMMMMMMMMMMM 
+   MMMMMMM      MMMMMMMMMML         MMMMMMMK   LMMMMMMMMMMMMMMMMMMMMMMMML LMMMMMMMMMMMMMMMMMMMMMMMMMMMM 
+   MMMMMMM    LMMMMMMMMML           MMMMMMMK  LMMMMMMMMMLLMLLLLLLLLLLLLLL LMMMMMMMLLLLLLLLLLLLLLLLLLLLM 
+   MMMMMMM  MMMMMMMMMLM             MMMMMMMK LMMMMMMMM                    LMMMMMML                      
+   MMMMMMMLMMMMMMMML                MMMMMMMK MMMMMMML                     LMMMMMMMMLLLLLLLLLLLLLMLL     
+   MMMMMMMMMMMMMMMM                 MMMMMMMK MMMMMML                       LMMMMMMMMMMMMMMMMMMMMMMMMML  
+   MMMMMMMMMMMMMMMMMM               MMMMMMMK MMMMMMM                         LMMMMMMMMMMMMMMMMMMMMMMMML 
+   MMMMMMM KLMMMMMMMMML             MMMMMMMK LMMMMMMM                                          MMMMMMMML
+   MMMMMMM    LMMMMMMMMMM           MMMMMMMK LMMMMMMMMLL                                        MMMMMMML
+   MMMMMMM      LMMMMMMMMMLL        MMMMMMMK  LMMMMMMMMMMMMMMMMMMMMMMMMML LLLLLLLLLLLLLLLLLLLLMMMMMMMMMM
+   MMMMMMM        MMMMMMMMMMML      MMMMMMMK   MMMMMMMMMMMMMMMMMMMMMMMMML LMMMMMMMMMMMMMMMMMMMMMMMMMMMM 
+   MMMMMMM          LLMMMMMMMMML    MMMMMMMK     LLMMMMMMMMMMMMMMMMMMMMML LMMMMMMMMMMMMMMMMMMMMMMMMMML  
+   MMMMMMM             MMMMMMMMMML  MMMMMMMK         KLMMMMMMMMMMMMMMMMML LMMMMMMMMMMMMMMMMMMMMMMMLK    
+                                                                                                            
+                                                                                                                                                                                                                                                                                                                        
+
+[0m
+Scanning with Keeping Infrastructure as Code Secure v2.1.20
+
+
+
+
+
+[38;2;255;114;19mSecurity Opt Not Set[0m, Severity: [38;2;255;114;19mMEDIUM[0m, Results: 4
+[1mDescription:[0m Attribute 'security_opt' should be defined.
+[1mPlatform:[0m DockerCompose
+[1mCWE:[0m 693
+[1mRisk Score:[0m 5.5
+[1mLearn more about this vulnerability:[0m https://docs.kics.io/latest/queries/dockercompose-queries/610e266e-6c12-4bca-9925-1ed0cd29742b
+
+	[38;2;255;114;19m[1]:[0m ../../path/compose.yaml:[38;2;34;187;51m19[0m
+
+		018: 
+[38;2;240;173;78m		019:   clickhouse:
+[0m		020:     image: clickhouse/clickhouse-server:26.7
+
+
+	[38;2;255;114;19m[2]:[0m ../../path/compose.yaml:[38;2;34;187;51m42[0m
+
+		041: 
+[38;2;240;173;78m		042:   minio:
+[0m		043:     image: minio/minio:latest
+
+
+	[38;2;255;114;19m[3]:[0m ../../path/compose.yaml:[38;2;34;187;51m2[0m
+
+		001: services:
+[38;2;240;173;78m		002:   postgres:
+[0m		003:     image: postgres:18
+
+
+	[38;2;255;114;19m[4]:[0m ../../path/compose.yaml:[38;2;34;187;51m55[0m
+
+		054: 
+[38;2;240;173;78m		055:   nats:
+[0m		056:     image: nats:2-alpine
+
+
+[38;2;255;114;19mHealthcheck Not Set[0m, Severity: [38;2;255;114;19mMEDIUM[0m, Results: 2
+[1mDescription:[0m Check containers periodically to see if they are running properly.
+[1mPlatform:[0m DockerCompose
+[1mCWE:[0m 703
+[1mRisk Score:[0m 5.1
+[1mLearn more about this vulnerability:[0m https://docs.kics.io/latest/queries/dockercompose-queries/698ed579-b239-4f8f-a388-baa4bcb13ef8
+
+	[38;2;255;114;19m[1]:[0m ../../path/compose.yaml:[38;2;34;187;51m55[0m
+
+		054: 
+[38;2;240;173;78m		055:   nats:
+[0m		056:     image: nats:2-alpine
+
+
+	[38;2;255;114;19m[2]:[0m ../../path/compose.yaml:[38;2;34;187;51m42[0m
+
+		041: 
+[38;2;240;173;78m		042:   minio:
+[0m		043:     image: minio/minio:latest
+
+
+[38;2;255;114;19mContainer Capabilities Unrestricted[0m, Severity: [38;2;255;114;19mMEDIUM[0m, Results: 4
+[1mDescription:[0m Some capabilities are not needed in certain (or any) containers. Make sure that you only add capabilities that your container needs. Drop unnecessary capabilities as well.
+[1mPlatform:[0m DockerCompose
+[1mCWE:[0m 400
+[1mRisk Score:[0m 6.8
+[1mLearn more about this vulnerability:[0m https://docs.kics.io/latest/queries/dockercompose-queries/ce76b7d0-9e77-464d-b86f-c5c48e03e22d
+
+	[38;2;255;114;19m[1]:[0m ../../path/compose.yaml:[38;2;34;187;51m19[0m
+
+		018: 
+[38;2;240;173;78m		019:   clickhouse:
+[0m		020:     image: clickhouse/clickhouse-server:26.7
+
+
+	[38;2;255;114;19m[2]:[0m ../../path/compose.yaml:[38;2;34;187;51m42[0m
+
+		041: 
+[38;2;240;173;78m		042:   minio:
+[0m		043:     image: minio/minio:latest
+
+
+	[38;2;255;114;19m[3]:[0m ../../path/compose.yaml:[38;2;34;187;51m55[0m
+
+		054: 
+[38;2;240;173;78m		055:   nats:
+[0m		056:     image: nats:2-alpine
+
+
+	[38;2;255;114;19m[4]:[0m ../../path/compose.yaml:[38;2;34;187;51m2[0m
+
+		001: services:
+[38;2;240;173;78m		002:   postgres:
+[0m		003:     image: postgres:18
+
+
+
+Results Summary:
+[38;2;255;0;0mCRITICAL[0m: 0
+[38;2;187;33;36mHIGH[0m: 0
+[38;2;255;114;19mMEDIUM[0m: 10
+[38;2;237;213;126mLOW[0m: 0
+[38;2;91;192;222mINFO[0m: 0
+TOTAL: 10
+

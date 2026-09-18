@@ -1,0 +1,199 @@
+{
+  "purpose": "按本轮真实 request_id 把 negative 用例的拒绝响应与 audit_events_v2 逐条对齐",
+  "query": "SELECT json_agg(t) FROM (SELECT request_id, trace_id, action, result, http_status, route_template, permission_key, deny_reason, occurred_at FROM audit_events_v2 WHERE request_id IN ('08b30112-f0c5-4991-b87e-d52433ca5a4d','09fc0f14-2aec-4374-9b96-fccdfb2d3e6a','23d84db2-d112-43af-bce4-ac621cfcc1db','2860c4fd-e7ca-455d-b1e5-54ab80517ac6','390e60b9-94f9-4203-b798-e9329f3ab68a','3cc639ab-94b4-46c2-bccc-7eadd6f9fa22','41790f79-cdea-46b9-84bf-625a6ef73871','5aecde51-097e-4176-91f0-45a0b59f7d8f','667c7b74-e650-455f-af52-45db1c5b61ce','843cbdfa-a245-4f6a-9fc9-7b90faf61634','8afcf170-88a9-47e3-b5e5-e9465b1ce13b','95f301e8-b7c3-45b2-aa6d-05b0fbe2c456','9e55bfb0-8397-47fd-90e4-08430dd9f1e3','a0d20e8d-261c-489e-932d-9115eaf9fb1b','a5ce79de-b1de-49db-86ee-39f884258700','ba1f147f-e9da-47e2-8b9e-b57324e69601','bba3ac6f-6a2e-4042-845e-2304962b5355','c44797e7-7947-4945-9502-25323cd95c05','c6f7b4db-da31-44ca-b62b-9b5329a207b0','dc6ad7c1-32bc-453b-8c0a-0d8a071a7385','f3d47dc2-e740-44e6-bfb7-14a8a80fd0e4','fb9dda59-1ea2-421b-981b-ecd9aad698d7')) t;",
+  "request_ids": 22,
+  "matched": 22,
+  "missing": [],
+  "trace_id_header_vs_audit_mismatch": [],
+  "entries_without_header_trace": [
+    "08b30112-f0c5-4991-b87e-d52433ca5a4d",
+    "23d84db2-d112-43af-bce4-ac621cfcc1db",
+    "390e60b9-94f9-4203-b798-e9329f3ab68a",
+    "95f301e8-b7c3-45b2-aa6d-05b0fbe2c456",
+    "f3d47dc2-e740-44e6-bfb7-14a8a80fd0e4",
+    "fb9dda59-1ea2-421b-981b-ecd9aad698d7"
+  ],
+  "entries": [
+    {
+      "request_id": "08b30112-f0c5-4991-b87e-d52433ca5a4d",
+      "source": "negative-r3-desktop-audience-mismatch-privileged.json",
+      "http_status": 403,
+      "trace_id_header": null,
+      "trace_id_audit": "5afc5a44-9d38-452b-a1f9-536890e26e8c",
+      "trace_match": null
+    },
+    {
+      "request_id": "09fc0f14-2aec-4374-9b96-fccdfb2d3e6a",
+      "source": "negative-r3-mobile-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "84ff64a6-714d-4dbe-bb86-558a12296176",
+      "trace_id_audit": "84ff64a6-714d-4dbe-bb86-558a12296176",
+      "trace_match": true
+    },
+    {
+      "request_id": "23d84db2-d112-43af-bce4-ac621cfcc1db",
+      "source": "negative-r3-mobile-audience-mismatch.json",
+      "http_status": 403,
+      "trace_id_header": null,
+      "trace_id_audit": "409e32ca-8f21-48fd-b2dc-fabe4047336f",
+      "trace_match": null
+    },
+    {
+      "request_id": "2860c4fd-e7ca-455d-b1e5-54ab80517ac6",
+      "source": "negative-r3-mobile-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "c663c2f8-d837-4890-ba3e-cb09965099f2",
+      "trace_id_audit": "c663c2f8-d837-4890-ba3e-cb09965099f2",
+      "trace_match": true
+    },
+    {
+      "request_id": "390e60b9-94f9-4203-b798-e9329f3ab68a",
+      "source": "negative-r3-desktop-audience-mismatch.json",
+      "http_status": 403,
+      "trace_id_header": null,
+      "trace_id_audit": "f0bc9e59-6ca4-4e0c-844c-70ff26b2fde3",
+      "trace_match": null
+    },
+    {
+      "request_id": "3cc639ab-94b4-46c2-bccc-7eadd6f9fa22",
+      "source": "negative-r3-mobile-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "f809606c-d1c4-4e17-92bc-8896f2cd7cf8",
+      "trace_id_audit": "f809606c-d1c4-4e17-92bc-8896f2cd7cf8",
+      "trace_match": true
+    },
+    {
+      "request_id": "41790f79-cdea-46b9-84bf-625a6ef73871",
+      "source": "negative-r3-mobile-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "ffa30934-4545-480e-970b-9aaa3d5b4d50",
+      "trace_id_audit": "ffa30934-4545-480e-970b-9aaa3d5b4d50",
+      "trace_match": true
+    },
+    {
+      "request_id": "5aecde51-097e-4176-91f0-45a0b59f7d8f",
+      "source": "negative-r3-desktop-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "d8b57a01-912e-4221-b85d-3b1ddb1a0fe7",
+      "trace_id_audit": "d8b57a01-912e-4221-b85d-3b1ddb1a0fe7",
+      "trace_match": true
+    },
+    {
+      "request_id": "667c7b74-e650-455f-af52-45db1c5b61ce",
+      "source": "negative-r3-desktop-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "919b9921-42f1-4b51-9b94-11bf27dcc221",
+      "trace_id_audit": "919b9921-42f1-4b51-9b94-11bf27dcc221",
+      "trace_match": true
+    },
+    {
+      "request_id": "843cbdfa-a245-4f6a-9fc9-7b90faf61634",
+      "source": "negative-r3-desktop-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "8cd478ad-960d-4478-b16c-e385a3f859ab",
+      "trace_id_audit": "8cd478ad-960d-4478-b16c-e385a3f859ab",
+      "trace_match": true
+    },
+    {
+      "request_id": "8afcf170-88a9-47e3-b5e5-e9465b1ce13b",
+      "source": "negative-r3-desktop-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "c0e489b5-c348-4a9b-8521-3197c41e4931",
+      "trace_id_audit": "c0e489b5-c348-4a9b-8521-3197c41e4931",
+      "trace_match": true
+    },
+    {
+      "request_id": "95f301e8-b7c3-45b2-aa6d-05b0fbe2c456",
+      "source": "negative-r3-desktop-audience-header-cannot-escalate.json",
+      "http_status": 401,
+      "trace_id_header": null,
+      "trace_id_audit": "e3d3b70b-cc11-49f7-9768-373dfc3e77d3",
+      "trace_match": null
+    },
+    {
+      "request_id": "9e55bfb0-8397-47fd-90e4-08430dd9f1e3",
+      "source": "negative-r3-mobile-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "7ec89d05-e0b2-4aaa-80c4-998a3711a545",
+      "trace_id_audit": "7ec89d05-e0b2-4aaa-80c4-998a3711a545",
+      "trace_match": true
+    },
+    {
+      "request_id": "a0d20e8d-261c-489e-932d-9115eaf9fb1b",
+      "source": "negative-r3-mobile-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "817b45a1-1259-4b77-9044-40e77e7047cd",
+      "trace_id_audit": "817b45a1-1259-4b77-9044-40e77e7047cd",
+      "trace_match": true
+    },
+    {
+      "request_id": "a5ce79de-b1de-49db-86ee-39f884258700",
+      "source": "negative-r3-desktop-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "0aaade6a-052f-490f-be43-9181d8cde776",
+      "trace_id_audit": "0aaade6a-052f-490f-be43-9181d8cde776",
+      "trace_match": true
+    },
+    {
+      "request_id": "ba1f147f-e9da-47e2-8b9e-b57324e69601",
+      "source": "negative-r3-desktop-anonymous.json",
+      "http_status": 401,
+      "trace_id_header": "6cc10225-ec8c-4d80-a1d0-e824e5762c27",
+      "trace_id_audit": "6cc10225-ec8c-4d80-a1d0-e824e5762c27",
+      "trace_match": true
+    },
+    {
+      "request_id": "bba3ac6f-6a2e-4042-845e-2304962b5355",
+      "source": "negative-r3-mobile-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "03a469c9-b391-4cb1-a0b2-59098e3cf24d",
+      "trace_id_audit": "03a469c9-b391-4cb1-a0b2-59098e3cf24d",
+      "trace_match": true
+    },
+    {
+      "request_id": "c44797e7-7947-4945-9502-25323cd95c05",
+      "source": "negative-r3-desktop-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "09b06299-760c-4cf4-84de-144859dbee25",
+      "trace_id_audit": "09b06299-760c-4cf4-84de-144859dbee25",
+      "trace_match": true
+    },
+    {
+      "request_id": "c6f7b4db-da31-44ca-b62b-9b5329a207b0",
+      "source": "negative-r3-desktop-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "62002d11-3fbc-46e5-be99-10b491c3e871",
+      "trace_id_audit": "62002d11-3fbc-46e5-be99-10b491c3e871",
+      "trace_match": true
+    },
+    {
+      "request_id": "dc6ad7c1-32bc-453b-8c0a-0d8a071a7385",
+      "source": "negative-r3-mobile-user-session.json",
+      "http_status": 401,
+      "trace_id_header": "187fc320-c368-46db-9b80-d385435e2cbf",
+      "trace_id_audit": "187fc320-c368-46db-9b80-d385435e2cbf",
+      "trace_match": true
+    },
+    {
+      "request_id": "f3d47dc2-e740-44e6-bfb7-14a8a80fd0e4",
+      "source": "negative-r3-mobile-audience-mismatch-privileged.json",
+      "http_status": 403,
+      "trace_id_header": null,
+      "trace_id_audit": "24473fd1-1748-4ef9-b862-13ab1e5be00a",
+      "trace_match": null
+    },
+    {
+      "request_id": "fb9dda59-1ea2-421b-981b-ecd9aad698d7",
+      "source": "negative-r3-mobile-audience-header-cannot-escalate.json",
+      "http_status": 401,
+      "trace_id_header": null,
+      "trace_id_audit": "d084d2e2-35f7-467f-ad5d-ace8ac479a0a",
+      "trace_match": null
+    }
+  ],
+  "observed_backend_contract_note": {
+    "finding": "拒绝响应的**响应体** meta.request_id / meta.trace_id 为空字符串，而**响应头** X-Request-Id / X-Trace-Id 有真实值；审计行写入的是响应头同源的值。",
+    "evidence_body_head": "{\"success\":false,\"data\":null,\"meta\":{\"request_id\":\"\",\"trace_id\":\"\",\"server_time\":\"2026-09-12T22:51:17.925Z\",\"next_cursor\":null},\"error\":{\"code\":\"unauthenticated\",\"message\":\"需要登录\",\"field_errors\":[],\"retryable\":false}}\n",
+    "action": "本轮只记录、不在 R-3 内改后端（避免与在途部署并发）；trace 契约验证留给主会话。"
+  }
+}

@@ -1,0 +1,65 @@
+# ===== AUDIT-002 classification =====
+# generated  : 2026-09-12T23:50:56
+# 说明       : 本文件是 raw/*.txt 原始命中的【分类解释】，不替代原始命中；
+#              原始命中全量保存在 raw/api-log-scan.txt / raw/worker-log-scan.txt / raw/audit-db-scan.txt
+# 分类口径   : (a) 键名/字段名/占位/枚举/路径   (b) 脱敏掩码/摘要/引用名   (c) 疑似真实明文秘密
+# 键感知     : 先解析 key[:=]value，再按 键名语义 + 值形态 分类；未成键的裸关键词计为 (a)
+
+## 3b. 阳性对照自测 (positive control) — 证明分类器能报出 (c)
+  目的: 若真实扫描 (c)=0，本自测证明这不是分类器盲区导致的假阴性
+  PASS expect=c got=c  plaintext password value | {"password":"s3cr3t-P4ssw0rd-9f8a7b6c5d4e3f21aa"}
+  PASS expect=c got=c  plaintext api_key value  | {"api_key":"AKIAIOSFODNN7EXAMPLE1234567890"}
+  PASS expect=c got=c  plaintext token value    | {"token":"ab12cd34ef56ab78cd90ef12ab34cd56"}
+  PASS expect=c got=c  plaintext secret value   | {"secret":"Zx9Qw8Er7Ty6Ui5Op4As3Df2Gh1Jk0Lm"}
+  PASS expect=c got=c  bearer jwt               | Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklm
+  PASS expect=b got=b  masked placeholder       | {"password":"<redacted>"}
+  PASS expect=b got=b  masked ref               | {"secret_ref_masked":"env:S6_R..."}
+  PASS expect=a got=a  boolean flag             | {"api_key_configured":true}
+  PASS expect=a got=a  boolean flag             | {"has_password":false}
+  PASS expect=a got=a  route path               | GET /api/v1/tokens/enrichment
+  SELFTEST=PASS (pass=10 fail=0)
+
+## 3c. 真实数据分类计数
+  扫描行数(非注释)              : 170129
+  解析出的 key[:=]value 个数    : 300   <- 证明值的分类路径确实被执行
+  未成键的裸关键词命中          : 52687
+  (a) key-name/placeholder/benign : 52976
+  (b) masked/redacted/digest/ref  : 11
+  其中强信号命中(凭据本身)        : 0
+  (c) PLAINTEXT-SUSPECT           : 0
+
+## (c) 疑似真实明文命中清单 (值已脱敏: 前6位+长度)
+  NONE — 0 条 (c) 类命中
+
+## (b) 脱敏/摘要/引用 典型样例 (证明不是明文)
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+  [B] label=audit_events_v2  key=secret_ref_masked        env:S6...(len=9)  reason=key-name=secret_ref_masked 表明脱敏/摘要/引用
+
+## (a) 键名/占位/路径 典型样例 (证明不是泄漏)
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=token                    value=<bare-mention>         reason=keyword 出现在路径/文案中，非赋值
+  [A] label=api.log          key=token                    value=<bare-mention>         reason=keyword 出现在路径/文案中，非赋值
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+  [A] label=api.log          key=api_key_configured       value=true                   reason=boolean/enum/blank
+
+## 机器可读结果 (供 CI gate)
+SELFTEST=PASS
+C_COUNT=0
+B_COUNT=11
+A_COUNT=52976
+VALPATH=300
+BARE=52687
+STRONG=0

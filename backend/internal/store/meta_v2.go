@@ -39,13 +39,29 @@ func (s *Store) UpsertWorkspaceAddress(ctx context.Context, wsID, orgID, chain, 
 	return err
 }
 
-// ListWorkspaceAddresses 地址目录（keyset cursor 按地址；案件/标签/状态筛选，§61）。
+// ListWorkspaceAddresses 地址目录（单工作区，keyset cursor 按地址；案件/标签/状态筛选，§61）。
 func (s *Store) ListWorkspaceAddresses(ctx context.Context, wsID, chain, q string, caseIDs, tagIDs []string, tagMode, syncStatus, cursor string, limit int) ([]model.WorkspaceAddress, string, error) {
-	args := []any{wsID}
+	var orgID string
+	if err := s.Pool.QueryRow(ctx, "SELECT organization_id::text FROM workspaces WHERE id=$1", wsID).Scan(&orgID); err != nil {
+		return nil, "", err
+	}
+	return s.listWorkspaceAddresses(ctx, orgID, wsID, chain, q, caseIDs, tagIDs, tagMode, syncStatus, cursor, limit)
+}
+
+// ListWorkspaceAddressesScoped 按租户作用域列出地址目录。
+//
+// P0 修复：HTTP 读路径必须使用本方法。wsID 为空表示该组织下全部工作区
+// （主体只有组织级绑定时的合法视图），但**永远不会**跨组织。
+func (s *Store) ListWorkspaceAddressesScoped(ctx context.Context, orgID, wsID, chain, q string, caseIDs, tagIDs []string, tagMode, syncStatus, cursor string, limit int) ([]model.WorkspaceAddress, string, error) {
+	return s.listWorkspaceAddresses(ctx, orgID, wsID, chain, q, caseIDs, tagIDs, tagMode, syncStatus, cursor, limit)
+}
+
+func (s *Store) listWorkspaceAddresses(ctx context.Context, orgID, wsID, chain, q string, caseIDs, tagIDs []string, tagMode, syncStatus, cursor string, limit int) ([]model.WorkspaceAddress, string, error) {
+	args := []any{orgID, wsID}
 	sql := "SELECT wa.id, wa.chain, wa.address, wa.normalized_address, COALESCE(wa.display_name,''), wa.primary_case_id::text, " +
 		"wa.transaction_count, wa.token_transfer_count, wa.nft_transfer_count, wa.log_count, wa.total_activity_count, " +
 		"COALESCE(wa.first_data_block,0), COALESCE(wa.last_data_block,0), wa.first_data_at, wa.last_data_at, wa.last_sync_at, wa.sync_status, wa.updated_at " +
-		"FROM workspace_addresses wa WHERE wa.workspace_id=$1"
+		"FROM workspace_addresses wa WHERE wa.organization_id=$1 AND ($2='' OR wa.workspace_id::text=$2)"
 	ph := func() string { return "$" + itoa(len(args)) }
 	if chain != "" {
 		args = append(args, chain)
@@ -263,6 +279,15 @@ func (s *Store) CreateUpdatePreview(ctx context.Context, wsID, orgID, chain stri
 	_, err := s.Pool.Exec(ctx, "INSERT INTO update_previews (id, organization_id, workspace_id, chain, target_block, request_json, result_json, expires_at) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", id, orgID, wsID, chain, targetBlock, requestJSON, resultJSON, time.Now().Add(ttl))
 	return id, err
+}
+
+// UpdatePreviewScope 返回预览所属的租户作用域。
+//
+// 更新确认（POST /api/v1/updates/{id}/confirm）会据此把工作区状态写回**预览自己的**
+// 作用域，而不是 Store.DefaultOrgWorkspace。
+func (s *Store) UpdatePreviewScope(ctx context.Context, id string) (orgID, wsID string, err error) {
+	err = s.Pool.QueryRow(ctx, "SELECT COALESCE(organization_id::text,''), COALESCE(workspace_id::text,'') FROM update_previews WHERE id=$1", id).Scan(&orgID, &wsID)
+	return
 }
 
 func (s *Store) GetUpdatePreview(ctx context.Context, id string) (targetBlock int64, requestJSON, resultJSON []byte, expiresAt time.Time, err error) {

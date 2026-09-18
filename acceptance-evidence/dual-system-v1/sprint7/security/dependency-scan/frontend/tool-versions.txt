@@ -1,0 +1,79 @@
+# S7-SEC-01 dependency scan - Node toolchain versions
+# collected_at: 2026-09-12T23:37:17+07:00  host: dataserver  cwd: /home/euripides/projects/blockchain-platform/frontend
+
+## node -v
+v24.20.0
+exit=0
+
+## npm -v
+11.19.0
+exit=0
+
+## pnpm -v
+11.24.0
+exit=0
+
+## which node/npm/pnpm
+/home/euripides/.nvm/versions/node/v24.20.0/bin/node
+/home/euripides/.nvm/versions/node/v24.20.0/bin/npm
+/home/euripides/.nvm/versions/node/v24.20.0/bin/pnpm
+
+## lockfiles present
+ls: cannot access 'package-lock.json': No such file or directory
+ls: cannot access 'npm-shrinkwrap.json': No such file or directory
+ls: cannot access 'yarn.lock': No such file or directory
+-rw-rw-r-- 1 euripides euripides 54095 Sep 12 22:54 pnpm-lock.yaml
+
+## pnpm-workspace.yaml
+# 目标态：两个应用 + 共享包（docs/dual-system-development-plan.md §6.1）。
+# 现状：应用通过 Vite alias / tsconfig paths 解析 @chain/*，依赖仍从 frontend/node_modules 解析。
+# 正式切换 workspace 链接前必须验证：共享包无反向依赖、两个应用与旧 SPA 均可独立构建。
+# 见 docs/adr/AD-010。
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild
+
+## package.json
+{
+  "name": "blockchain-platform-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "check:tokens": "node scripts/check-token-contrast.mjs",
+    "build:user": "vite build --config apps/user-console/vite.config.ts",
+    "build:admin": "vite build --config apps/admin-console/vite.config.ts",
+    "gen:audit-coverage": "cd .. && python3 scripts/gen_audit_coverage.py"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.66.0",
+    "@xyflow/react": "12.10.2",
+    "ag-grid-community": "33.3.0",
+    "ag-grid-react": "33.3.0",
+    "echarts": "5.6.0",
+    "lucide-react": "0.468.0",
+    "motion": "12.23.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}

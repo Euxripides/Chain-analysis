@@ -1,0 +1,1595 @@
+=== SELFTEST: does trivy 0.74.0 recognize compose.yaml / Dockerfile / k8s yaml ? ===
+--- JSON ---
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.74.0"
+  },
+  "ReportID": "01a09684-d863-71a4-af3f-de52a10fa3bf",
+  "CreatedAt": "2026-09-12T16:48:03.683110361Z",
+  "ArtifactName": "/t",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "plain/Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 21,
+        "Failures": 6
+      },
+      "Misconfigurations": [
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0001",
+          "Title": "':latest' tag used",
+          "Description": "When using a 'FROM' statement you should use a specific tag to avoid uncontrolled behavior when the image is updated.",
+          "Message": "Specify a tag in the 'FROM' statement for image 'ubuntu'",
+          "Namespace": "builtin.dockerfile.DS001",
+          "Query": "data.builtin.dockerfile.DS001.deny",
+          "Resolution": "Add a tag to the image in the 'FROM' statement",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0001",
+          "References": [
+            "https://avd.aquasec.com/misconfig/ds-0001"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 1,
+            "EndLine": 1,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 1,
+                  "Content": "FROM ubuntu:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m ubuntu:latest\u001b[0m",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0002",
+          "Title": "Image user should not be 'root'",
+          "Description": "Running containers with 'root' user can lead to a container escape situation. It is a best practice to run containers as non-root users, which can be done by adding a 'USER' statement to the Dockerfile.",
+          "Message": "Last USER command in Dockerfile should not be 'root'",
+          "Namespace": "builtin.dockerfile.DS002",
+          "Query": "data.builtin.dockerfile.DS002.deny",
+          "Resolution": "Add 'USER \u003cnon root user name\u003e' line to the Dockerfile",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0002",
+          "References": [
+            "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/",
+            "https://avd.aquasec.com/misconfig/ds-0002"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 2,
+            "EndLine": 2,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 2,
+                  "Content": "USER root",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mUSER\u001b[0m\u001b[38;5;37m root\u001b[0m",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0004",
+          "Title": "Port 22 exposed",
+          "Description": "Exposing port 22 might allow users to SSH into the container.",
+          "Message": "Port 22 should not be exposed in Dockerfile",
+          "Namespace": "builtin.dockerfile.DS004",
+          "Query": "data.builtin.dockerfile.DS004.deny",
+          "Resolution": "Remove 'EXPOSE 22' statement from the Dockerfile",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0004",
+          "References": [
+            "https://avd.aquasec.com/misconfig/ds-0004"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 5,
+            "EndLine": 5,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 5,
+                  "Content": "EXPOSE 22",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mEXPOSE\u001b[0m\u001b[38;5;37m 22\u001b[0m",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0026",
+          "Title": "No HEALTHCHECK defined",
+          "Description": "You should add HEALTHCHECK instruction in your docker container images to perform the health check on running containers.",
+          "Message": "Add HEALTHCHECK instruction in your Dockerfile",
+          "Namespace": "builtin.dockerfile.DS026",
+          "Query": "data.builtin.dockerfile.DS026.deny",
+          "Resolution": "Add HEALTHCHECK instruction in Dockerfile",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0026",
+          "References": [
+            "https://blog.aquasec.com/docker-security-best-practices",
+            "https://avd.aquasec.com/misconfig/ds-0026"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general"
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0029",
+          "Title": "'apt-get' missing '--no-install-recommends'",
+          "Description": "'apt-get' install should use '--no-install-recommends' to minimize image size.",
+          "Message": "'--no-install-recommends' flag is missed: 'apt-get update \u0026\u0026 apt-get install -y curl'",
+          "Namespace": "builtin.dockerfile.DS029",
+          "Query": "data.builtin.dockerfile.DS029.deny",
+          "Resolution": "Add '--no-install-recommends' flag to 'apt-get'",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0029",
+          "References": [
+            "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/",
+            "https://avd.aquasec.com/misconfig/ds-0029"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 4,
+            "EndLine": 4,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 4,
+                  "Content": "RUN apt-get update \u0026\u0026 apt-get install -y curl",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mRUN\u001b[0m apt-get update \u001b[38;5;245m\u0026\u0026\u001b[0m apt-get install -y curl",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0031",
+          "Title": "Secrets passed via `build-args` or envs or copied secret files",
+          "Description": "Passing secrets via `build-args` or envs or copying secret files can leak them out",
+          "Message": "Possible exposure of secret env \"API_KEY\" in ENV",
+          "Namespace": "builtin.dockerfile.DS031",
+          "Query": "data.builtin.dockerfile.DS031.deny",
+          "Resolution": "Use secret mount if secrets are needed during image build. Use volume mount if secret files are needed during container runtime.",
+          "Severity": "CRITICAL",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0031",
+          "References": [
+            "https://docs.docker.com/build/building/secrets/",
+            "https://avd.aquasec.com/misconfig/ds-0031"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 3,
+            "EndLine": 3,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 3,
+                  "Content": "ENV API_KEY=supersecret123",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mENV\u001b[0m \u001b[38;5;33mAPI_KEY\u001b[0m\u001b[38;5;245m=\u001b[0msupersecret123",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Target": "plain/k8s.yaml",
+      "Class": "config",
+      "Type": "kubernetes",
+      "MisconfSummary": {
+        "Successes": 79,
+        "Failures": 19
+      },
+      "Misconfigurations": [
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0001",
+          "Title": "Can elevate its own privileges",
+          "Description": "A program inside the container can elevate its own privileges and run as root, which might give the program control over the container and node.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.allowPrivilegeEscalation' to false",
+          "Namespace": "builtin.kubernetes.KSV001",
+          "Query": "data.builtin.kubernetes.KSV001.deny",
+          "Resolution": "Set 'set containers[].securityContext.allowPrivilegeEscalation' to 'false'.",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0001",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted",
+            "https://avd.aquasec.com/misconfig/ksv-0001"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0003",
+          "Title": "Default capabilities: some containers do not drop all",
+          "Description": "The container should drop all default capabilities and add only those that are needed for its execution.",
+          "Message": "Container 'c' of Pod 'bad' should add 'ALL' to 'securityContext.capabilities.drop'",
+          "Namespace": "builtin.kubernetes.KSV003",
+          "Query": "data.builtin.kubernetes.KSV003.deny",
+          "Resolution": "Add 'ALL' to containers[].securityContext.capabilities.drop.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0003",
+          "References": [
+            "https://kubesec.io/basics/containers-securitycontext-capabilities-drop-index-all/",
+            "https://avd.aquasec.com/misconfig/ksv-0003"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0004",
+          "Title": "Default capabilities: some containers do not drop any",
+          "Description": "Security best practices require containers to run with minimal required capabilities.",
+          "Message": "Container 'c' of 'pod' 'bad' in 'default' namespace should set securityContext.capabilities.drop",
+          "Namespace": "builtin.kubernetes.KSV004",
+          "Query": "data.builtin.kubernetes.KSV004.deny",
+          "Resolution": "Specify at least one unneeded capability in 'containers[].securityContext.capabilities.drop'",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0004",
+          "References": [
+            "https://kubesec.io/basics/containers-securitycontext-capabilities-drop-index-all/",
+            "https://avd.aquasec.com/misconfig/ksv-0004"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0009",
+          "Title": "Access to host network",
+          "Description": "Sharing the host’s network namespace permits processes in the pod to communicate with processes bound to the host’s loopback adapter.",
+          "Message": "Pod 'bad' should not set 'spec.template.spec.hostNetwork' to true",
+          "Namespace": "builtin.kubernetes.KSV009",
+          "Query": "data.builtin.kubernetes.KSV009.deny",
+          "Resolution": "Do not set 'spec.template.spec.hostNetwork' to true.",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0009",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline",
+            "https://avd.aquasec.com/misconfig/ksv-0009"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 5,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 5,
+                  "Content": "spec:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;33mspec\u001b[0m:",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 6,
+                  "Content": "  hostNetwork: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "  \u001b[38;5;33mhostNetwork\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 7,
+                  "Content": "  containers:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mcontainers\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0011",
+          "Title": "CPU not limited",
+          "Description": "Enforcing CPU limits prevents DoS via resource exhaustion.",
+          "Message": "Container 'c' of Pod 'bad' should set 'resources.limits.cpu'",
+          "Namespace": "builtin.kubernetes.KSV011",
+          "Query": "data.builtin.kubernetes.KSV011.deny",
+          "Resolution": "Set a limit value under 'containers[].resources.limits.cpu'.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0011",
+          "References": [
+            "https://cloud.google.com/blog/products/containers-kubernetes/kubernetes-best-practices-resource-requests-and-limits",
+            "https://avd.aquasec.com/misconfig/ksv-0011"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0012",
+          "Title": "Runs as root user",
+          "Description": "Force the running image to run as a non-root user to ensure least privileges.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.runAsNonRoot' to true",
+          "Namespace": "builtin.kubernetes.KSV012",
+          "Query": "data.builtin.kubernetes.KSV012.deny",
+          "Resolution": "Set 'containers[].securityContext.runAsNonRoot' to true.",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0012",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted",
+            "https://avd.aquasec.com/misconfig/ksv-0012"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0013",
+          "Title": "Image tag \":latest\" used",
+          "Description": "It is best to avoid using the ':latest' image tag when deploying containers in production. Doing so makes it hard to track which version of the image is running, and hard to roll back the version.",
+          "Message": "Container 'c' of Pod 'bad' should specify an image tag",
+          "Namespace": "builtin.kubernetes.KSV013",
+          "Query": "data.builtin.kubernetes.KSV013.deny",
+          "Resolution": "Use a specific container image tag that is not 'latest'.",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0013",
+          "References": [
+            "https://kubernetes.io/docs/concepts/configuration/overview/#container-images",
+            "https://avd.aquasec.com/misconfig/ksv-0013"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0014",
+          "Title": "Root file system is not read-only",
+          "Description": "An immutable root file system prevents applications from writing to their local disk. This can limit intrusions, as attackers will not be able to tamper with the file system or write foreign executables to disk.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.readOnlyRootFilesystem' to true",
+          "Namespace": "builtin.kubernetes.KSV014",
+          "Query": "data.builtin.kubernetes.KSV014.deny",
+          "Resolution": "Change 'containers[].securityContext.readOnlyRootFilesystem' to 'true'.",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0014",
+          "References": [
+            "https://kubesec.io/basics/containers-securitycontext-readonlyrootfilesystem-true/",
+            "https://avd.aquasec.com/misconfig/ksv-0014"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0015",
+          "Title": "CPU requests not specified",
+          "Description": "When containers have resource requests specified, the scheduler can make better decisions about which nodes to place pods on, and how to deal with resource contention.",
+          "Message": "Container 'c' of Pod 'bad' should set 'resources.requests.cpu'",
+          "Namespace": "builtin.kubernetes.KSV015",
+          "Query": "data.builtin.kubernetes.KSV015.deny",
+          "Resolution": "Set 'containers[].resources.requests.cpu'.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0015",
+          "References": [
+            "https://cloud.google.com/blog/products/containers-kubernetes/kubernetes-best-practices-resource-requests-and-limits",
+            "https://avd.aquasec.com/misconfig/ksv-0015"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0016",
+          "Title": "Memory requests not specified",
+          "Description": "When containers have memory requests specified, the scheduler can make better decisions about which nodes to place pods on, and how to deal with resource contention.",
+          "Message": "Container 'c' of Pod 'bad' should set 'resources.requests.memory'",
+          "Namespace": "builtin.kubernetes.KSV016",
+          "Query": "data.builtin.kubernetes.KSV016.deny",
+          "Resolution": "Set 'containers[].resources.requests.memory'.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0016",
+          "References": [
+            "https://kubesec.io/basics/containers-resources-limits-memory/",
+            "https://avd.aquasec.com/misconfig/ksv-0016"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0017",
+          "Title": "Privileged",
+          "Description": "Privileged containers share namespaces with the host system and do not offer any security. They should be used exclusively for system containers that require high privileges.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.privileged' to false",
+          "Namespace": "builtin.kubernetes.KSV017",
+          "Query": "data.builtin.kubernetes.KSV017.deny",
+          "Resolution": "Change 'containers[].securityContext.privileged' to 'false'.",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0017",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline",
+            "https://avd.aquasec.com/misconfig/ksv-0017"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0018",
+          "Title": "Memory not limited",
+          "Description": "Enforcing memory limits prevents DoS via resource exhaustion.",
+          "Message": "Container 'c' of Pod 'bad' should set 'resources.limits.memory'",
+          "Namespace": "builtin.kubernetes.KSV018",
+          "Query": "data.builtin.kubernetes.KSV018.deny",
+          "Resolution": "Set a limit value under 'containers[].resources.limits.memory'.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0018",
+          "References": [
+            "https://kubesec.io/basics/containers-resources-limits-memory/",
+            "https://avd.aquasec.com/misconfig/ksv-0018"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0020",
+          "Title": "Runs with UID \u003c= 10000",
+          "Description": "Force the container to run with user ID \u003e 10000 to avoid conflicts with the host’s user table.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.runAsUser' \u003e 10000",
+          "Namespace": "builtin.kubernetes.KSV020",
+          "Query": "data.builtin.kubernetes.KSV020.deny",
+          "Resolution": "Set 'containers[].securityContext.runAsUser' to an integer \u003e 10000.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0020",
+          "References": [
+            "https://kubesec.io/basics/containers-securitycontext-runasuser/",
+            "https://avd.aquasec.com/misconfig/ksv-0020"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0021",
+          "Title": "Runs with GID \u003c= 10000",
+          "Description": "Force the container to run with group ID \u003e 10000 to avoid conflicts with the host’s user table.",
+          "Message": "Container 'c' of Pod 'bad' should set 'securityContext.runAsGroup' \u003e 10000",
+          "Namespace": "builtin.kubernetes.KSV021",
+          "Query": "data.builtin.kubernetes.KSV021.deny",
+          "Resolution": "Set 'containers[].securityContext.runAsGroup' to an integer \u003e 10000.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0021",
+          "References": [
+            "https://kubesec.io/basics/containers-securitycontext-runasuser/",
+            "https://avd.aquasec.com/misconfig/ksv-0021"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0030",
+          "Title": "Runtime/Default Seccomp profile not set",
+          "Description": "According to pod security standard 'Seccomp', the RuntimeDefault seccomp profile must be required, or allow specific additional profiles.",
+          "Message": "Either Pod or Container should set 'securityContext.seccompProfile.type' to 'RuntimeDefault'",
+          "Namespace": "builtin.kubernetes.KSV030",
+          "Query": "data.builtin.kubernetes.KSV030.deny",
+          "Resolution": "Set 'spec.securityContext.seccompProfile.type', 'spec.containers[*].securityContext.seccompProfile' and 'spec.initContainers[*].securityContext.seccompProfile' to 'RuntimeDefault' or undefined.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0030",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted",
+            "https://avd.aquasec.com/misconfig/ksv-0030"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0104",
+          "Title": "Seccomp policies disabled",
+          "Description": "A program inside the container can bypass Seccomp protection policies.",
+          "Message": "container \"c\" of pod \"bad\" in \"default\" namespace should specify a seccomp profile",
+          "Namespace": "builtin.kubernetes.KSV104",
+          "Query": "data.builtin.kubernetes.KSV104.deny",
+          "Resolution": "Specify seccomp either by annotation or by seccomp profile type having allowed values as per pod security standards",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0104",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline",
+            "https://avd.aquasec.com/misconfig/ksv-0104"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0106",
+          "Title": "Container capabilities must only include NET_BIND_SERVICE",
+          "Description": "Containers must drop ALL capabilities, and are only permitted to add back the NET_BIND_SERVICE capability.",
+          "Message": "container should drop all",
+          "Namespace": "builtin.kubernetes.KSV106",
+          "Query": "data.builtin.kubernetes.KSV106.deny",
+          "Resolution": "Set 'spec.containers[*].securityContext.capabilities.drop' to 'ALL' and only add 'NET_BIND_SERVICE' to 'spec.containers[*].securityContext.capabilities.add'.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0106",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted",
+            "https://avd.aquasec.com/misconfig/ksv-0106"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 8,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0110",
+          "Title": "Workloads in the default namespace",
+          "Description": "Checks whether a workload is running in the default namespace.",
+          "Message": "pod bad in default namespace should set metadata.namespace to a non-default namespace",
+          "Namespace": "builtin.kubernetes.KSV110",
+          "Query": "data.builtin.kubernetes.KSV110.deny",
+          "Resolution": "Set 'metadata.namespace' to a non-default namespace.",
+          "Severity": "LOW",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0110",
+          "References": [
+            "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/",
+            "https://avd.aquasec.com/misconfig/ksv-0110"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 3,
+            "EndLine": 4,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 3,
+                  "Content": "metadata:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;33mmetadata\u001b[0m:",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 4,
+                  "Content": "  name: bad",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "  \u001b[38;5;33mname\u001b[0m: bad",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0118",
+          "Title": "Default security context configured",
+          "Description": "Security context controls the allocation of security parameters for the pod/container/volume, ensuring the appropriate level of protection. Relying on default security context may expose vulnerabilities to potential attacks that rely on privileged access.",
+          "Message": "pod bad in default namespace is using the default security context, which allows root privileges",
+          "Namespace": "builtin.kubernetes.KSV118",
+          "Query": "data.builtin.kubernetes.KSV118.deny",
+          "Resolution": "To enhance security, it is strongly recommended not to rely on the default security context. Instead, it is advisable to explicitly define the required security parameters (such as runAsNonRoot, capabilities, readOnlyRootFilesystem, etc.) within the security context.",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0118",
+          "References": [
+            "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+            "https://avd.aquasec.com/misconfig/ksv-0118"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 5,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 5,
+                  "Content": "spec:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;33mspec\u001b[0m:",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 6,
+                  "Content": "  hostNetwork: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "  \u001b[38;5;33mhostNetwork\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 7,
+                  "Content": "  containers:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mcontainers\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 8,
+                  "Content": "    - name: c",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: c",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
+--- TABLE ---
+ plain/k8s.yaml:8-11
+────────────────────────────────────────
+   8 ┌     - name: c
+   9 │       image: nginx:latest
+  10 │       securityContext:
+  11 └         privileged: true
+────────────────────────────────────────
+
+
+KSV-0110 (LOW): pod bad in default namespace should set metadata.namespace to a non-default namespace
+════════════════════════════════════════
+Checks whether a workload is running in the default namespace.
+
+See https://avd.aquasec.com/misconfig/ksv-0110
+────────────────────────────────────────
+ plain/k8s.yaml:3-4
+────────────────────────────────────────
+   3 ┌ metadata:
+   4 └   name: bad
+────────────────────────────────────────
+
+
+KSV-0118 (HIGH): pod bad in default namespace is using the default security context, which allows root privileges
+════════════════════════════════════════
+Security context controls the allocation of security parameters for the pod/container/volume, ensuring the appropriate level of protection. Relying on default security context may expose vulnerabilities to potential attacks that rely on privileged access.
+
+See https://avd.aquasec.com/misconfig/ksv-0118
+────────────────────────────────────────
+ plain/k8s.yaml:5-11
+────────────────────────────────────────
+   5 ┌ spec:
+   6 │   hostNetwork: true
+   7 │   containers:
+   8 │     - name: c
+   9 │       image: nginx:latest
+  10 │       securityContext:
+  11 └         privileged: true
+────────────────────────────────────────
+
+

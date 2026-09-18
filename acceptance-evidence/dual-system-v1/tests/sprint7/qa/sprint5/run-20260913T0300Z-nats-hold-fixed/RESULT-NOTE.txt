@@ -1,0 +1,12 @@
+session_id: e11fc079-7204-48a8-ad32-0e42b49aa2e3
+truncated: false
+size: 900
+
+run_finished=2026-09-13T03:04:11+07:00
+result: PASS=108 FAIL=0 NOT_VERIFIED=0 (previous round: PASS=105 FAIL=1 NOT_VERIFIED=0)
+fixed: DATA-007 (watchdog maintenance hold; verifiable effectiveness; verified NATS stop)
+guard_status=INVALID — 首版保护壳在运行中被新版本覆盖（bash 边读边执行），本轮的 guard 结论不采信；
+             套件本身的结果有效（套件脚本未在运行中被修改）。
+原始失败证据保留: acceptance-evidence/dual-system-v1/tests/sprint7/qa/sprint5/preserved-original-20260913T0148Z/
+e0de75049e1c1280e76715b9f9d1e6d98fb43834ea4645efde4db7b5db93a882  acceptance-evidence/dual-system-v1/tests/sprint7/qa/sprint5/run-20260913T0300Z-nats-hold-fixed/run.log
+dfa3440456387f23dc7f2162fd2a5d4cd6efbc2f6871b7d9caac07268f96ddf3  acceptance-evidence/dual-system-v1/tests/sprint7/qa/sprint5/run-20260913T0300Z-nats-hold-fixed/result.json

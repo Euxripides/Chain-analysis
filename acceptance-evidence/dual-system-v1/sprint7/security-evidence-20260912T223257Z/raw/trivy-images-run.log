@@ -1,0 +1,185 @@
++ EV=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z
++ mkdir -p /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images
++ TRIVY=aquasec/trivy:latest
++ MIRROR=docker.m.daocloud.io/aquasec/trivy-db
++ echo '=== trivy version ==='
+=== trivy version ===
++ docker run --rm aquasec/trivy:latest --version
+Version: 0.74.0
++ echo '=== trivy db metadata (from cache volume) ==='
+=== trivy db metadata (from cache volume) ===
++ docker run --rm -v trivy-cache:/root/.cache/trivy --entrypoint cat aquasec/trivy:latest /root/.cache/trivy/db/metadata.json
+{"Version":2,"NextUpdate":"2026-09-13T13:01:09.044712565Z","UpdatedAt":"2026-09-12T13:01:09.044712903Z","DownloadedAt":"2026-09-12T16:47:08.604622754Z"}
++ scan_one postgres:18 postgres-18
++ REF=postgres:18
++ OUT=postgres-18
++ echo '########## IMAGE: postgres:18 ##########'
+########## IMAGE: postgres:18 ##########
++ echo '--- docker image inspect ---'
+--- docker image inspect ---
++ docker image inspect postgres:18 --format '{{json .RepoDigests}}|{{.Id}}|{{.Created}}|{{json .Config.Labels}}'
+
+template parsing error: template: :1:57: executing "" at <.Config.Labels>: map has no entry for key "Labels"
++ echo inspect_failed
+inspect_failed
++ echo '--- trivy image JSON ---'
+--- trivy image JSON ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/postgres-18.json postgres:18
+2026-09-12T22:33:28Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:28Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:29Z	INFO	Detected OS	family="debian" version="13.6"
+2026-09-12T22:33:29Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=145
+2026-09-12T22:33:29Z	INFO	Number of language-specific files	num=1
+2026-09-12T22:33:29Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:29Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo JSON_EXIT_postgres-18=0
+JSON_EXIT_postgres-18=0
++ echo '--- trivy image TABLE ---'
+--- trivy image TABLE ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/postgres-18.txt postgres:18
+2026-09-12T22:33:29Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:29Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:29Z	INFO	Detected OS	family="debian" version="13.6"
+2026-09-12T22:33:29Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=145
+2026-09-12T22:33:29Z	INFO	Number of language-specific files	num=1
+2026-09-12T22:33:29Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:29Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo TABLE_EXIT_postgres-18=0
+TABLE_EXIT_postgres-18=0
++ scan_one clickhouse/clickhouse-server:26.7 clickhouse-clickhouse-server-26.7
++ REF=clickhouse/clickhouse-server:26.7
++ OUT=clickhouse-clickhouse-server-26.7
++ echo '########## IMAGE: clickhouse/clickhouse-server:26.7 ##########'
+########## IMAGE: clickhouse/clickhouse-server:26.7 ##########
++ echo '--- docker image inspect ---'
+--- docker image inspect ---
++ docker image inspect clickhouse/clickhouse-server:26.7 --format '{{json .RepoDigests}}|{{.Id}}|{{.Created}}|{{json .Config.Labels}}'
+["clickhouse/clickhouse-server@sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e"]|sha256:800e82865530eb2f1c4bc1b960e43b435fd9b2d83b4bd04a2564a5cfd88fdb6e|2026-08-21T14:21:02.953425965Z|{"com.clickhouse.build.version":"26.7.5.10","org.opencontainers.image.version":"22.04"}
++ echo '--- trivy image JSON ---'
+--- trivy image JSON ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/clickhouse-clickhouse-server-26.7.json clickhouse/clickhouse-server:26.7
+2026-09-12T22:33:30Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:30Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:30Z	INFO	Detected OS	family="ubuntu" version="22.04"
+2026-09-12T22:33:30Z	INFO	[ubuntu] Detecting vulnerabilities...	os_version="22.04" pkg_num=111
+2026-09-12T22:33:30Z	INFO	Number of language-specific files	num=0
++ echo JSON_EXIT_clickhouse-clickhouse-server-26.7=0
+JSON_EXIT_clickhouse-clickhouse-server-26.7=0
++ echo '--- trivy image TABLE ---'
+--- trivy image TABLE ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/clickhouse-clickhouse-server-26.7.txt clickhouse/clickhouse-server:26.7
+2026-09-12T22:33:30Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:30Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:31Z	INFO	Detected OS	family="ubuntu" version="22.04"
+2026-09-12T22:33:31Z	INFO	[ubuntu] Detecting vulnerabilities...	os_version="22.04" pkg_num=111
+2026-09-12T22:33:31Z	INFO	Number of language-specific files	num=0
++ echo TABLE_EXIT_clickhouse-clickhouse-server-26.7=0
+TABLE_EXIT_clickhouse-clickhouse-server-26.7=0
++ scan_one nats:2-alpine nats-2-alpine
++ REF=nats:2-alpine
++ OUT=nats-2-alpine
++ echo '########## IMAGE: nats:2-alpine ##########'
+########## IMAGE: nats:2-alpine ##########
++ echo '--- docker image inspect ---'
+--- docker image inspect ---
++ docker image inspect nats:2-alpine --format '{{json .RepoDigests}}|{{.Id}}|{{.Created}}|{{json .Config.Labels}}'
+["nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3"]|sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3|2026-08-27T18:29:05.681698961Z|{"org.opencontainers.image.description":"NATS is an open-source, high-performance, cloud native messaging system.","org.opencontainers.image.documentation":"https://docs.nats.io","org.opencontainers.image.licenses":"Apache-2.0","org.opencontainers.image.source":"https://github.com/nats-io/nats-docker","org.opencontainers.image.title":"NATS Server","org.opencontainers.image.url":"https://nats.io","org.opencontainers.image.vendor":"NATS.io","org.opencontainers.image.version":"2.14.6"}
++ echo '--- trivy image JSON ---'
+--- trivy image JSON ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/nats-2-alpine.json nats:2-alpine
+2026-09-12T22:33:31Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:31Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:31Z	INFO	Detected OS	family="alpine" version="3.22.5"
+2026-09-12T22:33:31Z	INFO	[alpine] Detecting vulnerabilities...	os_version="3.22" repository="3.22" pkg_num=18
+2026-09-12T22:33:31Z	INFO	Number of language-specific files	num=1
+2026-09-12T22:33:31Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:31Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo JSON_EXIT_nats-2-alpine=0
+JSON_EXIT_nats-2-alpine=0
++ echo '--- trivy image TABLE ---'
+--- trivy image TABLE ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/nats-2-alpine.txt nats:2-alpine
+2026-09-12T22:33:32Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:32Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:32Z	INFO	Detected OS	family="alpine" version="3.22.5"
+2026-09-12T22:33:32Z	INFO	[alpine] Detecting vulnerabilities...	os_version="3.22" repository="3.22" pkg_num=18
+2026-09-12T22:33:32Z	INFO	Number of language-specific files	num=1
+2026-09-12T22:33:32Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:32Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo TABLE_EXIT_nats-2-alpine=0
+TABLE_EXIT_nats-2-alpine=0
++ scan_one minio/minio:latest minio-minio-latest
++ REF=minio/minio:latest
++ OUT=minio-minio-latest
++ echo '########## IMAGE: minio/minio:latest ##########'
+########## IMAGE: minio/minio:latest ##########
++ echo '--- docker image inspect ---'
+--- docker image inspect ---
++ docker image inspect minio/minio:latest --format '{{json .RepoDigests}}|{{.Id}}|{{.Created}}|{{json .Config.Labels}}'
+["minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"]|sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e|2025-09-07T18:42:37.017942402Z|{"architecture":"x86_64","build-date":"2025-08-06T08:12:37","com.redhat.component":"ubi9-micro-container","com.redhat.license_terms":"https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI","description":"MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads.","distribution-scope":"public","io.buildah.version":"1.40.1","io.k8s.description":"Very small image which doesn't install the package manager.","io.k8s.display-name":"Red Hat Universal Base Image 9 Micro","io.openshift.expose-services":"","maintainer":"MinIO Inc <dev@min.io>","name":"MinIO","release":"RELEASE.2025-09-07T16-13-09Z","summary":"MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service.","url":"https://catalog.redhat.com/en/search?searchType=containers","vcs-ref":"32d8e5209f029a1fb7235308ab32253bface1001","vcs-type":"git","vendor":"MinIO Inc <dev@min.io>","version":"RELEASE.2025-09-07T16-13-09Z"}
++ echo '--- trivy image JSON ---'
+--- trivy image JSON ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/minio-minio-latest.json minio/minio:latest
+2026-09-12T22:33:32Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:32Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:34Z	INFO	Detected OS	family="redhat" version="9.6"
+2026-09-12T22:33:34Z	INFO	[redhat] Detecting RHEL/CentOS vulnerabilities...	os_version="9" pkg_num=20
+2026-09-12T22:33:34Z	INFO	Number of language-specific files	num=2
+2026-09-12T22:33:34Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:34Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo JSON_EXIT_minio-minio-latest=0
+JSON_EXIT_minio-minio-latest=0
++ echo '--- trivy image TABLE ---'
+--- trivy image TABLE ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/minio-minio-latest.txt minio/minio:latest
+2026-09-12T22:33:34Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:34Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:35Z	INFO	Detected OS	family="redhat" version="9.6"
+2026-09-12T22:33:35Z	INFO	[redhat] Detecting RHEL/CentOS vulnerabilities...	os_version="9" pkg_num=20
+2026-09-12T22:33:35Z	INFO	Number of language-specific files	num=2
+2026-09-12T22:33:35Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-09-12T22:33:35Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.74/guide/scanner/vulnerability#severity-selection for details.
++ echo TABLE_EXIT_minio-minio-latest=0
+TABLE_EXIT_minio-minio-latest=0
++ scan_one opensecurity/mobile-security-framework-mobsf:latest mobsf-latest
++ REF=opensecurity/mobile-security-framework-mobsf:latest
++ OUT=mobsf-latest
++ echo '########## IMAGE: opensecurity/mobile-security-framework-mobsf:latest ##########'
+########## IMAGE: opensecurity/mobile-security-framework-mobsf:latest ##########
++ echo '--- docker image inspect ---'
+--- docker image inspect ---
++ docker image inspect opensecurity/mobile-security-framework-mobsf:latest --format '{{json .RepoDigests}}|{{.Id}}|{{.Created}}|{{json .Config.Labels}}'
+["opensecurity/mobile-security-framework-mobsf@sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee"]|sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee|2026-08-10T06:16:06.712524046Z|{"author":"Ajin Abraham <ajin25@gmail.com>","contributor_1":"OscarAkaElvis <oscar.alfonso.diaz@gmail.com>","contributor_2":"Vincent Nadal <vincent.nadal@orange.fr>","description":"Mobile Security Framework (MobSF) is an automated, all-in-one mobile application (Android/iOS/Windows) pen-testing, malware analysis and security assessment framework capable of performing static and dynamic analysis.","maintainer":"Ajin Abraham <ajin25@gmail.com>","name":"MobSF"}
++ echo '--- trivy image JSON ---'
+--- trivy image JSON ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format json --output /out/mobsf-latest.json opensecurity/mobile-security-framework-mobsf:latest
+2026-09-12T22:33:36Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:33:36Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:33:56Z	WARN	Third-party SBOM may lead to inaccurate vulnerability detection
+2026-09-12T22:33:56Z	WARN	Recommend using Trivy to generate SBOMs
+2026-09-12T22:33:57Z	INFO	[javadb] Downloading Java DB...
+2026-09-12T22:33:57Z	INFO	[javadb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-java-db:1"
+2026-09-12T22:33:58Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-09-12T22:40:44Z	FATAL	Fatal error	run error: image scan error: scan error: scan failed: failed analysis: analyze error: pipeline error: failed to analyze layer (sha256:bd5d328a1f153972126f3e396a9e4c89e6671733b7754a504b29747983ede483): post analysis error: post analysis error: Unable to initialize the Java DB: Java DB update failed: OCI artifact error: failed to download Java DB: failed to download artifact from mirror.gcr.io/aquasec/trivy-java-db:1: OCI repository error: 1 error occurred:
+	* Get "https://mirror.gcr.io/v2/": dial tcp 74.125.199.82:443: connect: connection timed out
+
+
++ echo JSON_EXIT_mobsf-latest=1
+JSON_EXIT_mobsf-latest=1
++ echo '--- trivy image TABLE ---'
+--- trivy image TABLE ---
++ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy -v /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security-evidence-20260912T223257Z/images:/out aquasec/trivy:latest image --scanners vuln --image-src docker --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --db-repository docker.m.daocloud.io/aquasec/trivy-db --timeout 30m --cache-dir /root/.cache/trivy --format table --output /out/mobsf-latest.txt opensecurity/mobile-security-framework-mobsf:latest
+2026-09-12T22:40:45Z	INFO	Adding schema version to the DB repository for backward compatibility	repository="docker.m.daocloud.io/aquasec/trivy-db:2"
+2026-09-12T22:40:45Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-12T22:41:05Z	WARN	Third-party SBOM may lead to inaccurate vulnerability detection
+2026-09-12T22:41:05Z	WARN	Recommend using Trivy to generate SBOMs
+2026-09-12T22:41:06Z	INFO	[javadb] Downloading Java DB...
+2026-09-12T22:41:06Z	INFO	[javadb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-java-db:1"
+2026-09-12T22:47:54Z	FATAL	Fatal error	run error: image scan error: scan error: scan failed: failed analysis: analyze error: pipeline error: failed to analyze layer (sha256:bd5d328a1f153972126f3e396a9e4c89e6671733b7754a504b29747983ede483): post analysis error: post analysis error: Unable to initialize the Java DB: Java DB update failed: OCI artifact error: failed to download Java DB: failed to download artifact from mirror.gcr.io/aquasec/trivy-java-db:1: OCI repository error: 1 error occurred:
+	* Get "https://mirror.gcr.io/v2/": dial tcp 192.178.163.82:443: connect: connection timed out
+
+
++ echo TABLE_EXIT_mobsf-latest=1
+TABLE_EXIT_mobsf-latest=1
++ echo INNER_DONE=1
+INNER_DONE=1

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useScopedQuery as useQuery } from "../lib/sessionScope";
 import { useLocation } from "react-router-dom";
 import {
   Background,
@@ -208,7 +209,7 @@ export default function FundFlowPage() {
         </div>
       </header>
       <nav className="flow-canvas-toolbar" aria-label="案件画布工具栏">
-        <PanelsTopLeft size={15}/><select aria-label="案件" value={caseID} onChange={e=>{setCaseID(e.target.value);setCanvasID("")}}><option value="">选择案件</option>{casesQ.data?.cases.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <PanelsTopLeft size={15}/><select aria-label="案件" value={caseID} onChange={e=>{setCaseID(e.target.value);setCanvasID("")}}><option value="">选择案件</option>{(Array.isArray(casesQ.data?.cases) ? casesQ.data?.cases : []).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
         <button onClick={()=>{setDialogName("");setDialog("case")}}>新建案件</button>
         <select aria-label="分析画布" value={canvasID} onChange={e=>setCanvasID(e.target.value)} disabled={!caseID}><option value="">选择画布</option>{canvasesQ.data?.items.map(item=><option key={item.id} value={item.id}>{item.parent_canvas_id?"↳ ":""}{item.name} · r{item.revision}</option>)}</select>
         <button disabled={!caseID} onClick={()=>{setDialogName(`资金分析 · ${short(address)}`);setDialog("canvas")}}>新建画布</button>

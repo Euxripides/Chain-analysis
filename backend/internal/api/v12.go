@@ -20,15 +20,21 @@ import (
 // ---- Cases / Tags（`63/`64）----
 
 func (s *Server) handleListCases(w http.ResponseWriter, r *http.Request) {
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	// P0 修复：作用域来自已认证主体本身，不再使用 Store.DefaultOrgWorkspace。
+	// 旧实现让任何登录用户（以及未认证请求）读到"默认组织/默认工作区"的案件。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.deps.Store.ListCases(r.Context(), scope.OrganizationID, scope.WorkspaceID)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	rows, err := s.deps.Store.ListCases(r.Context(), wsID)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
-		return
+	// D-R10-01（根 11:00 要求，契约层）：nil slice 必须序列化为 [] 而不是 null。
+	// 旧行为让已认证用户在空工作区拿到 {"cases":null}，前端 cases.map → TypeError 白屏。
+	if rows == nil {
+		rows = []model.CaseInfo{}
 	}
 	writeJSON(w, 200, map[string]any{"cases": rows})
 }
@@ -44,12 +50,16 @@ func (s *Server) handleCreateCase(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "name required"})
 		return
 	}
-	orgID, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := s.writableWorkspace(r.Context(), scope)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	c, err := s.deps.Store.CreateCase(r.Context(), wsID, orgID, req.CaseNo, req.Name, req.Description, req.Color)
+	c, err := s.deps.Store.CreateCase(r.Context(), wsID, scope.OrganizationID, req.CaseNo, req.Name, req.Description, req.Color)
 	if err != nil {
 		writeJSON(w, 409, map[string]any{"error": err.Error()})
 		return
@@ -59,12 +69,15 @@ func (s *Server) handleCreateCase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteCase(w http.ResponseWriter, r *http.Request) {
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
+	// 对象级授权先判归属：越界统一 404（不泄露对象是否存在）。
+	if !s.scopedObject(w, r, "case", chi.URLParam(r, "id")) {
 		return
 	}
-	if err := s.deps.Store.DeleteCase(r.Context(), wsID, chi.URLParam(r, "id")); err != nil {
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	if err := s.deps.Store.DeleteCase(r.Context(), scope.OrganizationID, scope.WorkspaceID, chi.URLParam(r, "id")); err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
@@ -72,15 +85,18 @@ func (s *Server) handleDeleteCase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.deps.Store.ListTags(r.Context(), scope.OrganizationID, scope.WorkspaceID)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	rows, err := s.deps.Store.ListTags(r.Context(), wsID)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
-		return
+	// D-R10-01：同上，tags 也必须稳定序列化为 []（不得为 null）。
+	if rows == nil {
+		rows = []model.TagInfo{}
 	}
 	writeJSON(w, 200, map[string]any{"tags": rows})
 }
@@ -95,12 +111,16 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "name required"})
 		return
 	}
-	orgID, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := s.writableWorkspace(r.Context(), scope)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	t, err := s.deps.Store.CreateTag(r.Context(), wsID, orgID, req.Name, req.Description, req.Color, "user")
+	t, err := s.deps.Store.CreateTag(r.Context(), wsID, scope.OrganizationID, req.Name, req.Description, req.Color, "user")
 	if err != nil {
 		writeJSON(w, 409, map[string]any{"error": err.Error()})
 		return
@@ -109,12 +129,11 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
 		return
 	}
-	if err := s.deps.Store.DeleteTag(r.Context(), wsID, chi.URLParam(r, "id")); err != nil {
+	if err := s.deps.Store.DeleteTag(r.Context(), scope.OrganizationID, scope.WorkspaceID, chi.URLParam(r, "id")); err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
@@ -139,7 +158,13 @@ func (s *Server) handleExplorerAddresses(w http.ResponseWriter, r *http.Request)
 	}
 	caseIDs := splitCSV(q.Get("case_ids"))
 	tagIDs := splitCSV(q.Get("tag_ids"))
-	rows, next, err := s.meta.Catalog(r.Context(), chain, search, caseIDs, tagIDs, tagMode, syncStatus, cursor, limit)
+	// 地址目录（workspace_addresses）是按工作区隔离的租户数据，
+	// 必须传入主体自己的作用域，否则会读到默认工作区的目录。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	rows, next, err := s.meta.Catalog(r.Context(), scope.OrganizationID, scope.WorkspaceID, chain, search, caseIDs, tagIDs, tagMode, syncStatus, cursor, limit)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
@@ -171,6 +196,13 @@ func (s *Server) handleExplorerQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Addresses = addresses
+	// 服务端注入租户作用域：行富化（案件名/标签名）按主体自己的工作区，
+	// 不接受客户端 JSON，也不回退到默认工作区。
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	req.OrgID, req.WSID = scope.OrganizationID, scope.WorkspaceID
 	if req.Limit <= 0 || req.Limit > 500 {
 		req.Limit = 100
 	}
@@ -207,7 +239,11 @@ func (s *Server) handleAddressMetadata(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
 		return
 	}
-	_, wsID, err := s.deps.Store.DefaultOrgWorkspace(r.Context())
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := s.writableWorkspace(r.Context(), scope)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
@@ -249,7 +285,7 @@ func (s *Server) handleAddressMetadata(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.deps.Store.InsertAudit(r.Context(), nil, "address.metadata.update", "address", chain+":"+addr, map[string]any{})
-	entry, err := s.meta.Meta(r.Context(), chain, addr)
+	entry, err := s.meta.Meta(r.Context(), scope.OrganizationID, wsID, chain, addr)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
@@ -269,6 +305,16 @@ func (s *Server) handleUpdatePreview(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
 		return
 	}
+	scope, ok := s.tenantScopeOr401(w, r)
+	if !ok {
+		return
+	}
+	wsID, wsErr := s.writableWorkspace(r.Context(), scope)
+	if wsErr != nil {
+		writeJSON(w, 500, map[string]any{"error": wsErr.Error()})
+		return
+	}
+	req.OrganizationID, req.WorkspaceID = scope.OrganizationID, wsID
 	resp, err := s.updates.Preview(r.Context(), req)
 	if err != nil {
 		writeJSON(w, 400, map[string]any{"error": err.Error()})
@@ -289,6 +335,12 @@ func (s *Server) handleUpdateConfirm(w http.ResponseWriter, r *http.Request) {
 // ---- 导出 Ticket（`54/`56）----
 
 func (s *Server) handleExportTicket(w http.ResponseWriter, r *http.Request) {
+	// 票据必须绑定到**导出对象自己的**租户归属：旧实现把票据挂到默认组织，
+	// 等于让任意用户为他人导出签发下载票据（对象级授权的绕过）。
+	scope, ok := s.requireObject(w, r, "export", chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
 	exp, err := s.deps.Store.GetExport(r.Context(), chi.URLParam(r, "id"))
 	if err != nil || exp == nil {
 		writeJSON(w, 404, map[string]any{"error": "export not found"})
@@ -298,8 +350,7 @@ func (s *Server) handleExportTicket(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "export not ready: " + exp.Status})
 		return
 	}
-	orgID, wsID, _ := s.deps.Store.DefaultOrgWorkspace(r.Context())
-	ticketID, err := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, orgID, wsID, 15*time.Minute)
+	ticketID, err := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, scope.OrganizationID, scope.WorkspaceID, 15*time.Minute)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return

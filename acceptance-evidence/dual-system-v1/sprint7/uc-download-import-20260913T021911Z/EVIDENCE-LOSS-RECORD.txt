@@ -1,0 +1,14 @@
+checked_utc=2026-09-13T02:30:09Z
+v1_evidence_dir=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z
+v1_dir_contents_below (only these survived):
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/fixtures-manifest.json
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/fixtures-sha256.txt
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/p0-pre-state.txt
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/p3-db-crosscheck.txt
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/p4-retry-evidence.txt
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/playwright.log
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/playwright.rc
+/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-20260913T022255Z/uc-desktop/r9-05-evidence.json
+v1_playwright_default_outputdir_had: trace.zip + test-failed-*.png + error-context.md for 6 failed tests
+current frontend/test-results contains ONLY v2 run dirs => v1 trace/screenshot/error-context were wiped by Playwright's default outputDir cleanup at the start of the v2 run.
+NOT RECOVERED, NOT RECONSTRUCTED. The v1 playwright.log (runner-captured) and the v1 uc-desktop/r9-05-evidence.json did survive and are listed above.

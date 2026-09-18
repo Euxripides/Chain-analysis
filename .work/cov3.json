@@ -1,0 +1,1778 @@
+{
+  "registered_routes_total": 378,
+  "state_changing_routes": 163,
+  "counts": {
+    "commit-gate": 144,
+    "actions-bearer": 9,
+    "commit-gate-self-target": 1,
+    "self-service": 9
+  },
+  "guarded_external_counts": {
+    "db-only": 101,
+    "bus": 8,
+    "clickhouse": 19,
+    "clickhouse,object,provider": 2,
+    "provider": 6,
+    "clickhouse,object": 3,
+    "object": 4,
+    "bus,clickhouse,object": 2
+  },
+  "gated_handlers_not_found_in_package": [],
+  "routes": [
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/investigations",
+      "handler": "handleCreateInvestigation",
+      "classification": "commit-gate",
+      "permission": "investigation:create",
+      "external": [],
+      "external_chain_size": 4
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/investigations/{id}/{action}",
+      "handler": "handleInvestigationAction",
+      "classification": "commit-gate",
+      "permission": "investigation:run",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/investigations/{id}/reports",
+      "handler": "handleGenerateInvestigationReport",
+      "classification": "commit-gate",
+      "permission": "report:create",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/investigations/{id}/subjects",
+      "handler": "handleInvestigationSubjects",
+      "classification": "commit-gate",
+      "permission": "subject:create",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/investigations/{id}/relationships",
+      "handler": "handleInvestigationRelationships",
+      "classification": "commit-gate",
+      "permission": "investigation:update",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/analysis/addresses/{chain}/{address}/semantic-events/rebuild",
+      "handler": "handleRebuildAddressSemanticEvents",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 4
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/analysis/addresses/{chain}/{address}/advanced/rebuild",
+      "handler": "handleRebuildAddressAdvancedAnalysis",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/datasets/ensure",
+      "handler": "handleEnsure",
+      "classification": "commit-gate",
+      "permission": "download:create",
+      "external": [],
+      "external_chain_size": 21
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/datasets/coverage/preview",
+      "handler": "handleCoveragePreview",
+      "classification": "commit-gate",
+      "permission": "explorer:read",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/pause",
+      "handler": "handlePause",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/resume",
+      "handler": "handleResume",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/cancel",
+      "handler": "handleCancel",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/guard/continue",
+      "handler": "handleContinueVolumeGuard",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/guard/abort",
+      "handler": "handleAbortVolumeGuard",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/subjects/{subjectID}/{action}",
+      "handler": "handleSubjectControl",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 4
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/providers/ankr/performance-mode",
+      "handler": "handleSetAnkrPerformanceMode",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/download-jobs/{id}/performance-mode",
+      "handler": "handleSetJobPerformanceMode",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/api-control/provider-accounts/ankr/connect",
+      "handler": "handleAnkrManagementConnect",
+      "classification": "commit-gate",
+      "permission": "admin:provider:update",
+      "external": [],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/api-control/provider-accounts/ankr/sync",
+      "handler": "handleAnkrManagementSync",
+      "classification": "commit-gate",
+      "permission": "admin:provider:update",
+      "external": [],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "DELETE",
+      "path": "/api/v1/api-control/provider-accounts/ankr",
+      "handler": "handleAnkrManagementDisconnect",
+      "classification": "commit-gate",
+      "permission": "admin:provider:update",
+      "external": [],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "PATCH",
+      "path": "/api/v1/api-control/control/policies",
+      "handler": "handleAPIControlPolicies",
+      "classification": "commit-gate",
+      "permission": "admin:routing:update",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/api-control/control/overrides",
+      "handler": "handleAPIControlOverride",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [],
+      "external_chain_size": 9
+    },
+    {
+      "file": "server.go",
+      "method": "PATCH",
+      "path": "/api/v1/api-control/control/kill-switch",
+      "handler": "handleAPIControlKillSwitch",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:engage",
+      "external": [],
+      "external_chain_size": 9
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/api-control/budgets",
+      "handler": "handleAPIControlBudgets",
+      "classification": "commit-gate",
+      "permission": "admin:budget:update",
+      "external": [],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/api-control/alerts/{id}/actions",
+      "handler": "handleAPIControlAlerts",
+      "classification": "commit-gate",
+      "permission": "admin:alert:manage",
+      "external": [],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/ankr/benchmarks",
+      "handler": "handleBenchmarkCreate",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 89
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/ankr/range-certifications",
+      "handler": "handleRecordRangeCertification",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [],
+      "external_chain_size": 4
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/data-explorer/query",
+      "handler": "handleExplorerQuery",
+      "classification": "commit-gate",
+      "permission": "explorer:read",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/exports",
+      "handler": "handleCreateExport",
+      "classification": "commit-gate",
+      "permission": "export:create",
+      "external": [
+        "clickhouse",
+        "object",
+        "provider"
+      ],
+      "external_chain_size": 72
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/exports/{id}/download-ticket",
+      "handler": "handleExportTicket",
+      "classification": "commit-gate",
+      "permission": "export:download",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/cases",
+      "handler": "handleCreateCase",
+      "classification": "commit-gate",
+      "permission": "case:create",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "DELETE",
+      "path": "/api/v1/cases/{id}",
+      "handler": "handleDeleteCase",
+      "classification": "commit-gate",
+      "permission": "case:delete",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/cases/{id}/canvases",
+      "handler": "handleCreateCanvas",
+      "classification": "commit-gate",
+      "permission": "canvas:create",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "server.go",
+      "method": "PATCH",
+      "path": "/api/v1/canvases/{id}",
+      "handler": "handleUpdateCanvas",
+      "classification": "commit-gate",
+      "permission": "canvas:update",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/canvases/{id}/branch",
+      "handler": "handleBranchCanvas",
+      "classification": "commit-gate",
+      "permission": "canvas:branch",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/canvases/{id}/snapshots",
+      "handler": "handleCreateCanvasSnapshot",
+      "classification": "commit-gate",
+      "permission": "canvas:snapshot:create",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/tags",
+      "handler": "handleCreateTag",
+      "classification": "commit-gate",
+      "permission": "case:update",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "DELETE",
+      "path": "/api/v1/tags/{id}",
+      "handler": "handleDeleteTag",
+      "classification": "commit-gate",
+      "permission": "case:update",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "server.go",
+      "method": "PATCH",
+      "path": "/api/v1/addresses/{chain}/{address}/metadata",
+      "handler": "handleAddressMetadata",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/tokens/{chain}/{contract}/resolve",
+      "handler": "handleTokenResolve",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/tokens/{chain}/{contract}/override",
+      "handler": "handleTokenOverride",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 4
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/token-metadata/backfill",
+      "handler": "handleTokenBackfill",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/updates/preview",
+      "handler": "handleUpdatePreview",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/updates/{id}/confirm",
+      "handler": "handleUpdateConfirm",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 3
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/methods/backfill",
+      "handler": "handleCreateBackfill",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/methods/backfill/{id}/{action}",
+      "handler": "handleControlBackfill",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/methods/signatures",
+      "handler": "handleCreateSignature",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 6
+    },
+    {
+      "file": "server.go",
+      "method": "POST",
+      "path": "/api/v1/admin/contracts/{chain}/{address}/abi",
+      "handler": "handleUploadABI",
+      "classification": "commit-gate",
+      "permission": "admin:dataset:manage",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 6
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/admin/action-api-keys/",
+      "handler": "handleCreateActionKey",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/admin/action-api-keys/{id}/disable",
+      "handler": "handleDisableActionKey",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 6
+    },
+    {
+      "file": "?",
+      "method": "DELETE",
+      "path": "/api/v1/admin/action-api-keys/{id}",
+      "handler": "handleDeleteActionKey",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 6
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/addresses/batch-overview",
+      "handler": "handleActionBatchOverview",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/addresses/batch-assets",
+      "handler": "handleActionBatchAssets",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 9
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/analysis/path",
+      "handler": "handleActionPath",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 10
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/analysis/address-network",
+      "handler": "handleActionNetwork",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 10
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/export/create",
+      "handler": "handleActionCreateExport",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [
+        "clickhouse",
+        "object",
+        "provider"
+      ],
+      "external_chain_size": 61
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v1/data/ensure",
+      "handler": "handleActionEnsureData",
+      "classification": "actions-bearer",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 8
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/users/{id}",
+      "handler": "handleAdminUpdateUser",
+      "classification": "commit-gate",
+      "permission": "admin:user:update",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/users/{id}/commands/disable",
+      "handler": "handleAdminDisableUser",
+      "classification": "commit-gate",
+      "permission": "admin:user:disable",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/users/{id}/commands/enable",
+      "handler": "handleAdminEnableUser",
+      "classification": "commit-gate",
+      "permission": "admin:user:disable",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/users/{id}/commands/reset-password",
+      "handler": "handleAdminResetPassword",
+      "classification": "commit-gate",
+      "permission": "admin:user:password:reset",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/sessions/{id}/commands/revoke",
+      "handler": "handleAdminRevokeSession",
+      "classification": "commit-gate-self-target",
+      "permission": "admin:session:revoke",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 32
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/verify",
+      "handler": "handleAdminAuditVerify",
+      "classification": "commit-gate",
+      "permission": "admin:audit:verify",
+      "external": [],
+      "external_chain_size": 14
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/jobs/{id}/commands/{command}",
+      "handler": "handleAdminJobCommand",
+      "classification": "commit-gate",
+      "permission": "admin:job:control",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/login",
+      "handler": "handleAuthLogin",
+      "classification": "self-service",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/logout",
+      "handler": "handleAuthLogout",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 22
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/refresh",
+      "handler": "handleAuthRefresh",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 21
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/session/workspace",
+      "handler": "handleAuthSwitchWorkspace",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 38
+    },
+    {
+      "file": "?",
+      "method": "DELETE",
+      "path": "/api/auth/v1/sessions/{id}",
+      "handler": "handleAuthRevokeSession",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 33
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/sessions/revoke-all",
+      "handler": "handleAuthRevokeAll",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 34
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/auth/v1/devices/{id}",
+      "handler": "handleAuthUpdateDevice",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 34
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/password/change",
+      "handler": "handleAuthChangePassword",
+      "classification": "self-service",
+      "permission": "",
+      "external": [
+        "bus"
+      ],
+      "external_chain_size": 35
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/auth/v1/mfa/verify",
+      "handler": "handleNotImplemented",
+      "classification": "self-service",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/integrity/preview",
+      "handler": "handleAdminAuditIntegrityPreview",
+      "classification": "commit-gate",
+      "permission": "admin:audit:verify",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/integrity/incidents/requests",
+      "handler": "handleAdminAuditIntegrityRequest",
+      "classification": "commit-gate",
+      "permission": "admin:audit:seal",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 103
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/integrity/incidents/requests/{id}/approve",
+      "handler": "handleAdminAuditIntegrityApprove",
+      "classification": "commit-gate",
+      "permission": "admin:approval:decide",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 99
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/integrity/incidents/requests/{id}/reject",
+      "handler": "handleAdminAuditIntegrityReject",
+      "classification": "commit-gate",
+      "permission": "admin:approval:decide",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 99
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/integrity/incidents/requests/{id}/execute",
+      "handler": "handleAdminAuditIntegrityExecute",
+      "classification": "commit-gate",
+      "permission": "admin:audit:seal",
+      "external": [
+        "clickhouse",
+        "object"
+      ],
+      "external_chain_size": 103
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/anchors",
+      "handler": "handleAdminAuditAnchorCreate",
+      "classification": "commit-gate",
+      "permission": "admin:audit:seal",
+      "external": [
+        "object"
+      ],
+      "external_chain_size": 14
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/control/policies",
+      "handler": "handleAdminUpdateControlPolicies",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:engage",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/preview",
+      "handler": "handleAdminKillSwitchPreview",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:engage",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/requests",
+      "handler": "handleAdminKillSwitchRequest",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:engage",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 106
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/requests/{id}/approve",
+      "handler": "handleAdminKillSwitchApprove",
+      "classification": "commit-gate",
+      "permission": "admin:approval:decide",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 100
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/requests/{id}/reject",
+      "handler": "handleAdminKillSwitchReject",
+      "classification": "commit-gate",
+      "permission": "admin:approval:decide",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 100
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/requests/{id}/execute",
+      "handler": "handleAdminKillSwitchExecute",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:engage",
+      "external": [
+        "bus",
+        "clickhouse",
+        "object"
+      ],
+      "external_chain_size": 106
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/control/kill-switch/requests/{id}/restore",
+      "handler": "handleAdminKillSwitchRestore",
+      "classification": "commit-gate",
+      "permission": "admin:killswitch:release",
+      "external": [
+        "bus",
+        "clickhouse",
+        "object"
+      ],
+      "external_chain_size": 106
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/runtime/performance/preview",
+      "handler": "handleAdminPerformancePreview",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [],
+      "external_chain_size": 10
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/runtime/performance/commands/{command}",
+      "handler": "handleAdminPerformanceCommand",
+      "classification": "commit-gate",
+      "permission": "admin:performance:update",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/alerts/{id}/commands/{command}",
+      "handler": "handleAdminAlertCommand",
+      "classification": "commit-gate",
+      "permission": "admin:alert:manage",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 96
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/feature-flags",
+      "handler": "handleAdminUpsertFeatureFlag",
+      "classification": "commit-gate",
+      "permission": "admin:flag:update",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/feature-flags/{key}",
+      "handler": "handleAdminUpsertFeatureFlag",
+      "classification": "commit-gate",
+      "permission": "admin:flag:update",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/feature-flags/{key}/commands/{command}",
+      "handler": "handleAdminFlagCommand",
+      "classification": "commit-gate",
+      "permission": "admin:flag:update",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 98
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/settings/{key}",
+      "handler": "handleAdminUpdateSetting",
+      "classification": "commit-gate",
+      "permission": "admin:config:update",
+      "external": [],
+      "external_chain_size": 23
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/settings/{key}/commands/{command}",
+      "handler": "handleAdminSettingCommand",
+      "classification": "commit-gate",
+      "permission": "admin:config:update",
+      "external": [],
+      "external_chain_size": 21
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/retention-policies/preview",
+      "handler": "handleAdminRetentionPreview",
+      "classification": "commit-gate",
+      "permission": "admin:retention:read",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 95
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/retention-policies/{id}",
+      "handler": "handleAdminUpdateRetentionPolicy",
+      "classification": "commit-gate",
+      "permission": "admin:retention:manage",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 96
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/deletion-requests",
+      "handler": "handleAdminCreateDeletionRequest",
+      "classification": "commit-gate",
+      "permission": "admin:deletion:request",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 105
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/deletion-requests/{id}/commands/{command}",
+      "handler": "handleAdminDeletionCommand",
+      "classification": "commit-gate",
+      "permission": "admin:deletion:approve",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 101
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/backups",
+      "handler": "handleAdminCreateBackup",
+      "classification": "commit-gate",
+      "permission": "admin:backup:create",
+      "external": [
+        "object"
+      ],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/backups/{id}/commands/verify",
+      "handler": "handleAdminVerifyBackup",
+      "classification": "commit-gate",
+      "permission": "admin:backup:read",
+      "external": [
+        "clickhouse",
+        "object"
+      ],
+      "external_chain_size": 92
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/restores/preview",
+      "handler": "handleAdminRestorePreview",
+      "classification": "commit-gate",
+      "permission": "admin:backup:restore",
+      "external": [
+        "clickhouse",
+        "object"
+      ],
+      "external_chain_size": 95
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/restores",
+      "handler": "handleAdminCreateRestore",
+      "classification": "commit-gate",
+      "permission": "admin:backup:restore",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 101
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/audit/export",
+      "handler": "handleAdminAuditExport",
+      "classification": "commit-gate",
+      "permission": "admin:audit:export",
+      "external": [
+        "object"
+      ],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/users",
+      "handler": "handleAdminCreateUser",
+      "classification": "commit-gate",
+      "permission": "admin:user:create",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/budgets/{id}/commands/evaluate",
+      "handler": "handleAdminEvaluateBudget",
+      "classification": "commit-gate",
+      "permission": "admin:budget:read",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 94
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/observability/alerts/evaluate",
+      "handler": "handleAdminEvaluateAlerts",
+      "classification": "commit-gate",
+      "permission": "admin:metrics:read",
+      "external": [],
+      "external_chain_size": 22
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/providers/{id}",
+      "handler": "handleAdminProviderUpdate",
+      "classification": "commit-gate",
+      "permission": "admin:provider:update",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 21
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/providers/{id}/commands/{command}",
+      "handler": "",
+      "classification": "commit-gate",
+      "permission": "",
+      "external": [],
+      "external_chain_size": 0
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/routing-policies/{id}",
+      "handler": "handleAdminRoutingPolicyUpdate",
+      "classification": "commit-gate",
+      "permission": "admin:routing:update",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/api-keys",
+      "handler": "handleAdminCreateAPIKey",
+      "classification": "commit-gate",
+      "permission": "admin:apikey:create",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/api-keys/{id}/commands/{command}",
+      "handler": "handleAdminAPIKeyCommand",
+      "classification": "commit-gate",
+      "permission": "admin:apikey:revoke",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 96
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/budgets",
+      "handler": "handleAdminCreateBudget",
+      "classification": "commit-gate",
+      "permission": "admin:budget:update",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/budgets/{id}",
+      "handler": "handleAdminUpdateBudget",
+      "classification": "commit-gate",
+      "permission": "admin:budget:update",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 96
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/v2/me/profile",
+      "handler": "handleUserProfileUpdate",
+      "classification": "commit-gate",
+      "permission": "profile:update:self",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/v2/me/preferences",
+      "handler": "handleUserPreferencesUpdate",
+      "classification": "commit-gate",
+      "permission": "profile:update:self",
+      "external": [],
+      "external_chain_size": 5
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/notifications/{id}/read",
+      "handler": "handleUserNotificationRead",
+      "classification": "commit-gate",
+      "permission": "notification:update",
+      "external": [],
+      "external_chain_size": 9
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/notifications/read-all",
+      "handler": "handleUserNotificationsReadAll",
+      "classification": "commit-gate",
+      "permission": "notification:update",
+      "external": [],
+      "external_chain_size": 9
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/notifications/{id}/open",
+      "handler": "handleUserNotificationOpen",
+      "classification": "commit-gate",
+      "permission": "notification:list",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases",
+      "handler": "handleUserCreateCase",
+      "classification": "commit-gate",
+      "permission": "case:create",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/v2/cases/{id}",
+      "handler": "handleUserUpdateCase",
+      "classification": "commit-gate",
+      "permission": "case:update",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases/{id}/commands/{command}",
+      "handler": "handleUserCaseCommand",
+      "classification": "commit-gate",
+      "permission": "case:state:update",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases/{id}/members",
+      "handler": "handleUserCaseMemberAdd",
+      "classification": "commit-gate",
+      "permission": "case:member:manage",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "DELETE",
+      "path": "/api/v2/cases/{id}/members/{identity_id}",
+      "handler": "handleUserCaseMemberRemove",
+      "classification": "commit-gate",
+      "permission": "case:member:manage",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases/{id}/subjects",
+      "handler": "handleUserCaseSubjectAdd",
+      "classification": "commit-gate",
+      "permission": "subject:create",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "DELETE",
+      "path": "/api/v2/cases/{id}/subjects/{subject_id}",
+      "handler": "handleUserCaseSubjectRemove",
+      "classification": "commit-gate",
+      "permission": "subject:remove",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases/{id}/comments",
+      "handler": "handleUserCaseCommentAdd",
+      "classification": "commit-gate",
+      "permission": "comment:create",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/cases/{id}/reports",
+      "handler": "handleUserCaseReportCreate",
+      "classification": "commit-gate",
+      "permission": "report:create",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations",
+      "handler": "handleUserCreateInvestigation",
+      "classification": "commit-gate",
+      "permission": "investigation:create",
+      "external": [],
+      "external_chain_size": 10
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/preview",
+      "handler": "handleUserInvestigationPreview",
+      "classification": "commit-gate",
+      "permission": "investigation:create",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/start",
+      "handler": "handleUserInvestigationStart",
+      "classification": "commit-gate",
+      "permission": "investigation:start",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/pause",
+      "handler": "handleUserInvestigationPause",
+      "classification": "commit-gate",
+      "permission": "investigation:pause",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/resume",
+      "handler": "handleUserInvestigationResume",
+      "classification": "commit-gate",
+      "permission": "investigation:resume",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/cancel",
+      "handler": "handleUserInvestigationCancel",
+      "classification": "commit-gate",
+      "permission": "investigation:cancel",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/retry",
+      "handler": "handleUserInvestigationRetry",
+      "classification": "commit-gate",
+      "permission": "investigation:retry",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/commands/submit-review",
+      "handler": "handleUserInvestigationSubmitReview",
+      "classification": "commit-gate",
+      "permission": "investigation:submit_review",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/v2/findings/{id}",
+      "handler": "handleUserFindingPatch",
+      "classification": "commit-gate",
+      "permission": "finding:update",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/findings/{id}/commands/confirm",
+      "handler": "handleUserFindingConfirm",
+      "classification": "commit-gate",
+      "permission": "finding:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/findings/{id}/commands/reject",
+      "handler": "handleUserFindingReject",
+      "classification": "commit-gate",
+      "permission": "finding:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/findings/{id}/commands/supersede",
+      "handler": "handleUserFindingSupersede",
+      "classification": "commit-gate",
+      "permission": "finding:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/evidence/{id}/commands/verify",
+      "handler": "handleUserEvidenceVerify",
+      "classification": "commit-gate",
+      "permission": "evidence:review",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/evidence/{id}/commands/dispute",
+      "handler": "handleUserEvidenceDispute",
+      "classification": "commit-gate",
+      "permission": "evidence:review",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/evidence/{id}/commands/supersede",
+      "handler": "handleUserEvidenceSupersede",
+      "classification": "commit-gate",
+      "permission": "evidence:review",
+      "external": [],
+      "external_chain_size": 11
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/commands/submit",
+      "handler": "handleUserReportSubmit",
+      "classification": "commit-gate",
+      "permission": "report:create",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/commands/approve",
+      "handler": "handleUserReportApprove",
+      "classification": "commit-gate",
+      "permission": "report:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/commands/reject",
+      "handler": "handleUserReportReject",
+      "classification": "commit-gate",
+      "permission": "report:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/commands/sign",
+      "handler": "handleUserReportSign",
+      "classification": "commit-gate",
+      "permission": "report:sign",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/commands/archive",
+      "handler": "handleUserReportArchive",
+      "classification": "commit-gate",
+      "permission": "report:review",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/reports/{id}/download-ticket",
+      "handler": "handleUserReportTicket",
+      "classification": "commit-gate",
+      "permission": "report:download",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/downloads/validate-addresses",
+      "handler": "handleDownloadValidateAddresses",
+      "classification": "commit-gate",
+      "permission": "download:create",
+      "external": [
+        "provider"
+      ],
+      "external_chain_size": 16
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/downloads/preview",
+      "handler": "handleDownloadPreview",
+      "classification": "commit-gate",
+      "permission": "download:create",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 98
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/downloads",
+      "handler": "handleDownloadCreate",
+      "classification": "commit-gate",
+      "permission": "download:create",
+      "external": [
+        "clickhouse"
+      ],
+      "external_chain_size": 98
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/jobs/{id}/commands/{command}",
+      "handler": "handleUserJobCommand",
+      "classification": "commit-gate",
+      "permission": "job:control",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/exports",
+      "handler": "handleExportV2Create",
+      "classification": "commit-gate",
+      "permission": "export:create",
+      "external": [
+        "clickhouse",
+        "object",
+        "provider"
+      ],
+      "external_chain_size": 70
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/exports/{id}/download-ticket",
+      "handler": "handleExportV2Ticket",
+      "classification": "commit-gate",
+      "permission": "export:download",
+      "external": [
+        "object"
+      ],
+      "external_chain_size": 21
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/investigations/{id}/canvases",
+      "handler": "handleInvestigationCanvasesV2",
+      "classification": "commit-gate",
+      "permission": "canvas:create",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/v2/canvases/{id}",
+      "handler": "handleCanvasV2Update",
+      "classification": "commit-gate",
+      "permission": "canvas:update",
+      "external": [],
+      "external_chain_size": 19
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/canvases/{id}/branches",
+      "handler": "handleCanvasV2Branch",
+      "classification": "commit-gate",
+      "permission": "canvas:branch",
+      "external": [],
+      "external_chain_size": 17
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/v2/canvases/{id}/snapshots",
+      "handler": "handleCanvasV2Snapshots",
+      "classification": "commit-gate",
+      "permission": "canvas:snapshot:create",
+      "external": [],
+      "external_chain_size": 15
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/organizations/{id}",
+      "handler": "handleAdminUpdateOrganization",
+      "classification": "commit-gate",
+      "permission": "admin:org:manage",
+      "external": [],
+      "external_chain_size": 12
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/workspaces",
+      "handler": "handleAdminCreateWorkspace",
+      "classification": "commit-gate",
+      "permission": "admin:workspace:manage",
+      "external": [],
+      "external_chain_size": 16
+    },
+    {
+      "file": "?",
+      "method": "PATCH",
+      "path": "/api/admin/v1/workspaces/{id}",
+      "handler": "handleAdminUpdateWorkspace",
+      "classification": "commit-gate",
+      "permission": "admin:workspace:manage",
+      "external": [],
+      "external_chain_size": 13
+    },
+    {
+      "file": "?",
+      "method": "POST",
+      "path": "/api/admin/v1/users/{id}/roles",
+      "handler": "handleAdminGrantRole",
+      "classification": "commit-gate",
+      "permission": "admin:member:manage",
+      "external": [],
+      "external_chain_size": 18
+    },
+    {
+      "file": "?",
+      "method": "DELETE",
+      "path": "/api/admin/v1/users/{id}/roles/{binding}",
+      "handler": "handleAdminRevokeRole",
+      "classification": "commit-gate",
+      "permission": "admin:member:manage",
+      "external": [],
+      "external_chain_size": 17
+    }
+  ]
+}

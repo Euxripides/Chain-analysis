@@ -46,8 +46,9 @@ export default function DataExplorerPage() {
 	const [error, setError] = useState('')
 	const [copyToast, setCopyToast] = useState('')
 
-  useEffect(() => { api.listCases().then((d) => setCases(d.cases)).catch(() => {}) }, [])
-  useEffect(() => { api.listTags().then((d) => setTags(d.tags)).catch(() => {}) }, [])
+  // fail-closed：同 DownloadPage，cases/tags 为 null 时不得把 state 置空为 null（否则 .map 崩溃）。
+  useEffect(() => { api.listCases().then((d) => setCases(Array.isArray(d?.cases) ? d.cases : [])).catch(() => {}) }, [])
+  useEffect(() => { api.listTags().then((d) => setTags(Array.isArray(d?.tags) ? d.tags : [])).catch(() => {}) }, [])
 
   async function load(nextCursor = '') {
     const params = new URLSearchParams({ chain, limit: '100' })

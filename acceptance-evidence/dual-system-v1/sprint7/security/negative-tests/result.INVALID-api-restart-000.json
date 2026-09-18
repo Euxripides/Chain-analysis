@@ -1,0 +1,13 @@
+{
+  "suite": "run-sprint7-sec-negative.sh",
+  "test_id": "S7-SEC-01",
+  "pass": 71,
+  "fail": 18,
+  "not_verified": 2,
+  "blocking_failures": 18,
+  "blocking_not_verified": 2,
+  "criteria": "fail==0 and not_verified==0 and pass>0",
+  "status": "FAIL",
+  "started_at": "2026-09-12T17:03:34Z",
+  "finished_at": "2026-09-12T17:03:49Z"
+}

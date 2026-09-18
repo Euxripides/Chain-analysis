@@ -55,10 +55,26 @@ code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 csrf() { grep "$1" "$2" 2>/dev/null | awk '{print $7}'; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(sys.argv[1]))" "$1"; }
 is_uuid() { [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; }
+# 多工作区身份登录必须显式选择工作区（P1-20260913）：服务端不替用户猜作用域。
+# 夹具账号同时属于 acme-lab 与 acme-lab-other，不带 workspace_id 会得到
+# AUTHN_WORKSPACE_SELECTION_REQUIRED。这里按邮箱解析目标工作区并随登录一并提交。
+if [ -z "${FIXTURE_WORKSPACE_ID:-}" ] && [ -r /tmp/dual-system-fixture.env ]; then
+  set -a; . /tmp/dual-system-fixture.env; set +a
+fi
+login_workspace() {
+  case "$1" in
+    *@fixture.local) printf '%s' "${FIXTURE_WORKSPACE_ID:-}" ;;
+    *) printf '' ;;
+  esac
+}
 login() { # login <jar> <email> <password> <audience>
   local jar=$1 email=$2 pass=$3 aud=${4:-user}
+  local ws; ws=$(login_workspace "$email")
+  local body="{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\""
+  [ -n "$ws" ] && body="$body,\"workspace_id\":\"$ws\""
+  body="$body}"
   curl -s -c "$jar" -H 'Content-Type: application/json' -H "X-Auth-Audience: $aud" \
-    -d "{\"identifier\":\"$email\",\"password\":\"$pass\",\"audience\":\"$aud\"}" "$BASE/api/auth/v1/login"
+    -d "$body" "$BASE/api/auth/v1/login"
 }
 api() { # api <jar> <csrf> <method> <path> [json]
   local jar=$1 token=$2 method=$3 path=$4 body=${5:-}
@@ -362,12 +378,21 @@ format_export_and_download() { # <format> <forcezip:yes|no> <datasets_json> <out
   local created expid status sha ticket url code
   created=$(curl -s -b "$J1" -H "X-CSRF-Token: $CSRF1" -H 'Content-Type: application/json' -H 'X-Auth-Audience: user' -H "Idempotency-Key: s5-export-$fmt-$(date +%s%N)" -d "$body" "$BASE/api/v2/exports")
   expid=$(echo "$created" | jget 'd["data"]["id"]')
-  for i in $(seq 1 60); do
+  # 等待预算 180 s（原 60 s）：导出不是"点一下就好"的接口——它在 API 进程内流式跑完整条
+  # ClickHouse 查询 + 令牌元数据 + 案件注释流水线，并且与本套件自己刚创建的下载任务**并发**
+  # 争用同一套依赖。2026-09-16 实测同一操作的成功耗时在 22 s ~ 139 s 之间波动（数据量只有 1 行，
+  # 慢的原因是争用而不是数据量），60 s 预算会把"完成的导出"误判成失败。
+  # 注意：这里放宽的是**等待**，判据仍是"COMPLETED + SHA-256 与 DB 一致"，没有任何产品判据被放宽；
+  # 导出延迟本身（§11 性能）作为观察项记录在 ROUND-20260916 报告中。
+  for i in $(seq 1 180); do
     status=$($PG "select status from exports where id='$expid'")
     case "$status" in COMPLETED|FAILED) break;; esac
     sleep 1
   done
-  if [ "$status" != "COMPLETED" ]; then echo "EXPORT_FAILED:$fmt:$status"; return 1; fi
+  if [ "$status" != "COMPLETED" ]; then
+    echo "  DIAG DATA-003 $fmt 导出未在预算内完成：status=$status waited=${i}s rows=$($PG "select coalesce(rows,0) from exports where id='$expid'") err=$($PG "select coalesce(error,'-') from exports where id='$expid'")"
+    echo "EXPORT_FAILED:$fmt:$status"; return 1
+  fi
   sha=$($PG "select sha256 from exports where id='$expid'")
   ticket=$(curl -s -b "$J1" -H "X-CSRF-Token: $CSRF1" -H 'X-Auth-Audience: user' -X POST "$BASE/api/v2/exports/$expid/download-ticket")
   url=$(echo "$ticket" | jget 'd["data"]["url"]')
@@ -459,7 +484,38 @@ for i in $(seq 1 90); do
   sleep 2
 done
 check DATA-006 "Worker 已成功完成至少一页" "$KILL_READY" "yes"
-SHARD_SIG_BEFORE=$($PG "select string_agg(coalesce(sh.id::text,'')||':'||sh.status||':'||coalesce(cp.page_no,0)||':'||coalesce(cp.downloaded_rows,0), ',' order by sh.id) from download_shards sh left join checkpoints cp on cp.shard_id=sh.id where sh.job_id='$KILL_JOB'")
+# 【2026-09-13 加固（监控者复核）】原实现只比较 shard 的 page_no/rows 与 shard 集合，
+# 证不了"每地址 cursor / 成功页 / Provider 用量保留"。现在冻结 machine-readable 签名：
+#   - 逐 shard（= 逐地址 subject × dataset）的 page_no / rows / page_count /
+#     最新 next_page_token_hash / 成功页数 / Provider 成功页数；
+#   - 成功页 key 集合 (shard_id#page_no)；
+#   - download_subjects 的 per-address progress。
+# token 只比较 hash，绝不输出明文。
+KILL_SIG_SQL=$(cat <<KILLSQL
+SELECT json_build_object(
+  'shards', (SELECT coalesce(json_agg(json_build_object(
+        'id', sh.id, 'subject_id', sh.subject_id, 'dataset', sh.dataset, 'status', sh.status,
+        'page_no', coalesce(sh.page_no,0), 'rows', coalesce(sh.downloaded_rows,0),
+        'page_count', coalesce(sh.page_count,0),
+        'token_hash', (SELECT p.next_page_token_hash FROM download_pages p WHERE p.shard_id=sh.id ORDER BY p.page_no DESC LIMIT 1),
+        'success_pages', (SELECT count(*) FROM download_pages p WHERE p.shard_id=sh.id AND p.status IN ('VALIDATED','INGESTED','DURABLE')),
+        'provider_ok', (SELECT count(*) FROM provider_usage u WHERE u.shard_id=sh.id AND u.status IN ('success','ok'))
+      ) ORDER BY sh.id), '[]'::json)
+      FROM download_shards sh WHERE sh.job_id='$KILL_JOB'),
+  'success_page_keys', (SELECT coalesce(json_agg(sh.id::text||'#'||p.page_no ORDER BY sh.id, p.page_no), '[]'::json)
+      FROM download_pages p JOIN download_shards sh ON sh.id=p.shard_id
+      WHERE sh.job_id='$KILL_JOB' AND p.status IN ('VALIDATED','INGESTED','DURABLE')),
+  'subjects', (SELECT coalesce(json_agg(json_build_object('id',id,'subject',subject,'status',status,'progress',progress) ORDER BY id), '[]'::json)
+      FROM download_subjects WHERE job_id='$KILL_JOB')
+)::text;
+KILLSQL
+)
+KILL_DONE_PAGES=$($PG "select count(*) from download_pages p join download_shards sh on sh.id=p.shard_id where sh.job_id='$KILL_JOB' and p.status in ('VALIDATED','INGESTED','DURABLE')")
+KILL_UNFINISHED=$($PG "select count(*) from download_shards where job_id='$KILL_JOB' and status not in ('COMPLETED','FAILED_FINAL','CANCELLED')")
+KILL_JOB_STATUS_BEFORE=$($PG "select status from download_jobs where id='$KILL_JOB'")
+check DATA-006 "Kill-9 发生在真实分页中途（已完成页>0 且仍有未完成 shard）" "$([ "${KILL_DONE_PAGES:-0}" -ge 1 ] && [ "${KILL_UNFINISHED:-0}" -ge 1 ] && echo yes || echo no)" "yes"
+SHARD_SIG_BEFORE=$($PG "$KILL_SIG_SQL")
+printf '%s' "$SHARD_SIG_BEFORE" > "$EVIDENCE_DIR/kill9-signature-before.json"
 OLD_PID=$(systemctl --user show -p MainPID --value blockchain-worker.service 2>/dev/null || echo 0)
 echo "worker MainPID before kill=$OLD_PID"
 systemctl --user kill -s KILL blockchain-worker.service 2>/dev/null || true
@@ -476,34 +532,231 @@ GHOST=$($PG "select count(*) from download_shards where job_id='$KILL_JOB' and s
 # 允许恢复后重新租约；只要求任务仍存在且没有重复 shard 集合。
 KILL_JOB_EXISTS=$($PG "select count(*) from download_jobs where id='$KILL_JOB'")
 check DATA-006 "任务未被吞掉（无幽灵任务）" "$KILL_JOB_EXISTS" "1"
-SHARD_SIG_AFTER=$($PG "select string_agg(coalesce(sh.id::text,'')||':'||sh.status||':'||coalesce(cp.page_no,0)||':'||coalesce(cp.downloaded_rows,0), ',' order by sh.id) from download_shards sh left join checkpoints cp on cp.shard_id=sh.id where sh.job_id='$KILL_JOB'")
-check DATA-006 "成功页数与游标不回退（逐 shard page_no/rows 不减少）" "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 -c "
-import os
-def parse(s):
-    out={}
-    for part in s.split(','):
-        if not part: continue
-        i,st,pg,rw=(part.split(':')+['0','0','0'])[:4]
-        out[i]=(st,int(pg or 0),int(rw or 0))
-    return out
-b=parse(os.environ['BEFORE']); a=parse(os.environ['AFTER'])
-ok=True
-for k,(st,pg,rw) in b.items():
-    if k in a and a[k][1] < pg: ok=False
-    if k in a and a[k][2] < rw: ok=False
-print('ok' if ok else 'regressed')")" "ok"
-check DATA-006 "Shard 集合无重复/无丢失" "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 -c "
-import os
-def ids(s): return sorted(p.split(':')[0] for p in s.split(',') if p)
-print('ok' if ids(os.environ['BEFORE'])==ids(os.environ['AFTER']) else 'changed')")" "ok"
+SHARD_SIG_AFTER=$($PG "$KILL_SIG_SQL")
+printf '%s' "$SHARD_SIG_AFTER" > "$EVIDENCE_DIR/kill9-signature-after.json"
+KILL_JOB_STATUS_AFTER=$($PG "select status from download_jobs where id='$KILL_JOB'")
+echo "DATA-006 job status before=$KILL_JOB_STATUS_BEFORE after=$KILL_JOB_STATUS_AFTER" | tee -a "$EVIDENCE_DIR/run.log"
+
+# 逐项不变量比对器（写成文件，便于复算与审计）。
+cat > "$EVIDENCE_DIR/kill9-invariants.py" <<'KILLPY'
+import json, os, sys
+b = json.loads(os.environ["BEFORE"])
+a = json.loads(os.environ["AFTER"])
+which = sys.argv[1] if len(sys.argv) > 1 else "all"
+bs = {s["id"]: s for s in b["shards"]}
+as_ = {s["id"]: s for s in a["shards"]}
+
+def counters():
+    bad = []
+    for sid, s in bs.items():
+        t = as_.get(sid)
+        if t is None:
+            bad.append({"shard_id": sid, "field": "shard_row", "before": "present", "after": "missing"})
+            continue
+        for f in ("page_no", "rows", "page_count", "success_pages", "provider_ok"):
+            if t[f] < s[f]:
+                bad.append({"shard_id": sid, "field": f, "before": s[f], "after": t[f]})
+    return bad
+
+def pages():
+    bp, ap = set(b["success_page_keys"]), set(a["success_page_keys"])
+    return sorted(bp - ap)
+
+def tokens():
+    """合法进展 vs cursor 丢失：
+       前进（page_no/page_count/成功页任一增加）时 token 变化或末页清空都合法；
+       无任何前进却变化/清空 => 记违反。token 只比较 hash，不出明文。"""
+    bad, notes = [], []
+    for sid, s in bs.items():
+        t = as_.get(sid)
+        if t is None:
+            continue
+        if s.get("token_hash") == t.get("token_hash"):
+            continue
+        progressed = (t["page_no"] > s["page_no"] or t["page_count"] > s["page_count"]
+                      or t["success_pages"] > s["success_pages"])
+        ev = {"shard_id": sid, "before": "none" if s.get("token_hash") is None else "set",
+              "after": "none" if t.get("token_hash") is None else "set",
+              "page_no": [s["page_no"], t["page_no"]],
+              "page_count": [s["page_count"], t["page_count"]],
+              "success_pages": [s["success_pages"], t["success_pages"]]}
+        if progressed:
+            ev["classification"] = "legitimate_progress"
+            notes.append(ev)
+        else:
+            ev["classification"] = "cursor_changed_without_progress"
+            bad.append(ev)
+    return bad, notes
+
+def subjects():
+    bm = {x["id"]: x for x in b["subjects"]}
+    am = {x["id"]: x for x in a["subjects"]}
+    missing = sorted(set(bm) - set(am))
+    return missing
+
+if which == "counters":
+    print("ok" if not counters() else json.dumps(counters(), ensure_ascii=False))
+elif which == "pages":
+    lost = pages()
+    print("ok" if not lost else json.dumps(lost, ensure_ascii=False))
+elif which == "tokens":
+    bad, _ = tokens()
+    print("ok" if not bad else json.dumps(bad, ensure_ascii=False))
+elif which == "subjects":
+    m = subjects()
+    print("ok" if not m else json.dumps(m, ensure_ascii=False))
+elif which == "shardset":
+    print("ok" if set(bs) == set(as_) else json.dumps(sorted(set(bs) ^ set(as_)), ensure_ascii=False))
+KILLPY
+
+check DATA-006 "逐地址(逐 shard) page_no/rows/page_count/成功页/Provider成功页均不回退" \
+  "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 "$EVIDENCE_DIR/kill9-invariants.py" counters)" "ok"
+check DATA-006 "Shard 集合无重复/无丢失" \
+  "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 "$EVIDENCE_DIR/kill9-invariants.py" shardset)" "ok"
+check DATA-006 "成功页 key 集合不丢失（逐 shard#page_no）" \
+  "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 "$EVIDENCE_DIR/kill9-invariants.py" pages)" "ok"
+check DATA-006 "cursor(token hash) 变化均为合法进展（无前进却有变化即违反）" \
+  "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 "$EVIDENCE_DIR/kill9-invariants.py" tokens)" "ok"
+check DATA-006 "download_subjects(逐地址) 记录未丢失" \
+  "$(BEFORE="$SHARD_SIG_BEFORE" AFTER="$SHARD_SIG_AFTER" python3 "$EVIDENCE_DIR/kill9-invariants.py" subjects)" "ok"
 api "$J1" "$CSRF1" POST "/api/v2/jobs/$KILL_JOB/commands/cancel" '{"reason":"S5 DATA-006 cleanup"}' >/dev/null
 
 fi
 
 echo
 echo "== DATA-007 NATS 重启：Outbox 补发、消费者幂等 =="
-docker stop deploy-nats-1 >/dev/null 2>&1 || true
-sleep 2
+# S7-DR-01 起主机上有容器看门狗（每 30s 拉起非 running 的依赖容器）。
+# 本用例需要"NATS 真的不可用"这一前提，因此先置维护持有位，用例结束后释放；
+# 否则看门狗可能在本用例窗口内把 NATS 拉起，导致 outbox pending=0 的假失败。
+#
+# 【修复一 2026-09-13】原实现只写 /run/blockchain/containers-watchdog.hold 并把
+# 创建失败用 `|| true` 吞掉：在没有免密 sudo 的主机上持有位**静默失效**，
+# 看门狗照常拉起 NATS → DATA-007 假失败（本机实测发生过）。
+# 【修复二（监控者复核）】持有位所有权：
+#   - 已存在的持有位一律**沿用**，绝不覆盖、绝不在结束时删除（可能是管理员或其他
+#     用例的维护位）；
+#   - 只有在全部候选都不存在时才用 noclobber（等价 O_EXCL）**新建**一个，
+#     并记名 DATA007_HOLD_OWNED，结束时只删自己建的那个。
+# 【修复三（监控者复核）】生效证明不看"最近 N 条 journal"（会命中旧记录）：
+#   a) 直接执行看门狗脚本并捕获**本次 stdout**；
+#   b) 记录 journal cursor，只看**本次之后**定时器那次执行的输出。
+# 【修复四（监控者复核）】停机前提必须被证明：docker stop 退出码 0、
+#   State.Status=exited、4222 与 8222 均不可达，三条同时成立才允许创建 outbox 对象；
+#   任何一条不成立即整组 NOT_VERIFIED 并跳过（不计 FAIL、不伪造 PASS）。
+# 【修复五（监控者复核）】EXIT/INT/TERM trap：本次真的停过就恢复 NATS，
+#   且只释放本次自建的持有位；原有 cookie 临时文件清理仍然有效。
+WATCHDOG_UNIT=blockchain-containers-watchdog.service
+NATS_CONTAINER=deploy-nats-1
+DATA007_NATS_STOPPED=no
+DATA007_HOLD_OWNED=""
+DATA007_HOLD_KEEP=""
+# 恢复 NATS 并把"是否已恢复"作为独立断言：只有确认容器回到 running 才清责任标记。
+# 禁止 \`start || true\` 之后直接清标记——那会把"恢复失败"伪装成"已恢复"。
+data007_restore_nats() {
+  if [ "$DATA007_NATS_STOPPED" != "yes" ]; then return 0; fi
+  docker start "$NATS_CONTAINER" >/dev/null 2>&1 || sudo -n docker start "$NATS_CONTAINER" >/dev/null 2>&1 || true
+  local st i
+  for i in $(seq 1 20); do
+    st=$(docker inspect -f '{{.State.Status}}' "$NATS_CONTAINER" 2>/dev/null || echo unknown)
+    [ "$st" = "running" ] && break
+    sleep 1
+  done
+  if [ "$st" = "running" ]; then
+    DATA007_NATS_STOPPED=no
+    echo "DATA-007：NATS 已恢复到 running"
+  else
+    echo "DATA-007：警告：NATS 未恢复到 running（state=$st），保留恢复责任标记" >&2
+  fi
+}
+data007_cleanup() {
+  local rc=$?
+  if [ "$DATA007_NATS_STOPPED" = "yes" ]; then
+    data007_restore_nats
+  fi
+  if [ -n "$DATA007_HOLD_OWNED" ]; then
+    rm -f "$DATA007_HOLD_OWNED" 2>/dev/null || sudo -n rm -f "$DATA007_HOLD_OWNED" 2>/dev/null || true
+    DATA007_HOLD_OWNED=""
+  fi
+  return $rc
+}
+trap 'rm -f "$J1" "$J2" "$J3" "$J4" "$J5" "$JA"; data007_cleanup' EXIT
+trap 'data007_cleanup; rm -f "$J1" "$J2" "$J3" "$J4" "$J5" "$JA"; exit 130' INT TERM
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+# 第一遍：先扫描**全部**候选，只要任何一个已存在就沿用（可能是管理员或其他用例的维护位）。
+# 注意顺序：不能"边扫边建"——否则会在较早路径新建成功后，再也没机会看到较后路径上
+# 管理员已有的持有位，等于无视了别人的维护窗口。
+DATA007_HOLD_CANDIDATES=()
+[ -n "${WATCHDOG_HOLD_FILE:-}" ] && DATA007_HOLD_CANDIDATES+=("$WATCHDOG_HOLD_FILE")
+DATA007_HOLD_CANDIDATES+=("$XDG_RUNTIME_DIR/blockchain/containers-watchdog.hold")
+DATA007_HOLD_CANDIDATES+=("/run/blockchain/containers-watchdog.hold")
+for cand in "${DATA007_HOLD_CANDIDATES[@]}"; do
+  if [ -e "$cand" ]; then
+    DATA007_HOLD_KEEP="$cand"
+    break
+  fi
+done
+# 第二遍：仅当确认**没有任何**既有持有位时，才按顺序找可写路径新建（noclobber = O_EXCL）。
+if [ -z "$DATA007_HOLD_KEEP" ]; then
+  for cand in "${DATA007_HOLD_CANDIDATES[@]}"; do
+    mkdir -p "$(dirname "$cand")" 2>/dev/null || sudo -n mkdir -p "$(dirname "$cand")" 2>/dev/null || continue
+    if ( set -o noclobber; : > "$cand" ) 2>/dev/null; then
+      DATA007_HOLD_OWNED="$cand"
+      break
+    fi
+  done
+fi
+HOLD_PATH="${DATA007_HOLD_OWNED:-$DATA007_HOLD_KEEP}"
+HOLD_PROOF_DIRECT=no
+HOLD_PROOF_TIMER=no
+if [ -n "$HOLD_PATH" ]; then
+  WD_OUT=$(bash "$PROJECT/scripts/backup/containers-watchdog.sh" 2>&1)
+  printf '%s\n' "$WD_OUT" | grep -qF "WATCHDOG: hold=$HOLD_PATH" && HOLD_PROOF_DIRECT=yes
+  CUR_BEFORE=$(journalctl --user -u "$WATCHDOG_UNIT" -n 0 --show-cursor --no-pager 2>/dev/null | sed -n 's/^-- cursor: //p')
+  systemctl --user start "$WATCHDOG_UNIT" >/dev/null 2>&1 || true
+  sleep 1
+  if [ -n "$CUR_BEFORE" ]; then
+    JOUT=$(journalctl --user -u "$WATCHDOG_UNIT" --after-cursor "$CUR_BEFORE" --no-pager 2>/dev/null)
+  else
+    JOUT=$(journalctl --user -u "$WATCHDOG_UNIT" --since "$(date -d '30 seconds ago' '+%Y-%m-%d %H:%M:%S')" --no-pager 2>/dev/null)
+  fi
+  printf '%s\n' "$JOUT" | grep -qF "WATCHDOG: hold=$HOLD_PATH" && HOLD_PROOF_TIMER=yes
+fi
+HOLD_EFFECTIVE=no
+[ "$HOLD_PROOF_DIRECT" = "yes" ] && [ "$HOLD_PROOF_TIMER" = "yes" ] && HOLD_EFFECTIVE=yes
+DATA007_READY=no
+NATS_STOP_RC=-
+NATS_STATE=unknown
+NATS_UNREACHABLE=no
+NATS_STATE_PRE=$(docker inspect -f '{{.State.Status}}' "$NATS_CONTAINER" 2>/dev/null || echo unknown)
+if [ "$HOLD_EFFECTIVE" = "yes" ]; then
+  docker stop "$NATS_CONTAINER" >/dev/null 2>&1; NATS_STOP_RC=$?
+  # 【责任登记】动作一发生就登记恢复责任，不看后续断言是否全部成立：
+  #   - stop 返回 0（成功停过），或
+  #   - 事后观察到 exited 且此前是 running（确实被本次停了，哪怕 stop 命令返回非 0）。
+  # 否则一旦"三前提"里有一条不成立（例如端口探测抖动），flag 仍是 no，trap 不会恢复，
+  # 就会把停掉的 NATS 留在停机状态——这正是必须避免的。
+  sleep 2
+  NATS_STATE=$(docker inspect -f '{{.State.Status}}' "$NATS_CONTAINER" 2>/dev/null || echo unknown)
+  if [ "$NATS_STOP_RC" = "0" ] || { [ "$NATS_STATE" = "exited" ] && [ "$NATS_STATE_PRE" = "running" ]; }; then
+    DATA007_NATS_STOPPED=yes
+  fi
+  NATS_UNREACHABLE=yes
+  (exec 3<>/dev/tcp/127.0.0.1/4222) >/dev/null 2>&1 && NATS_UNREACHABLE=no
+  (exec 3<>/dev/tcp/127.0.0.1/8222) >/dev/null 2>&1 && NATS_UNREACHABLE=no
+  if [ "$NATS_STOP_RC" = "0" ] && [ "$NATS_STATE" = "exited" ] && [ "$NATS_UNREACHABLE" = "yes" ]; then
+    DATA007_READY=yes
+  fi
+fi
+echo "DATA-007 前提：hold=$HOLD_PATH owned=$DATA007_HOLD_OWNED keep=$DATA007_HOLD_KEEP direct=$HOLD_PROOF_DIRECT timer=$HOLD_PROOF_TIMER stop_rc=$NATS_STOP_RC state=$NATS_STATE unreachable=$NATS_UNREACHABLE ready=$DATA007_READY" | tee -a "$EVIDENCE_DIR/run.log"
+if [ "$DATA007_READY" != "yes" ]; then
+  nv DATA-007 "前提不成立：hold=$HOLD_PATH direct=$HOLD_PROOF_DIRECT timer=$HOLD_PROOF_TIMER stop_rc=$NATS_STOP_RC state=$NATS_STATE unreachable=$NATS_UNREACHABLE —— 未执行 NATS 停机注入"
+  nv DATA-007 "NATS 不可用时事件仍事务性写入 outbox（未执行：前提不成立）"
+  nv DATA-007 "NATS 恢复后 Outbox 补发并标记 published_at（未执行：前提不成立）"
+  nv DATA-007 "补发无遗留错误（未执行：前提不成立）"
+  nv DATA-007 "Outbox 幂等键唯一（同 aggregate 仅 1 条）（未执行：前提不成立）"
+else
+check DATA-007 "看门狗维护持有位已生效（直接执行 stdout + 定时器 journal cursor 双证）" "yes" "yes"
+check DATA-007 "NATS 已真实停机（stop rc=0 / State.Status=exited / 4222+8222 不可达）" "yes" "yes"
 # 在 NATS 不可用期间创建一个真实调查：investigation.created 事件会事务性写入 outbox。
 NATS_GOAL="S5 NATS Outbox $(date +%s)"
 NATS_INV=$(curl -s -b "$J1" -H "X-CSRF-Token: $CSRF1" -H 'Content-Type: application/json' -H "Idempotency-Key: s5-nats-$(date +%s%N)" -H 'X-Auth-Audience: user' -d "{\"case_id\":\"$CID\",\"goal\":\"$NATS_GOAL\",\"mode\":\"assisted\",\"subjects\":[{\"type\":\"ADDRESS\",\"chain\":\"$COV_CHAIN\",\"value\":\"$COV_SUBJECT\"}],\"expected_outputs\":[\"EVIDENCE_INDEX\"],\"data_requirement\":{\"datasets\":[\"token_transfers\"],\"range\":{\"type\":\"block\",\"from_block\":$COV_FROM,\"to_block\":$COV_FROM},\"reuse_policy\":\"prefer_local\"}}" "$BASE/api/v2/investigations")
@@ -511,7 +764,15 @@ IID_NATS=$(echo "$NATS_INV" | jget 'd["data"]["investigation"]["id"] if isinstan
 OUTBOX_ID=$($PG "select id from outbox_events where aggregate_id='$IID_NATS' order by created_at desc limit 1")
 OUTBOX_PENDING=$($PG "select count(*) from outbox_events where aggregate_id='$IID_NATS' and published_at is null")
 check DATA-007 "NATS 不可用时事件仍事务性写入 outbox" "$([ -n "$OUTBOX_ID" ] && [ "${OUTBOX_PENDING:-0}" -ge 1 ] && echo yes || echo no)" "yes"
-docker start deploy-nats-1 >/dev/null 2>&1 || true
+# 正常路径恢复：先拉起并**确认** NATS 回到 running，再只释放**本次自建**的持有位
+# （沿用他人的一律保留）。
+data007_restore_nats
+check DATA-007 "NATS 已恢复到 running（恢复责任已履行）" "$([ "$DATA007_NATS_STOPPED" = "no" ] && echo yes || echo no)" "yes"
+if [ -n "$DATA007_HOLD_OWNED" ]; then
+  rm -f "$DATA007_HOLD_OWNED" 2>/dev/null || sudo -n rm -f "$DATA007_HOLD_OWNED" 2>/dev/null || true
+  DATA007_HOLD_OWNED=""
+fi
+[ -n "$DATA007_HOLD_KEEP" ] && echo "DATA-007：沿用他人维护持有位 $DATA007_HOLD_KEEP（未删除）" | tee -a "$EVIDENCE_DIR/run.log"
 sleep 3
 PUBLISHED=""
 for i in $(seq 1 40); do
@@ -533,25 +794,48 @@ LAST_ERR=$($PG "select last_error from outbox_events where id='$OUTBOX_ID'")
 check DATA-007 "补发无遗留错误" "$LAST_ERR" ""
 OUTBOX_DUP=$($PG "select count(*) from outbox_events where aggregate_id='$IID_NATS'")
 check DATA-007 "Outbox 幂等键唯一（同 aggregate 仅 1 条）" "$OUTBOX_DUP" "1"
+fi   # HOLD_EFFECTIVE
 
 echo
 echo "== DATA-008 MinIO 对象缺失：不宣称完成，留下可操作线索 =="
 if is_uuid "${CSV_ID:-}"; then
   CSV_OBJECT=$($PG "select object_ref from exports where id='$CSV_ID'")
   BACKUP_FILE="$FILES_DIR/object-backup.bin"
-  "$PROJECT/backend/bin/objectprobe" -action=backup -key="$CSV_OBJECT" -file="$BACKUP_FILE" >/dev/null 2>&1
-  check DATA-008 "已备份导出对象用于故障注入" "$([ -f "$BACKUP_FILE" ] && echo yes || echo no)" "yes"
-  "$PROJECT/backend/bin/objectprobe" -action=delete -key="$CSV_OBJECT" >/dev/null 2>&1
-  "$PROJECT/backend/bin/objectprobe" -action=stat -key="$CSV_OBJECT" >/dev/null 2>&1; STAT_CODE=$?
-  check DATA-008 "对象已真实从 MinIO 删除（stat exit=3）" "$STAT_CODE" "3"
+  # F-R10-BUCKET：导出对象只会出现在读桶（EXPORT_BUCKET）或写桶（EXPORT_WRITE_BUCKET），
+  # objectprobe 的 -bucket 默认是 RAW_BUCKET —— 不显式指定就会"删了个不存在的桶"，
+  # 对象其实还在，API 如实回答 download_available=true，于是用例误判成产品缺陷。
+  EXPORT_BUCKETS="$EXPORT_BUCKET ${EXPORT_WRITE_BUCKET:-}"
+  held_bucket=""
+  for b in $EXPORT_BUCKETS; do
+    [ -n "$b" ] || continue
+    if "$PROJECT/backend/bin/objectprobe" -action=stat -bucket="$b" -key="$CSV_OBJECT" 2>/dev/null | grep -q 'exists=true'; then
+      held_bucket="$b"; break
+    fi
+  done
+  check DATA-008 "定位导出对象所在桶（读桶或写桶）" "$([ -n "$held_bucket" ] && echo yes || echo no)" "yes"
+  for b in $EXPORT_BUCKETS; do
+    [ -n "$b" ] || continue
+    "$PROJECT/backend/bin/objectprobe" -action=backup -bucket="$b" -key="$CSV_OBJECT" -file="$BACKUP_FILE.$b" >/dev/null 2>&1
+  done
+  check DATA-008 "已备份导出对象用于故障注入" "$([ -f "$BACKUP_FILE.$held_bucket" ] && echo yes || echo no)" "yes"
+  for b in $EXPORT_BUCKETS; do
+    [ -n "$b" ] || continue
+    "$PROJECT/backend/bin/objectprobe" -action=delete -bucket="$b" -key="$CSV_OBJECT" >/dev/null 2>&1
+  done
+  GONE=yes
+  for b in $EXPORT_BUCKETS; do
+    [ -n "$b" ] || continue
+    "$PROJECT/backend/bin/objectprobe" -action=stat -bucket="$b" -key="$CSV_OBJECT" 2>/dev/null | grep -q 'exists=true' && GONE=no
+  done
+  check DATA-008 "对象已从两个导出桶真实删除" "$GONE" "yes"
   DETAIL=$(api "$J1" "$CSRF1" GET "/api/v2/exports/$CSV_ID")
   check DATA-008 "详情返回 object_missing=true 且 download_available=false" "$(echo "$DETAIL" | jget 'd["data"].get("object_missing") is True and d["data"].get("download_available") is False')" "True"
   TICKET_MISSING=$(curl -s -o /tmp/s5-ticket-missing.json -w '%{http_code}' -b "$J1" -H "X-CSRF-Token: $CSRF1" -H 'X-Auth-Audience: user' -X POST "$BASE/api/v2/exports/$CSV_ID/download-ticket")
   check DATA-008 "对象缺失时拒绝创建下载票据" "$TICKET_MISSING" "503"
   check DATA-008 "返回可操作的 DATA_OBJECT_MISSING" "$(python3 -c "import json;d=json.load(open('/tmp/s5-ticket-missing.json'));print(d['error']['code'])")" "DATA_OBJECT_MISSING"
   check DATA-008 "失败写入审计线索（action=notify_admin）" "$([ "$($PG "select count(*) from audit_events_v2 where action='export.download_failed' and resource_id='$CSV_ID'")" -ge 1 ] && echo yes || echo no)" "yes"
-  "$PROJECT/backend/bin/objectprobe" -action=restore -key="$CSV_OBJECT" -file="$BACKUP_FILE" >/dev/null 2>&1
-  RESTORED=$("$PROJECT/backend/bin/objectprobe" -action=stat -key="$CSV_OBJECT" 2>/dev/null | grep -o 'exists=true')
+  "$PROJECT/backend/bin/objectprobe" -action=restore -bucket="$held_bucket" -key="$CSV_OBJECT" -file="$BACKUP_FILE.$held_bucket" >/dev/null 2>&1
+  RESTORED=$("$PROJECT/backend/bin/objectprobe" -action=stat -bucket="$held_bucket" -key="$CSV_OBJECT" 2>/dev/null | grep -o 'exists=true')
   check DATA-008 "对象恢复后详情恢复可下载" "$RESTORED" "exists=true"
 else
   nv DATA-008 "缺少 CSV 导出夹具，MinIO 对象缺失未验证"

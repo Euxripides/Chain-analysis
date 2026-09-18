@@ -1,0 +1,196 @@
+==============================================================================
+VALIDATION (PASS 2) OF THE SCOPED SBOM DOCUMENTS - 2026-09-13 dependency-upgrade scope
+supersedes validation.txt for the go.mod/go.sum h1 cross-check only; that file is
+preserved byte-for-byte as the record of validation pass 1
+utc=2026-09-13T02:11:45Z
+==============================================================================
+
+SOURCE-LEVEL EVIDENCE (read-only): backend/go.mod + backend/go.sum
+  go.mod sha256 = 87356daa3f6ccb99cee5478b82b9c5664332279767eab0c21459a839f1cdd86c
+  go.sum sha256 = 654127a5b1ef7c599f573d8f3259235398eab330d3c1eb9f097dee1c180607cb
+  module                           expect    go.mod    ok        go.sum h1
+  github.com/go-chi/chi/v5         5.3.2     v5.3.2    True      h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=
+  github.com/xuri/excelize/v2      2.11.0    v2.11.0   True      h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=
+  github.com/jackc/pgx/v5          5.9.2     v5.9.2    True      h1:3ZhOzMWnR4yJ+RW1XImIPsD1aNSz4T4fyP7zlQb56hw=
+  golang.org/x/crypto              0.56.0    v0.56.0   True      h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=
+
+------------------------------------------------------------------------------
+ARTIFACT api
+  scanned target       = /home/euripides/projects/blockchain-platform/backend/bin/api
+  target sha256        = 8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a   (56147343 bytes)
+  go toolchain         = go1.26.7
+  main package         = github.com/blockchain-platform/blockchain-platform/cmd/api
+  main module          = github.com/blockchain-platform/blockchain-platform (devel)
+  embedded go modules  = 53  (read from the binary's own buildinfo)
+  build settings       = {"-buildmode": "exe", "-compiler": "gc", "CGO_CFLAGS": "", "CGO_CPPFLAGS": "", "CGO_CXXFLAGS": "", "CGO_ENABLED": "1", "CGO_LDFLAGS": "", "GOAMD64": "v1", "GOARCH": "amd64", "GOOS": "linux"}
+  vcs build settings   = {}  (empty => no VCS revision/commit is embedded)
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/api.cdx.json
+    size_bytes = 60083
+    sha256     = d8cd34d0d56ba18a10eaa363fcd9fdd2c5392faffc231d0dc25f97aa3242096a
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=CycloneDX 1.7  serial=urn:uuid:d87cbce1-2abe-4888-9cab-16f355f2c6eb
+    metadata.component={"bom-ref": "22db590d71f764e4", "type": "file", "name": "api", "version": "sha256:8993916fc5a6abd02ed04896d84ccf56c9882078a6261b4b3f5543a569b2982a"}
+    components=56  dependency_entries=1
+    types={"file": 1, "library": 55}
+    ecosystems={"(no purl)": 1, "github.com": 45, "go.opentelemetry.io": 2, "golang.org": 5, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1} (components without a license field: 55)
+    TARGET BINDING metadata.component.version == real binary sha256 -> True
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=True version_ok=True [{"name": "github.com/go-chi/chi/v5", "version": "v5.3.2"}]
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=True version_ok=True [{"name": "github.com/xuri/excelize/v2", "version": "v2.11.0"}]
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "version": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "version": "v0.56.0"}]
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/api.spdx.json
+    size_bytes = 86474
+    sha256     = a8e1c7eb6e7ce296735644a7eb5db530f813177efd35ba130f9691588708182c
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=SPDX-2.3 (CC0-1.0)  name=api
+    creators=["Organization: Anchore, Inc", "Tool: syft-1.51.1"]
+    packages=56  relationships=165
+    primaryPackagePurpose={"FILE": 1, "None": 55}
+    ecosystems={"(no purl)": 1, "github.com": 45, "go.opentelemetry.io": 2, "golang.org": 5, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1, "NOASSERTION": 55}
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=True version_ok=True [{"name": "github.com/go-chi/chi/v5", "versionInfo": "v5.3.2"}]
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=True version_ok=True [{"name": "github.com/xuri/excelize/v2", "versionInfo": "v2.11.0"}]
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "versionInfo": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "versionInfo": "v0.56.0"}]
+
+  buildinfo vs go.mod/go.sum cross-check for the four upgraded modules:
+    github.com/go-chi/chi/v5         expected=5.3.2 linked=True  buildinfo=v5.3.2 go.mod=v5.3.2 h1==go.sum=True
+    github.com/xuri/excelize/v2      expected=2.11.0 linked=True  buildinfo=v2.11.0 go.mod=v2.11.0 h1==go.sum=True
+    github.com/jackc/pgx/v5          expected=5.9.2 linked=True  buildinfo=v5.9.2 go.mod=v5.9.2 h1==go.sum=True
+    golang.org/x/crypto              expected=0.56.0 linked=True  buildinfo=v0.56.0 go.mod=v0.56.0 h1==go.sum=True
+
+------------------------------------------------------------------------------
+ARTIFACT worker
+  scanned target       = /home/euripides/projects/blockchain-platform/backend/bin/worker
+  target sha256        = 513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48   (42685594 bytes)
+  go toolchain         = go1.26.7
+  main package         = github.com/blockchain-platform/blockchain-platform/cmd/worker
+  main module          = github.com/blockchain-platform/blockchain-platform (devel)
+  embedded go modules  = 42  (read from the binary's own buildinfo)
+  build settings       = {"-buildmode": "exe", "-compiler": "gc", "CGO_CFLAGS": "", "CGO_CPPFLAGS": "", "CGO_CXXFLAGS": "", "CGO_ENABLED": "1", "CGO_LDFLAGS": "", "GOAMD64": "v1", "GOARCH": "amd64", "GOOS": "linux"}
+  vcs build settings   = {}  (empty => no VCS revision/commit is embedded)
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/worker.cdx.json
+    size_bytes = 47752
+    sha256     = b61c3ef8ead547fe2af4453d1f7f30a3653e1365fbc2a331fa6071de2210fdf2
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=CycloneDX 1.7  serial=urn:uuid:daff9baa-2c4f-4c35-bd03-9448319d7d36
+    metadata.component={"bom-ref": "ea456957bdd572be", "type": "file", "name": "worker", "version": "sha256:513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48"}
+    components=45  dependency_entries=1
+    types={"file": 1, "library": 44}
+    ecosystems={"(no purl)": 1, "github.com": 34, "go.opentelemetry.io": 2, "golang.org": 5, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1} (components without a license field: 44)
+    TARGET BINDING metadata.component.version == real binary sha256 -> True
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=False version_ok=False []
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=False version_ok=False []
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "version": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "version": "v0.56.0"}]
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/worker.spdx.json
+    size_bytes = 68963
+    sha256     = 4daac5ea63d41f895c68c58aae287c37e28e0010fb01a5bca76a3fbe4b31912e
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=SPDX-2.3 (CC0-1.0)  name=worker
+    creators=["Organization: Anchore, Inc", "Tool: syft-1.51.1"]
+    packages=45  relationships=132
+    primaryPackagePurpose={"FILE": 1, "None": 44}
+    ecosystems={"(no purl)": 1, "github.com": 34, "go.opentelemetry.io": 2, "golang.org": 5, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1, "NOASSERTION": 44}
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=False version_ok=False []
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=False version_ok=False []
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "versionInfo": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "versionInfo": "v0.56.0"}]
+
+  buildinfo vs go.mod/go.sum cross-check for the four upgraded modules:
+    github.com/go-chi/chi/v5         expected=5.3.2 linked=False buildinfo=None go.mod=v5.3.2 h1==go.sum=False
+    github.com/xuri/excelize/v2      expected=2.11.0 linked=False buildinfo=None go.mod=v2.11.0 h1==go.sum=False
+    github.com/jackc/pgx/v5          expected=5.9.2 linked=True  buildinfo=v5.9.2 go.mod=v5.9.2 h1==go.sum=True
+    golang.org/x/crypto              expected=0.56.0 linked=True  buildinfo=v0.56.0 go.mod=v0.56.0 h1==go.sum=True
+
+------------------------------------------------------------------------------
+ARTIFACT migrate
+  scanned target       = /home/euripides/projects/blockchain-platform/backend/bin/migrate
+  target sha256        = 28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4   (30859300 bytes)
+  go toolchain         = go1.26.7
+  main package         = github.com/blockchain-platform/blockchain-platform/cmd/migrate
+  main module          = github.com/blockchain-platform/blockchain-platform (devel)
+  embedded go modules  = 30  (read from the binary's own buildinfo)
+  build settings       = {"-buildmode": "exe", "-compiler": "gc", "CGO_CFLAGS": "", "CGO_CPPFLAGS": "", "CGO_CXXFLAGS": "", "CGO_ENABLED": "1", "CGO_LDFLAGS": "", "GOAMD64": "v1", "GOARCH": "amd64", "GOOS": "linux"}
+  vcs build settings   = {}  (empty => no VCS revision/commit is embedded)
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/migrate.cdx.json
+    size_bytes = 34611
+    sha256     = f4d2ae4f9440a188dec119de551657b613dedfbc99d4e0d5338a98b8d400cfec
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=CycloneDX 1.7  serial=urn:uuid:7b108d5b-e382-42fc-9500-bc1b875346f7
+    metadata.component={"bom-ref": "4eb5a07c8697d933", "type": "file", "name": "migrate", "version": "sha256:28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4"}
+    components=33  dependency_entries=1
+    types={"file": 1, "library": 32}
+    ecosystems={"(no purl)": 1, "github.com": 23, "go.opentelemetry.io": 2, "golang.org": 4, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1} (components without a license field: 32)
+    TARGET BINDING metadata.component.version == real binary sha256 -> True
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=False version_ok=False []
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=False version_ok=False []
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "version": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "version": "v0.56.0"}]
+
+  FILE /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/security/sbom/dependency-upgrade-20260913T015815Z/migrate.spdx.json
+    size_bytes = 49939
+    sha256     = f53fbf3fa1c5998ae1ce748cc23165b637c8bccd2c6357a99cce7a28c6b708ce
+    unchanged since generation (artifact-hashes.txt) = True
+    JSON parse = OK
+    format=SPDX-2.3 (CC0-1.0)  name=migrate
+    creators=["Organization: Anchore, Inc", "Tool: syft-1.51.1"]
+    packages=33  relationships=96
+    primaryPackagePurpose={"FILE": 1, "None": 32}
+    ecosystems={"(no purl)": 1, "github.com": 23, "go.opentelemetry.io": 2, "golang.org": 4, "google.golang.org": 1, "gopkg.in": 1, "stdlib@1.26.7": 1}
+    licenses={"BSD-3-Clause": 1, "NOASSERTION": 32}
+    upgraded_module[github.com/go-chi/chi/v5] expected=5.3.2 found=False version_ok=False []
+    upgraded_module[github.com/xuri/excelize/v2] expected=2.11.0 found=False version_ok=False []
+    upgraded_module[github.com/jackc/pgx/v5] expected=5.9.2 found=True version_ok=True [{"name": "github.com/jackc/pgx/v5", "versionInfo": "v5.9.2"}]
+    upgraded_module[golang.org/x/crypto] expected=0.56.0 found=True version_ok=True [{"name": "golang.org/x/crypto", "versionInfo": "v0.56.0"}]
+
+  buildinfo vs go.mod/go.sum cross-check for the four upgraded modules:
+    github.com/go-chi/chi/v5         expected=5.3.2 linked=False buildinfo=None go.mod=v5.3.2 h1==go.sum=False
+    github.com/xuri/excelize/v2      expected=2.11.0 linked=False buildinfo=None go.mod=v2.11.0 h1==go.sum=False
+    github.com/jackc/pgx/v5          expected=5.9.2 linked=True  buildinfo=v5.9.2 go.mod=v5.9.2 h1==go.sum=True
+    golang.org/x/crypto              expected=0.56.0 linked=True  buildinfo=v0.56.0 go.mod=v0.56.0 h1==go.sum=True
+
+==============================================================================
+UPGRADED-MODULE PRESENCE MATRIX (per document, per format)
+==============================================================================
+artifact  fmt   v5@5.3.2        v2@2.11.0       v5@5.9.2        crypto@0.56.0 
+api       cdx   OK              OK              OK              OK            
+api       spdx  OK              OK              OK              OK            
+worker    cdx   NOT-LINKED      NOT-LINKED      OK              OK            
+worker    spdx  NOT-LINKED      NOT-LINKED      OK              OK            
+migrate   cdx   NOT-LINKED      NOT-LINKED      OK              OK            
+migrate   spdx  NOT-LINKED      NOT-LINKED      OK              OK            
+
+OK            = the module is present in that SBOM at the expected upgraded version
+OTHER-VERSION = present but at a different version  -> REAL GAP
+NOT-LINKED    = the module is not linked into that binary, so its buildinfo does not
+                carry it and no SBOM generated from that binary can list it.
+                The four upgrades are still evidenced at source level (backend/go.mod,
+                whose sha256 matches the recorded post-upgrade source digest).
+
+real_gaps             = []
+not_linked_occurrences= 8  (informational, expected for the api-only modules)
+
+all_documents_parse   = True
+all_documents_bound  = True
+sboms_unchanged_by_validator = {"api.cdx.json": true, "api.spdx.json": true, "migrate.cdx.json": true, "migrate.spdx.json": true, "worker.cdx.json": true, "worker.spdx.json": true}
+
+validation_result = PASS
+  PASS here means: every document parses as JSON, every document is cryptographically
+  bound to the binary it claims to describe, and no document carries one of the four
+  upgraded modules at a version other than the upgraded one.
+  It does NOT mean all four modules appear in all six documents - see the matrix above.

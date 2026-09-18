@@ -1,0 +1,15 @@
+captured_utc=2026-09-13T02:34:41Z
+--- deployed bundle BEFORE rebuild (this is what v3 actually exercised) ---
+46ead1c6a3f70e272d11942fb9072d6f2b2696fb250fa8019e1ac94e9a315faa  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/index.html
+25f938752d56520202544e1ae71d4d3c680823790b28b7eeda39f30f95a0a655  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/index-DahtH2uu.js
+3fbc0afebcd8706dcd01d96b5da7eaac228a724409c5a482144c23597fade675  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/dist/assets/DownloadNewPage-kYSJBAao.js
+--- source on disk BEFORE rebuild (new real-decompression guard, NOT yet built) ---
+0a2b567adfd56bbf9154873d90b02b874817124996d3794cddde65662e51d29f  /home/euripides/projects/blockchain-platform/frontend/apps/user-console/src/pages/DownloadNewPage.tsx
+--- backend artifacts + running identity (unchanged in this step) ---
+7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a  /home/euripides/projects/blockchain-platform/backend/bin/api
+513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48  /home/euripides/projects/blockchain-platform/backend/bin/worker
+28cee869e44fb60840daeb78f8860afa62d7dd41d8f1301c2ab7ce83d64664c4  /home/euripides/projects/blockchain-platform/backend/bin/migrate
+blockchain-api pid=4011163 exe_sha=7e15271a2d837dac8066eb1f99ab45efad4f663698c4f4a3bb7b678cc458ce4a
+blockchain-worker pid=4011175 exe_sha=513e67bd7e9d4a9f96aeb659a237ca2399e7fc2074fdfe0978d0f6d8e6dbdb48
+--- served index BEFORE rebuild ---
+src="/app-v2/assets/index-DahtH2uu.js"

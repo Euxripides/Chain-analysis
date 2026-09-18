@@ -1,0 +1,30 @@
+# S7-SEC-01 dependency scan - Go toolchain versions
+# collected_at: 2026-09-12T23:34:28+07:00
+# host: dataserver  user: euripides
+
+## command: /usr/local/go/bin/go version
+go version go1.26.7 linux/amd64
+exit=0
+
+## command: /tmp/gtools/govulncheck -version
+Scanner: govulncheck@v1.8.0
+DB: https://vuln.go.dev
+DB updated: 2026-09-10 14:48:42 +0000 UTC
+
+exit=0
+
+## command: /usr/local/go/bin/go env GOPATH GOMODCACHE GOBIN GOPROXY GOFLAGS GOTOOLCHAIN
+/home/euripides/go
+/home/euripides/go/pkg/mod
+/tmp/gtools
+https://goproxy.cn,direct
+
+local
+exit=0
+
+## backend/go.mod header
+module github.com/blockchain-platform/blockchain-platform
+
+go 1.26.0
+
+require (

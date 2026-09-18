@@ -247,6 +247,22 @@ func (s *Store) ListChainCapabilities(ctx context.Context) ([]model.ChainCapabil
 
 // ---- Scheduler / Oracle 心跳（§80/§82）----
 
+// UpsertSchedulerState 写 ankr_scheduler_state 心跳。
+//
+// WAL 优化（2026-09-17）：**有意不加值变化守卫**，理由如下（也写在
+// acceptance-evidence/.../wal-reduction-20260917.md 的“有意不改”一节）：
+//
+//   - worker_id 的取值是 dataserver-<pid>，即**每个 worker 进程一份新行**；线上实测
+//     ankr_scheduler_state 已有 **397 行 / 397 个不同 worker_id**，其中只有当前进程那一行是活的。
+//   - 读取方 GetSchedulerState 用的是 ORDER BY updated_at DESC LIMIT 1（见本文件下方），
+//     它的正确性**依赖当前 worker 的 updated_at 持续前进**。一旦改成“值不变就不写、updated_at
+//     只在变化时推进”，当前 worker 长时间无变化时，这个查询会选到**上一个已退出 worker 的陈旧行**，
+//     调度状态会被读错。
+//   - 而这张表的 WAL 占比极小：实测 44 次 UPDATE/分钟、行宽约 400 B ≈ **18 KB/min**，
+//     相对当时基线 15.6 MB/min 约 **0.1%**。
+//
+// 用 0.1% 的收益去换“调度状态可能读错”的风险不划算。若确实要优化，正确做法是先让读取端
+// 变成确定性定位（例如按 worker_id 查询），那是语义变更，需要单独批准。
 func (s *Store) UpsertSchedulerState(ctx context.Context, st *model.SchedulerState) error {
 	_, err := s.Pool.Exec(ctx, "INSERT INTO ankr_scheduler_state (worker_id, configured_initial_concurrency, configured_max_concurrency, global_hard_ceiling, ready_queue_enabled, ready_queue_shadow, ready_queue_mode, auto_tune_enabled, controller_mode, active_slots, weighted_slots, concurrency_target, hard_ceiling, ramp_level, ramp_phase, control_state, control_reason, goodput, ttfb_p50_ms, mem_used_bytes, spool_used_bytes, time_to_full_safe_concurrency_ms, updated_at) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now()) "+
@@ -273,10 +289,28 @@ func (s *Store) GetSchedulerState(ctx context.Context) (*model.SchedulerState, e
 	return &st, nil
 }
 
+// UpsertCountOracleHealth 写 count_oracle_status（countoracle 5 秒心跳的一部分，
+// internal/countoracle/service.go:870-873，实测 12 次 UPDATE/分钟）。
+//
+// WAL 优化（2026-09-17）：加 WHERE 守卫，只有业务值真的变化时才写新版本行。
+// 读取方 GetCountOracleHealth 按 provider 精确查询，不依赖写入次数或 updated_at 的新鲜度，
+// 因此“值没变就不写”对它是不可见的。
+// updated_at 有意不参与比较（它在 SET 里被赋成 now()，参与比较会让守卫恒真、完全失效）。
 func (s *Store) UpsertCountOracleHealth(ctx context.Context, h *model.CountOracleHealth) error {
 	_, err := s.Pool.Exec(ctx, "INSERT INTO count_oracle_status (provider, circuit_state, requests, success_count, p50_ms, p95_ms, success_rate, cache_hit_rate, quota_exhausted, last_error, false_zero_count, prediction_error_p50, updated_at) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now()) "+
-		"ON CONFLICT (provider) DO UPDATE SET circuit_state=$2, requests=$3, success_count=$4, p50_ms=$5, p95_ms=$6, success_rate=$7, cache_hit_rate=$8, quota_exhausted=$9, last_error=$10, false_zero_count=$11, prediction_error_p50=$12, updated_at=now()",
+		"ON CONFLICT (provider) DO UPDATE SET circuit_state=$2, requests=$3, success_count=$4, p50_ms=$5, p95_ms=$6, success_rate=$7, cache_hit_rate=$8, quota_exhausted=$9, last_error=$10, false_zero_count=$11, prediction_error_p50=$12, updated_at=now() "+
+		"WHERE count_oracle_status.circuit_state IS DISTINCT FROM EXCLUDED.circuit_state "+
+		"OR count_oracle_status.requests IS DISTINCT FROM EXCLUDED.requests "+
+		"OR count_oracle_status.success_count IS DISTINCT FROM EXCLUDED.success_count "+
+		"OR count_oracle_status.p50_ms IS DISTINCT FROM EXCLUDED.p50_ms "+
+		"OR count_oracle_status.p95_ms IS DISTINCT FROM EXCLUDED.p95_ms "+
+		"OR count_oracle_status.success_rate IS DISTINCT FROM EXCLUDED.success_rate "+
+		"OR count_oracle_status.cache_hit_rate IS DISTINCT FROM EXCLUDED.cache_hit_rate "+
+		"OR count_oracle_status.quota_exhausted IS DISTINCT FROM EXCLUDED.quota_exhausted "+
+		"OR count_oracle_status.last_error IS DISTINCT FROM EXCLUDED.last_error "+
+		"OR count_oracle_status.false_zero_count IS DISTINCT FROM EXCLUDED.false_zero_count "+
+		"OR count_oracle_status.prediction_error_p50 IS DISTINCT FROM EXCLUDED.prediction_error_p50",
 		h.Provider, h.CircuitState, h.Requests, h.SuccessCount, h.P50Ms, h.P95Ms, h.SuccessRate, h.CacheHitRate, h.QuotaExhausted, h.LastError, h.FalseZeroCount, h.PredictionErrorP50)
 	return err
 }

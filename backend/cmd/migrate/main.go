@@ -17,13 +17,14 @@ func main() {
 	ctx := context.Background()
 	cfg := config.Load()
 	log := logger.New("info")
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	// 迁移必须使用具备 DDL 权限的运维账号（MIGRATION_DATABASE_URL，未配置时回落 DATABASE_URL）。
+	st, err := store.New(ctx, cfg.MigrationDatabaseURL)
 	if err != nil {
 		log.Error("postgres connect failed", "err", err)
 		os.Exit(1)
 	}
 	defer st.Close()
-	if err := migrations.ApplyPostgres(ctx, st.Pool); err != nil {
+	if err := migrations.ApplyPostgres(ctx, st.Pool.Raw()); err != nil {
 		log.Error("postgres migrate failed", "err", err)
 		os.Exit(1)
 	}

@@ -25,8 +25,21 @@ check() {
 
 echo "== 准备一次性数据库 $TESTDB =="
 psql "$BASE/postgres" -q -c "DROP DATABASE IF EXISTS $TESTDB" -c "CREATE DATABASE $TESTDB"
+# 2026-09-16 真实事故（必须写下来）：本脚本此前只导出 DATABASE_URL，而 cmd/migrate 读的是
+# **MIGRATION_DATABASE_URL**（deploy/.env）。于是：① 一次性库从未被迁移，全部断言都打在
+# 不存在的库上（psql 报 relation "schema_migrations" does not exist，两个 check 因为"空 == 空"
+# 假 PASS）；② 注入的失败迁移 9999_injected_failure.sql 实际是拿**生产库**跑的。
+# 生产库事后核对无损（head 仍为 0065、无 9999 记录、无 injected_probe 残留、服务健康），
+# 但"绝不触碰生产库"这句注释当时是假的。现在：两个 DSN 都指向一次性库，并且加一道硬断言
+# ——运行前后生产库的迁移头与行数必须完全不变，否则脚本以非 0 退出。
 export DATABASE_URL="$BASE/$TESTDB?sslmode=disable"
+export MIGRATION_DATABASE_URL="$BASE/$TESTDB?sslmode=disable"
 export PATH=/usr/local/go/bin:$PATH
+
+# 生产库基线：脚本自己证明"没有碰生产"。
+PROD_HEAD_BEFORE=$(psql "$BASE/blockchain_platform" -tAc "select coalesce(max(name),'') from schema_migrations" 2>/dev/null | tr -d '[:space:]')
+PROD_ROWS_BEFORE=$(psql "$BASE/blockchain_platform" -tAc "select count(*) from schema_migrations" 2>/dev/null | tr -d '[:space:]')
+echo "  生产库基线：head=$PROD_HEAD_BEFORE rows=$PROD_ROWS_BEFORE"
 
 echo "== 1. 首次全量迁移 =="
 cd backend
@@ -87,7 +100,8 @@ check "DATA-010" "迁移失败后旧表仍可读（users）" "$LEGACY_READ" "t"
 rm -f "$INJ"
 
 echo "== 4. 清理注入物后应可重入 =="
-psql "$BASE/$TESTDB" -q -c "DROP TABLE IF EXISTS sessions_device_id_fkey"
+# 注意：sessions_device_id_fkey 是**约束**不是表，原来这一句从来就是 no-op（注释想"制造需要重跑的
+# 状态"）。留着只会误导读者，删掉；第 4 步的 FK 断言核对的是 0046 迁移本身的产物。
 cd backend
 RECOVER=$(go run ./cmd/migrate 2>&1)
 cd ..
@@ -96,6 +110,14 @@ APPLIED=$(psql "$BASE/$TESTDB" -tAc "select count(*) from schema_migrations wher
 check "DATA-010" "该迁移最终被正确记录" "$APPLIED" "1"
 FK=$(psql "$BASE/$TESTDB" -tAc "select count(*) from pg_constraint where conname='sessions_device_id_fkey' and confdeltype='n'")
 check "DATA-010" "外键重建为 ON DELETE SET NULL" "$FK" "1"
+
+echo "== 5. 生产库未被触碰（本脚本的自我约束） =="
+PROD_HEAD_AFTER=$(psql "$BASE/blockchain_platform" -tAc "select coalesce(max(name),'') from schema_migrations" 2>/dev/null | tr -d '[:space:]')
+PROD_ROWS_AFTER=$(psql "$BASE/blockchain_platform" -tAc "select count(*) from schema_migrations" 2>/dev/null | tr -d '[:space:]')
+INJ_IN_PROD=$(psql "$BASE/blockchain_platform" -tAc "select count(*) from schema_migrations where name like '%9999_injected%'" 2>/dev/null | tr -d '[:space:]')
+check "DATA-010" "生产库迁移头未被改变" "$PROD_HEAD_AFTER" "$PROD_HEAD_BEFORE"
+check "DATA-010" "生产库迁移行数未被改变" "$PROD_ROWS_AFTER" "$PROD_ROWS_BEFORE"
+check "DATA-010" "生产库没有注入迁移的记录" "$INJ_IN_PROD" "0"
 
 echo "== 收尾：删除一次性数据库 =="
 psql "$BASE/postgres" -q -c "DROP DATABASE IF EXISTS $TESTDB"

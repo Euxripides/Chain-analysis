@@ -12,20 +12,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const Bucket = "blockchain-reports"
 const AlgorithmVersion = "evidence-report-v1.0"
 
 type Service struct {
-	pool    *pgxpool.Pool
+	pool    *dbtx.Pool
 	objects *rawstore.Store
 }
 
-func New(pool *pgxpool.Pool, objects *rawstore.Store) *Service {
+func New(pool *dbtx.Pool, objects *rawstore.Store) *Service {
 	return &Service{pool: pool, objects: objects}
 }
 

@@ -1,0 +1,67 @@
+{
+  "suite": "run-sprint7-qa.sh",
+  "build_api_sha": "d221dfefb8052f8e973b5f068a3b89a998c517f4222e130896887e69554e2e05",
+  "started_at": "2026-09-12T18:43:26Z",
+  "finished_at": "2026-09-12T18:52:26Z",
+  "suites": {
+    "sprint4": {
+      "pass": 81,
+      "fail": 0,
+      "not_verified": 0,
+      "blocked": null,
+      "source": "summary-line",
+      "status": "PASS"
+    },
+    "sprint5": {
+      "pass": 105,
+      "fail": 1,
+      "not_verified": 0,
+      "blocked": null,
+      "source": "result.json",
+      "status": "FAIL"
+    },
+    "sprint6": {
+      "pass": 159,
+      "fail": 0,
+      "not_verified": 0,
+      "blocked": null,
+      "source": "result.json",
+      "status": "PASS"
+    },
+    "rbac": {
+      "pass": 29,
+      "fail": 0,
+      "not_verified": null,
+      "blocked": 2,
+      "source": "summary-line",
+      "status": "PASS"
+    },
+    "iam": {
+      "pass": 33,
+      "fail": 0,
+      "not_verified": null,
+      "blocked": null,
+      "source": "summary-line",
+      "status": "PASS"
+    },
+    "sprint12": {
+      "pass": 19,
+      "fail": 0,
+      "not_verified": null,
+      "blocked": 1,
+      "source": "summary-line",
+      "status": "PASS"
+    }
+  },
+  "playwright": {
+    "passed": 33,
+    "failed": 4,
+    "skipped": 21,
+    "flaky": 0,
+    "rc": 1,
+    "status": "FAIL",
+    "criteria": "failed==0 and rc==0 and passed>0"
+  },
+  "criteria": "each suite: fail==0 and not_verified in (0,null) and pass>0; playwright: failed==0 and passed>0",
+  "status": "FAIL"
+}
