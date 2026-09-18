@@ -15,10 +15,17 @@ import { dirname, resolve } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(here, "../packages/design-tokens/tokens.css"), "utf-8");
 
+/**
+ * 只收集**直接写成十六进制**的令牌：语义角色层（--bg-* / --text-* 等）
+ * 大量使用 var() 间接引用，交给浏览器解析后又绕回了同一组原始色阶，
+ * 因此对比度守卫统一在色阶/原始色这一层校验（蓝图 §6.1 的那张表）。
+ */
 function parseTokens(text) {
   const out = {};
-  for (const m of text.matchAll(/--(c-[a-z-]+):\s*(#[0-9a-fA-F]{6})/g)) {
-    out[m[1]] = m[2].toLowerCase();
+  for (const m of text.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) {
+    if (m[1].startsWith("c-") || /^(ink|graphite|slate|canvas|indigo|cyan|amber|green|red|chart|state|graph)-/.test(m[1])) {
+      out[m[1]] = m[2].toLowerCase();
+    }
   }
   return out;
 }
@@ -55,9 +62,31 @@ const PAIRS = [
   ["c-slate", "c-ice", 4.5, "工作区次级文字"],
   ["c-graphite", "c-ice", 4.5, "工作区正文"],
   ["c-graphite", "c-surface", 4.5, "卡片正文"],
+
+  /* --- 用户端重构蓝图 §6.1 新增组合。前台/背景必须在此登记，否则 CI 不拦。 --- */
+  ["slate-600", "canvas-50", 4.5, "画布底次级文字"],
+  ["slate-600", "bg-surface-placeholder", 4.5, "占位：白底次级文字"],
+  ["graphite-900", "canvas-50", 4.5, "画布底正文"],
+  ["graphite-900", "bg-surface-placeholder", 4.5, "白底正文"],
+  ["indigo-600", "bg-surface-placeholder", 4.5, "主操作/链接"],
+  ["indigo-600", "indigo-soft", 4.5, "信息徽标"],
+  ["cyan-text", "bg-surface-placeholder", 4.5, "实时数据文字"],
+  ["cyan-text", "cyan-soft", 4.5, "实时数据徽标"],
+  ["amber-600", "amber-soft-2", 4.5, "待复核徽标"],
+  ["amber-600", "bg-surface-placeholder", 4.5, "注意文字"],
+  ["green-700", "green-soft-2", 4.5, "已完成徽标"],
+  ["green-700", "bg-surface-placeholder", 4.5, "成功文字"],
+  ["red-700", "red-soft-2", 4.5, "失败徽标"],
+  ["red-700", "bg-surface-placeholder", 4.5, "危险文字"],
+  ["slate-400", "ink-950", 4.5, "深色导航次级文字"],
+  ["ink-950", "bg-surface-placeholder", 4.5, "反色正文（哨兵：深底浅面）"],
 ];
 
-const tokens = parseTokens(css);
+/** `--bg-surface` 是 #FFFFFF 的语义别名；守卫解析不到 var()，这里补一个等价哨兵。 */
+const ALIAS = { "bg-surface-placeholder": "#ffffff" };
+
+const tokens = { ...parseTokens(css) };
+for (const [name, value] of Object.entries(ALIAS)) tokens[name] = value;
 const failures = [];
 console.log("设计令牌对比度检查（WCAG 2.1 AA）");
 for (const [fg, bg, need, label] of PAIRS) {

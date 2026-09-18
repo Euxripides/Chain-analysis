@@ -1,14 +1,22 @@
-/* Sprint 5：Explorer / 下载 / 任务 / 导出 / Canvas 的布局与响应式。
-   页面提示仍必须走 Dialog（AGENTS.md），这里只定义业务布局。 */
+/*
+ * Sprint 5 遗留布局类（用户端重构后清理）
+ *
+ * 保留的是**仍然被引用**的部分：
+ *   · `.s5-canvas-*` —— CanvasPage 的 SVG 画布、状态环、路径流动与降级断点
+ *     （用户端从未使用 XYFlow；`@xyflow/react` 只被旧 SPA /fund-flow 引用，
+ *      且 tests/dual-system-sprint5.spec.ts 断言 `.s5-canvas-svg` 可见，
+ *      因此这里是按蓝图 §12.13 增强既有 SVG，而不是换渲染器）；
+ *   · `.s5-node-list*` —— 画布左侧对象/图层列表；
+ *   · `.s5-object-head` / `.s5-mono` / `.s5-stack` / `.s5-json` —— 仍被页面使用；
+ *   · `.table--virtual` —— 虚拟滚动表格的单元格截断与吸顶表头。
+ *
+ * 已删除（删除前确认全 src 无 .tsx 引用）：
+ *   s5-grid、s5-grid--3、s5-kpis、s5-kpi 系列、s5-form-section、s5-form-grid、
+ *   s5-field-label、s5-actions、s5-progress、s5-chart-frame、s5-mobile-only、s5-desktop-only
+ *   —— 分别由 `.cs-bento`、`PageSection` + 表单网格、`LinearProgress`、
+ *      `.cs-chart-frame` 与页面自身的断点判定（`useMediaQuery`）取代。
+ */
 
-.s5-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-4);
-}
-.s5-grid--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
 .s5-stack {
   display: grid;
   gap: var(--sp-3);
@@ -24,73 +32,22 @@
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   overflow-wrap: anywhere;
 }
-.s5-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--sp-3);
-}
-.s5-kpi {
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-md, 8px);
-  padding: var(--sp-3);
-  min-width: 0;
-}
-.s5-kpi__label {
-  color: var(--c-slate);
-  font-size: var(--fs-12);
-}
-.s5-kpi__value {
-  font-size: var(--fs-18, 18px);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.s5-form-section {
-  border-top: 1px solid var(--c-border);
-  padding: var(--sp-3) 0;
-}
-.s5-form-section:first-child {
-  border-top: 0;
-}
-.s5-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-3);
-}
-.s5-form-grid > * {
-  min-width: 0;
-}
-.s5-field-label {
-  display: block;
-  font-size: var(--fs-12);
-  color: var(--c-slate);
-  margin-bottom: 4px;
-}
-.s5-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  align-items: center;
-}
-.s5-progress {
-  height: 8px;
-  background: var(--c-border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.s5-progress > span {
-  display: block;
-  height: 100%;
-  background: var(--c-primary, #2563eb);
-}
+
+/* 全宽调查画布 = 对象/图层面板 + 画布 + Inspector。
+   列宽收敛在 272–344px，主画布吃掉剩余宽度；≤1100px 与 ≤760px 的降级规则在文件末尾。 */
 .s5-canvas-shell {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 320px;
-  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 272px) minmax(0, 1fr) minmax(0, 344px);
+  gap: var(--sp-4);
   align-items: start;
+  min-width: 0;
+}
+.s5-canvas-shell > * {
+  min-width: 0;
 }
 .s5-canvas-svg {
   width: 100%;
-  height: 520px;
+  height: clamp(340px, 56vh, 620px);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-md, 8px);
   background: var(--c-surface, #fff);
@@ -105,6 +62,67 @@
 }
 .s5-canvas-side {
   min-width: 0;
+}
+
+/* 画布状态与路径流动（蓝图 §7.2 / §12.13）。
+   只对选中节点、框选集合、聚焦路径给出状态环；只有正在播放（RUNNING）的路径才画方向流动。
+   动画只驱动 transform / opacity / stroke-*，不驱动布局。 */
+.s5-canvas-halo {
+  fill: none;
+  stroke: var(--c-cobalt, #3b4fe4);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: s5-canvas-halo-in var(--motion-spatial, 380ms) cubic-bezier(.34, 1.56, .64, 1);
+}
+.s5-canvas-halo[data-tone="box"] {
+  stroke-dasharray: 4 4;
+  stroke-opacity: .75;
+}
+.s5-canvas-halo[data-tone="path"] {
+  stroke: var(--cyan-500, #0ea5b7);
+  stroke-opacity: .9;
+}
+@keyframes s5-canvas-halo-in {
+  from { transform: scale(.72); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+/* 聚类展开：成员节点进入时播放一次 spring */
+.s5-canvas-node--enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: s5-canvas-node-in var(--motion-spatial, 380ms) cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes s5-canvas-node-in {
+  from { transform: scale(.76); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.s5-canvas-edge {
+  transition: stroke-width var(--motion-standard, 220ms) cubic-bezier(.34, 1.56, .64, 1),
+    stroke-opacity var(--motion-fast, 160ms) ease-out;
+}
+.s5-canvas-edge--focus {
+  stroke-width: 3.4;
+  stroke-opacity: 1;
+}
+.s5-canvas-flow-dash {
+  fill: none;
+  stroke-dasharray: 5 9;
+  animation: s5-canvas-flow 1.1s linear infinite;
+}
+@keyframes s5-canvas-flow {
+  from { stroke-dashoffset: 14; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s5-canvas-halo,
+  .s5-canvas-node--enter,
+  .s5-canvas-flow-dash {
+    animation: none !important;
+  }
+  .s5-canvas-edge {
+    transition: none !important;
+  }
 }
 .s5-node-list {
   max-height: 420px;
@@ -126,9 +144,9 @@
   outline: 2px solid var(--c-primary, #2563eb);
   outline-offset: -2px;
 }
-.s5-mobile-only {
-  display: none;
-}
+
+/* 虚拟滚动表格：单元格视觉省略 + 吸顶表头。
+   完整值仍通过 title 与复制按钮保留（蓝图 §2.5）。 */
 .table--virtual td {
   max-width: 420px;
   overflow: hidden;
@@ -141,10 +159,7 @@
   z-index: 2;
   background: var(--c-surface, #fff);
 }
-.s5-chart-frame {
-  width: 100%;
-  overflow-x: auto;
-}
+
 .s5-json {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: var(--fs-12);
@@ -165,23 +180,12 @@
 }
 
 @media (max-width: 760px) {
-  .s5-grid,
-  .s5-grid--3,
-  .s5-form-grid,
-  .s5-kpis {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .s5-canvas-shell {
     grid-template-columns: minmax(0, 1fr);
   }
   .s5-canvas-svg {
-    height: 320px;
-  }
-  .s5-mobile-only {
-    display: block;
-  }
-  .s5-desktop-only {
-    display: none;
+    height: min(56vh, 420px);
+    min-height: 280px;
   }
   .table-scroll {
     max-width: 100%;

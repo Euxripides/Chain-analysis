@@ -1,8 +1,25 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
-import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows, StatusBadge, statusToneFor, useDialog, dialogInputValue } from "@chain/ui";
-import { EntityLink, EvidenceRail } from "@chain/ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  HashValue,
+  InspectorDrawer,
+  KeyValueList,
+  MetaLine,
+  PageHeader,
+  PageSection,
+  PageSkeleton,
+  SplitPane,
+  StatusBadge,
+  StickyActionBar,
+  Timeline,
+  statusToneFor,
+  useDialog,
+} from "@chain/ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
 
 interface Approval {
@@ -28,7 +45,9 @@ interface ReportDetail {
   status_revision: number;
   generated_at: string;
   submitted_at?: string | null;
+  submitted_by?: string | null;
   approved_at?: string | null;
+  approved_by?: string | null;
   rejected_at?: string | null;
   reject_reason: string;
   signed_at?: string | null;
@@ -39,7 +58,29 @@ interface ReportDetail {
   metadata: Record<string, unknown>;
 }
 
-/** 报告详情：审批状态机 + 一次性下载票据。artifact revision 不可覆盖。 */
+/** 服务端状态 → 中文标签；原始状态值仍保留在状态徽标的 title 上。 */
+const REPORT_STATUS_LABEL: Record<string, string> = {
+  generated: "草稿",
+  in_review: "待审批",
+  approved: "已批准",
+  rejected: "已驳回",
+  signed: "已签署",
+  archived: "已归档",
+};
+
+function decisionTone(decision: string): "ok" | "danger" | "warn" | "neutral" {
+  if (decision === "approve") return "ok";
+  if (decision === "reject") return "danger";
+  return "neutral";
+}
+
+/**
+ * §12.23 报告详情：审批状态机 + 一次性下载票据。artifact revision 不可覆盖。
+ *
+ * 表现层重构**没有改动任何请求**：提交/批准/驳回/签署/归档继续走原来的
+ * `POST /api/v2/reports/{id}/commands/{cmd}`（含 `If-Match: status_revision`、意见输入、
+ * 二次确认、Trace 错误处理），下载继续走原来的 download-ticket 一次性票据。
+ */
 export default function ReportDetailPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
@@ -47,6 +88,8 @@ export default function ReportDetailPage() {
   const action = useAction();
   const navigate = useNavigate();
   const { data, loading, error, reload } = useAsync<ReportDetail>(`/api/v2/reports/${id}`, [id]);
+  /* 只用于给被点击的那个按钮显示 busy，不改变 command 本身的语义。 */
+  const [pending, setPending] = useState<string | null>(null);
 
   const command = useCallback(
     async (cmd: string) => {
@@ -101,63 +144,248 @@ export default function ReportDetailPage() {
     if (!res) return;
   }, [action, id]);
 
-  if (loading) return <SkeletonRows rows={6} columns={4} />;
-  if (error || !data) return <Card><ErrorState title="报告加载失败" message={error ?? "不存在或无权访问"} onRetry={reload} /></Card>;
+  /** 包裹层：只负责按钮 busy 指示，命令与错误语义完全由 command / download 决定。 */
+  const runCommand = useCallback(
+    async (cmd: string) => {
+      setPending(cmd);
+      try {
+        await command(cmd);
+      } finally {
+        setPending(null);
+      }
+    },
+    [command],
+  );
+
+  const runDownload = useCallback(async () => {
+    setPending("download");
+    try {
+      await download();
+    } finally {
+      setPending(null);
+    }
+  }, [download]);
+
+  if (loading) return <PageSkeleton shape="detail" />;
+  if (error || !data) {
+    return (
+      <Card>
+        <ErrorState title="报告加载失败" message={error ?? "不存在或无权访问"} onRetry={reload} />
+      </Card>
+    );
+  }
+
+  /* 徽标同时给出中文标签与服务端原始值：原始值是接口与审计里的权威写法。 */
+  const statusText = REPORT_STATUS_LABEL[data.status] ? `${REPORT_STATUS_LABEL[data.status]} · ${data.status}` : data.status;
+  const canSubmit = can("report:create") && ["generated", "rejected"].includes(data.status);
+  const canReview = can("report:review") && data.status === "in_review";
+  const canSign = can("report:sign") && data.status === "approved";
+  const canArchive = can("report:review") && ["approved", "signed"].includes(data.status);
+  const canDownload = can("report:download") && data.downloadable;
+
+  const submitButton = canSubmit ? (
+    <Button size="sm" busy={pending === "submit"} busyLabel="提交中…" onClick={() => void runCommand("submit")}>
+      提交复核
+    </Button>
+  ) : null;
+  const approveButton = canReview ? (
+    <Button size="sm" variant="primary" busy={pending === "approve"} busyLabel="批准中…" onClick={() => void runCommand("approve")}>
+      批准
+    </Button>
+  ) : null;
+  const rejectButton = canReview ? (
+    <Button size="sm" variant="danger" busy={pending === "reject"} busyLabel="驳回中…" onClick={() => void runCommand("reject")}>
+      驳回
+    </Button>
+  ) : null;
+  const signButton = canSign ? (
+    <Button size="sm" variant="primary" busy={pending === "sign"} busyLabel="签署中…" onClick={() => void runCommand("sign")}>
+      签署
+    </Button>
+  ) : null;
+  const archiveButton = canArchive ? (
+    <Button size="sm" busy={pending === "archive"} busyLabel="归档中…" onClick={() => void runCommand("archive")}>
+      归档
+    </Button>
+  ) : null;
+  const downloadButton = canDownload ? (
+    <Button size="sm" busy={pending === "download"} busyLabel="签发中…" onClick={() => void runDownload()}>
+      下载（票据）
+    </Button>
+  ) : null;
+
+  /* 危险操作（驳回）永远不是主按钮：主按钮只承载"推进流程"的动作。 */
+  const primaryAction = approveButton ?? signButton ?? submitButton ?? downloadButton;
+  const secondaryActions = (
+    <span className="toolbar" style={{ justifyContent: "flex-end" }}>
+      <Button size="sm" variant="ghost" onClick={() => navigate(-1)}>
+        返回
+      </Button>
+      {rejectButton}
+      {archiveButton}
+      {primaryAction === submitButton ? null : submitButton}
+      {primaryAction === signButton ? null : signButton}
+      {primaryAction === downloadButton ? null : downloadButton}
+    </span>
+  );
+
+  const approvals = data.approvals ?? [];
+  const metadata = Object.entries(data.metadata ?? {});
 
   return (
     <>
       <PageHeader
-        title={`报告 revision ${data.revision}`}
-        subtitle={<span>案件 {data.case_no || data.case_id || "—"} · {data.status} · 数据源 postgres:investigation_reports + MinIO</span>}
-        actions={
-          <span className="s4-button-row">
-            <button type="button" className="btn btn--sm" onClick={() => navigate(-1)}>返回</button>
-            {can("report:create") && ["generated", "rejected"].includes(data.status) ? <button type="button" className="btn btn--primary btn--sm" onClick={() => command("submit")}>提交复核</button> : null}
-            {can("report:review") && data.status === "in_review" ? <button type="button" className="btn btn--primary btn--sm" onClick={() => command("approve")}>批准</button> : null}
-            {can("report:review") && data.status === "in_review" ? <button type="button" className="btn btn--danger btn--sm" onClick={() => command("reject")}>驳回</button> : null}
-            {can("report:sign") && data.status === "approved" ? <button type="button" className="btn btn--primary btn--sm" onClick={() => command("sign")}>签署</button> : null}
-            {can("report:review") && ["approved", "signed"].includes(data.status) ? <button type="button" className="btn btn--sm" onClick={() => command("archive")}>归档</button> : null}
-            {can("report:download") && data.downloadable ? <button type="button" className="btn btn--sm" onClick={download}>下载（票据）</button> : null}
+        title={`报告 r${data.revision}`}
+        breadcrumb={[
+          { label: "工作台", to: "/home" },
+          { label: "报告中心", to: "/reports" },
+          { label: `报告 r${data.revision}` },
+        ]}
+        status={
+          <span title={data.status}>
+            <StatusBadge tone={statusToneFor(data.status)}>{statusText}</StatusBadge>
           </span>
         }
+        meta={
+          <MetaLine
+            items={[
+              { label: "案件", value: data.case_no || data.case_id || "—" },
+              { label: "调查", value: data.investigation_id.slice(0, 8) + "…" },
+              { label: "格式", value: data.format || "—" },
+              { label: "大小", value: `${data.size_bytes} B` },
+              { label: "生成", value: formatTime(data.generated_at) },
+              { label: "数据源", value: "postgres:investigation_reports + MinIO" },
+            ]}
+          />
+        }
+        primaryAction={primaryAction}
+        secondaryAction={secondaryActions}
       />
-      <div className="s4-grid">
-        <Card title="审批状态">
-          <dl className="s4-kv">
-            <div className="s4-kv__row"><dt>状态</dt><dd><StatusBadge tone={statusToneFor(data.status)}>{data.status}</StatusBadge></dd></div>
-            <div className="s4-kv__row"><dt>artifact SHA-256</dt><dd><EntityLink value={data.artifact_sha256} /></dd></div>
-            <div className="s4-kv__row"><dt>大小</dt><dd>{data.size_bytes} bytes</dd></div>
-            <div className="s4-kv__row"><dt>生成时间</dt><dd>{formatTime(data.generated_at)}</dd></div>
-            <div className="s4-kv__row"><dt>提交时间</dt><dd>{formatTime(data.submitted_at)}</dd></div>
-            <div className="s4-kv__row"><dt>批准时间</dt><dd>{formatTime(data.approved_at)}</dd></div>
-            <div className="s4-kv__row"><dt>驳回原因</dt><dd>{data.reject_reason || "—"}</dd></div>
-            <div className="s4-kv__row"><dt>签署时间</dt><dd>{formatTime(data.signed_at)}</dd></div>
-            <div className="s4-kv__row"><dt>签名哈希</dt><dd className="mono">{data.signature_hash || "—"}</dd></div>
-            <div className="s4-kv__row"><dt>归档时间</dt><dd>{formatTime(data.archived_at)}</dd></div>
-          </dl>
-        </Card>
-        <EvidenceRail
-          title="Report metadata"
-          items={Object.entries(data.metadata ?? {}).map(([k, v]) => ({ label: k, value: <span className="mono">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span> }))}
-        />
-      </div>
-      <Card title="审批记录">
-        {data.approvals.length === 0 ? <EmptyState title="尚无审批记录" /> : null}
-        <div className="s4-list">
-          {data.approvals.map((a) => (
-            <div className="s4-list__item" key={a.id}>
-              <div className="s4-list__main">
-                <div className="s4-list__title">{a.decision} · revision {a.report_revision}</div>
-                <div className="s4-list__sub">reviewer {a.reviewer_id ?? "—"} · {formatTime(a.created_at)} · {a.note || "无意见"}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-      <div className="s4-sticky-actions">
-        <Link className="btn" to={`/investigations/${data.investigation_id}/workbench`}>调查工作台</Link>
-        {data.case_id ? <Link className="btn" to={`/cases/${data.case_id}/reports`}>案件报告</Link> : null}
-      </div>
+
+      <SplitPane
+        storageKey="cs-report-detail-aside"
+        asideLabel="审批状态"
+        aside={
+          <InspectorDrawer title="审批状态" subtitle={`r${data.revision}`} ariaLabel="审批状态与审批记录">
+            <PageSection title="当前状态">
+              <KeyValueList
+                ariaLabel="审批状态"
+                items={[
+                  { label: "状态", value: <span title={data.status}><StatusBadge tone={statusToneFor(data.status)}>{statusText}</StatusBadge></span> },
+                  { label: "当前 revision", value: <span className="mono">r{data.revision}</span> },
+                  { label: "status_revision", value: <span className="mono">s{data.status_revision}</span> },
+                  { label: "提交时间", value: formatTime(data.submitted_at) },
+                  { label: "批准时间", value: formatTime(data.approved_at) },
+                  { label: "驳回时间", value: formatTime(data.rejected_at) },
+                  { label: "驳回原因", value: data.reject_reason || "—" },
+                  { label: "签署时间", value: formatTime(data.signed_at) },
+                  { label: "归档时间", value: formatTime(data.archived_at) },
+                ]}
+              />
+            </PageSection>
+            <PageSection title="审批记录" count={approvals.length + " 条"}>
+              {approvals.length === 0 ? (
+                <EmptyState title="尚无审批记录" />
+              ) : (
+                <Timeline
+                  ariaLabel="审批记录"
+                  items={approvals.map((approval) => ({
+                    key: approval.id,
+                    title: `${approval.decision} · revision r${approval.report_revision}`,
+                    tone: decisionTone(approval.decision),
+                    meta: (
+                      <>
+                        <span>reviewer {approval.reviewer_id ?? "—"}</span>
+                        <div>{formatTime(approval.created_at)}</div>
+                        <div>{approval.note || "无意见"}</div>
+                        <div className="mono" title={approval.content_hash}>
+                          {approval.content_hash.slice(0, 16)}…
+                        </div>
+                      </>
+                    ),
+                  }))}
+                />
+              )}
+            </PageSection>
+          </InspectorDrawer>
+        }
+        main={
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+            <PageSection title="报告元数据">
+              <Card>
+                <KeyValueList
+                  ariaLabel="报告元数据"
+                  items={[
+                    { label: "报告 ID", value: <HashValue value={data.id} wrap label="报告 ID" />, wide: true },
+                    { label: "案件", value: data.case_no || data.case_id || "—" },
+                    { label: "调查", value: <HashValue value={data.investigation_id} head={12} tail={8} label="调查 ID" /> },
+                    { label: "revision", value: <span className="mono">r{data.revision}</span> },
+                    { label: "状态", value: <span title={data.status}><StatusBadge tone={statusToneFor(data.status)}>{statusText}</StatusBadge></span> },
+                    { label: "status_revision", value: <span className="mono">s{data.status_revision}</span> },
+                    { label: "格式", value: data.format || "—" },
+                    { label: "大小", value: `${data.size_bytes} bytes` },
+                    { label: "生成时间", value: formatTime(data.generated_at) },
+                    { label: "提交时间", value: formatTime(data.submitted_at) },
+                    { label: "提交人", value: <HashValue value={data.submitted_by ?? ""} label="提交人身份 ID" /> },
+                    { label: "批准时间", value: formatTime(data.approved_at) },
+                    { label: "审批人", value: <HashValue value={data.approved_by ?? ""} label="审批人身份 ID" /> },
+                    { label: "驳回原因", value: data.reject_reason || "—" },
+                    { label: "签署时间", value: formatTime(data.signed_at) },
+                    { label: "归档时间", value: formatTime(data.archived_at) },
+                  ]}
+                />
+              </Card>
+            </PageSection>
+
+            <PageSection title="报告文件" count={data.downloadable ? "可下载" : "当前状态不可下载"}>
+              <Card>
+                <KeyValueList
+                  ariaLabel="报告文件"
+                  items={[
+                    { label: "artifact SHA-256", value: <HashValue value={data.artifact_sha256} wrap label="artifact SHA-256" />, wide: true },
+                    { label: "内容哈希", value: <HashValue value={data.content_hash} wrap label="报告内容哈希" />, wide: true },
+                    { label: "签名哈希", value: data.signature_hash ? <HashValue value={data.signature_hash} wrap label="签名哈希" /> : "—", wide: true },
+                    { label: "格式", value: data.format || "—" },
+                    { label: "大小", value: `${data.size_bytes} bytes` },
+                    { label: "下载可用", value: data.downloadable ? "是" : "否" },
+                  ]}
+                />
+              </Card>
+            </PageSection>
+
+            <PageSection title="Report metadata" count={metadata.length + " 项"}>
+              <Card>
+                {metadata.length === 0 ? (
+                  <EmptyState title="服务端未返回附加元数据" />
+                ) : (
+                  <KeyValueList
+                    ariaLabel="Report metadata"
+                    items={metadata.map(([key, value]) => ({
+                      label: key,
+                      value: (
+                        <span className="mono">
+                          {typeof value === "object" && value !== null ? JSON.stringify(value) : String(value)}
+                        </span>
+                      ),
+                    }))}
+                  />
+                )}
+              </Card>
+            </PageSection>
+
+            <StickyActionBar>
+              <Link className="btn btn--sm" to={`/investigations/${data.investigation_id}/workbench`}>
+                调查工作台
+              </Link>
+              {data.case_id ? (
+                <Link className="btn btn--sm" to={`/cases/${data.case_id}/reports`}>
+                  案件报告
+                </Link>
+              ) : null}
+            </StickyActionBar>
+          </div>
+        }
+      />
     </>
   );
 }

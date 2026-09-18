@@ -1,37 +1,68 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import {
+  Maximize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pause,
+  Play,
+  Redo2,
+  Square,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { ApiError } from "@chain/api-client";
 import {
   BackLink,
+  Button,
   Card,
+  dialogInputValue,
   EmptyState,
   ErrorState,
   EvidenceRail,
+  FilterChip,
+  HashValue,
+  IconButton,
+  InspectorDrawer,
+  KeyValueList,
+  MetaLine,
   PageHeader,
+  PageSection,
+  SearchInput,
+  SegmentedControl,
   SkeletonRows,
   StatusBadge,
   statusToneFor,
-  dialogInputValue,
   useDialog,
 } from "@chain/ui";
-import type { EvidenceItem } from "@chain/ui";
+import type { KeyValueEntry } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
 /**
  * U-GRAPH-02 / S5-FE-03 / USER-007：Canvas / Fund Flow 工作区（路由 /canvases/:canvasId）。
  *
- * 数据模型（与后端 canvas service 一致）：
+ * 数据模型（与后端 canvas service 一致，**未做任何改动**）：
  * - GET/PATCH /api/v2/canvases/{id}，revision 通过 If-Match 提交；
  * - node_refs：address:<chain>:<address> | tx:<chain>:<hash> | evidence:<uuid>；
  * - edge_refs：edge:<fromNodeRef>-><toNodeRef>:<amountRaw?>:<asset?>；
  * - 解析失败的 ref 在渲染中忽略，并通过 Dialog 列出坏引用数量；
  * - 所有说明 / 警告 / 错误 / 成功 / 确认只通过 useDialog 弹窗呈现。
+ *
+ * 表现层（蓝图 §12.13）：全宽调查画布 = 顶部工具栏 + 左侧可折叠对象/图层面板
+ * + 中央画布 + 右侧 Inspector/Evidence Rail + 底部路径播放控制。
+ * 节点按类型使用不同形状（圆 = 地址、圆角矩形 = 交易、菱形 = Evidence），
+ * 文字标签按渲染预算做 LOD，边始终保留方向、资产、金额，完整值放在 <title> 与 Inspector 里。
+ * 画布本体沿用仓库既有的内联 SVG 渲染（user-console 未引入 @xyflow/react，
+ * 也不在本轮把新依赖提升到首屏包）；XYFlow 版本仍只存在于旧工作台 FundFlowPage。
  */
 
 type NodeKind = "address" | "tx" | "evidence";
 type Lens = "flow" | "time" | "asset" | "evidence";
 type RenderMode = "normal" | "aggregate" | "limit";
+type CanvasTool = "select" | "box" | "pan";
+type LayoutMode = "auto" | "columns" | "ring";
 
 interface CanvasRecord {
   id: string;
@@ -94,6 +125,10 @@ interface RenderNode {
   sublabel?: string;
   count: number;
   aggregate: boolean;
+  /** 由聚类展开产生的节点：进入时播放一次 spring 位移（蓝图 §7.2）。 */
+  entering?: boolean;
+  /** 聚合节点的原始 key，用于展开/收起。 */
+  clusterKey?: string;
 }
 
 interface RenderEdge {
@@ -103,6 +138,14 @@ interface RenderEdge {
   amountRaw?: string;
   asset?: string;
   repeated: number;
+}
+
+interface ClusterInfo {
+  key: string;
+  kind: NodeKind;
+  chain?: string;
+  count: number;
+  label: string;
 }
 
 interface EvidenceRow {
@@ -156,6 +199,12 @@ interface SnapshotRow {
   created_at?: string;
 }
 
+type Selection =
+  | { kind: "node"; ref: string }
+  | { kind: "edge"; ref: string }
+  | { kind: "aggregate"; key: string }
+  | null;
+
 const NODE_KIND_LABEL: Record<NodeKind, string> = { address: "地址", tx: "交易", evidence: "证据" };
 const LENSES: Array<{ key: Lens; label: string }> = [
   { key: "flow", label: "资金流" },
@@ -163,12 +212,29 @@ const LENSES: Array<{ key: Lens; label: string }> = [
   { key: "asset", label: "资产" },
   { key: "evidence", label: "证据" },
 ];
+const TOOL_ITEMS: Array<{ key: CanvasTool; label: string }> = [
+  { key: "select", label: "选择" },
+  { key: "box", label: "框选" },
+  { key: "pan", label: "平移" },
+];
+const LAYOUT_ITEMS: Array<{ key: LayoutMode; label: string }> = [
+  { key: "auto", label: "自动" },
+  { key: "columns", label: "分层" },
+  { key: "ring", label: "环形" },
+];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ASSET_PALETTE = ["#175cd3", "#067647", "#b45309", "#7f56d9", "#c11574", "#088ab2"];
 const NODE_LIMIT_SOFT = 1000;
 const NODE_LIMIT_HARD = 2000;
 const SVG_W = 1000;
 const SVG_H = 600;
+/** 单次聚类展开上限：超过时用 Dialog 说明，不静默渲染上千个元素（蓝图 §12.13）。 */
+const CLUSTER_EXPAND_LIMIT = 200;
+/** 复杂标签的渲染预算：超过后只给选中/框选/路径相关对象画文字（蓝图 §12.13 "不能一次渲染全部复杂标签"）。 */
+const NODE_LABEL_BUDGET = 120;
+const EDGE_LABEL_BUDGET = 60;
+/** 路径播放的步进间隔；reduced-motion 下不使用自动播放（蓝图 §7.4）。 */
+const PATH_STEP_MS = 1200;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -373,25 +439,52 @@ function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
-  );
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const query = window.matchMedia("(max-width: 767px)");
-    const update = () => setMobile(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return mobile;
+/** 长标签的视觉省略：完整值始终保留在 <title> 与 Inspector（蓝图 §2.5）。 */
+function ellipsize(value: string, max = 22): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
 }
 
-function layoutPositions(nodes: RenderNode[], edges: RenderEdge[]): Map<string, { x: number; y: number }> {
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener("change", update);
+    return () => list.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
+function useIsMobile(): boolean {
+  return useMediaQuery("(max-width: 767px)");
+}
+
+/** 蓝图 §7.4：reduced-motion 下关闭自动播放与方向流动，但逐步查看仍然可用。 */
+function usePrefersReducedMotion(): boolean {
+  return useMediaQuery("(prefers-reduced-motion: reduce)");
+}
+
+/** 客户端坐标 → SVG viewBox 坐标（与 preserveAspectRatio="xMidYMid meet" 一致）。 */
+function clientToViewBox(svg: SVGSVGElement, clientX: number, clientY: number): { x: number; y: number } {
+  const rect = svg.getBoundingClientRect();
+  const scale = Math.min(rect.width / SVG_W, rect.height / SVG_H) || 1;
+  const offsetX = (rect.width - SVG_W * scale) / 2;
+  const offsetY = (rect.height - SVG_H * scale) / 2;
+  return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
+}
+
+function layoutPositions(
+  nodes: RenderNode[],
+  edges: RenderEdge[],
+  mode: LayoutMode = "auto",
+): Map<string, { x: number; y: number }> {
   const raw = new Map<string, { x: number; y: number }>();
   if (nodes.length === 0) return raw;
-  if (nodes.length > 80) {
+  const useRing = mode === "ring" || (mode === "auto" && nodes.length > 80);
+  if (useRing) {
     let index = 0;
     let ring = 0;
     while (index < nodes.length) {
@@ -474,9 +567,7 @@ export default function CanvasPage() {
   const [state, setState] = useState<CanvasState | null>(null);
   const [revision, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
-  const [selection, setSelection] = useState<
-    { kind: "node"; ref: string } | { kind: "aggregate"; key: string } | null
-  >(null);
+  const [selection, setSelection] = useState<Selection>(null);
   const [lens, setLens] = useState<Lens>("flow");
   const [search, setSearch] = useState("");
   const [zoom, setZoom] = useState(1);
@@ -486,13 +577,25 @@ export default function CanvasPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [flowBusy, setFlowBusy] = useState(false);
   const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceEntry>>({});
+  const [tool, setTool] = useState<CanvasTool>("select");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("auto");
+  const [boxRect, setBoxRect] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [boxKeys, setBoxKeys] = useState<string[]>([]);
+  const [expandedClusters, setExpandedClusters] = useState<string[]>([]);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [pathIndex, setPathIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [undoStack, setUndoStack] = useState<CanvasState[]>([]);
+  const [redoStack, setRedoStack] = useState<CanvasState[]>([]);
 
   const isMobile = useIsMobile();
+  const reducedMotion = usePrefersReducedMotion();
   const loadedCanvasRef = useRef<string | null>(null);
   const badRefDialogRef = useRef("");
   const budgetDialogRef = useRef("");
   const inspectorRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
+  const boxRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 
   const parsed = useMemo<ParsedCanvas>(
     () => parseCanvasRefs(state?.node_refs ?? [], state?.edge_refs ?? []),
@@ -554,7 +657,32 @@ export default function CanvasPage() {
     [parsed.edges, visibleNodeRefs],
   );
 
-  const { renderNodes, renderEdges } = useMemo(() => {
+  const parsedNodeMap = useMemo(() => new Map(parsed.nodes.map((node) => [node.ref, node])), [parsed.nodes]);
+  const expandedSet = useMemo(() => new Set(expandedClusters), [expandedClusters]);
+  const clusterLabelOf = useCallback(
+    (kind: NodeKind, chain?: string) =>
+      kind === "address" || kind === "tx"
+        ? `${NODE_KIND_LABEL[kind]} · ${chain ?? "unknown"}`
+        : `${NODE_KIND_LABEL[kind]}节点`,
+    [],
+  );
+  const groupKeyOf = useCallback(
+    (node: ParsedNode) => (renderMode === "limit" ? node.kind : `${node.kind}:${node.chain ?? "unknown"}`),
+    [renderMode],
+  );
+  /** 单个节点 ref 在"当前渲染模式 + 已展开聚类"下对应的渲染 key。 */
+  const renderKeyOfRef = useCallback(
+    (ref: string): string => {
+      if (renderMode === "normal") return ref;
+      const node = parsedNodeMap.get(ref);
+      if (!node) return ref;
+      const groupKey = groupKeyOf(node);
+      return expandedSet.has(groupKey) ? ref : groupKey;
+    },
+    [expandedSet, groupKeyOf, parsedNodeMap, renderMode],
+  );
+
+  const { renderNodes, renderEdges, clusters } = useMemo(() => {
     if (renderMode === "normal") {
       const nodes: RenderNode[] = visibleNodes.map((node) => ({
         key: node.ref,
@@ -574,47 +702,98 @@ export default function CanvasPage() {
         asset: edge.asset,
         repeated: 1,
       }));
-      return { renderNodes: nodes, renderEdges: edges };
+      return { renderNodes: nodes, renderEdges: edges, clusters: [] as ClusterInfo[] };
     }
-    const nodeMap = new Map(visibleNodes.map((node) => [node.ref, node]));
-    const groupOf = (node: ParsedNode) =>
-      renderMode === "limit" ? node.kind : `${node.kind}:${node.chain ?? "unknown"}`;
-    const groups = new Map<string, { kind: NodeKind; chain?: string; count: number }>();
+    const groups = new Map<string, { kind: NodeKind; chain?: string; count: number; members: ParsedNode[] }>();
     for (const node of visibleNodes) {
-      const key = groupOf(node);
+      const key = groupKeyOf(node);
       const group = groups.get(key);
-      if (group) group.count += 1;
-      else groups.set(key, { kind: node.kind, chain: node.chain, count: 1 });
+      if (group) {
+        group.count += 1;
+        group.members.push(node);
+      } else {
+        groups.set(key, { kind: node.kind, chain: node.chain, count: 1, members: [node] });
+      }
     }
-    const nodes: RenderNode[] = [...groups.entries()].map(([key, group]) => ({
+    const clusterList: ClusterInfo[] = [...groups.entries()].map(([key, group]) => ({
       key,
       kind: group.kind,
       chain: group.chain,
-      label:
-        group.kind === "address" || group.kind === "tx"
-          ? `${NODE_KIND_LABEL[group.kind]} · ${group.chain ?? "unknown"}`
-          : `${NODE_KIND_LABEL[group.kind]}节点`,
-      sublabel: `${group.count} 个节点`,
       count: group.count,
-      aggregate: true,
+      label: clusterLabelOf(group.kind, group.chain),
     }));
+    /* 聚类展开：展开的组渲染真实成员节点（带一次 spring 进入），未展开的组保持聚合气泡。 */
+    const nodes: RenderNode[] = [];
+    for (const [key, group] of groups) {
+      if (expandedSet.has(key)) {
+        for (const member of group.members) {
+          nodes.push({
+            key: member.ref,
+            ref: member.ref,
+            kind: member.kind,
+            chain: member.chain,
+            label: nodeRefLabel(member),
+            sublabel:
+              lens === "time"
+                ? `${shortDate(nodeMeta[member.ref]?.first_seen)} → ${shortDate(nodeMeta[member.ref]?.last_seen)}`
+                : undefined,
+            count: 1,
+            aggregate: false,
+            entering: true,
+            clusterKey: key,
+          });
+        }
+        continue;
+      }
+      nodes.push({
+        key,
+        kind: group.kind,
+        chain: group.chain,
+        label: clusterLabelOf(group.kind, group.chain),
+        sublabel: `${group.count} 个节点`,
+        count: group.count,
+        aggregate: true,
+        clusterKey: key,
+      });
+    }
     const pairs = new Map<string, RenderEdge>();
     for (const edge of visibleEdges) {
-      const from = nodeMap.get(edge.fromRef);
-      const to = nodeMap.get(edge.toRef);
-      if (!from || !to) continue;
-      const fromKey = groupOf(from);
-      const toKey = groupOf(to);
+      const fromKey = renderKeyOfRef(edge.fromRef);
+      const toKey = renderKeyOfRef(edge.toRef);
       if (fromKey === toKey) continue;
       const key = `${fromKey}->${toKey}`;
+      const real = fromKey === edge.fromRef && toKey === edge.toRef;
       const existing = pairs.get(key);
-      if (existing) existing.repeated += 1;
-      else pairs.set(key, { key, fromKey, toKey, repeated: 1 });
+      if (existing) {
+        existing.repeated += 1;
+        continue;
+      }
+      pairs.set(key, {
+        key,
+        fromKey,
+        toKey,
+        amountRaw: real ? edge.amountRaw : undefined,
+        asset: real ? edge.asset : undefined,
+        repeated: 1,
+      });
     }
-    return { renderNodes: nodes, renderEdges: [...pairs.values()] };
-  }, [renderMode, visibleNodes, visibleEdges, lens, nodeMeta]);
+    return { renderNodes: nodes, renderEdges: [...pairs.values()], clusters: clusterList };
+  }, [
+    clusterLabelOf,
+    expandedSet,
+    groupKeyOf,
+    lens,
+    nodeMeta,
+    renderKeyOfRef,
+    renderMode,
+    visibleEdges,
+    visibleNodes,
+  ]);
 
-  const positions = useMemo(() => layoutPositions(renderNodes, renderEdges), [renderNodes, renderEdges]);
+  const positions = useMemo(
+    () => layoutPositions(renderNodes, renderEdges, layoutMode),
+    [layoutMode, renderEdges, renderNodes],
+  );
 
   const stateBytes = useMemo(() => {
     if (!state) return 0;
@@ -625,11 +804,50 @@ export default function CanvasPage() {
     }
   }, [state]);
 
+  /* 复杂标签的渲染预算（蓝图 §12.13）：超出预算后文字只跟随焦点对象出现。 */
+  const showNodeLabels = renderNodes.length <= NODE_LABEL_BUDGET || zoom >= 1.6;
+  const showEdgeLabels = renderEdges.length <= EDGE_LABEL_BUDGET && zoom >= 0.8;
+  const boxKeySet = useMemo(() => new Set(boxKeys), [boxKeys]);
+
+  /** 选中节点的全部一跳边（真实 edge_refs）。顺序优先用服务端 node_meta 的首见时间，缺失时按 edge_refs 顺序。 */
+  const pathEdges = useMemo(() => {
+    const ref = selection?.kind === "node" ? selection.ref : null;
+    if (!ref) return [] as ParsedEdge[];
+    const indexed = parsed.edges
+      .map((edge, index) => ({ edge, index }))
+      .filter((entry) => entry.edge.fromRef === ref || entry.edge.toRef === ref);
+    return indexed
+      .sort((a, b) => {
+        const firstA = nodeMeta[a.edge.fromRef]?.first_seen;
+        const firstB = nodeMeta[b.edge.fromRef]?.first_seen;
+        if (firstA && firstB && firstA !== firstB) return firstA.localeCompare(firstB);
+        return a.index - b.index;
+      })
+      .map((entry) => entry.edge);
+  }, [nodeMeta, parsed.edges, selection]);
+
+  const focusEdge = pathEdges[pathIndex] ?? null;
+  const focusRenderKey = focusEdge
+    ? renderMode === "normal"
+      ? focusEdge.ref
+      : `${renderKeyOfRef(focusEdge.fromRef)}->${renderKeyOfRef(focusEdge.toRef)}`
+    : null;
+  const focusNodeKeys = useMemo(() => {
+    if (!focusEdge) return new Set<string>();
+    return new Set([renderKeyOfRef(focusEdge.fromRef), renderKeyOfRef(focusEdge.toRef)]);
+  }, [focusEdge, renderKeyOfRef]);
+
   const applyServerRecord = useCallback((record: Partial<CanvasRecord>) => {
     setState(normalizeCanvasState(record));
     setRevision(typeof record.revision === "number" ? record.revision : Number(record.revision ?? 0));
     setDirty(false);
     setSelection(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setExpandedClusters([]);
+    setBoxKeys([]);
+    setPathIndex(0);
+    setPlaying(false);
   }, []);
 
   useEffect(() => {
@@ -644,6 +862,14 @@ export default function CanvasPage() {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setSvgOpen(false);
+    setTool("select");
+    setBoxKeys([]);
+    setBoxRect(null);
+    setExpandedClusters([]);
+    setPathIndex(0);
+    setPlaying(false);
+    setUndoStack([]);
+    setRedoStack([]);
   }, [canvasId]);
 
   useEffect(() => {
@@ -686,16 +912,16 @@ export default function CanvasPage() {
     budgetDialogRef.current = key;
     dialog.notify(
       "warning",
-      renderMode === "limit" ? "节点数超过 2000：已停止扩展" : "节点数超过 1000：已启用简化渲染",
+      renderMode === "limit" ? "节点数超过 2000：已停止扩展" : "节点数超过 1000：已启用聚类渲染",
       renderMode === "limit"
-        ? "已超过渲染预算上限，仅展示聚合视图，新增节点操作已停用。"
-        : "已超过完整渲染预算，当前按类型与链聚合展示；可继续编辑并保存。",
+        ? "已超过渲染预算上限，仅展示聚类视图，新增节点操作已停用。"
+        : "已超过完整渲染预算，当前按类型与链聚类展示；可继续编辑并保存。",
       [
         { label: "节点总数", value: String(totalNodes) },
         { label: "边总数", value: String(parsed.edges.length) },
-        { label: "渲染模式", value: renderMode === "limit" ? "聚合视图（停止扩展）" : "聚合视图（简化渲染）" },
+        { label: "渲染模式", value: renderMode === "limit" ? "聚类视图（停止扩展）" : "聚类视图（简化渲染）" },
         { label: "渲染节点数", value: String(renderNodes.length) },
-        { label: "渲染预算", value: `≤${NODE_LIMIT_SOFT} 完整 / ≤${NODE_LIMIT_HARD} 简化` },
+        { label: "渲染预算", value: `≤${NODE_LIMIT_SOFT} 完整 / ≤${NODE_LIMIT_HARD} 聚类` },
       ],
     );
   }, [canvasId, dialog, parsed.edges.length, renderMode, renderNodes.length, state, totalNodes]);
@@ -703,12 +929,30 @@ export default function CanvasPage() {
   useEffect(() => {
     if (!state) return;
     if (selection?.kind === "node" && parsed.nodes.some((node) => node.ref === selection.ref)) return;
+    if (selection?.kind === "edge" && parsed.edges.some((edge) => edge.ref === selection.ref)) return;
     if (selection?.kind === "aggregate" && renderNodes.some((node) => node.key === selection.key)) return;
     if (selection === null || selection.kind === "node") {
       const first = parsed.nodes[0];
       setSelection(first ? { kind: "node", ref: first.ref } : null);
     }
-  }, [parsed.nodes, renderNodes, selection, state]);
+  }, [parsed.edges, parsed.nodes, renderNodes, selection, state]);
+
+  useEffect(() => {
+    setPathIndex(0);
+    setPlaying(false);
+  }, [selection]);
+
+  useEffect(() => {
+    if (!playing || reducedMotion) return;
+    const timer = window.setInterval(() => {
+      setPathIndex((index) => (index + 1 >= pathEdges.length ? index : index + 1));
+    }, PATH_STEP_MS);
+    return () => window.clearInterval(timer);
+  }, [pathEdges.length, playing, reducedMotion]);
+
+  useEffect(() => {
+    if (playing && pathEdges.length > 0 && pathIndex >= pathEdges.length - 1) setPlaying(false);
+  }, [pathEdges.length, pathIndex, playing]);
 
   useEffect(() => {
     if (!evidenceKey) {
@@ -756,33 +1000,68 @@ export default function CanvasPage() {
       : null;
   const canvasName = state?.name ?? canvasQuery.data?.name ?? "画布";
 
-  const inspectorItems: EvidenceItem[] = useMemo(() => {
-    const items: EvidenceItem[] = [];
+  const inspectorItems: KeyValueEntry[] = useMemo(() => {
+    const items: KeyValueEntry[] = [];
     if (selection?.kind === "aggregate") {
       const node = renderNodes.find((entry) => entry.key === selection.key);
-      items.push({ label: "节点", value: <span className="mono">{selection.key}</span> });
-      items.push({ label: "类型", value: "聚合组" });
+      items.push({ label: "对象", value: <HashValue value={selection.key} label="聚类标识" wrap />, wide: true });
+      items.push({ label: "类型", value: "聚类（聚合组）" });
       items.push({ label: "节点数", value: String(node?.count ?? "—") });
-      items.push({ label: "ID", value: node?.chain ?? "—" });
-      items.push({ label: "所在案件", value: caseId ? <span className="mono">{shortValue(caseId, 8, 6)}</span> : "—" });
-      items.push({ label: "数据来源", value: "本地聚合渲染" });
+      items.push({ label: "链", value: node?.chain ?? "—" });
+      items.push({ label: "展开状态", value: node && expandedSet.has(node.key) ? "已展开" : "未展开" });
+      items.push({
+        label: "所在案件",
+        value: caseId ? <HashValue value={caseId} label="案件 ID" /> : "—",
+      });
+      items.push({ label: "数据来源", value: "Canvas node_refs（本地聚类）" });
+      return items;
+    }
+    if (selection?.kind === "edge") {
+      const edge = parsed.edges.find((entry) => entry.ref === selection.ref) ?? null;
+      const rendered = renderEdges.find((entry) => entry.key === selection.ref) ?? null;
+      items.push({ label: "边引用", value: <HashValue value={selection.ref} label="边引用" wrap />, wide: true });
+      items.push({
+        label: "方向",
+        value: edge ? (
+          <span className="mono" title={`${edge.fromRef} → ${edge.toRef}`}>
+            {shortValue(edge.fromRef, 12, 6)} → {shortValue(edge.toRef, 12, 6)}
+          </span>
+        ) : (
+          "—"
+        ),
+      });
+      items.push({
+        label: "来源节点",
+        value: edge ? <HashValue value={edge.fromRef} label="来源节点" /> : "—",
+      });
+      items.push({
+        label: "目标节点",
+        value: edge ? <HashValue value={edge.toRef} label="目标节点" /> : "—",
+      });
+      /* 金额以原始字符串呈现，绝不经 JS number 转换（蓝图 §2.5）。 */
+      items.push({ label: "金额（原始值）", value: edge?.amountRaw ?? "—" });
+      items.push({ label: "资产", value: edge?.asset ?? "—" });
+      items.push({
+        label: "同一渲染边",
+        value: rendered ? (rendered.repeated > 1 ? `${rendered.repeated} 条边聚合` : "单条边") : "—",
+      });
+      items.push({
+        label: "所在案件",
+        value: caseId ? <HashValue value={caseId} label="案件 ID" /> : "—",
+      });
+      items.push({ label: "数据来源", value: "Canvas edge_refs" });
       return items;
     }
     const ref = selection?.kind === "node" ? selection.ref : null;
     const node = ref ? parsed.nodes.find((entry) => entry.ref === ref) ?? null : null;
     items.push({
       label: "节点",
-      value: ref ? (
-        <span className="mono" title={ref}>
-          {shortValue(ref, 18, 10)}
-        </span>
-      ) : (
-        "—"
-      ),
+      value: ref ? <HashValue value={ref} label="节点引用" wrap /> : "—",
+      wide: true,
     });
     items.push({
       label: "ID",
-      value: node?.id ? <span className="mono">{shortValue(node.id, 14, 8)}</span> : "—",
+      value: node?.id ? <HashValue value={node.id} label="节点 ID" head={14} tail={8} /> : "—",
     });
     items.push({
       label: "类型",
@@ -791,7 +1070,7 @@ export default function CanvasPage() {
     items.push({ label: "链", value: node?.chain ?? "—" });
     items.push({
       label: "所在案件",
-      value: caseId ? <span className="mono">{shortValue(caseId, 10, 6)}</span> : "—",
+      value: caseId ? <HashValue value={caseId} label="案件 ID" head={10} tail={6} /> : "—",
     });
     items.push({ label: "数据来源", value: ref ? nodeSources[ref] ?? "Canvas 引用（来源未标注）" : "—" });
     const meta = ref ? nodeMeta[ref] : undefined;
@@ -803,14 +1082,17 @@ export default function CanvasPage() {
     }
     if (state) items.push({ label: "本地状态", value: formatBytes(stateBytes) });
     return items;
-  }, [caseId, nodeMeta, nodeSources, parsed.nodes, renderNodes, selection, state, stateBytes]);
+  }, [caseId, expandedSet, nodeMeta, nodeSources, parsed.edges, parsed.nodes, renderEdges, renderNodes, selection, state, stateBytes]);
 
-  const evidenceItems: EvidenceItem[] = useMemo(() => {
-    const items: EvidenceItem[] = [];
+  const evidenceItems: KeyValueEntry[] = useMemo(() => {
+    const items: KeyValueEntry[] = [];
     evidenceIds.forEach((id, index) => {
       const entry = evidenceMap[id];
       const prefix = `证据 ${index + 1}（${shortValue(id, 6, 4)}）`;
-      items.push({ label: `${prefix} · Evidence`, value: <span className="mono">{shortValue(id, 8, 4)}</span> });
+      items.push({
+        label: `${prefix} · Evidence`,
+        value: <HashValue value={id} label={`证据 ${index + 1} ID`} head={8} tail={4} />,
+      });
       if (!entry || entry.phase === "loading") {
         items.push({ label: `${prefix} · 状态`, value: "读取中" });
         return;
@@ -829,7 +1111,11 @@ export default function CanvasPage() {
       items.push({ label: `${prefix} · 性质`, value: row.nature ?? "—" });
       items.push({
         label: `${prefix} · content_hash`,
-        value: <span className="mono">{shortValue(row.content_hash ?? "", 12, 8)}</span>,
+        value: row.content_hash ? (
+          <HashValue value={row.content_hash} label="Evidence content_hash" head={12} tail={8} />
+        ) : (
+          "—"
+        ),
       });
       items.push({ label: `${prefix} · 版本`, value: `v${row.version ?? "—"}` });
     });
@@ -848,6 +1134,31 @@ export default function CanvasPage() {
     camera: source.camera,
     view_state: source.view_state,
   });
+
+  const pushUndo = useCallback((snapshot: CanvasState) => {
+    setUndoStack((stack) => [...stack, snapshot].slice(-20));
+    setRedoStack([]);
+    setDirty(true);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!state || undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [...stack, state]);
+    setState(previous);
+    /* 撤销回最后一个服务端版本时不再标记为"有未保存修改"。 */
+    setDirty(undoStack.length > 1);
+  }, [state, undoStack]);
+
+  const redo = useCallback(() => {
+    if (!state || redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((stack) => stack.slice(0, -1));
+    setUndoStack((stack) => [...stack, state]);
+    setState(next);
+    setDirty(true);
+  }, [redoStack, state]);
 
   const fail = useCallback(
     (title: string, message: string, status?: number) => {
@@ -925,6 +1236,8 @@ export default function CanvasPage() {
       const nextRevision = typeof response.data?.revision === "number" ? response.data.revision : revision + 1;
       setRevision(nextRevision);
       setDirty(false);
+      setUndoStack([]);
+      setRedoStack([]);
       dialog.notify("success", "画布已保存", null, [
         { label: "revision", value: `r${nextRevision}` },
         { label: "节点 refs", value: String(state.node_refs.length) },
@@ -1182,6 +1495,7 @@ export default function CanvasPage() {
         ]);
         return;
       }
+      pushUndo(state);
       setState((previous) => {
         if (!previous) return previous;
         const previousMeta = isRecord(previous.view_state.node_meta)
@@ -1234,10 +1548,30 @@ export default function CanvasPage() {
   const onCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (tool === "box") {
+      const point = clientToViewBox(event.currentTarget, event.clientX, event.clientY);
+      const origin = { x: (point.x - pan.x) / zoom, y: (point.y - pan.y) / zoom };
+      const rect = { x0: origin.x, y0: origin.y, x1: origin.x, y1: origin.y };
+      boxRef.current = rect;
+      setBoxRect(rect);
+      return;
+    }
     dragRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y, moved: false };
   };
 
   const onCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (boxRef.current) {
+      const point = clientToViewBox(event.currentTarget, event.clientX, event.clientY);
+      const rect = {
+        x0: boxRef.current.x0,
+        y0: boxRef.current.y0,
+        x1: (point.x - pan.x) / zoom,
+        y1: (point.y - pan.y) / zoom,
+      };
+      boxRef.current = rect;
+      setBoxRect(rect);
+      return;
+    }
     const drag = dragRef.current;
     if (!drag) return;
     const dx = event.clientX - drag.x;
@@ -1247,12 +1581,72 @@ export default function CanvasPage() {
   };
 
   const onCanvasPointerUp = () => {
+    const rect = boxRef.current;
+    boxRef.current = null;
+    setBoxRect(null);
     dragRef.current = null;
+    if (!rect) return;
+    const minX = Math.min(rect.x0, rect.x1);
+    const maxX = Math.max(rect.x0, rect.x1);
+    const minY = Math.min(rect.y0, rect.y1);
+    const maxY = Math.max(rect.y0, rect.y1);
+    const inside = renderNodes
+      .filter((node) => {
+        const point = positions.get(node.key);
+        return point ? point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY : false;
+      })
+      .sort((a, b) => {
+        const pointA = positions.get(a.key);
+        const pointB = positions.get(b.key);
+        if (!pointA || !pointB) return 0;
+        return pointA.x - pointB.x || pointA.y - pointB.y;
+      });
+    setBoxKeys(inside.map((node) => node.key));
+    const first = inside[0];
+    if (first) setSelection(first.ref ? { kind: "node", ref: first.ref } : { kind: "aggregate", key: first.key });
+  };
+
+  const toggleCluster = (key: string, next: boolean) => {
+    if (!next) {
+      setExpandedClusters((list) => list.filter((item) => item !== key));
+      return;
+    }
+    const cluster = clusters.find((item) => item.key === key);
+    if (!cluster) return;
+    if (cluster.count > CLUSTER_EXPAND_LIMIT) {
+      dialog.notify("warning", "聚类未展开", "单次展开上限为 200 个节点；请先用节点搜索或 Lens 缩小范围。", [
+        { label: "聚类", value: key },
+        { label: "节点数", value: String(cluster.count) },
+        { label: "展开上限", value: String(CLUSTER_EXPAND_LIMIT) },
+      ]);
+      return;
+    }
+    if (renderNodes.length - 1 + cluster.count > NODE_LIMIT_HARD) {
+      dialog.notify("warning", "聚类未展开", "展开后的渲染节点数会超过 2000 上限。", [
+        { label: "当前渲染节点", value: String(renderNodes.length) },
+        { label: "展开后渲染节点", value: String(renderNodes.length - 1 + cluster.count) },
+        { label: "上限", value: String(NODE_LIMIT_HARD) },
+      ]);
+      return;
+    }
+    setExpandedClusters((list) => (list.includes(key) ? list : [...list, key]));
+    setSelection({ kind: "aggregate", key });
   };
 
   const resetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+  };
+
+  const togglePlay = () => {
+    if (reducedMotion) return;
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    if (pathEdges.length === 0) return;
+    if (pathIndex >= pathEdges.length - 1) setPathIndex(0);
+    setPlaying(true);
   };
 
   const edgeColor = (edge: RenderEdge): string => {
@@ -1266,14 +1660,625 @@ export default function CanvasPage() {
     return "#175cd3";
   };
 
+  /** 边上显示的短标签（过长时省略），方向/资产/金额的完整值放在 <title> 与 Inspector。 */
   const edgeLabel = (edge: RenderEdge): string => {
     if (edge.repeated > 1) return `${edge.repeated} 条边`;
     if (edge.amountRaw) return `${formatRawAmount(edge.amountRaw)}${edge.asset ? ` ${edge.asset}` : ""}`;
     return edge.asset ?? "";
   };
 
+  const edgeFullText = (edge: RenderEdge): string => {
+    if (edge.repeated > 1) return `${edge.fromKey} → ${edge.toKey} · 聚合 ${edge.repeated} 条边`;
+    const amount = edge.amountRaw ? `金额 ${edge.amountRaw}` : "金额未标注";
+    const asset = edge.asset ? `资产 ${edge.asset}` : "资产未标注";
+    return `${edge.fromKey} → ${edge.toKey} · ${amount} · ${asset}`;
+  };
+
   const mutedNodes = lens === "evidence";
   const canvasBusy = saving || actionBusy || flowBusy || actionBusyHook;
+  const playingEdgeKey = playing && !reducedMotion ? focusRenderKey : null;
+
+  const kindTone = (kind: NodeKind): "info" | "neutral" | "warn" =>
+    kind === "address" ? "info" : kind === "evidence" ? "warn" : "neutral";
+
+  const edgeFullTextOf = (fromKey: string, toKey: string, amountRaw?: string, asset?: string): string =>
+    `${fromKey} → ${toKey} · ${amountRaw ? `金额 ${amountRaw}` : "金额未标注"} · ${
+      asset ? `资产 ${asset}` : "资产未标注"
+    }`;
+
+  /** 边在画布上的点击：普通渲染下选中边本身，聚类渲染下聚焦来源聚类（不伪造对象）。 */
+  const selectEdgeByKey = (edge: RenderEdge) => {
+    if (tool === "pan") return;
+    if (renderMode === "normal") setSelection({ kind: "edge", ref: edge.key });
+    else setSelection({ kind: "aggregate", key: edge.fromKey });
+  };
+
+  const objectListLimit = 200;
+
+  const leftColumn = (
+    <div className="s5-canvas-side s5-canvas-left">
+      {panelOpen ? (
+        <>
+          <PageSection
+            title="Lens"
+            actions={
+              <IconButton
+                label="收起对象面板"
+                icon={<PanelLeftClose size={16} />}
+                onClick={() => setPanelOpen(false)}
+                aria-expanded={true}
+              />
+            }
+          >
+            <SegmentedControl
+              items={LENSES}
+              value={lens}
+              onChange={(key) => setLens(key as Lens)}
+              ariaLabel="视图维度"
+            />
+          </PageSection>
+
+          <PageSection
+            title="对象与图层"
+            count={`${Math.min(visibleNodes.length, objectListLimit)} / ${visibleNodes.length} 个节点`}
+            actions={
+              selectedAddressNode ? (
+                <Button
+                  size="sm"
+                  disabled={flowBusy || renderMode === "limit"}
+                  onClick={() => void addAddressFlow(selectedAddressNode.chain, selectedAddressNode.id)}
+                >
+                  加入选中地址资金流
+                </Button>
+              ) : null
+            }
+          >
+            <Card flush>
+              <div className="toolbar" style={{ padding: "var(--sp-2) var(--sp-3)" }}>
+                <span className="mono" style={{ fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+                  节点 {totalNodes} · 边 {parsed.edges.length}
+                </span>
+                {renderMode === "normal" ? (
+                  <StatusBadge tone="ok">完整渲染</StatusBadge>
+                ) : (
+                  <StatusBadge tone="warn">{renderMode === "limit" ? "聚类（停止扩展）" : "聚类渲染"}</StatusBadge>
+                )}
+              </div>
+              <div className="s5-node-list">
+                {renderMode === "normal"
+                  ? visibleNodes.slice(0, objectListLimit).map((node) => (
+                      <button
+                        key={node.ref}
+                        type="button"
+                        className="s5-node-list__item"
+                        onClick={() => focusNode(node.ref)}
+                      >
+                        <span className="s5-object-head">
+                          <strong>{nodeRefLabel(node)}</strong>
+                          <StatusBadge tone={kindTone(node.kind)}>{NODE_KIND_LABEL[node.kind]}</StatusBadge>
+                          {node.chain ? <span className="mono">{node.chain}</span> : null}
+                        </span>
+                        <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+                          {node.ref}
+                        </span>
+                      </button>
+                    ))
+                  : clusters.slice(0, objectListLimit).map((cluster) => {
+                      const expanded = expandedSet.has(cluster.key);
+                      const members = expanded
+                        ? renderNodes.filter((node) => node.clusterKey === cluster.key && Boolean(node.ref))
+                        : [];
+                      return (
+                        <div key={cluster.key}>
+                          <button
+                            type="button"
+                            className="s5-node-list__item"
+                            aria-expanded={expanded}
+                            title={`${expanded ? "收起" : "展开"}聚类 ${cluster.key}（${cluster.count} 个节点）`}
+                            onClick={() => toggleCluster(cluster.key, !expanded)}
+                          >
+                            <span className="s5-object-head">
+                              <strong>{cluster.label}</strong>
+                              <StatusBadge tone={kindTone(cluster.kind)}>{NODE_KIND_LABEL[cluster.kind]}</StatusBadge>
+                              <span className="mono">{cluster.count} 个节点</span>
+                            </span>
+                            <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+                              {expanded ? "已展开 · 点击收起" : "点击展开成员"}
+                            </span>
+                          </button>
+                          {members.map((member) => (
+                            <button
+                              key={member.key}
+                              type="button"
+                              className="s5-node-list__item"
+                              style={{ paddingLeft: "var(--sp-6)" }}
+                              onClick={() => focusNode(member.key)}
+                            >
+                              <span className="s5-object-head">
+                                <strong>{member.label}</strong>
+                              </span>
+                              <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+                                {member.key}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                {visibleNodes.length === 0 ? <EmptyState title="当前筛选没有匹配的对象" /> : null}
+              </div>
+            </Card>
+          </PageSection>
+
+          <PageSection title="边" count={`${renderEdges.length} 条`}>
+            <Card flush>
+              <div className="s5-node-list">
+                {renderEdges.slice(0, objectListLimit).map((edge) => (
+                  <button
+                    key={edge.key}
+                    type="button"
+                    className="s5-node-list__item"
+                    title={edgeFullText(edge)}
+                    onClick={() => selectEdgeByKey(edge)}
+                  >
+                    <span className="s5-object-head">
+                      <strong>
+                        {shortValue(edge.fromKey, 10, 6)} → {shortValue(edge.toKey, 10, 6)}
+                      </strong>
+                      {edge.repeated > 1 ? <StatusBadge tone="neutral">{edge.repeated} 条边</StatusBadge> : null}
+                    </span>
+                    <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+                      {edgeLabel(edge) || "金额与资产未标注"}
+                    </span>
+                  </button>
+                ))}
+                {renderEdges.length === 0 ? <EmptyState title="当前没有可显示的边" /> : null}
+              </div>
+            </Card>
+          </PageSection>
+
+          <PageSection title="Evidence" count={`${evidenceIds.length} 个引用`}>
+            <Card flush>
+              <div className="s5-node-list">
+                {evidenceIds.map((id) => {
+                  const entry = evidenceMap[id];
+                  return (
+                    <button
+                      key={`evidence-${id}`}
+                      type="button"
+                      className="s5-node-list__item"
+                      onClick={() => focusNode(`evidence:${id}`)}
+                    >
+                      <span className="s5-object-head">
+                        <strong>证据 {shortValue(id, 8, 4)}</strong>
+                        {entry?.phase === "ok" ? (
+                          <StatusBadge tone={statusToneFor(entry.data.status ?? "")}>{entry.data.status ?? "—"}</StatusBadge>
+                        ) : (
+                          <StatusBadge tone="neutral">{entry?.phase === "unavailable" ? "不可用" : "读取中"}</StatusBadge>
+                        )}
+                      </span>
+                      {entry?.phase === "ok" ? <span>{entry.data.title ?? "—"}</span> : null}
+                    </button>
+                  );
+                })}
+                {evidenceIds.length === 0 ? <EmptyState title="画布还没有 Evidence 引用" /> : null}
+              </div>
+            </Card>
+          </PageSection>
+        </>
+      ) : (
+        <Card flush>
+          <div className="toolbar" style={{ padding: "var(--sp-2) var(--sp-3)" }}>
+            <IconButton
+              label="展开对象面板"
+              icon={<PanelLeftOpen size={16} />}
+              onClick={() => setPanelOpen(true)}
+              aria-expanded={false}
+            />
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+
+  const mainColumn = (
+    <div className="s5-canvas-side">
+      <PageSection
+        title="图谱"
+        count={`渲染 ${renderNodes.length} / ${totalNodes} 个节点 · ${renderEdges.length} / ${parsed.edges.length} 条边`}
+      >
+        <Card flush>
+          <div className="toolbar cs-toolbar-scroll" style={{ padding: "var(--sp-3) var(--sp-4)" }}>
+            <SegmentedControl
+              items={TOOL_ITEMS}
+              value={tool}
+              onChange={(key) => setTool(key as CanvasTool)}
+              ariaLabel="画布工具"
+            />
+            <Button
+              size="sm"
+              onClick={() => void addAddressFlow()}
+              disabled={!state || flowBusy || renderMode === "limit"}
+            >
+              加入地址资金流
+            </Button>
+            <SegmentedControl
+              items={LAYOUT_ITEMS}
+              value={layoutMode}
+              onChange={(key) => setLayoutMode(key as LayoutMode)}
+              ariaLabel="布局方式"
+            />
+            <IconButton label="适配视图" icon={<Maximize2 size={15} />} onClick={resetView} />
+            <IconButton
+              label="缩小"
+              icon={<ZoomOut size={15} />}
+              onClick={() => setZoom((value) => Math.max(0.3, value / 1.25))}
+            />
+            <span className="mono" style={{ fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <IconButton
+              label="放大"
+              icon={<ZoomIn size={15} />}
+              onClick={() => setZoom((value) => Math.min(3, value * 1.25))}
+            />
+            <IconButton
+              label="撤销"
+              icon={<Undo2 size={15} />}
+              onClick={undo}
+              disabled={undoStack.length === 0 || !state}
+            />
+            <IconButton
+              label="重做"
+              icon={<Redo2 size={15} />}
+              onClick={redo}
+              disabled={redoStack.length === 0 || !state}
+            />
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              label="搜索节点"
+              placeholder="搜索节点 ref / 地址"
+            />
+            {isMobile ? (
+              <Button size="sm" onClick={() => setSvgOpen((value) => !value)}>
+                {svgOpen ? "收起图谱" : "展开图谱"}
+              </Button>
+            ) : null}
+          </div>
+
+          {renderNodes.length === 0 ? (
+            <EmptyState
+              title={search || lens === "evidence" ? "当前筛选没有可渲染节点" : "画布还没有可渲染节点"}
+              action={
+                <Button
+                  size="sm"
+                  onClick={() => void addAddressFlow()}
+                  disabled={!state || flowBusy || renderMode === "limit"}
+                >
+                  加入地址资金流
+                </Button>
+              }
+            />
+          ) : !isMobile || svgOpen ? (
+            <div style={{ padding: "0 var(--sp-2) var(--sp-2)" }}>
+              <svg
+                className="s5-canvas-svg"
+                viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+                preserveAspectRatio="xMidYMid meet"
+                role="img"
+                aria-label="Canvas SVG 图谱"
+                onPointerDown={onCanvasPointerDown}
+                onPointerMove={onCanvasPointerMove}
+                onPointerUp={onCanvasPointerUp}
+                onPointerCancel={onCanvasPointerUp}
+              >
+                <defs>
+                  <marker id="canvas-arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085" />
+                  </marker>
+                </defs>
+                <rect x="0" y="0" width={SVG_W} height={SVG_H} fill="transparent" />
+                <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
+                  {renderEdges.map((edge) => {
+                    const from = positions.get(edge.fromKey);
+                    const to = positions.get(edge.toKey);
+                    if (!from || !to) return null;
+                    const label = edgeLabel(edge);
+                    const focused = edge.key === focusRenderKey;
+                    const animate = edge.key === playingEdgeKey;
+                    const labelVisible = showEdgeLabels || focused;
+                    return (
+                      <g key={edge.key}>
+                        <title>{edgeFullText(edge)}</title>
+                        <line
+                          className={focused ? "s5-canvas-edge s5-canvas-edge--focus" : "s5-canvas-edge"}
+                          x1={from.x}
+                          y1={from.y}
+                          x2={to.x}
+                          y2={to.y}
+                          stroke={edgeColor(edge)}
+                          strokeWidth={edge.repeated > 1 ? Math.min(5, 1.5 + edge.repeated / 4) : 1.6}
+                          strokeOpacity={0.82}
+                          strokeDasharray={lens === "evidence" ? "7 5" : undefined}
+                          markerEnd="url(#canvas-arrow)"
+                        />
+                        {animate ? (
+                          <line
+                            className="s5-canvas-flow-dash"
+                            x1={from.x}
+                            y1={from.y}
+                            x2={to.x}
+                            y2={to.y}
+                            stroke="var(--c-cobalt, #3b4fe4)"
+                            strokeWidth={2.6}
+                            markerEnd="url(#canvas-arrow)"
+                          />
+                        ) : null}
+                        {/* 14px 透明点击区：边可被点选，完整值在 <title> 与 Inspector（蓝图 §12.13）。 */}
+                        <line
+                          x1={from.x}
+                          y1={from.y}
+                          x2={to.x}
+                          y2={to.y}
+                          stroke="transparent"
+                          strokeWidth={14}
+                          pointerEvents="stroke"
+                          style={{ cursor: "pointer" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectEdgeByKey(edge);
+                          }}
+                        />
+                        {labelVisible && label ? (
+                          <text
+                            x={(from.x + to.x) / 2}
+                            y={(from.y + to.y) / 2 - 5}
+                            textAnchor="middle"
+                            fontSize={10}
+                            fill="var(--c-slate)"
+                            style={{ pointerEvents: "none" }}
+                          >
+                            {ellipsize(label, 24)}
+                          </text>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+
+                  {renderNodes.map((node) => {
+                    const position = positions.get(node.key);
+                    if (!position) return null;
+                    const selected =
+                      selection?.kind === "node"
+                        ? selection.ref === node.ref
+                        : selection?.kind === "aggregate" && selection.key === node.key;
+                    const boxed = boxKeySet.has(node.key);
+                    const onPath = focusNodeKeys.has(node.key);
+                    const labelVisible = showNodeLabels || selected || boxed || onPath;
+                    const fill = node.aggregate
+                      ? "var(--c-surface-sunken)"
+                      : node.kind === "address"
+                        ? "var(--c-cobalt-soft)"
+                        : node.kind === "evidence"
+                          ? "var(--c-amber-soft)"
+                          : "var(--c-neutral-soft)";
+                    const stroke = node.aggregate
+                      ? "var(--c-neutral)"
+                      : node.kind === "address"
+                        ? "var(--c-cobalt)"
+                        : node.kind === "evidence"
+                          ? "var(--c-amber-text)"
+                          : "var(--c-neutral)";
+                    const radius = node.aggregate ? Math.min(34, 22 + node.count / 40) : node.kind === "address" ? 22 : 18;
+                    const isRect = node.kind === "tx" && !node.aggregate;
+                    const topOffset = isRect ? 16 : radius;
+                    return (
+                      <g
+                        key={node.key}
+                        className={`s5-canvas-node${selected ? " is-selected" : ""}`}
+                        transform={`translate(${position.x} ${position.y})`}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${NODE_KIND_LABEL[node.kind]}节点 ${node.label}${node.aggregate ? `（聚类 ${node.count} 个）` : ""}`}
+                        data-node-ref={node.ref ?? node.key}
+                        onPointerDown={(event) => {
+                          if (tool === "select") event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (tool === "pan") return;
+                          if (node.ref) setSelection({ kind: "node", ref: node.ref });
+                          else setSelection({ kind: "aggregate", key: node.key });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          if (node.ref) setSelection({ kind: "node", ref: node.ref });
+                          else setSelection({ kind: "aggregate", key: node.key });
+                        }}
+                      >
+                        <title>
+                          {(node.ref ?? node.key) +
+                            (node.aggregate
+                              ? ` · 聚类 ${node.count} 个节点`
+                              : ` · ${NODE_KIND_LABEL[node.kind]}${node.chain ? ` · ${node.chain}` : ""}`)}
+                        </title>
+                        <g
+                          className={node.entering ? "s5-canvas-node--enter" : undefined}
+                          style={mutedNodes && node.kind !== "evidence" ? { opacity: 0.45 } : undefined}
+                        >
+                          {node.kind === "evidence" && !node.aggregate ? (
+                            <polygon points="0,-20 20,0 0,20 -20,0" fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
+                          ) : isRect ? (
+                            <rect x="-26" y="-16" width="52" height="32" rx="7" fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
+                          ) : (
+                            <circle r={radius} fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
+                          )}
+                          {/* 类型图标：形状之外的第二通道（蓝图 §12.13"颜色只是辅助"） */}
+                          {!node.aggregate && node.kind === "address" ? (
+                            <circle cx={0} cy={-8} r={3.2} fill="none" stroke={stroke} strokeWidth={1.5} aria-hidden="true" />
+                          ) : null}
+                          {!node.aggregate && node.kind === "tx" ? (
+                            <path
+                              d="M-8 -8 h12 M2 -11 l3 3 l-3 3"
+                              fill="none"
+                              stroke={stroke}
+                              strokeWidth={1.5}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          {!node.aggregate && node.kind === "evidence" ? (
+                            <path d="M0 -11 l3.4 3.4 l-3.4 3.4 l-3.4 -3.4 z" fill="none" stroke={stroke} strokeWidth={1.5} aria-hidden="true" />
+                          ) : null}
+                          {labelVisible ? (
+                            <text textAnchor="middle" y={6} fontSize={10} fill="var(--c-graphite)">
+                              {node.label}
+                            </text>
+                          ) : null}
+                          {node.sublabel && labelVisible ? (
+                            <text textAnchor="middle" y={isRect ? 30 : 36} fontSize={9} fill="var(--c-slate)">
+                              {ellipsize(node.sublabel, 30)}
+                            </text>
+                          ) : null}
+                          {node.aggregate ? (
+                            <text textAnchor="middle" y={radius + 14} fontSize={10} fill="var(--c-cobalt)" fontWeight={600}>
+                              ×{node.count}
+                            </text>
+                          ) : null}
+                          {labelVisible && !node.aggregate ? (
+                            <text textAnchor="middle" y={-(topOffset + 16)} fontSize={9} fill={stroke}>
+                              {NODE_KIND_LABEL[node.kind]}
+                            </text>
+                          ) : null}
+                        </g>
+                        {selected ? <circle className="s5-canvas-halo" r={radius + 7} /> : null}
+                        {!selected && boxed ? <circle className="s5-canvas-halo" data-tone="box" r={radius + 7} /> : null}
+                        {!selected && !boxed && onPath ? (
+                          <circle className="s5-canvas-halo" data-tone="path" r={radius + 7} />
+                        ) : null}
+                      </g>
+                    );
+                  })}
+
+                  {boxRect ? (
+                    <rect
+                      x={Math.min(boxRect.x0, boxRect.x1)}
+                      y={Math.min(boxRect.y0, boxRect.y1)}
+                      width={Math.abs(boxRect.x1 - boxRect.x0)}
+                      height={Math.abs(boxRect.y1 - boxRect.y0)}
+                      fill="rgba(59,79,228,.08)"
+                      stroke="var(--c-cobalt, #3b4fe4)"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 4"
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                </g>
+              </svg>
+            </div>
+          ) : null}
+        </Card>
+      </PageSection>
+
+      {pathEdges.length > 0 ? (
+        <PageSection
+          title="路径播放"
+          count={`第 ${Math.min(pathIndex + 1, pathEdges.length)} / ${pathEdges.length} 步`}
+          actions={
+            <div className="toolbar" role="group" aria-label="路径播放控制（顺序取自首见时间或 edge_refs）">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setPlaying(false);
+                  setPathIndex((index) => Math.max(0, index - 1));
+                }}
+                disabled={pathIndex === 0}
+              >
+                上一步
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setPlaying(false);
+                  setPathIndex((index) => Math.min(pathEdges.length - 1, index + 1));
+                }}
+                disabled={pathIndex >= pathEdges.length - 1}
+              >
+                下一步
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+                onClick={togglePlay}
+                disabled={reducedMotion}
+                title={
+                  reducedMotion
+                    ? "系统开启了减少动态效果：自动播放已关闭，仍可用上一步/下一步逐步查看"
+                    : "沿选中节点的一跳边自动步进"
+                }
+              >
+                {playing ? "暂停" : "播放"}
+              </Button>
+              <Button
+                size="sm"
+                icon={<Square size={14} aria-hidden="true" />}
+                onClick={() => {
+                  setPlaying(false);
+                  setPathIndex(0);
+                }}
+                disabled={pathIndex === 0 && !playing}
+              >
+                停止
+              </Button>
+            </div>
+          }
+        >
+          <Card flush>
+            <div className="toolbar cs-toolbar-scroll" style={{ padding: "var(--sp-3) var(--sp-4)" }}>
+              {pathEdges.map((edge, index) => (
+                <FilterChip
+                  key={edge.ref}
+                  active={index === pathIndex}
+                  onClick={() => {
+                    setPlaying(false);
+                    setPathIndex(index);
+                  }}
+                >
+                  <span title={edgeFullTextOf(edge.fromRef, edge.toRef, edge.amountRaw, edge.asset)}>
+                    第 {index + 1} 步 · {ellipsize(`${shortValue(edge.fromRef, 10, 6)} → ${shortValue(edge.toRef, 10, 6)}`, 34)}
+                    {edge.amountRaw ? ` · ${formatRawAmount(edge.amountRaw)}${edge.asset ? ` ${edge.asset}` : ""}` : ""}
+                  </span>
+                </FilterChip>
+              ))}
+            </div>
+          </Card>
+        </PageSection>
+      ) : null}
+    </div>
+  );
+
+  const rightColumn = (
+    <div
+      className="s5-canvas-side s5-stack"
+      ref={inspectorRef}
+      style={{ display: "grid", gap: "var(--sp-3)", alignContent: "start" }}
+    >
+      <InspectorDrawer
+        title="Inspector · 对象属性"
+        subtitle={
+          selection?.kind === "edge" ? "边" : selection?.kind === "aggregate" ? "聚类" : selection ? "节点" : undefined
+        }
+        ariaLabel="Inspector 对象属性"
+      >
+        <KeyValueList items={inspectorItems} ariaLabel="对象属性" />
+      </InspectorDrawer>
+      <EvidenceRail title="Evidence Rail" items={evidenceItems} />
+    </div>
+  );
 
   if (!canvasQuery.error && (canvasQuery.loading || (!state && Boolean(canvasQuery.data)))) {
     return (
@@ -1308,359 +2313,54 @@ export default function CanvasPage() {
 
   return (
     <>
-      <BackLink to="/graph" label="返回图谱列表" />
       <PageHeader
         title={canvasName}
-        subtitle={`revision r${revision} · 案件 ${caseId ? shortValue(caseId, 8, 6) : "—"} · 来源 /api/v2/canvases/${canvasId}`}
-        actions={
+        breadcrumb={[{ label: "资金图谱", to: "/graph" }, { label: canvasName }]}
+        status={dirty ? <StatusBadge tone="warn">有未保存修改</StatusBadge> : <StatusBadge tone="ok">已同步</StatusBadge>}
+        meta={
+          <MetaLine
+            items={[
+              { label: "revision", value: `r${revision}` },
+              { label: "所在案件", value: caseId ? shortValue(caseId, 8, 6) : "—" },
+              { label: "渲染模式", value: renderMode === "limit" ? "聚类（停止扩展）" : renderMode === "aggregate" ? "聚类渲染" : "完整渲染" },
+              { label: "数据来源", value: `/api/v2/canvases/${canvasId}` },
+            ]}
+          />
+        }
+        primaryAction={
+          <Button
+            variant="primary"
+            size="sm"
+            busy={saving}
+            busyLabel="保存中…"
+            onClick={() => void save()}
+            disabled={!state || canvasBusy}
+          >
+            保存
+          </Button>
+        }
+        secondaryAction={
           <>
-            {dirty ? <StatusBadge tone="warn">有未保存修改</StatusBadge> : <StatusBadge tone="ok">已同步</StatusBadge>}
-            <button
-              type="button"
-              className="btn btn--primary btn--sm"
-              onClick={() => void save()}
-              disabled={!state || canvasBusy}
-            >
-              保存
-            </button>
-            <button type="button" className="btn btn--sm" onClick={() => void branch()} disabled={!state || canvasBusy}>
+            <Button size="sm" onClick={() => void branch()} disabled={!state || canvasBusy}>
               分支
-            </button>
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => void openSnapshots()}
-              disabled={!state || canvasBusy}
-            >
+            </Button>
+            <Button size="sm" onClick={() => void openSnapshots()} disabled={!state || canvasBusy}>
               快照
-            </button>
-            <button type="button" className="btn btn--sm" onClick={() => void exportCanvas()} disabled={!state}>
+            </Button>
+            <Button size="sm" onClick={() => void exportCanvas()} disabled={!state}>
               导出
-            </button>
+            </Button>
           </>
         }
       />
 
       <div className="s5-canvas-shell">
-        <div className="s5-canvas-side s5-canvas-left">
-          <Card title="Lens">
-            <div className="s5-stack">
-              {LENSES.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`btn btn--sm${lens === item.key ? " btn--primary" : ""}`}
-                  aria-pressed={lens === item.key}
-                  onClick={() => setLens(item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <span className="mono" style={{ fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
-                节点 {totalNodes} · 边 {parsed.edges.length}
-              </span>
-              {renderMode === "normal" ? (
-                <StatusBadge tone="ok">完整渲染</StatusBadge>
-              ) : (
-                <StatusBadge tone="warn">{renderMode === "limit" ? "聚合（停止扩展）" : "聚合渲染"}</StatusBadge>
-              )}
-              {selectedAddressNode ? (
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={flowBusy || renderMode === "limit"}
-                  onClick={() => void addAddressFlow(selectedAddressNode.chain, selectedAddressNode.id)}
-                >
-                  加入选中地址资金流
-                </button>
-              ) : null}
-            </div>
-          </Card>
-        </div>
-
-        <div className="s5-canvas-side">
-          <Card title="图谱" flush>
-            <div className="toolbar" style={{ padding: "var(--sp-3) var(--sp-4)" }}>
-              <input
-                className="input"
-                style={{ flex: "1 1 180px", minWidth: 140, maxWidth: 260 }}
-                aria-label="搜索节点"
-                placeholder="搜索节点 ref / 地址"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <button type="button" className="btn btn--sm" onClick={() => setSearch("")} disabled={!search}>
-                清除
-              </button>
-              <button
-                type="button"
-                className="btn btn--sm"
-                title="放大"
-                onClick={() => setZoom((value) => Math.min(3, value * 1.25))}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn btn--sm"
-                title="缩小"
-                onClick={() => setZoom((value) => Math.max(0.3, value / 1.25))}
-              >
-                -
-              </button>
-              <button type="button" className="btn btn--sm" title="重置缩放与平移" onClick={resetView}>
-                重置
-              </button>
-              <span className="mono" style={{ fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
-                {Math.round(zoom * 100)}%
-              </span>
-              {isMobile ? (
-                <button type="button" className="btn btn--sm" onClick={() => setSvgOpen((value) => !value)}>
-                  {svgOpen ? "收起图谱" : "展开图谱"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void addAddressFlow()}
-                disabled={!state || flowBusy || renderMode === "limit"}
-              >
-                加入地址资金流
-              </button>
-            </div>
-
-            {renderNodes.length === 0 ? (
-              <EmptyState
-                title={search || lens === "evidence" ? "当前筛选没有可渲染节点" : "画布还没有可渲染节点"}
-                action={
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    onClick={() => void addAddressFlow()}
-                    disabled={!state || flowBusy || renderMode === "limit"}
-                  >
-                    加入地址资金流
-                  </button>
-                }
-              />
-            ) : !isMobile || svgOpen ? (
-              <div style={{ padding: "0 var(--sp-2) var(--sp-2)" }}>
-                <svg
-                  className="s5-canvas-svg"
-                  viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-                  preserveAspectRatio="xMidYMid meet"
-                  role="img"
-                  aria-label="Canvas SVG 图谱"
-                  onPointerDown={onCanvasPointerDown}
-                  onPointerMove={onCanvasPointerMove}
-                  onPointerUp={onCanvasPointerUp}
-                  onPointerCancel={onCanvasPointerUp}
-                >
-                  <defs>
-                    <marker id="canvas-arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085" />
-                    </marker>
-                  </defs>
-                  <rect x="0" y="0" width={SVG_W} height={SVG_H} fill="transparent" />
-                  <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-                    {renderEdges.map((edge) => {
-                      const from = positions.get(edge.fromKey);
-                      const to = positions.get(edge.toKey);
-                      if (!from || !to) return null;
-                      const label = edgeLabel(edge);
-                      return (
-                        <g key={edge.key}>
-                          <line
-                            x1={from.x}
-                            y1={from.y}
-                            x2={to.x}
-                            y2={to.y}
-                            stroke={edgeColor(edge)}
-                            strokeWidth={edge.repeated > 1 ? Math.min(5, 1.5 + edge.repeated / 4) : 1.6}
-                            strokeOpacity={0.82}
-                            strokeDasharray={lens === "evidence" ? "7 5" : undefined}
-                            markerEnd="url(#canvas-arrow)"
-                          />
-                          {label ? (
-                            <text
-                              x={(from.x + to.x) / 2}
-                              y={(from.y + to.y) / 2 - 5}
-                              textAnchor="middle"
-                              fontSize={10}
-                              fill="var(--c-slate)"
-                              style={{ pointerEvents: "none" }}
-                            >
-                              {label}
-                            </text>
-                          ) : null}
-                        </g>
-                      );
-                    })}
-                    {renderNodes.map((node) => {
-                      const position = positions.get(node.key);
-                      if (!position) return null;
-                      const selected =
-                        selection?.kind === "node"
-                          ? selection.ref === node.ref
-                          : selection?.kind === "aggregate" && selection.key === node.key;
-                      const fill = node.aggregate
-                        ? "var(--c-surface-sunken)"
-                        : node.kind === "address"
-                          ? "var(--c-cobalt-soft)"
-                          : node.kind === "evidence"
-                            ? "var(--c-amber-soft)"
-                            : "var(--c-neutral-soft)";
-                      const stroke = node.aggregate
-                        ? "var(--c-neutral)"
-                        : node.kind === "address"
-                          ? "var(--c-cobalt)"
-                          : node.kind === "evidence"
-                            ? "var(--c-amber-text)"
-                            : "var(--c-neutral)";
-                      const radius = node.aggregate ? Math.min(34, 22 + node.count / 40) : node.kind === "address" ? 22 : 18;
-                      return (
-                        <g
-                          key={node.key}
-                          className={`s5-canvas-node${selected ? " is-selected" : ""}`}
-                          transform={`translate(${position.x} ${position.y})`}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`节点 ${node.label}`}
-                          data-node-ref={node.ref ?? node.key}
-                          style={mutedNodes && node.kind !== "evidence" ? { opacity: 0.45 } : undefined}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (node.ref) setSelection({ kind: "node", ref: node.ref });
-                            else setSelection({ kind: "aggregate", key: node.key });
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key !== "Enter" && event.key !== " ") return;
-                            event.preventDefault();
-                            if (node.ref) setSelection({ kind: "node", ref: node.ref });
-                            else setSelection({ kind: "aggregate", key: node.key });
-                          }}
-                        >
-                          {node.kind === "evidence" && !node.aggregate ? (
-                            <polygon
-                              points="0,-20 20,0 0,20 -20,0"
-                              fill={fill}
-                              stroke={stroke}
-                              strokeWidth={selected ? 3 : 1.5}
-                            />
-                          ) : node.kind === "tx" && !node.aggregate ? (
-                            <rect
-                              x="-26"
-                              y="-16"
-                              width="52"
-                              height="32"
-                              rx="7"
-                              fill={fill}
-                              stroke={stroke}
-                              strokeWidth={selected ? 3 : 1.5}
-                            />
-                          ) : (
-                            <circle r={radius} fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
-                          )}
-                          <text textAnchor="middle" y={4} fontSize={10} fill="var(--c-graphite)">
-                            {node.label}
-                          </text>
-                          {node.sublabel ? (
-                            <text textAnchor="middle" y={node.kind === "tx" && !node.aggregate ? 30 : 36} fontSize={9} fill="var(--c-slate)">
-                              {node.sublabel}
-                            </text>
-                          ) : null}
-                          {node.aggregate ? (
-                            <text textAnchor="middle" y={radius + 14} fontSize={10} fill="var(--c-cobalt)" fontWeight={600}>
-                              ×{node.count}
-                            </text>
-                          ) : null}
-                        </g>
-                      );
-                    })}
-                  </g>
-                </svg>
-              </div>
-            ) : null}
-          </Card>
-        </div>
-
-        <div
-          className="s5-canvas-side s5-stack"
-          ref={inspectorRef}
-          style={{ display: "grid", gap: "var(--sp-3)", alignContent: "start" }}
-        >
-          <EvidenceRail title="Inspector · 对象属性" items={inspectorItems} />
-          <EvidenceRail title="Evidence Rail" items={evidenceItems} />
-        </div>
+        {isMobile ? null : leftColumn}
+        {mainColumn}
+        {isMobile ? leftColumn : null}
+        {rightColumn}
       </div>
-
-      {isMobile ? (
-        <Card title="列表视图" flush>
-          <div className="s5-node-list">
-            {parsed.nodes.map((node) => (
-              <button
-                key={node.ref}
-                type="button"
-                className="s5-node-list__item"
-                onClick={() => focusNode(node.ref)}
-              >
-                <span className="s5-object-head">
-                  <strong>{nodeRefLabel(node)}</strong>
-                  <StatusBadge tone={node.kind === "evidence" ? "warn" : node.kind === "address" ? "info" : "neutral"}>
-                    {NODE_KIND_LABEL[node.kind]}
-                  </StatusBadge>
-                  {node.chain ? <span className="mono">{node.chain}</span> : null}
-                </span>
-                <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
-                  {node.ref}
-                </span>
-              </button>
-            ))}
-            {parsed.edges.map((edge) => (
-              <button
-                key={edge.ref}
-                type="button"
-                className="s5-node-list__item"
-                onClick={() => focusNode(edge.fromRef)}
-              >
-                <span className="s5-object-head">
-                  <strong>
-                    {shortValue(edge.fromRef, 12, 6)} → {shortValue(edge.toRef, 12, 6)}
-                  </strong>
-                </span>
-                <span className="s5-mono" style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--c-slate)" }}>
-                  {edge.amountRaw ? `${formatRawAmount(edge.amountRaw)}${edge.asset ? ` ${edge.asset}` : ""}` : edge.asset ?? "edge"}
-                </span>
-              </button>
-            ))}
-            {evidenceIds.map((id) => {
-              const entry = evidenceMap[id];
-              return (
-                <button
-                  key={`evidence-${id}`}
-                  type="button"
-                  className="s5-node-list__item"
-                  onClick={() => focusNode(`evidence:${id}`)}
-                >
-                  <span className="s5-object-head">
-                    <strong>证据 {shortValue(id, 8, 4)}</strong>
-                    {entry?.phase === "ok" ? (
-                      <StatusBadge tone={statusToneFor(entry.data.status ?? "")}>{entry.data.status ?? "—"}</StatusBadge>
-                    ) : (
-                      <StatusBadge tone="neutral">{entry?.phase === "unavailable" ? "不可用" : "读取中"}</StatusBadge>
-                    )}
-                  </span>
-                  {entry?.phase === "ok" ? <span>{entry.data.title ?? "—"}</span> : null}
-                </button>
-              );
-            })}
-            {parsed.nodes.length === 0 && parsed.edges.length === 0 && evidenceIds.length === 0 ? (
-              <EmptyState title="画布还没有节点或边" />
-            ) : null}
-          </div>
-        </Card>
-      ) : null}
     </>
   );
 }
+

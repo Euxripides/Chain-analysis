@@ -1,0 +1,301 @@
+/*
+ * 用户调查工作台 AppShell（蓝图 §5.1 / §5.2）
+ *
+ * 与后台共用 `@chain/ui/AppShell`：后台继续走 `.shell__*` 旧类，
+ * 用户端走这里新增的 `.cs-shell__*` 类（AppShell 的 variant="user"）。
+ * 两条路径互不影响，满足"共享组件变化必须用用户端作用域隔离"的约束。
+ *
+ * 结构：
+ *   .cs-shell                     两列网格（rail | main）
+ *     .cs-shell__rail             固定左导航，自身滚动
+ *     .cs-shell__main
+ *       .cs-shell__topbar         56px 吸顶
+ *       .cs-shell__content        主体，独立滚动
+ */
+
+.cs-shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  transition: grid-template-columns var(--motion-standard) var(--ease-out);
+}
+.cs-shell[data-collapsed="true"] { grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr); }
+
+/* 会话校验期间的启动态：单列，不渲染导航（避免闪出"未登录也能看到导航"的错觉） */
+.cs-shell--boot { grid-template-columns: minmax(0, 1fr); }
+.cs-shell--boot .cs-shell__content { grid-column: 1; }
+
+/* ---------------- 左侧导航 ---------------- */
+.cs-shell__rail {
+  grid-column: 1;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: var(--z-rail);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-3) var(--sp-3);
+  background: var(--bg-rail);
+  color: var(--text-on-rail);
+  border-right: 1px solid var(--border-on-rail);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.14) transparent;
+}
+.cs-shell__rail::-webkit-scrollbar { width: 8px; }
+.cs-shell__rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
+
+/* 收起态：图标保持水平居中，文字整块淡出而不是被裁切（蓝图 §7.2 侧栏展开/收起） */
+.cs-shell__rail[data-collapsed="true"] { padding-left: var(--sp-2); padding-right: var(--sp-2); align-items: stretch; }
+
+.cs-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+.cs-brand__mark {
+  width: 34px; height: 34px; flex: none;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  color: #fff; font-size: var(--fs-13); font-weight: 700; letter-spacing: 0.02em;
+  background: linear-gradient(150deg, #6E7CF0 0%, var(--indigo-600) 55%, var(--indigo-700) 100%);
+  box-shadow: 0 4px 14px rgba(67, 83, 230, 0.34);
+}
+.cs-brand__text { min-width: 0; overflow: hidden; white-space: nowrap; }
+.cs-brand__name { display: block; color: #fff; font-size: var(--fs-14); font-weight: 650; letter-spacing: -0.01em; }
+.cs-brand__tag {
+  display: block; margin-top: 1px;
+  color: var(--text-on-rail-muted);
+  font-size: var(--fs-11);
+  letter-spacing: 0.02em;
+}
+
+.cs-nav { display: flex; flex-direction: column; gap: var(--sp-4); flex: 1; min-height: 0; }
+.cs-nav__group { display: flex; flex-direction: column; gap: 2px; }
+.cs-nav__label {
+  padding: 0 var(--sp-3) var(--sp-1);
+  color: var(--text-on-rail-muted);
+  font-size: 10px; font-weight: 650;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.cs-nav__link {
+  position: relative;
+  display: flex; align-items: center; gap: var(--sp-3);
+  min-height: 34px;
+  padding: 7px var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-on-rail);
+  font-size: var(--fs-13);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.cs-nav__link:hover { background: rgba(255,255,255,.06); color: #fff; text-decoration: none; }
+.cs-nav__link[aria-current="page"] { background: rgba(123,139,255,.14); color: #fff; font-weight: 600; }
+/*
+ * "我在哪"必须不只靠颜色（蓝图 §5.1 / §14）：
+ * 选中项同时具备 3px 左侧指示条 + 更亮的文字 + 加重字重，三通道冗余。
+ */
+.cs-nav__link[aria-current="page"]::before {
+  content: "";
+  position: absolute; left: 0; top: 50%;
+  width: 3px; height: 18px;
+  margin-top: -9px;
+  border-radius: 0 3px 3px 0;
+  background: var(--interactive-on-rail);
+}
+.cs-nav__icon { flex: none; display: grid; place-items: center; width: 18px; height: 18px; }
+.cs-nav__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cs-nav__badge { margin-left: auto; }
+
+.cs-shell__rail[data-collapsed="true"] .cs-nav__link { justify-content: center; padding-left: 0; padding-right: 0; }
+.cs-shell__rail[data-collapsed="true"] .cs-nav__label { opacity: 0; height: 4px; padding: 0; overflow: hidden; }
+
+.cs-railfoot {
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-on-rail);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.cs-railfoot__scope {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  color: var(--text-on-rail-muted);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+.cs-railfoot__collapse {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; min-height: 34px;
+  padding: 7px var(--sp-3);
+  border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-on-rail);
+  font: inherit; font-size: var(--fs-13);
+  cursor: pointer; text-align: left;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+.cs-railfoot__collapse:hover { background: rgba(255,255,255,.06); color: #fff; }
+.cs-shell__rail[data-collapsed="true"] .cs-railfoot__collapse { justify-content: center; padding-left: 0; padding-right: 0; }
+
+/* ---------------- 主区 ---------------- */
+.cs-shell__main { grid-column: 2; display: flex; flex-direction: column; min-width: 0; }
+
+.cs-shell__topbar {
+  position: sticky; top: 0;
+  z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--page-gutter);
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border-default);
+  transition: background var(--motion-standard) var(--ease-out), box-shadow var(--motion-standard) var(--ease-out);
+}
+/* 滚动后才出现轻阴影；不吸顶遮挡标题（蓝图 §5.1） */
+.cs-shell__topbar[data-scrolled="true"] { box-shadow: 0 1px 0 rgba(11,18,32,.04), 0 8px 24px rgba(11,18,32,.06); }
+.cs-shell__topbar-title {
+  display: none;
+  font-size: var(--fs-14); font-weight: 600; color: var(--text-primary);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cs-shell__spacer { flex: 1; min-width: var(--sp-2); }
+
+.cs-shell__content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-6) var(--page-gutter) var(--sp-12);
+  display: flex; flex-direction: column; gap: var(--sp-5);
+}
+/* 表单/阅读型页面用 `.cs-page--reading` 收窄；列表、图谱、工作台保持全宽（蓝图 §5.1） */
+.cs-page--reading { max-width: var(--reading-width); }
+.cs-page--wide { max-width: none; }
+
+/* 命令面板触发入口（替代原 GlobalSearchBox 的视觉位置，但保留受控搜索行为） */
+.cs-cmdtrigger {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: min(360px, 34vw);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit; font-size: var(--fs-13);
+  cursor: pointer; text-align: left;
+  transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+.cs-cmdtrigger:hover { border-color: var(--border-strong); background: var(--bg-surface-muted); }
+.cs-cmdtrigger:focus-visible { outline: none; border-color: var(--interactive); box-shadow: 0 0 0 3px var(--interactive-ring); }
+.cs-cmdtrigger__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-cmdtrigger__keys { display: flex; gap: 2px; flex: none; }
+.cs-kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border: 1px solid var(--border-default);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg-surface-muted);
+  color: var(--text-secondary);
+  font-family: var(--font-sans); font-size: 11px; line-height: 1;
+}
+
+/* 顶栏图标按钮：移动端触摸目标 ≥44px（蓝图 §8.2） */
+.cs-iconbtn {
+  position: relative;
+  display: inline-grid; place-items: center;
+  width: var(--control-h); height: var(--control-h);
+  flex: none;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.cs-iconbtn:hover { background: var(--bg-surface-sunken); color: var(--text-primary); }
+.cs-iconbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--interactive-ring); border-color: var(--interactive); }
+.cs-iconbtn[aria-expanded="true"] { background: var(--interactive-soft); color: var(--interactive); }
+.cs-iconbtn__dot {
+  position: absolute; top: 4px; right: 4px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px;
+  background: var(--red-700); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 17px;
+  text-align: center;
+  border: 2px solid var(--bg-surface);
+  box-sizing: content-box;
+}
+
+/* 用户菜单 */
+.cs-usermenu { position: relative; flex: none; }
+.cs-usermenu__trigger {
+  display: flex; align-items: center; gap: var(--sp-2);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-2) 0 4px;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--text-primary);
+  font: inherit; cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+.cs-usermenu__trigger:hover { background: var(--bg-surface-sunken); }
+.cs-usermenu__trigger:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--interactive-ring); border-color: var(--interactive); }
+.cs-avatar {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: #fff; font-size: var(--fs-12); font-weight: 650;
+  background: linear-gradient(150deg, #6E7CF0, var(--indigo-600));
+}
+.cs-usermenu__name {
+  display: flex; flex-direction: column; align-items: flex-start;
+  max-width: 160px; min-width: 0; line-height: 1.25;
+}
+.cs-usermenu__name > b { font-size: var(--fs-13); font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-usermenu__name > span { font-size: var(--fs-11); color: var(--text-secondary); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------- 移动抽屉（<900px，蓝图 §5.2） ---------------- */
+.cs-shell__scrim {
+  position: fixed; inset: 0;
+  z-index: calc(var(--z-rail) - 1);
+  background: var(--bg-overlay);
+  animation: cs-fade-in var(--motion-fast) var(--ease-out);
+  border: 0; padding: 0;
+}
+
+@media (max-width: 899px) {
+  .cs-shell, .cs-shell[data-collapsed="true"] { grid-template-columns: minmax(0, 1fr); }
+  .cs-shell__rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(288px, 84vw);
+    transform: translateX(-100%);
+    transition: transform var(--motion-standard) var(--ease-out);
+    box-shadow: none;
+  }
+  .cs-shell__rail[data-open="true"] { transform: translateX(0); box-shadow: 0 24px 64px rgba(10,14,20,.42); }
+  .cs-shell__rail[data-collapsed="true"] { width: min(288px, 84vw); padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  /* 抽屉里永远显示完整标签：收起态是桌面概念，不能带进移动端 */
+  .cs-shell__rail[data-collapsed="true"] .cs-nav__label { opacity: 1; height: auto; padding: 0 var(--sp-3) var(--sp-1); }
+  .cs-shell__rail[data-collapsed="true"] .cs-nav__link { justify-content: flex-start; padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  .cs-shell__rail[data-collapsed="true"] .cs-railfoot__collapse { justify-content: flex-start; padding-left: var(--sp-3); }
+  .cs-railfoot__collapse { min-height: var(--control-h-mobile); }
+  .cs-nav__link { min-height: var(--control-h-mobile); }
+  .cs-shell__main { grid-column: 1; }
+  .cs-shell__topbar { padding: 0 var(--sp-4); gap: var(--sp-2); }
+  .cs-shell__topbar-title { display: block; }
+  .cs-shell__content { padding: var(--sp-4) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom, 0px)); }
+  .cs-cmdtrigger { display: none; }
+  /* 工作区切换移动到用户菜单，避免顶栏拥挤（蓝图 §5.2） */
+  .cs-topbar-workspace { display: none; }
+  .cs-usermenu__name { display: none; }
+}
+
+@media (max-width: 480px) {
+  .cs-shell__topbar { padding: 0 var(--sp-3); }
+  .cs-shell__content { padding: var(--sp-3) var(--sp-3) calc(var(--sp-12) + env(safe-area-inset-bottom, 0px)); }
+}

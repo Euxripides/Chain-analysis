@@ -1,24 +1,49 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError, useAuth } from "@chain/api-client";
+import { useAuth } from "@chain/api-client";
 import {
+  Button,
   Card,
   DataTable,
   EmptyState,
   EntityLink,
   ErrorState,
-  EvidenceRail,
   Field,
+  HashValue,
+  InspectorDrawer,
+  KeyValueList,
+  MetaLine,
   PageHeader,
+  PageSection,
+  PageSkeleton,
   RelativeTime,
   SkeletonRows,
+  SplitPane,
   StatusBadge,
-  statusToneFor,
-  useDialog,
+  StatusBadgeForState,
+  Timeline,
   dialogInputValue,
+  useDialog,
 } from "@chain/ui";
-import { DeepTabs, KeyValues, formatTime, useAsync, useAction } from "../sprint4/common";
+import { DeepTabs, formatTime, useAction, useAsync } from "../sprint4/common";
 
+/**
+ * §12.6 案件详情 /cases/:caseId/:tab
+ *
+ * 全部 tab 保留：概览 / 对象 / 调查 / 证据 / 报告 / 成员 / 动态。tab 由 URL 决定
+ * （`/cases/{id}/{tab}`），刷新后保持当前 tab。
+ *
+ * 数据来源与写操作完全不变：
+ *   GET /api/v2/cases/{id} · /members · /subjects · /activity · /reports
+ *   GET /api/v2/investigations?case_id= · /api/v2/workspace-members
+ *   POST /cases/{id}/commands/{cmd}（If-Match: revision）· members · subjects · reports
+ *   DELETE /members/{identity_id} · /subjects/{subject_id}
+ * 每个写操作的权限判定、原因输入、revision 与审计链路保持原样。
+ *
+ * 两栏结构改为 SplitPane（主区 + InspectorDrawer「案件事实」）；Evidence 列表使用真实
+ * 的 `/api/v2/investigations?case_id=` 聚合结果——服务端没有"按案件列 Evidence"的端点，
+ * 因此这一栏不伪造逐条 Evidence，而是给出每个调查的 Evidence 计数与入口。
+ */
 interface CaseDetail {
   id: string;
   organization_id: string;
@@ -65,6 +90,8 @@ interface Activity {
   event_type: string;
   actor_display: string;
   summary: string;
+  object_type?: string;
+  object_id?: string;
   created_at: string;
 }
 interface InvestigationRow {
@@ -86,25 +113,19 @@ interface ReportRow {
   required_action?: string;
 }
 
-const TAB_TO: Record<string, string> = {
-  overview: "overview",
-  subjects: "subjects",
-  investigations: "investigations",
-  evidence: "evidence",
-  reports: "reports",
-  activity: "activity",
-};
+/** URL 中允许的 tab；未知值回落到概览（与重构前一致）。 */
+const TAB_KEYS = ["overview", "subjects", "investigations", "evidence", "reports", "members", "activity"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
 
 export default function CaseDetailPage() {
-  const { caseId = "" } = useParams();
-  const path = window.location.pathname;
-  const tab = Object.keys(TAB_TO).find((key) => path.endsWith("/" + key)) ?? "overview";
+  const { caseId = "", tab: tabParam = "" } = useParams();
+  const tab: TabKey = (TAB_KEYS as readonly string[]).includes(tabParam) ? (tabParam as TabKey) : "overview";
   const dialog = useDialog();
   const { can } = useAuth();
   const action = useAction();
   const navigate = useNavigate();
   const { data: detail, loading, error, reload } = useAsync<CaseDetail>(`/api/v2/cases/${caseId}`, [caseId], {});
-  const { data: members, reload: reloadMembers } = useAsync<Member[]>(`/api/v2/cases/${caseId}/members`, [caseId]);
+  const { data: members, loading: membersLoading, error: membersError, reload: reloadMembers } = useAsync<Member[]>(`/api/v2/cases/${caseId}/members`, [caseId]);
   const [addingMember, setAddingMember] = useState(false);
   const [subjectVersion, setSubjectVersion] = useState(0);
   const [memberOptions, setMemberOptions] = useState<Array<{ identity_id: string; email: string; display_name: string }>>([]);
@@ -193,7 +214,7 @@ export default function CaseDetailPage() {
     [action, caseId, dialog, reloadMembers],
   );
 
-  if (loading) return <SkeletonRows rows={6} columns={4} />;
+  if (loading) return <PageSkeleton shape="detail" />;
   if (error || !detail) {
     return (
       <Card>
@@ -208,245 +229,358 @@ export default function CaseDetailPage() {
     { key: "investigations", label: "案件调查", to: `/cases/${caseId}/investigations`, permission: "investigation:list" },
     { key: "evidence", label: "证据中心", to: `/cases/${caseId}/evidence`, permission: "evidence:list" },
     { key: "reports", label: "案件报告", to: `/cases/${caseId}/reports`, permission: "report:list" },
+    { key: "members", label: "案件成员", to: `/cases/${caseId}/members`, permission: "case:member:list" },
     { key: "activity", label: "案件动态", to: `/cases/${caseId}/activity`, permission: "case:activity:read" },
   ];
+
+  const memberRows = members ?? [];
 
   return (
     <>
       <PageHeader
         title={detail.name}
-        subtitle={
-          <span>
-            {detail.case_no || "无编号"} · revision r{detail.revision} · 密级 {detail.classification} · 数据源 postgres:cases
-          </span>
+        breadcrumb={[{ label: "工作台", to: "/home" }, { label: "案件中心", to: "/cases" }, { label: detail.name }]}
+        status={<StatusBadgeForState value={detail.status} />}
+        meta={
+          <MetaLine
+            items={[
+              { label: "案件号", value: detail.case_no || "无编号" },
+              { label: "revision", value: `r${detail.revision}` },
+              { label: "密级", value: detail.classification },
+              { label: "最近更新", value: <RelativeTime value={detail.updated_at} /> },
+              { label: "数据源", value: "postgres:cases" },
+            ]}
+          />
         }
-        actions={
+        primaryAction={
+          can("investigation:create") ? (
+            <Button variant="primary" size="sm" onClick={() => navigate(`/investigations/new?case_id=${caseId}`)}>
+              发起调查
+            </Button>
+          ) : null
+        }
+        secondaryAction={
           <span className="s4-button-row">
             {can("case:state:update") && detail.status === "draft" ? (
-              <button type="button" className="btn btn--sm" onClick={() => command("activate")}>
+              <Button size="sm" onClick={() => command("activate")}>
                 启用
-              </button>
+              </Button>
             ) : null}
             {can("case:state:update") && ["draft", "active", "under_review"].includes(detail.status) ? (
-              <button type="button" className="btn btn--sm" onClick={() => command("close")}>
+              <Button size="sm" onClick={() => command("close")}>
                 关闭
-              </button>
+              </Button>
             ) : null}
             {can("case:state:update") && detail.status === "closed" ? (
-              <button type="button" className="btn btn--sm" onClick={() => command("archive")}>
+              <Button size="sm" onClick={() => command("archive")}>
                 归档
-              </button>
+              </Button>
             ) : null}
             {can("case:state:update") && ["closed", "archived"].includes(detail.status) ? (
-              <button type="button" className="btn btn--sm" onClick={() => command("reopen")}>
+              <Button size="sm" onClick={() => command("reopen")}>
                 重新打开
-              </button>
-            ) : null}
-            {can("investigation:create") ? (
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => navigate(`/investigations/new?case_id=${caseId}`)}>
-                发起调查
-              </button>
+              </Button>
             ) : null}
           </span>
         }
       />
+
       <DeepTabs tabs={tabs} />
-      <div className="s4-grid">
-        <div>
-          {tab === "overview" ? <OverviewTab detail={detail} /> : null}
-          {tab === "subjects" ? <SubjectsTab caseId={caseId} version={subjectVersion} onAdd={addSubject} onRemove={removeSubject} /> : null}
-          {tab === "investigations" ? <CaseInvestigationsTab caseId={caseId} /> : null}
-          {tab === "evidence" ? <CaseEvidenceTab caseId={caseId} /> : null}
-          {tab === "reports" ? <CaseReportsTab caseId={caseId} /> : null}
-          {tab === "activity" ? <ActivityTab caseId={caseId} /> : null}
-        </div>
-        <EvidenceRail
-          title="案件事实"
-          items={[
-            { label: "状态", value: <StatusBadge tone={statusToneFor(detail.status)}>{detail.status}</StatusBadge> },
-            { label: "优先级", value: detail.priority },
-            { label: "负责人", value: `${detail.lead_count ?? 0} 名 lead` },
-            { label: "成员", value: `${detail.member_count ?? 0} 人` },
-            { label: "对象", value: `${detail.subject_count ?? 0} 个` },
-            { label: "待复核 Finding", value: String(detail.open_findings ?? 0) },
-            { label: "未完成报告", value: String(detail.open_reports ?? 0) },
-            { label: "进行中调查", value: String(detail.open_investigations ?? 0) },
-            { label: "创建时间", value: formatTime(detail.created_at) },
-            { label: "最近更新", value: formatTime(detail.updated_at) },
-            { label: "案件 ID", value: <EntityLink value={detail.id} /> },
-          ]}
-        />
-      </div>
 
-      <Card title="案件成员" actions={<button type="button" className="btn btn--sm" disabled={!can("case:member:manage")} onClick={() => setAddingMember(true)}>添加成员</button>}>
-        <DataTable<Member>
-          rows={members ?? []}
-          rowKey={(m) => m.id}
-          columns={[
-            { key: "name", header: "成员", render: (m) => <span><strong>{m.display_name || "—"}</strong><div className="s4-list__sub">{m.email}</div></span> },
-            { key: "role", header: "角色", width: "120px", render: (m) => <StatusBadge tone={m.role === "lead" ? "ok" : "neutral"}>{m.role}</StatusBadge> },
-            { key: "joined", header: "加入时间", width: "160px", render: (m) => formatTime(m.created_at) },
-            {
-              key: "ops",
-              header: "",
-              width: "90px",
-              render: (m) => (
-                <button type="button" className="btn btn--sm" disabled={!can("case:member:manage")} onClick={() => removeMember(m)}>
-                  移除
-                </button>
-              ),
-            },
-          ]}
-        />
-      </Card>
+      <SplitPane
+        storageKey="cs-case-detail-aside"
+        asideLabel="案件事实"
+        defaultAsideWidth={340}
+        minAsideWidth={280}
+        maxAsideWidth={520}
+        main={
+          <>
+            {tab === "overview" ? <OverviewTab detail={detail} /> : null}
+            {tab === "subjects" ? <SubjectsTab caseId={caseId} version={subjectVersion} onAdd={addSubject} onRemove={removeSubject} /> : null}
+            {tab === "investigations" ? <CaseInvestigationsTab caseId={caseId} /> : null}
+            {tab === "evidence" ? <CaseEvidenceTab caseId={caseId} /> : null}
+            {tab === "reports" ? <CaseReportsTab caseId={caseId} /> : null}
+            {tab === "activity" ? <ActivityTab caseId={caseId} /> : null}
+            {tab === "members" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)" }}>
+                <PageSection title="案件成员" count={`${memberRows.length} 人`}>
+                  <Card
+                    flush
+                    actions={
+                      <Button size="sm" disabled={!can("case:member:manage")} onClick={() => setAddingMember(true)}>
+                        添加成员
+                      </Button>
+                    }
+                  >
+                    <DataTable<Member>
+                      loading={membersLoading}
+                      error={membersError}
+                      onRetry={reloadMembers}
+                      rows={memberRows}
+                      rowKey={(member) => member.id}
+                      caption="案件成员"
+                      columns={[
+                        {
+                          key: "name",
+                          header: "成员",
+                          render: (member) => (
+                            <span>
+                              <strong>{member.display_name || "—"}</strong>
+                              <div className="s4-list__sub">{member.email}</div>
+                            </span>
+                          ),
+                        },
+                        { key: "role", header: "角色", width: "120px", render: (member) => <StatusBadge tone={member.role === "lead" ? "ok" : "neutral"}>{member.role}</StatusBadge> },
+                        { key: "joined", header: "加入时间", width: "170px", render: (member) => <span>{formatTime(member.created_at)}</span> },
+                        {
+                          key: "ops",
+                          header: "操作",
+                          width: "100px",
+                          render: (member) => (
+                            <Button size="sm" disabled={!can("case:member:manage")} onClick={() => removeMember(member)}>
+                              移除
+                            </Button>
+                          ),
+                        },
+                      ]}
+                    />
+                  </Card>
+                </PageSection>
 
-      {addingMember ? (
-        <Card title="添加案件成员">
-          <div className="s4-form-grid">
-            <Field label="成员" htmlFor="member-id">
-              <select id="member-id" className="select" value={memberForm.identity_id} onChange={(e) => setMemberForm({ ...memberForm, identity_id: e.target.value })}>
-                <option value="">选择工作区成员</option>
-                {memberOptions.map((m) => (
-                  <option key={m.identity_id} value={m.identity_id}>
-                    {m.display_name || m.email}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="角色" htmlFor="member-role">
-              <select id="member-role" className="select" value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}>
-                <option value="lead">lead</option>
-                <option value="investigator">investigator</option>
-                <option value="reviewer">reviewer</option>
-                <option value="viewer">viewer</option>
-              </select>
-            </Field>
-            <div className="s4-sticky-actions field--wide">
-              <button type="button" className="btn" onClick={() => setAddingMember(false)}>
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={!memberForm.identity_id || action.busy}
-                onClick={() =>
-                  action.run(() => action.client.post(`/api/v2/cases/${caseId}/members`, memberForm), {
-                    successTitle: "成员已加入",
-                    onDone: () => {
-                      setAddingMember(false);
-                      setMemberForm({ identity_id: "", role: "investigator" });
-                      void reloadMembers();
-                    },
-                  })
-                }
-              >
-                加入
-              </button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
+                {addingMember ? (
+                  <PageSection title="添加案件成员">
+                    <Card>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+                        <Field label="成员" htmlFor="member-id">
+                          <select id="member-id" className="select" value={memberForm.identity_id} onChange={(e) => setMemberForm({ ...memberForm, identity_id: e.target.value })}>
+                            <option value="">选择工作区成员</option>
+                            {memberOptions.map((option) => (
+                              <option key={option.identity_id} value={option.identity_id}>
+                                {option.display_name || option.email}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="角色" htmlFor="member-role">
+                          <select id="member-role" className="select" value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}>
+                            <option value="lead">lead</option>
+                            <option value="investigator">investigator</option>
+                            <option value="reviewer">reviewer</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        </Field>
+                        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
+                          <Button onClick={() => setAddingMember(false)}>取消</Button>
+                          <Button
+                            variant="primary"
+                            disabled={!memberForm.identity_id}
+                            busy={action.busy}
+                            busyLabel="加入中…"
+                            onClick={() =>
+                              action.run(() => action.client.post(`/api/v2/cases/${caseId}/members`, memberForm), {
+                                successTitle: "成员已加入",
+                                onDone: () => {
+                                  setAddingMember(false);
+                                  setMemberForm({ identity_id: "", role: "investigator" });
+                                  void reloadMembers();
+                                },
+                              })
+                            }
+                          >
+                            加入
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  </PageSection>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        }
+        aside={
+          <InspectorDrawer title="案件事实" subtitle={detail.case_no || undefined} ariaLabel="案件事实">
+            <KeyValueList
+              items={[
+                { label: "状态", value: <StatusBadgeForState value={detail.status} /> },
+                { label: "优先级", value: detail.priority || "—" },
+                { label: "负责人", value: `${detail.lead_count ?? 0} 名 lead` },
+                { label: "成员", value: `${detail.member_count ?? 0} 人` },
+                { label: "对象", value: `${detail.subject_count ?? 0} 个` },
+                { label: "待复核 Finding", value: String(detail.open_findings ?? 0) },
+                { label: "未完成报告", value: String(detail.open_reports ?? 0) },
+                { label: "进行中调查", value: String(detail.open_investigations ?? 0) },
+                { label: "创建时间", value: formatTime(detail.created_at) },
+                { label: "最近更新", value: formatTime(detail.updated_at) },
+                { label: "案件 ID", value: <HashValue value={detail.id} label="案件 ID" wrap />, wide: true },
+              ]}
+            />
+          </InspectorDrawer>
+        }
+      />
     </>
   );
 }
 
 function OverviewTab({ detail }: { detail: CaseDetail }) {
   return (
-    <Card title="案件概览">
-      <KeyValues
-        items={[
-          { label: "案件编号", value: detail.case_no || "—" },
-          { label: "名称", value: detail.name },
-          { label: "状态", value: detail.status },
-          { label: "密级", value: detail.classification },
-          { label: "优先级", value: detail.priority },
-          { label: "revision", value: `r${detail.revision}` },
-          { label: "创建", value: formatTime(detail.created_at) },
-          { label: "更新", value: formatTime(detail.updated_at) },
-          { label: "关闭时间", value: formatTime(detail.closed_at) },
-          { label: "归档时间", value: formatTime(detail.archived_at) },
-          { label: "说明", value: detail.description || "—" },
-        ]}
-      />
-    </Card>
+    <PageSection title="案件概览">
+      <Card>
+        <KeyValueList
+          items={[
+            { label: "案件编号", value: detail.case_no || "—" },
+            { label: "名称", value: detail.name },
+            { label: "状态", value: <StatusBadgeForState value={detail.status} /> },
+            { label: "密级", value: detail.classification },
+            { label: "优先级", value: detail.priority },
+            { label: "revision", value: `r${detail.revision}` },
+            { label: "创建", value: formatTime(detail.created_at) },
+            { label: "更新", value: formatTime(detail.updated_at) },
+            { label: "关闭时间", value: formatTime(detail.closed_at) },
+            { label: "归档时间", value: formatTime(detail.archived_at) },
+            { label: "说明", value: detail.description || "—", wide: true },
+          ]}
+        />
+      </Card>
+    </PageSection>
   );
 }
 
 function SubjectsTab({ caseId, version, onAdd, onRemove }: { caseId: string; version: number; onAdd: () => void; onRemove: (s: Subject) => void }) {
   const { data, loading, error, reload } = useAsync<Subject[]>(`/api/v2/cases/${caseId}/subjects`, [caseId, version]);
   const { can } = useAuth();
+  const rows = data ?? [];
   return (
-    <Card title="调查对象" actions={<button type="button" className="btn btn--sm" disabled={!can("subject:create")} onClick={onAdd}>新增对象</button>}>
-      <DataTable<Subject>
-        loading={loading}
-        error={error}
-        onRetry={reload}
-        rows={data ?? []}
-        rowKey={(s) => s.id}
-        columns={[
-          { key: "type", header: "类型", width: "120px", render: (s) => <StatusBadge tone="neutral">{s.subject_type}</StatusBadge> },
-          { key: "chain", header: "链", width: "90px", render: (s) => s.chain ?? "—" },
-          { key: "value", header: "对象值", render: (s) => <EntityLink value={s.value} /> },
-          { key: "revision", header: "revision", width: "90px", render: (s) => `r${s.revision}` },
-          { key: "created", header: "加入时间", width: "160px", render: (s) => formatTime(s.created_at) },
-          { key: "ops", header: "", width: "90px", render: (s) => <button type="button" className="btn btn--sm" disabled={!can("subject:remove")} onClick={() => onRemove(s)}>移除</button> },
-        ]}
-      />
-    </Card>
+    <PageSection
+      title="调查对象"
+      count={`${rows.length} 个`}
+      actions={
+        <Button size="sm" disabled={!can("subject:create")} onClick={onAdd}>
+          新增对象
+        </Button>
+      }
+    >
+      <Card flush>
+        <DataTable<Subject>
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          rows={rows}
+          rowKey={(subject) => subject.id}
+          caption="案件调查对象"
+          columns={[
+            { key: "type", header: "类型", width: "130px", render: (subject) => <StatusBadge tone="neutral">{subject.subject_type}</StatusBadge> },
+            { key: "chain", header: "链", width: "100px", render: (subject) => <span className="mono">{subject.chain ?? "—"}</span> },
+            { key: "value", header: "对象值", render: (subject) => <EntityLink value={subject.value} /> },
+            { key: "revision", header: "revision", width: "90px", render: (subject) => <span className="mono">{"r" + subject.revision}</span> },
+            { key: "created", header: "加入时间", width: "170px", render: (subject) => <span>{formatTime(subject.created_at)}</span> },
+            {
+              key: "ops",
+              header: "操作",
+              width: "100px",
+              render: (subject) => (
+                <Button size="sm" disabled={!can("subject:remove")} onClick={() => onRemove(subject)}>
+                  移除
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
+    </PageSection>
   );
 }
 
 function CaseInvestigationsTab({ caseId }: { caseId: string }) {
   const navigate = useNavigate();
   const { data, loading, error, reload } = useAsync<InvestigationRow[]>("/api/v2/investigations", [caseId], { case_id: caseId, limit: 200 });
+  const rows = data ?? [];
   return (
-    <Card title="案件调查" actions={<button type="button" className="btn btn--sm" onClick={() => navigate(`/investigations/new?case_id=${caseId}`)}>发起调查</button>}>
-      <DataTable<InvestigationRow>
-        loading={loading}
-        error={error}
-        onRetry={reload}
-        rows={data ?? []}
-        rowKey={(r) => r.id}
-        columns={[
-          { key: "goal", header: "目的", render: (r) => <a href={`/app-v2/investigations/${r.id}/workbench`} onClick={(e) => { e.preventDefault(); navigate(`/investigations/${r.id}/workbench`); }}>{r.goal}</a> },
-          { key: "status", header: "状态", width: "120px", render: (r) => <StatusBadge tone={statusToneFor(r.status)}>{r.status}</StatusBadge> },
-          { key: "findings", header: "Findings", width: "100px", render: (r) => `${r.finding_count}（待复核 ${r.pending_findings}）` },
-          { key: "evidence", header: "Evidence", width: "100px", render: (r) => r.evidence_count },
-          { key: "updated", header: "更新", width: "140px", render: (r) => <RelativeTime value={r.updated_at} /> },
-        ]}
-      />
-    </Card>
+    <PageSection
+      title="案件调查"
+      count={`${rows.length} 个`}
+      actions={
+        <Button size="sm" onClick={() => navigate(`/investigations/new?case_id=${caseId}`)}>
+          发起调查
+        </Button>
+      }
+    >
+      <Card flush>
+        <DataTable<InvestigationRow>
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          rows={rows}
+          rowKey={(row) => row.id}
+          caption="案件调查列表"
+          columns={[
+            {
+              key: "goal",
+              header: "目的",
+              render: (row) => (
+                <Link
+                  to={`/investigations/${row.id}/workbench`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {row.goal}
+                </Link>
+              ),
+            },
+            { key: "status", header: "状态", width: "140px", render: (row) => <StatusBadgeForState value={row.status} /> },
+            { key: "findings", header: "Findings", width: "160px", render: (row) => `${row.finding_count}（待复核 ${row.pending_findings}）` },
+            { key: "evidence", header: "Evidence", width: "110px", render: (row) => <span>{row.evidence_count}</span> },
+            { key: "updated", header: "更新", width: "140px", render: (row) => <RelativeTime value={row.updated_at} /> },
+          ]}
+        />
+      </Card>
+    </PageSection>
   );
 }
 
 function CaseEvidenceTab({ caseId }: { caseId: string }) {
   const investigations = useAsync<InvestigationRow[]>("/api/v2/investigations", [caseId], { case_id: caseId, limit: 200 });
+  const rows = investigations.data ?? [];
   return (
-    <Card title="案件证据">
-      {investigations.loading ? <SkeletonRows rows={3} columns={3} /> : null}
-      {investigations.error ? <ErrorState title="调查列表加载失败" message={investigations.error} onRetry={investigations.reload} /> : null}
-      {!investigations.loading && (investigations.data ?? []).length === 0 ? <EmptyState title="该案件还没有调查" /> : null}
-      <div className="s4-list">
-        {(investigations.data ?? []).map((inv) => (
-          <div className="s4-list__item" key={inv.id}>
-            <div className="s4-list__main">
-              <div className="s4-list__title">{inv.goal}</div>
-              <div className="s4-list__sub">
-                {inv.finding_count} Finding · {inv.evidence_count} Evidence · 状态 {inv.status}
-              </div>
-            </div>
-            <span className="s4-list__actions">
-              <Link className="btn btn--sm" to={`/investigations/${inv.id}/findings`}>
-                Findings
-              </Link>
-              <Link className="btn btn--sm" to={`/investigations/${inv.id}/workbench`}>
-                工作台
-              </Link>
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <PageSection title="案件证据" count={`${rows.length} 个调查`}>
+      <Card flush>
+        {investigations.loading ? <SkeletonRows rows={3} columns={5} /> : null}
+        {!investigations.loading && investigations.error ? (
+          <ErrorState title="调查列表加载失败" message={investigations.error} onRetry={investigations.reload} />
+        ) : null}
+        {!investigations.loading && !investigations.error && rows.length === 0 ? (
+          <EmptyState title="该案件还没有调查" />
+        ) : null}
+        {!investigations.loading && !investigations.error && rows.length > 0 ? (
+          <DataTable<InvestigationRow>
+            rows={rows}
+            rowKey={(row) => row.id}
+            caption="按调查汇总的证据"
+            columns={[
+              { key: "goal", header: "调查", render: (row) => <span>{row.goal}</span> },
+              { key: "status", header: "状态", width: "140px", render: (row) => <StatusBadgeForState value={row.status} /> },
+              { key: "evidence", header: "Evidence", width: "110px", render: (row) => <span>{row.evidence_count}</span> },
+              { key: "findings", header: "Finding", width: "110px", render: (row) => <span>{row.finding_count}</span> },
+              { key: "updated", header: "更新", width: "140px", render: (row) => <RelativeTime value={row.updated_at} /> },
+              {
+                key: "ops",
+                header: "操作",
+                width: "190px",
+                render: (row) => (
+                  <span className="toolbar">
+                    <Link className="btn btn--sm" to={`/investigations/${row.id}/findings`}>
+                      Findings
+                    </Link>
+                    <Link className="btn btn--sm" to={`/investigations/${row.id}/workbench`}>
+                      工作台
+                    </Link>
+                  </span>
+                ),
+              },
+            ]}
+          />
+        ) : null}
+      </Card>
+    </PageSection>
   );
 }
 
@@ -457,6 +591,7 @@ function CaseReportsTab({ caseId }: { caseId: string }) {
   const { can } = useAuth();
   const action = useAction();
   const dialog = useDialog();
+  const rows = data ?? [];
 
   const generate = useCallback(async () => {
     const options = investigations.data ?? [];
@@ -491,45 +626,82 @@ function CaseReportsTab({ caseId }: { caseId: string }) {
   );
 
   return (
-    <Card title="案件报告" actions={<button type="button" className="btn btn--sm" disabled={!can("report:create")} onClick={generate}>生成报告</button>}>
-      <DataTable<ReportRow>
-        loading={loading}
-        error={error}
-        onRetry={reload}
-        rows={data ?? []}
-        rowKey={(r) => r.id}
-        columns={[
-          { key: "revision", header: "revision", width: "100px", render: (r) => `r${r.revision}` },
-          { key: "status", header: "状态", width: "120px", render: (r) => <StatusBadge tone={statusToneFor(r.status)}>{r.status}</StatusBadge> },
-          { key: "hash", header: "SHA-256", render: (r) => <EntityLink value={r.content_hash} /> },
-          { key: "size", header: "大小", width: "100px", render: (r) => `${r.size_bytes} B` },
-          { key: "generated", header: "生成时间", width: "160px", render: (r) => formatTime(r.generated_at) },
-          { key: "ops", header: "", width: "160px", render: (r) => <span className="s4-button-row"><button type="button" className="btn btn--sm" onClick={() => navigate(`/reports/${r.id}`)}>打开</button><button type="button" className="btn btn--sm" disabled={!["approved", "signed", "archived"].includes(r.status)} onClick={() => download(r)}>下载</button></span> },
-        ]}
-      />
-    </Card>
+    <PageSection
+      title="案件报告"
+      count={`${rows.length} 份`}
+      actions={
+        <Button size="sm" disabled={!can("report:create")} busy={action.busy} busyLabel="生成中…" onClick={generate}>
+          生成报告
+        </Button>
+      }
+    >
+      <Card flush>
+        <DataTable<ReportRow>
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          rows={rows}
+          rowKey={(report) => report.id}
+          caption="案件报告列表"
+          columns={[
+            { key: "revision", header: "revision", width: "100px", render: (report) => <span className="mono">{"r" + report.revision}</span> },
+            { key: "status", header: "状态", width: "140px", render: (report) => <StatusBadgeForState value={report.status} /> },
+            { key: "hash", header: "SHA-256", render: (report) => <HashValue value={report.content_hash} label="报告内容哈希" /> },
+            { key: "size", header: "大小", width: "110px", render: (report) => <span>{report.size_bytes + " B"}</span> },
+            { key: "generated", header: "生成时间", width: "170px", render: (report) => <span>{formatTime(report.generated_at)}</span> },
+            {
+              key: "ops",
+              header: "操作",
+              width: "180px",
+              render: (report) => (
+                <span className="toolbar">
+                  <Button size="sm" onClick={() => navigate(`/reports/${report.id}`)}>
+                    打开
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!["approved", "signed", "archived"].includes(report.status)}
+                    onClick={() => void download(report)}
+                  >
+                    下载
+                  </Button>
+                </span>
+              ),
+            },
+          ]}
+        />
+      </Card>
+    </PageSection>
   );
 }
 
 function ActivityTab({ caseId }: { caseId: string }) {
   const { data, loading, error, reload } = useAsync<Activity[]>(`/api/v2/cases/${caseId}/activity`, [caseId], { limit: 200 });
+  const rows = data ?? [];
   return (
-    <Card title="案件动态">
-      {loading ? <SkeletonRows rows={5} columns={3} /> : null}
-      {error ? <ErrorState title="动态加载失败" message={error} onRetry={reload} /> : null}
-      {!loading && !error && (data ?? []).length === 0 ? <EmptyState title="暂无业务动态" /> : null}
-      <div className="s4-list">
-        {(data ?? []).map((a) => (
-          <div className="s4-list__item" key={a.id}>
-            <div className="s4-list__main">
-              <div className="s4-list__title">{a.summary}</div>
-              <div className="s4-list__sub">
-                {a.event_type} · {a.actor_display || "system"} · {formatTime(a.created_at)}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <PageSection title="案件动态" count={`${rows.length} 条`}>
+      <Card>
+        {loading ? <SkeletonRows rows={5} columns={3} /> : null}
+        {!loading && error ? <ErrorState title="动态加载失败" message={error} onRetry={reload} /> : null}
+        {!loading && !error && rows.length === 0 ? <EmptyState title="暂无业务动态" /> : null}
+        {!loading && !error && rows.length > 0 ? (
+          <Timeline
+            ariaLabel="案件动态时间线"
+            items={rows.map((item) => ({
+              key: item.id,
+              title: item.summary,
+              meta: (
+                <span>
+                  {item.event_type} · {item.actor_display || "system"} · {formatTime(item.created_at)}
+                  {item.object_type ? " · 对象 " : ""}
+                  {item.object_type ? <span className="mono">{item.object_type}</span> : null}
+                  {item.object_id ? <HashValue value={item.object_id} label="对象 ID" /> : null}
+                </span>
+              ),
+            }))}
+          />
+        ) : null}
+      </Card>
+    </PageSection>
   );
 }

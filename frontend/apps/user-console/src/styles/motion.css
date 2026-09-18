@@ -1,0 +1,124 @@
+/*
+ * 用户端动效系统（蓝图 §7）
+ *
+ * 规则：
+ *   - 只用 transform / opacity 等合成友好属性驱动动画（§15）。
+ *   - 时长只能取四档语义令牌，不写裸毫秒。
+ *   - 不做"每张卡都上浮缩放闪光"的动画集合；动画只用于说明关系、状态变化和空间连续性。
+ *   - `prefers-reduced-motion: reduce` 下全部关闭，但功能状态仍可读（§7.4）。
+ */
+
+/* 页面主区域切换：淡入 + 8px 位移，180–240ms（蓝图 §7.2） */
+.cs-page-enter { animation: cs-page-in var(--motion-standard) var(--ease-out); }
+@keyframes cs-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes cs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cs-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes cs-popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-command-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+/* 检查器/抽屉从右侧进入配合主画布 layout 缩放，而不是盖住内容（蓝图 §7.2） */
+@keyframes cs-drawer-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+.cs-drawer-enter { animation: cs-drawer-in var(--motion-spatial) var(--ease-out); }
+
+@keyframes cs-spin { to { transform: rotate(360deg); } }
+@keyframes cs-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes cs-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+/* RUNNING 状态的低速脉冲：只用于状态点与进度条，不用于正文（蓝图 §9.2） */
+@keyframes cs-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(14,165,183,.42); }
+  50% { box-shadow: 0 0 0 4px rgba(14,165,183,0); }
+}
+/* 高精度数值不做滚动动画，只做一次轻微背景闪现（蓝图 §7.2） */
+@keyframes cs-flash {
+  from { background: rgba(14,165,183,.16); }
+  to { background: transparent; }
+}
+.cs-flash { animation: cs-flash var(--motion-spatial) var(--ease-out); }
+
+/* 列表首屏 stagger：只对前 8 项生效，长列表后续项不 stagger（蓝图 §7.2 / §15） */
+.cs-stagger > * { animation: cs-item-in var(--motion-standard) var(--ease-out) backwards; }
+.cs-stagger > *:nth-child(1) { animation-delay: calc(var(--stagger-step) * 1); }
+.cs-stagger > *:nth-child(2) { animation-delay: calc(var(--stagger-step) * 2); }
+.cs-stagger > *:nth-child(3) { animation-delay: calc(var(--stagger-step) * 3); }
+.cs-stagger > *:nth-child(4) { animation-delay: calc(var(--stagger-step) * 4); }
+.cs-stagger > *:nth-child(5) { animation-delay: calc(var(--stagger-step) * 5); }
+.cs-stagger > *:nth-child(6) { animation-delay: calc(var(--stagger-step) * 6); }
+.cs-stagger > *:nth-child(7) { animation-delay: calc(var(--stagger-step) * 7); }
+.cs-stagger > *:nth-child(n+8) { animation-delay: calc(var(--stagger-step) * 8); }
+@keyframes cs-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+ * 页面隐藏时暂停装饰性动画（蓝图 §15）。
+ * 只停动画，不停业务订阅：数据照常到达，回到前台立即恢复。
+ */
+html[data-page-visible="false"] .cs-page-enter,
+html[data-page-visible="false"] .cs-stagger > *,
+html[data-page-visible="false"] .cs-pipeline__glyph,
+html[data-page-visible="false"] .cs-progressglyph svg,
+html[data-page-visible="false"] .cs-progress__fill--indeterminate,
+html[data-page-visible="false"] .cs-compactprogress__fill--indeterminate,
+html[data-page-visible="false"] .skeleton,
+html[data-page-visible="false"] .auth-flow__edge,
+html[data-page-visible="false"] .auth-flow__node,
+html[data-page-visible="false"] .btn__spinner,
+html[data-page-visible="false"] .cs-spin {
+  animation-play-state: paused !important;
+}
+
+/* 侧栏展开/收起：宽度由 .cs-shell 的 grid-template-columns 过渡驱动，图标位置保持连续 */
+@media (prefers-reduced-motion: reduce) {
+  .cs-page-enter,
+  .cs-drawer-enter,
+  .cs-stagger > *,
+  .cs-flash,
+  .cs-popover,
+  .cs-command,
+  .cs-bulkbar,
+  .cs-shell__scrim {
+    animation: none !important;
+  }
+  .cs-progress__fill,
+  .cs-compactprogress__fill,
+  .cs-ring__fill,
+  .cs-shell,
+  .cs-shell__rail,
+  .cs-shell__topbar {
+    transition: none !important;
+  }
+  /* 图谱/图表自动播放由 JS 读取 matchMedia 关闭，这里只兜底 CSS 侧 */
+  .cs-pipeline__glyph[data-state="running"],
+  .cs-progress__fill--indeterminate,
+  .cs-compactprogress__fill--indeterminate,
+  .btn__spinner {
+    animation: none !important;
+  }
+  /* 进度仍然立即显示最新数值：把 indeterminate 变成静态满格纹理，而不是消失 */
+  .cs-progress__fill--indeterminate,
+  .cs-compactprogress__fill--indeterminate {
+    width: 100% !important;
+    background: repeating-linear-gradient(90deg, var(--cyan-500) 0 6px, transparent 6px 12px);
+  }
+  html[data-app="user"] .skeleton { animation: none; }
+}

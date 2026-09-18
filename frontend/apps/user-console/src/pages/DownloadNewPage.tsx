@@ -2,19 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@chain/api-client";
 import {
+  Button,
   Card,
   DataTable,
+  DatasetSelector,
   EmptyState,
+  EntityLink,
   ErrorState,
-  EvidenceRail,
   Field,
-  Metric,
+  HashValue,
+  InspectorDrawer,
+  KeyValueList,
+  MetricCard,
   PageHeader,
+  PageSection,
+  ParseProgressBody,
+  RadioGroup,
   SkeletonRows,
+  SplitPane,
   StatusBadge,
+  Stepper,
+  StickyActionBar,
   useDialog,
 } from "@chain/ui";
-import { formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
+import type { KeyValueEntry } from "@chain/ui";
+import { formatRawAmount, formatTime, useApi, useS5Action } from "../sprint5/common";
 import { IMPORT_FILE_EXTENSIONS, IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../import/parse-core";
 import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddressFileInWorker } from "../import/parse-client";
 
@@ -22,6 +34,10 @@ import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddress
 /* ============================================================================
  * U-DL-01 /downloads/new：真实顺序 对象 → 链与范围 → Dataset → 复用策略 →
  * Coverage/成本预览 → 确认创建。所有说明/风险/结果只通过 Dialog 呈现。
+ *
+ * 表现层（蓝图 §12.17）：顶部 Stepper 表达真实填写顺序与当前进度；
+ * 桌面为「左侧步骤表单 + 右侧 sticky 预览摘要」（SplitPane，宽度只作本地视觉偏好），
+ * ≤899px 时预览摘要移动到提交之前。业务 hook、请求参数与错误语义一律未改。
  * ==========================================================================*/
 
 interface ChainMeta {
@@ -235,8 +251,37 @@ function rangeText(body: { range: RangeBody }): string {
   return `时间 ${range.from ? formatTime(range.from) : "—"} → ${range.to ? formatTime(range.to) : "—"}`;
 }
 
+/** 五个业务步骤：顺序即真实填写顺序（蓝图 §12.17），跳转只允许回到已完成步骤。 */
+const STEP_ITEMS = [
+  { key: "objects", label: "① 对象与地址" },
+  { key: "range", label: "② 链与范围" },
+  { key: "datasets", label: "③ Dataset" },
+  { key: "reuse", label: "④ 复用策略" },
+  { key: "preview", label: "⑤ 预览与创建" },
+];
+
+/**
+ * 断点与 responsive.css 中 SplitPane 的折叠断点一致（≤899px 单列）。
+ * 窄屏下预览摘要不再占侧栏，而是移动到提交之前。
+ */
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 899px)").matches,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const query = window.matchMedia("(max-width: 899px)");
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 export default function DownloadNewPage() {
   const dialog = useDialog();
+  const isNarrow = useIsNarrow();
   const navigate = useNavigate();
   const { busy, run, client } = useS5Action();
 
@@ -261,6 +306,12 @@ export default function DownloadNewPage() {
   const [preview, setPreview] = useState<DownloadPreviewData | null>(null);
   const [previews, setPreviews] = useState<Array<{ chain: string; data: DownloadPreviewData }>>([]);
   const [previewFingerprint, setPreviewFingerprint] = useState<string | null>(null);
+  /**
+   * 上一次成功的真实预览（服务端原文），**不随参数变化清空**：
+   * 参数变化后 preview / previewFingerprint 照旧被清空（可提交资格只看它们），
+   * 这里保留一份灰化的对照值，避免用户失去"上一次到底算出什么"的参照。
+   */
+  const [lastPreview, setLastPreview] = useState<DownloadPreviewData | null>(null);
   const [lastTrace, setLastTrace] = useState<string | null>(null);
 
   const datasetsTouched = useRef(false);
@@ -476,7 +527,14 @@ export default function DownloadNewPage() {
     const progress = dialog.open({
       kind: "info",
       title: "正在隔离解析文件",
-      body: `${file.name} 在 Web Worker 中解析，页面保持可交互；超过 ${formatParseBudget(timeoutMs)}会自动中止，也可以立即取消。`,
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+          <p style={{ margin: 0 }}>
+            {`${file.name} 在 Web Worker 中解析，页面保持可交互；超过 ${formatParseBudget(timeoutMs)}会自动中止，也可以立即取消。`}
+          </p>
+          <ParseProgressBody parsedRows={0} totalRows={null} accepted={0} rejected={0} duplicates={0} state="running" />
+        </div>
+      ),
       details: [
         { label: "文件名", value: file.name },
         { label: "文件大小", value: `${file.size} 字节` },
@@ -675,6 +733,7 @@ export default function DownloadNewPage() {
     const items = responses.map((response, index) => ({ chain: payloads[index].chain, data: response!.data }));
     setPreviews(items);
     setPreview(items[0].data);
+    setLastPreview(items[0].data);
     setPreviewFingerprint(fingerprint);
     for (const item of items) await showPreviewDialog(item.data, item.chain);
     return { items, fingerprint };
@@ -815,29 +874,127 @@ export default function DownloadNewPage() {
     [dialog, preview, reusePolicy],
   );
 
-  const toggleDataset = useCallback((id: string) => {
-    datasetsTouched.current = true;
-    setDatasets((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  /** 参数变化统一失效：可提交资格只由 preview + previewFingerprint 决定（语义与原来一致）。 */
+  const invalidatePreview = useCallback(() => {
     setPreview(null);
     setPreviewFingerprint(null);
   }, []);
 
-  const previewItems = preview?.coverage.items ?? [];
+  const toggleDataset = useCallback((next: string[]) => {
+    datasetsTouched.current = true;
+    setDatasets(next);
+    setPreview(null);
+    setPreviewFingerprint(null);
+  }, []);
 
-  return (
-    <>
-      <PageHeader
-        title="新建数据下载"
-        actions={
-          <button type="button" className="btn btn--sm" onClick={() => navigate("/jobs")}>
-            任务中心
-          </button>
-        }
-      />
+  const resetAddresses = useCallback(() => {
+    setAddressText("");
+    setAddresses([]);
+    setImported([]);
+    setServerVerdict(null);
+    setParsedFrom("");
+    setPreview(null);
+    setPreviews([]);
+    setPreviewFingerprint(null);
+  }, []);
 
-      <div className="workbench">
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--sp-5)" }}>
-          <Card title="1 · 对象（地址）">
+  /* ---------------------------------------------------------------- 派生视图 */
+
+  /** 当前应处理的步骤：按真实前置条件推进，不靠滚动位置猜测。 */
+  const activeStep = addresses.length === 0 ? "objects" : !chain ? "range" : datasets.length === 0 ? "datasets" : "preview";
+
+  const jumpToStep = useCallback((key: string) => {
+    const node = document.getElementById(`download-step-${key}`);
+    if (!node) return;
+    /* prefers-reduced-motion 下不做平滑滚动（蓝图 §14）。 */
+    const reduce = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, []);
+
+  /* 选项文案与服务端 Dataset 元数据一致（label（id）），禁用态直接来自服务端 status。 */
+  const datasetOptions = useMemo(
+    () => datasetItems.map((item) => ({ value: item.id, label: `${item.label}（${item.id}）`, disabled: item.status !== "available" })),
+    [datasetItems],
+  );
+
+  /** 可提交资格只由 preview + previewFingerprint 决定；lastPreview 仅作灰化对照。 */
+  const stalePreview = preview ? null : lastPreview;
+  const shownPreview = preview ?? lastPreview;
+  const coverageItems = shownPreview?.coverage.items ?? [];
+
+  const summaryItems = useMemo<KeyValueEntry[]>(() => {
+    if (!shownPreview) return [];
+    const items: KeyValueEntry[] = [
+      { label: "复用策略", value: shownPreview.reuse.policy },
+      { label: "Coverage 命中", value: shownPreview.reuse.coverage_hit ? "是" : "否" },
+      { label: "将复用现有任务", value: shownPreview.reuse.will_reuse ? "是" : "否" },
+      { label: "refresh", value: shownPreview.reuse.refresh ? "是" : "否" },
+      {
+        label: "Provider 工作",
+        value: (
+          <StatusBadge tone={shownPreview.provider_work_required ? "warn" : "ok"}>
+            {shownPreview.provider_work_required ? "需要新增" : "复用本地"}
+          </StatusBadge>
+        ),
+      },
+      { label: "整体覆盖率", value: percent(shownPreview.coverage.overall_ratio) },
+      { label: "未覆盖区块", value: formatRawAmount(String(shownPreview.missing_blocks), 0) },
+      { label: "预估成本（USD）", value: shownPreview.estimate.estimated_cost_usd ?? "—" },
+      { label: "估算依据", value: shownPreview.estimate.basis, wide: true },
+      { label: "Coverage 来源", value: String(shownPreview.source.coverage ?? "—") },
+      { label: "Provider 来源", value: String(shownPreview.source.provider ?? "—") },
+      { label: "数据时点", value: shownPreview.source.as_of ? formatTime(String(shownPreview.source.as_of)) : "—" },
+      { label: "最近 Trace", value: lastTrace ? <HashValue value={lastTrace} label="Trace" /> : "—" },
+    ];
+    if (shownPreview.reuse.candidate) {
+      items.splice(3, 0, {
+        label: "候选任务",
+        value: (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+            <span>{`${shownPreview.reuse.candidate.job_no} · ${shownPreview.reuse.candidate.status} · ${percent(shownPreview.reuse.candidate.coverage)}`}</span>
+            <EntityLink value={shownPreview.reuse.candidate.job_id} label="job_id" />
+          </span>
+        ),
+      });
+    }
+    return items;
+  }, [shownPreview, lastTrace]);
+
+  const summaryPanel = (
+    <InspectorDrawer
+      title="预览摘要"
+      subtitle={preview ? "本次预览" : stalePreview ? "上次预览 · 已失效" : "尚未预览"}
+      ariaLabel="预览摘要"
+    >
+      {summaryItems.length === 0 ? (
+        <EmptyState title="尚未预览" />
+      ) : (
+        <div style={stalePreview ? { opacity: 0.6 } : undefined}>
+          <KeyValueList items={summaryItems} ariaLabel="预览摘要" />
+        </div>
+      )}
+    </InspectorDrawer>
+  );
+
+  const actionBar = (
+    <StickyActionBar>
+      <Button variant="secondary" onClick={() => navigate("/jobs")}>
+        取消
+      </Button>
+      <Button variant="primary" busy={busy} busyLabel="正在创建…" onClick={() => void handleCreate()}>
+        创建下载任务
+      </Button>
+    </StickyActionBar>
+  );
+
+  const stepSections = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+      <Stepper steps={STEP_ITEMS} current={activeStep} onJump={jumpToStep} ariaLabel="新建下载步骤" />
+
+      {/* ① 对象与地址：粘贴 / CSV-XLSX（隔离 Worker）导入 / 服务端再次验证 */}
+      <div id="download-step-objects" style={{ scrollMarginTop: "calc(var(--topbar-h, 56px) + var(--sp-4))" }}>
+        <PageSection title="① 对象与地址" count={`已导入 ${addresses.length} 个 · 上限 ${IMPORT_MAX_ADDRESSES}`}>
+          <Card>
             <div className="s4-form-grid">
               <div className="field field--wide">
                 <Field label={`地址列表（已导入 ${addresses.length} 个）`} htmlFor="download-addresses">
@@ -850,8 +1007,7 @@ export default function DownloadNewPage() {
                       setAddressText(event.target.value);
                       if (event.target.value.trim() !== parsedFrom) {
                         setAddresses([]);
-                        setPreview(null);
-                        setPreviewFingerprint(null);
+                        invalidatePreview();
                       }
                     }}
                   />
@@ -880,29 +1036,63 @@ export default function DownloadNewPage() {
                   type="button"
                   className="btn btn--sm btn--ghost"
                   disabled={addresses.length === 0 && addressText.trim() === ""}
-                  onClick={() => {
-                    setAddressText("");
-                    setAddresses([]);
-                    setImported([]);
-                    setServerVerdict(null);
-                    setParsedFrom("");
-                    setPreview(null);
-                    setPreviews([]);
-                    setPreviewFingerprint(null);
-                  }}
+                  onClick={resetAddresses}
                 >
                   清空
                 </button>
               </div>
               {serverVerdict && (
                 <p className="field-hint" data-testid="server-verdict-summary">
-                  {`服务端复核：接受 ${serverVerdict.summary.accepted} · 拒绝 ${serverVerdict.summary.rejected} · 链 ${Object.entries(serverVerdict.summary.chains).map(([k, v]) => `${k}:${v}`).join("、") || "—"} · 来源 ${serverVerdict.source}`}
+                  {`服务端复核：接受 ${serverVerdict.summary.accepted} · 拒绝 ${serverVerdict.summary.rejected} · 链 ${Object.entries(serverVerdict.summary.chains).map(([k, v]) => k + ":" + v).join("、") || "—"} · 来源 ${serverVerdict.source}`}
                 </p>
               )}
             </div>
-          </Card>
 
-          <Card title="2 · 链与范围">
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", marginTop: "var(--sp-5)" }}>
+              {serverVerdict && serverVerdict.rejected.length > 0 ? (
+                <PageSection title="服务端拒绝明细" count={`${serverVerdict.rejected.length} 条`}>
+                  <DataTable<ServerAddressVerdict>
+                    rows={serverVerdict.rejected}
+                    rowKey={(row, index) => `${row.row}-${row.index}-${index}`}
+                    caption="被服务端拒绝的地址行（含原始行号）"
+                    columns={[
+                      { key: "row", header: "行", width: "72px", render: (row) => <span className="mono">{row.row}</span> },
+                      { key: "input", header: "原始输入", width: "240px", render: (row) => <HashValue value={row.input} head={14} tail={8} label="地址" /> },
+                      { key: "chain", header: "链", width: "90px", render: (row) => row.chain || "—" },
+                      { key: "code", header: "代码", width: "190px", render: (row) => <span className="mono">{row.code}</span> },
+                      { key: "message", header: "说明", render: (row) => row.message || "—" },
+                    ]}
+                    empty={<EmptyState title="服务端未返回拒绝条目" />}
+                  />
+                </PageSection>
+            ) : null}
+
+            {serverVerdict && serverVerdict.field_rejections.length > 0 ? (
+                <PageSection title="字段级拒绝" count={`${serverVerdict.field_rejections.length} 条`}>
+                  <DataTable<ServerFieldRejection>
+                    rows={serverVerdict.field_rejections}
+                    rowKey={(row, index) => `${row.row}-${row.field}-${index}`}
+                    caption="被服务端拒绝的字段取值（含原始行号）"
+                    columns={[
+                      { key: "row", header: "行", width: "72px", render: (row) => <span className="mono">{row.row}</span> },
+                      { key: "field", header: "字段", width: "110px", render: (row) => <span className="mono">{row.field}</span> },
+                      { key: "code", header: "代码", width: "190px", render: (row) => <span className="mono">{row.code}</span> },
+                      { key: "count", header: "计数 / 上限", width: "120px", render: (row) => `${row.count} / ${row.limit}` },
+                      { key: "message", header: "说明", render: (row) => row.message || "—" },
+                    ]}
+                    empty={<EmptyState title="服务端未返回字段级拒绝" />}
+                  />
+                </PageSection>
+              ) : null}
+            </div>
+          </Card>
+        </PageSection>
+      </div>
+
+      {/* ② 链与范围 */}
+      <div id="download-step-range" style={{ scrollMarginTop: "calc(var(--topbar-h, 56px) + var(--sp-4))" }}>
+        <PageSection title="② 链与范围" count={chain || "未选择链"}>
+          <Card>
             <div className="s4-form-grid">
               <Field label="链" htmlFor="download-chain">
                 <select
@@ -911,8 +1101,7 @@ export default function DownloadNewPage() {
                   value={chain}
                   onChange={(event) => {
                     setChain(event.target.value);
-                    setPreview(null);
-                    setPreviewFingerprint(null);
+                    invalidatePreview();
                   }}
                 >
                   <option value="">请选择链</option>
@@ -930,8 +1119,7 @@ export default function DownloadNewPage() {
                   value={rangeType}
                   onChange={(event) => {
                     setRangeType(event.target.value as RangeType);
-                    setPreview(null);
-                    setPreviewFingerprint(null);
+                    invalidatePreview();
                   }}
                 >
                   <option value="full">full · 全量</option>
@@ -942,20 +1130,44 @@ export default function DownloadNewPage() {
               {rangeType === "block" ? (
                 <>
                   <Field label="起始区块" htmlFor="download-from-block">
-                    <input id="download-from-block" className="input" inputMode="numeric" value={fromBlock} onChange={(event) => { setFromBlock(event.target.value); setPreview(null); setPreviewFingerprint(null); }} />
+                    <input
+                      id="download-from-block"
+                      className="input mono"
+                      inputMode="numeric"
+                      value={fromBlock}
+                      onChange={(event) => { setFromBlock(event.target.value); invalidatePreview(); }}
+                    />
                   </Field>
                   <Field label="结束区块" htmlFor="download-to-block">
-                    <input id="download-to-block" className="input" inputMode="numeric" value={toBlock} onChange={(event) => { setToBlock(event.target.value); setPreview(null); setPreviewFingerprint(null); }} />
+                    <input
+                      id="download-to-block"
+                      className="input mono"
+                      inputMode="numeric"
+                      value={toBlock}
+                      onChange={(event) => { setToBlock(event.target.value); invalidatePreview(); }}
+                    />
                   </Field>
                 </>
               ) : null}
               {rangeType === "time" ? (
                 <>
                   <Field label="起始时间" htmlFor="download-from-time">
-                    <input id="download-from-time" className="input" type="datetime-local" value={fromTime} onChange={(event) => { setFromTime(event.target.value); setPreview(null); setPreviewFingerprint(null); }} />
+                    <input
+                      id="download-from-time"
+                      className="input"
+                      type="datetime-local"
+                      value={fromTime}
+                      onChange={(event) => { setFromTime(event.target.value); invalidatePreview(); }}
+                    />
                   </Field>
                   <Field label="结束时间" htmlFor="download-to-time">
-                    <input id="download-to-time" className="input" type="datetime-local" value={toTime} onChange={(event) => { setToTime(event.target.value); setPreview(null); setPreviewFingerprint(null); }} />
+                    <input
+                      id="download-to-time"
+                      className="input"
+                      type="datetime-local"
+                      value={toTime}
+                      onChange={(event) => { setToTime(event.target.value); invalidatePreview(); }}
+                    />
                   </Field>
                 </>
               ) : null}
@@ -966,8 +1178,7 @@ export default function DownloadNewPage() {
                   value={performanceMode}
                   onChange={(event) => {
                     setPerformanceMode(event.target.value as PerformanceMode);
-                    setPreview(null);
-                    setPreviewFingerprint(null);
+                    invalidatePreview();
                   }}
                 >
                   <option value="safe">safe</option>
@@ -977,57 +1188,68 @@ export default function DownloadNewPage() {
               </Field>
             </div>
           </Card>
+        </PageSection>
+      </div>
 
-          <Card title="3 · Dataset">
+      {/* ③ Dataset */}
+      <div id="download-step-datasets" style={{ scrollMarginTop: "calc(var(--topbar-h, 56px) + var(--sp-4))" }}>
+        <PageSection title="③ Dataset" count={`已选 ${datasets.length} / 上限 6`}>
+          <Card>
             {datasetsApi.loading ? (
               <SkeletonRows rows={2} columns={3} />
             ) : datasetItems.length === 0 ? (
-              <EmptyState title="服务端未返回可用 Dataset" />
+              <EmptyState
+                title="服务端未返回可用 Dataset"
+                action={
+                  <button type="button" className="btn btn--sm" onClick={() => void datasetsApi.reload()}>
+                    重新加载
+                  </button>
+                }
+              />
             ) : (
-              <div className="toolbar" role="group" aria-label="Dataset 选择">
-                {datasetItems.map((item) => (
-                  <label key={item.id} className="btn btn--sm" style={{ cursor: item.status === "available" ? "pointer" : "not-allowed" }}>
-                    <input
-                      type="checkbox"
-                      checked={datasets.includes(item.id)}
-                      disabled={item.status !== "available"}
-                      onChange={() => toggleDataset(item.id)}
-                    />
-                    {item.label}（{item.id}）
-                  </label>
-                ))}
-              </div>
+              <DatasetSelector datasets={datasetOptions} values={datasets} onChange={toggleDataset} label="Dataset" max={6} />
             )}
           </Card>
+        </PageSection>
+      </div>
 
-          <Card title="4 · 复用策略">
-            <div className="toolbar" role="radiogroup" aria-label="复用策略">
-              <label className="btn btn--sm" style={{ cursor: "pointer" }}>
-                <input type="radio" name="reuse-policy" checked={reusePolicy === "prefer_local"} onChange={() => void chooseReusePolicy("prefer_local")} />
-                prefer_local（默认，优先复用本地）
-              </label>
-              <label className="btn btn--sm" style={{ cursor: "pointer" }}>
-                <input type="radio" name="reuse-policy" checked={reusePolicy === "refresh"} onChange={() => void chooseReusePolicy("refresh")} />
-                refresh（不复用，新增 Provider 工作）
-              </label>
-            </div>
+      {/* ④ 复用策略 */}
+      <div id="download-step-reuse" style={{ scrollMarginTop: "calc(var(--topbar-h, 56px) + var(--sp-4))" }}>
+        <PageSection title="④ 复用策略" count={reusePolicy}>
+          <Card>
+            <RadioGroup<ReusePolicy>
+              name="reuse-policy"
+              ariaLabel="复用策略"
+              value={reusePolicy}
+              onChange={(next) => void chooseReusePolicy(next)}
+              options={[
+                { value: "prefer_local", label: "prefer_local（默认，优先复用本地）" },
+                { value: "refresh", label: "refresh（不复用，新增 Provider 工作）" },
+              ]}
+            />
           </Card>
+        </PageSection>
+      </div>
 
-          <Card
-            title="5 · Coverage / 成本预览"
-            actions={
-              <span className="toolbar">
-                {preview ? (
-                  <button type="button" className="btn btn--sm" onClick={() => void showPreviewDialog(preview)}>
-                    {preview.provider_work_required ? `成本/风险说明（${preview.risks.length}）` : "复用说明"}
-                  </button>
-                ) : null}
-                <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void handlePreview()}>
-                  {busy ? "处理中…" : "预览 Coverage 与成本"}
+      {/* ⑤ Coverage 与成本预览 */}
+      <div id="download-step-preview" style={{ scrollMarginTop: "calc(var(--topbar-h, 56px) + var(--sp-4))" }}>
+        <PageSection
+          title="⑤ Coverage 与成本预览"
+          count={preview ? "本次预览可提交" : stalePreview ? "上次预览已失效" : "尚未预览"}
+          actions={
+            <span className="toolbar">
+              {preview ? (
+                <button type="button" className="btn btn--sm" onClick={() => void showPreviewDialog(preview)}>
+                  {preview.provider_work_required ? `成本/风险说明（${preview.risks.length}）` : "复用说明"}
                 </button>
-              </span>
-            }
-          >
+              ) : null}
+              <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void handlePreview()}>
+                {busy ? "处理中…" : "预览 Coverage 与成本"}
+              </button>
+            </span>
+          }
+        >
+          <Card>
             {chainsApi.loading || datasetsApi.loading ? (
               <SkeletonRows rows={3} columns={4} />
             ) : chainsApi.error ? (
@@ -1038,7 +1260,7 @@ export default function DownloadNewPage() {
                   void chainsApi.reload();
                 }}
               />
-            ) : !preview ? (
+            ) : !shownPreview ? (
               <EmptyState
                 title="尚未预览"
                 action={
@@ -1048,40 +1270,52 @@ export default function DownloadNewPage() {
                 }
               />
             ) : (
-              <>
+              <div style={stalePreview ? { opacity: 0.6 } : undefined}>
                 <div className="metric-grid">
-                  <Metric label="整体覆盖率" value={percent(preview.coverage.overall_ratio)} tone={preview.coverage.overall_ratio >= 1 ? "ok" : "warn"} />
-                  <Metric label="未覆盖区块" value={formatRawAmount(String(preview.missing_blocks), 0)} />
-                  <Metric
+                  <MetricCard
+                    label="整体覆盖率"
+                    value={percent(shownPreview.coverage.overall_ratio)}
+                    tone={shownPreview.coverage.overall_ratio >= 1 ? "ok" : "warn"}
+                  />
+                  <MetricCard label="未覆盖区块" value={formatRawAmount(String(shownPreview.missing_blocks), 0)} />
+                  <MetricCard
                     label="预估行数"
-                    value={preview.estimate.estimated_rows === null ? "—" : formatRawAmount(String(preview.estimate.estimated_rows), 0)}
+                    value={shownPreview.estimate.estimated_rows === null ? "—" : formatRawAmount(String(shownPreview.estimate.estimated_rows), 0)}
+                    source="estimate.estimated_rows"
+                    sourceNote="由 /api/v2/downloads/preview 返回；null 表示服务端未给出估算，界面不做二次估算。"
                   />
-                  <Metric label="预估成本 USD" value={preview.estimate.estimated_cost_usd ?? "—"} />
-                  <Metric
+                  <MetricCard
+                    label="预估成本 USD"
+                    value={shownPreview.estimate.estimated_cost_usd ?? "—"}
+                    source="estimate.estimated_cost_usd"
+                    sourceNote="服务端返回的十进制字符串原样展示，不经过 JS number，避免精度丢失。"
+                  />
+                  <MetricCard
                     label="预估耗时（秒）"
-                    value={preview.estimate.estimated_time_seconds === null ? "—" : String(preview.estimate.estimated_time_seconds)}
+                    value={shownPreview.estimate.estimated_time_seconds === null ? "—" : String(shownPreview.estimate.estimated_time_seconds)}
                   />
-                  <Metric
+                  <MetricCard
                     label="Provider 工作"
                     value={
-                      <StatusBadge tone={preview.provider_work_required ? "warn" : "ok"}>
-                        {preview.provider_work_required ? "需要新增" : "复用本地"}
+                      <StatusBadge tone={shownPreview.provider_work_required ? "warn" : "ok"}>
+                        {shownPreview.provider_work_required ? "需要新增" : "复用本地"}
                       </StatusBadge>
                     }
                   />
                 </div>
                 <div style={{ marginTop: "var(--sp-4)" }}>
                   <DataTable<PreviewCoverageItem>
-                    rows={previewItems}
+                    rows={coverageItems}
                     rowKey={(row, index) => `${row.subject}-${row.dataset}-${index}`}
+                    caption="每个对象在每个 Dataset 上的真实 Coverage"
                     columns={[
-                      { key: "subject", header: "对象", width: "170px", render: (row) => <span className="mono" title={row.subject}>{shortValue(row.subject, 12, 8)}</span> },
-                      { key: "dataset", header: "Dataset", width: "120px", render: (row) => row.dataset },
-                      { key: "ratio", header: "Coverage", width: "90px", render: (row) => percent(row.ratio) },
+                      { key: "subject", header: "对象", width: "200px", render: (row) => <HashValue value={row.subject} head={12} tail={8} label="地址" /> },
+                      { key: "dataset", header: "Dataset", width: "140px", render: (row) => row.dataset },
+                      { key: "ratio", header: "Coverage", width: "100px", render: (row) => percent(row.ratio) },
                       {
                         key: "blocks",
                         header: "已覆盖 / 总区块",
-                        width: "150px",
+                        width: "170px",
                         render: (row) => `${formatRawAmount(String(row.covered_blocks), 0)} / ${formatRawAmount(String(row.total_blocks), 0)}`,
                       },
                       { key: "gaps", header: "缺口", width: "90px", render: (row) => String(row.gaps.length) },
@@ -1094,36 +1328,72 @@ export default function DownloadNewPage() {
                     empty={<EmptyState title="服务端未返回 Coverage 明细" />}
                   />
                 </div>
-              </>
+              </div>
             )}
           </Card>
-
-          <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-            <button type="button" className="btn" onClick={() => navigate("/jobs")}>
-              取消
-            </button>
-            <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void handleCreate()}>
-              {busy ? "正在创建…" : "创建下载任务"}
-            </button>
-          </div>
-        </div>
-
-        <EvidenceRail
-          title="预览来源与复用"
-          items={[
-            { label: "复用策略", value: preview?.reuse.policy ?? reusePolicy },
-            { label: "Coverage 命中", value: preview ? (preview.reuse.coverage_hit ? "是" : "否") : "—" },
-            { label: "将复用", value: preview ? (preview.reuse.will_reuse ? "是" : "否") : "—" },
-            { label: "候选任务", value: preview?.reuse.candidate ? `${preview.reuse.candidate.job_no} · ${preview.reuse.candidate.status}` : "—" },
-            { label: "refresh", value: preview ? (preview.reuse.refresh ? "是" : "否") : "—" },
-            { label: "估算依据", value: preview?.estimate.basis ?? "—" },
-            { label: "Coverage 来源", value: String(preview?.source?.coverage ?? "—") },
-            { label: "Provider 来源", value: String(preview?.source?.provider ?? "—") },
-            { label: "数据时点", value: preview ? formatTime(String(preview.source.as_of ?? "")) : "—" },
-            { label: "最近 Trace", value: lastTrace ?? "—" },
-          ]}
-        />
+        </PageSection>
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="新建数据下载"
+        breadcrumb={[{ label: "任务中心", to: "/jobs" }, { label: "新建数据下载" }]}
+        status={
+          addresses.length === 0 ? (
+            <StatusBadge tone="neutral">尚未导入地址</StatusBadge>
+          ) : (
+            <StatusBadge tone="info">{`${addresses.length} 个地址`}</StatusBadge>
+          )
+        }
+        meta={
+          <span className="cs-meta">
+            <span className="cs-meta__item">
+              链元数据<b>/api/v2/meta/chains</b>
+            </span>
+            <span className="cs-meta__item">
+              Dataset 元数据<b>/api/v2/meta/datasets</b>
+            </span>
+            <span className="cs-meta__item">
+              预览接口<b>/api/v2/downloads/preview</b>
+            </span>
+          </span>
+        }
+        secondaryAction={
+          <button type="button" className="btn btn--sm" onClick={() => navigate("/jobs")}>
+            任务中心
+          </button>
+        }
+      />
+
+      {isNarrow ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+          {stepSections}
+          {summaryPanel}
+          {actionBar}
+        </div>
+      ) : (
+        <SplitPane
+          storageKey="cs-download-new-aside"
+          asideLabel="预览摘要"
+          defaultAsideWidth={360}
+          minAsideWidth={300}
+          maxAsideWidth={520}
+          main={
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+              {stepSections}
+              {actionBar}
+            </div>
+          }
+          aside={
+            <div style={{ position: "sticky", top: "calc(var(--topbar-h, 56px) + var(--sp-4))", minWidth: 0 }}>
+              {summaryPanel}
+            </div>
+          }
+        />
+      )}
     </>
   );
 }

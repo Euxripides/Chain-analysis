@@ -1,0 +1,107 @@
+/*
+ * 用户端响应式与溢出守卫（蓝图 §13 / §14）
+ *
+ * 强制断点：390×844、768×1024、1024×768、1440×900；补测 1920×1080、2560×1440。
+ * 页面 scrollWidth <= clientWidth + 1 是硬约束——宽表格只能在自己的滚动容器内滚动。
+ */
+
+html[data-app="user"] { overflow-x: hidden; }
+
+/* 全局溢出防线：弹性/网格子项默认 min-width:auto，长哈希会把整页撑宽 */
+html[data-app="user"] .cs-shell__content > *,
+html[data-app="user"] .cs-shell__content > * > * { min-width: 0; }
+
+/* 长标识一律可换行；表格里靠视觉省略 + 完整 title 表达（蓝图 §13） */
+html[data-app="user"] .mono,
+html[data-app="user"] .cs-hash__text,
+html[data-app="user"] .cs-objecthead__value { min-width: 0; }
+
+/* 表格容器：自己滚动，不把页面撑开 */
+html[data-app="user"] .table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-app="user"] .table { min-width: max-content; }
+
+/* 吸顶表头：不遮挡焦点元素；只有滚动容器本身溢出时才吸顶 */
+html[data-app="user"] .table thead th { z-index: 2; }
+
+/* 图表容器：横向不溢出，内部滚动 */
+.cs-chart-frame { width: 100%; max-width: 100%; overflow-x: auto; }
+
+/* ---------------- 断点策略（蓝图 §13 表格） ---------------- */
+
+/* 640–899px：单列或 2 列，右栏改抽屉，表格局部滚动 */
+@media (max-width: 899px) {
+  .cs-split { flex-direction: column; align-items: stretch; }
+  .cs-split__handle { display: none; }
+  .cs-split__pane--aside { width: 100% !important; }
+  .cs-evidence-rail-mobile { width: 100%; }
+  html[data-app="user"] .evidence-rail { width: 100%; }
+  .cs-hier__bar { width: 108px; }
+  .cs-rate { min-width: 96px; }
+}
+
+/* <640px：单列、卡片列表、底部操作栏 */
+@media (max-width: 639px) {
+  /*
+   * 这里**刻意不把表格拆成"隐藏表头的块"**。
+   *
+   * 曾经的写法是 `thead { display: none }` + `td { display: block }`，
+   * 结果是移动端每一行都失去列标签——用户看到一串没有含义的值，
+   * 比横向滚动更难用。正确做法是让表格保留表头、由 `.table-scroll` 自己横向滚动
+   * （蓝图 §13"宽表格只能在自己的滚动容器内滚动"），
+   * 而真正需要在窄屏换形态的列表页由页面自己渲染 `.cs-rowcards` 卡片列表。
+   */
+  html[data-app="user"] .table-scroll { max-height: none !important; }
+  html[data-app="user"] .table th { position: sticky; top: 0; }
+  .cs-page--reading { max-width: none; }
+  .cs-bento { grid-template-columns: minmax(0, 1fr); }
+  .cs-stickybar {
+    /* 移动底部操作栏必须避开 iOS safe area 与 home indicator */
+    position: sticky; bottom: 0;
+    margin: 0 calc(var(--sp-3) * -1);
+    padding: var(--sp-3) var(--sp-3) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-default);
+  }
+  .cs-stickybar .btn { flex: 1 1 auto; min-height: var(--control-h-mobile); }
+  /* 移动端输入不得低于 16px，避免 iOS 自动缩放（蓝图 §6.2） */
+  html[data-app="user"] .input,
+  html[data-app="user"] .select,
+  html[data-app="user"] .textarea,
+  .cs-command__input { font-size: 16px; }
+  .cs-usermenu__name { display: none; }
+}
+
+/* 900–1199px：桌面导航，工作台从三栏降为两栏 */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .cs-workbench { grid-template-columns: minmax(0, 1fr) 320px !important; }
+  .cs-workbench > .cs-workbench__stages { grid-column: 1 / -1; }
+}
+
+/* ≥1600px：扩展主工作区，侧栏/证据栏不无限放大（蓝图 §5.1 / §13） */
+@media (min-width: 1600px) {
+  html[data-app="user"] { --page-gutter: 32px; --card-pad: 24px; }
+  .cs-shell__content { gap: var(--sp-6); }
+  html[data-app="user"] .evidence-rail { width: 360px; }
+}
+@media (min-width: 2200px) {
+  html[data-app="user"] .cs-shell__content { padding-left: var(--sp-12); padding-right: var(--sp-12); }
+}
+
+/* 触摸目标：移动端 icon-only 控件至少 44×44（蓝图 §8.2 / §14） */
+@media (pointer: coarse) {
+  .cs-iconbtn, .cs-copybtn { min-width: var(--control-h-mobile); min-height: var(--control-h-mobile); }
+  .cs-copybtn { width: var(--control-h-mobile); height: var(--control-h-mobile); }
+  html[data-app="user"] .btn--sm { min-height: var(--control-h-mobile); padding: 0 var(--sp-4); }
+  .cs-chip { min-height: var(--control-h-mobile); }
+}
+
+/* 打印/横向窄屏兜底 */
+@media (max-width: 400px) {
+  .cs-stepper__sep { display: none; }
+  .cs-stepper { gap: var(--sp-1); }
+}

@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { X } from "lucide-react";
+import { Check, CircleAlert, Info, ShieldQuestion, TriangleAlert, X } from "lucide-react";
 
 /**
  * Dialog 是两套系统里唯一的提示通道。
@@ -208,12 +208,19 @@ function defaultConfirmActions(): DialogAction[] {
   ];
 }
 
-const KIND_META: Record<DialogKind, { tone: string; label: string }> = {
-  info: { tone: "info", label: "提示" },
-  success: { tone: "ok", label: "已完成" },
-  warning: { tone: "warn", label: "注意" },
-  error: { tone: "danger", label: "错误" },
-  confirm: { tone: "warn", label: "请确认" },
+/**
+ * 类型图标 + 颜色（蓝图 §10.2"顶部：类型图标、标题、关闭按钮"）。
+ *
+ * 图标是**形状通道**：即使把界面转成灰度，五种弹窗仍然可区分，
+ * 不会退化成"只能靠红/黄/蓝判断这是不是危险操作"（§14）。
+ * `label` 继续用于屏幕阅读器，不进入可视觉阅读的标题区。
+ */
+const KIND_META: Record<DialogKind, { tone: string; label: string; icon: React.ReactNode }> = {
+  info: { tone: "info", label: "提示", icon: <Info size={17} strokeWidth={2.3} /> },
+  success: { tone: "ok", label: "已完成", icon: <Check size={17} strokeWidth={2.8} /> },
+  warning: { tone: "warn", label: "注意", icon: <TriangleAlert size={17} strokeWidth={2.3} /> },
+  error: { tone: "danger", label: "错误", icon: <CircleAlert size={17} strokeWidth={2.3} /> },
+  confirm: { tone: "warn", label: "请确认", icon: <ShieldQuestion size={17} strokeWidth={2.3} /> },
 };
 
 /** 表单初始值：只接受显式 defaultValue，其余字段留空（绝不预填敏感值）。 */
@@ -325,15 +332,24 @@ function DialogHost({ request, onResolve }: { request: DialogRequest; onResolve:
       <div
         ref={dialogRef}
         className={`dialog${request.details && request.details.length > 4 ? " dialog--wide" : ""}`}
+        data-kind={request.kind}
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
         aria-describedby="dialog-body"
       >
         <div className="dialog__head">
-          <span className={`badge badge--${meta.tone}`} aria-hidden="true">
-            {meta.label}
+          {/*
+            类型标记同时包含"图标"和"文字"两个节点，由各端 CSS 决定显示哪一个：
+              · 用户端（html[data-app="user"]）：显示图标 —— 形状通道，灰度下也能区分五种弹窗；
+              · 后台端（默认，无 data-app）：显示原来的文字徽标 —— 与重构前完全一致。
+            这样共享组件形态变化被用户端作用域隔离，后台不会被动改变（蓝图 §16）。
+          */}
+          <span className={`dialog__kindbadge badge badge--${meta.tone}`} aria-hidden="true">
+            <span className="dialog__kindicon">{meta.icon}</span>
+            <span className="dialog__kindlabel">{meta.label}</span>
           </span>
+          <span className="visually-hidden">{meta.label}</span>
           <h2 className="dialog__title" id="dialog-title">
             {request.title}
           </h2>

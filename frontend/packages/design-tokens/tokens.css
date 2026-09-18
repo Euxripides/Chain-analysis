@@ -83,10 +83,138 @@
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-fast: 120ms;
   --dur: 200ms;
+
+  /* ==========================================================================
+   * 用户端重构蓝图 §6：语义令牌扩展层（纯新增，不修改上方任何既有变量名与取值）
+   *
+   * 为什么是新增而不是改值：`frontend/apps/admin-console` 与用户端共用本文件，
+   * 蓝图第 16 行明确"不得让后台页面被动改变"。因此这里只**扩充**语义令牌；
+   * 用户端的实际配色重映射放在 `apps/user-console/src/styles/user-tokens.css`
+   * 的 `:root[data-app="user"]` 作用域里，后台读取到的仍是原有 `--c-*` 取值。
+   *
+   * 命名分层：中性色阶 → 语义角色 → 交互 → 状态 → 图谱/图表序列。
+   * 组件只能引用语义角色层，不直接引用色阶层，也不写死十六进制。
+   * ========================================================================== */
+
+  /* --- 中性色阶（蓝图 §6.1） --- */
+  --ink-950: #0A0E14;          /* 侧栏最深背景 */
+  --ink-900: #111720;          /* 侧栏表面、暗色浮层 */
+  --ink-800: #1B2430;
+  --graphite-900: #111827;     /* 主文字 */
+  --slate-600: #596273;        /* 次级文字（白底 6.14:1 / 画布底 5.68:1） */
+  --slate-400: #8A93A3;        /* 深色面上的次级文字（墨黑底 6.25:1） */
+  --canvas-50: #F5F6F8;        /* 页面底色 */
+
+  /* --- 品牌与信号色 --- */
+  --indigo-600: #4353E6;       /* 主操作、焦点、当前对象（白底 5.80:1） */
+  --indigo-700: #3543C9;
+  --indigo-soft: #EDEFFE;
+  --cyan-500: #0EA5B7;         /* 实时数据、链路流动：图形填充色，不用于正文 */
+  --cyan-text: #0E7490;        /* 青色文字安全色（白底 5.36:1） */
+  --cyan-soft: #E6F7F9;
+  --amber-600: #B45309;        /* 等待、复核、注意（浅琥珀底 4.57:1） */
+  --amber-soft-2: #FDF3E4;
+  --green-700: #067647;        /* 成功、完成、验证（浅绿底 5.06:1） */
+  --green-soft-2: #E6F5EE;
+  --red-700: #B42318;          /* 失败、危险、取消（浅红底 5.75:1） */
+  --red-soft-2: #FDECEB;
+
+  /* --- 语义角色层（组件引用这一层） --- */
+  --bg-canvas: var(--canvas-50);
+  --bg-surface: #FFFFFF;
+  --bg-surface-muted: #FAFAFB;
+  --bg-surface-sunken: #F1F2F4;
+  --bg-rail: var(--ink-950);
+  --bg-rail-raised: var(--ink-900);
+  --bg-overlay: rgba(10, 14, 20, 0.52);
+
+  --text-primary: var(--graphite-900);
+  --text-secondary: var(--slate-600);
+  --text-muted: #7A8291;
+  --text-inverse: #FFFFFF;
+  --text-on-rail: #C9D1DE;
+  --text-on-rail-muted: var(--slate-400);
+
+  --border-subtle: #EDEFF2;
+  --border-default: #E3E6EB;
+  --border-strong: #D2D6DD;
+  --border-on-rail: rgba(255, 255, 255, 0.08);
+
+  --interactive: var(--indigo-600);
+  --interactive-hover: var(--indigo-700);
+  --interactive-soft: var(--indigo-soft);
+  --interactive-ring: rgba(67, 83, 230, 0.22);
+  --interactive-on-rail: #7B8BFF;
+
+  --state-queued: #6B7280;
+  --state-running: var(--cyan-500);
+  --state-running-text: var(--cyan-text);
+  --state-paused: var(--amber-600);
+  --state-waiting: var(--amber-600);
+  --state-completed: var(--green-700);
+  --state-failed: var(--red-700);
+  --state-cancelled: #6B7280;
+  --state-info: var(--indigo-600);
+  --state-neutral: #4B5563;
+
+  /* --- 图谱节点（颜色只是辅助，形状与图标才是主语义；蓝图 §12.13） --- */
+  --graph-node-address: #4353E6;
+  --graph-node-transaction: #0E7490;
+  --graph-node-contract: #7C3AED;
+  --graph-node-entity: #B45309;
+  --graph-node-evidence: #067647;
+  --graph-node-selected: #111827;
+  --graph-edge-default: #B6BCC7;
+  --graph-edge-active: #0EA5B7;
+
+  /* --- 图表序列（ECharts / 图表统一取色） --- */
+  --chart-1: #4353E6;
+  --chart-2: #0EA5B7;
+  --chart-3: #B45309;
+  --chart-4: #067647;
+  --chart-5: #7C3AED;
+  --chart-6: #B42318;
+  --chart-7: #2563EB;
+  --chart-8: #64748B;
+
+  /* --- 动效等级（蓝图 §7.1）：组件只能引用这四档 --- */
+  --motion-instant: 100ms;
+  --motion-fast: 160ms;
+  --motion-standard: 240ms;
+  --motion-spatial: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --stagger-step: 32ms;
+
+  /* --- 层级（蓝图 §6.4）：禁止再出现 9999 --- */
+  --z-sticky: 20;
+  --z-rail: 30;
+  --z-popover: 50;
+  --z-command: 800;
+  --z-dialog: 1000;
+  --z-dialog-queue: 1010;
+
+  /* --- 组件尺寸（蓝图 §8.2 / §6.3） --- */
+  --control-h-sm: 32px;
+  --control-h: 40px;
+  --control-h-mobile: 44px;
+  --rail-w: 264px;
+  --rail-w-collapsed: 72px;
+  --topbar-h: 56px;
+  --page-gutter: 24px;
+  --card-pad: 22px;
+  --reading-width: 760px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur: 0ms; }
+  /* 蓝图 §7.4：非必要动画全部关闭，但功能状态不得只靠动画表达——
+     因此这里把时长压到 0，而不是删掉 transition 声明（保留状态切换的最终值）。 */
+  :root {
+    --dur-fast: 0ms; --dur: 0ms;
+    --motion-instant: 0ms; --motion-fast: 0ms; --motion-standard: 0ms; --motion-spatial: 0ms;
+    --stagger-step: 0ms;
+  }
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

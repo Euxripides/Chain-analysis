@@ -27,7 +27,12 @@ export default defineConfig({
   },
   projects: [
     { name: "user-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
-    { name: "admin-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    {
+      name: "admin-desktop",
+      // 用户端重构验收规格只面向 /app-v2，后台 project 不复跑一遍（避免把用户路由当后台页面测）。
+      testIgnore: /user-console-redesign/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+    },
     { name: "user-mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
     // §14.5 最终轮要求的补充档位（各自只跑对应规格，不影响既有 project 的覆盖面）：
     //   平板档：后台管理操作的平板宽度（1024×768），触屏语义与桌面一致；

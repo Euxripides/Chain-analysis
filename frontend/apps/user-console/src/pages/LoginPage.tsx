@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Field, StatusBadge, TopToast, useDialog, useTopToast } from "@chain/ui";
+import { Button, Field, PasswordInput, StatusBadge, useDialog } from "@chain/ui";
 import {
   ApiError,
   MFA_ERROR_CODES,
@@ -15,10 +15,18 @@ import {
 } from "@chain/api-client";
 
 /**
- * §18.2 U-AUTH-01 登录页（含 §19.9 MFA 第二步）。
+ * §12.1 登录 `/login`
  *
- * 提示口径：说明类走 Dialog；**登录失败**走页面顶部短提示（2 秒自动消失，fixed 覆盖层、
- * 不进布局），这是需求方 2026-09-18 的明确指定，仅限登录失败这一类瞬时反馈。
+ * 结构：左侧品牌与动态链路图（桌面显示，纯 CSS/SVG，**不显示虚构金额**），右侧登录区。
+ *
+ * 必须保留（一条都没删）：账号密码、本地账号/OIDC、工作区选择、MFA 第二步、
+ * 恢复码、超时、必须修改初始密码、return-to。
+ *
+ * 提示口径：说明 / 成功 / 警告 / 错误 / 确认全部走 `useDialog()`。
+ * 蓝图 §12.1 明确"登录失败不抖动整个页面，只轻微强调相关字段并打开错误 Dialog"，
+ * 因此本页**不再使用 TopToast**（TopToast 仍作为兼容层保留在 @chain/ui 里，
+ * 其他调用方不受影响）。这是一处可见的行为变化，已在实施记录中逐项列出。
+ *
  * 第二步的挑战令牌与用户输入的验证码只存在于内存与请求体里：
  * 不写入 URL、localStorage、sessionStorage 或任何日志。
  */
@@ -40,14 +48,17 @@ interface MfaStepState {
 function formatCountdown(seconds: number): string {
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
-  return `${mm}:${ss}`;
+  return mm + ":" + ss;
+}
+
+/** 6 位纯数字才走"格子"视觉；恢复码等其它形式回落成普通文本框。 */
+function looksLikeTotp(value: string): boolean {
+  return /^\d{0,6}$/.test(value);
 }
 
 export default function LoginPage() {
   const { login, verifyMfa } = useAuth();
   const dialog = useDialog();
-  /** 登录失败的顶部短提示（2 秒自动消失）。 */
-  const toast = useTopToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState("");
@@ -57,6 +68,8 @@ export default function LoginPage() {
   const [mfa, setMfa] = useState<MfaStepState | null>(null);
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
+  /** 登录失败后轻微强调凭据字段，而不是抖动整页（蓝图 §12.1）。 */
+  const [credentialInvalid, setCredentialInvalid] = useState(false);
   const [params] = useSearchParams();
 
   useEffect(() => {
@@ -118,7 +131,7 @@ export default function LoginPage() {
       actions: [
         { label: "取消", result: "", variant: "default" },
         ...options.map((option) => ({
-          label: option.name ? `${option.name}（${option.slug}）` : option.slug,
+          label: option.name ? option.name + "（" + option.slug + "）" : option.slug,
           value: option.id,
           result: option.id,
           variant: "primary" as const,
@@ -149,6 +162,7 @@ export default function LoginPage() {
       email: challenge.user?.email || identifier.trim(),
     });
     setCode("");
+    setCredentialInvalid(false);
     setSecondsLeft(mfaSecondsLeft(deadline));
   };
 
@@ -159,6 +173,12 @@ export default function LoginPage() {
     dialog.notify("warning", title, body, details);
   };
 
+  /** 登录失败：强调字段 + 错误 Dialog，不做整页抖动。 */
+  const reportLoginFailure = (title: string, message: string, details?: Array<{ label: string; value: React.ReactNode }>) => {
+    setCredentialInvalid(true);
+    dialog.notify("error", title, message, details);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!identifier.trim() || !password) {
@@ -166,6 +186,7 @@ export default function LoginPage() {
       return;
     }
     setSubmitting(true);
+    setCredentialInvalid(false);
     try {
       let workspaceId: string | undefined;
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -186,7 +207,7 @@ export default function LoginPage() {
           }
           if (options.length === 0) {
             // 服务端要求选择却没有给出任何可选项：不得自行编造工作区，明确失败。
-            dialog.notify("error", "无法选择工作区", "该账号在当前组织内没有可用的工作区成员资格。");
+            reportLoginFailure("无法选择工作区", "该账号在当前组织内没有可用的工作区成员资格。");
             return;
           }
           const picked = await chooseWorkspace(options);
@@ -197,8 +218,15 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      // 登录失败 → 顶部短提示，2 秒自动消失（不再弹模态框）。
-      toast.show(err instanceof ApiError ? err.userMessage : "登录失败，请稍后重试");
+      if (err instanceof ApiError) {
+        reportLoginFailure(
+          "登录失败",
+          err.userMessage,
+          err.traceId ? [{ label: "Trace", value: err.traceId }] : undefined,
+        );
+      } else {
+        reportLoginFailure("登录失败", "登录请求未能完成，请检查网络后重试。");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -226,22 +254,27 @@ export default function LoginPage() {
     } catch (err) {
       setCode("");
       if (!(err instanceof ApiError)) {
-        toast.show("第二步验证未通过，请稍后重试");
+        dialog.notify("error", "第二步验证未通过", "验证请求未能完成，请检查网络后重试。");
         return;
       }
       if (err.code === MFA_ERROR_CODES.invalid) {
         // 码错：留在第二步重试。
-        toast.show("验证码不正确：请确认认证器与本机时间同步；恢复码只能用一次");
+        dialog.notify(
+          "error",
+          "验证码不正确",
+          "请确认认证器与本机时间同步；恢复码每个只能使用一次。",
+          err.traceId ? [{ label: "Trace", value: err.traceId }] : undefined,
+        );
       } else if (err.code === MFA_ERROR_CODES.challengeInvalid) {
         // 挑战过期/已使用/不存在：必须重新走第一步。
         backToPasswordStep("本次验证已失效", "第二步验证已过期或已被使用，请重新输入账号与密码。");
       } else if (err.code === MFA_ERROR_CODES.attemptsExhausted) {
         backToPasswordStep("尝试次数已用尽", "为避免暴力猜测，该账号短时间内不能再提交验证码。", [
-          { label: "可重试时间", value: err.retryAfterSeconds === undefined ? "请稍后重试" : `${err.retryAfterSeconds} 秒后` },
+          { label: "可重试时间", value: err.retryAfterSeconds === undefined ? "请稍后重试" : err.retryAfterSeconds + " 秒后" },
           { label: "下一步", value: "重新输入账号与密码" },
         ]);
       } else {
-        toast.show(err.userMessage);
+        dialog.notify("error", "第二步验证失败", err.userMessage, err.traceId ? [{ label: "Trace", value: err.traceId }] : undefined);
       }
     } finally {
       setSubmitting(false);
@@ -249,15 +282,16 @@ export default function LoginPage() {
   };
 
   const supportsRecoveryCode = Boolean(mfa?.methods.includes("recovery_code"));
+  const totpMode = looksLikeTotp(code);
 
   return (
     <div className="auth-page">
-      <TopToast message={toast.message} />
-      {/* 品牌面板：纯装饰性产品信息 + 纯 CSS 网格背景（零外部资源）。<980px 自动隐藏。 */}
+      {/* 品牌面板：抽象地址节点与资金路径，纯 SVG + CSS（零外部资源、零虚构金额）。
+          <980px 由 CSS 隐藏，移动端只保留小型品牌标识与表单（蓝图 §12.1）。 */}
       <aside className="auth-aside">
         <div className="auth-aside__top">
           <span className="auth-aside__mark">
-            <span className="shell__brand-mark" aria-hidden="true">CS</span>
+            <span className="cs-brand__mark" aria-hidden="true">CS</span>
             <span>
               <span className="auth-aside__name">ChainSight</span>
               <span className="auth-aside__tagline">链上调查工作台</span>
@@ -271,59 +305,69 @@ export default function LoginPage() {
             还原成可呈堂的证据链
           </h2>
           <p className="auth-aside__desc">地址画像、资金流向、交易证据与审计轨迹，收敛在同一个工作台里。</p>
-          <div className="auth-aside__points">
-            <span className="auth-aside__point"><span className="auth-aside__dot" />多链地址与交易查询</span>
-            <span className="auth-aside__point"><span className="auth-aside__dot" />案件、画布与证据固化</span>
-            <span className="auth-aside__point"><span className="auth-aside__dot" />全量操作留痕与审计</span>
-          </div>
+          <FundPathCanvas />
         </div>
         <div className="auth-aside__foot">ChainSight · 内部部署环境</div>
       </aside>
+
       <div className="auth-card">
         <div className="auth-card__brand">
-          <span className="shell__brand-mark" aria-hidden="true">
+          <span className="cs-brand__mark" aria-hidden="true">
             CS
           </span>
           <div>
             <div className="auth-card__title">ChainSight 调查工作台</div>
-            <div className="auth-card__sub">
-              {mfa ? "两步验证 · 第二步" : "用户层系统 · 双重系统第 2 版"}
-            </div>
+            <div className="auth-card__sub">{mfa ? "两步验证 · 第二步" : "用户层系统"}</div>
           </div>
         </div>
+
         {mfa ? (
           <form onSubmit={submitMfa} noValidate>
             <div className="toolbar" style={{ justifyContent: "space-between" }}>
               <span className="mono" style={{ fontSize: "var(--fs-12)" }}>
                 {mfa.email}
               </span>
-              <StatusBadge tone={secondsLeft <= 60 ? "warn" : "info"}>
-                剩余 {formatCountdown(secondsLeft)}
-              </StatusBadge>
+              <StatusBadge tone={secondsLeft <= 60 ? "warn" : "info"}>剩余 {formatCountdown(secondsLeft)}</StatusBadge>
             </div>
+
             <Field
               label="认证器验证码"
               htmlFor="mfa_code"
               hint={supportsRecoveryCode ? "6 位数字；认证器不可用时，也可以输入一个恢复码。" : "认证器上显示的 6 位数字验证码。"}
             >
-              <input
-                id="mfa_code"
-                name="mfa_code"
-                className="input"
-                type="text"
-                autoComplete="one-time-code"
-                autoFocus
-                spellCheck={false}
-                maxLength={64}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
+              {/*
+                6 格视觉输入，但**只有一个真实 input**（蓝图 §12.1）：
+                格子只是 aria-hidden 的呈现层，值的唯一来源仍是 #mfa_code。
+                输入出现非数字/超长（恢复码）时自动回落成普通文本框，不限制格式。
+              */}
+              <div className="cs-otp" data-mode={totpMode ? "cells" : "text"}>
+                <div className="cs-otp__cells" aria-hidden="true">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <span className="cs-otp__cell" key={index} data-filled={code[index] ? "true" : "false"}>
+                      {code[index] ?? ""}
+                    </span>
+                  ))}
+                </div>
+                <input
+                  id="mfa_code"
+                  name="mfa_code"
+                  className="input cs-otp__input"
+                  type="text"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  spellCheck={false}
+                  maxLength={64}
+                  aria-label="认证器验证码"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </div>
             </Field>
-            <button className="btn btn--primary" type="submit" disabled={submitting || code.trim().length < 6}>
-              {submitting ? "正在验证…" : "提交"}
-            </button>
-            <button
-              className="btn"
+
+            <Button type="submit" variant="primary" busy={submitting} busyLabel="正在验证…" disabled={code.trim().length < 6}>
+              提交
+            </Button>
+            <Button
               type="button"
               disabled={submitting}
               onClick={() => {
@@ -333,11 +377,11 @@ export default function LoginPage() {
               }}
             >
               返回上一步
-            </button>
+            </Button>
           </form>
         ) : (
           <form onSubmit={submit} noValidate>
-            <Field label="账号邮箱" htmlFor="identifier">
+            <Field label="账号邮箱" htmlFor="identifier" error={credentialInvalid ? "账号或密码不正确。" : undefined}>
               <input
                 id="identifier"
                 name="identifier"
@@ -346,39 +390,85 @@ export default function LoginPage() {
                 autoComplete="username"
                 inputMode="email"
                 required
+                aria-invalid={credentialInvalid || undefined}
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  setCredentialInvalid(false);
+                }}
               />
             </Field>
-            <Field label="密码" htmlFor="password">
-              <input
+            <Field label="密码" htmlFor="password" error={credentialInvalid ? "账号或密码不正确。" : undefined}>
+              <PasswordInput
                 id="password"
-                name="password"
-                className="input"
-                type="password"
-                autoComplete="current-password"
-                required
+                label="密码"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(next) => {
+                  setPassword(next);
+                  setCredentialInvalid(false);
+                }}
+                /* Enter 提交当前步骤由表单原生行为承担：输入框在 <form> 内，
+                   且存在 type="submit" 按钮，浏览器回车即走与点击完全相同的路径。 */
+                required
               />
             </Field>
-            <button className="btn btn--primary" type="submit" disabled={submitting}>
-              {submitting ? "正在登录…" : "登录"}
-            </button>
+            <Button type="submit" variant="primary" busy={submitting} busyLabel="正在登录…">
+              登录
+            </Button>
             {oidcEnabled ? (
-              <button
-                className="btn btn--primary"
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => {
-                  window.location.href = `/api/auth/v1/oidc/start?audience=user&return_to=${encodeURIComponent("/home")}`;
+                  window.location.href = "/api/auth/v1/oidc/start?audience=user&return_to=" + encodeURIComponent("/home");
                 }}
               >
                 使用组织账号登录
-              </button>
+              </Button>
             ) : null}
           </form>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 品牌区的抽象资金路径。
+ *
+ * 只画**结构**（地址节点、方向、路径流动），不标注任何金额或余额——
+ * 蓝图 §12.1 明确"不显示虚构金额"。纯 SVG + CSS，无外部资源、无网络请求。
+ * reduced-motion 下动画由 CSS 关闭。
+ */
+function FundPathCanvas() {
+  return (
+    <svg className="auth-flow" viewBox="0 0 420 200" role="img" aria-label="抽象的资金路径示意：地址节点之间的方向与汇聚关系">
+      <defs>
+        <linearGradient id="auth-flow-line" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#4353E6" stopOpacity="0.15" />
+          <stop offset="55%" stopColor="#0EA5B7" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#0EA5B7" stopOpacity="0.2" />
+        </linearGradient>
+      </defs>
+      <path className="auth-flow__edge" d="M40 40 C 140 40, 160 100, 262 100" />
+      <path className="auth-flow__edge" d="M40 160 C 140 160, 160 100, 262 100" />
+      <path className="auth-flow__edge" d="M262 100 C 330 100, 340 56, 384 56" />
+      <path className="auth-flow__edge" d="M262 100 C 330 100, 340 150, 384 150" />
+      <g className="auth-flow__node" transform="translate(40 40)">
+        <circle r="7" />
+      </g>
+      <g className="auth-flow__node" transform="translate(40 160)">
+        <circle r="7" />
+      </g>
+      <g className="auth-flow__node auth-flow__node--hub" transform="translate(262 100)">
+        <rect x="-8" y="-8" width="16" height="16" rx="3" />
+      </g>
+      <g className="auth-flow__node" transform="translate(384 56)">
+        <polygon points="0,-9 9,0 0,9 -9,0" />
+      </g>
+      <g className="auth-flow__node" transform="translate(384 150)">
+        <polygon points="0,-9 9,0 0,9 -9,0" />
+      </g>
+    </svg>
   );
 }

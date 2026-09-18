@@ -7,16 +7,24 @@ import {
   type SessionRow,
 } from "@chain/api-client";
 import {
+  Button,
   Card,
   DataTable,
   EmptyState,
-  EntityLink,
-  EvidenceRail,
+  ErrorState,
   Field,
-  Metric,
+  HashValue,
+  InspectorDrawer,
+  KeyValueList,
+  MetaLine,
+  MetricCard,
   PageHeader,
+  PageSection,
+  PageSkeleton,
+  PasswordInput,
   QrCode,
   RelativeTime,
+  SplitPane,
   StatusBadge,
   statusToneFor,
   useDialog,
@@ -102,9 +110,16 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
   );
 }
 
-/** §18 个人资料 + §21.4 会话与设备安全页 + §19.9 MFA 自助管理。 */
+/**
+ * §18 个人资料 + §21.4 会话与设备安全页 + §19.9 MFA 自助管理。
+ *
+ * 表现层改为"主区设置分节 + 桌面右侧当前会话"（SplitPane + InspectorDrawer）。
+ * **安全流程一字未改**：修改密码的"修改并下线"确认、关闭 MFA 的二次确认、
+ * 恢复码的一次性 acknowledge 门控、退出全部设备的 REVOKE-ALL 确认词、
+ * 会话撤销确认全部保留，只调整它们的呈现位置。
+ */
 export default function ProfilePage() {
-  const { client, session, reload, mfaEnrollStart, mfaEnrollConfirm, mfaDisable } = useAuth();
+  const { client, session, reload, logout, mfaEnrollStart, mfaEnrollConfirm, mfaDisable } = useAuth();
   const dialog = useDialog();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -199,7 +214,7 @@ export default function ProfilePage() {
     }
   };
 
-  /** 复制到剪贴板：成功不打扰用户（与 EntityLink 一致），失败才弹窗说明。 */
+  /** 复制到剪贴板：成功不打扰用户（与 CopyButton 的反馈策略一致），失败才弹窗说明。 */
   const copyText = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -327,10 +342,13 @@ export default function ProfilePage() {
   };
 
   const revokeSession = async (row: SessionRow) => {
+    const isCurrent = row.id === session?.session_id;
     const answer = await dialog.confirm({
       kind: "warning",
-      title: "撤销该会话？",
-      body: "被撤销的设备会立即退出登录。",
+      title: isCurrent ? "撤销当前会话并退出？" : "撤销该会话？",
+      body: isCurrent
+        ? "当前浏览器的会话会立即失效，你需要重新登录。"
+        : "被撤销的设备会立即退出登录。",
       details: [
         { label: "设备", value: row.device?.label ? String(row.device.label) : row.user_agent.slice(0, 60) || "未知" },
         { label: "客户端声明 IP", value: row.client_ip || "—" },
@@ -343,6 +361,13 @@ export default function ProfilePage() {
     if (answer !== "ok") return;
     try {
       await client.delete(`/api/auth/v1/sessions/${row.id}`);
+      if (isCurrent) {
+        /* 撤销当前会话后按现有退出流程离开（与修改密码后的处理一致）。 */
+        dialog.notify("success", "会话已撤销", "当前会话已失效，请重新登录。");
+        await logout().catch(() => undefined);
+        window.location.href = "/app-v2/login";
+        return;
+      }
       dialog.notify("success", "会话已撤销");
       await load();
     } catch (err) {
@@ -372,288 +397,357 @@ export default function ProfilePage() {
   };
 
   if (loading) {
-    return <Card title="个人资料与安全">正在加载…</Card>;
+    return <PageSkeleton shape="detail" />;
   }
   if (error || !profile) {
     return (
       <Card>
-        <EmptyState title="无法加载个人资料" body={error ?? "未知错误"} action={<button className="btn btn--sm" onClick={load}>重试</button>} />
+        <ErrorState title="无法加载个人资料" message={error ?? "未知错误"} onRetry={load} />
       </Card>
     );
   }
 
   return (
-    <div className="workbench">
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "var(--sp-5)" }}>
-        <PageHeader title="个人资料与安全" subtitle={<span className="mono">{profile.email}</span>} />
+    <>
+      <PageHeader
+        title="个人资料与安全"
+        breadcrumb={[{ label: "工作台", to: "/home" }, { label: "个人资料与安全" }]}
+        status={<StatusBadge tone={profile.status === "active" ? "ok" : "warn"}>{profile.status}</StatusBadge>}
+        meta={
+          <MetaLine
+            items={[
+              { label: "账号", value: profile.email },
+              { label: "组织", value: profile.organization_id },
+              { label: "角色", value: (profile.roles ?? []).join(", ") || "—" },
+              { label: "会话数", value: String(sessions.length) },
+              { label: "设备数", value: String(devices.length) },
+            ]}
+          />
+        }
+      />
 
-        <Card title="基本资料">
-          <Field label="显示名称" htmlFor="display_name" hint="用于任务、审计和协作记录中的展示。">
-            <input id="display_name" className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} />
-          </Field>
-          <div className="toolbar" style={{ marginTop: "var(--sp-4)" }}>
-            <button className="btn btn--primary btn--sm" onClick={saveName} disabled={busy || displayName === profile.display_name}>
-              保存
-            </button>
-            <StatusBadge tone={profile.status === "active" ? "ok" : "warn"}>{profile.status}</StatusBadge>
-            {profile.must_change_password ? <StatusBadge tone="warn">需要修改初始密码</StatusBadge> : null}
-          </div>
-        </Card>
-
-        <Card title="修改密码">
-          <div style={{ display: "grid", gap: "var(--sp-4)", maxWidth: 420 }}>
-            <Field label="当前密码" htmlFor="current_password">
-              <input
-                id="current_password"
-                className="input"
-                type="password"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
+      <SplitPane
+        storageKey="cs-profile-aside"
+        asideLabel="当前会话"
+        aside={
+          <InspectorDrawer title="当前 Session" subtitle={session?.audience ?? undefined} ariaLabel="当前会话">
+            <PageSection title="会话属性">
+              <KeyValueList
+                ariaLabel="当前会话"
+                items={[
+                  { label: "会话 ID", value: <HashValue value={session?.session_id ?? ""} wrap label="会话 ID" />, wide: true },
+                  { label: "受众", value: session?.audience ?? "—" },
+                  { label: "角色", value: (session?.roles ?? []).join(", ") || "—" },
+                  { label: "权限数", value: String((session?.permissions ?? []).length) },
+                  { label: "空闲到期", value: session ? new Date(session.expires_at).toLocaleString("zh-CN") : "—" },
+                  { label: "绝对到期", value: session ? new Date(session.absolute_expires_at).toLocaleString("zh-CN") : "—" },
+                  {
+                    label: "MFA",
+                    value: mfaEnrolled
+                      ? session?.mfa_satisfied
+                        ? "已启用 · 本次已验证"
+                        : "已启用 · 本次未验证"
+                      : "未启用",
+                  },
+                  { label: "组织", value: profile?.organization_id ?? "—" },
+                  { label: "MFA 要求", value: profile.mfa_required ? "该身份要求 MFA" : "未强制" },
+                ]}
               />
-            </Field>
-            <Field label="新密码" htmlFor="new_password" hint="不限制长度（非空即可）。系统只保存 Argon2id 哈希。">
-              <input
-                id="new_password"
-                className="input"
-                type="password"
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </Field>
-            <button className="btn btn--primary" onClick={changePassword} disabled={busy}>
-              修改密码
-            </button>
-          </div>
-        </Card>
-
-        <Card
-          title={
-            <span className="toolbar" style={{ gap: "var(--sp-2)" }}>
-              多因素认证（MFA）
-              <StatusBadge tone={mfaEnrolled ? "ok" : "neutral"}>{mfaEnrolled ? "已启用" : "未启用"}</StatusBadge>
-            </span>
-          }
-          actions={
-            enroll ? null : mfaEnrolled ? (
-              <button className="btn btn--danger btn--sm" type="button" onClick={() => void disableMfa()} disabled={mfaBusy}>
-                关闭 MFA
-              </button>
-            ) : (
-              <button className="btn btn--primary btn--sm" type="button" onClick={() => void startEnroll()} disabled={mfaBusy}>
-                {mfaBusy ? "正在准备…" : "启用 MFA"}
-              </button>
-            )
-          }
-        >
-          {enroll ? (
-            <div style={{ display: "grid", gap: "var(--sp-5)" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: "var(--sp-5)",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: "fit-content",
-                    padding: "var(--sp-3)",
-                    background: "var(--c-surface)",
-                    border: "1px solid var(--c-border)",
-                    borderRadius: "var(--radius-md)",
-                  }}
-                >
-                  <QrCode value={enroll.otpauth_uri} size={180} />
-                </div>
-                <div style={{ display: "grid", gap: "var(--sp-4)", minWidth: 0 }}>
-                  <Field label="密钥（Base32）" hint="认证器无法扫码时手工输入；每 4 位一组只是便于抄录，复制的是原始值。">
-                    <div className="toolbar">
-                      <span className="mono" style={{ letterSpacing: "0.08em", overflowWrap: "anywhere" }}>
-                        {groupSecret(enroll.secret)}
-                      </span>
-                      <button className="btn btn--sm" type="button" onClick={() => void copyText(enroll.secret)}>
-                        复制密钥
-                      </button>
-                    </div>
-                  </Field>
-                  <Field label="otpauth URI" hint="服务端签发的 provisioning URI，二维码内容与它完全一致。">
-                    <div className="toolbar" style={{ alignItems: "flex-start" }}>
-                      <span
-                        className="mono"
-                        style={{ fontSize: "var(--fs-11)", maxWidth: 420, overflowWrap: "anywhere" }}
-                      >
-                        {enroll.otpauth_uri}
-                      </span>
-                      <button className="btn btn--sm" type="button" onClick={() => void copyText(enroll.otpauth_uri)}>
-                        复制 URI
-                      </button>
-                    </div>
-                  </Field>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 280px)", gap: "var(--sp-4)" }}>
-                <Field
-                  label="认证器验证码"
-                  htmlFor="mfa_enroll_code"
-                  hint={`${enroll.digits} 位数字，每 ${enroll.period_seconds} 秒更新一次。`}
-                >
+            </PageSection>
+          </InspectorDrawer>
+        }
+        main={
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+            <PageSection title="基本资料">
+              <Card>
+                <Field label="显示名称" htmlFor="display_name" hint="用于任务、审计和协作记录中的展示。">
                   <input
-                    id="mfa_enroll_code"
-                    name="mfa_enroll_code"
+                    id="display_name"
                     className="input"
-                    type="text"
-                    autoComplete="one-time-code"
-                    spellCheck={false}
-                    maxLength={Math.max(6, enroll.digits)}
-                    value={enrollCode}
-                    onChange={(e) => setEnrollCode(e.target.value)}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    maxLength={80}
                   />
                 </Field>
-              </div>
-              <div className="toolbar">
-                <button
-                  className="btn btn--primary"
-                  type="button"
-                  onClick={() => void confirmEnroll()}
-                  disabled={mfaBusy || enrollCode.trim().length < 6}
-                >
-                  {mfaBusy ? "正在确认…" : "确认启用"}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={mfaBusy}
-                  onClick={() => {
-                    // 取消注册：密钥在服务端仍是"未确认"状态，不改变登录要求。
-                    setEnroll(null);
-                    setEnrollCode("");
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="metric-grid">
-              <Metric label="认证方式" value="TOTP" hint="6 位验证码 / 30 秒，兼容常见认证器应用。" />
-              <Metric
-                label="恢复码"
-                value={mfaEnrolled ? "10 枚" : "—"}
-                hint={mfaEnrolled ? "仅在注册确认时展示一次，服务端只保存摘要。" : "启用 MFA 时一次性生成 10 枚。"}
-              />
-              <Metric
-                label="本次会话"
-                value={mfaEnrolled ? (session?.mfa_satisfied ? "已通过" : "未通过") : "—"}
-                tone={mfaEnrolled ? (session?.mfa_satisfied ? "ok" : "warn") : "neutral"}
-                hint="本次登录是否已完成第二步验证。"
-              />
-              <Metric
-                label="组织策略"
-                value={profile.mfa_required ? "要求 MFA" : "未强制"}
-                tone={profile.mfa_required ? "warn" : "neutral"}
-                hint="来自该身份的 MFA 要求字段。"
-              />
-            </div>
-          )}
-        </Card>
+                <div className="toolbar" style={{ marginTop: "var(--sp-4)" }}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => void saveName()}
+                    disabled={busy || displayName === profile.display_name}
+                    busy={busy}
+                    busyLabel="保存中…"
+                  >
+                    保存
+                  </Button>
+                  {profile.must_change_password ? <StatusBadge tone="warn">需要修改初始密码</StatusBadge> : null}
+                </div>
+              </Card>
+            </PageSection>
 
-        <Card
-          title={`我的会话（${sessions.length}）`}
-          actions={
-            <button className="btn btn--sm" onClick={revokeAll}>
-              退出其它设备
-            </button>
-          }
-          flush
-        >
-          <DataTable<SessionRow>
-            rows={sessions}
-            rowKey={(r) => r.id}
-            empty={<EmptyState title="没有会话记录" />}
-            columns={[
-              {
-                key: "device",
-                header: "设备（客户端声明）",
-                render: (r) => (
-                  <span>
-                    <strong>{r.device?.label ? String(r.device.label) : "未知设备"}</strong>
-                    <div style={{ color: "var(--c-slate)", fontSize: "var(--fs-11)", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.user_agent || "—"}
+            <PageSection title="修改密码">
+              <Card>
+                <div style={{ display: "grid", gap: "var(--sp-4)", maxWidth: 420 }}>
+                  <Field label="当前密码" htmlFor="current_password">
+                    <PasswordInput
+                      id="current_password"
+                      label="当前密码"
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={setCurrentPassword}
+                    />
+                  </Field>
+                  <Field label="新密码" htmlFor="new_password" hint="不限制长度（非空即可）。系统只保存 Argon2id 哈希。">
+                    <PasswordInput
+                      id="new_password"
+                      label="新密码"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={setNewPassword}
+                    />
+                  </Field>
+                  <Button
+                    variant="primary"
+                    onClick={() => void changePassword()}
+                    disabled={busy}
+                    busy={busy}
+                    busyLabel="提交中…"
+                  >
+                    修改密码
+                  </Button>
+                </div>
+              </Card>
+            </PageSection>
+
+            <PageSection
+              title="多因素认证（MFA）"
+              actions={
+                enroll ? null : mfaEnrolled ? (
+                  <Button variant="danger" size="sm" onClick={() => void disableMfa()} disabled={mfaBusy} busy={mfaBusy} busyLabel="关闭中…">
+                    关闭 MFA
+                  </Button>
+                ) : (
+                  <Button variant="primary" size="sm" onClick={() => void startEnroll()} disabled={mfaBusy} busy={mfaBusy} busyLabel="正在准备…">
+                    启用 MFA
+                  </Button>
+                )
+              }
+            >
+              <Card>
+                <div className="toolbar" style={{ marginBottom: "var(--sp-4)" }}>
+                  <StatusBadge tone={mfaEnrolled ? "ok" : "neutral"}>{mfaEnrolled ? "已启用" : "未启用"}</StatusBadge>
+                </div>
+                {enroll ? (
+                  <div style={{ display: "grid", gap: "var(--sp-5)" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                        gap: "var(--sp-5)",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "fit-content",
+                          padding: "var(--sp-3)",
+                          background: "var(--c-surface)",
+                          border: "1px solid var(--c-border)",
+                          borderRadius: "var(--radius-md)",
+                        }}
+                      >
+                        <QrCode value={enroll.otpauth_uri} size={180} />
+                      </div>
+                      <div style={{ display: "grid", gap: "var(--sp-4)", minWidth: 0 }}>
+                        <Field label="密钥（Base32）" hint="认证器无法扫码时手工输入；每 4 位一组只是便于抄录，复制的是原始值。">
+                          <div className="toolbar">
+                            <span className="mono" style={{ letterSpacing: "0.08em", overflowWrap: "anywhere" }}>
+                              {groupSecret(enroll.secret)}
+                            </span>
+                            <button className="btn btn--sm" type="button" onClick={() => void copyText(enroll.secret)}>
+                              复制密钥
+                            </button>
+                          </div>
+                        </Field>
+                        <Field label="otpauth URI" hint="服务端签发的 provisioning URI，二维码内容与它完全一致。">
+                          <div className="toolbar" style={{ alignItems: "flex-start" }}>
+                            <span
+                              className="mono"
+                              style={{ fontSize: "var(--fs-11)", maxWidth: 420, overflowWrap: "anywhere" }}
+                            >
+                              {enroll.otpauth_uri}
+                            </span>
+                            <button className="btn btn--sm" type="button" onClick={() => void copyText(enroll.otpauth_uri)}>
+                              复制 URI
+                            </button>
+                          </div>
+                        </Field>
+                      </div>
                     </div>
-                  </span>
-                ),
-              },
-              { key: "audience", header: "受众", width: "90px", render: (r) => <StatusBadge tone="info">{r.audience}</StatusBadge> },
-              { key: "ip", header: "客户端 IP", width: "150px", render: (r) => <span className="mono">{r.client_ip || "—"}</span> },
-              { key: "seen", header: "最近活动", width: "130px", render: (r) => <RelativeTime value={r.last_seen_at} /> },
-              {
-                key: "status",
-                header: "状态",
-                width: "110px",
-                render: (r) =>
-                  r.revoked_at ? (
-                    <StatusBadge tone="neutral">已撤销</StatusBadge>
-                  ) : (
-                    <StatusBadge tone={statusToneFor("ACTIVE")}>
-                      {r.id === session?.session_id ? "当前会话" : "有效"}
-                    </StatusBadge>
-                  ),
-              },
-              {
-                key: "actions",
-                header: "",
-                width: "90px",
-                align: "right",
-                render: (r) =>
-                  r.id === session?.session_id || r.revoked_at ? null : (
-                    <button className="btn btn--sm" onClick={() => revokeSession(r)}>
-                      撤销
-                    </button>
-                  ),
-              },
-            ]}
-          />
-        </Card>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 280px)", gap: "var(--sp-4)" }}>
+                      <Field
+                        label="认证器验证码"
+                        htmlFor="mfa_enroll_code"
+                        hint={`${enroll.digits} 位数字，每 ${enroll.period_seconds} 秒更新一次。`}
+                      >
+                        <input
+                          id="mfa_enroll_code"
+                          name="mfa_enroll_code"
+                          className="input"
+                          type="text"
+                          autoComplete="one-time-code"
+                          spellCheck={false}
+                          maxLength={Math.max(6, enroll.digits)}
+                          value={enrollCode}
+                          onChange={(e) => setEnrollCode(e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    <div className="toolbar">
+                      <Button
+                        variant="primary"
+                        type="button"
+                        onClick={() => void confirmEnroll()}
+                        disabled={mfaBusy || enrollCode.trim().length < 6}
+                        busy={mfaBusy}
+                        busyLabel="正在确认…"
+                      >
+                        确认启用
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={mfaBusy}
+                        onClick={() => {
+                          // 取消注册：密钥在服务端仍是"未确认"状态，不改变登录要求。
+                          setEnroll(null);
+                          setEnrollCode("");
+                        }}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="metric-grid">
+                    <MetricCard label="认证方式" value="TOTP" hint="6 位验证码 / 30 秒，兼容常见认证器应用。" />
+                    <MetricCard
+                      label="恢复码"
+                      value={mfaEnrolled ? "10 枚" : "—"}
+                      hint={mfaEnrolled ? "仅在注册确认时展示一次，服务端只保存摘要。" : "启用 MFA 时一次性生成 10 枚。"}
+                    />
+                    <MetricCard
+                      label="本次会话"
+                      value={mfaEnrolled ? (session?.mfa_satisfied ? "已通过" : "未通过") : "—"}
+                      tone={mfaEnrolled ? (session?.mfa_satisfied ? "ok" : "warn") : "neutral"}
+                      hint="本次登录是否已完成第二步验证。"
+                    />
+                    <MetricCard
+                      label="组织策略"
+                      value={profile.mfa_required ? "要求 MFA" : "未强制"}
+                      tone={profile.mfa_required ? "warn" : "neutral"}
+                      hint="来自该身份的 MFA 要求字段。"
+                    />
+                  </div>
+                )}
+              </Card>
+            </PageSection>
 
-        <Card title={`设备（${devices.length}）`} flush>
-          <DataTable<DeviceRow>
-            rows={devices}
-            rowKey={(r) => r.id}
-            empty={<EmptyState title="还没有设备记录" body="登录成功后系统会按平台与浏览器登记设备，不采集硬件指纹。" />}
-            columns={[
-              { key: "label", header: "设备", render: (r) => r.device_label || "未命名设备" },
-              { key: "platform", header: "平台", width: "120px", render: (r) => r.platform || "—" },
-              { key: "browser", header: "浏览器", width: "120px", render: (r) => r.browser || "—" },
-              { key: "ip", header: "最近 IP", width: "150px", render: (r) => <span className="mono">{r.last_ip || "—"}</span> },
-              { key: "seen", header: "最近出现", width: "130px", render: (r) => <RelativeTime value={r.last_seen_at} /> },
-            ]}
-          />
-        </Card>
-      </div>
+            <PageSection
+              title="我的会话"
+              count={sessions.length + " 个"}
+              actions={
+                <Button size="sm" onClick={() => void revokeAll()}>
+                  退出其它设备
+                </Button>
+              }
+            >
+              <Card flush>
+                <DataTable<SessionRow>
+                  caption="我的会话"
+                  rows={sessions}
+                  rowKey={(r) => r.id}
+                  empty={<EmptyState title="没有会话记录" />}
+                  columns={[
+                    {
+                      key: "device",
+                      header: "设备（客户端声明）",
+                      render: (r) => (
+                        <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                          <strong>{r.device?.label ? String(r.device.label) : "未知设备"}</strong>
+                          <span
+                            style={{
+                              color: "var(--c-slate)",
+                              fontSize: "var(--fs-11)",
+                              maxWidth: 320,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={r.user_agent || undefined}
+                          >
+                            {r.user_agent || "—"}
+                          </span>
+                        </span>
+                      ),
+                    },
+                    { key: "audience", header: "受众", width: "90px", render: (r) => <StatusBadge tone="info">{r.audience}</StatusBadge> },
+                    { key: "ip", header: "客户端 IP", width: "150px", render: (r) => <span className="mono">{r.client_ip || "—"}</span> },
+                    { key: "seen", header: "最近活动", width: "130px", render: (r) => <RelativeTime value={r.last_seen_at} /> },
+                    {
+                      key: "status",
+                      header: "状态",
+                      width: "110px",
+                      render: (r) =>
+                        r.revoked_at ? (
+                          <StatusBadge tone="neutral">已撤销</StatusBadge>
+                        ) : (
+                          <StatusBadge tone={statusToneFor("ACTIVE")}>
+                            {r.id === session?.session_id ? "当前会话" : "有效"}
+                          </StatusBadge>
+                        ),
+                    },
+                    {
+                      key: "actions",
+                      header: "",
+                      width: "110px",
+                      align: "right",
+                      render: (r) =>
+                        r.revoked_at ? null : (
+                          <Button size="sm" onClick={() => void revokeSession(r)}>
+                            撤销
+                          </Button>
+                        ),
+                    },
+                  ]}
+                />
+              </Card>
+            </PageSection>
 
-      <EvidenceRail
-        title="会话证据"
-        items={[
-          { label: "会话 ID", value: <EntityLink value={session?.session_id ?? ""} /> },
-          { label: "受众", value: session?.audience ?? "—" },
-          { label: "角色", value: (session?.roles ?? []).join(", ") || "—" },
-          { label: "权限数", value: String((session?.permissions ?? []).length) },
-          { label: "空闲到期", value: session ? new Date(session.expires_at).toLocaleString("zh-CN") : "—" },
-          { label: "绝对到期", value: session ? new Date(session.absolute_expires_at).toLocaleString("zh-CN") : "—" },
-          {
-            label: "MFA",
-            value: mfaEnrolled
-              ? session?.mfa_satisfied
-                ? "已启用 · 本次已验证"
-                : "已启用 · 本次未验证"
-              : "未启用",
-          },
-          { label: "组织", value: profile?.organization_id ?? "—" },
-        ]}
+            <PageSection title="设备" count={devices.length + " 个"}>
+              <Card flush>
+                <DataTable<DeviceRow>
+                  caption="设备"
+                  rows={devices}
+                  rowKey={(r) => r.id}
+                  empty={
+                    <EmptyState
+                      title="还没有设备记录"
+                      body="登录成功后系统会按平台与浏览器登记设备，不采集硬件指纹。"
+                    />
+                  }
+                  columns={[
+                    { key: "label", header: "设备", render: (r) => r.device_label || "未命名设备" },
+                    { key: "platform", header: "平台", width: "120px", render: (r) => r.platform || "—" },
+                    { key: "browser", header: "浏览器", width: "120px", render: (r) => r.browser || "—" },
+                    { key: "ip", header: "最近 IP", width: "150px", render: (r) => <span className="mono">{r.last_ip || "—"}</span> },
+                    { key: "seen", header: "最近出现", width: "130px", render: (r) => <RelativeTime value={r.last_seen_at} /> },
+                  ]}
+                />
+              </Card>
+            </PageSection>
+          </div>
+        }
       />
-    </div>
+    </>
   );
 }

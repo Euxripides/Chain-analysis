@@ -1,0 +1,62 @@
+/*
+ * 用户调查工作台 —— 令牌重映射层（设计蓝图 §6）
+ *
+ * 为什么需要这一层：`@chain/design-tokens/tokens.css` 被用户端与后台端共用。
+ * 蓝图第 16 行要求"不得让后台页面被动改变"，所以色值刷新不能直接改 :root。
+ * 这里把新配色挂在 `html[data-app="user"]` 作用域下，只覆盖**既有 `--c-*`
+ * 变量名的取值**——25 个页面里所有 `.card / .btn / .table` 等类一次性换肤，
+ * 业务代码零改动；后台读取到的仍是 tokens.css 里的原值。
+ *
+ * 取值来源：蓝图 §6.1 表格。所有前景/背景组合已登记进 `npm run check:tokens`，
+ * 对比度不达标的组合无法进入本文件。
+ */
+
+html[data-app="user"] {
+  /* --- 品牌与结构色 --- */
+  --c-graphite: var(--graphite-900);        /* #111827 主文字 */
+  --c-ink: var(--ink-950);                  /* #0A0E14 侧栏最深背景 */
+  --c-ink-soft: var(--ink-900);             /* #111720 侧栏表面、暗色浮层 */
+  --c-cobalt: var(--indigo-600);            /* #4353E6 主操作、焦点、当前对象 */
+  --c-cobalt-strong: var(--indigo-700);
+  --c-cobalt-soft: var(--indigo-soft);
+  --c-ice: var(--canvas-50);                /* #F5F6F8 页面底色 */
+  --c-slate: var(--slate-600);              /* #596273 次级文字 */
+  --c-amber: var(--amber-600);
+  --c-amber-soft: var(--amber-soft-2);
+  --c-amber-text: var(--amber-600);
+  --c-green: var(--green-700);
+  --c-green-soft: var(--green-soft-2);
+
+  /* --- 表面与边框 --- */
+  --c-surface: var(--bg-surface);
+  --c-surface-muted: var(--bg-surface-muted);
+  --c-surface-sunken: var(--bg-surface-sunken);
+  --c-border: var(--border-default);        /* #E3E6EB */
+  --c-border-strong: var(--border-strong);
+
+  /* --- 状态语义 --- */
+  --c-danger: var(--red-700);
+  --c-danger-soft: var(--red-soft-2);
+  --c-neutral: var(--state-neutral);
+  --c-neutral-soft: #F2F3F5;
+  --c-focus: var(--indigo-600);
+
+  /* --- 交互与状态角色（新组件引用这些，不引用上面的兼容层） --- */
+  --c-interactive: var(--interactive);
+  --c-interactive-soft: var(--interactive-soft);
+  --c-realtime: var(--cyan-500);
+  --c-realtime-text: var(--cyan-text);
+
+  /* --- 兼容层：sprint5.css 里早期写下的 `--c-primary` 兜底 --- */
+  --c-primary: var(--indigo-600);
+}
+
+/*
+ * 浅色层：用户端用冷白工作区承载长时间阅读（蓝图 §4.2）。
+ * 页面底色比后台更深一档，卡片纯白，靠 1px 描边分层而不是靠阴影堆叠。
+ */
+html[data-app="user"] body {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: var(--fs-14);
+}

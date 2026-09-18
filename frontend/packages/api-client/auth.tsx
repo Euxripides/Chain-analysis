@@ -152,6 +152,17 @@ export interface AuthContextValue {
   reload: () => Promise<AuthSession | null>;
   can: (permission: string) => boolean;
   canAny: (...permissions: string[]) => boolean;
+  /**
+   * 会话引导失败的原因（安全文案）；成功时恒为 null。
+   *
+   * 为什么需要它：会话引导（挂载 / 窗口聚焦 / 30s 轮询）以前用 `void reload()` 触发，
+   * 非 401/403 的错误（例如网关 5xx）会变成**未处理的 Promise 拒绝**——
+   * 浏览器 console 里留下一条红色错误，而用户只看到一个没有任何解释的登录页。
+   * 现在异常被收进这里，页面可以用 ErrorState + 重试表达，console 保持干净。
+   */
+  sessionError: string | null;
+  /** 重新引导会话；供 ErrorState 的"重试"使用。 */
+  retrySession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -172,6 +183,7 @@ export interface AuthProviderProps {
 
 export function AuthProvider({ audience, onSessionExpired, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const client = useMemo(
@@ -203,10 +215,12 @@ export function AuthProvider({ audience, onSessionExpired, children }: AuthProvi
         return null;
       }
       setSession(normalized);
+      setSessionError(null);
       return normalized;
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         setSession(null);
+        setSessionError(null);
         return null;
       }
       throw err;
@@ -215,9 +229,26 @@ export function AuthProvider({ audience, onSessionExpired, children }: AuthProvi
     }
   }, [client]);
 
-  useEffect(() => {
-    void reload();
+  /**
+   * 后台会话引导（挂载 / 窗口聚焦 / 30s 轮询）。
+   *
+   * 这里**必须吞掉异常**：调用点都是 `void bootstrap()`，异常逃出去就会变成
+   * 未处理的 Promise 拒绝，在浏览器 console 里留下红色错误（蓝图 §20.2 要求
+   * console error 为 0），而用户仍然只看到一个没有解释的登录页。
+   * 错误不丢：收进 `sessionError`，页面用 ErrorState + 重试呈现（§11.5）。
+   */
+  const bootstrap = useCallback(async () => {
+    try {
+      await reload();
+    } catch (err) {
+      setSession(null);
+      setSessionError(err instanceof ApiError ? err.userMessage : "无法读取会话状态，请稍后重试");
+    }
   }, [reload]);
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   /**
    * 多标签页 / 多设备收敛（P1-20260913-MULTITAB）。
@@ -231,7 +262,8 @@ export function AuthProvider({ audience, onSessionExpired, children }: AuthProvi
    */
   useEffect(() => {
     const onFocus = () => {
-      void reload();
+      /* 定时/聚焦轮询失败不应该打断用户：交给 bootstrap 记录，不弹窗、不跳转。 */
+      void bootstrap();
     };
     window.addEventListener("focus", onFocus);
     const timer = window.setInterval(onFocus, 30_000);
@@ -239,7 +271,7 @@ export function AuthProvider({ audience, onSessionExpired, children }: AuthProvi
       window.removeEventListener("focus", onFocus);
       window.clearInterval(timer);
     };
-  }, [reload]);
+  }, [bootstrap]);
 
   const login = useCallback(
     async (identifier: string, password: string, target: "user" | "admin", workspaceId?: string) => {
@@ -387,6 +419,8 @@ export function AuthProvider({ audience, onSessionExpired, children }: AuthProvi
       login,
       logout,
       reload,
+      sessionError,
+      retrySession: bootstrap,
       can,
       canAny,
       workspaceOptions,

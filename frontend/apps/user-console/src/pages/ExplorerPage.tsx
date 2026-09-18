@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { BackLink, Card, EmptyState, ErrorState, PageHeader, StatusBadge, useDialog } from "@chain/ui";
+import { Card, EmptyState, ErrorState, MetaLine, PageHeader, PageSection, StatusBadge, useDialog } from "@chain/ui";
 import { formatTime, shortValue, useApi } from "../sprint5/common";
 
 /**
- * U-EXP-01 地址与交易查询入口。
+ * U-EXP-01 地址与交易查询（蓝图 §12.14）。
+ *
+ * 数据层与跳转语义完全不变：
  * - 链列表来自 /api/v2/meta/chains，只展示 enabled。
  * - 输入框接受地址或交易哈希；交易哈希（0x+64hex / 64hex）跳交易详情，其余跳地址详情。
  * - 最近查询保存在 localStorage（最多 8 条）；清空走 ConfirmDialog。
  * - 所有说明/警告/确认只通过 Dialog 呈现。
+ *
+ * 本次只改表现层：查询区成为主工作区入口（.cs-search-hero），最近查询改成紧凑可删除列表
+ * （.cs-recentlist），并补上面包屑与元信息条。
  */
 
 interface ChainItem {
@@ -68,6 +73,21 @@ function looksLikeAddress(value: string): boolean {
   return EVM_ADDRESS_RE.test(value) || TRON_ADDRESS_RE.test(value);
 }
 
+/** 断点判定：<900px 视为窄屏（蓝图 §13）。首帧即取真实值，避免布局跳动。 */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const sync = () => setMatches(list.matches);
+    sync();
+    list.addEventListener("change", sync);
+    return () => list.removeEventListener("change", sync);
+  }, [query]);
+  return matches;
+}
+
 export default function ExplorerPage() {
   const navigate = useNavigate();
   const dialog = useDialog();
@@ -77,6 +97,7 @@ export default function ExplorerPage() {
   const [input, setInput] = useState("");
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const lastErrorRef = useRef("");
+  const wide = useMediaQuery("(min-width: 900px)");
 
   useEffect(() => {
     setRecent(readRecent());
@@ -162,6 +183,7 @@ export default function ExplorerPage() {
       [
         { label: "链列表", value: "/api/v2/meta/chains" },
         { label: "本地记录", value: `localStorage · 最多 ${MAX_RECENT} 条` },
+        { label: "形态识别", value: "0x+40 位地址 / TRON 地址 / 64 位交易哈希；最终判定在服务端" },
       ],
     );
   };
@@ -171,11 +193,20 @@ export default function ExplorerPage() {
 
   return (
     <>
-      <BackLink to="/home" label="返回工作台" />
       <PageHeader
         title="地址与交易查询"
+        breadcrumb={[{ label: "工作台", to: "/home" }, { label: "地址与交易查询" }]}
         subtitle={chains.length > 0 ? `已启用链：${chains.map((item) => item.slug).join(" / ")}` : undefined}
-        actions={
+        meta={
+          <MetaLine
+            items={[
+              { label: "链元数据", value: `${chains.length} 条已启用` },
+              { label: "本地记录", value: `${recent.length} / ${MAX_RECENT}` },
+              { label: "数据源", value: "/api/v2/meta/chains" },
+            ]}
+          />
+        }
+        secondaryAction={
           <button type="button" className="btn btn--sm" onClick={explain}>
             说明
           </button>
@@ -186,43 +217,46 @@ export default function ExplorerPage() {
           <ErrorState title="链列表加载失败" message="加载失败，请重试。" onRetry={() => void reloadChains()} />
         </Card>
       ) : null}
-      <Card title="查询">
-        <form className="toolbar" onSubmit={submit}>
-          <select
-            className="select"
-            style={{ flex: "0 1 200px", minWidth: 140 }}
-            aria-label="选择链"
-            value={chain}
-            disabled={chainsLoading || chains.length === 0}
-            onChange={(event) => setChain(event.target.value)}
-          >
-            {chains.length === 0 ? (
-              <option value="">{chainsLoading ? "加载链…" : "没有已启用的链"}</option>
-            ) : (
-              chains.map((item) => (
-                <option value={item.slug} key={item.slug}>
-                  {item.name}（{item.slug}）
-                </option>
-              ))
-            )}
-          </select>
-          <input
-            className="input"
-            style={{ flex: "1 1 260px", minWidth: 0 }}
-            aria-label="地址或交易哈希"
-            aria-invalid={shapeInvalid}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="0x 地址 / TRON 地址 / 交易哈希"
-          />
-          <button className="btn btn--primary" type="submit" disabled={trimmed.length === 0 || chains.length === 0}>
-            查询
-          </button>
-        </form>
-      </Card>
-      <Card
+      <PageSection title="查询">
+        <Card>
+          <form className="cs-search-hero" onSubmit={submit}>
+            <div className="cs-search-hero__row">
+              <select
+                className="select"
+                style={{ flex: "0 1 220px", minWidth: 150 }}
+                aria-label="选择链"
+                value={chain}
+                disabled={chainsLoading || chains.length === 0}
+                onChange={(event) => setChain(event.target.value)}
+              >
+                {chains.length === 0 ? (
+                  <option value="">{chainsLoading ? "加载链…" : "没有已启用的链"}</option>
+                ) : (
+                  chains.map((item) => (
+                    <option value={item.slug} key={item.slug}>
+                      {item.name}（{item.slug}）
+                    </option>
+                  ))
+                )}
+              </select>
+              <input
+                className="input cs-search-hero__input cs-search-hero__big"
+                aria-label="地址或交易哈希"
+                aria-invalid={shapeInvalid}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="0x 地址 / TRON 地址 / 交易哈希"
+              />
+              <button className="btn btn--primary" type="submit" disabled={trimmed.length === 0 || chains.length === 0}>
+                查询
+              </button>
+            </div>
+          </form>
+        </Card>
+      </PageSection>
+      <PageSection
         title="最近查询"
-        flush
+        count={`${recent.length} / ${MAX_RECENT}`}
         actions={
           <button
             type="button"
@@ -234,41 +268,49 @@ export default function ExplorerPage() {
           </button>
         }
       >
-        {recent.length === 0 ? (
-          <EmptyState title="暂无最近查询" body="查询记录只保存在本机浏览器，最多 8 条。" />
-        ) : (
-          <ul className="s4-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {recent.map((entry) => (
-              <li className="s4-list__item" key={`${entry.chain}-${entry.value}`}>
-                <div className="s4-list__main">
-                  <div className="mono" style={{ overflowWrap: "anywhere" }} title={entry.value}>
+        <Card flush>
+          {recent.length === 0 ? (
+            <EmptyState title="暂无最近查询" body="查询记录只保存在本机浏览器，最多 8 条。" />
+          ) : (
+            <div className="cs-recentlist">
+              {recent.map((entry) => (
+                <div
+                  className="cs-recentlist__item"
+                  key={`${entry.chain}-${entry.value}`}
+                  style={wide ? undefined : { flexWrap: "wrap" }}
+                >
+                  <span
+                    className="cs-recentlist__value"
+                    title={entry.value}
+                    style={wide ? undefined : { flexBasis: "100%" }}
+                  >
                     {shortValue(entry.value, 18, 12)}
-                  </div>
-                  <div className="s4-list__sub">
+                  </span>
+                  <span className="cs-recentlist__meta" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                     <StatusBadge tone={entry.kind === "transaction" ? "neutral" : "info"}>
                       {entry.kind === "transaction" ? "交易" : "地址"}
                     </StatusBadge>{" "}
                     <span className="mono">{entry.chain}</span> · {formatTime(entry.at)}
-                  </div>
+                  </span>
+                  <span className="toolbar">
+                    <button type="button" className="btn btn--sm" onClick={() => open(entry.value, entry.chain)}>
+                      打开
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm btn--ghost"
+                      aria-label="删除该条最近查询"
+                      onClick={() => removeOne(entry)}
+                    >
+                      删除
+                    </button>
+                  </span>
                 </div>
-                <div className="s4-list__actions">
-                  <button type="button" className="btn btn--sm" onClick={() => open(entry.value, entry.chain)}>
-                    打开
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--sm btn--ghost"
-                    aria-label="删除该条最近查询"
-                    onClick={() => removeOne(entry)}
-                  >
-                    删除
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      </PageSection>
     </>
   );
 }

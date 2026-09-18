@@ -1,0 +1,200 @@
+{
+  "base": "http://127.0.0.1:5199/app-v2",
+  "login": false,
+  "generatedAt": "2026-09-18T17:51:53.807Z",
+  "results": [
+    {
+      "breakpoint": "390x844",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    },
+    {
+      "breakpoint": "768x1024",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    },
+    {
+      "breakpoint": "1024x768",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 1024,
+      "clientWidth": 1024,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark",
+        "auth-aside__name",
+        "auth-aside__tagline",
+        "auth-aside__desc",
+        "auth-aside__foot"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    },
+    {
+      "breakpoint": "1440x900",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark",
+        "auth-aside__name",
+        "auth-aside__tagline",
+        "auth-aside__desc",
+        "auth-aside__foot"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    },
+    {
+      "breakpoint": "1920x1080",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark",
+        "auth-aside__name",
+        "auth-aside__tagline",
+        "auth-aside__desc",
+        "auth-aside__foot"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    },
+    {
+      "breakpoint": "2560x1440",
+      "route": "/login",
+      "finalUrl": "http://127.0.0.1:5199/app-v2/login",
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "bodyOverflowX": "visible",
+      "appScope": "user",
+      "tokens": {
+        "cobalt": "#4353E6",
+        "ink": "#0A0E14",
+        "ice": "#F5F6F8",
+        "graphite": "#111827",
+        "slate": "#596273",
+        "border": "#E3E6EB"
+      },
+      "contrastFailures": [],
+      "skippedGradient": [
+        "cs-brand__mark",
+        "auth-aside__name",
+        "auth-aside__tagline",
+        "auth-aside__desc",
+        "auth-aside__foot"
+      ],
+      "smallFonts": [],
+      "unnamedButtons": 0,
+      "progressbarsWithoutAria": 0,
+      "touchTargets": [],
+      "inlineNotices": [],
+      "overflow": false
+    }
+  ],
+  "pageErrors": [],
+  "resourceErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+}

@@ -1,7 +1,29 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
-import { Card, EmptyState, ErrorState, PageHeader, SkeletonRows, StatusBadge, statusToneFor, useDialog, dialogInputValue } from "@chain/ui";
+import {
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  FilterBar,
+  FilterChip,
+  HashValue,
+  InspectorDrawer,
+  KeyValueList,
+  MetaLine,
+  PageHeader,
+  PageSection,
+  SearchInput,
+  SkeletonRows,
+  SplitPane,
+  StatusBadge,
+  dialogInputValue,
+  statusToneFor,
+  useDialog,
+  type DataTableColumn,
+} from "@chain/ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
 
 interface EvidenceRef {
@@ -28,19 +50,49 @@ interface Finding {
   evidence: EvidenceRef[];
 }
 
+/** 与 CanvasPage 相同的本地断点读取方式：只在需要切换结构（列表 / 全屏详情）时用 JS。 */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(query);
+    const update = () => setMatches(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
 /** §18.1 U-INV-04：Findings 复核。支持 evidence verify 后再 confirm，算法字段只读。 */
 export default function FindingsPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
   const dialog = useDialog();
   const action = useAction();
+  const navigate = useNavigate();
   const [status, setStatus] = useState("all");
-  const { data, loading, error, reload } = useAsync<Finding[]>(`/api/v2/investigations/${id}/findings`, [id, status], {
+  const [findingType, setFindingType] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [knownTypes, setKnownTypes] = useState<string[]>([]);
+  const { data, loading, error, reload } = useAsync<Finding[]>(`/api/v2/investigations/${id}/findings`, [id, status, findingType], {
     limit: 200,
     status: status === "all" ? undefined : status,
+    type: findingType || undefined,
   });
   const [selected, setSelected] = useState<Finding | null>(null);
-  const navigate = useNavigate();
+  const isNarrow = useMediaQuery("(max-width: 899px)");
+
+  /* 类型下拉的选项来自服务端真实返回过的 finding_type，不在前端硬编码枚举。 */
+  useEffect(() => {
+    if (!data) return;
+    setKnownTypes((prev) => {
+      const next = [...new Set([...prev, ...data.map((f) => f.finding_type)])].sort();
+      return next.length === prev.length ? prev : next;
+    });
+  }, [data]);
 
   const verifyEvidence = useCallback(
     async (e: EvidenceRef) => {
@@ -112,114 +164,241 @@ export default function FindingsPage() {
     [action, dialog, id, reload],
   );
 
+  const loaded = data ?? [];
+  const trimmed = keyword.trim().toLowerCase();
+  const rows = trimmed
+    ? loaded.filter((f) =>
+        `${f.title} ${f.finding_type} ${f.nature} ${f.algorithm} ${f.status}`.toLowerCase().includes(trimmed),
+      )
+    : loaded;
+  const hasFilters = status !== "all" || findingType !== "" || keyword !== "";
+
+  const clearFilters = () => {
+    setStatus("all");
+    setFindingType("");
+    setKeyword("");
+  };
+
+  const columns: Array<DataTableColumn<Finding>> = [
+    { key: "title", header: "Finding", render: (row) => <span>{row.title}</span> },
+    { key: "type", header: "类型", width: "180px", render: (row) => <span className="mono">{row.finding_type}</span> },
+    { key: "nature", header: "nature", width: "110px", render: (row) => row.nature },
+    {
+      key: "confidence",
+      header: "confidence",
+      width: "110px",
+      align: "right",
+      render: (row) => <span className="num">{(row.confidence * 100).toFixed(0)}%</span>,
+    },
+    {
+      key: "algorithm",
+      header: "算法",
+      width: "170px",
+      render: (row) => <span className="mono">{`${row.algorithm}@${row.algorithm_version}`}</span>,
+    },
+    { key: "status", header: "状态", width: "140px", render: (row) => <StatusBadge tone={statusToneFor(row.status)}>{row.status}</StatusBadge> },
+  ];
+
+  const listPanel = (
+    <PageSection title="Finding 列表" count={`${rows.length} / ${loaded.length} 条`}>
+      <FilterBar onClear={clearFilters} showClear={hasFilters} ariaLabel="Finding 筛选">
+        <select className="select" aria-label="状态筛选" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">全部状态</option>
+          <option value="candidate">candidate</option>
+          <option value="confirmed">confirmed</option>
+          <option value="rejected">rejected</option>
+          <option value="superseded">superseded</option>
+        </select>
+        <select className="select" aria-label="类型筛选" value={findingType} onChange={(e) => setFindingType(e.target.value)}>
+          <option value="">全部类型</option>
+          {knownTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+        <SearchInput
+          label="关键字（当前结果内）"
+          placeholder="标题 / 类型 / nature / 算法"
+          value={keyword}
+          onChange={setKeyword}
+          busy={loading}
+        />
+      </FilterBar>
+      {status !== "all" || findingType ? (
+        <div className="cs-filterbar">
+          {status !== "all" ? (
+            <FilterChip removeLabel="移除状态筛选" onRemove={() => setStatus("all")}>
+              状态：{status}
+            </FilterChip>
+          ) : null}
+          {findingType ? (
+            <FilterChip removeLabel="移除类型筛选" onRemove={() => setFindingType("")}>
+              类型：{findingType}
+            </FilterChip>
+          ) : null}
+        </div>
+      ) : null}
+      <Card flush>
+        {loading && !data ? <SkeletonRows rows={6} columns={5} /> : null}
+        {error && !data ? <ErrorState title="Findings 加载失败" message={error} onRetry={reload} /> : null}
+        {data && rows.length === 0 ? (
+          <EmptyState
+            title="没有符合筛选条件的 Finding"
+            body="筛选条件会保留，可直接修改；也可以清除全部筛选。"
+            action={
+              hasFilters ? (
+                <Button size="sm" onClick={clearFilters}>
+                  清除筛选
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : null}
+        {rows.length > 0 ? (
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            caption="Finding 列表"
+            rowTestId={(row) => `finding-row-${row.id}`}
+            rowActivateLabel={(row) => `查看 Finding ${row.title}`}
+            onRowActivate={(row) => setSelected(row)}
+          />
+        ) : null}
+      </Card>
+    </PageSection>
+  );
+
+  const detailPanel = selected ? (
+    <InspectorDrawer
+      title={selected.title}
+      subtitle={`${selected.finding_type} · r${selected.revision}`}
+      ariaLabel="Finding 详情"
+      onClose={() => setSelected(null)}
+      actions={
+        can("finding:review") ? (
+          <>
+            {isNarrow ? (
+              <Button size="sm" onClick={() => setSelected(null)}>
+                返回列表
+              </Button>
+            ) : null}
+            <button type="button" data-testid="finding-confirm" className="btn btn--primary btn--sm" disabled={["confirmed", "rejected", "superseded"].includes(selected.status)} onClick={() => decide(selected, "confirm")}>
+              Confirm
+            </button>
+            <button type="button" data-testid="finding-reject" className="btn btn--sm" disabled={["confirmed", "rejected", "superseded"].includes(selected.status)} onClick={() => decide(selected, "reject")}>
+              Reject
+            </button>
+            <button type="button" data-testid="finding-supersede" className="btn btn--danger btn--sm" disabled={selected.status === "superseded"} onClick={() => decide(selected, "supersede")}>
+              Supersede
+            </button>
+          </>
+        ) : null
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+        <KeyValueList
+          items={[
+            { label: "摘要", value: selected.summary || "—", wide: true },
+            { label: "状态", value: <StatusBadge tone={statusToneFor(selected.status)}>{selected.status}</StatusBadge> },
+            { label: "类型", value: <span className="mono">{selected.finding_type}</span> },
+            { label: "nature", value: selected.nature },
+            { label: "confidence", value: <span className="num">{(selected.confidence * 100).toFixed(1)}%</span> },
+            { label: "算法", value: <span className="mono">{`${selected.algorithm}@${selected.algorithm_version}`}</span> },
+            { label: "revision", value: `r${selected.revision}` },
+            { label: "创建", value: formatTime(selected.created_at) },
+            { label: "复核意见", value: selected.review_note || "—", wide: true },
+          ]}
+        />
+        <PageSection title="引用 Evidence" count={`${selected.evidence.length} 条`}>
+          {selected.evidence.length === 0 ? <EmptyState title="没有关联 Evidence" /> : null}
+          {selected.evidence.length > 0 ? (
+            <div className="cs-rowcards">
+              {selected.evidence.slice(0, 8).map((e) => (
+                <div className="cs-rowcard" key={e.id}>
+                  <div className="cs-rowcard__head">
+                    <span className="cs-rowcard__title">{e.title}</span>
+                    <StatusBadge tone={statusToneFor(e.status)}>{e.status}</StatusBadge>
+                  </div>
+                  <div className="cs-rowcard__meta">
+                    <span className="mono">{e.evidence_type}</span>
+                    <HashValue value={e.content_hash} head={12} tail={8} label="内容哈希" />
+                  </div>
+                  <div className="cs-rowcard__actions">
+                    <Link className="btn btn--sm" to={`/investigations/${selected.investigation_id}/evidence/${e.id}`}>
+                      详情
+                    </Link>
+                    {can("evidence:review") && e.status !== "verified" ? (
+                      <button type="button" data-testid={`finding-evidence-verify-${e.id}`} className="btn btn--sm" onClick={() => verifyEvidence(e)}>
+                        Verify
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {selected.evidence.length > 8 ? (
+            <Button
+              size="sm"
+              onClick={() =>
+                dialog.notify(
+                  "info",
+                  `其余 ${selected.evidence.length - 8} 条 Evidence`,
+                  null,
+                  selected.evidence.slice(8).map((e) => ({ label: `${e.evidence_type} · ${e.status}`, value: e.title })),
+                )
+              }
+            >
+              查看其余 {selected.evidence.length - 8} 条
+            </Button>
+          ) : null}
+        </PageSection>
+      </div>
+    </InspectorDrawer>
+  ) : (
+    <InspectorDrawer title="Finding 详情" ariaLabel="Finding 详情">
+      <EmptyState title="选择左侧 Finding" />
+    </InspectorDrawer>
+  );
+
   return (
     <>
       <PageHeader
         title="Findings 复核"
-        subtitle={`调查 ${id} · 数据源 postgres:investigation_findings`}
-        actions={
-          <span className="s4-button-row">
-            <select className="select" aria-label="状态筛选" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="all">全部状态</option>
-              <option value="candidate">candidate</option>
-              <option value="confirmed">confirmed</option>
-              <option value="rejected">rejected</option>
-              <option value="superseded">superseded</option>
-            </select>
-            <button type="button" className="btn btn--sm" onClick={() => navigate(`/investigations/${id}/workbench`)}>返回工作台</button>
-          </span>
+        breadcrumb={[
+          { label: "调查任务", to: "/investigations" },
+          { label: "工作台", to: `/investigations/${id}/workbench` },
+          { label: "Findings 复核" },
+        ]}
+        status={<StatusBadge tone="info">{`${rows.length} 条结果`}</StatusBadge>}
+        meta={
+          <MetaLine
+            items={[
+              { label: "调查", value: <span className="mono">{id}</span> },
+              { label: "数据源", value: "postgres:investigation_findings" },
+              { label: "已加载", value: `${loaded.length} 条` },
+            ]}
+          />
+        }
+        secondaryAction={
+          <>
+            <Button size="sm" onClick={() => navigate(`/investigations/${id}/workbench`)}>
+              返回工作台
+            </Button>
+            <Button size="sm" variant="ghost" busy={loading} onClick={reload}>
+              刷新
+            </Button>
+          </>
         }
       />
-      <div className="s4-grid">
-        <Card title="Finding 列表" flush>
-          {loading ? <SkeletonRows rows={6} columns={4} /> : null}
-          {error ? <ErrorState title="Findings 加载失败" message={error} onRetry={reload} /> : null}
-          {!loading && !error && (data ?? []).length === 0 ? <EmptyState title="没有符合筛选条件的 Finding" /> : null}
-          <div className="s4-list">
-            {(data ?? []).map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                data-testid={`finding-row-${f.id}`}
-                className="s4-list__item"
-                style={{ textAlign: "left", background: selected?.id === f.id ? "var(--c-cobalt-soft)" : "transparent", border: 0 }}
-                onClick={() => setSelected(f)}
-              >
-                <div className="s4-list__main">
-                  <div className="s4-list__title">{f.title}</div>
-                  <div className="s4-list__sub">
-                    {f.finding_type} · {f.nature} · confidence {(f.confidence * 100).toFixed(0)}% · {f.algorithm}@{f.algorithm_version}
-                  </div>
-                </div>
-                <StatusBadge tone={statusToneFor(f.status)}>{f.status}</StatusBadge>
-              </button>
-            ))}
-          </div>
-        </Card>
-        <div>
-          {selected ? (
-            <Card title="Finding 详情">
-              <div className="s4-list__title">{selected.title}</div>
-              <div className="s4-list__sub">{selected.summary}</div>
-              <dl className="s4-kv" style={{ marginTop: 12 }}>
-                <div className="s4-kv__row"><dt>状态</dt><dd><StatusBadge tone={statusToneFor(selected.status)}>{selected.status}</StatusBadge></dd></div>
-                <div className="s4-kv__row"><dt>nature</dt><dd>{selected.nature}</dd></div>
-                <div className="s4-kv__row"><dt>confidence</dt><dd>{(selected.confidence * 100).toFixed(1)}%</dd></div>
-                <div className="s4-kv__row"><dt>算法</dt><dd>{selected.algorithm}@{selected.algorithm_version}</dd></div>
-                <div className="s4-kv__row"><dt>revision</dt><dd>r{selected.revision}</dd></div>
-                <div className="s4-kv__row"><dt>创建</dt><dd>{formatTime(selected.created_at)}</dd></div>
-                <div className="s4-kv__row"><dt>复核意见</dt><dd>{selected.review_note || "—"}</dd></div>
-              </dl>
-              <h3 className="card__title" style={{ marginTop: 16 }}>引用 Evidence</h3>
-              <div className="s4-list">
-                {selected.evidence.length === 0 ? <EmptyState title="没有关联 Evidence" /> : null}
-                {selected.evidence.slice(0, 8).map((e) => (
-                  <div className="s4-list__item" key={e.id}>
-                    <div className="s4-list__main">
-                      <div className="s4-list__title">{e.title}</div>
-                      <div className="s4-list__sub mono">{e.content_hash}</div>
-                    </div>
-                    <StatusBadge tone={statusToneFor(e.status)}>{e.status}</StatusBadge>
-                    <span className="s4-list__actions">
-                      <Link className="btn btn--sm" to={`/investigations/${selected.investigation_id}/evidence/${e.id}`}>详情</Link>
-                      {can("evidence:review") && e.status !== "verified" ? (
-                        <button type="button" data-testid={`finding-evidence-verify-${e.id}`} className="btn btn--sm" onClick={() => verifyEvidence(e)}>Verify</button>
-                      ) : null}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {selected.evidence.length > 8 ? (
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() =>
-                    dialog.notify(
-                      "info",
-                      `其余 ${selected.evidence.length - 8} 条 Evidence`,
-                      null,
-                      selected.evidence.slice(8).map((e) => ({ label: `${e.evidence_type} · ${e.status}`, value: e.title })),
-                    )
-                  }
-                >
-                  查看其余 {selected.evidence.length - 8} 条
-                </button>
-              ) : null}
-              {can("finding:review") ? (
-                <div className="s4-button-row" style={{ marginTop: 16 }}>
-                  <button type="button" data-testid="finding-confirm" className="btn btn--primary btn--sm" disabled={["confirmed", "rejected", "superseded"].includes(selected.status)} onClick={() => decide(selected, "confirm")}>Confirm</button>
-                  <button type="button" data-testid="finding-reject" className="btn btn--sm" disabled={["confirmed", "rejected", "superseded"].includes(selected.status)} onClick={() => decide(selected, "reject")}>Reject</button>
-                  <button type="button" data-testid="finding-supersede" className="btn btn--danger btn--sm" disabled={selected.status === "superseded"} onClick={() => decide(selected, "supersede")}>Supersede</button>
-                </div>
-              ) : null}
-            </Card>
-          ) : (
-            <Card title="Finding 详情">
-              <EmptyState title="选择左侧 Finding" />
-            </Card>
-          )}
-        </div>
-      </div>
+
+      {isNarrow ? (
+        selected ? detailPanel : listPanel
+      ) : (
+        <SplitPane main={listPanel} aside={detailPanel} storageKey="cs-findings-split" defaultAsideWidth={420} minAsideWidth={320} maxAsideWidth={620} asideLabel="Finding 详情" />
+      )}
     </>
   );
 }

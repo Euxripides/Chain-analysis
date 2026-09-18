@@ -72,14 +72,21 @@ export interface TabDef {
   permission?: string;
 }
 
+/**
+ * 深链接分区 tab（业务兼容层，签名与语义不变）。
+ *
+ * 2026-09 重构：内部换用共享的 `.cs-tabs` / `.cs-tab` 视觉，**API 与行为完全不变**——
+ * 仍然是真实路由 `NavLink`（深链接、刷新后保持当前 tab），仍然按权限裁剪。
+ * 选中态用 NavLink 自动写入的 `aria-current="page"`，与共享 `<Tabs>` 的 `aria-selected` 等价。
+ */
 export function DeepTabs({ tabs }: { tabs: TabDef[] }) {
   const { can } = useAuth();
   return (
-    <nav className="s4-tabs" aria-label="页面分区">
+    <nav className="cs-tabs" aria-label="页面分区">
       {tabs
         .filter((t) => !t.permission || can(t.permission))
         .map((t) => (
-          <NavLink key={t.key} to={t.to} end className={({ isActive }) => `s4-tab${isActive ? " is-active" : ""}`}>
+          <NavLink key={t.key} to={t.to} end className="cs-tab">
             {t.label}
           </NavLink>
         ))}
@@ -87,11 +94,17 @@ export function DeepTabs({ tabs }: { tabs: TabDef[] }) {
   );
 }
 
+/**
+ * 元数据键值列表（业务兼容层，签名不变）。
+ *
+ * 内部换用共享的 `.cs-kv` 视觉；取值语义不变——空值仍然原样输出，
+ * 由调用方决定显示 `—` 还是别的内容（不在这里替业务做判断）。
+ */
 export function KeyValues({ items }: { items: Array<{ label: string; value: React.ReactNode }> }) {
   return (
-    <dl className="s4-kv">
+    <dl className="cs-kv">
       {items.map((item) => (
-        <div key={item.label} className="s4-kv__row">
+        <div key={item.label} className="cs-kv__row">
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
         </div>
