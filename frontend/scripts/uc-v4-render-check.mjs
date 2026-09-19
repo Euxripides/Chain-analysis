@@ -1400,6 +1400,57 @@ async function main() {
         notes.push(`[${vp.name}] 画布契约=${JSON.stringify(canvasContract)}`);
 
         /*
+         * ---- 视图维度：切换必须真的到达引擎，并且按维度过滤依然生效 ----
+         *
+         * 迁移前这四个维度由 SVG 分支实现（虚线、内联淡化、分组配色）。
+         * 迁移后它们必须穿过 React → 引擎这条链路，而链路上任何一环断掉，
+         * 画面都只是"看起来差不多"——所以这里断言引擎侧的档位与页面的过滤结果。
+         */
+        if (vp.width >= 900 && canvasContract.stage) {
+          const lensGroup = page.locator('[aria-label^="视图维度"]');
+          const statsNow = async () => {
+            const raw = await page.locator(".cs-canvas-stage").first().getAttribute("data-canvas-stats").catch(() => null);
+            try {
+              return raw ? JSON.parse(raw) : null;
+            } catch {
+              return null;
+            }
+          };
+
+          const timeButton = lensGroup.getByRole("button", { name: "时间" });
+          if ((await timeButton.count()) > 0) {
+            await timeButton.first().click();
+            await page.waitForTimeout(600);
+            const stats = await statsNow();
+            if (!stats || stats.lens !== "time") {
+              problems.push(`[${vp.name}] 切到「时间」维度后引擎的透镜仍是 ${stats ? stats.lens : "(无状态)"}——透镜没有传到引擎`);
+            } else {
+              notes.push(`[${vp.name}] 视图维度：引擎已切到 ${stats.lens}，标签 ${stats.labels} 条`);
+            }
+          }
+
+          /*
+           * 夹具里没有证据节点，所以「证据」维度下页面本来就该过滤到空——
+           * 那是正确行为，不是缺陷。断言的就是这个过滤真的发生了。
+           */
+          const evidenceButton = lensGroup.getByRole("button", { name: "证据" });
+          if ((await evidenceButton.count()) > 0) {
+            await evidenceButton.first().click();
+            await page.waitForTimeout(600);
+            const mainText = (await page.locator("#main-content").first().innerText().catch(() => "")) ?? "";
+            if (!mainText.includes("当前筛选没有可渲染节点")) {
+              problems.push(`[${vp.name}] 切到「证据」维度后（夹具无证据节点）画布没有进入空态——透镜过滤没有生效`);
+            } else {
+              notes.push(`[${vp.name}] 视图维度：证据维度下按预期过滤为空态（夹具无证据节点）`);
+            }
+          }
+
+          const flowButton = lensGroup.getByRole("button", { name: "资金流" });
+          if ((await flowButton.count()) > 0) await flowButton.first().click();
+          await page.waitForTimeout(300);
+        }
+
+        /*
          * 画布**交互**契约：点一个节点，选中必须真的落到页面上。
          *
          * 这一条补的是迁移后最大的验证缺口：上面那些只证明了引擎在渲染，
@@ -1477,6 +1528,69 @@ async function main() {
                 problems.push(
                   `[${vp.name}] 点击画布节点后选中没有变化（尝试了 ${candidates.length} 个位置）——命中换算或 onSelect 链路断了`,
                 );
+              }
+
+              /*
+               * ---- 框选：拖拽矩形必须出现在用户拖的那个位置上 ----
+               *
+               * 迁移前这个矩形是 SVG 里的一个 <rect>（坐标直接复用 viewBox），
+               * 迁移后改由一层 div 画出来，换算是我新写的 worldRectToScreen。
+               * 这条断言比对的就是"拖拽的屏幕范围"与"矩形实际渲染的位置"——
+               * 算错了框就会飘到别处，而选中结果（页面侧按 world 坐标算）
+               * 依然是对的，所以只看"选中了几个"根本发现不了。
+               */
+              const toolGroup = page.locator('[aria-label^="画布工具"]');
+              const boxButton = toolGroup.getByRole("button", { name: "框选" });
+              if ((await boxButton.count()) > 0) {
+                await boxButton.first().click();
+                await page.waitForTimeout(200);
+
+                const nodeScreens = candidates.map((candidate) => ({
+                  x: candidate.x * k + (width - 1000 * k) / 2,
+                  y: candidate.y * k + (height - 600 * k) / 2,
+                }));
+                const pad = 24;
+                const startX = Math.max(2, Math.min(...nodeScreens.map((p) => p.x)) - pad);
+                const startY = Math.max(2, Math.min(...nodeScreens.map((p) => p.y)) - pad);
+                const endX = Math.min(width - 2, Math.max(...nodeScreens.map((p) => p.x)) + pad);
+                const endY = Math.min(height - 2, Math.max(...nodeScreens.map((p) => p.y)) + pad);
+
+                if (stageBox && endX - startX > 10 && endY - startY > 10) {
+                  await page.mouse.move(stageBox.x + startX, stageBox.y + startY);
+                  await page.mouse.down();
+                  await page.mouse.move(stageBox.x + endX, stageBox.y + endY, { steps: 6 });
+                  await page.waitForTimeout(200);
+
+                  const rectBox = await page.locator(".cs-canvas-stage__box").first().boundingBox().catch(() => null);
+                  if (!rectBox) {
+                    problems.push(`[${vp.name}] 框选拖拽时没有出现选择框（.cs-canvas-stage__box 缺失）`);
+                  } else {
+                    const expected = { left: stageBox.x + startX, top: stageBox.y + startY, width: endX - startX, height: endY - startY };
+                    const drift =
+                      Math.abs(rectBox.x - expected.left) +
+                      Math.abs(rectBox.y - expected.top) +
+                      Math.abs(rectBox.width - expected.width) +
+                      Math.abs(rectBox.height - expected.height);
+                    if (drift > 6) {
+                      problems.push(
+                        `[${vp.name}] 框选矩形与拖拽范围不符（偏移 ${Math.round(drift)}px）：实际 ${Math.round(rectBox.x)},${Math.round(rectBox.y)} ${Math.round(rectBox.width)}×${Math.round(rectBox.height)}，期望 ${Math.round(expected.left)},${Math.round(expected.top)} ${Math.round(expected.width)}×${Math.round(expected.height)}`,
+                      );
+                    } else {
+                      notes.push(`[${vp.name}] 框选：拖拽矩形与实际渲染位置一致（偏移 ${Math.round(drift)}px）`);
+                    }
+                  }
+
+                  await page.mouse.up();
+                  await page.waitForTimeout(300);
+                  /* 松手后必须收干净：留下一个不消失的选择框是"无法关闭的状态"。 */
+                  if ((await page.locator(".cs-canvas-stage__box").count()) > 0) {
+                    problems.push(`[${vp.name}] 框选松手后选择框没有消失`);
+                  }
+                }
+
+                /* 还原工具，避免影响后续步骤。 */
+                const selectButton = toolGroup.getByRole("button", { name: "选择" });
+                if ((await selectButton.count()) > 0) await selectButton.first().click();
               }
             }
           }

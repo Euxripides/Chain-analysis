@@ -274,8 +274,13 @@ export function CanvasStage({
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    setStats({ ...engine.stats() });
-  }, [graphNodes, graphEdges, pan, zoom, size, lens, ready]);
+    /*
+     * 一定要取**引擎自己的**状态，不能把刚传下去的 prop 顺手塞进报告里。
+     * 那样断言读到的是自己的输入：即使 setLens 根本没被调用，报告里也会写着
+     * "引擎已切到 time"——一个永远为真的判据比没有判据更危险。
+     */
+    setStats({ ...engine.stats(), lens: engine.lens, mutedNodes: engine.rendererDebugMutedCount() });
+  }, [graphNodes, graphEdges, pan, zoom, size, lens, mutedNodes, ready]);
 
   /* ---------- 命中测试：节点与边共用一次拾取（§30.7） ---------- */
   const handleClick = useCallback(
