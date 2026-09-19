@@ -43,6 +43,39 @@ const TRACKED = [
   "apps/user-console/src/sprint5",
 ];
 
+/**
+ * 案件详情 Tab 的权限契约（**钉死在本脚本里**，不与基准提交比对）。
+ *
+ * 为什么单独用一份钉死的表，而不是像上面三项那样与 BASELINE 比对：
+ * `app/case-tabs.ts` 是本次重构**新增**的文件，在基准提交里根本不存在，
+ * 没有可比对的旧版本；而它的内容恰恰是最需要冻结的东西。
+ *
+ * 冻结的四样（缺一不可）：
+ *   1. **tab key** —— 改 key 等于改深链接；
+ *   2. **route** —— 由 key 派生（`/cases/:caseId/<key>`），key 冻结即 route 冻结；
+ *   3. **permissions[]** —— 逐字比对，顺序也比对；
+ *   4. **组合方式（AND/OR）** —— 单独冻结。只比列表拦不住"改成 OR"：
+ *      列表一字未改，准入却松了一大截。
+ *
+ * 另外还有一条**执行层**断言：路由必须仍然走 `CaseTabRoute`。
+ * 只冻结权限表是不够的——把守卫拆掉、表原封不动，检查照样绿，而漏洞已经回来了。
+ *
+ * 改动这张表必须显式改本文件，于是"放宽权限"这件事一定会在 PR 里被看见。
+ */
+const CASE_TAB_CONTRACT = {
+  combination: "AND",
+  tabs: [
+    { key: "overview", permissions: ["case:read"] },
+    { key: "subjects", permissions: ["subject:list"] },
+    { key: "investigations", permissions: ["investigation:list"] },
+    /* temporary：临时兼容规则，等案件级证据接口就绪后应收回单一 evidence:list。 */
+    { key: "evidence", permissions: ["evidence:list", "investigation:list"], temporary: true },
+    { key: "reports", permissions: ["report:list", "investigation:list"] },
+    { key: "members", permissions: ["case:member:list"] },
+    { key: "activity", permissions: ["case:activity:read"] },
+  ],
+};
+
 /** 读取 HEAD 版本的文件内容。`repoPath` 必须是**仓库根相对**路径（形如 frontend/...）。 */
 function gitShow(repoPath) {
   try {
@@ -184,6 +217,92 @@ function diff(label, before, after) {
   return problems;
 }
 
+/** 从 `app/case-tabs.ts` 里解析出实际的 Tab 权限表。 */
+function actualCaseTabs() {
+  const path = join(SRC, "app/case-tabs.ts");
+  if (!existsSync(path)) return null;
+  const text = readFileSync(path, "utf8");
+  const block = text.match(/CASE_TABS[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!block) return null;
+  const tabs = [];
+  for (const match of block[1].matchAll(/\{([\s\S]*?)\}/g)) {
+    const body = match[1];
+    const key = body.match(/key:\s*"([^"]+)"/)?.[1];
+    const raw = body.match(/permissions:\s*\[([^\]]*)\]/)?.[1];
+    if (!key || raw === undefined) continue;
+    const permissions = raw
+      .split(",")
+      .map((item) => item.trim().replace(/^"|"$/g, ""))
+      .filter(Boolean);
+    tabs.push({ key, permissions, temporary: /temporary:\s*true/.test(body) });
+  }
+  const combination = text.match(/CASE_TAB_PERMISSION_COMBINATION\s*=\s*"([^"]+)"/)?.[1] ?? null;
+  return { combination, tabs };
+}
+
+/**
+ * Tab 权限契约的比对。逐条比对并给出**具体哪一项变了**，
+ * 而不是笼统地说"表不一样了"——CI 失败信息要能直接告诉人改坏了什么。
+ */
+function caseTabProblems() {
+  const actual = actualCaseTabs();
+  if (!actual) return ["找不到或无法解析 apps/user-console/src/app/case-tabs.ts（Tab 权限表的唯一来源）"];
+
+  const problems = [];
+  if (actual.combination !== CASE_TAB_CONTRACT.combination) {
+    problems.push(
+      `多权限组合方式被改动：期望 ${CASE_TAB_CONTRACT.combination}，实际 ${actual.combination}（这可能把 AND 放宽成 OR，而权限列表本身一字未改）`,
+    );
+  }
+
+  const expectedKeys = CASE_TAB_CONTRACT.tabs.map((tab) => tab.key);
+  const actualKeys = actual.tabs.map((tab) => tab.key);
+  for (const key of expectedKeys) {
+    if (!actualKeys.includes(key)) problems.push(`Tab「${key}」被删除（深链接 /cases/:caseId/${key} 会失效）`);
+  }
+  for (const key of actualKeys) {
+    if (!expectedKeys.includes(key)) problems.push(`Tab「${key}」被新增（深链接面扩大，需显式更新契约）`);
+  }
+  if (new Set(actualKeys).size !== actualKeys.length) {
+    problems.push(`Tab key 出现重复：${JSON.stringify(actualKeys)}（两个 Tab 会指向同一个 URL）`);
+  }
+
+  for (const expected of CASE_TAB_CONTRACT.tabs) {
+    const found = actual.tabs.find((tab) => tab.key === expected.key);
+    if (!found) continue;
+    const expectedPerms = JSON.stringify(expected.permissions);
+    const actualPerms = JSON.stringify(found.permissions);
+    if (expectedPerms !== actualPerms) {
+      const loosened = expected.permissions.some((p) => !found.permissions.includes(p));
+      problems.push(
+        `Tab「${expected.key}」的权限被改动：期望 ${expectedPerms}，实际 ${actualPerms}` +
+          (loosened ? "（**权限被放宽**——请确认这是有意的，并同步更新本脚本）" : ""),
+      );
+    }
+    const expectedTemporary = Boolean(expected.temporary);
+    if (expectedTemporary !== Boolean(found.temporary)) {
+      problems.push(
+        `Tab「${expected.key}」的 temporary 标记被改动：期望 ${expectedTemporary}，实际 ${Boolean(found.temporary)}` +
+          (expectedTemporary ? "（该条目是临时兼容规则，去掉标记等于承认它是最终设计）" : ""),
+      );
+    }
+  }
+
+  /* 执行层：权限表被冻结，但必须仍然由路由守卫强制，否则表只是一份文档。 */
+  const app = readFileSync(join(SRC, "App.tsx"), "utf8");
+  const routeLine = app.match(/<Route\s+path="\/cases\/:caseId\/:tab"[^>]*>/)?.[0] ?? "";
+  if (!routeLine.includes("CaseTabRoute")) {
+    problems.push(
+      `/cases/:caseId/:tab 没有走 CaseTabRoute（实际：${routeLine.trim() || "找不到该路由"}）——Tab 权限表还在，但没有任何一层在强制它`,
+    );
+  }
+
+  if (problems.length === 0) {
+    console.log(`  OK   案件 Tab 权限契约（${actual.tabs.length} 个 Tab · 组合方式 ${actual.combination} · 路由守卫已接入）`);
+  }
+  return problems;
+}
+
 function main() {
   const headFiles = collectSources(TRACKED, true);
   const workFiles = collectSources(TRACKED, false);
@@ -197,6 +316,11 @@ function main() {
     ...diff("路由路径", routePaths(headFiles), routePaths(workFiles)),
     ...diff("路由→权限映射", routePermissions(headFiles), routePermissions(workFiles)),
     ...diff("/api 字面量", apiLiterals(headFiles), apiLiterals(workFiles)),
+    /*
+     * Tab 权限契约不与基准比对（基准里没有这个文件），而是与脚本里钉死的表比对。
+     * 放在最后：上面三项一旦红了就没必要再看它。
+     */
+    ...caseTabProblems(),
   ].map((problem) => problem.replace(/与 HEAD 一致/, `与 ${BASELINE} 一致`));
 
   if (problems.length > 0) {
