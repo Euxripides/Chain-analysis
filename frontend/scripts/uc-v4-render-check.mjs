@@ -2008,6 +2008,76 @@ async function main() {
         await page.emulateMedia({ reducedMotion: null });
       }
 
+      /*
+       * ---------- 6g. WebGL2 不可用时的降级（§30.6 / §65「性能预算或自动降级」） ----------
+       *
+       * 这条路径以前**完全没有覆盖**，而画布刚迁移到 WebGL——也就是说
+       * "拿不到 WebGL2 上下文"这条分支现在会真的挡住用户：
+       * 处理不好就是一块永远空白的画布，而且不报错、不抛异常。
+       *
+       * 做法是在导航前把 getContext('webgl2') 打成 null，模拟真实的不支持环境。
+       * 放在本视口检查的**最后**：init script 对该 page 之后的所有导航都生效，
+       * 放在中间会污染后面的用例。下一个视口用的是全新 context，不受影响。
+       */
+      if (vp.width >= 900) {
+        await page.addInitScript(() => {
+          const original = HTMLCanvasElement.prototype.getContext;
+          HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+            if (typeof type === "string" && type.startsWith("webgl")) return null;
+            return original.call(this, type, ...rest);
+          };
+        });
+
+        await page.evaluate(() => {
+          window.__ucCheck.pageErrors.length = 0;
+          window.__ucCheck.consoleErrors.length = 0;
+        });
+        await page.goto(`${base}/canvases/canvas-demo`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1200);
+
+        const fallbackVisible = await page
+          .locator(".cs-fundgraph__fallback")
+          .first()
+          .isVisible()
+          .catch(() => false);
+        if (!fallbackVisible) {
+          problems.push("[webgl-fallback] WebGL2 不可用时没有显示降级提示（用户只会看到一块空白画布）");
+        }
+
+        const fallbackText = ((await page.locator(".cs-fundgraph__fallback").first().innerText().catch(() => "")) ?? "").trim();
+        if (fallbackVisible && !fallbackText.includes("性能受限")) {
+          problems.push(`[webgl-fallback] 降级提示没有说清发生了什么（${fallbackText.slice(0, 50)}）`);
+        }
+
+        /* 无障碍通道必须还在：画布画不出来时，对象列表是唯一的信息来源。 */
+        const a11yText = ((await page.locator(".cs-fundgraph__a11y").first().innerText().catch(() => "")) ?? "").trim();
+        if (!a11yText.includes("个节点")) {
+          problems.push(`[webgl-fallback] 降级后对象列表没有列出节点（${a11yText.slice(0, 40)}）`);
+        }
+
+        const fallbackStatsRaw = await page.locator(".cs-canvas-stage").first().getAttribute("data-canvas-stats").catch(() => null);
+        let fallbackStats = null;
+        try {
+          fallbackStats = fallbackStatsRaw ? JSON.parse(fallbackStatsRaw) : null;
+        } catch {
+          fallbackStats = null;
+        }
+        if (!fallbackStats || fallbackStats.webgl2 !== false) {
+          problems.push(`[webgl-fallback] 引擎状态没有如实反映 WebGL2 不可用（${fallbackStatsRaw ? fallbackStatsRaw.slice(0, 60) : "(无状态)"}）`);
+        } else if (fallbackStats.nodes !== CANVAS_RECORD.node_refs.length) {
+          problems.push(`[webgl-fallback] 降级后引擎只装载了 ${fallbackStats.nodes} 个节点`);
+        } else if (fallbackVisible && fallbackText.includes("性能受限") && a11yText.includes("个节点")) {
+          /* 只有降级提示、对象列表、引擎状态三者都对，才给正向证据——
+             否则失败时会同时打印一条"看起来正常"的说明，反而误导。 */
+          notes.push(`[webgl-fallback] WebGL2 不可用：降级提示可见 · 对象列表仍列出 ${fallbackStats.nodes} 个节点 · 引擎如实上报 webgl2=false`);
+        }
+
+        const fallbackSignals = await page.evaluate(() => window.__ucCheck);
+        if (fallbackSignals.pageErrors.length > 0) {
+          problems.push(`[webgl-fallback] 降级路径抛出异常：${JSON.stringify(fallbackSignals.pageErrors.slice(0, 2))}`);
+        }
+      }
+
       await context.close();
     }
   } finally {
