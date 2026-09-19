@@ -208,6 +208,35 @@ const VALIDATE_RESULT = {
   source: "server",
 };
 
+/*
+ * 画布夹具（G0 契约冻结，§60 Phase R6-G0）。
+ *
+ * 形状取自 CanvasPage 的**真实解析协议**：
+ *   节点 ref：`address:<chain>:<id>` / `tx:<chain>:<hash>` / `evidence:<uuid>`
+ *   边   ref：`edge:<fromRef>-><toRef>[:amountRaw[:asset]]`
+ * 用错了格式节点会被判成 badRef 直接丢掉，页面看起来"能跑但图是空的"——
+ * 所以这份夹具必须逐字对齐协议，否则契约基线本身就是错的。
+ */
+const CANVAS_RECORD = {
+  id: "canvas-demo",
+  name: "验收画布",
+  node_refs: [
+    "address:tron:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+    "address:tron:TXk9Kv1QzB7mN4pR2sD8fG3hJ6kL0aZ5yU",
+    "tx:tron:9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c",
+  ],
+  edge_refs: [
+    "edge:address:tron:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t->address:tron:TXk9Kv1QzB7mN4pR2sD8fG3hJ6kL0aZ5yU:1000:USDT",
+    "edge:address:tron:TXk9Kv1QzB7mN4pR2sD8fG3hJ6kL0aZ5yU->tx:tron:9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c",
+  ],
+  groups: [],
+  annotations: [],
+  filters: {},
+  layout: {},
+  camera: {},
+  view_state: {},
+};
+
 /* 调查列表夹具：用于验证 CsProTable（L1 业务表格，§17.1）真的渲染出行。 */
 const INVESTIGATION_ROWS = [
   {
@@ -617,6 +646,10 @@ async function main() {
       );
       await page.route(/\/api\/v2\/addresses\//, (route) =>
         route.fulfill({ status: 200, contentType: "application/json", body: envelope({ items: [] }) }),
+      );
+      /* 画布详情（G0 契约基线用）。 */
+      await page.route(/\/api\/v2\/canvases\/[^/]+(\?[^/]*)?$/, (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: envelope(CANVAS_RECORD) }),
       );
       await page.route(/\/api\/v2\/downloads\/preview$/, (route) =>
         route.fulfill({ status: 200, contentType: "application/json", body: envelope(PREVIEW) }),
@@ -1106,6 +1139,70 @@ async function main() {
           problems.push(`[${vp.name}] CsProTable 导致页面横向溢出：${JSON.stringify(proOverflow)}`);
         }
         await page.screenshot({ path: join(OUT, `investigations-${vp.name}.png`), fullPage: false });
+      }
+
+      /* ---------- 6b-3. 画布契约基线（G0，§60 Phase R6-G0） ---------- */
+      {
+        /*
+         * 这是"切换图谱引擎"之前的**契约冻结**。
+         *
+         * 断言的是不变量而不是像素：图谱画布的 SVG 容器、五组语义化控件、
+         * 以及"节点与边确实被画出来了"。将来把 CanvasPage 换成 @chain/graph-engine 时，
+         * 这些不变量必须原样成立——它们就是"信息架构没有被动过"的可执行定义。
+         */
+        await page.goto(`${base}/canvases/canvas-demo`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1200);
+
+        const canvasContract = await page.evaluate(() => {
+          const svg = document.querySelector('svg[aria-label="Canvas SVG 图谱"]');
+          const controls = (prefix) => {
+            const node = document.querySelector(`[aria-label^="${prefix}"]`);
+            if (!node) return null;
+            return Array.from(node.querySelectorAll("button, a, input, select"))
+              .map((el) => (el.getAttribute("aria-label") || el.textContent || "").trim())
+              .filter(Boolean);
+          };
+          return {
+            svg: Boolean(svg),
+            circles: svg ? svg.querySelectorAll("circle").length : 0,
+            paths: svg ? svg.querySelectorAll("path").length : 0,
+            lines: svg ? svg.querySelectorAll("line").length : 0,
+            /* 标签数：现有实现会在 SVG 里画 <text>，新引擎目前还没有标签能力——
+               记下这个数，正是它让"等价性"有可对照的锚点。 */
+            texts: svg ? svg.querySelectorAll("text").length : 0,
+            tool: controls("画布工具"),
+            layout: controls("布局方式"),
+            lens: controls("视图维度"),
+            playback: controls("路径播放控制"),
+          };
+        });
+
+        /*
+         * 断言的边界要说清楚：
+         *   - **控件组（工具 / 布局 / 视图维度 / 路径播放）在任何断点都必须存在**——
+         *     它们是信息架构的一部分，与视口宽度无关；
+         *   - **SVG 图谱只在桌面断点断言**：390px 下这个页面本来就不渲染 SVG，
+         *     那是既有行为，不是本次重构引入的。把它写成"两个断点都要有 SVG"
+         *     等于用一条错误的前提去卡将来的实现。
+         */
+        for (const [name, list] of [["画布工具", canvasContract.tool], ["布局方式", canvasContract.layout], ["视图维度", canvasContract.lens], ["路径播放控制", canvasContract.playback]]) {
+          if (!list || list.length < 2) {
+            problems.push(`[${vp.name}] 画布控件组「${name}」缺失或选项不足（${JSON.stringify(list)}）`);
+          }
+        }
+        if (vp.width >= 900 && !canvasContract.svg) {
+          problems.push(`[${vp.name}] 桌面断点下画布没有渲染 SVG 图谱容器`);
+        }
+        if (canvasContract.svg) {
+          /* 夹具是 3 个节点 / 2 条边：画出来的图形元素不能少于它们。 */
+          if (canvasContract.circles < CANVAS_RECORD.node_refs.length) {
+            problems.push(`[${vp.name}] 画布节点图形数 ${canvasContract.circles} < 夹具节点数 ${CANVAS_RECORD.node_refs.length}`);
+          }
+          if (canvasContract.paths + canvasContract.lines < CANVAS_RECORD.edge_refs.length) {
+            problems.push(`[${vp.name}] 画布边图形数 ${canvasContract.paths + canvasContract.lines} < 夹具边数 ${CANVAS_RECORD.edge_refs.length}`);
+          }
+        }
+        notes.push(`[${vp.name}] 画布契约=${JSON.stringify(canvasContract)}`);
       }
 
       /* ---------- 6c. 路由过渡策略（§9.3 / §61） ---------- */

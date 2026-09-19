@@ -9,6 +9,7 @@
     "[1440x900] 失效预览 border=rgb(217, 140, 22) opacity=1",
     "[1440x900] 案件 Tab href=[\"/app-v2/cases/case-0001/overview\",\"/app-v2/cases/case-0001/subjects\",\"/app-v2/cases/case-0001/investigations\",\"/app-v2/cases/case-0001/evidence\",\"/app-v2/cases/case-0001/reports\",\"/app-v2/cases/case-0001/members\",\"/app-v2/cases/case-0001/activity\"]",
     "[1440x900] 地址 Tab href=[\"?tab=overview\",\"?tab=assets\",\"?tab=transactions\",\"?tab=transfers\",\"?tab=internal\",\"?tab=counterparties\",\"?tab=semantic\",\"?tab=analysis\",\"?tab=coverage\"]",
+    "[1440x900] 画布契约={\"svg\":true,\"circles\":6,\"paths\":2,\"lines\":4,\"texts\":7,\"tool\":[\"选择\",\"框选\",\"平移\"],\"layout\":[\"自动\",\"分层\",\"环形\"],\"lens\":[\"资金流\",\"时间\",\"资产\",\"证据\"],\"playback\":[\"上一步\",\"下一步\",\"播放\",\"停止\"]}",
     "[1440x900] console=0 pageerror=0 csp=0",
     "[390x844] overflow={\"docScroll\":390,\"docClient\":390,\"bodyScroll\":390}",
     "[390x844] rail background=rgb(248, 251, 255)",
@@ -17,7 +18,8 @@
     "[390x844] 失效预览 border=rgb(217, 140, 22) opacity=1",
     "[390x844] 案件 Tab href=[\"/app-v2/cases/case-0001/overview\",\"/app-v2/cases/case-0001/subjects\",\"/app-v2/cases/case-0001/investigations\",\"/app-v2/cases/case-0001/evidence\",\"/app-v2/cases/case-0001/reports\",\"/app-v2/cases/case-0001/members\",\"/app-v2/cases/case-0001/activity\"]",
     "[390x844] 地址 Tab href=[\"?tab=overview\",\"?tab=assets\",\"?tab=transactions\",\"?tab=transfers\",\"?tab=internal\",\"?tab=counterparties\",\"?tab=semantic\",\"?tab=analysis\",\"?tab=coverage\"]",
+    "[390x844] 画布契约={\"svg\":false,\"circles\":0,\"paths\":0,\"lines\":0,\"texts\":0,\"tool\":[\"选择\",\"框选\",\"平移\"],\"layout\":[\"自动\",\"分层\",\"环形\"],\"lens\":[\"资金流\",\"时间\",\"资产\",\"证据\"],\"playback\":[\"上一步\",\"下一步\",\"播放\",\"停止\"]}",
     "[390x844] console=0 pageerror=0 csp=0"
   ],
-  "at": "2026-09-19T07:52:31.529Z"
+  "at": "2026-09-19T07:59:13.619Z"
 }
