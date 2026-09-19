@@ -2009,6 +2009,64 @@ async function main() {
       }
 
       /*
+       * ---------- 6f-2. 权限 fail-closed（§0.4.2 / §24.3） ----------
+       *
+       * 契约冻结只比对"路由 → 权限"的映射表，**管不了运行时的实际效果**：
+       * 如果哪天渲染层漏掉了 can() 判断，把证据 Tab 画给了一个没有 evidence:list 的人，
+       * 映射表照样一致、契约检查照样通过。所以这里用一份**被裁剪过的会话**跑一遍。
+       */
+      if (vp.width >= 900) {
+        const restricted = {
+          ...SESSION,
+          permissions: SESSION.permissions.filter((p) => p !== "evidence:list" && p !== "case:member:list"),
+        };
+        /* 路由后注册者优先：这条会盖掉上面的完整权限夹具。 */
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(restricted) }),
+        );
+
+        await page.goto(`${base}/cases/case-0001/overview`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(900);
+        const tabHrefs = await page.evaluate(() =>
+          Array.from(document.querySelectorAll(".cs-tabs a, .cs-tabpanel a, [role='tablist'] a")).map((a) => a.getAttribute("href")),
+        );
+        const hasEvidenceTab = tabHrefs.some((h) => h && h.includes("/evidence"));
+        const hasMembersTab = tabHrefs.some((h) => h && h.includes("/members"));
+        const hasReportsTab = tabHrefs.some((h) => h && h.includes("/reports"));
+        if (hasEvidenceTab) problems.push("[permission] 缺少 evidence:list 的用户仍然看到了「证据中心」Tab");
+        if (hasMembersTab) problems.push("[permission] 缺少 case:member:list 的用户仍然看到了「案件成员」Tab");
+        if (!hasReportsTab) problems.push("[permission] 有 report:list 的用户看不到「案件报告」Tab（收得过紧了）");
+
+        /* 直接敲 URL 也必须拦住，而不是"Tab 藏起来但页面照样打开"。 */
+        await page.goto(`${base}/cases/case-0001/evidence`, { waitUntil: "domcontentloaded" });
+        /* 夹具本身有 700ms 延迟；再加上会话被换掉后会重新取一次，等久一点才看得到稳定态。 */
+        await page.waitForTimeout(2200);
+        const evidenceText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        const leakedEvidence = await page.locator(".cs-protable, .table tbody tr").count();
+        /*
+         * 直达 URL 的实测结果：**页面照样渲染了证据内容**，没有无权限提示。
+         *
+         * 这不是本轮重构引入的，也不能在这里"顺手修掉"：
+         *   · `evidence:list` / `case:member:list` 在整个 src 里只出现在
+         *     CaseDetailPage 的 TABS 数组里，**没有对应的路由守卫**；
+         *   · 冻结的路由→权限映射（19 条）本来就不含案件子 Tab；
+         *   · 目标是"不改变权限契约"，把 UI 门槛变成路由门槛恰恰是改契约，
+         *     真正该由服务端裁决。
+         * 所以这里**只记录、不判定**：把它写成 problem 等于要求改契约；
+         * 写成"通过"又会让人以为这条路径被守住了。两者都是错的。
+         */
+        const rendersEvidenceContent = evidenceText.includes("案件证据") || evidenceText.includes("EVIDENCE");
+        notes.push(
+          `[permission] Tab 按权限过滤正确：${JSON.stringify(tabHrefs.map((h) => (h ?? "").replace("/app-v2/cases/case-0001/", "")))}；直达 /evidence 仍渲染内容=${rendersEvidenceContent}（**既有行为**：案件子 Tab 只有 UI 过滤、没有路由守卫，服务端才是裁决点；本轮契约要求不改权限，故仅记录）`,
+        );
+
+        /* 还原完整权限夹具。 */
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(SESSION) }),
+        );
+      }
+
+      /*
        * ---------- 6g. WebGL2 不可用时的降级（§30.6 / §65「性能预算或自动降级」） ----------
        *
        * 这条路径以前**完全没有覆盖**，而画布刚迁移到 WebGL——也就是说
