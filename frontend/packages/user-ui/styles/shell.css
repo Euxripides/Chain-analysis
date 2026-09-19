@@ -177,6 +177,23 @@ html[data-app="user"] .cs-avatar { color: var(--cs-text-inverse); }
 }
 @media (max-width: 899px) {
   html[data-app="user"] { --cs-gutter: 16px; --cs-topbar-h: 54px; }
+  /*
+   * 移动端：外壳只留一列，导航变成抽屉（规范 §54「< 900：drawer nav」）。
+   *
+   * 这一条必须**在这里**、并且带上 `html[data-app="user"]` 前缀。
+   * 旧样式表 user-shell.css 里已经有同样作用的 @media 规则，但它的选择器是
+   * `.cs-shell`（权重 0,1,0），会被本文件上面那条
+   * `html[data-app="user"] .cs-shell`（0,2,2）整体压掉——
+   * 于是桌面端的双列定义在移动端继续生效，而抽屉是 fixed 定位、不占格，
+   * 主内容就被自动排进了本该属于导航条的 220px 那一列。
+   * 表现是"没报错、不溢出，但整个手机端内容只有 220px 宽"。
+   *
+   * 教训：用高权重选择器覆盖旧样式时，会**连带压掉旧文件里的响应式规则**。
+   */
+  html[data-app="user"] .cs-shell,
+  html[data-app="user"] .cs-shell[data-collapsed="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html[data-app="user"] .cs-shell__rail[data-open="true"] { box-shadow: var(--cs-shadow-floating); }
   html[data-app="user"] .cs-shell__content { padding: 16px 16px 48px; gap: 14px; }
   html[data-app="user"] .cs-nav__link { min-height: 44px; }

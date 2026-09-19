@@ -1205,6 +1205,13 @@ async function main() {
           problems.push(`[${vp.name}] admin Dialog 无法用 Escape 关闭`);
         }
         await page.screenshot({ path: join(OUT, `admin-login-${vp.name}.png`), fullPage: false });
+        /*
+         * 这一段只报问题、不报结论，于是"后台端没被动过"在报告里是**空白**——
+         * 空白既可以读成"验过了"，也可以读成"根本没跑"。所以这里补一条正向证据。
+         */
+        notes.push(
+          `[${vp.name}] admin 回归：legacy Dialog 渲染 · 标题=${title} · 用户端视觉泄漏 0 · Esc 可关闭`,
+        );
 
         const adminSignals = await page.evaluate(() => window.__ucCheck);
         if (adminSignals.pageErrors.length > 0) {
@@ -1400,6 +1407,52 @@ async function main() {
         notes.push(`[${vp.name}] 画布契约=${JSON.stringify(canvasContract)}`);
 
         /*
+         * 移动端画布默认收起，点「展开图谱」之后必须真的出现一块**活**的画布：
+         * 只断言按钮文字变了是不够的——展开后是一块 0×0 的 canvas 也同样"没报错"。
+         */
+        if (vp.width < 900) {
+          const toggle = page.getByRole("button", { name: /展开图谱|收起图谱/ });
+          if ((await toggle.count()) > 0) {
+            if (((await toggle.first().innerText()) ?? "").includes("展开")) {
+              await toggle.first().click();
+              await page.waitForTimeout(800);
+            }
+            const stage = page.locator(".cs-canvas-stage").first();
+            if ((await stage.count()) === 0) {
+              problems.push(`[${vp.name}] 移动端展开图谱后没有出现画布舞台`);
+            } else {
+              const box = await stage.boundingBox();
+              const raw = await stage.getAttribute("data-canvas-stats").catch(() => null);
+              let mobileStats = null;
+              try {
+                mobileStats = raw ? JSON.parse(raw) : null;
+              } catch {
+                mobileStats = null;
+              }
+              if (!box || box.width <= 0 || box.height <= 0) {
+                problems.push(`[${vp.name}] 移动端展开图谱后画布尺寸为 0`);
+              } else if (!mobileStats || mobileStats.nodes !== CANVAS_RECORD.node_refs.length) {
+                problems.push(`[${vp.name}] 移动端展开图谱后引擎没有装载夹具节点（${mobileStats ? mobileStats.nodes : "(无状态)"}）`);
+              } else {
+                const chain = await page.evaluate(() => {
+                  const out = [];
+                  let el = document.querySelector(".s5-canvas-shell") || document.querySelector(".cs-canvas-stage");
+                  for (let i = 0; i < 7 && el; i += 1) {
+                    const rect = el.getBoundingClientRect();
+                    out.push(`${el.tagName.toLowerCase()}.${(el.className || "").toString().split(" ").filter(Boolean).slice(0, 2).join(".")}=${Math.round(rect.width)}`);
+                    el = el.parentElement;
+                  }
+                  return out;
+                });
+                notes.push(
+                  `[${vp.name}] 移动端画布：展开后 ${Math.round(box.width)}×${Math.round(box.height)}，引擎装载 ${mobileStats.nodes} 个节点 · 祖链 ${chain.join(" ← ")}`,
+                );
+              }
+            }
+          }
+        }
+
+        /*
          * ---- 视图维度：切换必须真的到达引擎，并且按维度过滤依然生效 ----
          *
          * 迁移前这四个维度由 SVG 分支实现（虚线、内联淡化、分组配色）。
@@ -1407,6 +1460,47 @@ async function main() {
          * 画面都只是"看起来差不多"——所以这里断言引擎侧的档位与页面的过滤结果。
          */
         if (vp.width >= 900 && canvasContract.stage) {
+          /*
+           * 相机路径：工具栏的缩放按钮必须真的驱动引擎相机。
+           *
+           * 上一轮修的就是"引擎擅自改相机"——那条链路正好在缩放按钮上暴露：
+           * zoom 3 倍后引擎的 LOD 应当从 mid 升到 near（阈值按本页比例校准过），
+           * 「适配视图」再把它按回 mid。只看画面是看不出相机有没有跟着走的。
+           */
+          const readStats = async () => {
+            const raw = await page.locator(".cs-canvas-stage").first().getAttribute("data-canvas-stats").catch(() => null);
+            try {
+              return raw ? JSON.parse(raw) : null;
+            } catch {
+              return null;
+            }
+          };
+          const zoomIn = page.getByRole("button", { name: "放大" });
+          if ((await zoomIn.count()) > 0) {
+            const before = await readStats();
+            for (let i = 0; i < 6; i += 1) await zoomIn.first().click();
+            await page.waitForTimeout(500);
+            const zoomed = await readStats();
+            if (!zoomed || zoomed.lod === (before ? before.lod : null)) {
+              problems.push(
+                `[${vp.name}] 点击放大后引擎档位没有变化（${before ? before.lod : "?"} → ${zoomed ? zoomed.lod : "?"}）——缩放没有驱动引擎相机`,
+              );
+            } else {
+              notes.push(`[${vp.name}] 画布相机：放大后引擎档位 ${before.lod} → ${zoomed.lod}`);
+            }
+            const fit = page.getByRole("button", { name: "适配视图" });
+            if ((await fit.count()) > 0) {
+              await fit.first().click();
+              await page.waitForTimeout(500);
+              const fitted = await readStats();
+              if (!fitted || fitted.lod !== (before ? before.lod : null)) {
+                problems.push(`[${vp.name}] 「适配视图」没有把引擎档位复位（${fitted ? fitted.lod : "?"}）`);
+              } else {
+                notes.push(`[${vp.name}] 画布相机：「适配视图」已复位到 ${fitted.lod}`);
+              }
+            }
+          }
+
           const lensGroup = page.locator('[aria-label^="视图维度"]');
           const statsNow = async () => {
             const raw = await page.locator(".cs-canvas-stage").first().getAttribute("data-canvas-stats").catch(() => null);
@@ -1810,6 +1904,33 @@ async function main() {
           window.__ucCheck.pageErrors.length = 0;
         });
       }
+      /*
+       * ---------- 6e. 外壳在窄屏必须只占一列（§54「< 900：drawer nav」） ----------
+       *
+       * 这一条来自一个真实缺陷：用户端外壳层用 `html[data-app="user"] .cs-shell`
+       * （权重 0,2,2）覆盖旧样式，顺手把旧文件里 @media 下的
+       * `grid-template-columns: minmax(0,1fr)`（0,1,0）也压掉了。
+       * 桌面端的双列在移动端继续生效，而导航条是 fixed 定位不占格，
+       * 主内容于是被自动排进 220px 那一列——不报错、不溢出，
+       * 只是**整个手机端内容区都只有 220px 宽**。
+       *
+       * 只看"有没有横向溢出"永远发现不了这种缺陷，所以要直接量内容列宽度。
+       */
+      if (vp.width < 900) {
+        const mainWidth = await page
+          .locator(".cs-shell__main")
+          .first()
+          .evaluate((el) => el.getBoundingClientRect().width)
+          .catch(() => 0);
+        if (mainWidth < vp.width * 0.9) {
+          problems.push(
+            `[${vp.name}] 移动端主内容列只有 ${Math.round(mainWidth)}px（视口 ${vp.width}px）——外壳没有切成单列，导航仍占着一整列`,
+          );
+        } else {
+          notes.push(`[${vp.name}] 外壳：主内容列 ${Math.round(mainWidth)}px / 视口 ${vp.width}px，窄屏单列生效`);
+        }
+      }
+
       const signals = await page.evaluate(() => window.__ucCheck);
       const unexpectedCsp = signals.csp.filter((v) => !/font-src|img-src/.test(v.directive));
       if (unexpectedCsp.length > 0) problems.push(`[${vp.name}] CSP violations: ${JSON.stringify(unexpectedCsp)}`);
