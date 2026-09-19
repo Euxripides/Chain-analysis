@@ -31,6 +31,8 @@ import {
 } from "@chain/ui";
 import { CsPageHeader } from "@chain/user-ui";
 import { DeepTabs, formatTime, useAction, useAsync } from "../sprint4/common";
+import { CASE_TABS } from "../app/case-tabs";
+import { CaseMembersTab } from "./case/CaseMembersTab";
 
 /**
  * §12.6 案件详情 /cases/:caseId/:tab
@@ -130,19 +132,7 @@ export default function CaseDetailPage() {
   const action = useAction();
   const navigate = useNavigate();
   const { data: detail, loading, error, reload } = useAsync<CaseDetail>(`/api/v2/cases/${caseId}`, [caseId], {});
-  const { data: members, loading: membersLoading, error: membersError, reload: reloadMembers } = useAsync<Member[]>(`/api/v2/cases/${caseId}/members`, [caseId]);
-  const [addingMember, setAddingMember] = useState(false);
   const [subjectVersion, setSubjectVersion] = useState(0);
-  const [memberOptions, setMemberOptions] = useState<Array<{ identity_id: string; email: string; display_name: string }>>([]);
-  const [memberForm, setMemberForm] = useState({ identity_id: "", role: "investigator" });
-
-  useEffect(() => {
-    if (!addingMember) return;
-    void action.client
-      .get<Array<{ identity_id: string; email: string; display_name: string }>>("/api/v2/workspace-members", { query: { limit: 200 } })
-      .then((res) => setMemberOptions(res.data ?? []))
-      .catch(() => setMemberOptions([]));
-  }, [addingMember, action.client]);
 
   const command = useCallback(
     async (cmd: string) => {
@@ -203,22 +193,6 @@ export default function CaseDetailPage() {
     [action, caseId, dialog, reload],
   );
 
-  const removeMember = useCallback(
-    async (member: Member) => {
-      const answer = await dialog.confirm({
-        kind: "confirm",
-        title: "移除案件成员？",
-        details: [
-          { label: "成员", value: member.display_name || member.email },
-          { label: "角色", value: member.role },
-        ],
-      });
-      if (answer !== "confirm") return;
-      await action.run(() => action.client.delete(`/api/v2/cases/${caseId}/members/${member.identity_id}`), { successTitle: "成员已移除", onDone: () => reloadMembers() });
-    },
-    [action, caseId, dialog, reloadMembers],
-  );
-
   if (loading) return <PageSkeleton shape="detail" />;
   if (error || !detail) {
     return (
@@ -228,17 +202,17 @@ export default function CaseDetailPage() {
     );
   }
 
-  const tabs = [
-    { key: "overview", label: "概览", to: `/cases/${caseId}/overview` },
-    { key: "subjects", label: "调查对象", to: `/cases/${caseId}/subjects`, permission: "subject:list" },
-    { key: "investigations", label: "案件调查", to: `/cases/${caseId}/investigations`, permission: "investigation:list" },
-    { key: "evidence", label: "证据中心", to: `/cases/${caseId}/evidence`, permission: "evidence:list" },
-    { key: "reports", label: "案件报告", to: `/cases/${caseId}/reports`, permission: "report:list" },
-    { key: "members", label: "案件成员", to: `/cases/${caseId}/members`, permission: "case:member:list" },
-    { key: "activity", label: "案件动态", to: `/cases/${caseId}/activity`, permission: "case:activity:read" },
-  ];
-
-  const memberRows = members ?? [];
+  /*
+   * Tab 表与**路由守卫共用** app/case-tabs.ts：两处各写一份权限必然漂移，
+   * 而漂移的后果正好是这次要修的问题——UI 藏起来了、路由却没拦。
+   */
+  const tabs = CASE_TABS.map((definition) => ({
+    key: definition.key,
+    label: definition.label,
+    to: `/cases/${caseId}/${definition.key}`,
+    /* 入口过滤与路由守卫共用同一份权限列表，都是"全部满足才显示"。 */
+    permissions: definition.permissions,
+  }));
 
   return (
     <>
@@ -306,101 +280,7 @@ export default function CaseDetailPage() {
             {tab === "evidence" ? <CaseEvidenceTab caseId={caseId} /> : null}
             {tab === "reports" ? <CaseReportsTab caseId={caseId} /> : null}
             {tab === "activity" ? <ActivityTab caseId={caseId} /> : null}
-            {tab === "members" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)" }}>
-                <PageSection title="案件成员" count={`${memberRows.length} 人`}>
-                  <Card
-                    flush
-                    actions={
-                      <Button size="sm" disabled={!can("case:member:manage")} onClick={() => setAddingMember(true)}>
-                        添加成员
-                      </Button>
-                    }
-                  >
-                    <DataTable<Member>
-                      loading={membersLoading}
-                      error={membersError}
-                      onRetry={reloadMembers}
-                      rows={memberRows}
-                      rowKey={(member) => member.id}
-                      caption="案件成员"
-                      columns={[
-                        {
-                          key: "name",
-                          header: "成员",
-                          render: (member) => (
-                            <span>
-                              <strong>{member.display_name || "—"}</strong>
-                              <div className="s4-list__sub">{member.email}</div>
-                            </span>
-                          ),
-                        },
-                        { key: "role", header: "角色", width: "120px", render: (member) => <StatusBadge tone={member.role === "lead" ? "ok" : "neutral"}>{member.role}</StatusBadge> },
-                        { key: "joined", header: "加入时间", width: "170px", render: (member) => <span>{formatTime(member.created_at)}</span> },
-                        {
-                          key: "ops",
-                          header: "操作",
-                          width: "100px",
-                          render: (member) => (
-                            <Button size="sm" disabled={!can("case:member:manage")} onClick={() => removeMember(member)}>
-                              移除
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                  </Card>
-                </PageSection>
-
-                {addingMember ? (
-                  <PageSection title="添加案件成员">
-                    <Card>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
-                        <Field label="成员" htmlFor="member-id">
-                          <select id="member-id" className="select" value={memberForm.identity_id} onChange={(e) => setMemberForm({ ...memberForm, identity_id: e.target.value })}>
-                            <option value="">选择工作区成员</option>
-                            {memberOptions.map((option) => (
-                              <option key={option.identity_id} value={option.identity_id}>
-                                {option.display_name || option.email}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        <Field label="角色" htmlFor="member-role">
-                          <select id="member-role" className="select" value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}>
-                            <option value="lead">lead</option>
-                            <option value="investigator">investigator</option>
-                            <option value="reviewer">reviewer</option>
-                            <option value="viewer">viewer</option>
-                          </select>
-                        </Field>
-                        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-                          <Button onClick={() => setAddingMember(false)}>取消</Button>
-                          <Button
-                            variant="primary"
-                            disabled={!memberForm.identity_id}
-                            busy={action.busy}
-                            busyLabel="加入中…"
-                            onClick={() =>
-                              action.run(() => action.client.post(`/api/v2/cases/${caseId}/members`, memberForm), {
-                                successTitle: "成员已加入",
-                                onDone: () => {
-                                  setAddingMember(false);
-                                  setMemberForm({ identity_id: "", role: "investigator" });
-                                  void reloadMembers();
-                                },
-                              })
-                            }
-                          >
-                            加入
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  </PageSection>
-                ) : null}
-              </div>
-            ) : null}
+            {tab === "members" ? <CaseMembersTab caseId={caseId} /> : null}
           </>
         }
         aside={

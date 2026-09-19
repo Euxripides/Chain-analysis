@@ -70,6 +70,15 @@ export interface TabDef {
   label: string;
   to: string;
   permission?: string;
+  /**
+   * 多权限入口：**全部满足**才显示（本轮为案件详情 Tab 新增）。
+   *
+   * 与单权限的 `permission` 是叠加关系而不是替代：其它页面继续用单权限，
+   * 行为一字不变。之所以需要多权限，是因为有的 Tab 要同时具备两个权限
+   * 才真正可用（见 app/case-tabs.ts），只检查其中一个会让用户点进去吃 403。
+   * 判据必须与路由守卫一致，否则会出现"入口看得见、进去被拦"。
+   */
+  permissions?: string[];
 }
 
 /**
@@ -84,7 +93,10 @@ export function DeepTabs({ tabs }: { tabs: TabDef[] }) {
   return (
     <nav className="cs-tabs" aria-label="页面分区">
       {tabs
-        .filter((t) => !t.permission || can(t.permission))
+        .filter((t) => {
+          const required = t.permissions ?? (t.permission ? [t.permission] : []);
+          return required.every((permission) => can(permission));
+        })
         .map((t) => (
           <NavLink key={t.key} to={t.to} end className="cs-tab">
             {t.label}

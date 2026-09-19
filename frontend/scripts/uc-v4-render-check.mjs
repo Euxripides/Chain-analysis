@@ -578,6 +578,14 @@ async function main() {
           page.evaluate((text) => window.__ucCheck.consoleErrors.push(text), msg.text()).catch(() => {});
         }
       });
+      /*
+       * 记录本视口内发出的所有请求 URL。
+       * 权限断言要证明的不是"页面看起来被拦住了"，而是**相关接口一次都没发**——
+       * 只有数请求才能把"父页面先挂载再判断"这种实现挡住。
+       */
+      const requestLog = [];
+      page.on("request", (request) => requestLog.push(request.url()));
+
       page.on("pageerror", (err) => {
         page.evaluate((text) => window.__ucCheck.pageErrors.push(text), String(err)).catch(() => {});
       });
@@ -2009,58 +2017,110 @@ async function main() {
       }
 
       /*
-       * ---------- 6f-2. 权限 fail-closed（§0.4.2 / §24.3） ----------
+       * ---------- 6f-2. 权限 fail-closed：UI + Route Guard 两层（§0.4.2 / §24.3） ----------
        *
-       * 契约冻结只比对"路由 → 权限"的映射表，**管不了运行时的实际效果**：
-       * 如果哪天渲染层漏掉了 can() 判断，把证据 Tab 画给了一个没有 evidence:list 的人，
-       * 映射表照样一致、契约检查照样通过。所以这里用一份**被裁剪过的会话**跑一遍。
+       * 这条断言存在的理由：契约冻结检查比对的是 navigation.tsx 里的
+       * ROUTE_PERMISSIONS（导航裁剪用），**从来不覆盖运行时鉴权**。
+       * 案件详情的 7 个子 Tab 一度只在渲染层过滤权限，
+       * /cases/:caseId/:tab 这条路由本身只校验 case:read——
+       * 于是手输链接、收藏夹、浏览器历史都能绕过 UI 直达子页面。
+       *
+       * 这里要证明三件事，缺一不可：
+       *   1. 无权限用户直达子 Tab → 显示无权限页；
+       *   2. **CaseDetailPage 没有挂载**（它一挂载就会发请求）；
+       *   3. **对应接口请求次数为 0**。
+       * 只断言第 1 条的话，"先渲染页面再判断"的实现照样能过，
+       * 而那正是最危险的那种写法：页面已经拿过敏感数据了。
        */
       if (vp.width >= 900) {
-        const restricted = {
+        const countRequests = (needle) => requestLog.filter((url) => url.includes(needle)).length;
+
+        /* ---- A. 无 case:member:list：直达 /members ---- */
+        /* 必须清零：本视口前面已经跑过几十次导航，不清零会把历史请求算到这一段头上。 */
+        requestLog.length = 0;
+        const withoutMembers = {
           ...SESSION,
-          permissions: SESSION.permissions.filter((p) => p !== "evidence:list" && p !== "case:member:list"),
+          permissions: SESSION.permissions.filter((p) => p !== "case:member:list"),
         };
-        /* 路由后注册者优先：这条会盖掉上面的完整权限夹具。 */
         await page.route("**/api/auth/v1/session", (route) =>
-          route.fulfill({ status: 200, contentType: "application/json", body: envelope(restricted) }),
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(withoutMembers) }),
         );
+        await page.goto(`${base}/cases/case-0001/members`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1500);
 
-        await page.goto(`${base}/cases/case-0001/overview`, { waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(900);
-        const tabHrefs = await page.evaluate(() =>
-          Array.from(document.querySelectorAll(".cs-tabs a, .cs-tabpanel a, [role='tablist'] a")).map((a) => a.getAttribute("href")),
+        const blockedText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        /* 必须匹配接口路径：'/cases/...' 会连页面导航的文档请求一起数进来（实测踩过）。 */
+        const membersRequests = countRequests("/api/v2/cases/case-0001/members");
+        const pageMounted = (await page.locator(".cs-pageheader__title").count()) + (await page.locator(".cs-tabs").count());
+
+        if (!/没有访问/.test(blockedText)) {
+          problems.push(`[permission] 无 case:member:list 直达 /members 没有被拦截（正文「${blockedText.replace(/\s+/g, " ").slice(0, 50)}」）`);
+        }
+        if (membersRequests !== 0) {
+          problems.push(`[permission] 无 case:member:list 直达 /members 时仍然请求了成员接口 ${membersRequests} 次`);
+        }
+        if (membersRequests === 0) {
+          notes.push("[permission] 无 case:member:list 直达 /members：已拦截 · 页面未挂载 · 成员接口 0 次请求");
+        }
+        if (pageMounted > 0) {
+          problems.push(`[permission] 无 case:member:list 直达 /members 时 CaseDetailPage 仍然挂载了（${pageMounted} 个页面元素）`);
+        }
+
+        /* ---- B. 无 evidence:list：直达 /evidence（该 Tab 实际调 /investigations） ---- */
+        requestLog.length = 0;
+        const withoutEvidence = {
+          ...SESSION,
+          permissions: SESSION.permissions.filter((p) => p !== "evidence:list"),
+        };
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(withoutEvidence) }),
         );
-        const hasEvidenceTab = tabHrefs.some((h) => h && h.includes("/evidence"));
-        const hasMembersTab = tabHrefs.some((h) => h && h.includes("/members"));
-        const hasReportsTab = tabHrefs.some((h) => h && h.includes("/reports"));
-        if (hasEvidenceTab) problems.push("[permission] 缺少 evidence:list 的用户仍然看到了「证据中心」Tab");
-        if (hasMembersTab) problems.push("[permission] 缺少 case:member:list 的用户仍然看到了「案件成员」Tab");
-        if (!hasReportsTab) problems.push("[permission] 有 report:list 的用户看不到「案件报告」Tab（收得过紧了）");
-
-        /* 直接敲 URL 也必须拦住，而不是"Tab 藏起来但页面照样打开"。 */
         await page.goto(`${base}/cases/case-0001/evidence`, { waitUntil: "domcontentloaded" });
-        /* 夹具本身有 700ms 延迟；再加上会话被换掉后会重新取一次，等久一点才看得到稳定态。 */
-        await page.waitForTimeout(2200);
-        const evidenceText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
-        const leakedEvidence = await page.locator(".cs-protable, .table tbody tr").count();
-        /*
-         * 直达 URL 的实测结果：**页面照样渲染了证据内容**，没有无权限提示。
-         *
-         * 这不是本轮重构引入的，也不能在这里"顺手修掉"：
-         *   · `evidence:list` / `case:member:list` 在整个 src 里只出现在
-         *     CaseDetailPage 的 TABS 数组里，**没有对应的路由守卫**；
-         *   · 冻结的路由→权限映射（19 条）本来就不含案件子 Tab；
-         *   · 目标是"不改变权限契约"，把 UI 门槛变成路由门槛恰恰是改契约，
-         *     真正该由服务端裁决。
-         * 所以这里**只记录、不判定**：把它写成 problem 等于要求改契约；
-         * 写成"通过"又会让人以为这条路径被守住了。两者都是错的。
-         */
-        const rendersEvidenceContent = evidenceText.includes("案件证据") || evidenceText.includes("EVIDENCE");
-        notes.push(
-          `[permission] Tab 按权限过滤正确：${JSON.stringify(tabHrefs.map((h) => (h ?? "").replace("/app-v2/cases/case-0001/", "")))}；直达 /evidence 仍渲染内容=${rendersEvidenceContent}（**既有行为**：案件子 Tab 只有 UI 过滤、没有路由守卫，服务端才是裁决点；本轮契约要求不改权限，故仅记录）`,
-        );
+        await page.waitForTimeout(1500);
 
-        /* 还原完整权限夹具。 */
+        const evidenceText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        const investigationsRequests = countRequests("/api/v2/investigations");
+        if (!/没有访问/.test(evidenceText)) {
+          problems.push(`[permission] 无 evidence:list 直达 /evidence 没有被拦截（正文「${evidenceText.replace(/\s+/g, " ").slice(0, 50)}」）`);
+        }
+        if (investigationsRequests !== 0) {
+          problems.push(`[permission] 无 evidence:list 直达 /evidence 时仍然请求了 /investigations ${investigationsRequests} 次`);
+        }
+        if (!/证据中心/.test(evidenceText) && /没有访问/.test(evidenceText)) {
+          notes.push("[permission] /evidence 拦截至「证据中心」无权限页，且未发出 /investigations 请求");
+        }
+
+        /* ---- C. 只停在概览时，成员接口不得被请求（数据最小化） ---- */
+        requestLog.length = 0;
+        const fullSession = { ...SESSION };
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(fullSession) }),
+        );
+        await page.goto(`${base}/cases/case-0001/overview`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1800);
+        const overviewMembersRequests = countRequests("/api/v2/cases/case-0001/members");
+        if (overviewMembersRequests !== 0) {
+          problems.push(
+            `[permission] 停留在概览页时仍然请求了成员接口 ${overviewMembersRequests} 次——成员数据没有跟随 Tab 按需加载`,
+          );
+        } else {
+          notes.push("[permission] 概览页未请求成员接口（成员数据已改为进入 Tab 后按需加载）");
+        }
+
+        /* ---- D. 有权限时该 Tab 必须照常可进（收得过紧同样是缺陷） ---- */
+        requestLog.length = 0;
+        await page.goto(`${base}/cases/case-0001/members`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1800);
+        const allowedMembers = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        if (/没有访问/.test(allowedMembers)) {
+          problems.push("[permission] 拥有 case:member:list 的用户被挡在了成员 Tab 外（权限收得过紧）");
+        } else if (countRequests("/api/v2/cases/case-0001/members") === 0) {
+          problems.push("[permission] 成员 Tab 可进入但没有请求成员接口（Tab 没有真正加载数据）");
+        } else {
+          notes.push("[permission] 有权限时成员 Tab 正常进入并加载数据");
+        }
+
+        /* 还原完整权限夹具 */
         await page.route("**/api/auth/v1/session", (route) =>
           route.fulfill({ status: 200, contentType: "application/json", body: envelope(SESSION) }),
         );

@@ -5,6 +5,7 @@ import { EmptyState, ErrorState } from "@chain/ui";
 import { CsSkeleton } from "@chain/user-ui";
 import { UserShell } from "./app/UserShell";
 import { ROUTE_PERMISSIONS } from "./app/navigation";
+import { CaseTabRoute } from "./app/CaseTabRoute";
 import { routeMetaFor } from "./app/route-meta";
 import { RoutedContent } from "./app/route-transitions";
 
@@ -22,7 +23,6 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CasesPage = lazy(() => import("./pages/CasesPage"));
 const CaseNewPage = lazy(() => import("./pages/CaseNewPage"));
-const CaseDetailPage = lazy(() => import("./pages/CaseDetailPage"));
 const InvestigationsPage = lazy(() => import("./pages/InvestigationsPage"));
 const InvestigationNewPage = lazy(() => import("./pages/InvestigationNewPage"));
 const InvestigationWorkbenchPage = lazy(() => import("./pages/InvestigationWorkbenchPage"));
@@ -119,7 +119,12 @@ function Shell() {
           <Route path="/search" element={<Guard permission="search:read"><SearchPage /></Guard>} />
           <Route path="/cases" element={<Guard permission="case:list"><CasesPage /></Guard>} />
           <Route path="/cases/new" element={<Guard permission="case:create"><CaseNewPage /></Guard>} />
-          <Route path="/cases/:caseId/:tab" element={<Guard permission="case:read"><CaseDetailPage /></Guard>} />
+          {/*
+          案件详情的 7 个子 Tab 各有自己的权限（app/case-tabs.ts）。
+          这里不再统一挂 case:read —— 那正是"UI 藏起来了但直达 URL 进得去"的成因。
+          守卫在 CaseDetailPage 挂载之前完成判定，未授权时不渲染页面、不发任何请求。
+        */}
+        <Route path="/cases/:caseId/:tab" element={<CaseTabRoute />} />
           <Route path="/investigations" element={<Guard permission="investigation:list"><InvestigationsPage /></Guard>} />
           <Route path="/investigations/new" element={<Guard permission="investigation:create"><InvestigationNewPage /></Guard>} />
           <Route path="/investigations/:id/workbench" element={<Guard permission="investigation:read"><InvestigationWorkbenchPage /></Guard>} />
