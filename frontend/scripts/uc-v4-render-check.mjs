@@ -585,7 +585,33 @@ async function main() {
         listRoute("investigations", INVESTIGATION_ROWS),
         listRoute("inbox", []),
         listRoute("cases", CASE_ROWS),
-        listRoute("exports", { items: [] }),
+        /*
+         * 导出列表必须**有数据**：空列表虽然渲染正确，但会让 L1 表格契约
+         * （数据行、冻结主标识列、表头）在这一页悄悄变成空断言。
+         * 字段与服务端 ExportItem 一致，不编造接口没有的字段。
+         */
+        listRoute("exports", {
+          scope: { organization_id: "org-1", workspace_id: "ws-1" },
+          items: [
+            {
+              id: "exp-0001",
+              job_id: JOB_ID,
+              dataset: "token_transfers",
+              format: "csv",
+              zip: false,
+              status: "COMPLETED",
+              rows: 1_240_000,
+              sha256: "9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c",
+              error_safe: "",
+              object_ref: "s3://exports/exp-0001.csv",
+              created_at: JOB.created_at,
+              updated_at: JOB.updated_at,
+              finished_at: JOB.updated_at,
+              expires_at: null,
+              download_available: true,
+            },
+          ],
+        }),
         listRoute("reports", REPORT_ROWS),
         listRoute("canvases", { items: [] }),
       ];
@@ -902,6 +928,75 @@ async function main() {
         if (skeletonDuring > 0) problems.push(`[${vp.name}] 表格刷新时仍在渲染 skeleton`);
         if (refreshBar === 0) problems.push(`[${vp.name}] 表格刷新时没有顶部进度指示`);
         await page.waitForTimeout(1000);
+      }
+
+      /* ---------- 4c-3. L1 表格层级契约（§17.1 / §17.2） ---------- */
+      {
+        /*
+         * §17.1 把 Cases / Investigations / Reports / Exports 都归到 L1（ProTable）。
+         * 这一条断言的是**层级本身**，而不是某个页面的观感：
+         *   · 渲染的是 ProTable 而不是 L2 的 DataTable；
+         *   · 列表真的画出了行（迁移期间最典型的失败是表壳在、数据没进去）；
+         *   · 主标识列被冻结（§17.2），横向滚动时它必须留在原位。
+         *
+         * 移动端不做列结构断言：窄屏下 CsProTable 走的是卡片形态（cs-protable--cards），
+         * 那里本来就没有"冻结列"这回事，拿它去卡等于用桌面端的形态要求移动端。
+         */
+        const l1Summary = [];
+        for (const [route, label, expectRowText] of [
+          ["/reports", "报告中心", "报告"],
+          ["/exports", "导出中心", "导出"],
+          ["/cases", "案件列表", "案件"],
+          ["/investigations", "调查任务", "调查"],
+        ]) {
+          await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
+          const root = page.locator(".cs-protable").first();
+          try {
+            await root.waitFor({ timeout: 20_000 });
+          } catch {
+            problems.push(`[${vp.name}] ${label} 没有渲染 L1 表格（.cs-protable 缺失）`);
+            continue;
+          }
+          if (vp.width < 900) continue;
+          /* 根部一出现就数行会数到"还在加载"的那一帧，先等第一行出来。 */
+          await root.locator(".ant-table-tbody tr").first().waitFor({ timeout: 20_000 }).catch(() => {});
+
+          /*
+           * 夹具里 exports 返回的是空列表，所以这一页**本来就该是空态**：
+           * 没有 <table> 不是缺陷，是正确渲染。断言因此分两支——
+           * 有表格就查列结构，没表格就要求真的给出了空态/错误态文案，
+           * 而不是留一个光秃秃的壳（那才是迁移期间真正会出的问题）。
+           */
+          const hasTable = (await root.locator(".ant-table").count()) > 0;
+          if (!hasTable) {
+            if ((await root.locator(".cs-protable__error").count()) > 0) {
+              problems.push(`[${vp.name}] ${label} 的 L1 表格渲染的是错误态`);
+              continue;
+            }
+            const shellText = ((await root.innerText().catch(() => "")) ?? "").trim();
+            if (shellText.length === 0) {
+              problems.push(`[${vp.name}] ${label} 的 L1 表格既没有表格也没有空态文案（只剩下外壳）`);
+            }
+            if (vp.width >= 900) l1Summary.push(`${label}=空态`);
+            continue;
+          }
+
+          const rows = await root.locator(".ant-table-tbody tr.ant-table-row").count();
+          if (rows === 0) problems.push(`[${vp.name}] ${label} 的 L1 表格有表格结构却没有数据行`);
+          const frozen = await root.locator(".ant-table-thead th.ant-table-cell-fix-left").count();
+          if (frozen === 0) {
+            const headClasses = await root.locator(".ant-table-thead th").first().getAttribute("class").catch(() => null);
+            problems.push(
+              `[${vp.name}] ${label} 的 L1 表格没有冻结主标识列（§17.2）：首列表头 class=${headClasses ?? "(无)"}`,
+            );
+          }
+          const headerText = (await root.locator(".ant-table-thead").first().innerText().catch(() => "")) ?? "";
+          if (expectRowText && !headerText.includes(expectRowText)) {
+            problems.push(`[${vp.name}] ${label} 的表头缺少「${expectRowText}」列（实际 ${headerText.replace(/\s+/g, " ").slice(0, 60)}）`);
+          }
+          if (vp.width >= 900) l1Summary.push(`${label}=${rows} 行/冻结 ${frozen} 列`);
+        }
+        if (l1Summary.length > 0) notes.push(`[${vp.name}] L1 表格（ProTable 层级）：${l1Summary.join(" · ")}`);
       }
 
       /* ---------- 4d. 新建下载：预览汇总与失效标记（§45.4） ---------- */

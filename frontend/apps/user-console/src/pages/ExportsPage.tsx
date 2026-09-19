@@ -18,7 +18,6 @@ import {
   Checkbox,
   CompactProgress,
   CopyButton,
-  DataTable,
   DatasetSelector,
   EmptyState,
   Field,
@@ -34,7 +33,8 @@ import {
   progressStateFor,
   useDialog,
 } from "@chain/ui";
-import { CsPageHeader } from "@chain/user-ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
+import { CsProTable } from "@chain/user-ui/pro-table";
 import { formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
 /* ============================================================================
@@ -590,8 +590,17 @@ export default function ExportsPage() {
 
   const wide = useWideViewport();
 
+  /*
+   * L1 普通业务表格用 ProTable（§17.1 把 Exports 列在 L1）。
+   *
+   * 迁移前这里是 DataTable（L2 的高密度详情表控件）：行本身能画出表格，
+   * 但少了 §17.2 要求的列状态、密度切换与**冻结主标识列**——
+   * 导出列表横向滚动时，最左边的 export_id 必须一直看得见。
+   */
   const table = (
-    <DataTable<ExportItem>
+    <div style={{ position: "relative", minWidth: 0 }}>
+      <CsRefreshBar active={exportsApi.loading && rows.length > 0} />
+      <CsProTable<ExportItem>
       loading={exportsApi.loading}
       /* §17.5：刷新保留旧行与表头，只在顶部显示进度，不清屏。 */
       keepPreviousData
@@ -619,6 +628,8 @@ export default function ExportsPage() {
           key: "export",
           header: "导出 / 任务",
           width: "210px",
+          /* §17.2：主标识列冻结，横向滚动时不跟着走。 */
+          frozen: true,
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <span className="toolbar" style={{ gap: "var(--sp-1)" }}>
@@ -755,7 +766,8 @@ export default function ExportsPage() {
           ),
         },
       ]}
-    />
+      />
+    </div>
   );
 
   const aside =
