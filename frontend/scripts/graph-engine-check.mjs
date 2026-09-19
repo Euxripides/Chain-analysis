@@ -228,6 +228,21 @@ async function main() {
         "边拾取：" + report.edgePickHits + "/" + report.edgePickSamples + " 条边中点命中自身 · 节点优先 · 4px 偏移仍命中 / 20px 偏移落空",
       );
     }
+    /* 节点弱化（证据透镜的页面级语义）。 */
+    if (report.muteChecks === "webgl2-unavailable") {
+      notes.push("节点弱化检查跳过：WebGL2 不可用");
+    } else if (report.muteChecks !== "ok") {
+      problems.push(
+        "节点弱化未生效：" + report.muteChecks + " · 未弱化像素距填充色 " + report.unmutedPixelDistance +
+          " · 弱化后 " + report.mutedPixelDistance + " · 不影响他人=" + report.muteIsSelective +
+          " · 可恢复=" + report.muteRestored + " · 计数=" + report.mutedNodeCount,
+      );
+    } else {
+      notes.push(
+        "节点弱化：像素距填充色 " + report.unmutedPixelDistance + " → " + report.mutedPixelDistance +
+          " · 未指定的节点零变化 · 清除后完全恢复",
+      );
+    }
     /* 视图维度（§30.8）。 */
     if (report.lensChecks === "webgl2-unavailable") {
       notes.push("视图维度检查跳过：WebGL2 不可用");

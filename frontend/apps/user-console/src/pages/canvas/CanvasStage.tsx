@@ -34,6 +34,9 @@ const NODE_RADIUS = (node: RenderNode): number =>
 /** 可访问列表最多暴露多少个对象——大图不能整体倒进 DOM（§55.2）。 */
 const A11Y_NEIGHBOR_LIMIT = 20;
 
+/** 证据透镜下非证据节点的淡化值。与迁移前的内联 opacity 一致，避免换渲染器顺带换观感。 */
+const EVIDENCE_MUTE_ALPHA = 0.45;
+
 export interface CanvasStageProps {
   pan: { x: number; y: number };
   zoom: number;
@@ -79,6 +82,7 @@ export function CanvasStage({
   lens,
   tool,
   showNodeLabels,
+  mutedNodes,
   pathEdgeKeys,
   onSelect,
   onSelectEdge,
@@ -201,6 +205,25 @@ export function CanvasStage({
   useEffect(() => {
     engineRef.current?.setLens(lens);
   }, [lens, ready]);
+
+  /*
+   * 证据透镜下弱化非证据节点（迁移前用内联 opacity 0.45 实现）。
+   *
+   * 这不是装饰：证据透镜的全部意义是"只看证据及其一跳邻居"，
+   * 不把其余节点压下去，被保留下来的邻居就和证据本身一样显眼了。
+   */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    if (!mutedNodes) {
+      engine.clearMutedNodes();
+      return;
+    }
+    engine.setMutedNodes(
+      renderNodes.filter((node) => node.kind !== "evidence").map((node) => node.key),
+      EVIDENCE_MUTE_ALPHA,
+    );
+  }, [mutedNodes, renderNodes, ready]);
   useEffect(() => {
     engineRef.current?.setLabelVisibility(showNodeLabels);
   }, [showNodeLabels, ready]);

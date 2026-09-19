@@ -643,6 +643,26 @@ export class GraphEngine {
    * 证据节点及其一跳邻居、时间透镜的副标签）由页面按 `LENS_EFFECTS` 执行。
    * 两条路径读的是同一张效果表，不会再各写一套。
    */
+  /**
+   * 弱化一组节点（视图维度等页面级语义）。
+   *
+   * 传 alpha=1 等于取消弱化。与选中淡化互不干扰，见渲染器的说明。
+   */
+  setMutedNodes(nodeIds: Iterable<string>, alpha: number): void {
+    this.renderer?.setMutedNodes(nodeIds, alpha);
+    this.frameDirty = true;
+  }
+
+  clearMutedNodes(): void {
+    this.renderer?.clearMutedNodes();
+    this.frameDirty = true;
+  }
+
+  /** 当前被弱化的节点数（验收断言用，不做业务判断）。 */
+  rendererDebugMutedCount(): number {
+    return this.renderer?.mutedNodeCount ?? 0;
+  }
+
   setLens(lens: Lens): void {
     if (this.currentLens === lens) return;
     this.currentLens = lens;

@@ -164,6 +164,17 @@ interface ProbeReport {
   /** `pickAt` 只认节点：边中点处应返回 -1（既有 API 语义不变）。 */
   pickNodeIgnoresEdges: boolean;
   edgePickChecks: string;
+  /* 节点弱化（证据透镜 / 页面级语义）。 */
+  mutedNodeCount: number;
+  /** 未弱化节点的像素与填充色的距离（应接近 0）。 */
+  unmutedPixelDistance: number;
+  /** 弱化后同一像素与填充色的距离（应显著变大）。 */
+  mutedPixelDistance: number;
+  /** 清除弱化后是否完全恢复。 */
+  muteRestored: boolean;
+  /** 弱化不影响未被指定的节点。 */
+  muteIsSelective: boolean;
+  muteChecks: string;
 }
 
 declare global {
@@ -284,6 +295,12 @@ async function run(): Promise<ProbeReport> {
     edgePickEmptyOk: false,
     pickNodeIgnoresEdges: false,
     edgePickChecks: "",
+    mutedNodeCount: 0,
+    unmutedPixelDistance: 0,
+    mutedPixelDistance: 0,
+    muteRestored: false,
+    muteIsSelective: false,
+    muteChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -358,6 +375,9 @@ async function run(): Promise<ProbeReport> {
 
   /* 5e. 边拾取（§30.7）。 */
   await runEdgePickChecks(report);
+
+  /* 5f. 节点弱化（证据透镜的页面级语义）。 */
+  await runMuteChecks(report);
 
   /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
@@ -1449,6 +1469,104 @@ async function runEdgePickChecks(report: ProbeReport): Promise<void> {
   host.remove();
 }
 
+
+/* ------------------------------------------------- 节点弱化 */
+
+/**
+ * "弱化一组节点"必须真的改变**画出来的像素**。
+ *
+ * 迁移前这件事由内联 `opacity: 0.45` 完成；迁移到引擎之后如果只是把
+ * 状态记下来却没有接进 alpha 通道，画面会看起来完全正常——
+ * 只是证据透镜失去了它全部的意义（"只看证据及其一跳邻居"）。
+ * 所以这里比对的是同一个像素在弱化前后的颜色距离，而不是任何计数器。
+ */
+async function runMuteChecks(report: ProbeReport): Promise<void> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;width:480px;height:320px;";
+  document.body.appendChild(host);
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  host.appendChild(canvas);
+
+  const muteNodes: GraphNodeInput[] = [
+    { id: "keep", kind: "address", x: -80, y: 0, size: 26 },
+    { id: "mute", kind: "address", x: 80, y: 0, size: 26 },
+  ];
+  const muteEdges: GraphEdgeInput[] = [{ id: "e", source: "keep", target: "mute" }];
+
+  const engine = new GraphEngine({ nodes: muteNodes, edges: muteEdges });
+  if (!engine.mount(canvas)) {
+    report.muteChecks = "webgl2-unavailable";
+    host.remove();
+    return;
+  }
+  const waitFrames = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  engine.camera.state.scale = 1.2;
+  engine.camera.state.cx = 0;
+  engine.camera.state.cy = 0;
+  engine.invalidate();
+  await waitFrames();
+
+  const viewport = engine.viewport();
+  /* 填充色（DEFAULT_STYLE.kindColors[0] = 地址蓝）。 */
+  const fill: [number, number, number] = [0.204 * 255, 0.471 * 255, 0.965 * 255];
+  const sample = async (worldX: number): Promise<[number, number, number] | null> => {
+    const url = engine.exportView();
+    if (!url) return null;
+    const pixels = await decodePng(url);
+    const dprScale = pixels.width / Math.max(1, viewport.width);
+    const [sx, sy] = engine.camera.worldToScreen(worldX, 0, viewport.width, viewport.height);
+    return pixelAt(pixels, sx, sy, dprScale);
+  };
+  const distance = (a: [number, number, number], b: [number, number, number]) =>
+    Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+
+  const beforeKeep = await sample(-80);
+  const beforeMute = await sample(80);
+  if (!beforeKeep || !beforeMute) {
+    report.muteChecks = "export-failed";
+    engine.dispose();
+    host.remove();
+    return;
+  }
+  report.unmutedPixelDistance = distance(beforeKeep, fill);
+
+  engine.setMutedNodes(["mute"], 0.45);
+  engine.invalidate();
+  await waitFrames();
+  report.mutedNodeCount = engine.rendererDebugMutedCount();
+  const afterKeep = await sample(-80);
+  const afterMute = await sample(80);
+  if (!afterKeep || !afterMute) {
+    report.muteChecks = "export-failed";
+    engine.dispose();
+    host.remove();
+    return;
+  }
+  report.mutedPixelDistance = distance(afterMute, fill);
+  /* 未指定的节点必须一个像素都没变。 */
+  report.muteIsSelective = distance(afterKeep, beforeKeep) === 0;
+
+  engine.clearMutedNodes();
+  engine.invalidate();
+  await waitFrames();
+  const restored = await sample(80);
+  report.muteRestored = Boolean(restored) && distance(restored as [number, number, number], beforeMute) === 0;
+
+  report.muteChecks =
+    report.unmutedPixelDistance <= 12 &&
+    report.mutedPixelDistance > report.unmutedPixelDistance * 2 &&
+    report.muteIsSelective &&
+    report.muteRestored &&
+    report.mutedNodeCount === 1
+      ? "ok"
+      : "mismatch";
+
+  engine.dispose();
+  host.remove();
+}
+
 run()
   .then((report) => {
     window.__graphProbe = report;
@@ -1476,6 +1594,7 @@ run()
       lensEdgeColorsMatchPalette: false, lensEdgeColorText: "", lensStyleChecks: "", lensSwitchEvent: false, lensChecks: "",
       edgePickHits: 0, edgePickSamples: 0, edgePickMisses: "", nodeWinsOverEdge: false,
       edgePickNearMiss: false, edgePickFarMiss: false, edgePickEmptyOk: false, pickNodeIgnoresEdges: false, edgePickChecks: "",
+      mutedNodeCount: 0, unmutedPixelDistance: 0, mutedPixelDistance: 0, muteRestored: false, muteIsSelective: false, muteChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });

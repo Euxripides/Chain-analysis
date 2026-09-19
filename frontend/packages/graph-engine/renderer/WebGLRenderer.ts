@@ -334,6 +334,10 @@ export class WebGLRenderer {
   private edgeBudget = Number.POSITIVE_INFINITY;
   private pendingEdgeRebuild = false;
 
+  /** 页面级弱化集合（按节点 id，不是下标：下标会随重载变化）。 */
+  private mutedIds = new Set<string>();
+  private mutedAlpha = 1;
+
   private colorCache = new Float32Array(0);
   private alphaCache = new Float32Array(0);
   private pickCache = new Uint32Array(0);
@@ -623,7 +627,17 @@ export class WebGLRenderer {
       this.colorCache[i * 3 + 1] = color[1];
       this.colorCache[i * 3 + 2] = color[2];
       const flags = store.flags[i];
-      this.alphaCache[i] = flags & NODE_FLAG.dimmed ? this.style.dimmedAlpha : 1;
+      /*
+       * 选中淡化优先：两者叠加时取更弱的那个，避免"又被选中又被弱化"
+       * 变成一个几乎看不见的点。
+       */
+      const selectionDimmed = (flags & NODE_FLAG.dimmed) !== 0;
+      const muted = this.mutedIds.has(store.idAt(i));
+      this.alphaCache[i] = selectionDimmed
+        ? Math.min(this.style.dimmedAlpha, muted ? this.mutedAlpha : 1)
+        : muted
+          ? this.mutedAlpha
+          : 1;
       /* 形状通道（§30.9）：与颜色平行的一条独立信息，不是装饰。 */
       this.kindCache[i] = kind;
       /* 拾取 id 用 1 基：0 必须留给"什么都没点到"。 */
@@ -645,6 +659,31 @@ export class WebGLRenderer {
 
   markStyleDirty(): void {
     this.styleDirty = true;
+  }
+
+  /**
+   * 设置"被弱化的节点"集合（视图维度等页面级语义）。
+   *
+   * 与选中造成的淡化**分开两套状态**，但共用同一个 alpha 通道：
+   * 选中淡化是"你选了一个节点，其他都退后"，
+   * 弱化是"这个视图维度下这些节点不是重点"。
+   * 两者语义不同、生命周期也不同（选中随时会变，透镜不变），
+   * 合成到同一个标志位上会互相清除——切换透镜时选中淡化会莫名消失。
+   */
+  setMutedNodes(nodeIds: Iterable<string>, alpha: number): void {
+    this.mutedIds = new Set(nodeIds);
+    this.mutedAlpha = Math.max(0, Math.min(1, alpha));
+    this.styleDirty = true;
+  }
+
+  clearMutedNodes(): void {
+    if (this.mutedIds.size === 0) return;
+    this.mutedIds.clear();
+    this.styleDirty = true;
+  }
+
+  get mutedNodeCount(): number {
+    return this.mutedIds.size;
   }
 
   /**
