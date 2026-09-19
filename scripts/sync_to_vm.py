@@ -9,7 +9,9 @@ USER = os.environ.get("BLOCKCHAIN_VM_USER", "euripides")
 PASSWORD = os.environ.get("BLOCKCHAIN_VM_PASSWORD")
 REMOTE = os.environ.get("BLOCKCHAIN_VM_PATH", "/home/euripides/projects/blockchain-platform")
 LOCAL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP = {".git", "node_modules", "dist", "bin", ".DS_Store", "__pycache__"}
+# acceptance-evidence 是测试产物、不是可部署内容；本机部分证据文件由沙箱 SID 写出，
+# 当前用户读不了会让同步整体失败（与 deploy_dual_system.py 保持同一口径）。
+SKIP = {".git", "node_modules", "dist", "bin", ".DS_Store", "__pycache__", "acceptance-evidence"}
 
 
 def main() -> int:

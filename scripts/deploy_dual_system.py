@@ -32,12 +32,33 @@ import time
 
 import paramiko
 
+# 远程输出里带 ✓ / ✗ 等字符（pnpm、vite、nginx 都会打）。
+# Windows 控制台默认是 GBK，直接 print 会在**部署中途**抛 UnicodeEncodeError 并中断流程——
+# 曾导致 vite build 已经清空 dist 却没能写出产物，站点处于"进程活着但产物为空"的危险状态。
+# 这里把标准流固定成 UTF-8，遇到无法编码的字符也降级而不是崩溃。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
 HOST = os.environ.get("BLOCKCHAIN_VM_HOST", "192.168.31.152")
 USER = os.environ.get("BLOCKCHAIN_VM_USER", "euripides")
 PASSWORD = os.environ.get("BLOCKCHAIN_VM_PASSWORD")
 REMOTE = os.environ.get("BLOCKCHAIN_VM_PATH", "/home/euripides/projects/blockchain-platform")
 LOCAL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP_DIRS = {".git", "node_modules", "dist", "bin", ".DS_Store", "__pycache__", "test-results", "playwright-report"}
+# 不参与部署的目录。
+#
+# acceptance-evidence 与 test-results / playwright-report 同属**测试产物**，不是可部署内容：
+#   * VM 上有它自己生成的证据（在本机跑出的证据推过去只会覆盖掉更新的那一份）；
+#   * 本机部分证据文件是沙箱进程以另一个 SID 写出的，当前用户读不了，
+#     SFTP put 会在读本地文件时报 EACCES —— 而同步失败会让整次部署中止（fail-safe，
+#     但一个跑测试产生的目录不该有能力挡住发版）。
+SKIP_DIRS = {
+    ".git", "node_modules", "dist", "bin", ".DS_Store", "__pycache__",
+    "test-results", "playwright-report", "acceptance-evidence",
+}
 NODE_BIN = "/home/euripides/.nvm/versions/node/v24.20.0/bin"
 GO_BIN = "/usr/local/go/bin"
 
@@ -157,7 +178,15 @@ def main() -> int:
 
         if not args.skip_migrate:
             print("\n== 4. 应用迁移 0040 / 0041 / 0042 ==")
-            run(client, f"cd {shlex.quote(REMOTE)}/backend && {GO_BIN}/go run ./cmd/migrate 2>&1 | tail -8")
+            # 两处必须显式处理：
+            #   1) 迁移进程需要 deploy/.env 里的数据库口令（非交互 SSH 不会带上）；
+            #   2) `| tail` 会把管道退出码变成 tail 的 0，等于**静默吞掉迁移失败**。
+            #      用 bash -o pipefail 让真实退出码传出来，run(check=True) 才能真正拦住部署。
+            run(
+                client,
+                f"cd {shlex.quote(REMOTE)} && set -a && . deploy/.env && set +a && "
+                f"cd backend && bash -o pipefail -c '{GO_BIN}/go run ./cmd/migrate 2>&1 | tail -8'",
+            )
         else:
             print("\n== 4. 跳过迁移 ==")
 
