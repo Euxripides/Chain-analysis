@@ -27,3 +27,4 @@
 | [ADR-019](ADR-019-audit-integrity-declared-events.md) | 审计完整性「稀疏声明」：不可修复事实的显式登记 | Accepted | §6.6.5、§27.6 AUDIT-004（编号与上一条冲突，历史遗留，未重排） |
 | [ADR-020](ADR-020-gate-request-audit-joins-transaction.md) | commit gate 请求内的审计写入加入请求事务 | Accepted | §6.5、§6.6.5、§27 AUDIT-004、§28.6 |
 | [ADR-021](ADR-021-feature-flags-on-request-paths.md) | 功能开关在真实请求路径上求值 | Accepted | §7.3、§16.7、§21.6 |
+| [ADR-022](ADR-022-case-evidence-tab-permission.md) | 案件证据 Tab 的临时双权限（技术债，待产品决策） | Accepted (临时) | §0.4.2、§24.3、AD-003 |

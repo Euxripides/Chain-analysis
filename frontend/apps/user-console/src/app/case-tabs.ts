@@ -63,6 +63,8 @@ export const CASE_TABS: CaseTabDef[] = [
    * 于是"有 evidence:list、没有 investigation:list"的用户会进去吃 403。
    * 当前用双权限把它挡住，保证"进得去的人一定取得到数"。
    *
+   * **完整决策与被否决的方案见 `docs/adr/ADR-022-case-evidence-tab-permission.md`。**
+   *
    * 目标状态是**案件级证据接口**（形如 `/cases/{caseId}/evidence`，
    * 以案件证据权限为边界），届时本条目应改回单一 evidence:list 并去掉 temporary。
    * 在那之前不要把它当成设计意图引用。
