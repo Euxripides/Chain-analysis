@@ -65,7 +65,7 @@ export {
   lodLevelFor,
   policyFor,
 } from "./perf/lod";
-export type { LodLevel, LodPolicy } from "./perf/lod";
+export type { LodLevel, LodPolicy, LodThresholds } from "./perf/lod";
 export { DEFAULT_BUDGET_LIMITS, decideBudget } from "./perf/budget";
 export type { BudgetDecision, BudgetLimits, RenderMode } from "./perf/budget";
 export { buildCsr } from "./model/indices";

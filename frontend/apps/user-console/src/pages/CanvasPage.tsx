@@ -364,6 +364,15 @@ export default function CanvasPage() {
     return new Set([renderKeyOfRef(focusEdge.fromRef), renderKeyOfRef(focusEdge.toRef)]);
   }, [focusEdge, renderKeyOfRef]);
 
+  /*
+   * 交给引擎点亮的边。
+   *
+   * 与迁移前的 SVG 语义**逐字一致**：只点亮当前聚焦的那一条
+   * （加上它的两个端点，见 focusNodeKeys），不是整条路径。
+   * 数组身份要保持稳定，否则引擎每帧都会重新上传高亮缓冲。
+   */
+  const pathEdgeKeys = useMemo(() => (focusRenderKey ? [focusRenderKey] : []), [focusRenderKey]);
+
   const applyServerRecord = useCallback((record: Partial<CanvasRecord>) => {
     setState(normalizeCanvasState(record));
     setRevision(typeof record.revision === "number" ? record.revision : Number(record.revision ?? 0));
@@ -1072,7 +1081,7 @@ export default function CanvasPage() {
     window.requestAnimationFrame(() => inspectorRef.current?.scrollIntoView({ block: "nearest" }));
   };
 
-  const onCanvasPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const onCanvasPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === "box") {
@@ -1086,7 +1095,7 @@ export default function CanvasPage() {
     dragRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y, moved: false };
   };
 
-  const onCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const onCanvasPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (boxRef.current) {
       const point = clientToViewBox(event.currentTarget, event.clientX, event.clientY);
       const rect = {
@@ -1510,6 +1519,7 @@ export default function CanvasPage() {
               edgeFullText={edgeFullText}
               onSelect={setSelection}
               onSelectEdge={selectEdgeByKey}
+              pathEdgeKeys={pathEdgeKeys}
               onCanvasPointerDown={onCanvasPointerDown}
               onCanvasPointerMove={onCanvasPointerMove}
               onCanvasPointerUp={onCanvasPointerUp}

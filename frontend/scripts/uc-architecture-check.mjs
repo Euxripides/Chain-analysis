@@ -41,18 +41,35 @@ if (problems.length === 0) {
     }
   }
 
-  /* 2. 绘制组件必须是纯的：不持状态、不取数、不碰路由。 */
-  for (const hook of ["useState", "useEffect", "useMemo", "useCallback", "useRef", "useApi", "useParams", "useNavigate"]) {
+  /*
+   * 2. 绘制组件**可以**持状态——它要管引擎的挂载与销毁周期，那是渲染自己的事；
+   *    但它**不许取数、不许碰路由**：数据从 props 进来，导航由页面负责。
+   *    （R6 迁移之前这里是"完全不许有状态"，因为当时的 CanvasStage 只画 SVG；
+   *      迁移之后引擎生命周期必须有归宿，把它推到页面反而违反 §61。）
+   */
+  for (const hook of ["useApi", "useParams", "useNavigate", "useSearchParams", "useLocation"]) {
     if (new RegExp(`\\b${hook}\\s*[(<]`).test(stageCode)) {
-      problems.push(`CanvasStage.tsx 使用了 ${hook}：渲染组件应当是纯呈现，状态与取数留在页面`);
+      problems.push(`CanvasStage.tsx 使用了 ${hook}：渲染组件不得取数或依赖路由，数据只能从 props 进来`);
     }
   }
+  /* 反向也要成立：舞台必须真的管了引擎的生命周期，否则"迁移"只是换了个壳。 */
+  if (!/new GraphEngine\(/.test(stageCode)) {
+    problems.push("CanvasStage.tsx 没有创建图谱引擎：画布应迁移到 @chain/graph-engine（§65）");
+  }
+  if (!/engine\.dispose\(\)/.test(stageCode)) {
+    problems.push("CanvasStage.tsx 没有在卸载时 dispose 引擎（§63C 生命周期）");
+  }
 
-  /* 3. 页面必须通过 CanvasStage 渲染，而不是另起炉灶。 */
+  /* 3. 页面必须通过 CanvasStage 渲染，并且**不得直接依赖引擎**——那正是这条边界。 */
   if (!page.includes("CanvasStage")) problems.push("CanvasPage.tsx 没有使用 CanvasStage");
+  if (pageCode.includes("@chain/graph-engine")) {
+    problems.push("CanvasPage.tsx 直接导入了 @chain/graph-engine：引擎必须留在 CanvasStage 之后（§61）");
+  }
 
   const svgPrimitives = (stageCode.match(/<(svg|circle|line|polygon|rect|marker|text|g)\b/g) ?? []).length;
-  notes.push(`CanvasStage.tsx：${svgPrimitives} 个图元 · 无状态 · 无取数；CanvasPage.tsx 已无任何图元`);
+  notes.push(
+    `CanvasStage.tsx：${svgPrimitives} 个 SVG 图元 · 自带引擎生命周期 · 不取数不碰路由；CanvasPage.tsx 已无任何图元且不依赖引擎`,
+  );
 }
 
 const report = { ok: problems.length === 0, problems, notes };

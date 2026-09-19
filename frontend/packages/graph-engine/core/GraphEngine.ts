@@ -7,7 +7,7 @@ import { layoutTransferables, type LayoutRequest, type LayoutResponse } from "..
 import { findPath, type FindPathOptions, type GraphPath } from "../model/paths";
 import { PlaybackController } from "../interaction/playback";
 import { decideBudget, type BudgetDecision, type BudgetLimits, type RenderMode } from "../perf/budget";
-import { lodLevelFor, policyFor, type LodLevel } from "../perf/lod";
+import { DEFAULT_LOD_THRESHOLDS, lodLevelFor, policyFor, type LodLevel, type LodThresholds } from "../perf/lod";
 import { LabelLayer, type LabelLayerOptions } from "../labels/LabelLayer";
 import type { LabelInstance } from "../renderer/LabelProgram";
 import { lensStyle, type Lens } from "../lenses";
@@ -64,6 +64,19 @@ export interface GraphEngineOptions {
   showLabels?: boolean;
   /** 初始视图维度（§30.8），默认资金流。 */
   lens?: Lens;
+  /**
+   * 是否由引擎自己接管指针与滚轮（默认 true）。
+   *
+   * 置为 false 时引擎**只渲染**，不绑定任何指针 / 滚轮 / 双击监听：
+   * 宿主页面自己在画布上盖一层透明层来维持它原有的工具语义
+   * （选择 / 框选 / 平移这三个工具各自的拖拽含义）。
+   *
+   * 为什么需要这个开关：引擎默认的"拖拽=平移、点击=选择、滚轮=缩放"
+   * 只是**一种**交互约定。把它强加给一个已经有自己工具模型的页面，
+   * 等于用迁移渲染器顺手改掉用户的操作习惯——
+   * 渲染技术可以换，操作语义不该跟着换。
+   */
+  interactive?: boolean;
 }
 
 export class GraphEngine {
@@ -91,6 +104,8 @@ export class GraphEngine {
    * 正是最该被降采样的那一次。用 null 强制首帧一定同步一次。
    */
   private currentLod: LodLevel | null = null;
+  /** LOD 阈值；宿主坐标系与引擎默认不同时由 setLodThresholds 校准。 */
+  private lodThresholds: LodThresholds = DEFAULT_LOD_THRESHOLDS;
 
   private renderer: WebGLRenderer | null = null;
   /**
@@ -111,6 +126,8 @@ export class GraphEngine {
   private frameDirty = true;
   private hoveredNode = -1;
   private selected = new Set<number>();
+  /** 引擎是否接管指针（见 GraphEngineOptions.interactive）。 */
+  private readonly interactive: boolean;
   private readonly maxDpr: number;
   private readonly hiddenFps: number;
   private lastFrameAt = 0;
@@ -146,6 +163,7 @@ export class GraphEngine {
     this.hiddenFps = options.hiddenFps ?? 4;
     this.labelOptions = options.labels ?? {};
     this.showLabels = options.showLabels ?? true;
+    this.interactive = options.interactive ?? true;
     this.currentLens = options.lens ?? "flow";
     this.baseStyle = options.style ?? DEFAULT_STYLE;
     this.store.load(options.nodes, options.edges);
@@ -195,13 +213,16 @@ export class GraphEngine {
     this.syncLod();
     this.syncLabels();
 
-    canvas.addEventListener("pointerdown", this.onPointerDown);
-    canvas.addEventListener("pointermove", this.onPointerMove);
-    canvas.addEventListener("pointerup", this.onPointerUp);
-    canvas.addEventListener("pointercancel", this.onPointerUp);
-    canvas.addEventListener("pointerleave", this.onPointerLeave);
-    canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    canvas.addEventListener("dblclick", this.onDoubleClick);
+    /* interactive=false 时一个监听都不绑：宿主页面自己处理交互（见选项注释）。 */
+    if (this.interactive) {
+      canvas.addEventListener("pointerdown", this.onPointerDown);
+      canvas.addEventListener("pointermove", this.onPointerMove);
+      canvas.addEventListener("pointerup", this.onPointerUp);
+      canvas.addEventListener("pointercancel", this.onPointerUp);
+      canvas.addEventListener("pointerleave", this.onPointerLeave);
+      canvas.addEventListener("wheel", this.onWheel, { passive: false });
+      canvas.addEventListener("dblclick", this.onDoubleClick);
+    }
     canvas.addEventListener("contextlost", this.onContextLost);
     canvas.addEventListener("contextrestored", this.onContextRestored);
 
@@ -361,6 +382,21 @@ export class GraphEngine {
     }
     this.frameDirty = true;
     this.emitCamera();
+  }
+
+  /**
+   * 由宿主页面直接设置相机（interactive=false 时的典型用法）。
+   *
+   * 页面持有的 pan/zoom 状态是它自己那套坐标（viewBox 单位）下的真值，
+   * 这里只做一次换算，不反过来让引擎的相机成为真值——
+   * 否则框选、缩放按钮、深链接恢复三处都要跟着改。
+   */
+  setCamera(state: { cx: number; cy: number; scale: number }): void {
+    this.camera.state.cx = state.cx;
+    this.camera.state.cy = state.cy;
+    this.camera.state.scale = state.scale;
+    this.syncLod();
+    this.frameDirty = true;
   }
 
   fitAll(): void {
@@ -564,7 +600,22 @@ export class GraphEngine {
 
   /** 当前细节层次（§30.8）。 */
   get lod(): LodLevel {
-    return this.currentLod ?? lodLevelFor(this.camera.scale);
+    return this.currentLod ?? lodLevelFor(this.camera.scale, this.lodThresholds);
+  }
+
+  /**
+   * 校准 LOD 阈值（见 perf/lod.ts 的说明）。
+   *
+   * 宿主用自己的坐标系时，必须按"世界单位 → 像素"的实际比例传入阈值，
+   * 否则"眼前这张图"和"引擎以为的观察距离"会对不上——
+   * 表现是标签莫名其妙地少了一大片，而画面本身完全正常。
+   */
+  setLodThresholds(thresholds: LodThresholds): void {
+    this.lodThresholds = thresholds;
+    /* 强制下一次 syncLod 重新判定档位。 */
+    this.currentLod = null;
+    this.syncLod();
+    this.frameDirty = true;
   }
 
   /**
@@ -574,7 +625,7 @@ export class GraphEngine {
    * 而 `currentLod` 初值为 null 保证首帧一定会同步一次。
    */
   private syncLod(): void {
-    const level = lodLevelFor(this.camera.scale);
+    const level = lodLevelFor(this.camera.scale, this.lodThresholds);
     if (level === this.currentLod) return;
     this.currentLod = level;
     this.renderer?.setEdgeBudget(policyFor(level).maxEdges);

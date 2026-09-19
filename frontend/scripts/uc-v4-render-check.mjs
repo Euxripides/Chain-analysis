@@ -1158,7 +1158,8 @@ async function main() {
         await page.waitForTimeout(1200);
 
         const canvasContract = await page.evaluate(() => {
-          const svg = document.querySelector('svg[aria-label="Canvas SVG 图谱"]');
+          const stage = document.querySelector(".cs-canvas-stage");
+          const canvas = stage ? stage.querySelector("canvas") : null;
           const controls = (prefix) => {
             const node = document.querySelector(`[aria-label^="${prefix}"]`);
             if (!node) return null;
@@ -1166,14 +1167,24 @@ async function main() {
               .map((el) => (el.getAttribute("aria-label") || el.textContent || "").trim())
               .filter(Boolean);
           };
+          let stats = null;
+          try {
+            const raw = stage ? stage.getAttribute("data-canvas-stats") : null;
+            stats = raw ? JSON.parse(raw) : null;
+          } catch {
+            stats = null;
+          }
+          const a11y = document.querySelector(".cs-fundgraph__a11y");
           return {
-            svg: Boolean(svg),
-            circles: svg ? svg.querySelectorAll("circle").length : 0,
-            paths: svg ? svg.querySelectorAll("path").length : 0,
-            lines: svg ? svg.querySelectorAll("line").length : 0,
-            /* 标签数：现有实现会在 SVG 里画 <text>，新引擎目前还没有标签能力——
-               记下这个数，正是它让"等价性"有可对照的锚点。 */
-            texts: svg ? svg.querySelectorAll("text").length : 0,
+            stage: Boolean(stage),
+            stageWidth: stage ? stage.clientWidth : 0,
+            stageHeight: stage ? stage.clientHeight : 0,
+            /* 画布的后备缓冲尺寸：引擎按 DPR 放大过，为 0 说明根本没渲染。 */
+            canvasWidth: canvas ? canvas.width : 0,
+            canvasHeight: canvas ? canvas.height : 0,
+            surface: Boolean(stage && stage.querySelector(".cs-canvas-stage__surface")),
+            stats,
+            a11y: a11y ? (a11y.textContent || "").trim().slice(0, 60) : "",
             tool: controls("画布工具"),
             layout: controls("布局方式"),
             lens: controls("视图维度"),
@@ -1194,17 +1205,43 @@ async function main() {
             problems.push(`[${vp.name}] 画布控件组「${name}」缺失或选项不足（${JSON.stringify(list)}）`);
           }
         }
-        if (vp.width >= 900 && !canvasContract.svg) {
-          problems.push(`[${vp.name}] 桌面断点下画布没有渲染 SVG 图谱容器`);
+        /*
+         * 画布契约自 R6 起由**引擎状态**承载（§65「Canvas 迁移到独立性能引擎」）。
+         *
+         * 迁移前这里数的是 SVG 图元；迁移后没有 SVG 了，如果只是把断言删掉，
+         * 一个"尺寸正常但一帧没画"的 canvas 会照样通过。
+         * 所以判据换成三样**只有真的在渲染才会有**的东西：
+         *   · 舞台与画布的后备缓冲尺寸（0 = 没渲染）；
+         *   · 交互层存在（页面的工具语义靠它承载）；
+         *   · data-canvas-stats —— 引擎自己的账，且已装载的节点/边数必须等于夹具规模。
+         */
+        if (vp.width >= 900) {
+          if (!canvasContract.stage) {
+            problems.push(`[${vp.name}] 画布没有渲染舞台容器`);
+          } else {
+            if (canvasContract.stageWidth <= 0 || canvasContract.stageHeight <= 0) {
+              problems.push(`[${vp.name}] 画布舞台尺寸为 0（${canvasContract.stageWidth}x${canvasContract.stageHeight}）`);
+            }
+            if (canvasContract.canvasWidth <= 0 || canvasContract.canvasHeight <= 0) {
+              problems.push(`[${vp.name}] 画布后备缓冲尺寸为 0（${canvasContract.canvasWidth}x${canvasContract.canvasHeight}）`);
+            }
+            if (!canvasContract.surface) problems.push(`[${vp.name}] 画布缺少交互层`);
+          }
         }
-        if (canvasContract.svg) {
-          /* 夹具是 3 个节点 / 2 条边：画出来的图形元素不能少于它们。 */
-          if (canvasContract.circles < CANVAS_RECORD.node_refs.length) {
-            problems.push(`[${vp.name}] 画布节点图形数 ${canvasContract.circles} < 夹具节点数 ${CANVAS_RECORD.node_refs.length}`);
+        if (canvasContract.stats) {
+          const stats = canvasContract.stats;
+          if (stats.webgl2 !== true) problems.push(`[${vp.name}] 图谱引擎没有拿到 WebGL2 上下文`);
+          if (stats.nodes !== CANVAS_RECORD.node_refs.length) {
+            problems.push(`[${vp.name}] 引擎装载节点数 ${stats.nodes} ≠ 夹具 ${CANVAS_RECORD.node_refs.length}`);
           }
-          if (canvasContract.paths + canvasContract.lines < CANVAS_RECORD.edge_refs.length) {
-            problems.push(`[${vp.name}] 画布边图形数 ${canvasContract.paths + canvasContract.lines} < 夹具边数 ${CANVAS_RECORD.edge_refs.length}`);
+          if (stats.edges !== CANVAS_RECORD.edge_refs.length) {
+            problems.push(`[${vp.name}] 引擎装载边数 ${stats.edges} ≠ 夹具 ${CANVAS_RECORD.edge_refs.length}`);
           }
+          if (stats.renderedEdges < CANVAS_RECORD.edge_refs.length) {
+            problems.push(`[${vp.name}] 引擎实际绘制边数 ${stats.renderedEdges} < 夹具 ${CANVAS_RECORD.edge_refs.length}`);
+          }
+        } else if (vp.width >= 900) {
+          problems.push(`[${vp.name}] 画布没有上报引擎状态（data-canvas-stats 缺失）`);
         }
         notes.push(`[${vp.name}] 画布契约=${JSON.stringify(canvasContract)}`);
       }

@@ -1,58 +1,71 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { NODE_KIND_LABEL, SVG_H, SVG_W } from "./constants";
-import { ellipsize } from "./display";
+import { GraphEngine, type GraphEdgeInput, type GraphNodeInput } from "@chain/graph-engine";
+import { NODE_KIND_LABEL } from "./constants";
+import { cameraForViewport, worldRectToScreen } from "./geometry";
 import type { CanvasTool, Lens, RenderEdge, RenderNode, Selection } from "./types";
 
 /**
- * 画布本体（§61：`CanvasPage.tsx` 只保留 workspace orchestration，图形渲染逻辑全部移出）。
+ * 画布本体（§61 / §65「Canvas 迁移到独立性能引擎」）。
  *
- * 这个组件是**纯呈现**：它不取数、不持状态、不碰路由。
- * 所有派生值（坐标、选中、标签开关、配色、格式化）都由页面算好后传进来，
- * 所有用户操作都通过回调抛回页面。
+ * 这个组件是**纯呈现 + 一层交互转发**：不取数、不持业务状态、不碰路由。
+ * 节点与边由 `@chain/graph-engine` 在 WebGL 上绘制，React 只渲染
+ * 容器、交互层与可访问对象列表（§30.1：React 不渲染图谱节点）。
  *
- * 为什么要这么切：画布是整站唯一一个"渲染技术可能整体替换"的区域
- * （R6 的 WebGL 引擎就是为它准备的）。把渲染隔离在一个只有 props 进、
- * 回调出的组件里，替换渲染器时页面侧一行都不用动。
+ * 三个刻意的设计：
  *
- * 本文件里的 SVG 结构是从 CanvasPage 逐字搬过来的，没有重排、没有改名，
- * 只把组件内部的两个闭包（setSelection / selectEdgeByKey）换成了 props 回调。
+ * 1. **引擎的指针监听是关掉的**（`interactive: false`）。
+ *    页面有自己的一套工具语义（选择 / 框选 / 平移），引擎默认的
+ *    "拖拽=平移、滚轮=缩放"只是**另一种**约定。迁移渲染器不应该顺手改掉
+ *    用户的操作习惯，所以交互由盖在 canvas 上的透明层维持原样，
+ *    命中测试改为调用 `engine.pickAny()`——它同时能认出节点与边。
+ *
+ * 2. **页面持有的 pan/zoom 仍是真值**，引擎相机由它换算而来
+ *    （`cameraForViewport`）。反过来让引擎相机当真的话，
+ *    框选、缩放按钮、深链接恢复三处都要跟着改。
+ *
+ * 3. **无障碍不能退化**（§55.2）：canvas 对读屏隐藏，真实信息由下方的
+ *    对象列表承载；列表与画布选中双向同步。
  */
+
+const NODE_RADIUS = (node: RenderNode): number =>
+  node.aggregate ? Math.min(34, 22 + node.count / 40) : node.kind === "address" ? 22 : 18;
+
+/** 可访问列表最多暴露多少个对象——大图不能整体倒进 DOM（§55.2）。 */
+const A11Y_NEIGHBOR_LIMIT = 20;
+
 export interface CanvasStageProps {
-  /** 画布平移（viewBox 单位）。 */
   pan: { x: number; y: number };
-  /** 画布缩放。 */
   zoom: number;
   renderNodes: RenderNode[];
   renderEdges: RenderEdge[];
   positions: Map<string, { x: number; y: number }>;
   selection: Selection;
-  /** 框选命中的节点 key 集合（已提交的那一批）。 */
   boxKeySet: Set<string>;
-  /** 当前高亮路径上的节点 key 集合。 */
   focusNodeKeys: Set<string>;
-  /** 正在拖拽的框选矩形（未提交）。 */
   boxRect: { x0: number; y0: number; x1: number; y1: number } | null;
   lens: Lens;
   tool: CanvasTool;
   showNodeLabels: boolean;
   showEdgeLabels: boolean;
-  /** 证据透镜下淡化非证据节点。 */
   mutedNodes: boolean;
-  /** 当前聚焦对象对应的渲染 key（节点或边）。 */
   focusRenderKey: string | null;
-  /** 正在播放动画的那条边；null = 没有动画。 */
   playingEdgeKey: string | null;
+  /** 当前路径上的边 key（按顺序）——引擎用它点亮整条链路。 */
+  pathEdgeKeys: string[];
   edgeColor: (edge: RenderEdge) => string;
   edgeLabel: (edge: RenderEdge) => string;
   edgeFullText: (edge: RenderEdge) => string;
-  /** 选中节点 / 聚合节点。 */
   onSelect: (selection: Selection) => void;
-  /** 点选一条边。 */
   onSelectEdge: (edge: RenderEdge) => void;
-  onCanvasPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-  onCanvasPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+  onCanvasPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onCanvasPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
   onCanvasPointerUp: () => void;
+  /** WebGL2 不可用时的说明入口（提示只能走弹窗，组件本身不弹）。 */
+  onExplainFallback?: () => void;
 }
+
+/** 交互层坐标 → 引擎拾取坐标的换算在组件内完成，页面不需要知道引擎的存在。 */
 
 export function CanvasStage({
   pan,
@@ -61,243 +74,295 @@ export function CanvasStage({
   renderEdges,
   positions,
   selection,
-  boxKeySet,
   focusNodeKeys,
   boxRect,
   lens,
   tool,
   showNodeLabels,
-  showEdgeLabels,
-  mutedNodes,
-  focusRenderKey,
-  playingEdgeKey,
-  edgeColor,
-  edgeLabel,
-  edgeFullText,
+  pathEdgeKeys,
   onSelect,
   onSelectEdge,
   onCanvasPointerDown,
   onCanvasPointerMove,
   onCanvasPointerUp,
+  onExplainFallback,
 }: CanvasStageProps) {
-  return (
-                <div style={{ padding: "0 var(--sp-2) var(--sp-2)" }}>
-                  <svg
-                    className="s5-canvas-svg"
-                    viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-                    preserveAspectRatio="xMidYMid meet"
-                    role="img"
-                    aria-label="Canvas SVG 图谱"
-                    onPointerDown={onCanvasPointerDown}
-                    onPointerMove={onCanvasPointerMove}
-                    onPointerUp={onCanvasPointerUp}
-                    onPointerCancel={onCanvasPointerUp}
-                  >
-                    <defs>
-                      <marker id="canvas-arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085" />
-                      </marker>
-                    </defs>
-                    <rect x="0" y="0" width={SVG_W} height={SVG_H} fill="transparent" />
-                    <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-                      {renderEdges.map((edge) => {
-                        const from = positions.get(edge.fromKey);
-                        const to = positions.get(edge.toKey);
-                        if (!from || !to) return null;
-                        const label = edgeLabel(edge);
-                        const focused = edge.key === focusRenderKey;
-                        const animate = edge.key === playingEdgeKey;
-                        const labelVisible = showEdgeLabels || focused;
-                        return (
-                          <g key={edge.key}>
-                            <title>{edgeFullText(edge)}</title>
-                            <line
-                              className={focused ? "s5-canvas-edge s5-canvas-edge--focus" : "s5-canvas-edge"}
-                              x1={from.x}
-                              y1={from.y}
-                              x2={to.x}
-                              y2={to.y}
-                              stroke={edgeColor(edge)}
-                              strokeWidth={edge.repeated > 1 ? Math.min(5, 1.5 + edge.repeated / 4) : 1.6}
-                              strokeOpacity={0.82}
-                              strokeDasharray={lens === "evidence" ? "7 5" : undefined}
-                              markerEnd="url(#canvas-arrow)"
-                            />
-                            {animate ? (
-                              <line
-                                className="s5-canvas-flow-dash"
-                                x1={from.x}
-                                y1={from.y}
-                                x2={to.x}
-                                y2={to.y}
-                                stroke="var(--c-cobalt, #3b4fe4)"
-                                strokeWidth={2.6}
-                                markerEnd="url(#canvas-arrow)"
-                              />
-                            ) : null}
-                            {/* 14px 透明点击区：边可被点选，完整值在 <title> 与 Inspector（蓝图 §12.13）。 */}
-                            <line
-                              x1={from.x}
-                              y1={from.y}
-                              x2={to.x}
-                              y2={to.y}
-                              stroke="transparent"
-                              strokeWidth={14}
-                              pointerEvents="stroke"
-                              style={{ cursor: "pointer" }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onSelectEdge(edge);
-                              }}
-                            />
-                            {labelVisible && label ? (
-                              <text
-                                x={(from.x + to.x) / 2}
-                                y={(from.y + to.y) / 2 - 5}
-                                textAnchor="middle"
-                                fontSize={10}
-                                fill="var(--c-slate)"
-                                style={{ pointerEvents: "none" }}
-                              >
-                                {ellipsize(label, 24)}
-                              </text>
-                            ) : null}
-                          </g>
-                        );
-                      })}
-    
-                      {renderNodes.map((node) => {
-                        const position = positions.get(node.key);
-                        if (!position) return null;
-                        const selected =
-                          selection?.kind === "node"
-                            ? selection.ref === node.ref
-                            : selection?.kind === "aggregate" && selection.key === node.key;
-                        const boxed = boxKeySet.has(node.key);
-                        const onPath = focusNodeKeys.has(node.key);
-                        const labelVisible = showNodeLabels || selected || boxed || onPath;
-                        const fill = node.aggregate
-                          ? "var(--c-surface-sunken)"
-                          : node.kind === "address"
-                            ? "var(--c-cobalt-soft)"
-                            : node.kind === "evidence"
-                              ? "var(--c-amber-soft)"
-                              : "var(--c-neutral-soft)";
-                        const stroke = node.aggregate
-                          ? "var(--c-neutral)"
-                          : node.kind === "address"
-                            ? "var(--c-cobalt)"
-                            : node.kind === "evidence"
-                              ? "var(--c-amber-text)"
-                              : "var(--c-neutral)";
-                        const radius = node.aggregate ? Math.min(34, 22 + node.count / 40) : node.kind === "address" ? 22 : 18;
-                        const isRect = node.kind === "tx" && !node.aggregate;
-                        const topOffset = isRect ? 16 : radius;
-                        return (
-                          <g
-                            key={node.key}
-                            className={`s5-canvas-node${selected ? " is-selected" : ""}`}
-                            transform={`translate(${position.x} ${position.y})`}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`${NODE_KIND_LABEL[node.kind]}节点 ${node.label}${node.aggregate ? `（聚类 ${node.count} 个）` : ""}`}
-                            data-node-ref={node.ref ?? node.key}
-                            onPointerDown={(event) => {
-                              if (tool === "select") event.stopPropagation();
-                            }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (tool === "pan") return;
-                              if (node.ref) onSelect({ kind: "node", ref: node.ref });
-                              else onSelect({ kind: "aggregate", key: node.key });
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key !== "Enter" && event.key !== " ") return;
-                              event.preventDefault();
-                              if (node.ref) onSelect({ kind: "node", ref: node.ref });
-                              else onSelect({ kind: "aggregate", key: node.key });
-                            }}
-                          >
-                            <title>
-                              {(node.ref ?? node.key) +
-                                (node.aggregate
-                                  ? ` · 聚类 ${node.count} 个节点`
-                                  : ` · ${NODE_KIND_LABEL[node.kind]}${node.chain ? ` · ${node.chain}` : ""}`)}
-                            </title>
-                            <g
-                              className={node.entering ? "s5-canvas-node--enter" : undefined}
-                              style={mutedNodes && node.kind !== "evidence" ? { opacity: 0.45 } : undefined}
-                            >
-                              {node.kind === "evidence" && !node.aggregate ? (
-                                <polygon points="0,-20 20,0 0,20 -20,0" fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
-                              ) : isRect ? (
-                                <rect x="-26" y="-16" width="52" height="32" rx="7" fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
-                              ) : (
-                                <circle r={radius} fill={fill} stroke={stroke} strokeWidth={selected ? 3 : 1.5} />
-                              )}
-                              {/* 类型图标：形状之外的第二通道（蓝图 §12.13"颜色只是辅助"） */}
-                              {!node.aggregate && node.kind === "address" ? (
-                                <circle cx={0} cy={-8} r={3.2} fill="none" stroke={stroke} strokeWidth={1.5} aria-hidden="true" />
-                              ) : null}
-                              {!node.aggregate && node.kind === "tx" ? (
-                                <path
-                                  d="M-8 -8 h12 M2 -11 l3 3 l-3 3"
-                                  fill="none"
-                                  stroke={stroke}
-                                  strokeWidth={1.5}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                              {!node.aggregate && node.kind === "evidence" ? (
-                                <path d="M0 -11 l3.4 3.4 l-3.4 3.4 l-3.4 -3.4 z" fill="none" stroke={stroke} strokeWidth={1.5} aria-hidden="true" />
-                              ) : null}
-                              {labelVisible ? (
-                                <text textAnchor="middle" y={6} fontSize={10} fill="var(--c-graphite)">
-                                  {node.label}
-                                </text>
-                              ) : null}
-                              {node.sublabel && labelVisible ? (
-                                <text textAnchor="middle" y={isRect ? 30 : 36} fontSize={9} fill="var(--c-slate)">
-                                  {ellipsize(node.sublabel, 30)}
-                                </text>
-                              ) : null}
-                              {node.aggregate ? (
-                                <text textAnchor="middle" y={radius + 14} fontSize={10} fill="var(--c-cobalt)" fontWeight={600}>
-                                  ×{node.count}
-                                </text>
-                              ) : null}
-                              {labelVisible && !node.aggregate ? (
-                                <text textAnchor="middle" y={-(topOffset + 16)} fontSize={9} fill={stroke}>
-                                  {NODE_KIND_LABEL[node.kind]}
-                                </text>
-                              ) : null}
-                            </g>
-                            {selected ? <circle className="s5-canvas-halo" r={radius + 7} /> : null}
-                            {!selected && boxed ? <circle className="s5-canvas-halo" data-tone="box" r={radius + 7} /> : null}
-                            {!selected && !boxed && onPath ? (
-                              <circle className="s5-canvas-halo" data-tone="path" r={radius + 7} />
-                            ) : null}
-                          </g>
-                        );
-                      })}
-    
-                      {boxRect ? (
-                        <rect
-                          x={Math.min(boxRect.x0, boxRect.x1)}
-                          y={Math.min(boxRect.y0, boxRect.y1)}
-                          width={Math.abs(boxRect.x1 - boxRect.x0)}
-                          height={Math.abs(boxRect.y1 - boxRect.y0)}
-                          fill="rgba(59,79,228,.08)"
-                          stroke="var(--c-cobalt, #3b4fe4)"
-                          strokeWidth={1.5}
-                          strokeDasharray="5 4"
-                          pointerEvents="none"
-                        />
-                      ) : null}
-                    </g>
-                  </svg>
-                </div>
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const engineRef = useRef<GraphEngine | null>(null);
+  const [ready, setReady] = useState(0);
+  const [webgl2, setWebgl2] = useState(true);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  /* 引擎的节点 id 用渲染 key：它对一次渲染唯一，且不依赖 ref（聚合节点没有 ref）。 */
+  const graphNodes = useMemo<GraphNodeInput[]>(
+    () =>
+      renderNodes.map((node) => {
+        const position = positions.get(node.key);
+        return {
+          id: node.key,
+          kind: node.kind === "tx" ? "transaction" : node.kind,
+          label: node.label,
+          sublabel: node.sublabel,
+          x: position?.x ?? 0,
+          y: position?.y ?? 0,
+          size: NODE_RADIUS(node),
+        };
+      }),
+    [renderNodes, positions],
   );
+
+  const graphEdges = useMemo<GraphEdgeInput[]>(
+    () => renderEdges.map((edge) => ({ id: edge.key, source: edge.fromKey, target: edge.toKey })),
+    [renderEdges],
+  );
+
+  const edgeByKey = useMemo(() => new Map(renderEdges.map((edge) => [edge.key, edge])), [renderEdges]);
+  const nodeByKey = useMemo(() => new Map(renderNodes.map((node) => [node.key, node])), [renderNodes]);
+
+  /* ---------- 引擎生命周期（§63C：路由卸载必须 dispose） ---------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const engine = new GraphEngine({
+      nodes: graphNodes,
+      edges: graphEdges,
+      /* 交互由页面的透明层负责，引擎只渲染。 */
+      interactive: false,
+      showLabels: showNodeLabels,
+      lens,
+    });
+    const mounted = engine.mount(canvas);
+    engineRef.current = engine;
+    setWebgl2(mounted);
+    setReady((value) => value + 1);
+    return () => {
+      engine.dispose();
+      engineRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ---------- 容器尺寸（相机换算与命中测试都要用） ---------- */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+    const measure = () => setSize({ width: container.clientWidth, height: container.clientHeight });
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [ready]);
+
+  /* ---------- 数据（位置由页面算好，引擎不跑布局） ---------- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.loadGraph(graphNodes, graphEdges);
+  }, [graphNodes, graphEdges, ready]);
+
+  /* ---------- 相机：页面 pan/zoom 是唯一真值 ---------- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || size.width === 0 || size.height === 0) return;
+    /*
+     * LOD 阈值必须按**本页坐标系的实际比例**校准。
+     *
+     * 本页的世界是 viewBox 单位（1000×600），缩进 468px 的容器后
+     * "世界单位 → 像素"只有约 0.47。引擎默认阈值是按它自己那个量级定的，
+     * 直接套用会把正常视图判成远景，标签被整片压掉——
+     * 画面本身完全正常，只有标签不见了，是那种最难归因的缺陷。
+     */
+    const k = Math.min(size.width / 1000, size.height / 600) || 1;
+    engine.setLodThresholds({ near: 3 * k, mid: 0.8 * k });
+    engine.setCamera(cameraForViewport(pan, zoom, size.width, size.height));
+  }, [pan, zoom, size, ready]);
+
+  /* ---------- 选中 ---------- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    /* 选中一条边时画布不高亮任何节点——边的选中由 Inspector 承载。 */
+    if (!selection || selection.kind === "edge") {
+      engine.clearSelection();
+      return;
+    }
+    const node =
+      selection.kind === "node"
+        ? renderNodes.find((item) => item.ref === selection.ref)
+        : nodeByKey.get(selection.key);
+    const index = node ? graphNodes.findIndex((item) => item.id === node.key) : -1;
+    if (index >= 0) engine.setSelection([index]);
+    else engine.clearSelection();
+  }, [selection, renderNodes, nodeByKey, graphNodes, ready]);
+
+  /* ---------- 视图维度与标签 ---------- */
+  useEffect(() => {
+    engineRef.current?.setLens(lens);
+  }, [lens, ready]);
+  useEffect(() => {
+    engineRef.current?.setLabelVisibility(showNodeLabels);
+  }, [showNodeLabels, ready]);
+
+  /* ---------- 路径高亮（§30.12）：整条链路一次性点亮 ---------- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const edgeIndices: number[] = [];
+    const nodeIndices = new Set<number>();
+    for (const key of pathEdgeKeys) {
+      const edge = edgeByKey.get(key);
+      if (!edge) continue;
+      const index = graphEdges.findIndex((item) => item.id === key);
+      if (index < 0) continue;
+      edgeIndices.push(index);
+      const s = graphNodes.findIndex((item) => item.id === edge.fromKey);
+      const t = graphNodes.findIndex((item) => item.id === edge.toKey);
+      if (s >= 0) nodeIndices.add(s);
+      if (t >= 0) nodeIndices.add(t);
+    }
+    if (edgeIndices.length === 0) {
+      engine.highlightPath(null);
+      return;
+    }
+    engine.highlightPath({
+      nodes: Uint32Array.from(nodeIndices),
+      edges: Uint32Array.from(edgeIndices),
+      cost: edgeIndices.length,
+    });
+  }, [pathEdgeKeys, edgeByKey, graphEdges, graphNodes, ready]);
+
+  /*
+   * 把引擎的**真实状态**暴露到 DOM 上（验收用，不参与业务）。
+   *
+   * 为什么不能只断言"canvas 元素存在"：一个尺寸正常、但引擎没拿到数据、
+   * 或者一帧都没画的 canvas，元素层面完全看不出区别。这里的数字来自
+   * `engine.stats()`——已装载的节点/边、实际绘制的边数、LOD 档位、WebGL2 是否可用，
+   * 都是引擎自己的账，不是页面算的。
+   */
+  const [stats, setStats] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    setStats({ ...engine.stats() });
+  }, [graphNodes, graphEdges, pan, zoom, size, lens, ready]);
+
+  /* ---------- 命中测试：节点与边共用一次拾取（§30.7） ---------- */
+  const handleClick = useCallback(
+    (event: { clientX: number; clientY: number }) => {
+      /* 平移工具下拖拽不改变选中：与迁移前的行为一致。 */
+      if (tool === "pan") return;
+      const engine = engineRef.current;
+      const container = containerRef.current;
+      if (!engine || !container) return;
+      const rect = container.getBoundingClientRect();
+      const hit = engine.pickAny(event.clientX - rect.left, event.clientY - rect.top);
+      if (!hit) return;
+      if (hit.kind === "edge") {
+        const edge = edgeByKey.get(engine.store.edgeIdAt(hit.index));
+        if (edge) onSelectEdge(edge);
+        return;
+      }
+      const node = nodeByKey.get(engine.store.idAt(hit.index));
+      if (!node) return;
+      if (node.ref) onSelect({ kind: "node", ref: node.ref });
+      else onSelect({ kind: "aggregate", key: node.key });
+    },
+    [edgeByKey, nodeByKey, onSelect, onSelectEdge, tool],
+  );
+
+  return (
+    <>
+    <div
+      className="cs-canvas-stage"
+      ref={containerRef}
+      data-canvas-stats={stats ? JSON.stringify(stats) : undefined}
+    >
+      <canvas ref={canvasRef} className="cs-canvas-stage__canvas" aria-hidden="true" tabIndex={-1} role="presentation" />
+
+      {/*
+        交互层：盖在 canvas 上，维持页面原有的工具语义。
+        touch-action 由样式给出，否则移动端的拖拽会被浏览器当成滚动。
+      */}
+      <div
+        className="cs-canvas-stage__surface"
+        role="img"
+        aria-label="资金图谱画布"
+        onPointerDown={onCanvasPointerDown}
+        onPointerMove={onCanvasPointerMove}
+        onPointerUp={onCanvasPointerUp}
+        onPointerCancel={onCanvasPointerUp}
+        onClick={handleClick}
+      />
+
+      {/* 框选矩形：迁移到 canvas 之后改由一层 div 画出来（同一套换算）。 */}
+      {boxRect && size.width > 0 ? (
+        <div className="cs-canvas-stage__box" style={worldRectToScreen(boxRect, pan, zoom, size.width, size.height)} />
+      ) : null}
+
+      {!webgl2 ? (
+        <div className="cs-fundgraph__fallback" role="status">
+          <p className="cs-fundgraph__fallback-title">当前浏览器无法启用 GPU 图谱</p>
+          <p className="cs-fundgraph__fallback-body">已切换到性能受限模式：对象仍可通过下方的对象列表浏览与选中。</p>
+          {onExplainFallback ? (
+            <button type="button" className="btn btn--sm" onClick={onExplainFallback}>
+              查看原因
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+    </div>
+
+    {/*
+      可访问对象列表（§55.2）：canvas 对它隐藏，读屏读的是这里。
+      与画布选中双向同步；默认视觉隐藏，聚焦后出现。
+      放在舞台**外面**：舞台是固定高度 + overflow:hidden 的，
+      把面板塞进去会被裁掉。
+    */}
+    <div className="cs-fundgraph__a11y" role="group" aria-label="资金图谱对象列表" tabIndex={0}>
+        <p className="cs-fundgraph__a11y-hint">
+          {"共 " + renderNodes.length + " 个节点 · " + renderEdges.length + " 条边"}
+        </p>
+        <p className="cs-fundgraph__a11y-current">
+          {"当前选中：" + describeSelection(selection, renderNodes, nodeByKey)}
+        </p>
+        <ul className="cs-fundgraph__a11y-list">
+          {renderNodes
+            .filter((node) => focusNodeKeys.has(node.key))
+            .slice(0, A11Y_NEIGHBOR_LIMIT)
+            .map((node) => (
+              <li key={node.key}>
+                <button
+                  type="button"
+                  className="cs-fundgraph__a11y-item"
+                  onClick={() =>
+                    node.ref ? onSelect({ kind: "node", ref: node.ref }) : onSelect({ kind: "aggregate", key: node.key })
+                  }
+                >
+                  <span className="mono">{node.label}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+    </div>
+    </>
+  );
+}
+
+/** 选中项的可读描述（读屏读的就是这句话）。 */
+function describeSelection(
+  selection: Selection,
+  renderNodes: RenderNode[],
+  nodeByKey: Map<string, RenderNode>,
+): string {
+  if (!selection) return "尚未选中对象";
+  if (selection.kind === "edge") return selection.ref;
+  const node =
+    selection.kind === "node"
+      ? renderNodes.find((item) => item.ref === selection.ref)
+      : nodeByKey.get(selection.key);
+  if (!node) return selection.kind === "node" ? selection.ref : selection.key;
+  return NODE_KIND_LABEL[node.kind] + " " + node.label;
 }

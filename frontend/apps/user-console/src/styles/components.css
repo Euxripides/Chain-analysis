@@ -928,6 +928,47 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
 .cs-addrs__summary b { color: var(--text-primary); }
 .cs-addrs__summary [data-tone="danger"] b { color: var(--red-700); }
 .cs-addrs__summary [data-tone="warn"] b { color: var(--amber-600); }
+
+/* =========================================================================
+ * 画布舞台（§61 / §65「Canvas 迁移到独立性能引擎」）
+ *
+ * 节点与边由 @chain/graph-engine 在 WebGL 上绘制；这一层只负责**给画布一个盒子**
+ * 以及承载交互层。尺寸刻意与它取代的 .s5-canvas-svg 完全一致，
+ * 迁移渲染器不应该顺带改变页面布局。
+ * ========================================================================= */
+.cs-canvas-stage {
+  position: relative;
+  width: 100%;
+  height: clamp(340px, 56vh, 620px);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--c-surface, #fff);
+  overflow: hidden;
+  /* 触屏上不加这一条，拖拽会被浏览器当成页面滚动。 */
+  touch-action: none;
+}
+.cs-canvas-stage__canvas,
+.cs-canvas-stage__surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cs-canvas-stage__canvas { display: block; }
+/* 交互层是透明的，只负责接指针事件；工具语义仍由页面决定。 */
+.cs-canvas-stage__surface { cursor: crosshair; }
+.cs-canvas-stage__box {
+  position: absolute;
+  border: 1.5px dashed var(--c-cobalt, #3b4fe4);
+  background: rgba(59, 79, 228, .08);
+  pointer-events: none;
+}
+@media (max-width: 760px) {
+  .cs-canvas-stage {
+    height: min(56vh, 420px);
+    min-height: 280px;
+  }
+}
 .cs-addrs { list-style: none; margin: var(--sp-2) 0 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
 .cs-addrs__item { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-3); border-bottom: 1px solid var(--border-subtle); min-width: 0; }
 .cs-addrs__item:last-child { border-bottom: 0; }

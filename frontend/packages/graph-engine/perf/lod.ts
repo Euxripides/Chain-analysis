@@ -53,9 +53,25 @@ export const LOD_POLICIES: Record<LodLevel, LodPolicy> = {
 export const LOD_NEAR_SCALE = 3;
 export const LOD_MID_SCALE = 0.8;
 
-export function lodLevelFor(scale: number): LodLevel {
-  if (scale >= LOD_NEAR_SCALE) return "near";
-  if (scale >= LOD_MID_SCALE) return "mid";
+/**
+ * 阈值默认值。**它们是世界单位 → 像素的比例**，因此与"世界坐标是怎么定的"强相关。
+ *
+ * 引擎默认的世界坐标量级在几百到几千，阈值就是按那个量级定的。
+ * 宿主页面如果用的是别的坐标系（例如 viewBox 的 1000×600），
+ * 同一个 scale 的含义完全不同：1000 单位宽的世界画进 468px 的容器时
+ * 比例只有 0.47，于是"正常视图"会被判成远景，标签被整片压掉。
+ * 这种情况由宿主用 `setLodThresholds` 按自己的比例校准。
+ */
+export const DEFAULT_LOD_THRESHOLDS = { near: LOD_NEAR_SCALE, mid: LOD_MID_SCALE };
+
+export interface LodThresholds {
+  near: number;
+  mid: number;
+}
+
+export function lodLevelFor(scale: number, thresholds: LodThresholds = DEFAULT_LOD_THRESHOLDS): LodLevel {
+  if (scale >= thresholds.near) return "near";
+  if (scale >= thresholds.mid) return "mid";
   return "far";
 }
 

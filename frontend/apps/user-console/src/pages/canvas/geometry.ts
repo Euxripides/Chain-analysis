@@ -8,12 +8,73 @@
 import { SVG_H, SVG_W } from "./constants";
 import type { LayoutMode, RenderEdge, RenderNode } from "./types";
 
-export function clientToViewBox(svg: SVGSVGElement, clientX: number, clientY: number): { x: number; y: number } {
-  const rect = svg.getBoundingClientRect();
+/**
+ * 客户端坐标 → viewBox 坐标（与 preserveAspectRatio="xMidYMid meet" 一致）。
+ *
+ * 参数是 `Element` 而不是 `SVGSVGElement`：画布迁移到 WebGL 之后，
+ * 交互层是盖在 canvas 上的一层透明 div，但坐标换算必须**完全不变**——
+ * 框选、命中与深链接里的相机恢复都依赖这套换算。
+ */
+export function clientToViewBox(target: Element, clientX: number, clientY: number): { x: number; y: number } {
+  const rect = target.getBoundingClientRect();
   const scale = Math.min(rect.width / SVG_W, rect.height / SVG_H) || 1;
   const offsetX = (rect.width - SVG_W * scale) / 2;
   const offsetY = (rect.height - SVG_H * scale) / 2;
   return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
+}
+
+/**
+ * 把页面自己的 pan/zoom 换算成引擎相机。
+ *
+ * 两套坐标必须严格等价，否则"框选选中的节点"与"画面上看到的节点"会错位：
+ *
+ *   页面（world 与 viewBox 同坐标）：
+ *     view = world * zoom + pan
+ *   再由 viewBox 映射到容器像素（xMidYMid meet）：
+ *     screen = view * k + offset
+ *   引擎：
+ *     screen = (world - c) * S + size / 2
+ *
+ * 令两者恒等：S = zoom * k，c = (size / 2 - pan * k - offset) / S。
+ */
+export function cameraForViewport(
+  pan: { x: number; y: number },
+  zoom: number,
+  width: number,
+  height: number,
+): { cx: number; cy: number; scale: number } {
+  const k = Math.min(width / SVG_W, height / SVG_H) || 1;
+  const offsetX = (width - SVG_W * k) / 2;
+  const offsetY = (height - SVG_H * k) / 2;
+  const scale = Math.max(zoom * k, 1e-6);
+  return {
+    cx: (width / 2 - pan.x * k - offsetX) / scale,
+    cy: (height / 2 - pan.y * k - offsetY) / scale,
+    scale,
+  };
+}
+
+/**
+ * viewBox 坐标下的矩形 → 容器内的 CSS 像素矩形。
+ *
+ * 框选时用户必须**看得见**自己正在拖的那个框。迁移到 canvas 之后没有 SVG 元素
+ * 可以复用，所以这个矩形改由一层 div 画出来，换算规则与相机完全一致
+ * （同一套 k / offset），否则框会和它选中的内容错位。
+ */
+export function worldRectToScreen(
+  rect: { x0: number; y0: number; x1: number; y1: number },
+  pan: { x: number; y: number },
+  zoom: number,
+  width: number,
+  height: number,
+): { left: number; top: number; width: number; height: number } {
+  const k = Math.min(width / SVG_W, height / SVG_H) || 1;
+  const offsetX = (width - SVG_W * k) / 2;
+  const offsetY = (height - SVG_H * k) / 2;
+  const toScreen = (x: number, y: number) => [(x * zoom + pan.x) * k + offsetX, (y * zoom + pan.y) * k + offsetY];
+  const [ax, ay] = toScreen(rect.x0, rect.y0);
+  const [bx, by] = toScreen(rect.x1, rect.y1);
+  return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) };
 }
 
 export function layoutPositions(

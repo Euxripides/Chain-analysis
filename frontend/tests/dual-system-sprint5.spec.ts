@@ -353,7 +353,9 @@ test.describe("S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / U
     if ((await svgToggle.textContent())?.includes("展开")) {
       await svgToggle.click();
     }
-    await expect(page.locator(".s5-canvas-svg")).toBeVisible({ timeout: 15_000 });
+    /* 画布自 R6 起由 @chain/graph-engine 在 WebGL 上绘制（§65），选择器随之更新；
+       断言的意图不变：展开后画布必须真的可见。 */
+    await expect(page.locator(".cs-canvas-stage")).toBeVisible({ timeout: 15_000 });
     await expectNoHorizontalOverflow(page);
   });
 

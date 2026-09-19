@@ -96,6 +96,14 @@ export class GraphStore {
   edgeAmount = new Uint32Array(0);
   /** 每条边的颜色分组下标（资产透镜用）。 */
   edgeColorGroup = new Uint32Array(0);
+  /**
+   * 边 id 的字典下标。
+   *
+   * 页面用业务 ref 标识一条边，而拾取返回的是**存内下标**——
+   * 没有这张表就没法把"点到的那条边"还原回页面认识的对象。
+   * 与 nodeIds 同一套做法：只存字典下标，不复制字符串。
+   */
+  edgeIds = new Uint32Array(0);
 
   /** CSR 邻接（§30.4 adjacency index）：offset[i]..offset[i+1] 是节点 i 的出边下标。 */
   outOffset = new Uint32Array(0);
@@ -127,6 +135,11 @@ export class GraphStore {
 
   idAt(nodeIndex: number): string {
     return this.stringAt(this.nodeIds[nodeIndex] ?? 0);
+  }
+
+  /** 边 id（与 `idAt` 对称）。拾取返回存内下标，页面靠它换回业务 ref。 */
+  edgeIdAt(edgeIndex: number): string {
+    return this.stringAt(this.edgeIds[edgeIndex] ?? 0);
   }
 
   labelAt(nodeIndex: number): string {
@@ -190,6 +203,7 @@ export class GraphStore {
     this.edgeWeight = new Float32Array(edges.length);
     this.edgeAmount = new Uint32Array(edges.length);
     this.edgeColorGroup = new Uint32Array(edges.length);
+    this.edgeIds = new Uint32Array(edges.length);
     for (let i = 0; i < edges.length; i += 1) {
       const edge = edges[i];
       this.edgeSource[i] = Math.max(0, this.indexOfNodeId(edge.source));
@@ -197,6 +211,7 @@ export class GraphStore {
       this.edgeWeight[i] = edge.weight ?? 1;
       this.edgeAmount[i] = edge.amountIndex ?? 0;
       this.edgeColorGroup[i] = edge.colorGroup ?? 0;
+      this.edgeIds[i] = edge.id ? this.intern(edge.id) : 0;
     }
 
     this.buildAdjacency();
@@ -260,7 +275,7 @@ export class GraphStore {
       this.positions.byteLength + this.sizes.byteLength + this.kinds.byteLength + this.flags.byteLength +
       this.nodeIds.byteLength + this.nodeLabels.byteLength + this.nodeSublabels.byteLength + this.edgeSource.byteLength +
       this.edgeTarget.byteLength + this.edgeWeight.byteLength + this.edgeAmount.byteLength +
-      this.edgeColorGroup.byteLength +
+      this.edgeColorGroup.byteLength + this.edgeIds.byteLength +
       this.outOffset.byteLength + this.outEdges.byteLength + this.inOffset.byteLength + this.inEdges.byteLength;
     let strings = 0;
     for (const value of this.strings) strings += value.length * 2;
