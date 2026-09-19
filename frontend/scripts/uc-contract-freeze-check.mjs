@@ -15,8 +15,16 @@
  * 新增页面可以加路由——但那样必须**显式**更新本脚本里的豁免清单，
  * 于是改动会在 PR 里被看见，而不是悄悄发生。
  *
+ * **基准必须是重构开始前的那个提交，不能是 HEAD。**
+ * 重构一旦被提交，HEAD 就等于重构后的状态，拿它做基准会让这条检查退化成
+ * "自己和自己比"——永远通过，永远没有意义。因此这里把基准固定成
+ * 重构前的最后一个提交；要换基准必须改这一行，于是"换基准"这件事本身
+ * 会在 PR 里被看见。
+ *
  * 用法：node scripts/uc-contract-freeze-check.mjs
+ *       UC_CONTRACT_BASELINE=<sha> node scripts/uc-contract-freeze-check.mjs
  */
+const BASELINE = process.env.UC_CONTRACT_BASELINE ?? "25a6ee6";
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -38,7 +46,7 @@ const TRACKED = [
 /** 读取 HEAD 版本的文件内容。`repoPath` 必须是**仓库根相对**路径（形如 frontend/...）。 */
 function gitShow(repoPath) {
   try {
-    return execFileSync("git", ["show", `HEAD:${repoPath}`], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    return execFileSync("git", ["show", `${BASELINE}:${repoPath}`], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   } catch {
     return null;
   }
@@ -53,7 +61,7 @@ function gitShow(repoPath) {
  */
 function gitLs(relPath) {
   try {
-    return execFileSync("git", ["ls-tree", "-r", "--name-only", "HEAD", "--", `frontend/${relPath}`], {
+    return execFileSync("git", ["ls-tree", "-r", "--name-only", BASELINE, "--", `frontend/${relPath}`], {
       cwd: REPO,
       encoding: "utf8",
     })
@@ -167,7 +175,7 @@ function diff(label, before, after) {
   const removed = before.filter((item) => !afterSet.has(JSON.stringify(item)));
   const added = after.filter((item) => !beforeSet.has(JSON.stringify(item)));
   if (removed.length === 0 && added.length === 0) {
-    console.log(`  OK   ${label}（${after.length} 项，与 HEAD 完全一致）`);
+    console.log(`  OK   ${label}（${after.length} 项，与基准 ${BASELINE} 完全一致）`);
     return [];
   }
   const problems = [];
@@ -180,23 +188,23 @@ function main() {
   const headFiles = collectSources(TRACKED, true);
   const workFiles = collectSources(TRACKED, false);
   if (headFiles.length === 0) {
-    console.error("无法读取 HEAD 版本源码（不在 git 仓库里？）");
+    console.error(`无法读取基准提交 ${BASELINE} 的源码（不在 git 仓库里？）`);
     process.exit(2);
   }
 
-  console.log(`契约冻结检查：HEAD 共 ${headFiles.length} 个文件，工作区共 ${workFiles.length} 个文件`);
+  console.log(`契约冻结检查：基准 ${BASELINE} 共 ${headFiles.length} 个文件，工作区共 ${workFiles.length} 个文件`);
   const problems = [
     ...diff("路由路径", routePaths(headFiles), routePaths(workFiles)),
     ...diff("路由→权限映射", routePermissions(headFiles), routePermissions(workFiles)),
     ...diff("/api 字面量", apiLiterals(headFiles), apiLiterals(workFiles)),
-  ];
+  ].map((problem) => problem.replace(/与 HEAD 一致/, `与 ${BASELINE} 一致`));
 
   if (problems.length > 0) {
     console.error("\n契约发生变化：");
     for (const problem of problems) console.error("  - " + problem);
     process.exit(1);
   }
-  console.log("\n契约冻结通过：路由、权限与 API 字面量均与 HEAD 一致。");
+  console.log(`\n契约冻结通过：路由、权限与 API 字面量均与基准 ${BASELINE} 一致。`);
 }
 
 main();
