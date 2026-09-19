@@ -107,3 +107,18 @@ E2E_BROWSER_CHANNEL=chromium node scripts/uc-v4-render-check.mjs   # 真实浏�
   那是 Desktop 私有构建才有的 API；故 `dsh-better-sidebar` 必须 ≥ 0.18.0（当前 0.19.1）。
 - 聚合包 `@linxin666/dsh-web-all` 的 family 行 config 只转发 `plugin` 键，插件自身配置项（如 `tokenTtlMs`）
   无法从 profile 覆盖——已实测并回退，勿重复尝试；改用该插件的环境变量入口。配对令牌默认 10 分钟有效、一次性。
+
+**远程端（手机/另一台电脑）使用要点**
+
+- 客户端落在 `Choose a workspace to start` 状态时 composer 是禁用的（`Send message` 按钮 `disabled`），
+  必须先点 `Choose workspace` 选目录（或用 `Edit path` 直接填路径 → `Open`）才能输入与发送。
+  这跟服务端配置无关，是本机与服务器两端共有的客户端状态；实测选完工作区后发送链路完全正常
+  （消息送达且 agent 正常回复）。
+- nginx 的 `listen 8450 ssl;` **不能加 `http2`**：nginx 1.24 不支持 HTTP/2 上的 WebSocket
+  （RFC 8441 需显式支持），浏览器不会回落，会导致 wss:// 升级失败。
+- 已知限制：`dsh-better-sidebar` 的 `/sidebar/ws/agent-opens` 用的是**未改写**的绝对路径，
+  harness 的升级路由拒绝非 loopback 的 Host（实测同一路径 Host=127.0.0.1:8450 → 101，
+  Host=192.168.31.152:8450 → 502，nginx error.log 记 `upstream prematurely closed connection`）。
+  插件的 `/remote/**` 通道不受影响，配对后 `/remote/api/remote.mux`、`/remote/sidebar/ws/agent-terminals`
+  均能建立。要"修复"只能给 harness 加 `--trusted-host 192.168.31.152:8450`，但那会重新打开 /api 围栏
+  （回到 CRITICAL 状态），不值得；该 WS 只影响侧栏的实时状态，不影响收发消息。
