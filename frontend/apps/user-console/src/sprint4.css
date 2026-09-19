@@ -24,7 +24,4 @@
   .evidence-rail { width: auto; }
 }
 
-@media (max-width: 640px) {
-  .page-head__actions { width: 100%; }
-  .page-head__actions .btn { flex: 1 1 auto; }
-}
+/* 原 `@media (max-width: 640px)` 下的 `.page-head__actions` 已随页面头一并删除（R7）。 */

@@ -510,6 +510,10 @@ async function main() {
     process.exit(2);
   }
   await mkdir(OUT, { recursive: true });
+  /*
+   * CSS 使用面审计的累加器：跨越两个视口，因为有些类只在移动端布局下出现。
+   */
+  const usedClasses = new Set();
   const server = await startStaticServer();
   const browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL ?? "msedge" });
 
@@ -1306,6 +1310,118 @@ async function main() {
         }
       }
 
+      /* ---------- 6d. CSS 使用面审计（R7 遗留清理的判据，规范 §60 Phase R7） ---------- */
+      {
+        /*
+         * 删除 CSS 的前提是"真的没有元素在用"，而 grep 源码判断不出来：
+         * 类名常常是拼出来的（`card--${variant}`），只有把页面**渲染出来**
+         * 再数 DOM 上的 classList，才能区分"没人用"和"grep 没搜到"。
+         * 所以这里把全部路由过一遍，收集真实出现过的类名，再与 components.css 求差。
+         */
+        const AUDIT_ROUTES = [
+          "/home", "/inbox", "/reports", "/exports", "/investigations", "/explorer", "/search",
+          "/profile", "/graph", "/notifications", "/downloads", "/downloads/new",
+          "/cases", "/cases/new", "/cases/case-0001/overview", "/cases/case-0001/subjects",
+          "/cases/case-0001/investigations", "/cases/case-0001/evidence", "/cases/case-0001/reports",
+          "/cases/case-0001/members", "/cases/case-0001/activity",
+          `/addresses/tron/${ADDRESS_INPUT}`, `/addresses/tron/${ADDRESS_INPUT}?tab=coverage`,
+          `/jobs/${JOB_ID}`, "/canvases/canvas-demo", "/investigations/inv-demo/workbench",
+          "/investigations/new",
+        ];
+        for (const route of AUDIT_ROUTES) {
+          try {
+            await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
+            await page.waitForTimeout(450);
+            const classes = await page.evaluate(() => {
+              const sink = new Set();
+              for (const el of document.querySelectorAll("*")) {
+                for (const name of el.classList) sink.add(name);
+              }
+              return [...sink];
+            });
+            for (const name of classes) usedClasses.add(name);
+          } catch {
+            /* 单条路由失败不影响审计：它只影响"哪些类被判定为未使用"，
+              而删除前还会逐条人工复核。 */
+          }
+        }
+
+        /*
+         * 只遍历路由会漏掉"要点开才存在"的界面：命令面板、通知 Popover、
+         * 技术详情的各个 Tab、登录前的 MFA 步骤……它们各自带着几十个类名。
+         * 不把这些状态走一遍，审计会把它们全部误判成"没人用"。
+         */
+        const sweepState = async (label, run) => {
+          try {
+            await run();
+            const classes = await page.evaluate(() => {
+              const sink = new Set();
+              for (const el of document.querySelectorAll("*")) for (const n of el.classList) sink.add(n);
+              return [...sink];
+            });
+            for (const name of classes) usedClasses.add(name);
+          } catch (error) {
+            notes.push(`CSS 审计：状态「${label}」未取到（${String(error).slice(0, 80)}）`);
+          }
+        };
+
+        /* 命令面板（Cmd/Ctrl+K）。 */
+        await page.goto(`${base}/home`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(400);
+        await sweepState("命令面板", async () => {
+          await page.keyboard.press("Control+k");
+          await page.waitForTimeout(600);
+        });
+        await page.keyboard.press("Escape");
+
+        /* 通知 Popover（点铃铛）。 */
+        await sweepState("通知 Popover", async () => {
+          await page.getByRole("button", { name: /通知/ }).first().click();
+          await page.waitForTimeout(600);
+        });
+        await page.keyboard.press("Escape");
+
+        /* 技术详情：抽屉 + 逐个 Tab（进度环、流水线、层级、时间线、速率都在里面）。 */
+        await page.goto(`${base}/jobs/${JOB_ID}`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(600);
+        await sweepState("技术详情抽屉", async () => {
+          await page.getByRole("button", { name: /查看技术详情/ }).first().click();
+          await page.waitForSelector(".ant-drawer-open", { timeout: 10_000 });
+          await page.waitForTimeout(400);
+          const tabCount = await page.locator(".ant-drawer .cs-tab").count();
+          for (let i = 0; i < tabCount; i += 1) {
+            await page.locator(".ant-drawer .cs-tab").nth(i).click();
+            await page.waitForTimeout(350);
+          }
+        });
+        await page.keyboard.press("Escape");
+
+        /* 未认证状态：登录页装饰与 MFA 输入。 */
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({
+            status: 401,
+            contentType: "application/json",
+            body: JSON.stringify({ success: false, error: { code: "AUTHN_REQUIRED", message: "未登录", field_errors: [], retryable: false } }),
+          }),
+        );
+        await page.goto(`${base}/login`, { waitUntil: "domcontentloaded" });
+        await sweepState("登录页", async () => {
+          await page.waitForTimeout(700);
+        });
+        await page.route("**/api/auth/v1/session", (route) =>
+          route.fulfill({ status: 200, contentType: "application/json", body: envelope(SESSION) }),
+        );
+        /*
+         * 上面那次 401 是**我们自己换的夹具**，浏览器必然在 console 里记一条
+         * "Failed to load resource: 401"。这一步在冒烟循环之后运行，
+         * 不会再被循环开头的清空覆盖，所以必须在这里显式清掉——
+         * 否则审计步骤会给最终判定塞进两条假失败。
+         */
+        await page.evaluate(() => {
+          window.__ucCheck.consoleErrors.length = 0;
+          window.__ucCheck.pageErrors.length = 0;
+        });
+      }
       const signals = await page.evaluate(() => window.__ucCheck);
       const unexpectedCsp = signals.csp.filter((v) => !/font-src|img-src/.test(v.directive));
       if (unexpectedCsp.length > 0) problems.push(`[${vp.name}] CSP violations: ${JSON.stringify(unexpectedCsp)}`);
@@ -1324,10 +1440,65 @@ async function main() {
     server.close();
   }
 
-  const report = { ok: problems.length === 0, problems, notes, at: new Date().toISOString() };
+  /*
+   * CSS 使用面审计结果（R7 遗留清理判据）。
+   *
+   * 只作为**报告**输出，不直接判定失败：一个类没在这次遍历里出现，
+   * 可能是"确实没人用了"，也可能是"只在某个稀有状态（权限拒绝、错误态）下才出现"。
+   * 删除前必须逐条复核，所以这里给出候选清单而不是自动删。
+   */
+  const cssAudit = await auditComponentCss(usedClasses);
+  notes.push(
+    `CSS 使用面：components.css 定义 ${cssAudit.defined} 个类，实际渲染出现 ${usedClasses.size} 个，未出现 ${cssAudit.unused.length} 个`,
+  );
+  if (cssAudit.unused.length > 0) {
+    /*
+     * 明确写成"候选"而不是"死代码"：没出现也可能是"只在某个没走到的状态下存在"
+     * （运行中的任务才有进度环，只有 MFA 步骤才有 OTP 输入）。
+     * 这份清单是给下一轮清理用的线索，不是删除依据。
+     */
+    notes.push("components.css 候选未使用类（需逐条复核状态可达性，不能直接删）：" + cssAudit.unused.join(", "));
+  }
+  if (cssAudit.resurrected.length > 0) {
+    problems.push("R7 已删除的页面头规则重新出现：" + cssAudit.resurrected.join(", ") + "（页面头双轨制回归）");
+  }
+
+  const report = { ok: problems.length === 0, problems, notes, cssAudit, at: new Date().toISOString() };
   await writeFile(join(OUT, "report.json"), JSON.stringify(report, null, 2), "utf8");
   console.log(JSON.stringify(report, null, 2));
   if (problems.length > 0) process.exit(1);
+}
+
+
+/**
+ * 把 `components.css` 里定义的选择器与实际渲染出现过的类名求差。
+ *
+ * 解析用正则而不是 CSS parser：只需要类名集合，不需要层叠信息，
+ * 引一个 parser 反而会把这个验收脚本变成一个需要维护依赖的项目。
+ * 代价是会多收一些东西（注释里的示例、属性选择器里的类名片段），
+ * 所以结果只作为**候选**，删之前逐条人工确认。
+ */
+async function auditComponentCss(used) {
+  const cssPath = resolve(here, "apps/user-console/src/styles/components.css");
+  const css = await readFile(cssPath, "utf8");
+  /* 去掉块注释，避免把注释里提到的类名算成"已定义"。 */
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const defined = new Set();
+  for (const match of withoutComments.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(match[1]);
+  const unused = [...defined].filter((name) => !used.has(name)).sort();
+
+  /*
+   * R7 已经删除的选择器不允许回来。
+   *
+   * 这一条比审计报告硬：审计只能说明"这次没渲染到"，而这里说明
+   * "用户端已经没有任何页面头组件了，这份覆盖规则是纯死代码"——
+   * 依据是 `check:uc-render` 在 14 条路由上对 `.page-head` 元素计数为 0 的断言。
+   * 谁要是把这组规则粘回来，页面头双轨制就回来了。
+   */
+  const removedInR7 = ["page-head", "page-head__title", "page-head__sub", "page-head__crumbs", "page-head__titlerow", "page-head__meta"];
+  const resurrected = removedInR7.filter((name) => defined.has(name));
+
+  return { defined: defined.size, used: used.size, unused, resurrected };
 }
 
 main().catch((err) => {
