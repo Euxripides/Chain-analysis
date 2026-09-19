@@ -212,6 +212,16 @@ async function main() {
         `LOD：far=${report.renderedEdgesFar} 边 · near=${report.renderedEdgesNear} 边 · 预算档位=${report.budgetModeForProbe} · 保留主干=${report.farKeepsHeaviest}`,
       );
     }
+    /* 高亮边的实际颜色（§30.11）。 */
+    if (report.highlightChecks === "webgl2-unavailable") {
+      notes.push("高亮边颜色检查跳过：WebGL2 不可用");
+    } else if (report.highlightChecks === "no-sample-in-view") {
+      problems.push("高亮边颜色检查没有采到任何样点（夹具或相机设置有误，判据形同虚设）");
+    } else if (!report.highlightPixelMatch) {
+      problems.push("高亮路径的边没有画出 edgeActiveColor（" + report.highlightChecks + "）：" + report.highlightPixelRgb);
+    } else {
+      notes.push("高亮边颜色：" + report.highlightPixelsLit + "/" + report.highlightSamples + " 个边中点匹配 edgeActiveColor");
+    }
     /* 标签（§30.8 / G2「基础 label」）。 */
     if (report.labelChecks === "webgl2-unavailable") {
       notes.push("标签检查跳过：WebGL2 不可用");

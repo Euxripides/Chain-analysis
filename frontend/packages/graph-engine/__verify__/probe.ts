@@ -102,6 +102,22 @@ interface ProbeReport {
   /** 标签锚点必须在节点的**右侧**（左对齐文本块），不能压在节点上。 */
   labelAnchoredRightOfNode: boolean;
   labelChecks: string;
+  /* 高亮边着色（§30.11）。 */
+  /**
+   * 高亮路径**边中点**的像素是否等于 `edgeActiveColor`（按 alpha 混合到背景上）。
+   *
+   * 这是唯一能抓到"顶点缓冲布局写错"的判据：
+   * 布局错位时边数、高亮边数、粒子数**全都正常**，
+   * 只有真正读回像素才会发现画出来的颜色/透明度根本不是那个颜色。
+   */
+  highlightPixelMatch: boolean;
+  /** 实测与期望的 RGB，失败时直接进报告，不用再去猜。 */
+  highlightPixelRgb: string;
+  /** 采样到的不是背景色的边中点数（0 = 高亮完全没画出来）。 */
+  highlightPixelsLit: number;
+  /** 采样了几个边中点。 */
+  highlightSamples: number;
+  highlightChecks: string;
 }
 
 declare global {
@@ -199,6 +215,11 @@ async function run(): Promise<ProbeReport> {
     labelPixelsSublabel: 0,
     labelAnchoredRightOfNode: false,
     labelChecks: "",
+    highlightPixelMatch: false,
+    highlightPixelRgb: "",
+    highlightPixelsLit: 0,
+    highlightSamples: 0,
+    highlightChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -264,6 +285,9 @@ async function run(): Promise<ProbeReport> {
 
   /* 5b. 标签（§30.8 / G2 基础 label）。 */
   await runLabelChecks(report);
+
+  /* 5c. 高亮边的**实际颜色**（§30.11）。 */
+  await runHighlightColorCheck(report);
 
   /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
@@ -905,6 +929,157 @@ async function inkInBox(engine: GraphEngine, rect: InkBox | null): Promise<numbe
   }
 }
 
+
+/* ------------------------------------------------------- 高亮边的实际颜色（§30.11） */
+
+/**
+ * 高亮路径的边，画出来到底是什么颜色？
+ *
+ * 背景：主边缓冲与高亮边缓冲用的是**同一个着色器**（`EDGE_VS` 里 `a_rgba` 是 vec4），
+ * 但两个缓冲是分别装配的。只要有一个装配错了 stride / 偏移 / 分量个数，
+ * 结果就是"边的数量对、高亮边的数量对、粒子数量也对，唯独颜色不是那个颜色"——
+ * 而颜色恰恰是路径高亮**唯一**的表达方式。所以这里必须读回像素。
+ */
+async function runHighlightColorCheck(report: ProbeReport): Promise<void> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;width:480px;height:240px;";
+  document.body.appendChild(host);
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  host.appendChild(canvas);
+
+  /* 一条水平的三段链：边中点落在整数像素网格上，采样最稳。 */
+  const chain = [
+    { id: "a", kind: "address" as const, x: -120, y: 0, size: 4 },
+    { id: "b", kind: "address" as const, x: 0, y: 0, size: 4 },
+    { id: "c", kind: "address" as const, x: 120, y: 0, size: 4 },
+  ];
+  const chainEdges = [
+    { id: "ab", source: "a", target: "b" },
+    { id: "bc", source: "b", target: "c" },
+  ];
+
+  const engine = new GraphEngine({ nodes: chain, edges: chainEdges });
+  if (!engine.mount(canvas)) {
+    report.highlightChecks = "webgl2-unavailable";
+    host.remove();
+    return;
+  }
+  const waitFrames = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+
+  /* 把节点缩到很小、并把相机拉到"节点是几个像素的点"的程度，
+     这样采样边中点时不会碰到节点本体。 */
+  engine.camera.state.scale = 1.4;
+  engine.fitAll();
+  engine.invalidate();
+  await waitFrames();
+
+  const path = engine.findPath("a", "c", { directed: false });
+  if (!path) {
+    report.highlightChecks = "path-not-found";
+    engine.dispose();
+    host.remove();
+    return;
+  }
+  engine.highlightPath(path);
+  engine.invalidate();
+  await waitFrames();
+
+  const url = engine.exportView();
+  if (!url) {
+    report.highlightChecks = "export-failed";
+    engine.dispose();
+    host.remove();
+    return;
+  }
+  let pixels: ImageData;
+  try {
+    pixels = await decodePng(url);
+  } catch {
+    report.highlightChecks = "png-decode-failed";
+    engine.dispose();
+    host.remove();
+    return;
+  }
+
+  /* 期望色：`DEFAULT_STYLE.edgeActiveColor` = #0A7191。 */
+  const expected = [10, 113, 145];
+  const background = BG;
+  const viewport = engine.viewport();
+  const dprScale = pixels.width / Math.max(1, viewport.width);
+
+  let lit = 0;
+  let samples = 0;
+  let worstText = "";
+  let wrongHue = 0;
+  for (const edge of path.edges) {
+    const s = engine.store.edgeSource[edge];
+    const t = engine.store.edgeTarget[edge];
+    const mx = (engine.store.positions[s * 2] + engine.store.positions[t * 2]) / 2;
+    const my = (engine.store.positions[s * 2 + 1] + engine.store.positions[t * 2 + 1]) / 2;
+    const [sx, sy] = engine.camera.worldToScreen(mx, my, viewport.width, viewport.height);
+    /* 采样点必须落在画布内，否则量到的是"没画"而不是"颜色错"。 */
+    if (sx < 2 || sy < 2 || sx > viewport.width - 2 || sy > viewport.height - 2) continue;
+    samples += 1;
+    const x = Math.round(sx * dprScale);
+    const y = Math.round(sy * dprScale);
+    const i = (y * pixels.width + x) * 4;
+    const rgb = [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+
+    /*
+     * 不能直接比 RGB 相等：WebGL 的线宽固定为 1 像素，而画布开了 antialias，
+     * 一条水平线即使落在像素正中，覆盖率也常常只有 50%
+     * ——实测值本来就是"期望色与背景的混合"，不是期望色本身。
+     *
+     * 所以判据是：**这个像素必须落在"背景 → 期望色"这条线段上**。
+     * 对每个通道解出混合系数 t = (实测 - 背景) / (期望 - 背景)，
+     * 三个通道的 t 必须彼此一致（否则就是另一个色相），且 t 不能太小
+     * （高亮没画出来时，量到的是底层普通边那一丁点淡色，t 只有 0.04）。
+     */
+    const ts: number[] = [];
+    let degenerate = false;
+    for (let c = 0; c < 3; c += 1) {
+      const span = expected[c] - background[c];
+      if (Math.abs(span) < 8) continue;
+      ts.push((rgb[c] - background[c]) / span);
+    }
+    if (ts.length < 2) {
+      degenerate = true;
+    }
+    const tMin = Math.min(...ts);
+    const tMax = Math.max(...ts);
+    const consistent = !degenerate && tMax - tMin <= 0.18;
+    const strong = !degenerate && tMin >= 0.35;
+    if (consistent && strong) {
+      lit += 1;
+    } else {
+      if (!consistent) wrongHue += 1;
+      if (!worstText) {
+        worstText = `(${sx.toFixed(0)},${sy.toFixed(0)}) 实测 rgb(${rgb.join(",")}) 期望 rgb(${expected.join(",")}) · t=[${ts
+          .map((v) => v.toFixed(2))
+          .join(",")}]`;
+      }
+    }
+  }
+
+  report.highlightSamples = samples;
+  report.highlightPixelsLit = lit;
+  report.highlightPixelMatch = samples > 0 && lit === samples;
+  report.highlightPixelRgb = worstText || `全部 ${samples} 个采样点都落在"背景→rgb(${expected.join(",")})"的混合线上`;
+  report.highlightChecks =
+    samples === 0
+      ? "no-sample-in-view"
+      : report.highlightPixelMatch
+        ? "ok"
+        : wrongHue > 0
+          ? "hue-mismatch"
+          : "coverage-too-low";
+
+  engine.dispose();
+  host.remove();
+}
+
 run()
   .then((report) => {
     window.__graphProbe = report;
@@ -927,6 +1102,7 @@ run()
       labelsNear: 0, labelsMid: 0, labelsFar: 0, labelsFarPinned: 0,
       labelGlyphs: 0, labelDropped: 0, labelPixelsNear: 0, labelPixelsFar: 0,
       labelPixelsBackground: 0, labelPixelsSublabel: 0, labelAnchoredRightOfNode: false, labelChecks: "",
+      highlightPixelMatch: false, highlightPixelRgb: "", highlightPixelsLit: 0, highlightSamples: 0, highlightChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });

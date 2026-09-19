@@ -480,7 +480,16 @@ export class WebGLRenderer {
   uploadHighlight(store: GraphStore, edges: Uint32Array, color: [number, number, number]): void {
     const gl = this.gl;
     if (!gl || this.contextLost) return;
-    const data = new Float32Array(edges.length * 2 * 4);
+    /*
+     * 顶点布局必须与主边缓冲**逐字节一致**：(x, y, r, g, b, a) 共 6 个 float，
+     * 因为两者共用同一个着色器（`EDGE_VS` 里 `a_rgba` 是 vec4）。
+     *
+     * 这里曾经只按 4 个 float 分配并只写了 (x, y, r, g)：
+     * 绘制时按 stride 16 / 偏移 8 读 vec4，于是 **蓝色通道与 alpha 读到了下一个顶点的 x/y**。
+     * 典型布局里 y 恒为 0，所以整条高亮路径的 alpha 是 0——
+     * 高亮边完全不可见，而"高亮边数量""粒子数量"这些断言**全都照常通过**。
+     */
+    const data = new Float32Array(edges.length * 2 * 6);
     let cursor = 0;
     for (let i = 0; i < edges.length; i += 1) {
       const edge = edges[i];
@@ -491,6 +500,10 @@ export class WebGLRenderer {
         data[cursor++] = store.positions[node * 2 + 1];
         data[cursor++] = color[0];
         data[cursor++] = color[1];
+        data[cursor++] = color[2];
+        /* 高亮边是**不透明**的：它是"资金实际走了哪条链路"的唯一表达，
+           半透明会让它在叠加于普通边之上时几乎看不出来。 */
+        data[cursor++] = 1;
       }
     }
     this.highlightVertexCount = edges.length * 2;
@@ -579,9 +592,9 @@ export class WebGLRenderer {
       const hlPos = gl.getAttribLocation(this.edgeProgram, "a_pos");
       const hlRgba = gl.getAttribLocation(this.edgeProgram, "a_rgba");
       gl.enableVertexAttribArray(hlPos);
-      gl.vertexAttribPointer(hlPos, 2, gl.FLOAT, false, 16, 0);
+      gl.vertexAttribPointer(hlPos, 2, gl.FLOAT, false, 24, 0);
       gl.enableVertexAttribArray(hlRgba);
-      gl.vertexAttribPointer(hlRgba, 4, gl.FLOAT, false, 16, 8);
+      gl.vertexAttribPointer(hlRgba, 4, gl.FLOAT, false, 24, 8);
       gl.drawArrays(gl.LINES, 0, this.highlightVertexCount);
       gl.disableVertexAttribArray(hlPos);
       gl.disableVertexAttribArray(hlRgba);
