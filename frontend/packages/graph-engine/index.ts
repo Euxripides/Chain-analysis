@@ -11,7 +11,8 @@
  *   - React 不渲染节点（§30.1）：本包不依赖 React；
  *   - 数据是 TypedArray + 字符串字典池（§30.4），字符串不复制 N 份；
  *   - 命中测试走拾取帧缓冲，不做 DOM hitbox（§30.7）；
- *   - 生命周期由 `dispose()` 收口（§63C）。
+ *   - 生命周期由 `dispose()` 收口（§63C）；
+ *   - 标签是 GPU 字形图集（§30.2 `LabelProgram`），不是 DOM 覆盖层（§30.1）。
  */
 export { GraphEngine } from "./core/GraphEngine";
 export type { GraphEngineEvents, GraphEngineOptions } from "./core/GraphEngine";
@@ -41,6 +42,12 @@ export { PLAYBACK_SPEEDS, PlaybackController } from "./interaction/playback";
 export type { PlaybackOptions, PlaybackState } from "./interaction/playback";
 export { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram } from "./renderer/ParticleProgram";
 export type { ParticleAppearance } from "./renderer/ParticleProgram";
+export { LabelAtlas } from "./renderer/LabelAtlas";
+export type { AtlasStats, GlyphBox } from "./renderer/LabelAtlas";
+export { LabelProgram } from "./renderer/LabelProgram";
+export type { LabelInstance } from "./renderer/LabelProgram";
+export { LabelLayer, orderByDegree, shortId } from "./labels/LabelLayer";
+export type { LabelLayerOptions, LabelPriority } from "./labels/LabelLayer";
 export {
   LOD_MID_SCALE,
   LOD_NEAR_SCALE,

@@ -26,7 +26,12 @@ export interface LodPolicy {
   minEdgeWeight: number;
   /** 节点半径的视觉放大（世界单位不变，只在屏幕空间调整观感）。 */
   nodeScale: number;
-  /** 是否绘制标签。渲染器当前尚未实现标签，字段先占位以免以后再加时漏配。 */
+  /**
+   * 这一档是否绘制标签（§30.8）。
+   *
+   * 由 `LabelLayer` 读取，是"哪一档该有标签"的**唯一**来源——
+   * 标签预算在别处再写一遍就会和这里漂移。
+   */
   labels: boolean;
 }
 

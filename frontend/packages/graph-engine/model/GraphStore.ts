@@ -43,6 +43,11 @@ export interface GraphNodeInput {
   id: string;
   kind?: NodeKindName | string;
   label?: string;
+  /**
+   * 副标签（§30.8 近景）：时间透镜下的 "首次出现 → 最近出现"、聚类节点下的 "N 个节点" 等。
+   * 它和 label 一样只存字典下标——同一句 "12 个节点" 在图上出现上百次是常态。
+   */
+  sublabel?: string;
   /** 世界坐标；缺省时由布局（worker）填充，未填充前先落在原点。 */
   x?: number;
   y?: number;
@@ -74,6 +79,8 @@ export class GraphStore {
   /** 节点 id 的字典下标。 */
   nodeIds = new Uint32Array(0);
   nodeLabels = new Uint32Array(0);
+  /** 副标签的字典下标；没有副标签时与 nodeIds 相同（读取时据此判定为空）。 */
+  nodeSublabels = new Uint32Array(0);
 
   edgeSource = new Uint32Array(0);
   edgeTarget = new Uint32Array(0);
@@ -118,6 +125,17 @@ export class GraphStore {
     return label === id ? "" : this.stringAt(label);
   }
 
+  sublabelAt(nodeIndex: number): string {
+    const id = this.nodeIds[nodeIndex] ?? 0;
+    const sublabel = this.nodeSublabels[nodeIndex] ?? 0;
+    return sublabel === id ? "" : this.stringAt(sublabel);
+  }
+
+  /** 节点类型名（§30.9）。给渲染层的类型标签用，业务代码不要拿它做判断。 */
+  kindLabelAt(nodeIndex: number): string {
+    return NODE_KIND_NAMES[this.kinds[nodeIndex] ?? 0] ?? "";
+  }
+
   indexOfNodeId(id: string): number {
     const dict = this.stringToIndex.get(id);
     if (dict === undefined) return -1;
@@ -141,6 +159,7 @@ export class GraphStore {
     this.flags = new Uint16Array(nodes.length);
     this.nodeIds = new Uint32Array(nodes.length);
     this.nodeLabels = new Uint32Array(nodes.length);
+    this.nodeSublabels = new Uint32Array(nodes.length);
 
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
@@ -151,6 +170,8 @@ export class GraphStore {
       const idIndex = this.intern(node.id);
       this.nodeIds[i] = idIndex;
       this.nodeLabels[i] = node.label ? this.intern(node.label) : idIndex;
+      /* 与 label 同一套规则：缺省填 id 下标，读取时判定为空。 */
+      this.nodeSublabels[i] = node.sublabel ? this.intern(node.sublabel) : idIndex;
       this.idToNode.set(idIndex, i);
     }
 
@@ -225,7 +246,7 @@ export class GraphStore {
   approximateBytes(): number {
     const typed =
       this.positions.byteLength + this.sizes.byteLength + this.kinds.byteLength + this.flags.byteLength +
-      this.nodeIds.byteLength + this.nodeLabels.byteLength + this.edgeSource.byteLength +
+      this.nodeIds.byteLength + this.nodeLabels.byteLength + this.nodeSublabels.byteLength + this.edgeSource.byteLength +
       this.edgeTarget.byteLength + this.edgeWeight.byteLength + this.edgeAmount.byteLength +
       this.outOffset.byteLength + this.outEdges.byteLength + this.inOffset.byteLength + this.inEdges.byteLength;
     let strings = 0;

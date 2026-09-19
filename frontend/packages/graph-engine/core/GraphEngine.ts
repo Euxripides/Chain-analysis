@@ -8,6 +8,8 @@ import { findPath, type FindPathOptions, type GraphPath } from "../model/paths";
 import { PlaybackController } from "../interaction/playback";
 import { decideBudget, type BudgetDecision, type BudgetLimits, type RenderMode } from "../perf/budget";
 import { lodLevelFor, policyFor, type LodLevel } from "../perf/lod";
+import { LabelLayer, type LabelLayerOptions } from "../labels/LabelLayer";
+import type { LabelInstance } from "../renderer/LabelProgram";
 
 /**
  * 图谱引擎门面（用户端重构规范 V4 §30.2 / §30.3）
@@ -35,6 +37,8 @@ export interface GraphEngineEvents extends Record<string, unknown> {
   "path:complete": { nodeIds: string[] };
   /** 细节层次切换（远景 / 中景 / 近景，§30.8）。 */
   "lod:change": { level: LodLevel; scale: number; renderedEdges: number };
+  /** 标签集合被重建（§30.8）。验收用它断言"远景下标签确实消失了"，而不是靠截图。 */
+  "labels:change": { count: number; glyphs: number; dropped: number; lod: LodLevel };
 }
 
 export interface GraphEngineOptions {
@@ -51,6 +55,10 @@ export interface GraphEngineOptions {
   hiddenFps?: number;
   /** 覆盖预算阈值（默认取 §30.15 的固定夹具配比）。 */
   budgetLimits?: BudgetLimits;
+  /** 标签策略（§30.8）：每档预算 / 重建阈值 / 最小可标注尺寸。 */
+  labels?: LabelLayerOptions;
+  /** 初始标签开关，默认开。 */
+  showLabels?: boolean;
 }
 
 export class GraphEngine {
@@ -80,6 +88,16 @@ export class GraphEngine {
   private currentLod: LodLevel | null = null;
 
   private renderer: WebGLRenderer | null = null;
+  /**
+   * 标签层（§30.8）。
+   *
+   * 它持有自己的图集画布，所以**只能在 mount() 里创建**——
+   * 构造 GraphEngine 时不保证有 DOM，而这个类要能在 worker / 测试环境里被 new 出来。
+   */
+  private labelLayer: LabelLayer | null = null;
+  private readonly labelOptions: LabelLayerOptions;
+  /** 节点标签开关（页面工具栏的"显示节点标签"）。 */
+  private showLabels = true;
   private canvas: HTMLCanvasElement | null = null;
   private container: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -113,12 +131,16 @@ export class GraphEngine {
   private readonly onContextRestored = () => {
     this.renderer?.handleContextRestored();
     this.renderer?.upload(this.store);
+    /* 上下文恢复会丢掉图集纹理，强制下次重建把标签重新传上去。 */
+    this.labelLayer?.invalidate(this.store);
     this.frameDirty = true;
   };
 
   constructor(options: GraphEngineOptions) {
     this.maxDpr = options.maxDpr ?? 2;
     this.hiddenFps = options.hiddenFps ?? 4;
+    this.labelOptions = options.labels ?? {};
+    this.showLabels = options.showLabels ?? true;
     this.store.load(options.nodes, options.edges);
     if (options.style) this.pendingStyle = options.style;
     this.budget = decideBudget(options.nodes.length, options.edges.length, options.budgetLimits);
@@ -153,8 +175,11 @@ export class GraphEngine {
     }
     this.renderer.upload(this.store);
     this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    this.labelLayer = new LabelLayer(this.labelOptions);
+    this.labelLayer.invalidate(this.store);
     /* 挂载后立刻按当前缩放定档：首帧就该是正确规模，而不是"等用户缩一下才对"。 */
     this.syncLod();
+    this.syncLabels();
 
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("pointermove", this.onPointerMove);
@@ -209,6 +234,8 @@ export class GraphEngine {
 
     /* 细节层次：由相机缩放决定，变化时调整边预算（§30.8）。 */
     this.syncLod();
+    /* 标签：只在"看得见的集合"真的变了时才重建，平移本身不产生额外开销。 */
+    this.syncLabels();
 
     const started = performance.now();
     this.renderer?.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr(), {
@@ -242,6 +269,7 @@ export class GraphEngine {
     this.store.load(nodes, edges);
     this.selected.clear();
     this.renderer?.upload(this.store);
+    this.labelLayer?.invalidate(this.store);
     this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
     this.frameDirty = true;
     this.events.emit("selection:change", { nodeIds: [] });
@@ -253,13 +281,26 @@ export class GraphEngine {
     const mergedEdges = [...this.edgesSnapshot(), ...edges];
     this.store.load(mergedNodes, mergedEdges);
     this.renderer?.upload(this.store);
+    this.labelLayer?.invalidate(this.store);
     this.frameDirty = true;
   }
 
   private nodesSnapshot(): GraphNodeInput[] {
     const out: GraphNodeInput[] = [];
     for (let i = 0; i < this.store.nodeCount; i += 1) {
-      out.push({ id: this.store.idAt(i), x: this.store.positions[i * 2], y: this.store.positions[i * 2 + 1] });
+      /*
+       * 快照必须带上 label / sublabel / kind / size：
+       * 增量补丁重建整个 store，少带一个字段就等于**每一次实时新增交易都把全图标签抹掉**。
+       */
+      out.push({
+        id: this.store.idAt(i),
+        x: this.store.positions[i * 2],
+        y: this.store.positions[i * 2 + 1],
+        label: this.store.labelAt(i) || undefined,
+        sublabel: this.store.sublabelAt(i) || undefined,
+        kind: this.store.kindLabelAt(i),
+        size: this.store.sizes[i],
+      });
     }
     return out;
   }
@@ -520,6 +561,79 @@ export class GraphEngine {
     });
   }
 
+  /**
+   * 节点标签开关（§30.8）。
+   *
+   * 关闭时**选中/悬停/路径节点的标签仍然显示**——这个开关控制的是"背景标签密度"，
+   * 不是"能不能看到我正在操作的东西"。
+   */
+  setLabelVisibility(visible: boolean): void {
+    if (this.showLabels === visible) return;
+    this.showLabels = visible;
+    this.frameDirty = true;
+  }
+
+  get labelVisibility(): boolean {
+    return this.showLabels;
+  }
+
+  /**
+   * 重建标签并提交给渲染器。
+   *
+   * 这个函数在**每帧**都会被调用，所以第一件事必须是廉价的否决：
+   * `LabelLayer.build` 内部先比对相机锚点与档位，没变就直接返回 false，
+   * 真正的扫描（O(可见节点数)）只在视野实质移动后发生。
+   */
+  private syncLabels(): void {
+    const layer = this.labelLayer;
+    const renderer = this.renderer;
+    if (!layer || !renderer) return;
+    const rebuilt = layer.build(this.store, this.camera, this.cssWidth(), this.cssHeight(), {
+      lod: this.lod,
+      showLabels: this.showLabels,
+      pinned: this.pinnedLabelNodes(),
+    });
+    if (!rebuilt) return;
+    renderer.commitLabels(layer.current, layer.atlas.canvas);
+    this.events.emit("labels:change", {
+      count: renderer.labelCount,
+      glyphs: layer.atlasStats.glyphs,
+      dropped: layer.atlasStats.dropped,
+      lod: this.lod,
+    });
+  }
+
+  /**
+   * 必须始终带标签的节点：选中 / 悬停 / 路径上的节点。
+   *
+   * 这些标签不受 LOD 预算约束（远景也不例外）：用户刚刚点过它们，
+   * 把名字藏起来是明确的可用性缺陷，而且现有 SVG 的
+   * `labelVisible = showNodeLabels || selected || boxed || onPath` 就是这个语义。
+   */
+  private pinnedLabelNodes(): number[] {
+    const pinned = new Set<number>(this.selected);
+    if (this.hoveredNode >= 0) pinned.add(this.hoveredNode);
+    const path = this.playback.path;
+    if (path) for (const index of path.nodes) pinned.add(index);
+    return [...pinned];
+  }
+
+  /** 当前提交给 GPU 的标签实例数量（不含被渲染器丢弃的情况）。 */
+  get labelCount(): number {
+    return this.renderer?.labelCount ?? 0;
+  }
+
+  /**
+   * 当前提交给 GPU 的标签实例。
+   *
+   * 给验收用：只有拿到`锚点 + 行偏移 + 像素尺寸`才能算出
+   * "这条文字应该出现在哪个屏幕矩形里"，进而去导出的 PNG 上数像素——
+   * 那是"文字真的被 GPU 光栅化出来了"的直接证据，比断言实例数强得多。
+   */
+  labelInstances(): readonly LabelInstance[] {
+    return this.labelLayer?.current ?? [];
+  }
+
   /** 当前渲染模式（full / aggregate / limit，§30.15）。 */
   get renderMode(): RenderMode {
     return this.budget.mode;
@@ -545,6 +659,11 @@ export class GraphEngine {
     renderedEdges: number;
     lod: LodLevel;
     renderMode: RenderMode;
+    /** 当前真正会绘制的标签四边形数（含主/副/类型标签）。 */
+    labels: number;
+    /** 图集里栅格化成功的文字数与"放不下被丢弃"的数——丢弃不为 0 就是需要调大图集。 */
+    labelGlyphs: number;
+    labelDropped: number;
     /** 当前真正上传到 GPU 的高亮边数——不是算出来的，是渲染器的实际状态。 */
     highlightedEdges: number;
     /** 当前真正会绘制的粒子实例数。 */
@@ -560,6 +679,9 @@ export class GraphEngine {
       renderedEdges: this.renderer?.renderedEdges ?? 0,
       lod: this.lod,
       renderMode: this.budget.mode,
+      labels: this.renderer?.labelCount ?? 0,
+      labelGlyphs: this.labelLayer?.atlasStats.glyphs ?? 0,
+      labelDropped: this.labelLayer?.atlasStats.dropped ?? 0,
     };
   }
 

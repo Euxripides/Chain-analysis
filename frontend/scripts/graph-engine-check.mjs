@@ -212,6 +212,46 @@ async function main() {
         `LOD：far=${report.renderedEdgesFar} 边 · near=${report.renderedEdgesNear} 边 · 预算档位=${report.budgetModeForProbe} · 保留主干=${report.farKeepsHeaviest}`,
       );
     }
+    /* 标签（§30.8 / G2「基础 label」）。 */
+    if (report.labelChecks === "webgl2-unavailable") {
+      notes.push("标签检查跳过：WebGL2 不可用");
+    } else {
+      /*
+       * 这一组判据的核心是 labelPixels*——它们是从 exportView 的 PNG 上
+       * **逐像素数出来的**。"实例数正确但文字没画出来"（着色器写错、图集传错）
+       * 只有像素判据能抓到，实例数会照常通过。
+       */
+      if (report.labelsNear <= 0) {
+        problems.push("近景下没有任何标签实例（§30.8 近景应显示地址短值 / entity tag）");
+      }
+      if (report.labelPixelsNear <= 0) {
+        problems.push("近景导出图里，主标签的屏幕矩形内一个非背景像素都没有——标签没有真正被 GPU 画出来");
+      }
+      if (!report.labelAnchoredRightOfNode) {
+        problems.push("标签锚点没有落在节点右侧（左对齐文本块的排版约束）");
+      }
+      if (report.labelPixelsBackground !== 0) {
+        problems.push("对照区域（确定无内容）出现 " + report.labelPixelsBackground + " 个非背景像素，像素判据本身不可信");
+      }
+      if (report.labelPixelsFar !== 0) {
+        problems.push("远景下同一块位置仍有 " + report.labelPixelsFar + " 个标签像素（§30.8 远景不显示 label）");
+      }
+      if (report.labelsFar !== 0) problems.push("远景下标签实例数应为 0，实际 " + report.labelsFar);
+      if (report.labelsFarPinned <= 0) {
+        problems.push("选中节点在远景下也丢了标签——固定显示的标签不应受档位预算约束");
+      }
+      if (report.labelsMid <= 0 || report.labelsMid > report.labelsNear) {
+        problems.push("中景标签数 " + report.labelsMid + " 不合理（应 > 0 且 <= 近景 " + report.labelsNear + "）");
+      }
+      if (report.labelDropped !== 0) {
+        problems.push("图集放不下 " + report.labelDropped + " 条文字——标签会静默消失，需要调大图集");
+      }
+      notes.push(
+        "标签：近景 " + report.labelsNear + " 条 / " + report.labelPixelsNear + " 像素 · 副标签 " +
+          report.labelPixelsSublabel + " 像素 · 中景 " + report.labelsMid + " 条 · 远景 " + report.labelsFar +
+          " 条（选中时 " + report.labelsFarPinned + " 条） · 图集 " + report.labelGlyphs + " 字形",
+      );
+    }
     if (consoleErrors.length > 0) problems.push("console/pageerror：" + JSON.stringify(consoleErrors.slice(0, 3)));
 
     const result = { ok: problems.length === 0, problems, notes, report };

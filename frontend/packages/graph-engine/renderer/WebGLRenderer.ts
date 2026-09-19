@@ -1,6 +1,7 @@
 import { Camera } from "../interaction/camera";
 import { NODE_FLAG, type GraphStore } from "../model/GraphStore";
 import { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram, type ParticleAppearance } from "./ParticleProgram";
+import { LabelProgram, type LabelInstance } from "./LabelProgram";
 
 /**
  * WebGL2 渲染器（用户端重构规范 V4 §30.6 / §30.7）
@@ -225,6 +226,8 @@ export class WebGLRenderer {
   private highlightVertexCount = 0;
   private particles: ParticleProgram | null = null;
   private particleAppearance: ParticleAppearance = DEFAULT_PARTICLE_APPEARANCE;
+  private labels: LabelProgram | null = null;
+  private labelOpacity = 1;
 
   private instanceCount = 0;
   private edgeVertexCount = 0;
@@ -289,6 +292,16 @@ export class WebGLRenderer {
       console.error("[graph-engine] particle program unavailable", error);
       this.particles = null;
     }
+    /*
+     * 标签同样是增强项：节点形状与颜色已经承载了类型信息，
+     * 标签程序编译失败时图谱照常可读，只是少了文字（§30.6）。
+     */
+    try {
+      this.labels = new LabelProgram(gl);
+    } catch (error) {
+      console.error("[graph-engine] label program unavailable", error);
+      this.labels = null;
+    }
   }
 
   /** 上下文恢复后重建全部 GPU 资源（§63C contextrestored）。 */
@@ -302,6 +315,29 @@ export class WebGLRenderer {
 
   handleContextLost(): void {
     this.contextLost = true;
+  }
+
+  /**
+   * 提交标签（§30.8）。
+   *
+   * 图集纹理**只在这里重传**——标签集合变化时才调用，不在每帧。
+   * 传 `atlas` 为 null 表示"复用上一次的图集纹理，只换实例"。
+   */
+  commitLabels(instances: readonly LabelInstance[], atlas: HTMLCanvasElement | null, opacity = 1): void {
+    if (!this.labels) return;
+    this.labelOpacity = opacity;
+    if (atlas) this.labels.uploadAtlas(atlas);
+    this.labels.upload(instances as LabelInstance[]);
+  }
+
+  /** 清空标签（远景无标签 / 关闭标签开关时）。 */
+  clearLabels(): void {
+    this.labels?.clear();
+  }
+
+  /** 当前真正会绘制的标签四边形数（验收断言用，不是估算值）。 */
+  get labelCount(): number {
+    return this.labels?.count ?? 0;
   }
 
   /** 上传图数据（几何 + 每节点实例属性）。 */
@@ -567,6 +603,14 @@ export class WebGLRenderer {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.instanceCount);
       this.unbindInstancedAttributes(this.nodeProgram);
     }
+
+    /*
+     * 标签画在节点之上：它是阅读层，被节点压住就失去意义。
+     * 位置换算在顶点着色器里做（屏幕尺寸恒定），所以平移/缩放不影响这里提交的数据。
+     */
+    if (this.labels && this.labels.count > 0) {
+      this.labels.draw(camera, width, height, this.labelOpacity);
+    }
   }
 
   /**
@@ -713,6 +757,8 @@ export class WebGLRenderer {
     this.disposePickTarget();
     this.particles?.dispose();
     this.particles = null;
+    this.labels?.dispose();
+    this.labels = null;
     for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.kindBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer]) {
       if (buffer) gl.deleteBuffer(buffer);
     }

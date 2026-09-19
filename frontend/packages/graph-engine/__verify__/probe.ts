@@ -10,7 +10,7 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { GraphEngine, GraphStore, bfsLayers, decideBudget, findPath, handleLayoutRequest, lodLevelFor, runLayout } from "../index";
-import type { LayoutMode, LayoutRequest } from "../index";
+import type { GraphEdgeInput, GraphNodeInput, LayoutMode, LayoutRequest } from "../index";
 import { FundGraph } from "@chain/graph-react";
 
 interface ProbeReport {
@@ -74,6 +74,34 @@ interface ProbeReport {
   farKeepsHeaviest: boolean;
   budgetModeForProbe: string;
   lodChecks: string;
+  /* 标签（§30.8 / G2「基础 label」）。 */
+  /** 近景下提交给 GPU 的标签四边形数。 */
+  labelsNear: number;
+  /** 中景下的标签数——必须 > 0 且 <= 近景（中景只给"重要节点"）。 */
+  labelsMid: number;
+  /** 远景下的标签数（无选中/悬停）：必须为 0。 */
+  labelsFar: number;
+  /** 远景下**选中**某个节点后的标签数：固定显示的标签不受档位预算约束。 */
+  labelsFarPinned: number;
+  /** 图集栅格化成功的文字数。 */
+  labelGlyphs: number;
+  /** 图集放不下而被丢弃的文字数——不为 0 说明图集需要调大。 */
+  labelDropped: number;
+  /**
+   * 标签矩形内**与背景不同**的像素数（从 exportView 的 PNG 上数出来的）。
+   * 这是"文字真的被 GPU 画出来了"的证据：实例数与图集都正确、
+   * 但着色器没画或者画在别处时，这个数是 0。
+   */
+  labelPixelsNear: number;
+  /** 远景同一区域的像素数，必须远小于近景。 */
+  labelPixelsFar: number;
+  /** 纯背景区域的像素数（对照样本），用来证明上面的判据不是"整张图都有噪点"。 */
+  labelPixelsBackground: number;
+  /** 副标签（sublabel）确实参与渲染：副标签行的像素数。 */
+  labelPixelsSublabel: number;
+  /** 标签锚点必须在节点的**右侧**（左对齐文本块），不能压在节点上。 */
+  labelAnchoredRightOfNode: boolean;
+  labelChecks: string;
 }
 
 declare global {
@@ -159,6 +187,18 @@ async function run(): Promise<ProbeReport> {
     farKeepsHeaviest: false,
     budgetModeForProbe: "",
     lodChecks: "",
+    labelsNear: 0,
+    labelsMid: 0,
+    labelsFar: 0,
+    labelsFarPinned: 0,
+    labelGlyphs: 0,
+    labelDropped: 0,
+    labelPixelsNear: 0,
+    labelPixelsFar: 0,
+    labelPixelsBackground: 0,
+    labelPixelsSublabel: 0,
+    labelAnchoredRightOfNode: false,
+    labelChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -221,6 +261,9 @@ async function run(): Promise<ProbeReport> {
    * 那不是产品缺陷，是测试顺序错了。
    */
   runPathChecks(report, engine);
+
+  /* 5b. 标签（§30.8 / G2 基础 label）。 */
+  await runLabelChecks(report);
 
   /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
@@ -626,6 +669,242 @@ async function runReactBridge(report: ProbeReport, nodes: ReturnType<typeof ring
   report.reactDisposedOnUnmount = engineRef === null;
 }
 
+
+/* ------------------------------------------------------------------ 标签（§30.8） */
+
+/** 背景色（`DEFAULT_STYLE.background` 的 0–255 形式），用来判定"这个像素上有没有东西"。 */
+const BG = [244, 248, 254];
+/** 与背景的曼哈顿距离超过这个值就算"有内容"。抗锯齿边缘会有中间色，阈值取小一点。 */
+const FG_DISTANCE = 24;
+
+function decodePng(url: string): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scratch = document.createElement("canvas");
+      scratch.width = image.width;
+      scratch.height = image.height;
+      const ctx = scratch.getContext("2d");
+      if (!ctx) {
+        reject(new Error("no 2d context"));
+        return;
+      }
+      ctx.drawImage(image, 0, 0);
+      resolve(ctx.getImageData(0, 0, image.width, image.height));
+    };
+    image.onerror = () => reject(new Error("png decode failed"));
+    image.src = url;
+  });
+}
+
+interface InkBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  canvasWidth: number;
+}
+
+/** 数一个屏幕矩形里"非背景"的像素数。坐标是 CSS 像素，内部按 DPR 折算到画布像素。 */
+function countInk(pixels: ImageData, rect: { x: number; y: number; width: number; height: number }): number {
+  const dpr = Math.max(1, Math.round(pixels.width / Math.max(1, rect.canvasWidth)));
+  const x0 = Math.max(0, Math.floor(rect.x * dpr));
+  const y0 = Math.max(0, Math.floor(rect.y * dpr));
+  const x1 = Math.min(pixels.width, Math.ceil((rect.x + rect.width) * dpr));
+  const y1 = Math.min(pixels.height, Math.ceil((rect.y + rect.height) * dpr));
+  let ink = 0;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * pixels.width + x) * 4;
+      const d = Math.abs(pixels.data[i] - BG[0]) + Math.abs(pixels.data[i + 1] - BG[1]) + Math.abs(pixels.data[i + 2] - BG[2]);
+      if (d > FG_DISTANCE) ink += 1;
+    }
+  }
+  return ink;
+}
+
+/**
+ * 标签验收。
+ *
+ * 判据的核心是**在导出的 PNG 上数像素**，而不是数实例：
+ * 实例数只能证明"CPU 认为该画 N 条标签"，证明不了着色器把它画对了位置。
+ * 因此这里先用 `labelInstances()` 算出每条文字**应该**出现的屏幕矩形
+ * （公式与顶点着色器一致：左边缘 = 节点屏幕位置 + 半径×scale + 间隙），
+ * 再去那个矩形里数非背景像素。
+ */
+async function runLabelChecks(report: ProbeReport): Promise<void> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;width:520px;height:380px;";
+  document.body.appendChild(host);
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  host.appendChild(canvas);
+
+  /*
+   * 夹具：一个带标签的枢纽节点 + 一圈带地址短值的叶子。
+   * 枢纽放在原点之外一点，避免它的标签压到叶子上——那样数像素会串味。
+   */
+  const hubId = "0x1234567890abcdef1234567890abcdef12345678";
+  const labelNodes: GraphNodeInput[] = [
+    { id: hubId, kind: "entity", label: "交易所热钱包", sublabel: "12.4 ETH", x: 0, y: 0, size: 28 },
+  ];
+  const labelEdges: GraphEdgeInput[] = [];
+  for (let i = 0; i < 6; i += 1) {
+    const angle = (i / 6) * Math.PI * 2;
+    const id = "0x" + (i + 1).toString(16).repeat(20).slice(0, 40);
+    /* 半径 40 而不是 150：近景（scale 3.2）下必须**留在视口内**，
+       否则"叶子没有标签"分不清是视口过滤生效还是短值回退没实现。 */
+    labelNodes.push({ id, kind: i % 2 === 0 ? "address" : "transaction", x: Math.cos(angle) * 40, y: Math.sin(angle) * 40, size: 9 });
+    labelEdges.push({ id: "le" + i, source: hubId, target: id });
+  }
+  /* 让枢纽的度数最高：中景预算只有几条，选出来的必须包含它。 */
+  for (let i = 0; i < 6; i += 1) labelEdges.push({ id: "lx" + i, source: labelNodes[1 + i].id, target: labelNodes[1 + ((i + 1) % 6)].id });
+
+  const engine = new GraphEngine({
+    nodes: labelNodes,
+    edges: labelEdges,
+    labels: { budget: { far: 0, mid: 3, near: 12 }, minNodePx: 2 },
+  });
+  if (!engine.mount(canvas)) {
+    report.labelChecks = "webgl2-unavailable";
+    host.remove();
+    return;
+  }
+
+  const waitFrames = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+
+  /* 近景：文字全部展开（含地址短值）。 */
+  engine.camera.state.scale = 3.2;
+  engine.camera.state.cx = 0;
+  engine.camera.state.cy = 0;
+  engine.invalidate();
+  await waitFrames();
+
+  const nearStats = engine.stats();
+  report.labelsNear = nearStats.labels;
+  report.labelGlyphs = nearStats.labelGlyphs;
+  report.labelDropped = nearStats.labelDropped;
+
+  const instances = engine.labelInstances();
+  const viewport = engine.viewport();
+  const inked = await inkOfPrimaryLabel(engine, instances, viewport);
+  report.labelPixelsNear = inked.primary;
+  report.labelPixelsSublabel = inked.sublabel;
+  report.labelPixelsBackground = inked.background;
+  report.labelAnchoredRightOfNode = inked.anchoredRight;
+  /*
+   * 记下近景下主标签的屏幕矩形。远景必须**在同一个矩形里**数像素——
+   * 否则"远景没有标签实例"会让这个判据变成空断言（矩形都不存在，当然数到 0）。
+   */
+  const nearBox = inked.primaryBox;
+
+  /* 中景：预算收紧，标签变少。 */
+  engine.camera.state.scale = 1.2;
+  engine.invalidate();
+  await waitFrames();
+  report.labelsMid = engine.stats().labels;
+
+  /* 远景：`LOD_POLICIES.far.labels === false`，一条标签都不该有。 */
+  engine.camera.state.scale = 0.05;
+  engine.invalidate();
+  await waitFrames();
+  report.labelsFar = engine.stats().labels;
+  report.labelPixelsFar = await inkInBox(engine, nearBox);
+
+  /* 远景 + 选中：固定显示的标签必须回来（§30.8 的例外，也是现有 SVG 的 labelVisible 语义）。 */
+  engine.setSelection([0]);
+  engine.invalidate();
+  await waitFrames();
+  report.labelsFarPinned = engine.stats().labels;
+
+  /* 关掉标签开关：背景标签消失，但选中的那个仍然在。 */
+  engine.setLabelVisibility(false);
+  engine.invalidate();
+  await waitFrames();
+  report.labelChecks = engine.stats().labels > 0 ? "ok" : "pinned-label-missing";
+
+  engine.dispose();
+  host.remove();
+}
+
+/**
+ * 在导出的 PNG 上数枢纽节点主/副标签矩形内的像素。
+ *
+ * 屏幕矩形由**与顶点着色器相同的公式**算出：
+ *   left = worldToScreen(node).x + radius * scale + gap
+ *   top  = worldToScreen(node).y + rowPx
+ * 如果着色器里的换算是错的（例如 y 轴方向反了），文字就会落在矩形外，这里会数到 0。
+ */
+async function inkOfPrimaryLabel(
+  engine: GraphEngine,
+  instances: readonly { x: number; y: number; anchorRadius: number; gapPx: number; rowPx: number; widthPx: number; heightPx: number }[],
+  viewport: { width: number; height: number; dpr: number },
+): Promise<{ primary: number; sublabel: number; background: number; anchoredRight: boolean; primaryBox: InkBox | null }> {
+  const empty = { primary: 0, sublabel: 0, background: 0, anchoredRight: false, primaryBox: null };
+  const url = engine.exportView();
+  if (!url) return empty;
+  let pixels: ImageData;
+  try {
+    pixels = await decodePng(url);
+  } catch {
+    return empty;
+  }
+
+  const hubIndex = engine.store.indexOfNodeId("0x1234567890abcdef1234567890abcdef12345678");
+  const [nodeX, nodeY] = engine.camera.worldToScreen(
+    engine.store.positions[hubIndex * 2],
+    engine.store.positions[hubIndex * 2 + 1],
+    viewport.width,
+    viewport.height,
+  );
+  const mine = instances.filter((i) => Math.abs(i.x - engine.store.positions[hubIndex * 2]) < 1e-6 && Math.abs(i.y - engine.store.positions[hubIndex * 2 + 1]) < 1e-6);
+  const primary = mine.find((i) => i.rowPx === 0);
+  const secondary = mine.find((i) => i.rowPx > 0);
+
+  const box = (i: typeof primary) =>
+    i
+      ? {
+          x: nodeX + i.anchorRadius * engine.camera.scale + i.gapPx,
+          y: nodeY + i.rowPx,
+          width: i.widthPx,
+          height: i.heightPx,
+          canvasWidth: viewport.width,
+        }
+      : null;
+
+  /* 对照样本：画布右下角一块确定没有节点的区域。 */
+  const background = {
+    x: viewport.width - 40,
+    y: viewport.height - 24,
+    width: 30,
+    height: 16,
+    canvasWidth: viewport.width,
+  };
+
+  const primaryBox = box(primary);
+  const secondaryBox = box(secondary);
+  return {
+    primary: primaryBox ? countInk(pixels, primaryBox) : 0,
+    sublabel: secondaryBox ? countInk(pixels, secondaryBox) : 0,
+    background: countInk(pixels, background),
+    anchoredRight: Boolean(primaryBox) && primaryBox!.x > nodeX,
+    primaryBox,
+  };
+}
+
+/** 在一个**之前记下的**屏幕矩形里数像素（用于"同一块地方，远景应该空了"）。 */
+async function inkInBox(engine: GraphEngine, rect: InkBox | null): Promise<number> {
+  if (!rect) return 0;
+  const url = engine.exportView();
+  if (!url) return 0;
+  try {
+    return countInk(await decodePng(url), rect);
+  } catch {
+    return 0;
+  }
+}
+
 run()
   .then((report) => {
     window.__graphProbe = report;
@@ -645,6 +924,9 @@ run()
       budgetFull: false, budgetAggregate: false, budgetLimit: false, lodThresholds: false,
       lodFarLevel: "", lodNearLevel: "", renderedEdgesFar: 0, renderedEdgesNear: 0,
       farKeepsHeaviest: false, budgetModeForProbe: "", lodChecks: "",
+      labelsNear: 0, labelsMid: 0, labelsFar: 0, labelsFarPinned: 0,
+      labelGlyphs: 0, labelDropped: 0, labelPixelsNear: 0, labelPixelsFar: 0,
+      labelPixelsBackground: 0, labelPixelsSublabel: 0, labelAnchoredRightOfNode: false, labelChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });
