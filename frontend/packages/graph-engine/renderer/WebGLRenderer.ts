@@ -18,20 +18,75 @@ import { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram, type ParticleAppearance }
  * `contextrestored` 后重建全部 GPU 资源（shader / buffer / framebuffer）。
  */
 
+
+const SDF_GLSL = `
+/* -------------------------------------------------------------------------
+ * 节点形状（规范 §30.9：颜色是辅助，**形状必须区分**）
+ *
+ * 为什么形状不是"锦上添花"：色觉障碍用户、灰度打印、以及小尺寸下相近的蓝色系，
+ * 都会让"这是地址还是交易"退化成猜。形状是与颜色**平行的**一条信息通道。
+ *
+ * 同时必须保证：**拾取用的形状与渲染用的形状是同一个函数**。
+ * 否则热区与肉眼所见不一致——用户点在一个看起来是空的地方却选中了节点，
+ * 或者点在菱形的一个角上却点不中。所以下面这段 SDF 被两个片元着色器共享。
+ * ------------------------------------------------------------------------- */
+
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+float sdHexagon(vec2 p, float r) {
+  const vec3 k = vec3(-0.8660254038, 0.5, 0.5773502692);
+  vec2 q = abs(p);
+  q -= 2.0 * min(dot(k.xy, q), 0.0) * k.xy;
+  q -= vec2(clamp(q.x, -k.z * r, k.z * r), r);
+  return length(q) * sign(q.y);
+}
+
+float sdTriangle(vec2 p, float r) {
+  const float k = 1.7320508076;
+  vec2 q = p;
+  q.x = abs(q.x) - r;
+  q.y = q.y + r / k;
+  if (q.x + k * q.y > 0.0) q = vec2(q.x - k * q.y, -k * q.x - q.y) / 2.0;
+  q.x -= clamp(q.x, -2.0 * r, 0.0);
+  return -length(q) * sign(q.y);
+}
+
+/*
+ * kind 与 GraphStore 的 NODE_KIND 一一对应：
+ *   0 address · 1 transaction · 2 contract · 3 entity · 4 evidence · 5 subject · 6 cluster
+ * 未知 kind 一律退回圆形，而不是不画——"看不见的节点"比"形状不对的节点"更糟。
+ */
+float nodeShape(vec2 p, float kind) {
+  if (kind < 0.5) return length(p) - 1.0;                       /* 地址：圆 */
+  if (kind < 1.5) return (abs(p.x) + abs(p.y) - 1.0) * 0.7071;  /* 交易：菱形 */
+  if (kind < 2.5) return sdHexagon(p, 1.0);                     /* 合约：六边形 */
+  if (kind < 3.5) return sdBox(p, vec2(0.82));                  /* 实体：方形 */
+  if (kind < 4.5) return sdTriangle(p, 1.0);                    /* 证据：三角形 */
+  if (kind < 5.5) return abs(length(p) - 0.78) - 0.22;          /* 调查对象：圆环 */
+  return length(p) - 0.9;                                       /* 聚类：略小的圆 */
+}
+`;
+
 const NODE_VS = `#version 300 es
 in vec2 a_quad;
 in vec2 a_pos;
 in float a_size;
 in vec3 a_color;
 in float a_alpha;
+in float a_kind;
 uniform mat3 u_matrix;
 out vec2 v_local;
 out vec3 v_color;
 out float v_alpha;
+flat out float v_kind;
 void main() {
   v_local = a_quad;
   v_color = a_color;
   v_alpha = a_alpha;
+  v_kind = a_kind;
   vec2 world = a_pos + a_quad * a_size;
   vec3 clip = u_matrix * vec3(world, 1.0);
   gl_Position = vec4(clip.xy, 0.0, 1.0);
@@ -42,12 +97,14 @@ precision highp float;
 in vec2 v_local;
 in vec3 v_color;
 in float v_alpha;
+flat in float v_kind;
 out vec4 outColor;
+${SDF_GLSL}
 void main() {
-  float d = length(v_local);
-  if (d > 1.0) discard;
-  /* 1px 左右的软边，避免小节点在高 DPR 下出现锯齿。 */
-  float edge = smoothstep(1.0, 0.88, d);
+  float d = nodeShape(v_local, v_kind);
+  if (d > 0.0) discard;
+  /* 约 1px 的软边，避免小节点在高 DPR 下出现锯齿。 */
+  float edge = smoothstep(0.0, -0.14, d);
   outColor = vec4(v_color, v_alpha * edge);
 }`;
 
@@ -55,13 +112,16 @@ const PICK_VS = `#version 300 es
 in vec2 a_quad;
 in vec2 a_pos;
 in float a_size;
+in float a_kind;
 in uint a_pick;
 uniform mat3 u_matrix;
 flat out uint v_pick;
+flat out float v_kind;
 out vec2 v_local;
 void main() {
   v_local = a_quad;
   v_pick = a_pick;
+  v_kind = a_kind;
   vec2 world = a_pos + a_quad * a_size;
   vec3 clip = u_matrix * vec3(world, 1.0);
   gl_Position = vec4(clip.xy, 0.0, 1.0);
@@ -77,10 +137,16 @@ precision highp float;
 precision highp int;
 in vec2 v_local;
 flat in uint v_pick;
+flat in float v_kind;
 out vec4 outColor;
+${SDF_GLSL}
 void main() {
-  float d = length(v_local);
-  if (d > 1.0) discard;
+  /*
+   * 拾取必须用**与渲染完全相同**的形状函数。
+   * 否则热区与肉眼所见不一致：用户点在看起来是空的地方却选中了节点，
+   * 或者点在菱形的角上却点不中——那种"手感不对"的缺陷最难排查。
+   */
+  if (nodeShape(v_local, v_kind) > 0.0) discard;
   uint id = v_pick;
   float r = float(id & 255u) / 255.0;
   float g = float((id >> 8u) & 255u) / 255.0;
@@ -144,6 +210,8 @@ export class WebGLRenderer {
   private sizeBuffer: WebGLBuffer | null = null;
   private colorBuffer: WebGLBuffer | null = null;
   private alphaBuffer: WebGLBuffer | null = null;
+  /** 节点类型（形状）。渲染与拾取共用同一份：画什么形状，就按什么形状判热区。 */
+  private kindBuffer: WebGLBuffer | null = null;
   private pickBuffer: WebGLBuffer | null = null;
   private edgeBuffer: WebGLBuffer | null = null;
 
@@ -165,6 +233,7 @@ export class WebGLRenderer {
   private colorCache = new Float32Array(0);
   private alphaCache = new Float32Array(0);
   private pickCache = new Uint32Array(0);
+  private kindCache = new Float32Array(0);
 
   contextLost = false;
 
@@ -204,6 +273,7 @@ export class WebGLRenderer {
     this.sizeBuffer = gl.createBuffer();
     this.colorBuffer = gl.createBuffer();
     this.alphaBuffer = gl.createBuffer();
+    this.kindBuffer = gl.createBuffer();
     this.pickBuffer = gl.createBuffer();
     this.edgeBuffer = gl.createBuffer();
     this.highlightBuffer = gl.createBuffer();
@@ -277,6 +347,7 @@ export class WebGLRenderer {
       this.colorCache = new Float32Array(n * 3);
       this.alphaCache = new Float32Array(n);
       this.pickCache = new Uint32Array(n);
+      this.kindCache = new Float32Array(n);
     }
     for (let i = 0; i < n; i += 1) {
       const kind = store.kinds[i];
@@ -286,6 +357,8 @@ export class WebGLRenderer {
       this.colorCache[i * 3 + 2] = color[2];
       const flags = store.flags[i];
       this.alphaCache[i] = flags & NODE_FLAG.dimmed ? this.style.dimmedAlpha : 1;
+      /* 形状通道（§30.9）：与颜色平行的一条独立信息，不是装饰。 */
+      this.kindCache[i] = kind;
       /* 拾取 id 用 1 基：0 必须留给"什么都没点到"。 */
       this.pickCache[i] = i + 1;
     }
@@ -298,6 +371,8 @@ export class WebGLRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, this.alphaCache.subarray(0, n), gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.pickBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.pickCache.subarray(0, n), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.kindBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.kindCache.subarray(0, n), gl.DYNAMIC_DRAW);
     this.styleDirty = false;
   }
 
@@ -522,6 +597,12 @@ export class WebGLRenderer {
     gl.vertexAttribPointer(sizeLoc, 1, gl.FLOAT, false, 0, 0);
     gl.vertexAttribDivisor(sizeLoc, 1);
 
+    const kindLoc = gl.getAttribLocation(program, "a_kind");
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.kindBuffer);
+    gl.enableVertexAttribArray(kindLoc);
+    gl.vertexAttribPointer(kindLoc, 1, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(kindLoc, 1);
+
     if (picking) {
       const pickLoc = gl.getAttribLocation(program, "a_pick");
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pickBuffer);
@@ -547,7 +628,9 @@ export class WebGLRenderer {
   private unbindInstancedAttributes(program: WebGLProgram, picking = false): void {
     const gl = this.gl;
     if (!gl) return;
-    const names = picking ? ["a_quad", "a_pos", "a_size", "a_pick"] : ["a_quad", "a_pos", "a_size", "a_color", "a_alpha"];
+    const names = picking
+      ? ["a_quad", "a_pos", "a_size", "a_kind", "a_pick"]
+      : ["a_quad", "a_pos", "a_size", "a_kind", "a_color", "a_alpha"];
     for (const name of names) {
       const loc = gl.getAttribLocation(program, name);
       if (loc >= 0) {
@@ -573,9 +656,10 @@ export class WebGLRenderer {
     this.disposePickTarget();
     this.particles?.dispose();
     this.particles = null;
-    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer]) {
+    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.kindBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer]) {
       if (buffer) gl.deleteBuffer(buffer);
     }
+    this.kindBuffer = null;
     this.highlightBuffer = null;
     for (const program of [this.nodeProgram, this.pickProgram, this.edgeProgram]) {
       if (program) gl.deleteProgram(program);

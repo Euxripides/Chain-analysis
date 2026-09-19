@@ -61,8 +61,8 @@ async function main() {
   await writeFile(
     join(outDir, "index.html"),
     `<!doctype html><html><head><meta charset="utf-8"><title>graph-engine probe</title>
-<style>html,body{margin:0;background:#F4F8FF}#stage{position:relative}</style></head>
-<body><div id="stage"></div><script type="module" src="./probe.js"></script></body></html>`,
+<style>html,body{margin:0;background:#F4F8FF}#stage{position:relative}#shapes{position:relative}</style></head>
+<body><div id="stage"></div><div id="shapes"></div><script type="module" src="./probe.js"></script></body></html>`,
     "utf8",
   );
 
@@ -161,6 +161,35 @@ async function main() {
     if (!report.warmStartChangedResult) problems.push("warmStart 语义失效：热启动与冷启动结果相同，说明起点没有被沿用");
     if (!report.handlerOk) problems.push("handleLayoutRequest 没有返回可用结果");
     if (report.handlerResolvedMode === "") problems.push("worker 处理器没有回报解析后的布局模式");
+
+    /* 路径与播放（§30.12）。 */
+    if (report.pathNodes !== 4) problems.push(`路径节点数 ${report.pathNodes} ≠ 4（A→B→C→D）`);
+    if (!report.pathPrefersCheapEdge) {
+      problems.push(`加权最短路没有选更省的链路（cost=${report.pathCostUnweighted}）——权重可能被忽略、退化成了 BFS`);
+    }
+    if (!report.pathUndirected) problems.push("有向/无向语义不正确：反向在有向模式下应无路，无向模式下应有路");
+    if (report.playbackHopsAtTick !== 1) problems.push(`播放推进不正确：t=310ms 时应为第 1 跳，实际 ${report.playbackHopsAtTick}`);
+    if (!report.playbackCompleted) problems.push("播放没有走到 completed 并发出 path:complete");
+    if (!report.playbackSpeed2xFaster) problems.push("2x 速度没有让播放更快");
+    if (!report.playbackManualStep) problems.push("nextHop / previousHop 手动步进不正确");
+    /*
+     * 必须拿**引擎上那条路径**的边数来比。
+     * 第一版拿的是 chain 夹具的 pathNodes-1（4-1=3），而高亮来自 12 环上的 n0→n4（4 条边），
+     * 两个数字来自两条毫不相干的路径——这种"拿错参照物"的断言比不写还糟。
+     */
+    if (report.litEdgesAfterHighlight !== report.enginePathEdges) {
+      problems.push(`高亮边数 ${report.litEdgesAfterHighlight} ≠ 引擎路径边数 ${report.enginePathEdges}`);
+    }
+    if (report.particleCount <= 0) problems.push("高亮路径上没有生成任何粒子");
+
+    /* 节点形状（§30.9）：形状必须真的不同，且拾取热区与所见形状一致。 */
+    if (report.shapeChecks === "webgl2-unavailable") {
+      notes.push("形状检查跳过：WebGL2 不可用");
+    } else if (!report.shapesDistinct) {
+      problems.push(`节点形状未能区分，或拾取热区与形状不一致：${report.shapeChecks}`);
+    } else {
+      notes.push(`形状检查：${report.shapeChecks}`);
+    }
     if (consoleErrors.length > 0) problems.push("console/pageerror：" + JSON.stringify(consoleErrors.slice(0, 3)));
 
     const result = { ok: problems.length === 0, problems, notes, report };

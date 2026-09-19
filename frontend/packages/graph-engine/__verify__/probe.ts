@@ -59,6 +59,9 @@ interface ProbeReport {
   particleCount: number;
   /** **引擎上那条路径**的边数——与上面 chain 夹具的路径是两回事，不能混用。 */
   enginePathEdges: number;
+  /* 节点形状（§30.9）。 */
+  shapesDistinct: boolean;
+  shapeChecks: string;
 }
 
 declare global {
@@ -131,6 +134,8 @@ async function run(): Promise<ProbeReport> {
     litEdgesAfterHighlight: 0,
     particleCount: 0,
     enginePathEdges: 0,
+    shapesDistinct: false,
+    shapeChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -204,7 +209,80 @@ async function run(): Promise<ProbeReport> {
 
   /* 8. 布局算法与 worker 处理器（§30.14 / §30.5）。 */
   runLayoutChecks(report);
+
+  /* 9. 节点形状（§30.9）：形状必须真的不同，且拾取热区与所见形状一致。 */
+  runShapeChecks(report);
   return report;
+}
+
+/**
+ * 形状验收（§30.9「颜色是辅助，形状必须区分」）。
+ *
+ * 做法：把三种节点（圆 / 菱形 / 方）放在已知位置，然后在**同一屏幕偏移**上做拾取。
+ * 圆在 (0.6r, 0.6r) 处仍然有实体（距离 0.85r），菱形的同一点已经在外面（|x|+|y| = 1.2r），
+ * 方形在 (0.9r, 0) 处已经在外面（半边长 0.82r）。三者的差异是可断言的。
+ *
+ * 这条同时验证了一件更重要的事：**拾取用的形状与渲染用的形状是同一个 SDF**。
+ * 只要两者不一致，用户就会点到"看起来是空的地方"。
+ */
+function runShapeChecks(report: ProbeReport) {
+  const SIZE = 20;
+  const stage = document.getElementById("shapes") as HTMLDivElement;
+  stage.style.width = "520px";
+  stage.style.height = "260px";
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  stage.appendChild(canvas);
+
+  const engine = new GraphEngine({
+    nodes: [
+      { id: "round", kind: "address", x: -220, y: 0, size: SIZE },
+      { id: "diamond", kind: "transaction", x: 0, y: 0, size: SIZE },
+      { id: "square", kind: "entity", x: 220, y: 0, size: SIZE },
+    ],
+    edges: [],
+  });
+  if (!engine.mount(canvas)) {
+    report.shapeChecks = "webgl2-unavailable";
+    return;
+  }
+  engine.fitAll();
+  engine.invalidate();
+
+  const pickAt = (x: number, y: number, ox: number, oy: number) => {
+    const viewport = engine.viewport();
+    const scale = engine.camera.scale;
+    const [sx, sy] = engine.camera.worldToScreen(x + ox * SIZE, y + oy * SIZE, viewport.width, viewport.height);
+    void scale;
+    return engine.pickAt(sx, sy);
+  };
+
+  /* 圆心点必须命中自己（形状不影响中心）。 */
+  const centerOk =
+    pickAt(-220, 0, 0, 0) === 0 && pickAt(0, 0, 0, 0) === 1 && pickAt(220, 0, 0, 0) === 2;
+
+  /* (0.6, 0.6)：圆命中、菱形落空。 */
+  const roundAtCorner = pickAt(-220, 0, 0.6, 0.6);
+  const diamondAtCorner = pickAt(0, 0, 0.6, 0.6);
+
+  /* (0.9, 0)：圆命中、方形落空。 */
+  const roundAtEdge = pickAt(-220, 0, 0.9, 0);
+  const squareAtEdge = pickAt(220, 0, 0.9, 0);
+
+  const parts = [
+    centerOk ? "center-ok" : "center-FAIL",
+    roundAtCorner === 0 ? "round@corner-hit" : "round@corner-" + roundAtCorner,
+    diamondAtCorner === -1 ? "diamond@corner-miss" : "diamond@corner-HIT",
+    roundAtEdge === 0 ? "round@edge-hit" : "round@edge-" + roundAtEdge,
+    squareAtEdge === -1 ? "square@edge-miss" : "square@edge-HIT",
+  ];
+  report.shapeChecks = parts.join(" ");
+  if (centerOk && roundAtCorner === 0 && diamondAtCorner === -1 && roundAtEdge === 0 && squareAtEdge === -1) {
+    report.shapesDistinct = true;
+  }
+  engine.dispose();
+  stage.removeChild(canvas);
 }
 
 /**
@@ -465,7 +543,7 @@ run()
       forceSeparated: 0, warmStartChangedResult: false, handlerOk: false, handlerResolvedMode: "", handlerDurationMs: 0,
       pathNodes: 0, pathCostUnweighted: 0, pathPrefersCheapEdge: false, pathUndirected: false,
       playbackHopsAtTick: 0, playbackCompleted: false, playbackSpeed2xFaster: false, playbackManualStep: false,
-      litEdgesAfterHighlight: 0, particleCount: 0, enginePathEdges: 0,
+      litEdgesAfterHighlight: 0, particleCount: 0, enginePathEdges: 0, shapesDistinct: false, shapeChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });
