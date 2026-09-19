@@ -129,6 +129,51 @@ void main() {
 }`;
 
 /*
+ * 边的拾取（§30.7 / §61 的"边可点选"）
+ *
+ * 为什么不用 GL_LINES 画拾取用的边：WebGL2 的 `lineWidth` 在绝大多数驱动上
+ * 被钳到 1.0，而 1 像素的命中区意味着"必须精确点到那条线上"——现有 SVG 画布
+ * 给的是一条 14px 的透明命中线，直接用线段做拾取等于把这个操作弄丢。
+ *
+ * 所以这里把每条边展开成一个**实例化四边形**：沿线段方向插值，
+ * 在垂直方向按屏幕像素宽度扩展。宽度用 uniform 传，与缩放无关，
+ * 和肉眼看到的那条 1px 线是两回事——命中区比可视线宽是刻意的。
+ */
+const PICK_EDGE_VS = `#version 300 es
+in vec2 a_quad;      // -1..1 单位四边形
+in vec2 a_from;      // 线段起点（世界坐标）
+in vec2 a_to;        // 线段终点（世界坐标）
+in float a_pickId;   // 已编码的拾取 id（节点数 + 1 + 边下标）
+uniform mat3 u_matrix;
+uniform float u_scale;      // 世界单位 → 设备像素
+uniform float u_halfWidth;  // 命中半宽（设备像素）
+out float v_pickId;
+void main() {
+  vec2 dir = a_to - a_from;
+  float len = length(dir);
+  vec2 unit = len > 0.0 ? dir / len : vec2(1.0, 0.0);
+  vec2 normal = vec2(-unit.y, unit.x);
+  vec2 base = a_from + dir * (a_quad.x * 0.5 + 0.5);
+  /* 退化线段（自环）也要留一个圆形热区，否则点不到。 */
+  vec2 world = base + normal * (a_quad.y * u_halfWidth / u_scale) + (len > 0.0 ? vec2(0.0) : unit * (a_quad.x * u_halfWidth / u_scale));
+  vec3 clip = u_matrix * vec3(world, 1.0);
+  gl_Position = vec4(clip.xy, 0.0, 1.0);
+  v_pickId = a_pickId;
+}`;
+
+const PICK_EDGE_FS = `#version 300 es
+precision highp float;
+in float v_pickId;
+out vec4 outColor;
+void main() {
+  float id = v_pickId;
+  float r = mod(id, 256.0);
+  float g = mod(floor(id / 256.0), 256.0);
+  float b = mod(floor(id / 65536.0), 256.0);
+  outColor = vec4(r / 255.0, g / 255.0, b / 255.0, 1.0);
+}`;
+
+/*
  * 拾取片元着色器用 **整数 + 位运算** 编码，而不是浮点颜色：
  * mediump float 存不下 65536，浮点编码在大图上会把不同节点解成同一个 id。
  * flat + uint 是精确的。
@@ -201,6 +246,15 @@ void main() {
   outColor = v_rgba;
 }`;
 
+/**
+ * 拾取结果。
+ *
+ * `index` 对节点是**节点下标**，对边是**边下标**（都取自 GraphStore，
+ * 不是"当前渲染列表里的位置"）——远景降采样之后两者会完全不同，
+ * 用渲染位置当 id 会让点击落到另一条边上。
+ */
+export type PickResult = { kind: "node" | "edge"; index: number } | null;
+
 export interface RenderStyle {
   /** 每种节点类型的填充色，[r,g,b] 0–1。索引与 NODE_KIND 对齐。 */
   kindColors: Array<[number, number, number]>;
@@ -253,6 +307,10 @@ export class WebGLRenderer {
   private kindBuffer: WebGLBuffer | null = null;
   private pickBuffer: WebGLBuffer | null = null;
   private edgeBuffer: WebGLBuffer | null = null;
+
+  private pickEdgeProgram: WebGLProgram | null = null;
+  private edgePickBuffer: WebGLBuffer | null = null;
+  private edgePickInstanceCount = 0;
 
   private pickFramebuffer: WebGLFramebuffer | null = null;
   private pickTexture: WebGLTexture | null = null;
@@ -328,6 +386,8 @@ export class WebGLRenderer {
     if (!gl) return;
     this.nodeProgram = buildProgram(gl, NODE_VS, NODE_FS);
     this.pickProgram = buildProgram(gl, PICK_VS, PICK_FS);
+    this.pickEdgeProgram = buildProgram(gl, PICK_EDGE_VS, PICK_EDGE_FS);
+    this.edgePickBuffer = gl.createBuffer();
     this.edgeProgram = buildProgram(gl, EDGE_VS, EDGE_FS);
 
     this.quadBuffer = gl.createBuffer();
@@ -478,7 +538,44 @@ export class WebGLRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, edgeData, gl.DYNAMIC_DRAW);
     this.edgeVertexCount = count * 2;
     this.renderedEdgeOrder = this.edgeOrder.subarray(0, count);
+
+    /*
+     * 边的拾取实例与可见边**同源**（同一份 edgeOrder 前缀），
+     * 所以"看得见哪条边"和"点得到哪条边"永远一致——
+     * 两者分开构建就会出现"远景降采样后，点到了一条根本没画的边"。
+     */
+    this.rebuildEdgePickInstances(store, count);
   }
+
+  /** 每条可见边一个实例：(起点, 终点, 编码 id)，拾取时在着色器里展开成四边形。 */
+  private rebuildEdgePickInstances(store: GraphStore, count: number): void {
+    const gl = this.gl;
+    if (!gl || !this.edgePickBuffer) return;
+    /* 每个实例 5 个 float：fromX, fromY, toX, toY, pickId。 */
+    const data = new Float32Array(count * 5);
+    let cursor = 0;
+    for (let i = 0; i < count; i += 1) {
+      const e = this.edgeOrder[i];
+      const s = store.edgeSource[e];
+      const t = store.edgeTarget[e];
+      data[cursor++] = store.positions[s * 2];
+      data[cursor++] = store.positions[s * 2 + 1];
+      data[cursor++] = store.positions[t * 2];
+      data[cursor++] = store.positions[t * 2 + 1];
+      /*
+       * id 空间与节点**不重叠**：1..nodeCount 归节点，之后归边。
+       * 这样一次 readPixels 就能区分"点到的是节点还是边"，
+       * 不需要维护两套拾取目标。
+       */
+      data[cursor++] = store.nodeCount + 1 + e;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.edgePickBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    this.edgePickInstanceCount = count;
+  }
+
+  /** 命中半宽（CSS 像素）。比可见的 1px 线宽得多，这是刻意的。 */
+  static readonly EDGE_PICK_HALF_WIDTH_CSS = 7;
 
   /** 设置边预算；返回是否真的发生了变化（没变就不重建）。 */
   setEdgeBudget(maxEdges: number): boolean {
@@ -738,8 +835,20 @@ export class WebGLRenderer {
    * 这是"禁止把每个节点变成 DOM hitbox"之后唯一能守住 hover < 8ms 的做法。
    */
   pickNode(store: GraphStore, camera: Camera, cssX: number, cssY: number, dpr: number): number {
+    const hit = this.pickAt(store, camera, cssX, cssY, dpr);
+    return hit && hit.kind === "node" ? hit.index : -1;
+  }
+
+  /**
+   * 一次拾取同时判定**节点与边**。
+   *
+   * 两者共用同一张拾取纹理与同一个 id 空间（1..nodeCount 是节点，
+   * 之后是边），所以"点到节点还是边"是一次 readPixels 就能回答的问题。
+   * 分开做两次拾取的话，每次鼠标移动都要多一轮离屏绘制。
+   */
+  pickAt(store: GraphStore, camera: Camera, cssX: number, cssY: number, dpr: number): PickResult {
     const gl = this.gl;
-    if (!gl || this.contextLost || this.instanceCount === 0 || !this.pickProgram) return -1;
+    if (!gl || this.contextLost || this.instanceCount === 0 || !this.pickProgram) return null;
 
     const width = this.canvas.width;
     const height = this.canvas.height;
@@ -766,8 +875,49 @@ export class WebGLRenderer {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
+    const matrix = camera.clipMatrix(width, height);
+
+    /*
+     * 先画边、后画节点：重叠处**节点获胜**。
+     * 顺序反过来会让一个正好压在节点上的边抢走点击，
+     * 而"点节点"是远比"点边"常用的操作。
+     */
+    if (this.edgePickInstanceCount > 0 && this.pickEdgeProgram && this.edgePickBuffer) {
+      gl.useProgram(this.pickEdgeProgram);
+      gl.uniformMatrix3fv(gl.getUniformLocation(this.pickEdgeProgram, "u_matrix"), false, matrix);
+      /* clipMatrix 用的是**设备像素**视口，所以这里也要换算到设备像素。 */
+      gl.uniform1f(gl.getUniformLocation(this.pickEdgeProgram, "u_scale"), camera.scale * dpr);
+      gl.uniform1f(gl.getUniformLocation(this.pickEdgeProgram, "u_halfWidth"), WebGLRenderer.EDGE_PICK_HALF_WIDTH_CSS * dpr);
+
+      const quadLoc = gl.getAttribLocation(this.pickEdgeProgram, "a_quad");
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+      gl.enableVertexAttribArray(quadLoc);
+      gl.vertexAttribPointer(quadLoc, 2, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(quadLoc, 0);
+
+      const stride = 20;
+      const fromLoc = gl.getAttribLocation(this.pickEdgeProgram, "a_from");
+      const toLoc = gl.getAttribLocation(this.pickEdgeProgram, "a_to");
+      const idLoc = gl.getAttribLocation(this.pickEdgeProgram, "a_pickId");
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.edgePickBuffer);
+      for (const [loc, size, offset] of [
+        [fromLoc, 2, 0],
+        [toLoc, 2, 8],
+        [idLoc, 1, 16],
+      ] as Array<[number, number, number]>) {
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, offset);
+        gl.vertexAttribDivisor(loc, 1);
+      }
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.edgePickInstanceCount);
+      for (const loc of [quadLoc, fromLoc, toLoc, idLoc]) {
+        gl.disableVertexAttribArray(loc);
+        gl.vertexAttribDivisor(loc, 0);
+      }
+    }
+
     gl.useProgram(this.pickProgram);
-    gl.uniformMatrix3fv(gl.getUniformLocation(this.pickProgram, "u_matrix"), false, camera.clipMatrix(width, height));
+    gl.uniformMatrix3fv(gl.getUniformLocation(this.pickProgram, "u_matrix"), false, matrix);
     this.bindInstancedAttributes(this.pickProgram, true);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.instanceCount);
     this.unbindInstancedAttributes(this.pickProgram, true);
@@ -783,7 +933,7 @@ export class WebGLRenderer {
     if (px < 0 || py < 0 || px >= width || py >= height) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.enable(gl.BLEND);
-      return -1;
+      return null;
     }
     const pixel = new Uint8Array(4);
     gl.readPixels(px, py, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
@@ -791,7 +941,9 @@ export class WebGLRenderer {
     gl.enable(gl.BLEND);
 
     const id = pixel[0] + (pixel[1] << 8) + (pixel[2] << 16);
-    return id === 0 ? -1 : id - 1;
+    if (id === 0) return null;
+    if (id <= store.nodeCount) return { kind: "node", index: id - 1 };
+    return { kind: "edge", index: id - store.nodeCount - 1 };
   }
 
   private bindInstancedAttributes(program: WebGLProgram, picking = false): void {
@@ -876,14 +1028,17 @@ export class WebGLRenderer {
     this.particles = null;
     this.labels?.dispose();
     this.labels = null;
-    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.kindBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer]) {
+    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.kindBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer, this.edgePickBuffer]) {
       if (buffer) gl.deleteBuffer(buffer);
     }
     this.kindBuffer = null;
     this.highlightBuffer = null;
-    for (const program of [this.nodeProgram, this.pickProgram, this.edgeProgram]) {
+    if (this.edgePickBuffer) gl.deleteBuffer(this.edgePickBuffer);
+    this.edgePickBuffer = null;
+    for (const program of [this.nodeProgram, this.pickProgram, this.pickEdgeProgram, this.edgeProgram]) {
       if (program) gl.deleteProgram(program);
     }
+    this.pickEdgeProgram = null;
     this.quadBuffer = null;
     this.posBuffer = null;
     this.sizeBuffer = null;

@@ -23,7 +23,7 @@ export type { GraphEdgeInput, GraphNodeInput, NodeKindName } from "./model/Graph
 export { Camera, MAX_SCALE, MIN_SCALE, emptyBounds } from "./interaction/camera";
 export type { Bounds, CameraState } from "./interaction/camera";
 export { DEFAULT_STYLE, WebGLRenderer } from "./renderer/WebGLRenderer";
-export type { RenderStyle } from "./renderer/WebGLRenderer";
+export type { PickResult, RenderStyle } from "./renderer/WebGLRenderer";
 export {
   DEFAULT_LAYOUT_OPTIONS,
   applyCluster,

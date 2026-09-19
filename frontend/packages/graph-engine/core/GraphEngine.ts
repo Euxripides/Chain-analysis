@@ -542,6 +542,16 @@ export class GraphEngine {
    * （例如把浏览器原生拖拽的落点映射到节点），而验收也需要一个不依赖
    * "看图"的方式证明几何真的被光栅化了——见 scripts/graph-engine-check.mjs。
    */
+  /**
+   * 一次拾取，同时判定节点与边（§30.7）。
+   *
+   * 返回的 `index` 是 **GraphStore 里的下标**；页面再用
+   * `store.idAt(index)` / 边 id 映射回业务 ref。不要拿渲染顺序当 id。
+   */
+  pickAny(cssX: number, cssY: number): { kind: "node" | "edge"; index: number } | null {
+    return this.renderer?.pickAt(this.store, this.camera, cssX, cssY, this.currentDpr()) ?? null;
+  }
+
   pickAt(cssX: number, cssY: number): number {
     if (!this.renderer || !this.canvas) return -1;
     return this.renderer.pickNode(this.store, this.camera, cssX, cssY, this.currentDpr());

@@ -212,6 +212,22 @@ async function main() {
         `LOD：far=${report.renderedEdgesFar} 边 · near=${report.renderedEdgesNear} 边 · 预算档位=${report.budgetModeForProbe} · 保留主干=${report.farKeepsHeaviest}`,
       );
     }
+    /* 边拾取（§30.7 / §61 Canvas 迁移的前置能力）。 */
+    if (report.edgePickChecks === "webgl2-unavailable") {
+      notes.push("边拾取检查跳过：WebGL2 不可用");
+    } else if (report.edgePickChecks !== "ok") {
+      problems.push(
+        "边拾取未通过：" + report.edgePickHits + "/" + report.edgePickSamples + " 条边中点命中自身" +
+          (report.edgePickMisses ? " · " + report.edgePickMisses : "") +
+          " · 节点优先=" + report.nodeWinsOverEdge + " · 近偏移命中=" + report.edgePickNearMiss +
+          " · 远偏移落空=" + report.edgePickFarMiss + " · 空白落空=" + report.edgePickEmptyOk +
+          " · pickAt 只认节点=" + report.pickNodeIgnoresEdges,
+      );
+    } else {
+      notes.push(
+        "边拾取：" + report.edgePickHits + "/" + report.edgePickSamples + " 条边中点命中自身 · 节点优先 · 4px 偏移仍命中 / 20px 偏移落空",
+      );
+    }
     /* 视图维度（§30.8）。 */
     if (report.lensChecks === "webgl2-unavailable") {
       notes.push("视图维度检查跳过：WebGL2 不可用");

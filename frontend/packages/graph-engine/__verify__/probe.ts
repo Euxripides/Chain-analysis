@@ -148,6 +148,22 @@ interface ProbeReport {
   /** `setLens` 是否发出了事件、`lens` 是否随之改变。 */
   lensSwitchEvent: boolean;
   lensChecks: string;
+  /* 边拾取（§30.7 / §61 的"边可点选"）。 */
+  /** 每条边中点必须拾取到**它自己**。 */
+  edgePickHits: number;
+  edgePickSamples: number;
+  edgePickMisses: string;
+  /** 节点中心必须拾取到节点——即使那里也是一条边的端点。 */
+  nodeWinsOverEdge: boolean;
+  /** 垂直偏移 4px（小于命中半宽）仍应命中边：证明命中区比 1px 线宽大。 */
+  edgePickNearMiss: boolean;
+  /** 垂直偏移 20px 必须落空：证明命中区不是无限大。 */
+  edgePickFarMiss: boolean;
+  /** 空白处返回 null，而不是随机命中。 */
+  edgePickEmptyOk: boolean;
+  /** `pickAt` 只认节点：边中点处应返回 -1（既有 API 语义不变）。 */
+  pickNodeIgnoresEdges: boolean;
+  edgePickChecks: string;
 }
 
 declare global {
@@ -259,6 +275,15 @@ async function run(): Promise<ProbeReport> {
     lensStyleChecks: "",
     lensSwitchEvent: false,
     lensChecks: "",
+    edgePickHits: 0,
+    edgePickSamples: 0,
+    edgePickMisses: "",
+    nodeWinsOverEdge: false,
+    edgePickNearMiss: false,
+    edgePickFarMiss: false,
+    edgePickEmptyOk: false,
+    pickNodeIgnoresEdges: false,
+    edgePickChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -330,6 +355,9 @@ async function run(): Promise<ProbeReport> {
 
   /* 5d. 视图维度：虚线（证据）与分组着色（资产）（§30.8）。 */
   await runLensChecks(report);
+
+  /* 5e. 边拾取（§30.7）。 */
+  await runEdgePickChecks(report);
 
   /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
@@ -1317,6 +1345,110 @@ async function runLensChecks(report: ProbeReport): Promise<void> {
   host.remove();
 }
 
+
+/* ------------------------------------------------- 边拾取（§30.7） */
+
+/**
+ * 边必须能被点中。
+ *
+ * 这条能力是 Canvas 迁移到引擎的**前置条件**：现有 SVG 画布给每条边铺了一条
+ * 14px 的透明命中线，点边会打开边的 Inspector。引擎只会画节点拾取的话，
+ * 迁移过去就等于把这个操作弄丢了（§65「所有现有重要操作不丢」）。
+ *
+ * 判据刻意包含三档距离，因为"能点到"和"点到的东西是它"是两回事：
+ *   · 正好在中点   → 必须命中该边；
+ *   · 垂直偏 4px   → 仍必须命中（命中区比 1px 线宽大）；
+ *   · 垂直偏 20px  → 必须落空（命中区不能无限大）。
+ */
+async function runEdgePickChecks(report: ProbeReport): Promise<void> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;width:640px;height:420px;";
+  document.body.appendChild(host);
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  host.appendChild(canvas);
+
+  /* 三条互不重叠的边：水平一条、垂直一条、斜一条，覆盖不同朝向。 */
+  const pickNodes: GraphNodeInput[] = [
+    { id: "A", kind: "address", x: -200, y: -120, size: 10 },
+    { id: "B", kind: "address", x: 0, y: -120, size: 10 },
+    { id: "C", kind: "address", x: -200, y: 60, size: 10 },
+    { id: "D", kind: "address", x: 40, y: 120, size: 10 },
+    { id: "E", kind: "address", x: 220, y: -40, size: 10 },
+  ];
+  const pickEdges: GraphEdgeInput[] = [
+    { id: "ab", source: "A", target: "B" },
+    { id: "ac", source: "A", target: "C" },
+    { id: "de", source: "D", target: "E" },
+  ];
+
+  const engine = new GraphEngine({ nodes: pickNodes, edges: pickEdges });
+  if (!engine.mount(canvas)) {
+    report.edgePickChecks = "webgl2-unavailable";
+    host.remove();
+    return;
+  }
+  const waitFrames = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  engine.camera.state.scale = 1;
+  engine.camera.state.cx = 0;
+  engine.camera.state.cy = 0;
+  engine.invalidate();
+  await waitFrames();
+
+  const viewport = engine.viewport();
+  const toScreen = (x: number, y: number) => engine.camera.worldToScreen(x, y, viewport.width, viewport.height);
+  const misses: string[] = [];
+
+  let hits = 0;
+  for (let e = 0; e < pickEdges.length; e += 1) {
+    const s = engine.store.edgeSource[e];
+    const t = engine.store.edgeTarget[e];
+    const mx = (engine.store.positions[s * 2] + engine.store.positions[t * 2]) / 2;
+    const my = (engine.store.positions[s * 2 + 1] + engine.store.positions[t * 2 + 1]) / 2;
+    const [sx, sy] = toScreen(mx, my);
+    const hit = engine.pickAny(sx, sy);
+    report.edgePickSamples += 1;
+    if (hit && hit.kind === "edge" && hit.index === e) hits += 1;
+    else misses.push(`${pickEdges[e].id}: 期望 edge#${e}，实际 ${hit ? hit.kind + "#" + hit.index : "null"}`);
+  }
+  report.edgePickHits = hits;
+  report.edgePickMisses = misses.join("；");
+
+  /* 节点中心同时是一条边的端点：必须判给节点。 */
+  const [bx, by] = toScreen(0, -120);
+  const nodeHit = engine.pickAny(bx, by);
+  report.nodeWinsOverEdge = Boolean(nodeHit && nodeHit.kind === "node" && engine.store.idAt(nodeHit.index) === "B");
+
+  /* 边 ab 是水平的，垂直方向偏移即可测试命中区宽度。 */
+  const [abx, aby] = toScreen(-100, -120);
+  const near = engine.pickAny(abx, aby + 4);
+  report.edgePickNearMiss = Boolean(near && near.kind === "edge" && near.index === 0);
+  const far = engine.pickAny(abx, aby + 20);
+  report.edgePickFarMiss = far === null;
+
+  /* 远离所有节点与边的位置。 */
+  const [ex, ey] = toScreen(-260, 180);
+  report.edgePickEmptyOk = engine.pickAny(ex, ey) === null;
+
+  /* 既有 API：pickAt 只认节点，边中点处必须返回 -1。 */
+  const [abmx, abmy] = toScreen(-100, -120);
+  report.pickNodeIgnoresEdges = engine.pickAt(abmx, abmy) === -1;
+
+  report.edgePickChecks =
+    report.edgePickHits === report.edgePickSamples &&
+    report.nodeWinsOverEdge &&
+    report.edgePickNearMiss &&
+    report.edgePickFarMiss &&
+    report.edgePickEmptyOk &&
+    report.pickNodeIgnoresEdges
+      ? "ok"
+      : "mismatch";
+
+  engine.dispose();
+  host.remove();
+}
+
 run()
   .then((report) => {
     window.__graphProbe = report;
@@ -1342,6 +1474,8 @@ run()
       highlightPixelMatch: false, highlightPixelRgb: "", highlightPixelsLit: 0, highlightSamples: 0, highlightChecks: "",
       lensDashGaps: 0, lensSolidGaps: 0, lensSamples: 0, lensEdgeColorsDistinct: false,
       lensEdgeColorsMatchPalette: false, lensEdgeColorText: "", lensStyleChecks: "", lensSwitchEvent: false, lensChecks: "",
+      edgePickHits: 0, edgePickSamples: 0, edgePickMisses: "", nodeWinsOverEdge: false,
+      edgePickNearMiss: false, edgePickFarMiss: false, edgePickEmptyOk: false, pickNodeIgnoresEdges: false, edgePickChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });
