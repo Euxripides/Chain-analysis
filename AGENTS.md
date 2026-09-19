@@ -63,3 +63,47 @@ E2E_BROWSER_CHANNEL=chromium node scripts/uc-v4-render-check.mjs   # 真实浏�
 由 `uc-contract-freeze-check.mjs` 冻结（含 AND/OR 组合方式与路由守卫接入）。
 证据 Tab 的 `case:read + evidence:list + investigation:list` 是**临时兼容规则**，
 见 `docs/adr/ADR-022-case-evidence-tab-permission.md` —— 未做产品决策前不要改动它。
+
+## DSH Web（局域网访问，常驻服务）
+
+**拓扑**：`nginx:8450 (TLS, 自签)` → `127.0.0.1:43130 (dsh web, 仅 loopback)`。
+局域网不直接暴露 dsh：绑定退回 loopback 后 `/api` 围栏对局域网 authority 恢复 403，
+局域网流量只走插件门控的 `/remote` 通道（启动日志里的 `CRITICAL — /api fence is OPEN` 因此归零）。
+
+- 服务：`dsh-web.service`（已 enable，开机自启）——`systemctl status|restart dsh-web`，日志 `journalctl -u dsh-web`。
+- 绑定 `127.0.0.1:43130` 由 `~/.dsh/profiles/web/cordis.patch.yml` 的受管 lan-bind 块固定。
+  **不要**用 `dsh web --host 0.0.0.0`（CLI 明确拒绝）。
+- 反代拓扑靠 systemd 单元里的环境变量驱动（profile 覆盖不到插件配置，只能用 env）：
+  `DSH_REMOTE_PUBLIC_BASE_URL=https://192.168.31.152:8450`、`DSH_REMOTE_TRUSTED_HOSTS=192.168.31.152:8450`；
+  配对链接据此自动生成为 https。
+- 证书：自签，`/etc/ssl/dsh-web/{cert,key}.pem`，SAN 含 `IP:192.168.31.152` 与 `DNS:dataserver`，有效期至 2028-12-22；
+  浏览器首次访问需手动信任一次。nginx 站点：`/etc/nginx/sites-available/dsh-web.conf`。
+
+**用户入口**
+
+- 一次配对（长期有效）：`bash ~/dsh-lan-link.sh` 铸链接 → 浏览器打开 → 之后收藏 `https://192.168.31.152:8450/`，
+  刷新、书签、新标签页均正常（已实测连续刷新 3 次 200）。配对 cookie `dsh_pair` 有效期 1 年，
+  设备库 `~/.dsh/remote-web-ui-devices.json`；一次吊销全部设备：loopback `POST /api/pair/stop`。
+- 免配对临时用：`bash ~/dsh-lan-url.sh` 打印带 launch token 的 https URL，打开一次即兑换 `dsh-auth` cookie，
+  根路径即可正常使用（cookie 30 天，但随每次 dsh-web 重启失效）。
+
+**为什么 nginx 要把带配对 cookie 的 `/` 内部重写为 `/pair-app`**
+
+- 根路径 `/` 归 harness 管，要求 `dsh-auth` cookie；配对 cookie 只门控插件的 `/remote` 通道，管不到 `/`。
+  而客户端路由会把地址栏改写成 `/`，于是在 `/` 上一刷新就 401（`dsh web authentication required`）。
+- 插件的官方解法是 `/pair-app.sw.js` service worker 接管 `/`，但 **SW 脚本抓取不认自签证书的例外**
+  （`SecurityError: An SSL certificate error occurred when fetching the script`），自签下无法注册。
+- 故在 nginx 里做等价转发；无配对 cookie 时不改动，保持原语义。将来若换成受信任证书，
+  可删掉这段让 SW 原生接管。
+- 安全性已核：`/pair-app` 在无 cookie 或伪造 cookie 下只返回 785 字节配对提示页，**不含** `__DSH_BOOT__`。
+
+**插件与陷阱**
+
+- 插件管理：`dsh plugin --profile web <pnpm 参数>`。原生构建白名单写在
+  `~/.dsh/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds`（pnpm 11 已不读 package.json 的 `pnpm.onlyBuiltDependencies`）。
+- 已按需精简：卸载 `dsh-chat-import`；关闭聚合包自带的皮肤中心（`cordis.patch.yml` 里
+  `- id: web-ui-skin-center` + `disabled: true`，聚合包不能整体卸载）。
+- **版本陷阱**：npm 版 `@deepseek-ai/dsh-settings`（实测到 0.1.6-alpha.2）都不导出 `settingsNamespace`，
+  那是 Desktop 私有构建才有的 API；故 `dsh-better-sidebar` 必须 ≥ 0.18.0（当前 0.19.1）。
+- 聚合包 `@linxin666/dsh-web-all` 的 family 行 config 只转发 `plugin` 键，插件自身配置项（如 `tokenTtlMs`）
+  无法从 profile 覆盖——已实测并回退，勿重复尝试；改用该插件的环境变量入口。配对令牌默认 10 分钟有效、一次性。
