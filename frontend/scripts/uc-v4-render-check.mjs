@@ -875,22 +875,32 @@ async function main() {
       /* ---------- 4c-2. 共享 DataTable：筛选变化时保留旧行与表头（§17.5） ---------- */
       {
         await page.goto(`${base}/reports`, { waitUntil: "domcontentloaded" });
-        await page.waitForSelector(".table tbody tr", { timeout: 20_000 });
-        const rowsBefore = await page.locator(".table tbody tr").count();
-        const theadBefore = await page.locator(".table thead th").count();
+        /*
+         * 报告列表已按 §17.1 迁到 L1（ProTable），DOM 从 `.table` 变成了 antd 的表格结构。
+         * 这里按"当前用的是哪一层"选选择器，而不是写死某一种：
+         * 断言的是 §17.5 的行为（刷新保留旧行与表头），不是某一层表格的 DOM 细节。
+         */
+        await page.locator(".cs-protable, .table").first().waitFor({ timeout: 20_000 });
+        const proTable = (await page.locator(".cs-protable").count()) > 0;
+        const root = proTable ? page.locator(".cs-protable").first() : page.locator(".table").first();
+        const rowSel = proTable ? ".ant-table-tbody tr.ant-table-row" : "tbody tr";
+        const headSel = proTable ? ".ant-table-thead th" : "thead th";
+        await root.locator(rowSel).first().waitFor({ timeout: 20_000 });
+        const rowsBefore = await root.locator(rowSel).count();
+        const theadBefore = await root.locator(headSel).count();
         if (theadBefore === 0) problems.push(`[${vp.name}] 报告表格没有表头`);
 
         /* 改一次筛选 → useAsync 重新取数（夹具延迟 700ms），期间表格必须保持挂载。 */
         await page.locator(".cs-filterbar select").first().selectOption({ index: 1 });
         await page.waitForTimeout(250);
-        const rowsDuring = await page.locator(".table tbody tr").count();
-        const theadDuring = await page.locator(".table thead th").count();
-        const skeletonDuring = await page.locator(".skeleton").count();
+        const rowsDuring = await root.locator(rowSel).count();
+        const theadDuring = await root.locator(headSel).count();
+        const skeletonDuring = await page.locator(".skeleton, .ant-skeleton").count();
         const refreshBar = await page.locator(".cs-refreshbar").count();
-        if (rowsDuring < rowsBefore) problems.push(`[${vp.name}] DataTable 刷新时清空了旧行：${rowsBefore} → ${rowsDuring}`);
-        if (theadDuring !== theadBefore) problems.push(`[${vp.name}] DataTable 刷新时表头消失：${theadBefore} → ${theadDuring}`);
-        if (skeletonDuring > 0) problems.push(`[${vp.name}] DataTable 刷新时仍在渲染 skeleton`);
-        if (refreshBar === 0) problems.push(`[${vp.name}] DataTable 刷新时没有顶部进度指示`);
+        if (rowsDuring < rowsBefore) problems.push(`[${vp.name}] 表格刷新时清空了旧行：${rowsBefore} → ${rowsDuring}`);
+        if (theadDuring !== theadBefore) problems.push(`[${vp.name}] 表格刷新时表头消失：${theadBefore} → ${theadDuring}`);
+        if (skeletonDuring > 0) problems.push(`[${vp.name}] 表格刷新时仍在渲染 skeleton`);
+        if (refreshBar === 0) problems.push(`[${vp.name}] 表格刷新时没有顶部进度指示`);
         await page.waitForTimeout(1000);
       }
 

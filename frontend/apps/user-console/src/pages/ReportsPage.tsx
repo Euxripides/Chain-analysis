@@ -6,9 +6,8 @@ import { Link,
 import { useAuth } from "@chain/api-client";
 import {
   Button,
-  Card,
-  DataTable,
   DateTimeRange,
+  EmptyState,
   FilterBar,
   HashValue,
   MetaLine,
@@ -18,7 +17,8 @@ import {
   useDialog,
   type StatusTone,
 } from "@chain/ui";
-import { CsPageHeader } from "@chain/user-ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
+import { CsProTable } from "@chain/user-ui/pro-table";
 import { useAsync } from "../sprint4/common";
 
 /**
@@ -216,8 +216,14 @@ export default function ReportsPage() {
           />
         </FilterBar>
 
-        <Card flush>
-          <DataTable<ReportRow>
+        {/*
+          L1 普通业务表格用 ProTable（§17.1 明确把 Reports 列在 L1）。
+          迁移前这里是 DataTable —— L2 的"高密度详情表"控件，
+          用在列表页上就少了 §17.2 要求的列状态、密度、冻结主标识列。
+        */}
+        <div style={{ position: "relative", minWidth: 0 }}>
+          <CsRefreshBar active={loading && timeFiltered.length > 0} />
+          <CsProTable<ReportRow>
             caption="报告列表"
             loading={loading}
             /* §17.5：刷新保留旧行与表头，不清屏。 */
@@ -228,12 +234,17 @@ export default function ReportsPage() {
             rowKey={(row) => row.id}
             onRowActivate={(row) => navigate(`/reports/${row.id}`)}
             rowActivateLabel={(row) => `打开报告 r${row.revision}`}
-            emptyAction={
-              hasFilters ? (
-                <Button size="sm" onClick={resetFilters}>
-                  清除筛选
-                </Button>
-              ) : undefined
+            empty={
+              <EmptyState
+                title="没有符合条件的报告"
+                action={
+                  hasFilters ? (
+                    <Button size="sm" onClick={resetFilters}>
+                      清除筛选
+                    </Button>
+                  ) : null
+                }
+              />
             }
             columns={[
               {
@@ -310,7 +321,7 @@ export default function ReportsPage() {
               },
             ]}
           />
-        </Card>
+        </div>
       </PageSection>
     </>
   );
