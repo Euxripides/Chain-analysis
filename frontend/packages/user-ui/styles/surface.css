@@ -486,6 +486,11 @@ html[data-app="user"] .cs-page {
 }
 html[data-app="user"] .cs-page--reading { max-width: var(--cs-reading-w); }
 
+/* 窄屏取消阅读栏宽度限制（旧 responsive.css 的 `.cs-page--reading { max-width: none }` 被本层盖掉过）。 */
+@media (max-width: 639px) {
+  html[data-app="user"] .cs-page--reading { max-width: none; }
+}
+
 /* =========================================================================
  * 10. 首页 Hero 与 KPI 条（§32.2 / §32.3）
  * ========================================================================= */

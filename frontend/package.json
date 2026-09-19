@@ -15,6 +15,7 @@
     "check:bundle": "node scripts/bundle-budget-check.mjs",
     "check:contract": "node scripts/uc-contract-freeze-check.mjs",
     "check:architecture": "node scripts/uc-architecture-check.mjs",
+    "check:css-shadowing": "node scripts/css-shadowing-check.mjs",
     "verify:xlsx": "node scripts/verify-xlsx-tarball.mjs",
     "build:user": "vite build --config apps/user-console/vite.config.ts",
     "build:admin": "vite build --config apps/admin-console/vite.config.ts",

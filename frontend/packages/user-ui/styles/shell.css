@@ -164,6 +164,8 @@ html[data-app="user"] .cs-avatar { color: var(--cs-text-inverse); }
 
 /* ---------------- 响应式（§6.2 / §54） ---------------- */
 @media (min-width: 1600px) {
+  /* 旧样式表在 ≥1600 放大内容间距；本层的顶层 gap 会盖掉它，这里补回来。 */
+  html[data-app="user"] .cs-shell__content { gap: var(--sp-6); }
   html[data-app="user"] { --cs-rail-w: 248px; --cs-inspector-w: 360px; }
 }
 @media (max-width: 1599px) and (min-width: 1200px) {

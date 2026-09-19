@@ -366,6 +366,21 @@ html[data-app="user"] .cs-stickybar {
   -webkit-backdrop-filter: var(--cs-glass-blur);
   backdrop-filter: var(--cs-glass-blur);
 }
+/*
+ * 窄屏：旧样式表把底部操作栏改成不透明贴底（要避开 iOS safe area，
+ * 半透明 + 毛玻璃在贴底场景下会让下面的内容透出来）。
+ * 那条规则没有 !important，会被上面本层的玻璃质感盖掉，所以在这里补回来。
+ */
+@media (max-width: 639px) {
+  html[data-app="user"] .cs-stickybar {
+    /* 描边在断点内一并声明：旧文件在这里也改过 border-top，
+       新层必须显式表达"这一档用 ChainSight 的描边令牌"，而不是靠继承默认值。 */
+    border-top: 1px solid var(--cs-border);
+    background: var(--cs-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 html[data-app="user"] .cs-split__handle { background: var(--cs-border-subtle); }
 html[data-app="user"] .cs-split__handle:hover,
 html[data-app="user"] .cs-split__handle:focus-visible { background: var(--cs-primary-soft); }
@@ -384,6 +399,19 @@ html[data-app="user"] .cs-command {
   border-radius: var(--cs-radius-panel);
   background: var(--cs-surface);
   box-shadow: var(--cs-shadow-floating);
+}
+/*
+ * 窄屏：命令面板占满整屏（旧样式表的 `.cs-command { width:100%; border-radius:0 }`
+ * 在 @media (max-width:899px) 里，同样被本层盖掉）。
+ * 手机上留一圈圆角面板会让列表可用高度进一步缩水。
+ */
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-command {
+    width: 100%;
+    max-height: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
 }
 html[data-app="user"] .cs-command__search { border-bottom: 1px solid var(--cs-border-subtle); }
 html[data-app="user"] .cs-command__item { border-radius: var(--cs-radius-control); }

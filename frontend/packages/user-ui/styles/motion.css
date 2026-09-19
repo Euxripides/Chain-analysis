@@ -257,7 +257,17 @@ html[data-page-visible="false"] .cs-ripple-once {
   html[data-app="user"] .cs-pageheader__titlerow,
   html[data-app="user"] .cs-pageheader__actions,
   html[data-app="user"] .cs-surface,
-  html[data-app="user"] .cs-interactivecard {
+  html[data-app="user"] .cs-interactivecard,
+  /*
+   * 加载指示器也必须停。
+   *
+   * 旧样式表里有一条 `.cs-spin { animation: none }`（**没有** !important），
+   * 而本层用 `html[data-app="user"] .cs-spin`（权重更高）重新开了旋转动画，
+   * 于是"减少动态效果"下转子照转——旧规则被无声盖掉，谁也没发现。
+   * 这正是 CSS 覆盖遮蔽检查要抓的那一类：新层赢得了桌面取值，
+   * 顺手也赢掉了旧文件里的无障碍兜底。
+   */
+  html[data-app="user"] .cs-spin {
     animation: none !important;
     transition: none !important;
   }

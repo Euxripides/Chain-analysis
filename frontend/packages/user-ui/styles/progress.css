@@ -39,7 +39,22 @@ html[data-app="user"] .cs-progress__fill[data-tone="failed"] { background: var(-
 html[data-app="user"] .cs-progress__fill[data-tone="cancelled"] { background: var(--cs-text-muted); }
 html[data-app="user"] .cs-progress__fill[data-tone="info"] { background: var(--cs-primary); }
 
-/* indeterminate：流动 1.4s（§25.2）。Reduced Motion 下变静态斑纹（见 motion.css）。 */
+/*
+ * indeterminate：流动 1.4s（§25.2）。Reduced Motion 下变静态斑纹。
+ *
+ * 这条兜底必须写在这里：旧样式表在 @media (prefers-reduced-motion) 里
+ * 把 background 换成静态纹理，但**没有加 !important**，
+ * 会被本文件下面那条权重更高的 background 盖掉，于是"减少动态效果"下
+ * 流动条纹照旧在跑（动画属性被 !important 停掉了，背景纹理却还在动）。
+ */
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-progress__fill--indeterminate,
+  html[data-app="user"] .cs-compactprogress__fill--indeterminate {
+    background: repeating-linear-gradient(90deg, var(--cyan-500) 0 6px, transparent 6px 12px);
+  }
+}
+
+/* indeterminate：流动 1.4s（§25.2）。 */
 html[data-app="user"] .cs-progress__fill--indeterminate {
   width: 34% !important;
   background: linear-gradient(90deg, transparent, var(--cs-primary), var(--cs-cyan), transparent);
