@@ -1,0 +1,95 @@
+########## dual-system-quality ##########
+[26/36] [user-mobile] › tests/dual-system-quality.spec.ts:207:3 › UX-004 长表渲染预算 › 表格按页窗口渲染，DOM 行数不随数据量线性增长
+[27/36] [user-mobile] › tests/dual-system-quality.spec.ts:240:3 › SEC-002 XSS / Markdown 注入 › 注入的 HTML 载荷以纯文本渲染，不执行
+[28/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › mobile (390px) 无页面级横向滚动
+[29/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › tablet (768px) 无页面级横向滚动
+[30/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › laptop (1024px) 无页面级横向滚动
+[31/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › desktop (1440px) 无页面级横向滚动
+[32/36] [admin-tablet] › tests/dual-system-quality.spec.ts:144:3 › UX-002 四断点布局 › 后台管理系统在四个断点下无横向滚动
+[33/36] [admin-tablet] › tests/dual-system-quality.spec.ts:162:3 › UX-003 颜色对比度与状态可辨识 › 所有可见文本满足 WCAG AA 对比度
+[34/36] [admin-tablet] › tests/dual-system-quality.spec.ts:191:3 › UX-003 颜色对比度与状态可辨识 › 状态徽标带形状前缀，不只依赖颜色
+[35/36] [admin-tablet] › tests/dual-system-quality.spec.ts:207:3 › UX-004 长表渲染预算 › 表格按页窗口渲染，DOM 行数不随数据量线性增长
+[36/36] [admin-tablet] › tests/dual-system-quality.spec.ts:240:3 › SEC-002 XSS / Markdown 注入 › 注入的 HTML 载荷以纯文本渲染，不执行
+  36 passed (6.4m)
+RC_dual-system-quality=0
+########## dual-system-sprint4 ##########
+
+Running 6 tests using 1 worker
+
+[1/6] [user-desktop] › tests/dual-system-sprint4.spec.ts:137:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+[2/6] [user-desktop] › tests/dual-system-sprint4.spec.ts:305:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+[3/6] [admin-desktop] › tests/dual-system-sprint4.spec.ts:137:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+[4/6] [admin-desktop] › tests/dual-system-sprint4.spec.ts:305:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+[5/6] [user-mobile] › tests/dual-system-sprint4.spec.ts:137:3 › Sprint 4 案件闭环 UI › USER-001/004/005/006：案件、对象、调查、Finding/Evidence 页面真实交互
+[6/6] [user-mobile] › tests/dual-system-sprint4.spec.ts:305:3 › Sprint 4 案件闭环 UI › USER-010：通知页 Dialog 交互与无效跳转安全失败
+  6 skipped
+RC_dual-system-sprint4=0
+########## dual-system-sprint5 ##########
+[17/27] [admin-desktop] › tests/dual-system-sprint5.spec.ts:412:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互
+[18/27] [admin-desktop] › tests/dual-system-sprint5.spec.ts:457:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染
+[19/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:133:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 全局搜索按类型分组，并可从结果进入地址详情
+[20/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:167:3 › S5-FE-01 搜索 / Explorer / 地址 / 交易 › 交易详情本地解码与 Logs/Trace Tab
+[21/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:191:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › Coverage HIT 预览默认不复用 Provider，创建成功提示走 Dialog
+[22/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:255:3 › S5-FE-02 下载表单 / 任务列表 / 任务详情 › 任务列表与详情展示地址/Dataset/Shard 三层进度并连接 SSE
+[23/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:280:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › Canvas 第二客户端 stale 保存收到 412 与字段级 diff，且不静默覆盖
+[24/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:340:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-011 移动端 Canvas 列表视图可关闭 Dialog 且无横向溢出
+[25/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:360:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › USER-012 键盘完成搜索并进入结果，Dialog 焦点可逃逸
+[26/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:412:3 › S5-FE-03 Canvas 并发保存 / USER-007 / USER-011 / USER-012 / UX-004 › UX-004 10k 真实长表：虚拟滚动 DOM 有界、滚动可交互
+[27/27] [user-mobile] › tests/dual-system-sprint5.spec.ts:457:3 › S5-ADMIN-01 后台全局任务与固定诊断链 › 全局任务列表跨组织可见，诊断链按固定顺序渲染
+  27 skipped
+RC_dual-system-sprint5=0
+########## dual-system-nav-permission ##########
+[6/16] [admin-desktop] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Platform Admin 只看到允许的入口，允许的入口一个不少
+[7/16] [admin-desktop] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Auditor 只看到允许的入口，允许的入口一个不少
+[8/16] [admin-desktop] › tests/dual-system-nav-permission.spec.ts:144:1 › §7.5 用户端导航同样按权限裁剪（viewer 不应看到写操作入口）
+[9/16] [user-mobile] › tests/dual-system-nav-permission.spec.ts:96:1 › §7.5 后台导航：Owner 的每个入口都能打开（导航不含走不通的入口）
+[10/16] [user-mobile] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Platform Admin 只看到允许的入口，允许的入口一个不少
+[11/16] [user-mobile] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Auditor 只看到允许的入口，允许的入口一个不少
+[12/16] [user-mobile] › tests/dual-system-nav-permission.spec.ts:144:1 › §7.5 用户端导航同样按权限裁剪（viewer 不应看到写操作入口）
+[13/16] [cross-role] › tests/dual-system-nav-permission.spec.ts:96:1 › §7.5 后台导航：Owner 的每个入口都能打开（导航不含走不通的入口）
+[14/16] [cross-role] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Platform Admin 只看到允许的入口，允许的入口一个不少
+[15/16] [cross-role] › tests/dual-system-nav-permission.spec.ts:117:3 › §7.5 后台导航：Auditor 只看到允许的入口，允许的入口一个不少
+[16/16] [cross-role] › tests/dual-system-nav-permission.spec.ts:144:1 › §7.5 用户端导航同样按权限裁剪（viewer 不应看到写操作入口）
+  16 skipped
+RC_dual-system-nav-permission=0
+########## dual-system-cross-role ##########
+[6/16] [admin-desktop] › tests/dual-system-cross-role.spec.ts:63:1 › AUTH-009 后台会话调用用户层 API -> 服务端 401（受众严格分离）
+[7/16] [admin-desktop] › tests/dual-system-cross-role.spec.ts:71:1 › RBAC-001 viewer 登录后台 -> 服务端拒绝，导航不出现后台条目
+[8/16] [admin-desktop] › tests/dual-system-cross-role.spec.ts:88:1 › UX-003 多工作区身份登录必须由用户显式选择工作区
+[9/16] [user-mobile] › tests/dual-system-cross-role.spec.ts:51:1 › RBAC-008 用户层会话调用后台 API -> 服务端 401，页面不进入后台外壳
+[10/16] [user-mobile] › tests/dual-system-cross-role.spec.ts:63:1 › AUTH-009 后台会话调用用户层 API -> 服务端 401（受众严格分离）
+[11/16] [user-mobile] › tests/dual-system-cross-role.spec.ts:71:1 › RBAC-001 viewer 登录后台 -> 服务端拒绝，导航不出现后台条目
+[12/16] [user-mobile] › tests/dual-system-cross-role.spec.ts:88:1 › UX-003 多工作区身份登录必须由用户显式选择工作区
+[13/16] [cross-role] › tests/dual-system-cross-role.spec.ts:51:1 › RBAC-008 用户层会话调用后台 API -> 服务端 401，页面不进入后台外壳
+[14/16] [cross-role] › tests/dual-system-cross-role.spec.ts:63:1 › AUTH-009 后台会话调用用户层 API -> 服务端 401（受众严格分离）
+[15/16] [cross-role] › tests/dual-system-cross-role.spec.ts:71:1 › RBAC-001 viewer 登录后台 -> 服务端拒绝，导航不出现后台条目
+[16/16] [cross-role] › tests/dual-system-cross-role.spec.ts:88:1 › UX-003 多工作区身份登录必须由用户显式选择工作区
+  16 skipped
+RC_dual-system-cross-role=0
+########## dual-system-reduced-motion ##########
+[2/12] [user-desktop] › tests/dual-system-reduced-motion.spec.ts:46:1 › 减少动态效果下弹窗仍可用：打开、焦点陷阱、ESC 关闭、焦点返回
+[3/12] [user-desktop] › tests/dual-system-reduced-motion.spec.ts:67:1 › 减少动态效果下没有超过 200ms 的过渡（不是只有观感变快）
+[4/12] [admin-desktop] › tests/dual-system-reduced-motion.spec.ts:39:1 › 预置条件：浏览器确实处于 prefers-reduced-motion=reduce
+[5/12] [admin-desktop] › tests/dual-system-reduced-motion.spec.ts:46:1 › 减少动态效果下弹窗仍可用：打开、焦点陷阱、ESC 关闭、焦点返回
+[6/12] [admin-desktop] › tests/dual-system-reduced-motion.spec.ts:67:1 › 减少动态效果下没有超过 200ms 的过渡（不是只有观感变快）
+[7/12] [user-mobile] › tests/dual-system-reduced-motion.spec.ts:39:1 › 预置条件：浏览器确实处于 prefers-reduced-motion=reduce
+[8/12] [user-mobile] › tests/dual-system-reduced-motion.spec.ts:46:1 › 减少动态效果下弹窗仍可用：打开、焦点陷阱、ESC 关闭、焦点返回
+[9/12] [user-mobile] › tests/dual-system-reduced-motion.spec.ts:67:1 › 减少动态效果下没有超过 200ms 的过渡（不是只有观感变快）
+[10/12] [reduced-motion] › tests/dual-system-reduced-motion.spec.ts:39:1 › 预置条件：浏览器确实处于 prefers-reduced-motion=reduce
+[11/12] [reduced-motion] › tests/dual-system-reduced-motion.spec.ts:46:1 › 减少动态效果下弹窗仍可用：打开、焦点陷阱、ESC 关闭、焦点返回
+[12/12] [reduced-motion] › tests/dual-system-reduced-motion.spec.ts:67:1 › 减少动态效果下没有超过 200ms 的过渡（不是只有观感变快）
+  12 skipped
+RC_dual-system-reduced-motion=0
+########## SWEEP ##########
+
+Running 1 test using 1 worker
+
+[1/1] [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts:160:3 › UC-SWEEP 全量点击巡检 › 逐个点开每一个控件并记录结果
+[user-desktop] › tests/dual-system-uc-button-sweep.spec.ts:160:3 › UC-SWEEP 全量点击巡检 › 逐个点开每一个控件并记录结果
+UC-SWEEP 完成：routes=15 controls=373 clicked=287 dialogCancelled=7 failures=0 pageErrors=0
+
+  Slow test file: [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts (11.1m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 passed (11.1m)
+RC_SWEEP=0
+ALL_DONE

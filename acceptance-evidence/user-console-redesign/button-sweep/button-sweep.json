@@ -1,0 +1,4703 @@
+{
+  "summary": {
+    "generatedAt": "2026-09-18T22:03:14.414Z",
+    "baseURL": "https://127.0.0.1:8448",
+    "account": "admin@local",
+    "routes": 21,
+    "totalControls": 484,
+    "clicked": 381,
+    "dialogCancelled": 14,
+    "skippedDestructive": 26,
+    "skippedDisabled": 62,
+    "failures": [],
+    "pageErrors": []
+  },
+  "records": [
+    {
+      "route": "/app-v2/home",
+      "index": 0,
+      "tag": "button",
+      "name": "口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 1,
+      "tag": "a",
+      "name": "新建案件",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/new"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 2,
+      "tag": "button",
+      "name": "进行中案件 口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 3,
+      "tag": "button",
+      "name": "调查任务 口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 4,
+      "tag": "button",
+      "name": "运行中下载 口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 5,
+      "tag": "button",
+      "name": "已生成报告 口径说明",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 6,
+      "tag": "a",
+      "name": "调查任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 7,
+      "tag": "a",
+      "name": "任务中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 8,
+      "tag": "a",
+      "name": "打开待我处理",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/inbox"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 9,
+      "tag": "a",
+      "name": "全部案件",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 10,
+      "tag": "a",
+      "name": "s7-owner-probe",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 11,
+      "tag": "a",
+      "name": "夹具案件（默认组织）",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ae8326ed-a6dc-414c-821f-b9a2973fc258/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 12,
+      "tag": "a",
+      "name": "ChatGPT MCP",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1c48a21c-7a26-4b10-872d-fe17b1ae9151/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 13,
+      "tag": "a",
+      "name": "画布验收-mobile-1788967512827",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/aeaf93c4-eca3-43e2-9a50-f988d17a27f4/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 14,
+      "tag": "a",
+      "name": "画布验收-desktop-1788967463835",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/3e440e81-d482-4cdd-898b-17e170ff210c/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 15,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966885310",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1a1326a9-ca82-4afa-8999-8ac6ba34fe6b/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 16,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966839704",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/80928dea-d04c-46ad-8987-742c203e7c7a/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 17,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966774087",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/b65fb8cf-c16c-4303-857e-64ec90fd49fd/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 18,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966696334",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/6d5c324b-d518-4d95-8f88-94ebf7ae95b0/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 19,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966150879",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/c377601b-1cec-4991-bacf-c4c9c3dece4b/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 20,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966106287",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1934fde5-cf5a-46e8-abf6-a841bc98d3f9/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 21,
+      "tag": "a",
+      "name": "画布验收-mobile-1788964373911",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/35f54552-0cea-4ecb-b66f-2b2b7b9f6c1d/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 22,
+      "tag": "a",
+      "name": "画布验收-desktop-1788964339946",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/00ee355e-f02c-4b64-afbe-5b93aa28b72d/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 23,
+      "tag": "a",
+      "name": "画布验收-mobile-1788962689137",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/52acbb6a-15f2-4d83-8ff2-a4a8e4e500a4/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 24,
+      "tag": "a",
+      "name": "画布验收-desktop-1788962627426",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/91c4e804-41c8-4fb2-8265-d626d6d9eedc/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 25,
+      "tag": "a",
+      "name": "画布验收-mobile-1788960978483",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/c87a32d4-a756-401c-85a5-9b54cf996e00/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 26,
+      "tag": "a",
+      "name": "画布验收-desktop-1788960956596",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/99a717eb-d178-468e-970d-c19ceb5550c1/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 27,
+      "tag": "a",
+      "name": "画布验收-mobile-1788960862252",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/a53451d6-5824-4fd7-987d-90f5c66c6c3c/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 28,
+      "tag": "a",
+      "name": "画布验收-desktop-1788960828109",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/39864e94-26c5-43ac-b0dd-fd8d24325000/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 29,
+      "tag": "a",
+      "name": "画布验收-mobile-1788959570994",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/433e20ac-606c-49a9-bf58-a2a54fa700c6/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 30,
+      "tag": "a",
+      "name": "画布验收-desktop-1788959552314",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ed81e4d8-f8f5-4b31-a1b2-3d6aa1592ca4/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 31,
+      "tag": "a",
+      "name": "画布验收-mobile-1788959390590",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/8e2b9ef2-2151-4eab-8226-a10104b09532/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 32,
+      "tag": "a",
+      "name": "画布验收-desktop-1788959371812",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/8a138215-02dd-429b-b02f-010a0ee51ff7/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 33,
+      "tag": "a",
+      "name": "Phase3验收-20260909210812",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/f5a6d5b6-cb4e-4715-b556-b86499f69bfa/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 34,
+      "tag": "a",
+      "name": "星链",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ae49f453-86af-4c5f-9f13-df903da01abe/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 35,
+      "tag": "a",
+      "name": "盘古",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/4ef81c5a-0920-4aec-a007-fa54290eb76b/overview"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 36,
+      "tag": "a",
+      "name": "新建案件",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/new"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 37,
+      "tag": "a",
+      "name": "新建下载",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 38,
+      "tag": "a",
+      "name": "新建调查",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 39,
+      "tag": "a",
+      "name": "全局搜索",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/search"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 40,
+      "tag": "a",
+      "name": "生成报告",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/home",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports"
+    },
+    {
+      "route": "/app-v2/home",
+      "index": 41,
+      "tag": "a",
+      "name": "进入后台管理",
+      "action": "skipped-navigation-external",
+      "outcome": "ok",
+      "detail": "/admin/overview"
+    },
+    {
+      "route": "/app-v2/search",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/search",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/search",
+      "index": 1,
+      "tag": "button",
+      "name": "说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/search",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/search"
+    },
+    {
+      "route": "/app-v2/search",
+      "index": 2,
+      "tag": "button",
+      "name": "搜索",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 1,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 2,
+      "tag": "button",
+      "name": "新建案件",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/new"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 3,
+      "tag": "button",
+      "name": "搜索",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 4,
+      "tag": "a",
+      "name": "s7-owner-probe",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 5,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 6,
+      "tag": "a",
+      "name": "夹具案件（默认组织）",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ae8326ed-a6dc-414c-821f-b9a2973fc258/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 7,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 8,
+      "tag": "a",
+      "name": "ChatGPT MCP",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1c48a21c-7a26-4b10-872d-fe17b1ae9151/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 9,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 10,
+      "tag": "a",
+      "name": "画布验收-mobile-1788967512827",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/aeaf93c4-eca3-43e2-9a50-f988d17a27f4/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 11,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 12,
+      "tag": "a",
+      "name": "画布验收-desktop-1788967463835",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/3e440e81-d482-4cdd-898b-17e170ff210c/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 13,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 14,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966885310",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1a1326a9-ca82-4afa-8999-8ac6ba34fe6b/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 15,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 16,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966839704",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/80928dea-d04c-46ad-8987-742c203e7c7a/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 17,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 18,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966774087",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/b65fb8cf-c16c-4303-857e-64ec90fd49fd/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 19,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 20,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966696334",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/6d5c324b-d518-4d95-8f88-94ebf7ae95b0/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 21,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 22,
+      "tag": "a",
+      "name": "画布验收-mobile-1788966150879",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/c377601b-1cec-4991-bacf-c4c9c3dece4b/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 23,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 24,
+      "tag": "a",
+      "name": "画布验收-desktop-1788966106287",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/1934fde5-cf5a-46e8-abf6-a841bc98d3f9/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 25,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 26,
+      "tag": "a",
+      "name": "画布验收-mobile-1788964373911",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/35f54552-0cea-4ecb-b66f-2b2b7b9f6c1d/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 27,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 28,
+      "tag": "a",
+      "name": "画布验收-desktop-1788964339946",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/00ee355e-f02c-4b64-afbe-5b93aa28b72d/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 29,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 30,
+      "tag": "a",
+      "name": "画布验收-mobile-1788962689137",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/52acbb6a-15f2-4d83-8ff2-a4a8e4e500a4/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 31,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 32,
+      "tag": "a",
+      "name": "画布验收-desktop-1788962627426",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/91c4e804-41c8-4fb2-8265-d626d6d9eedc/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 33,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 34,
+      "tag": "a",
+      "name": "画布验收-mobile-1788960978483",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/c87a32d4-a756-401c-85a5-9b54cf996e00/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 35,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 36,
+      "tag": "a",
+      "name": "画布验收-desktop-1788960956596",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/99a717eb-d178-468e-970d-c19ceb5550c1/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 37,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 38,
+      "tag": "a",
+      "name": "画布验收-mobile-1788960862252",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/a53451d6-5824-4fd7-987d-90f5c66c6c3c/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 39,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 40,
+      "tag": "a",
+      "name": "画布验收-desktop-1788960828109",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/39864e94-26c5-43ac-b0dd-fd8d24325000/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 41,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 42,
+      "tag": "a",
+      "name": "画布验收-mobile-1788959570994",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/433e20ac-606c-49a9-bf58-a2a54fa700c6/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 43,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 44,
+      "tag": "a",
+      "name": "画布验收-desktop-1788959552314",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ed81e4d8-f8f5-4b31-a1b2-3d6aa1592ca4/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 45,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 46,
+      "tag": "a",
+      "name": "画布验收-mobile-1788959390590",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/8e2b9ef2-2151-4eab-8226-a10104b09532/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 47,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 48,
+      "tag": "a",
+      "name": "画布验收-desktop-1788959371812",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/8a138215-02dd-429b-b02f-010a0ee51ff7/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 49,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 50,
+      "tag": "a",
+      "name": "Phase3验收-20260909210812",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/f5a6d5b6-cb4e-4715-b556-b86499f69bfa/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 51,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 52,
+      "tag": "a",
+      "name": "星链",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/ae49f453-86af-4c5f-9f13-df903da01abe/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 53,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 54,
+      "tag": "a",
+      "name": "盘古",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/4ef81c5a-0920-4aec-a007-fa54290eb76b/overview"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 55,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 56,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/cases",
+      "index": 57,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/cases/new",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/cases/new",
+      "index": 1,
+      "tag": "a",
+      "name": "案件中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases/new",
+      "index": 2,
+      "tag": "button",
+      "name": "取消",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases/new",
+      "index": 3,
+      "tag": "button",
+      "name": "创建案件",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/new"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 1,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 2,
+      "tag": "button",
+      "name": "发起调查",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 3,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788967487446",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 4,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 5,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 6,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788967438687",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/6449aca1-edb3-49fc-9ae3-3705c0469bc9/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 7,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 8,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 9,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788966864916",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/52c7e701-0657-4a40-89b7-34ae67c1c680/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 10,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 11,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 12,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788966818265",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/ce27c8a9-48d3-4442-bae0-5cc36367cc80/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 13,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 14,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 15,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788966752428",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/bdcea794-3d88-4c91-98ec-3124ae6ab0e1/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 16,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 17,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 18,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788966671802",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/5a54de6f-0693-4701-b9ed-86236e431d8b/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 19,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 20,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 21,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788966132095",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/188653bf-76ff-41e7-a9a5-c9a6749bfdd0/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 22,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 23,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 24,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788966085624",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/e0f9321b-8026-4732-9c4b-8f787daa734c/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 25,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 26,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 27,
+      "tag": "a",
+      "name": "Phase 5 Advanced Investigation 验收",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/9b8433c2-1d07-421e-8406-4823b4ef45e9/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 28,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 29,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 30,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788964362600",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/3eff8782-ab23-44a1-ac70-8ab72f2a71d7/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 31,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 32,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 33,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788964329061",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/d5d896ef-f986-4563-ba1c-f2fae22776fb/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 34,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 35,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 36,
+      "tag": "a",
+      "name": "Phase 4 Semantic Engine 验收",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/01fe6d41-9fbf-43af-97ae-f67d13716082/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 37,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 38,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 39,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788962687215",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/59e96159-13af-41de-a2ba-649bd0de5246/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 40,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 41,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 42,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788962625682",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/3a2c6383-d21d-4b40-b89a-e64867e95fa4/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 43,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 44,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 45,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788962561707",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/6dbc43aa-6fd9-48db-b8e3-452ef96ab86e/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 46,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 47,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 48,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788962384591",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/01db5c13-e2d4-4eba-96dd-98a319bd3e8f/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 49,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 50,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 51,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788962373870",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/911124d3-2007-4926-baeb-8a1b9e530bd4/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 52,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 53,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 54,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788961996508",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/4b957c4c-1eda-4ec2-b634-64f2287b813a/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 55,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 56,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 57,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788962025823",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/b8b7ef54-74ba-4f79-97c0-b41a8a8b892b/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 58,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 59,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 60,
+      "tag": "a",
+      "name": "启动语义验收-desktop-1788962160796",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/7c357bb2-d7dd-4510-bd6e-86f6b45bc10f/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 61,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 62,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 63,
+      "tag": "a",
+      "name": "启动语义验收-mobile-1788962171353",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/0b800b04-38eb-468b-a3f7-28d9c358cb4f/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 64,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 65,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 66,
+      "tag": "a",
+      "name": "验证持久化资金分析证据闭环",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/ee66c8c6-7c8c-4ef0-9136-da50bc388025/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 67,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 68,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 69,
+      "tag": "a",
+      "name": "部署验收：验证全覆盖复用与持久化运行时",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/28f8fcac-1d34-4bea-b863-19e1ce45c62d/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 70,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 71,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 72,
+      "tag": "a",
+      "name": "Phase 0 deployment state and outbox acceptance",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/5eac4cc1-f6c4-4ae9-981f-e8c8f620d967/workbench"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 73,
+      "tag": "button",
+      "name": "复制Subject 值",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 74,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 75,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations",
+      "index": 76,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 0,
+      "tag": "a",
+      "name": "调查任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 1,
+      "tag": "button",
+      "name": "计算说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 2,
+      "tag": "button",
+      "name": "创建调查",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 3,
+      "tag": "button",
+      "name": "1选择案件与目标",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 4,
+      "tag": "button",
+      "name": "2配置对象与模式",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 5,
+      "tag": "button",
+      "name": "3Coverage 预览与确认",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/new",
+      "index": 6,
+      "tag": "button",
+      "name": "下一步",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new"
+    },
+    {
+      "route": "/app-v2/graph",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/graph",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/graph",
+      "index": 1,
+      "tag": "button",
+      "name": "刷新",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/graph",
+      "index": 2,
+      "tag": "button",
+      "name": "新建画布",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/graph",
+      "index": 3,
+      "tag": "button",
+      "name": "查看说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/graph",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/graph"
+    },
+    {
+      "route": "/app-v2/explorer",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/explorer",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/explorer",
+      "index": 1,
+      "tag": "button",
+      "name": "说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/explorer",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/explorer"
+    },
+    {
+      "route": "/app-v2/explorer",
+      "index": 2,
+      "tag": "button",
+      "name": "查询",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/explorer",
+      "index": 3,
+      "tag": "button",
+      "name": "清空",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 0,
+      "tag": "a",
+      "name": "任务中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 1,
+      "tag": "button",
+      "name": "任务中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 2,
+      "tag": "button",
+      "name": "1① 对象与地址",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 3,
+      "tag": "button",
+      "name": "2② 链与范围",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 4,
+      "tag": "button",
+      "name": "3③ Dataset",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 5,
+      "tag": "button",
+      "name": "4④ 复用策略",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 6,
+      "tag": "button",
+      "name": "5⑤ 预览与创建",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 7,
+      "tag": "button",
+      "name": "解析导入",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 8,
+      "tag": "button",
+      "name": "导入 CSV / XLSX",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 9,
+      "tag": "button",
+      "name": "清空",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 10,
+      "tag": "button",
+      "name": "预览 Coverage 与成本",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 11,
+      "tag": "button",
+      "name": "立即预览",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 12,
+      "tag": "button",
+      "name": "取消",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/downloads/new",
+      "index": 13,
+      "tag": "button",
+      "name": "创建下载任务",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/downloads/new",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 1,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 2,
+      "tag": "button",
+      "name": "口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 3,
+      "tag": "a",
+      "name": "新建下载任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/downloads/new"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 4,
+      "tag": "button",
+      "name": "运行中0个任务RUNNING",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 5,
+      "tag": "button",
+      "name": "排队中0个任务QUEUED",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 6,
+      "tag": "button",
+      "name": "失败0个任务FAILED",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 7,
+      "tag": "button",
+      "name": "已完成0个任务COMPLETED",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 8,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 9,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 10,
+      "tag": "button",
+      "name": "应用来源",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs",
+      "index": 11,
+      "tag": "button",
+      "name": "重置筛选",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 1,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 2,
+      "tag": "button",
+      "name": "口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 3,
+      "tag": "button",
+      "name": "新建导出",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 4,
+      "tag": "button",
+      "name": "创建导出",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 5,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 6,
+      "tag": "button",
+      "name": "下一页",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 7,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 8,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 9,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 10,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 11,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 12,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 13,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 14,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 15,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 16,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 17,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 18,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 19,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 20,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 21,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 22,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 23,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 24,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 25,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 26,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 27,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 28,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 29,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 30,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 31,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 32,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 33,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 34,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 35,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 36,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 37,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 38,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 39,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 40,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 41,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 42,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 43,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 44,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 45,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 46,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 47,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 48,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 49,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 50,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 51,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 52,
+      "tag": "button",
+      "name": "错误详情",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 53,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 54,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 55,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 56,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 57,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 58,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 59,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 60,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 61,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 62,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 63,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 64,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 65,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 66,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 67,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 68,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 69,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 70,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 71,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 72,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 73,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 74,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 75,
+      "tag": "button",
+      "name": "复制导出 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 76,
+      "tag": "button",
+      "name": "复制导出 SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/exports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/exports"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 77,
+      "tag": "button",
+      "name": "下载票据",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 78,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/exports",
+      "index": 79,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/inbox",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/inbox",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/inbox",
+      "index": 1,
+      "tag": "button",
+      "name": "口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/inbox",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/inbox"
+    },
+    {
+      "route": "/app-v2/inbox",
+      "index": 2,
+      "tag": "a",
+      "name": "调查任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/inbox",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/inbox",
+      "index": 3,
+      "tag": "a",
+      "name": "报告中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/inbox",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 1,
+      "tag": "button",
+      "name": "口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 2,
+      "tag": "a",
+      "name": "报告 r9",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 3,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 4,
+      "tag": "a",
+      "name": "报告 r8",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/b2c6350e-920a-4623-b7f3-2be6c6360974"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 5,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/b2c6350e-920a-4623-b7f3-2be6c6360974"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 6,
+      "tag": "a",
+      "name": "报告 r7",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/ece9af4e-dd5e-4ade-9897-a3a03607b9fb"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 7,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/ece9af4e-dd5e-4ade-9897-a3a03607b9fb"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 8,
+      "tag": "a",
+      "name": "报告 r6",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/cb900246-0949-41e2-8c64-8efabbf9beef"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 9,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/cb900246-0949-41e2-8c64-8efabbf9beef"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 10,
+      "tag": "a",
+      "name": "报告 r5",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/96c7036e-7d0d-4fad-91ad-13da744728cf"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 11,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/96c7036e-7d0d-4fad-91ad-13da744728cf"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 12,
+      "tag": "a",
+      "name": "报告 r4",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/4df66211-1cf3-4a07-95af-e87e5eeada4c"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 13,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/4df66211-1cf3-4a07-95af-e87e5eeada4c"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 14,
+      "tag": "a",
+      "name": "报告 r3",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/45cd836e-b9c9-4040-9955-d2e6a30c7ad3"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 15,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/45cd836e-b9c9-4040-9955-d2e6a30c7ad3"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 16,
+      "tag": "a",
+      "name": "报告 r2",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/1a5bd629-4ba8-4dd4-8311-3977aa5b8a86"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 17,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/1a5bd629-4ba8-4dd4-8311-3977aa5b8a86"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 18,
+      "tag": "a",
+      "name": "报告 r1",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/9a764d73-3334-4b17-b905-47684057728e"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 19,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/9a764d73-3334-4b17-b905-47684057728e"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 20,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/reports",
+      "index": 21,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/notifications",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/notifications",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/notifications",
+      "index": 1,
+      "tag": "button",
+      "name": "全部标记已读",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/notifications",
+      "index": 2,
+      "tag": "button",
+      "name": "全部0",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/notifications",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/notifications"
+    },
+    {
+      "route": "/app-v2/notifications",
+      "index": 3,
+      "tag": "button",
+      "name": "未读0",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/notifications",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/notifications"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 1,
+      "tag": "button",
+      "name": "保存",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 2,
+      "tag": "button",
+      "name": "显示密码",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 3,
+      "tag": "button",
+      "name": "显示密码",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 4,
+      "tag": "button",
+      "name": "修改密码",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 5,
+      "tag": "button",
+      "name": "启用 MFA",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 6,
+      "tag": "button",
+      "name": "退出其它设备",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 7,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 8,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 9,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 10,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 11,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 12,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 13,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 14,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 15,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 16,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 17,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 18,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 19,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 20,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 21,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 22,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 23,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 24,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 25,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 26,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 27,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 28,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 29,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 30,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 31,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 32,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-destructive",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 33,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 34,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 35,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 36,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/profile",
+      "index": 37,
+      "tag": "button",
+      "name": "复制会话 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/profile",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/profile"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 1,
+      "tag": "a",
+      "name": "案件中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 2,
+      "tag": "button",
+      "name": "启用",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 3,
+      "tag": "button",
+      "name": "关闭",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 4,
+      "tag": "button",
+      "name": "发起调查",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/new?case_id=129ee936-1e32-4ce8-bd89-272f18e1b421"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 5,
+      "tag": "a",
+      "name": "概览",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 6,
+      "tag": "a",
+      "name": "调查对象",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/subjects"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 7,
+      "tag": "a",
+      "name": "案件调查",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/investigations"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 8,
+      "tag": "a",
+      "name": "证据中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/evidence"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 9,
+      "tag": "a",
+      "name": "案件报告",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/reports"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 10,
+      "tag": "a",
+      "name": "案件成员",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/members"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 11,
+      "tag": "a",
+      "name": "案件动态",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/activity"
+    },
+    {
+      "route": "/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "index": 12,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/cases/129ee936-1e32-4ce8-bd89-272f18e1b421/overview"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 0,
+      "tag": "a",
+      "name": "调查任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 1,
+      "tag": "button",
+      "name": "复制调查对象地址",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 2,
+      "tag": "button",
+      "name": "提交复核",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 3,
+      "tag": "button",
+      "name": "取消",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 4,
+      "tag": "button",
+      "name": "Findings",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 5,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 6,
+      "tag": "button",
+      "name": "折叠 Evidence 栏",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 7,
+      "tag": "button",
+      "name": "复制 c3dd0c09-c…e93843d1",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 8,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 9,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 10,
+      "tag": "a",
+      "name": "out USDT TSAseKcw5AyAQb4d4HEG7eTw4ghyFZsbT…",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/8b8fc995-4513-4366-b447-1b7d6e175da6"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 11,
+      "tag": "button",
+      "name": "打开证据检查器：out USDT TSAseKcw5AyAQb4d4HEG7eTw4ghyFZsbTt",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 12,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 13,
+      "tag": "a",
+      "name": "out USDT TGczVe6pmq1qtewkH8dJs28oDGM63n3kY…",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/197508dd-641f-4e1e-9bfc-26848e19c53f"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 14,
+      "tag": "button",
+      "name": "打开证据检查器：out USDT TGczVe6pmq1qtewkH8dJs28oDGM63n3kYT",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 15,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 16,
+      "tag": "a",
+      "name": "in USDT TJZUPSUN2tB11vwL3u9SUCM43eDBB86T4t",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/f482f959-909b-45ed-bc77-64d054139237"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 17,
+      "tag": "button",
+      "name": "打开证据检查器：in USDT TJZUPSUN2tB11vwL3u9SUCM43eDBB86T4t",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 18,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 19,
+      "tag": "a",
+      "name": "in USDT TYABVzdU2LP1E6Ay1SudgN2q6Gi1C9BcKe",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/f961a007-0816-420e-a6b2-d618e0c4b7d3"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 20,
+      "tag": "button",
+      "name": "打开证据检查器：in USDT TYABVzdU2LP1E6Ay1SudgN2q6Gi1C9BcKe",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 21,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 22,
+      "tag": "a",
+      "name": "out USDT TPCYbQGzMaDNz1wB7s6xQFrVvBsXCCYp7…",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/6821473c-1f31-469c-b8d6-0e65c47193ee"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 23,
+      "tag": "button",
+      "name": "打开证据检查器：out USDT TPCYbQGzMaDNz1wB7s6xQFrVvBsXCCYp7M",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 24,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 25,
+      "tag": "a",
+      "name": "out USDT TGyJC5a1bnhEotGLtQKa2e3i8kK1dZZd9…",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/1bf5e119-22cb-4d82-8e56-b8a17fabeab8"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 26,
+      "tag": "button",
+      "name": "打开证据检查器：out USDT TGyJC5a1bnhEotGLtQKa2e3i8kK1dZZd9s",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 27,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 28,
+      "tag": "a",
+      "name": "out USDT TPkzNdPPMTMtp9bTsbU8oN3w2MjxM3zxp…",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/cc9d0bb1-894c-498a-b963-5919d3d8b221"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 29,
+      "tag": "button",
+      "name": "打开证据检查器：out USDT TPkzNdPPMTMtp9bTsbU8oN3w2MjxM3zxpE",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 30,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 31,
+      "tag": "a",
+      "name": "in USDT TVWk2X8nFNVtuAY6t4QPEsk2Q1A1Kudt7g",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/4868081d-6a56-4af1-86cf-11825d419d3a"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 32,
+      "tag": "button",
+      "name": "打开证据检查器：in USDT TVWk2X8nFNVtuAY6t4QPEsk2Q1A1Kudt7g",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 33,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 34,
+      "tag": "a",
+      "name": "in USDT TMnzrFxhYx22zVPgzEVdxCNj6jW8iRnd6L",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/95f87d26-b09d-4493-9767-5770fd1932e0"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 35,
+      "tag": "button",
+      "name": "打开证据检查器：in USDT TMnzrFxhYx22zVPgzEVdxCNj6jW8iRnd6L",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 36,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 37,
+      "tag": "a",
+      "name": "in USDT TYn33iqsQmujtt1h58A3JdEwEwune3NyTy",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/evidence/385a7923-9118-40fb-a012-7dcc48edd8fe"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 38,
+      "tag": "button",
+      "name": "打开证据检查器：in USDT TYn33iqsQmujtt1h58A3JdEwEwune3NyTy",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "index": 39,
+      "tag": "button",
+      "name": "复制内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 0,
+      "tag": "a",
+      "name": "调查任务",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 1,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 2,
+      "tag": "button",
+      "name": "返回工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/workbench"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 3,
+      "tag": "button",
+      "name": "刷新",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 4,
+      "tag": "button",
+      "name": "上一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/investigations/a1c297f3-371d-4a6f-b1dc-a261517a6970/findings",
+      "index": 5,
+      "tag": "button",
+      "name": "下一页",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 0,
+      "tag": "a",
+      "name": "任务中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 1,
+      "tag": "a",
+      "name": "返回任务中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 2,
+      "tag": "button",
+      "name": "刷新详情",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 3,
+      "tag": "button",
+      "name": "rows/s 口径",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 4,
+      "tag": "button",
+      "name": "Provider rows/s 说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 5,
+      "tag": "button",
+      "name": "暂停",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 6,
+      "tag": "button",
+      "name": "恢复",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 7,
+      "tag": "button",
+      "name": "取消任务",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 8,
+      "tag": "button",
+      "name": "重试失败分片",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 9,
+      "tag": "button",
+      "name": "概览",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 10,
+      "tag": "button",
+      "name": "Pipeline",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 11,
+      "tag": "button",
+      "name": "地址进度1",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 12,
+      "tag": "button",
+      "name": "Dataset2",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 13,
+      "tag": "button",
+      "name": "Shards4",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 14,
+      "tag": "button",
+      "name": "结构化事件0",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 15,
+      "tag": "button",
+      "name": "Exports0",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 16,
+      "tag": "button",
+      "name": "证据链",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 17,
+      "tag": "button",
+      "name": "rows 口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/jobs/9b9a1c00-355c-4af0-9eef-5166bf5330ba",
+      "index": 18,
+      "tag": "button",
+      "name": "API 成本 USD 口径说明",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "控件在重载后消失（前一步改变了 DOM），跳过"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 0,
+      "tag": "a",
+      "name": "工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/home"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 1,
+      "tag": "a",
+      "name": "报告中心",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 2,
+      "tag": "button",
+      "name": "返回",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 3,
+      "tag": "button",
+      "name": "提交复核",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 4,
+      "tag": "button",
+      "name": "复制报告 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 5,
+      "tag": "button",
+      "name": "复制调查 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 6,
+      "tag": "button",
+      "name": "复制artifact SHA-256",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 7,
+      "tag": "button",
+      "name": "复制报告内容哈希",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7"
+    },
+    {
+      "route": "/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "index": 8,
+      "tag": "a",
+      "name": "调查工作台",
+      "action": "clicked",
+      "outcome": "ok",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/reports/c7cc4ae7-8add-431a-a522-8c49b55b30e7",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/investigations/9b8433c2-1d07-421e-8406-4823b4ef45e9/workbench"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 0,
+      "tag": "a",
+      "name": "资金图谱",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/graph"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 1,
+      "tag": "button",
+      "name": "分支",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 2,
+      "tag": "button",
+      "name": "快照",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 3,
+      "tag": "button",
+      "name": "导出",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 4,
+      "tag": "button",
+      "name": "保存",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏 | 确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 5,
+      "tag": "button",
+      "name": "收起对象面板",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 6,
+      "tag": "button",
+      "name": "资金流",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 7,
+      "tag": "button",
+      "name": "时间",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 8,
+      "tag": "button",
+      "name": "资产",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 9,
+      "tag": "button",
+      "name": "证据",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 10,
+      "tag": "button",
+      "name": "选择",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 11,
+      "tag": "button",
+      "name": "框选",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 12,
+      "tag": "button",
+      "name": "平移",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 13,
+      "tag": "button",
+      "name": "加入地址资金流",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏 | 确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 14,
+      "tag": "button",
+      "name": "自动",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 15,
+      "tag": "button",
+      "name": "分层",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 16,
+      "tag": "button",
+      "name": "环形",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 17,
+      "tag": "button",
+      "name": "适配视图",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 18,
+      "tag": "button",
+      "name": "缩小",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 19,
+      "tag": "button",
+      "name": "放大",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 20,
+      "tag": "button",
+      "name": "撤销",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 21,
+      "tag": "button",
+      "name": "重做",
+      "action": "skipped-disabled",
+      "outcome": "ok"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 22,
+      "tag": "button",
+      "name": "加入地址资金流",
+      "action": "dialog-opened-cancelled",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏 | 确认弹窗已打开并已取消（未提交写操作）",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    },
+    {
+      "route": "/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "index": 23,
+      "tag": "button",
+      "name": "复制案件 ID",
+      "action": "clicked",
+      "outcome": "ok",
+      "detail": "页面加载后自动弹窗（已关闭）：注意 存在无法解析的引用 以下引用不符合 Canvas ref 约定，已在渲染中忽略；本地编辑与保存不受影响。 坏节点引用数量 101 坏边引用数量 334 坏",
+      "urlBefore": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b",
+      "urlAfter": "https://127.0.0.1:8448/app-v2/canvases/60ae4fb2-c6f1-44af-969b-d101c6d1fb2b"
+    }
+  ]
+}

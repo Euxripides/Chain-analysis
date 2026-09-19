@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />
+    <!-- 必须显式声明图标：没有它时 Chromium 会拿文档 URL 当图标去探测，
+         在 CSP img-src 'self' 下被视为违规并产生一条可避免的 console error。 -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>ChainSight 调查工作台</title>
   </head>
   <body>

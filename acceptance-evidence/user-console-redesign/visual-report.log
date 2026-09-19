@@ -1,0 +1,11 @@
+用户端渲染度量报告：/home/euripides/projects/blockchain-platform/acceptance-evidence/user-console-redesign/visual-report-authenticated.json
+  检查组合数        90
+  横向溢出          0
+  对比度不达标      0
+  页面内提示选择器  0
+  触摸目标不足      0
+  进度条缺少 ARIA   0
+  无名称按钮        0
+  运行时 console 错误 0
+  网络资源错误      1（4xx/5xx 请求，未登录场景下属正常）
+  令牌快照(https://127.0.0.1:8448/app-v2/home) {"cobalt":"#4353E6","ink":"#0A0E14","ice":"#F5F6F8","graphite":"#111827","slate":"#596273","border":"#E3E6EB"}

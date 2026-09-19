@@ -22,6 +22,17 @@ html[data-app="user"] .table-scroll {
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /*
+   * contain: paint 让这个滚动容器成为独立的绘制/溢出上下文。
+   *
+   * 为什么需要：表格为了不被压扁设了 min-width: max-content（宽表 1731px），
+   * Chromium 会把这些内容计入根元素的 scrollable overflow，
+   * 于是 documentElement.scrollWidth 报出 946px——而 body 的 scrollWidth 一直是 390px，
+   * 也就是说**用户侧根本没有横向滚动、没有任何内容被截断**（实测冻结列/普通列都不越界）。
+   * 这个"指标失真"会让所有按 scrollWidth 判定的验收用例误报，
+   * 也会掩盖真正需要关注的溢出，因此必须消除而不是绕过。
+   */
+  contain: paint;
 }
 html[data-app="user"] .table { min-width: max-content; }
 
@@ -74,6 +85,19 @@ html[data-app="user"] .table thead th { z-index: 2; }
   html[data-app="user"] .textarea,
   .cs-command__input { font-size: 16px; }
   .cs-usermenu__name { display: none; }
+}
+
+/*
+ * <900px：取消冻结首列。
+ * 实测在 390px 下，冻结列的宽度（399px）会超过表格自身的滚动区（320px），
+ * 列会盖住后面所有内容；小屏本来就应该用卡片列表或横向滚动浏览。
+ */
+@media (max-width: 899px) {
+  html[data-app="user"] .table__th--frozen,
+  html[data-app="user"] .table__td--frozen {
+    position: static;
+    box-shadow: none;
+  }
 }
 
 /* 900–1199px：桌面导航，工作台从三栏降为两栏 */

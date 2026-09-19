@@ -477,3 +477,257 @@ git checkout -- frontend/apps/user-console/src/pages frontend/apps/user-console/
   若该属性丢失，用户端会回落到 tokens.css 的原始配色（功能不受影响，只是观感回到重构前）。
 - `packages/ui` 仍同时服务用户端与后台端，因此新增组件一律通过**可选 prop** 提供新行为，
   默认分支保持与原实现一致。
+
+---
+
+## 阶段 U7：真实环境点击巡检与缺陷修复
+
+**测试环境**（真实，非模拟）
+
+```text
+主机       dataserver（Ubuntu，192.168.31.152），仓库 /home/euripides/projects/blockchain-platform
+入口       https://127.0.0.1:8448/app-v2/   （socat TLS → nginx 8088 → vite preview 3001）
+后端       blockchain-api.service（:8080）、blockchain-worker.service（:8081）
+数据       PostgreSQL 16 + ClickHouse + MinIO + NATS（真实数据，非夹具桩）
+账号       admin@local（Owner，主工作区 000e31bb…，24 个调查 / 任务 / 报告 / Canvas）
+```
+
+**巡检方式**：`frontend/tests/dual-system-uc-button-sweep.spec.ts` —— 逐个点开页面上的每一个控件。
+安全边界写在用例里：只读/导航类真实点击；弹窗打开后关闭；**会写数据的动作只打开确认框再取消**；
+没有取消路径的立即破坏性动作不点（记录 `skipped-destructive`）。
+
+### 最终结果
+
+```text
+UC-SWEEP   routes=21  controls=464  clicked=381  dialogCancelled=14  failures=0  pageErrors=0
+dual-system-quality（4 个 project）                36 passed / 0 failed   RC=0
+dual-system-sprint4                                RC=0
+dual-system-sprint5                                RC=0
+dual-system-nav-permission                         RC=0
+dual-system-cross-role                             RC=0
+dual-system-reduced-motion                         RC=0
+```
+
+### 巡检发现并修复的 4 个真实缺陷
+
+#### 1（严重）虚拟滚动表格滚到底部后整片空白
+
+- **症状**：案件 / 调查 / 导出列表向下滚动到后半段时表格变空，行内「复制」按钮完全点不到。
+- **根因**：`DataTable` 的窗口起点用**固定估计行高 44px** 推算
+  （`floor(scrollTop / 44) - 8`）。重构后单元格内边距加大、多个列表出现两行单元格，
+  实测行高变成 **61 / 65 / 72px**；表越长累积偏差越大，滚到底部时算出的起点
+  **超过数据行数**，`slice.slice(start, end)` 取到空数组，tbody 只剩撑高的占位行。
+- **修复**（`packages/ui/primitives.tsx`）：
+  1. 起点夹取到 `[0, rows.length - visibleCount]`——**硬保证永不出现空窗口**，
+     即使行高估计仍有偏差，最坏也只是滚动手感略偏，不会整片空白；
+  2. 渲染后用**中位数**实测行高并回填（中位数对个别两行单元格不敏感，不会来回抖动）。
+- **验证**：`frontend/scripts/uc-virtualizer-probe.mjs`——
+  三张表滚到底部 `blank=false`、最后一行复制按钮点击 `OK`。
+
+#### 2 元信息条长值把 390px 页面撑到 485px
+
+- **根因**：`.cs-meta__item b` 没有 `overflow-wrap`，而元信息条里放的是
+  **工作区 UUID、数据源名**这类不可断词的业务标识。
+- **修复**：`.cs-meta__item` 补 `min-width:0; max-width:100%`，
+  `b` 补 `min-width:0; overflow-wrap:anywhere`。
+
+#### 3 头像/品牌标记的白字被量成"白底白字"（对比度 1.08）
+
+- **根因**：靛蓝底写在 `background-image` 渐变里，`background-color` 仍是透明的；
+  对比度检查按 `background-color` 回溯背景，一路找到页面白底。
+- **修复**：`.cs-avatar` / `.cs-brand__mark` 显式声明
+  `background-color: var(--indigo-600)`（白字 5.80:1），渐变只作为叠加层次。
+  这同时也是"让计算样式说真话"的修正，不只是为了让检查变绿。
+
+#### 4 登录页一条可避免的 CSP console 错误
+
+- **根因**：两个控制台都没有声明 favicon，Chromium 会拿**文档 URL** 去探测图标，
+  被 nginx 的 `img-src 'self'` 拦下并报一条 console error。
+  （用 `securitypolicyviolation` 事件定位到 `blockedURI=https://…/favicon.svg`。）
+- **修复**：新增品牌化 `apps/user-console/public/favicon.svg`（资金路径标记）与
+  `apps/admin-console/public/favicon.svg`（盾形校验标记），两个 `index.html` 各加
+  `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`；
+  Vite 会按各应用的 base 改写为 `/app-v2/favicon.svg` 与 `/admin/favicon.svg`。
+- **验证**：登录页 CSP 违规从 2 条降为 **0 条**。
+
+### 自检脚本本身的缺陷（由既有验收套件发现）
+
+`verify-user-console-visual.mjs` 原来只等 `domcontentloaded` 就测量：
+数据还没回来时元信息条仍是骨架，长值不在 DOM 里，**横向溢出被漏掉**——
+所以自检报"0 溢出"而 `dual-system-quality` 报 485px。
+已改为 `networkidle` + 700ms 稳定期。**自检脚本的严格度不得低于既有验收套件**，否则只是"假绿"。
+
+### 部署执行
+
+本次改动**全部在前端**（`apps/user-console`、`apps/admin-console`、`packages/ui`、
+`packages/design-tokens`、`packages/api-client`），没有任何后端、数据库或迁移改动。
+因此采用**前端作用域部署**，不执行会重建 Go 二进制并重启 API 的
+`scripts/deploy_dual_system.py --yes`——那会在公网入口上造成一次无必要的 API 重启。
+
+```text
+1. 源码同步    本地 → VM（tar over ssh，仅覆盖本次变更文件，不删除 VM 专有文件）
+2. 类型检查    npx tsc -p apps/user-console/tsconfig.json --noEmit  → 0 错误
+3. 构建        npx vite build --config apps/user-console/vite.config.ts  → 成功
+               npx vite build --config apps/admin-console/vite.config.ts  → 成功
+4. 重启        systemctl --user restart blockchain-user-console.service
+                                          blockchain-admin-console.service
+5. 冒烟        https://127.0.0.1:8448/app-v2/     200
+               https://127.0.0.1:8448/admin/      200
+               http://127.0.0.1:8080/health/ready 200
+               产物          assets/index-BPbVrJbD.js（与本地构建一致）
+               图标          /app-v2/favicon.svg 200 image/svg+xml
+                             /admin/favicon.svg   200 image/svg+xml
+```
+
+若需要走完整编排（会重建后端并应用迁移），命令是：
+
+```bash
+python3 scripts/deploy_dual_system.py --yes
+```
+
+### 测试环境的一处清理（需要知晓）
+
+`admin@local` 上有一次早期 MFA 自服务测试遗留的 **MFA 注册**，
+导致所有以该账号为默认的既有 E2E 规格都会卡在第二步验证。
+本次按 `bootstrap-e2e-env.sh` 的同一口径把它清理掉（删除 `identity_mfa` 及其恢复码/挑战），
+恢复"账号密码即可登录"的验收基线。这是**测试环境清理**，不是产品代码改动；
+该账号随时可以重新注册 MFA。
+### U7 第二轮：六断点全路由度量（比既有套件更严）
+
+既有 `dual-system-quality` 只覆盖 5 条路由 × 4 断点；本次用
+`frontend/scripts/verify-user-console-visual.mjs --login` 扩到
+**15 条路由 × 6 断点 = 90 个组合**（含 1920×1080、2560×1440）。第一轮又发现 3 类问题：
+
+| # | 发现 | 根因 | 修复 |
+|---|---|---|---|
+| 5 | `/investigations` 在 390px 下 `documentElement.scrollWidth` = 946px（`/exports` = 642px） | 宽表的 `min-width: max-content`（实测 1731px）让 Chromium 把滚动容器内的内容计入**根元素**的 scrollable overflow。逐项实验确认：`body.scrollWidth` 恒为 390px、`trueOffenders=0`，即**用户侧没有横向滚动、没有任何内容被截断**；但该指标失真会让所有按 scrollWidth 判定的验收用例误报 | 给 `.table-scroll` 加 `contain: paint`，把表格的溢出限制在它自己的滚动上下文里。修复后 `rootScrollW = 390` |
+| 6 | 小屏冻结首列宽 399px、超过表格自身滚动区 320px，盖住后面所有列 | 冻结列在窄屏没有降级 | `<900px` 取消冻结列的 `position: sticky`（小屏本就该用卡片列表或横向滚动） |
+| 7 | 步骤分隔符 `/` 与范围分隔符 `→` 对比度 1.35:1（白底上几乎不可见） | 用了边框色 `--border-strong` 当文字色 | 改为 `--text-secondary`（6.14:1） |
+| 8 | 侧栏分组标签 10px、元信息条 12px 偏小 | 低于 `--fs-11` / 正文 13px 的取值 | 分别提到 `--fs-11` 与 `--fs-13` |
+
+修复后 **90/90 组合全部通过**：横向溢出 0、对比度不达标 0、页面内提示选择器 0、
+触摸目标不足 0、进度条缺 ARIA 0、无名称按钮 0、**运行时 console 错误 0**。
+
+### 最终回归（全部真实执行）
+
+```text
+dual-system-quality（user-desktop / admin-desktop / user-mobile / admin-tablet）  36 passed / 0 failed
+dual-system-sprint4                 RC=0
+dual-system-sprint5                 RC=0
+dual-system-nav-permission          RC=0
+dual-system-cross-role              RC=0
+dual-system-reduced-motion          RC=0
+dual-system-uc-button-sweep         21 routes / 484 controls / 381 clicked / 14 dialog-cancelled
+                                    0 failures / 0 pageErrors
+verify-user-console-visual --login  90 combinations / 0 problems
+```
+### 部署后最终确认（对**已上线产物**再跑一遍）
+
+```text
+上线产物     user  assets/index-CX4qVDy7.js + assets/index-CK00XSYC.css
+             admin assets/index-CRFeEJXZ.js
+源码一致性   responsive.css / components.css / user-shell.css / primitives.tsx /
+             index.html / favicon.svg —— VM 与本地 SHA-256 前 16 位逐一相同
+类型检查     apps/user-console tsc OK ； apps/admin-console tsc OK
+冒烟         app-v2/ 200 · app-v2/home 200 · admin/ 200
+             app-v2/favicon.svg 200 image/svg+xml · admin/favicon.svg 200 image/svg+xml
+             api /health/ready 200
+登录链路     POST /api/auth/v1/login 200 → GET /api/auth/v1/session 200
+             workspace 000e31bb-8c48-435d-af97-95bbc75a496c · permissions 179
+
+dual-system-quality                 36 passed / 0 failed      RC=0
+dual-system-uc-button-sweep         21 routes · 484 controls · 381 clicked
+                                    14 dialog-cancelled · 26 skipped-destructive
+                                    62 skipped-disabled · 0 failures · 0 pageErrors
+verify-user-console-visual --login  90 combinations（15 路由 × 6 断点）· 0 problems
+```
+
+证据存档（部署机上）：`acceptance-evidence/user-console-redesign/`
+
+```text
+button-sweep/button-sweep.json        每个控件的逐条点击记录与结果
+button-sweep/sweep-run-final.log      最终巡检运行日志
+visual-report-authenticated.json      90 组合的渲染度量（含令牌快照）
+visual-report.log                     度量摘要
+regression-suites.log                 六个既有套件的完整输出
+final-confirmation.log                部署后最终确认
+```
+
+---
+
+## 阶段 U8：正式部署（scripts/deploy_dual_system.py）与途中发现的三个问题
+
+按仓库文档的正式部署命令执行：
+
+```bash
+python scripts/deploy_dual_system.py --yes
+```
+
+### 部署前拦下的一个 P0 回滚风险
+
+**仓库里的 `deploy/nginx-blockchain-platform.conf` 比线上旧。** 部署脚本第 3 步会把这份文件
+覆盖到 `/etc/nginx/sites-enabled/`，也就是说直接部署会：
+
+- 把 `location = / { return 302 https://$public_host/app-v2/login; }` 换回
+  `location / { proxy_pass http://127.0.0.1:3000; }`；
+- **重新把老控制台暴露到公网**。配置里的原注释写明了原因：
+  "老控制台自身没有登录页，且入口层会为无会话请求注入共享服务凭据
+  （实测未登录可读到真实业务数据，且审计无法区分到人）"—— 这是 2026-09-18 的 P0 决策 D3。
+
+处理：把线上正在运行的（已修复的）配置逐字节取回，覆盖仓库里的旧副本，
+并用 `cmp` 验证往返一致（`sha256: 1f3cdec5ca9aa7f8`）。此后部署是幂等的、不会再回滚该修复。
+
+### 修复的三个部署脚本缺陷
+
+| # | 缺陷 | 后果 | 修复 |
+|---|---|---|---|
+| 1 | 同步会把 `acceptance-evidence/` 一起推上 VM | 本机部分证据文件由沙箱 SID 写出、当前用户读不了，`sftp.put` 报 EACCES，**整次部署在第 1 步中止** | 把 `acceptance-evidence` 加入 `SKIP_DIRS`（`sync_to_vm.py` 同步口径）—— 测试产物本就不该参与代码部署 |
+| 2 | `run()` 直接 `print` 远程输出 | Windows 控制台默认 GBK，遇到 `✓` 抛 `UnicodeEncodeError`，脚本**在部署中途崩溃** | 启动时把 stdout/stderr `reconfigure` 成 UTF-8、`errors="replace"` |
+| 3 | 迁移命令 `go run ./cmd/migrate 2>&1 \| tail -8` | ① `\| tail` 让退出码变成 tail 的 0，**迁移失败被静默吞掉**；② 非交互 SSH 不加载 `deploy/.env`，迁移连不上库（`role "euripides" does not exist`） | 改为 `set -a; . deploy/.env; set +a` + `bash -o pipefail -c '… | tail -8'`，让真实退出码能拦住部署 |
+
+### 一次真实事故与恢复（记录在案）
+
+缺陷 2 第一次触发时，流程已经走到第 5 步：`vite build` 的 `emptyOutDir` 先清空了
+两个前端的 `dist/`，随后脚本在打印构建输出时崩溃 —— **产物目录为空，但服务进程仍在运行**。
+此时 `curl` 仍返回 200（preview 进程还持有内存中的旧内容），
+一旦重启就是彻底 500，属于最危险的一类"看起来正常"的故障。
+
+发现后立即：重建两个前端（user 35 个 assets / admin 40 个）→ 重启两个控制台服务 → 全面冒烟。
+全程站点未中断，恢复后产物与已验证版本逐字节一致。
+
+同时清理了我自己在 `/etc/nginx/sites-enabled/` 下留的备份文件：
+nginx 会加载该目录**所有**文件，一份带 `log_format` 的副本会让 `nginx -t` 直接失败
+（`duplicate "log_format" name`）。备份已移到 `/etc/nginx/backups/`。
+
+### 部署结果（脚本自身的 7 步全部通过）
+
+```text
+1. 同步工作区到 VM                                    ✓
+2. 编译后端（api / worker / admin-init）              ✓
+3. 安装 6 个 systemd 单元 + nginx 站点（nginx -t 通过） ✓
+4. 应用迁移（最新已到 postgres/0071_self_service_for_all_roles.sql） ✓
+5. 构建两套前端                                       ✓
+6. nginx reload + 重启 api/worker/两个控制台（api ready after 5s） ✓
+7. 冒烟                                               ✓
+
+  api /health/ready            -> 200
+  user console                 -> 200
+  admin console                -> 200
+  auth methods                 -> 200
+  admin without session        -> 401   （未登录访问后台接口被正确拒绝）
+```
+
+**部署后逐项确认**
+
+```text
+nginx 配置           1f3cdec5ca9aa7f8（= 修好的那版）
+含老控制台代理(3000)  否
+含 P0 重定向          是；GET / -> 302 https://<host>/app-v2/login
+sites-enabled 残留    0
+直连下载通道          download.aurore.online.conf 未被触碰（mtime 09-19 00:45）
+                      [::1]:8443/download-health -> 204
+四个服务              active / active / active / active
+上线产物              user  assets/index-CX4qVDy7.js + assets/index-CK00XSYC.css
+                      admin assets/index-CRFeEJXZ.js
+回滚点                backend/bin/api.bak-dualsystem-20260919-053418 / -053903
+```

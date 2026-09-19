@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -764,11 +764,24 @@ function PagedTable<T>({
    * - 保留上一页/下一页，兼容既有后台长表操作习惯。
    */
   const pageSize = 1000;
-  const rowHeight = 44;
+  /** 初始估计行高；真实行高在渲染后测量（见下方 useEffect）。 */
+  const estimatedRowHeight = 44;
   const overscan = 8;
   const viewportHeight = 560;
   const [page, setPage] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
+  /**
+   * 实测行高。
+   *
+   * 为什么不能只用估计值：单元格里出现两行内容（标题 + 副标题）、地址折行、
+   * 或主题把单元格内边距调大时，真实行高会明显大于 44px。
+   * 此时用 `scrollTop / 44` 推算窗口起点会偏离真实位置；表越长偏得越多，
+   * 滚到底部时算出的起点会**超过数据行数**，窗口取到空数组——
+   * 用户看到的是"表格后半段整片空白"。这是真实缺陷，不是测试问题。
+   */
+  const [measuredRowHeight, setMeasuredRowHeight] = useState(estimatedRowHeight);
+  const bodyRef = useRef<HTMLTableSectionElement | null>(null);
+  const rowHeight = Math.max(24, measuredRowHeight);
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(page, pageCount - 1);
   const { ref: scrollRef, sync: syncOverflow } = useHorizontalOverflowHint<HTMLDivElement>();
@@ -785,12 +798,34 @@ function PagedTable<T>({
   }, [rows.length, firstKey]);
 
   const slice = useMemo(() => rows.slice(current * pageSize, current * pageSize + pageSize), [rows, current]);
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + overscan * 2;
+  /*
+   * 起点必须夹在 [0, slice.length - visibleCount]：
+   * 这是"永远不渲染空窗口"的硬保证——即便行高估计仍然偏小，
+   * 最多是滚动手感略有偏差，绝不会出现整片空白。
+   */
+  const maxStart = Math.max(0, slice.length - visibleCount);
+  const start = Math.min(maxStart, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
   const end = Math.min(slice.length, start + visibleCount);
   const topPad = start * rowHeight;
   const bottomPad = Math.max(0, (slice.length - end) * rowHeight);
   const visible = slice.slice(start, end);
+
+  /* 渲染后用**中位数**校准行高：中位数对"个别两行单元格"不敏感，避免来回抖动。 */
+  useEffect(() => {
+    const nodes = bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-data-row="true"]');
+    if (!nodes || nodes.length < 3) return;
+    const heights: number[] = [];
+    for (const node of Array.from(nodes as ArrayLike<HTMLTableRowElement>).slice(0, 5)) {
+      const height = node.getBoundingClientRect().height;
+      if (height > 8) heights.push(height);
+    }
+    heights.sort((a, b) => a - b);
+    if (heights.length === 0) return;
+    const median = heights[Math.floor(heights.length / 2)];
+    const rounded = Math.round(median);
+    if (Math.abs(rounded - measuredRowHeight) > 2) setMeasuredRowHeight(rounded);
+  }, [start, end, rows.length, measuredRowHeight]);
   const selected = new Set(selectedKeys ?? []);
   const pageKeys = slice.map((row, index) => rowKey(row, current * pageSize + index));
   const allSelected = pageKeys.length > 0 && pageKeys.every((key) => selected.has(key));
@@ -840,7 +875,7 @@ function PagedTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={bodyRef}>
             {topPad > 0 ? (
               <tr aria-hidden="true" style={{ height: topPad }}>
                 <td colSpan={columnCount} style={{ padding: 0, border: 0 }} />
@@ -853,6 +888,7 @@ function PagedTable<T>({
               return (
                 <tr
                   key={key}
+                  data-data-row="true"
                   style={{ height: rowHeight }}
                   data-selected={isSelected ? "true" : undefined}
                   data-testid={rowTestId?.(row)}

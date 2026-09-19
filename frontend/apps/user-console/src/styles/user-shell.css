@@ -63,7 +63,15 @@
   border-radius: 10px;
   display: grid; place-items: center;
   color: #fff; font-size: var(--fs-13); font-weight: 700; letter-spacing: 0.02em;
-  background: linear-gradient(150deg, #6E7CF0 0%, var(--indigo-600) 55%, var(--indigo-700) 100%);
+  /*
+   * 必须同时给出**不透明的 background-color**，不能只写渐变。
+   * 渐变落在 background-image 上，background-color 仍是透明的；
+   * 对比度工具（以及任何按 background-color 回溯背景的实现）会一路找到页面底色，
+   * 把"白字 + 靛蓝底"误判成"白字 + 白底"（比值 1.08）。
+   * 这里声明真实底色 #4353E6（白字对比度 5.80:1），渐变只作为叠加的视觉层次。
+   */
+  background-color: var(--indigo-600);
+  background-image: linear-gradient(150deg, #6E7CF0 0%, var(--indigo-600) 55%, var(--indigo-700) 100%);
   box-shadow: 0 4px 14px rgba(67, 83, 230, 0.34);
 }
 .cs-brand__text { min-width: 0; overflow: hidden; white-space: nowrap; }
@@ -80,7 +88,8 @@
 .cs-nav__label {
   padding: 0 var(--sp-3) var(--sp-1);
   color: var(--text-on-rail-muted);
-  font-size: 10px; font-weight: 650;
+  /* 10px 的中文分组标签在中文界面里读不清；对齐 --fs-11 令牌。 */
+  font-size: var(--fs-11); font-weight: 650;
   letter-spacing: 0.14em; text-transform: uppercase;
   white-space: nowrap;
 }
@@ -249,7 +258,9 @@
   border-radius: 50%;
   display: grid; place-items: center;
   color: #fff; font-size: var(--fs-12); font-weight: 650;
-  background: linear-gradient(150deg, #6E7CF0, var(--indigo-600));
+  /* 同 .cs-brand__mark：渐变的底色必须显式声明，否则白字会被量成白底白字。 */
+  background-color: var(--indigo-600);
+  background-image: linear-gradient(150deg, #6E7CF0, var(--indigo-600));
 }
 .cs-usermenu__name {
   display: flex; flex-direction: column; align-items: flex-start;

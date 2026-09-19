@@ -150,8 +150,12 @@ const MEASURE = `(() => {
 })()`;
 
 async function main() {
-  const browser = await chromium.launch();
-  const context = await browser.newContext();
+  const browser = await chromium.launch({ executablePath: process.env.E2E_CHROMIUM_PATH || undefined });
+  /*
+   * 验收入口 https://127.0.0.1:8448 是自签名的回环 TLS（socat → nginx），
+   * 与 playwright.dual.config.ts 的 ignoreHTTPSErrors 保持一致。
+   */
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
   /*
    * 分开记录两类控制台输出：
@@ -192,8 +196,14 @@ async function main() {
     for (const route of routes) {
       const url = BASE + route;
       try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-        await page.waitForTimeout(500);
+        /*
+         * 必须等网络静默后再量：只等 domcontentloaded 会在数据回来**之前**测量，
+         * 那时元信息条、表格、指标卡都还是骨架，长值（UUID / 数据源 / 完整哈希）
+         * 还没进 DOM，横向溢出会被漏掉。这个坑是 dual-system-quality 的 390px 用例
+         * 先发现的——自检脚本必须和它一样严格。
+         */
+        await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+        await page.waitForTimeout(700);
         const measured = await page.evaluate(MEASURE);
         report.results.push({
           breakpoint: bp.name,

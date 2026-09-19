@@ -1,0 +1,27 @@
+########## DEPLOYED-BUILD CHECK ##########
+assets/index-CX4qVDy7.js
+########## QUALITY ##########
+[28/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › mobile (390px) 无页面级横向滚动
+[29/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › tablet (768px) 无页面级横向滚动
+[30/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › laptop (1024px) 无页面级横向滚动
+[31/36] [admin-tablet] › tests/dual-system-quality.spec.ts:117:5 › UX-002 四断点布局 › desktop (1440px) 无页面级横向滚动
+[32/36] [admin-tablet] › tests/dual-system-quality.spec.ts:144:3 › UX-002 四断点布局 › 后台管理系统在四个断点下无横向滚动
+[33/36] [admin-tablet] › tests/dual-system-quality.spec.ts:162:3 › UX-003 颜色对比度与状态可辨识 › 所有可见文本满足 WCAG AA 对比度
+[34/36] [admin-tablet] › tests/dual-system-quality.spec.ts:191:3 › UX-003 颜色对比度与状态可辨识 › 状态徽标带形状前缀，不只依赖颜色
+[35/36] [admin-tablet] › tests/dual-system-quality.spec.ts:207:3 › UX-004 长表渲染预算 › 表格按页窗口渲染，DOM 行数不随数据量线性增长
+[36/36] [admin-tablet] › tests/dual-system-quality.spec.ts:240:3 › SEC-002 XSS / Markdown 注入 › 注入的 HTML 载荷以纯文本渲染，不执行
+  36 passed (6.5m)
+RC_QUALITY=0
+########## SWEEP (21 routes) ##########
+
+Running 1 test using 1 worker
+
+[1/1] [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts:160:3 › UC-SWEEP 全量点击巡检 › 逐个点开每一个控件并记录结果
+[user-desktop] › tests/dual-system-uc-button-sweep.spec.ts:160:3 › UC-SWEEP 全量点击巡检 › 逐个点开每一个控件并记录结果
+UC-SWEEP 完成：routes=21 controls=484 clicked=381 dialogCancelled=14 failures=0 pageErrors=0
+
+  Slow test file: [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts (13.4m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 passed (13.4m)
+RC_SWEEP=0
+FINAL_DONE

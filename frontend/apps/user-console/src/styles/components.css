@@ -746,7 +746,9 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
 }
 .cs-stepper__step[data-state="current"] .cs-stepper__index { background: var(--interactive); color: #fff; }
 .cs-stepper__step[data-state="done"] .cs-stepper__index { background: var(--green-700); color: #fff; }
-.cs-stepper__sep { color: var(--border-strong); flex: none; }
+/* 步骤之间的分隔符是**可见的排版元素**，不是装饰边框：
+   #D2D6DD 在白底只有 1.35:1，等于看不见。用次级文字色（6.14:1）。 */
+.cs-stepper__sep { color: var(--text-secondary); flex: none; }
 
 /* ---- 工作台三栏（蓝图 §12.9） ---- */
 .cs-workbench {
@@ -849,9 +851,14 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
 }
 
 /* ---- 元信息条：数据时间 / 来源，属界面本身而非提示 ---- */
-.cs-meta { display: flex; align-items: center; gap: var(--sp-2) var(--sp-4); flex-wrap: wrap; color: var(--text-secondary); font-size: var(--fs-12); }
-.cs-meta__item { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-.cs-meta__item b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cs-meta { display: flex; align-items: center; gap: var(--sp-2) var(--sp-4); flex-wrap: wrap; color: var(--text-secondary); font-size: var(--fs-13); min-width: 0; }
+/*
+ * 元信息条里的值是**不可断词的业务标识**（工作区 UUID、数据源名、完整哈希）。
+ * 弹性子项默认 min-width:auto + 不换行，会让整条元信息把页面撑出横向滚动——
+ * 在 390px 下实测溢出到 485px。必须允许它在任意位置换行（蓝图 §13）。
+ */
+.cs-meta__item { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; max-width: 100%; }
+.cs-meta__item b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 
 /* ---- 搜索框 / 密码框 ---- */
 .cs-searchfield { position: relative; display: flex; align-items: center; min-width: 0; }
@@ -922,7 +929,7 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
 .cs-range { display: flex; align-items: flex-end; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
 .cs-range__field { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1; }
 .cs-range__label { color: var(--text-secondary); font-size: var(--fs-12); }
-.cs-range__sep { color: var(--border-strong); padding-bottom: 12px; flex: none; }
+.cs-range__sep { color: var(--text-secondary); padding-bottom: 12px; flex: none; }
 
 /* ---- 批量地址列表 ---- */
 .cs-addrs__summary { display: flex; gap: var(--sp-4); font-size: var(--fs-12); color: var(--text-secondary); }
