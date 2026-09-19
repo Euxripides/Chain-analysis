@@ -4,6 +4,8 @@ import { DEFAULT_STYLE, WebGLRenderer, type RenderStyle } from "../renderer/WebG
 import { GraphStore, NODE_FLAG, type GraphEdgeInput, type GraphNodeInput } from "../model/GraphStore";
 import { runLayout as runLayoutOnGraph, type LayoutMode, type LayoutOptions } from "../layout";
 import { layoutTransferables, type LayoutRequest, type LayoutResponse } from "../worker/protocol";
+import { findPath, type FindPathOptions, type GraphPath } from "../model/paths";
+import { PlaybackController } from "../interaction/playback";
 
 /**
  * 图谱引擎门面（用户端重构规范 V4 §30.2 / §30.3）
@@ -26,6 +28,9 @@ export interface GraphEngineEvents extends Record<string, unknown> {
   "selection:change": { nodeIds: string[] };
   "camera:change": { cx: number; cy: number; scale: number };
   "performance:warning": { fps: number; nodeCount: number; edgeCount: number };
+  /** 路径播放每前进一步（edgeIndex = -1 表示"起点亮起"）。 */
+  "path:hop": { path: { hopIndex: number; nodeIndex: number; edgeIndex: number } };
+  "path:complete": { nodeIds: string[] };
 }
 
 export interface GraphEngineOptions {
@@ -46,6 +51,15 @@ export class GraphEngine {
   readonly store = new GraphStore();
   readonly camera = new Camera();
   readonly events = new EventBus<GraphEngineEvents>();
+  /**
+   * 路径播放状态机（§30.12）。
+   *
+   * 时间由 `loop()` 注入，内部不起定时器：播放与渲染共用同一个 RAF 时钟，
+   * 否则"相机在动的同时路径在走"会出现两条时间线，回放速度会随帧率漂移。
+   */
+  readonly playback = new PlaybackController();
+  /** Reduced Motion（§9.5）：关闭粒子，但**不关闭状态**——点亮的边照常显示。 */
+  private reducedMotion = false;
 
   private renderer: WebGLRenderer | null = null;
   private canvas: HTMLCanvasElement | null = null;
@@ -89,7 +103,23 @@ export class GraphEngine {
     this.hiddenFps = options.hiddenFps ?? 4;
     this.store.load(options.nodes, options.edges);
     if (options.style) this.pendingStyle = options.style;
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    this.playback.onHop = (hopIndex, nodeIndex, edgeIndex) => {
+      /* 高亮与播放进度严格同源：播放器是唯一的状态来源，渲染器不自己记进度。 */
+      this.renderer?.uploadHighlight(this.store, this.playback.litEdges(), this.highlightColor);
+      this.frameDirty = true;
+      this.events.emit("path:hop", { path: { hopIndex, nodeIndex, edgeIndex } });
+    };
+    this.playback.onComplete = () => {
+      const path = this.playback.path;
+      const nodeIds = path ? [...path.nodes].map((index) => this.store.idAt(index)) : [];
+      this.events.emit("path:complete", { nodeIds });
+    };
   }
+
+  private highlightColor: [number, number, number] = DEFAULT_STYLE.edgeActiveColor;
 
   private pendingStyle: RenderStyle | null = null;
 
@@ -149,8 +179,20 @@ export class GraphEngine {
     if (now - this.lastFrameAt < minInterval) return;
     this.lastFrameAt = now;
 
+    /*
+     * 播放推进与渲染共用同一个时钟（now 已经在上面取过）。
+     * 播放中必须每帧重绘：粒子相位靠 `u_time` 前进，光靠脏标记是动不起来的。
+     */
+    this.playback.tick(now);
+    if (this.playback.state === "playing") this.frameDirty = true;
+
     const started = performance.now();
-    this.renderer?.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr());
+    this.renderer?.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr(), {
+      timeSeconds: now / 1000,
+      /* Reduced Motion：粒子关闭，但已点亮的边与节点状态照常保留（§9.5）。 */
+      particlesEnabled: !this.reducedMotion,
+      highlightColor: this.highlightColor,
+    });
     this.frameDirty = false;
 
     /* 帧耗时采样：连续超标时报 performance:warning，让 UI 有机会提示降级。 */
@@ -355,6 +397,62 @@ export class GraphEngine {
     this.layoutTimes = times;
   }
 
+  /* ------------------------------------------------------- 路径与播放（§30.12） */
+
+  /** 求两个节点之间的路径。找不到返回 null（调用方据此提示"无路径"，不猜）。 */
+  findPath(fromId: string, toId: string, options: FindPathOptions = {}): GraphPath | null {
+    const from = this.store.indexOfNodeId(fromId);
+    const to = this.store.indexOfNodeId(toId);
+    if (from < 0 || to < 0) return null;
+    return findPath(this.store, from, to, options);
+  }
+
+  /** 高亮一条路径（不播放）。传 null 清除。 */
+  highlightPath(path: GraphPath | null): void {
+    if (!path) {
+      this.renderer?.clearHighlight();
+      this.frameDirty = true;
+      return;
+    }
+    this.renderer?.uploadHighlight(this.store, path.edges, this.highlightColor);
+    this.frameDirty = true;
+  }
+
+  playPath(path: GraphPath, nowMs = performance.now()): void {
+    /* 不再手动触发 hop 0：`PlaybackController.play()` 内部已经会发一次，
+       手动再来一次会让第一跳的回调与事件各响两遍。 */
+    this.playback.play(path, nowMs);
+    this.renderer?.uploadHighlight(this.store, this.playback.litEdges(), this.highlightColor);
+    this.frameDirty = true;
+  }
+
+  pausePath(): void {
+    this.playback.pause();
+  }
+
+  resumePath(nowMs = performance.now()): void {
+    this.playback.resume(nowMs);
+  }
+
+  stopPath(): void {
+    this.playback.stop();
+    this.renderer?.clearHighlight();
+    this.frameDirty = true;
+  }
+
+  setPlaybackSpeed(speed: number): void {
+    this.playback.setSpeed(speed);
+  }
+
+  /** §30.12 next hop / previous hop：暂停状态下逐步核对用。 */
+  nextHop(): boolean {
+    return this.playback.nextHop();
+  }
+
+  previousHop(): boolean {
+    return this.playback.previousHop();
+  }
+
   private layoutRequestId = 0;
   private layoutTimes: Float64Array | null = null;
 
@@ -376,12 +474,23 @@ export class GraphEngine {
   }
 
   /** 统计信息（验收与性能报告用，不做业务判断）。 */
-  stats(): { nodes: number; edges: number; bytes: number; webgl2: boolean } {
+  stats(): {
+    nodes: number;
+    edges: number;
+    bytes: number;
+    webgl2: boolean;
+    /** 当前真正上传到 GPU 的高亮边数——不是算出来的，是渲染器的实际状态。 */
+    highlightedEdges: number;
+    /** 当前真正会绘制的粒子实例数。 */
+    particles: number;
+  } {
     return {
       nodes: this.store.nodeCount,
       edges: this.store.edgeCount,
       bytes: this.store.approximateBytes(),
       webgl2: this.renderer?.available ?? false,
+      highlightedEdges: this.renderer?.highlightedEdges ?? 0,
+      particles: this.renderer?.particleCount ?? 0,
     };
   }
 

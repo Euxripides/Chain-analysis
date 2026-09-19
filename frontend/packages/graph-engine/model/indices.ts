@@ -47,7 +47,15 @@ export function buildCsr(
   return { outOffset, outEdges, inOffset, inEdges };
 }
 
-/** 布局算法需要的最小图视图：只要几何与拓扑，不要字符串、不要标记。 */
+/**
+ * 算法需要的最小图视图：只要几何与拓扑，不要字符串、不要标记。
+ *
+ * 布局与求路径共用它——两者都不关心"这个节点是谁"，
+ * 只关心"它在哪里"和"它连到谁"，因此都不需要把字符串字典池带进 worker。
+ *
+ * `inEdges` / `edgeWeight` 是可选的：布局用不到反向邻接与边权，
+ * 只有无向求路径与加权最短路需要，缺省时按"无向不可用 / 权重为 1"处理。
+ */
 export interface LayoutGraph {
   nodeCount: number;
   edgeCount: number;
@@ -58,4 +66,6 @@ export interface LayoutGraph {
   outOffset: Uint32Array;
   outEdges: Uint32Array;
   inOffset: Uint32Array;
+  inEdges?: Uint32Array;
+  edgeWeight?: Float32Array;
 }

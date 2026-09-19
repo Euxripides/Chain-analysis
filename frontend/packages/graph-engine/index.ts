@@ -35,6 +35,12 @@ export {
   seededRandom,
 } from "./layout";
 export type { LayoutMode, LayoutOptions } from "./layout";
+export { findPath } from "./model/paths";
+export type { FindPathOptions, GraphPath } from "./model/paths";
+export { PLAYBACK_SPEEDS, PlaybackController } from "./interaction/playback";
+export type { PlaybackOptions, PlaybackState } from "./interaction/playback";
+export { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram } from "./renderer/ParticleProgram";
+export type { ParticleAppearance } from "./renderer/ParticleProgram";
 export { buildCsr } from "./model/indices";
 export type { CsrIndex, LayoutGraph } from "./model/indices";
 export { attachLayoutWorker, handleLayoutRequest } from "./worker/handleLayoutRequest";

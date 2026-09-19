@@ -9,7 +9,7 @@
  */
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { GraphEngine, GraphStore, bfsLayers, handleLayoutRequest, runLayout } from "../index";
+import { GraphEngine, GraphStore, bfsLayers, findPath, handleLayoutRequest, runLayout } from "../index";
 import type { LayoutMode, LayoutRequest } from "../index";
 import { FundGraph } from "@chain/graph-react";
 
@@ -46,6 +46,19 @@ interface ProbeReport {
   handlerOk: boolean;
   handlerResolvedMode: LayoutMode | "";
   handlerDurationMs: number;
+  /* 路径与播放（§30.12）。 */
+  pathNodes: number;
+  pathCostUnweighted: number;
+  pathPrefersCheapEdge: boolean;
+  pathUndirected: boolean;
+  playbackHopsAtTick: number;
+  playbackCompleted: boolean;
+  playbackSpeed2xFaster: boolean;
+  playbackManualStep: boolean;
+  litEdgesAfterHighlight: number;
+  particleCount: number;
+  /** **引擎上那条路径**的边数——与上面 chain 夹具的路径是两回事，不能混用。 */
+  enginePathEdges: number;
 }
 
 declare global {
@@ -107,6 +120,17 @@ async function run(): Promise<ProbeReport> {
     handlerOk: false,
     handlerResolvedMode: "",
     handlerDurationMs: 0,
+    pathNodes: 0,
+    pathCostUnweighted: 0,
+    pathPrefersCheapEdge: false,
+    pathUndirected: false,
+    playbackHopsAtTick: 0,
+    playbackCompleted: false,
+    playbackSpeed2xFaster: false,
+    playbackManualStep: false,
+    litEdgesAfterHighlight: 0,
+    particleCount: 0,
+    enginePathEdges: 0,
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -161,17 +185,111 @@ async function run(): Promise<ProbeReport> {
   const png = engine.exportView();
   report.exportedPngBytes = png ? png.length : 0;
 
-  /* 5. dispose 之后必须停止渲染且可重入调用。 */
+  /*
+   * 5. 路径求值与播放（§30.12）。
+   *
+   * **必须在 dispose 之前**：高亮与粒子只有在渲染器还活着的时候才有真实状态可读。
+   * 第一版把这段放在 dispose 之后，于是 highlightedEdges 与 particles 恒为 0——
+   * 那不是产品缺陷，是测试顺序错了。
+   */
+  runPathChecks(report, engine);
+
+  /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
   engine.dispose();
   report.disposed = true;
 
-  /* 6. React 桥（§30.3）与可访问对象列表（§55.2）。 */
+  /* 7. React 桥（§30.3）与可访问对象列表（§55.2）。 */
   await runReactBridge(report, nodes, edges);
 
-  /* 7. 布局算法与 worker 处理器（§30.14 / §30.5）。 */
+  /* 8. 布局算法与 worker 处理器（§30.14 / §30.5）。 */
   runLayoutChecks(report);
   return report;
+}
+
+/**
+ * 路径与播放验收。
+ *
+ * 全部用**显式时间**推进（`tick(t)`），不 sleep：
+ * "0.5x 速度下第 3 跳发生在第几毫秒"这种问题必须能精确断言，
+ * 靠等待真实时间只能测出"大概动了"。
+ */
+function runPathChecks(report: ProbeReport, engine: GraphEngine) {
+  /* A → B → C 链，外加一条 A → C 的直达边，用来验证"会选更省的那条"。 */
+  const chain = new GraphStore();
+  chain.load(
+    [
+      { id: "A", kind: "address" },
+      { id: "B", kind: "address" },
+      { id: "C", kind: "address" },
+      { id: "D", kind: "address" },
+    ],
+    [
+      { id: "ab", source: "A", target: "B", weight: 1 },
+      { id: "bc", source: "B", target: "C", weight: 1 },
+      { id: "ac", source: "A", target: "C", weight: 9 },
+      { id: "cd", source: "C", target: "D", weight: 1 },
+    ],
+  );
+
+  const path = findPath(chain, chain.indexOfNodeId("A"), chain.indexOfNodeId("D"));
+  report.pathNodes = path ? path.nodes.length : 0;
+  report.pathCostUnweighted = path ? path.cost : 0;
+  /* A→B→C→D 共 4 个节点；如果权重被忽略，BFS 可能选 A→C→D（3 个节点）。 */
+  /* A→B→C→D 共 4 个节点、代价 3；若权重被忽略（退化成 BFS），会选出 A→C→D。 */
+  report.pathPrefersCheapEdge = Boolean(path && path.nodes.length === 4 && Math.abs(path.cost - 3) < 1e-6);
+
+  /* 有向：从 D 出发到不了 A（所有边都是单向的）。 */
+  const backward = findPath(chain, chain.indexOfNodeId("D"), chain.indexOfNodeId("A"));
+  const backwardUndirected = findPath(chain, chain.indexOfNodeId("D"), chain.indexOfNodeId("A"), { directed: false });
+  report.pathUndirected = backward === null && backwardUndirected !== null;
+
+  /* 在真实引擎上跑播放：用一条 3 段的路径。 */
+  const graphPath = engine.findPath("n0", "n4");
+  if (!graphPath) return;
+  report.enginePathEdges = graphPath.edges.length;
+  let hops = 0;
+  let completed = false;
+  engine.events.on("path:hop", () => {
+    hops += 1;
+  });
+  engine.events.on("path:complete", () => {
+    completed = true;
+  });
+
+  /*
+   * 起点亮起是第 0 跳；之后每 hopDuration / 速度 毫秒走一跳（默认 620ms）。
+   * 因此这里要 tick **超过** 620ms 才应该看到第 1 跳——
+   * 第一版写的是 tick(310) 却断言 hopIndex === 1，那是在测我自己的算术。
+   */
+  engine.playPath(graphPath, 0);
+  engine.playback.tick(630);
+  report.playbackHopsAtTick = engine.playback.hopIndex;
+  engine.playback.tick(620 * graphPath.edges.length + 10);
+  report.playbackCompleted = completed && engine.playback.state === "completed";
+  /*
+   * 读**渲染器的实际状态**，而不是拿路径长度自己乘一遍——
+   * 后者只是把测试写成了它的假设，永远不会失败。
+   */
+  report.litEdgesAfterHighlight = engine.stats().highlightedEdges;
+  report.particleCount = engine.stats().particles;
+
+  /* 2x 速度：同样的时间应该走完原本两倍的路。 */
+  engine.playPath(graphPath, 0);
+  engine.setPlaybackSpeed(2);
+  engine.playback.tick(620 + 5);
+  report.playbackSpeed2xFaster = engine.playback.hopIndex >= 2;
+
+  /* 手动步进。 */
+  engine.playPath(graphPath, 0);
+  engine.pausePath();
+  const before = engine.playback.hopIndex;
+  engine.nextHop();
+  const afterNext = engine.playback.hopIndex;
+  engine.previousHop();
+  report.playbackManualStep = afterNext === before + 1 && engine.playback.hopIndex === before;
+  report.pathCostUnweighted = Math.round(report.pathCostUnweighted * 100) / 100;
+  void hops;
 }
 
 /**
@@ -345,6 +463,9 @@ run()
       keyboardMovedSelection: false, reactDisposedOnUnmount: false,
       layoutFinite: false, layoutDeterministic: false, columnsMonotonic: false, ringRadiusMonotonic: false,
       forceSeparated: 0, warmStartChangedResult: false, handlerOk: false, handlerResolvedMode: "", handlerDurationMs: 0,
+      pathNodes: 0, pathCostUnweighted: 0, pathPrefersCheapEdge: false, pathUndirected: false,
+      playbackHopsAtTick: 0, playbackCompleted: false, playbackSpeed2xFaster: false, playbackManualStep: false,
+      litEdgesAfterHighlight: 0, particleCount: 0, enginePathEdges: 0,
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });

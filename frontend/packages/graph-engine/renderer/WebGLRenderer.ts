@@ -1,5 +1,6 @@
 import { Camera } from "../interaction/camera";
 import { NODE_FLAG, type GraphStore } from "../model/GraphStore";
+import { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram, type ParticleAppearance } from "./ParticleProgram";
 
 /**
  * WebGL2 渲染器（用户端重构规范 V4 §30.6 / §30.7）
@@ -151,6 +152,12 @@ export class WebGLRenderer {
   private pickWidth = 0;
   private pickHeight = 0;
 
+  /** 高亮边（选中路径 / 播放路径）：单独一个 buffer，只放被点亮的那几段。 */
+  private highlightBuffer: WebGLBuffer | null = null;
+  private highlightVertexCount = 0;
+  private particles: ParticleProgram | null = null;
+  private particleAppearance: ParticleAppearance = DEFAULT_PARTICLE_APPEARANCE;
+
   private instanceCount = 0;
   private edgeVertexCount = 0;
   private styleDirty = true;
@@ -199,6 +206,14 @@ export class WebGLRenderer {
     this.alphaBuffer = gl.createBuffer();
     this.pickBuffer = gl.createBuffer();
     this.edgeBuffer = gl.createBuffer();
+    this.highlightBuffer = gl.createBuffer();
+    try {
+      this.particles = new ParticleProgram(gl);
+    } catch (error) {
+      /* 粒子是增强项：编译失败不应该让整个图谱渲染不出来（§30.6 的降级思路）。 */
+      console.error("[graph-engine] particle program unavailable", error);
+      this.particles = null;
+    }
   }
 
   /** 上下文恢复后重建全部 GPU 资源（§63C contextrestored）。 */
@@ -290,6 +305,49 @@ export class WebGLRenderer {
     this.styleDirty = true;
   }
 
+  /**
+   * 上传"高亮边"（§30.11：只有选中路径 / 播放路径 / 实时重点交易才有粒子与高亮）。
+   *
+   * 只传被点亮的那几段，而不是给所有边加一个 visible 标记——
+   * 后者会让每帧的顶点量仍然是 O(E)，而高亮路径通常只有几十条边。
+   */
+  uploadHighlight(store: GraphStore, edges: Uint32Array, color: [number, number, number]): void {
+    const gl = this.gl;
+    if (!gl || this.contextLost) return;
+    const data = new Float32Array(edges.length * 2 * 4);
+    let cursor = 0;
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
+      const s = store.edgeSource[edge];
+      const t = store.edgeTarget[edge];
+      for (const node of [s, t]) {
+        data[cursor++] = store.positions[node * 2];
+        data[cursor++] = store.positions[node * 2 + 1];
+        data[cursor++] = color[0];
+        data[cursor++] = color[1];
+      }
+    }
+    this.highlightVertexCount = edges.length * 2;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.highlightBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+
+    /* 粒子与高亮边同源：方向来自 edgeSource→edgeTarget，不由调用方决定。 */
+    this.particles?.uploadEdges(store.positions, store.edgeSource, store.edgeTarget, edges, this.particleAppearance);
+  }
+
+  clearHighlight(): void {
+    this.highlightVertexCount = 0;
+    this.particles?.clear();
+  }
+
+  get highlightedEdges(): number {
+    return this.highlightVertexCount / 2;
+  }
+
+  get particleCount(): number {
+    return this.particles?.count ?? 0;
+  }
+
   resize(cssWidth: number, cssHeight: number, dpr: number): void {
     const canvas = this.canvas;
     const width = Math.max(1, Math.round(cssWidth * dpr));
@@ -300,7 +358,20 @@ export class WebGLRenderer {
     }
   }
 
-  render(store: GraphStore, camera: Camera, cssWidth: number, cssHeight: number, dpr: number): void {
+  render(
+    store: GraphStore,
+    camera: Camera,
+    cssWidth: number,
+    cssHeight: number,
+    dpr: number,
+    options: {
+      /** 粒子时钟（秒）。只在有粒子时才有意义。 */
+      timeSeconds?: number;
+      /** Reduced Motion 下由调用方传 false（§9.5：graph particle 关闭）。 */
+      particlesEnabled?: boolean;
+      highlightColor?: [number, number, number];
+    } = {},
+  ): void {
     const gl = this.gl;
     if (!gl || this.contextLost) return;
     this.resize(cssWidth, cssHeight, dpr);
@@ -330,6 +401,31 @@ export class WebGLRenderer {
       gl.drawArrays(gl.LINES, 0, this.edgeVertexCount);
       gl.disableVertexAttribArray(posLoc);
       gl.disableVertexAttribArray(rgbaLoc);
+    }
+
+    /* 高亮边画在普通边之上、节点之下。 */
+    if (this.highlightVertexCount > 0 && this.edgeProgram) {
+      gl.useProgram(this.edgeProgram);
+      gl.uniformMatrix3fv(gl.getUniformLocation(this.edgeProgram, "u_matrix"), false, matrix);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.highlightBuffer);
+      const hlPos = gl.getAttribLocation(this.edgeProgram, "a_pos");
+      const hlRgba = gl.getAttribLocation(this.edgeProgram, "a_rgba");
+      gl.enableVertexAttribArray(hlPos);
+      gl.vertexAttribPointer(hlPos, 2, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(hlRgba);
+      gl.vertexAttribPointer(hlRgba, 4, gl.FLOAT, false, 16, 8);
+      gl.drawArrays(gl.LINES, 0, this.highlightVertexCount);
+      gl.disableVertexAttribArray(hlPos);
+      gl.disableVertexAttribArray(hlRgba);
+    }
+
+    /*
+     * 粒子：位置完全由顶点着色器按 u_time 插值，CPU 每帧只更新一个 uniform。
+     * Reduced Motion 下不绘制——但**已经点亮的边仍然保留**，
+     * 状态依然完整可读（§9.5 要求"所有最终状态仍完整显示"）。
+     */
+    if (options.particlesEnabled !== false && this.particles && this.particles.count > 0) {
+      this.particles.draw(camera, width, height, options.timeSeconds ?? 0, this.particleAppearance);
     }
 
     if (this.instanceCount > 0 && this.nodeProgram) {
@@ -475,9 +571,12 @@ export class WebGLRenderer {
     const gl = this.gl;
     if (!gl) return;
     this.disposePickTarget();
-    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.pickBuffer, this.edgeBuffer]) {
+    this.particles?.dispose();
+    this.particles = null;
+    for (const buffer of [this.quadBuffer, this.posBuffer, this.sizeBuffer, this.colorBuffer, this.alphaBuffer, this.pickBuffer, this.edgeBuffer, this.highlightBuffer]) {
       if (buffer) gl.deleteBuffer(buffer);
     }
+    this.highlightBuffer = null;
     for (const program of [this.nodeProgram, this.pickProgram, this.edgeProgram]) {
       if (program) gl.deleteProgram(program);
     }
