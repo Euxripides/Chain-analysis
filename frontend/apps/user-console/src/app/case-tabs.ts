@@ -43,10 +43,18 @@ export interface CaseTabDef {
 }
 
 export const CASE_TABS: CaseTabDef[] = [
-  /* 概览只读案件本体。 */
+  /*
+   * **每个 Tab 都要求 case:read**，包括非概览 Tab。
+   *
+   * 这不是冗余：案件详情页本身要调 `GET /api/v2/cases/{id}` 才能渲染标题与页头，
+   * 该接口要求 case:read。只写 Tab 自己的权限，
+   * 会让"有 case:member:list、没有 case:read"的用户进得了 /members，
+   * 然后父页面取案件时吃 403——又是"进得去但用不了"。
+   * 把它显式列在每一项里而不是代码里隐式补，是为了让冻结的契约表自解释。
+   */
   { key: "overview", label: "概览", permissions: ["case:read"] },
-  { key: "subjects", label: "调查对象", permissions: ["subject:list"] },
-  { key: "investigations", label: "案件调查", permissions: ["investigation:list"] },
+  { key: "subjects", label: "调查对象", permissions: ["case:read", "subject:list"] },
+  { key: "investigations", label: "案件调查", permissions: ["case:read", "investigation:list"] },
   /*
    * ⚠️ 临时兼容规则（temporary=true）——**不是最终权限设计**。
    *
@@ -59,11 +67,11 @@ export const CASE_TABS: CaseTabDef[] = [
    * 以案件证据权限为边界），届时本条目应改回单一 evidence:list 并去掉 temporary。
    * 在那之前不要把它当成设计意图引用。
    */
-  { key: "evidence", label: "证据中心", permissions: ["evidence:list", "investigation:list"], temporary: true },
+  { key: "evidence", label: "证据中心", permissions: ["case:read", "evidence:list", "investigation:list"], temporary: true },
   /* 同理：reports Tab 既调 /cases/{id}/reports（report:list）又调 /investigations（investigation:list）。 */
-  { key: "reports", label: "案件报告", permissions: ["report:list", "investigation:list"] },
-  { key: "members", label: "案件成员", permissions: ["case:member:list"] },
-  { key: "activity", label: "案件动态", permissions: ["case:activity:read"] },
+  { key: "reports", label: "案件报告", permissions: ["case:read", "report:list", "investigation:list"] },
+  { key: "members", label: "案件成员", permissions: ["case:read", "case:member:list"] },
+  { key: "activity", label: "案件动态", permissions: ["case:read", "case:activity:read"] },
 ];
 
 export const CASE_TAB_KEYS: string[] = CASE_TABS.map((item) => item.key);

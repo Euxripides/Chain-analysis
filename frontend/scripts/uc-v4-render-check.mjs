@@ -2017,113 +2017,144 @@ async function main() {
       }
 
       /*
-       * ---------- 6f-2. 权限 fail-closed：UI + Route Guard 两层（§0.4.2 / §24.3） ----------
+       * ---------- 6f-2. 案件 Tab 权限矩阵：表驱动（§0.4.2 / §24.3） ----------
        *
-       * 这条断言存在的理由：契约冻结检查比对的是 navigation.tsx 里的
-       * ROUTE_PERMISSIONS（导航裁剪用），**从来不覆盖运行时鉴权**。
-       * 案件详情的 7 个子 Tab 一度只在渲染层过滤权限，
-       * /cases/:caseId/:tab 这条路由本身只校验 case:read——
-       * 于是手输链接、收藏夹、浏览器历史都能绕过 UI 直达子页面。
+       * 之前只测了 members 一个 Tab，那是"抽检"而不是"覆盖"：其余 6 个 Tab
+       * 的权限线一旦被改回 case:read，没有任何断言会红。
+       * 这里改成表驱动：每个 Tab 都跑一遍同样的四件事，加 Tab 只需加一行数据。
        *
-       * 这里要证明三件事，缺一不可：
-       *   1. 无权限用户直达子 Tab → 显示无权限页；
-       *   2. **CaseDetailPage 没有挂载**（它一挂载就会发请求）；
-       *   3. **对应接口请求次数为 0**。
-       * 只断言第 1 条的话，"先渲染页面再判断"的实现照样能过，
-       * 而那正是最危险的那种写法：页面已经拿过敏感数据了。
+       * 每个 Tab 验证（deny / allow 两趟）：
+       *   1. 入口是否显示       —— Tab 栏里该链接的有无
+       *   2. 直达 URL 是否放行  —— 出现无权限页 vs 正常渲染
+       *   3. 组件是否挂载       —— CaseDetailPage 的 .cs-tabs 是否存在
+       *   4. 敏感接口请求次数   —— deny 时必须为 0；allow 时必须 >0（否则数据没真加载）
+       *
+       * 只做主路径（有权限能进）会漏掉整类问题；只做拒绝路径又会把
+       * "权限收得过紧"当成通过。两个方向都要。
        */
       if (vp.width >= 900) {
-        const countRequests = (needle) => requestLog.filter((url) => url.includes(needle)).length;
+        const CASE_ID = "case-0001";
+        /*
+         * require 是**该 Tab 额外的**权限；case:read 是所有 Tab 的基础权限
+         * （案件详情页本身要调 /api/v2/cases/{id}），所以 deny 时保留它，
+         * 只摘掉 Tab 自己的那一项——这样测的正是 Tab 级的门。
+         */
+        const CASE_TAB_MATRIX = [
+          /*
+           * keep 是"拒绝用例里仍然保留的权限"，默认 case:read——这样摘掉的是 Tab 自己那一项，
+           * 测的正是 Tab 级的门。但 overview 的权限**就是** case:read 本身，keep 必须为空：
+           * 否则"拒绝用例"里什么都没摘掉，等于拿全权限跑了一遍。
+           * 第一版就是这么写的，结果 overview 那三条断言是空转（页面当然正常打开）。
+           */
+          { tab: "overview", keep: [], require: ["case:read"], own: [/\/api\/v2\/cases\/case-0001(\?|$)/], forbidden: ["/api/v2/cases/case-0001/subjects", "/api/v2/cases/case-0001/members"] },
+          { tab: "subjects", require: ["subject:list"], own: ["/api/v2/cases/case-0001/subjects"], forbidden: ["/api/v2/cases/case-0001/subjects"] },
+          { tab: "investigations", require: ["investigation:list"], own: ["/api/v2/investigations"], forbidden: ["/api/v2/investigations"] },
+          { tab: "evidence", require: ["evidence:list", "investigation:list"], own: ["/api/v2/investigations"], forbidden: ["/api/v2/investigations"] },
+          { tab: "reports", require: ["report:list", "investigation:list"], own: ["/api/v2/cases/case-0001/reports"], forbidden: ["/api/v2/cases/case-0001/reports", "/api/v2/investigations"] },
+          { tab: "members", require: ["case:member:list"], own: ["/api/v2/cases/case-0001/members"], forbidden: ["/api/v2/cases/case-0001/members"] },
+          { tab: "activity", require: ["case:activity:read"], own: ["/api/v2/cases/case-0001/activity"], forbidden: ["/api/v2/cases/case-0001/activity"] },
+        ];
 
-        /* ---- A. 无 case:member:list：直达 /members ---- */
-        /* 必须清零：本视口前面已经跑过几十次导航，不清零会把历史请求算到这一段头上。 */
-        requestLog.length = 0;
-        const withoutMembers = {
-          ...SESSION,
-          permissions: SESSION.permissions.filter((p) => p !== "case:member:list"),
-        };
-        await page.route("**/api/auth/v1/session", (route) =>
-          route.fulfill({ status: 200, contentType: "application/json", body: envelope(withoutMembers) }),
-        );
-        await page.goto(`${base}/cases/case-0001/members`, { waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(1500);
+        const countRequests = (matcher) =>
+          requestLog.filter((url) =>
+            typeof matcher === "string" ? url.includes(matcher) : matcher.test(url),
+          ).length;
 
-        const blockedText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
-        /* 必须匹配接口路径：'/cases/...' 会连页面导航的文档请求一起数进来（实测踩过）。 */
-        const membersRequests = countRequests("/api/v2/cases/case-0001/members");
-        const pageMounted = (await page.locator(".cs-pageheader__title").count()) + (await page.locator(".cs-tabs").count());
-
-        if (!/没有访问/.test(blockedText)) {
-          problems.push(`[permission] 无 case:member:list 直达 /members 没有被拦截（正文「${blockedText.replace(/\s+/g, " ").slice(0, 50)}」）`);
-        }
-        if (membersRequests !== 0) {
-          problems.push(`[permission] 无 case:member:list 直达 /members 时仍然请求了成员接口 ${membersRequests} 次`);
-        }
-        if (membersRequests === 0) {
-          notes.push("[permission] 无 case:member:list 直达 /members：已拦截 · 页面未挂载 · 成员接口 0 次请求");
-        }
-        if (pageMounted > 0) {
-          problems.push(`[permission] 无 case:member:list 直达 /members 时 CaseDetailPage 仍然挂载了（${pageMounted} 个页面元素）`);
-        }
-
-        /* ---- B. 无 evidence:list：直达 /evidence（该 Tab 实际调 /investigations） ---- */
-        requestLog.length = 0;
-        const withoutEvidence = {
-          ...SESSION,
-          permissions: SESSION.permissions.filter((p) => p !== "evidence:list"),
-        };
-        await page.route("**/api/auth/v1/session", (route) =>
-          route.fulfill({ status: 200, contentType: "application/json", body: envelope(withoutEvidence) }),
-        );
-        await page.goto(`${base}/cases/case-0001/evidence`, { waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(1500);
-
-        const evidenceText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
-        const investigationsRequests = countRequests("/api/v2/investigations");
-        if (!/没有访问/.test(evidenceText)) {
-          problems.push(`[permission] 无 evidence:list 直达 /evidence 没有被拦截（正文「${evidenceText.replace(/\s+/g, " ").slice(0, 50)}」）`);
-        }
-        if (investigationsRequests !== 0) {
-          problems.push(`[permission] 无 evidence:list 直达 /evidence 时仍然请求了 /investigations ${investigationsRequests} 次`);
-        }
-        if (!/证据中心/.test(evidenceText) && /没有访问/.test(evidenceText)) {
-          notes.push("[permission] /evidence 拦截至「证据中心」无权限页，且未发出 /investigations 请求");
-        }
-
-        /* ---- C. 只停在概览时，成员接口不得被请求（数据最小化） ---- */
-        requestLog.length = 0;
-        const fullSession = { ...SESSION };
-        await page.route("**/api/auth/v1/session", (route) =>
-          route.fulfill({ status: 200, contentType: "application/json", body: envelope(fullSession) }),
-        );
-        await page.goto(`${base}/cases/case-0001/overview`, { waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(1800);
-        const overviewMembersRequests = countRequests("/api/v2/cases/case-0001/members");
-        if (overviewMembersRequests !== 0) {
-          problems.push(
-            `[permission] 停留在概览页时仍然请求了成员接口 ${overviewMembersRequests} 次——成员数据没有跟随 Tab 按需加载`,
+        const setSession = async (permissions) => {
+          await page.route("**/api/auth/v1/session", (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: "application/json",
+              body: envelope({ ...SESSION, permissions }),
+            }),
           );
-        } else {
-          notes.push("[permission] 概览页未请求成员接口（成员数据已改为进入 Tab 后按需加载）");
+        };
+
+        const tabHrefOf = async () =>
+          page.evaluate(() =>
+            Array.from(document.querySelectorAll(".cs-tabs a")).map((a) => a.getAttribute("href") ?? ""),
+          );
+
+        const summary = [];
+
+        for (const entry of CASE_TAB_MATRIX) {
+          const url = `${base}/cases/${CASE_ID}/${entry.tab}`;
+
+          /* ---- deny：摘掉该 Tab 的专属权限，保留 case:read ---- */
+          const keep = entry.keep ?? ["case:read"];
+          const denied = SESSION.permissions.filter(
+            (permission) => !entry.require.includes(permission) || keep.includes(permission),
+          );
+          await setSession(denied);
+          requestLog.length = 0;
+          await page.goto(url, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(1300);
+
+          const deniedText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+          const deniedMounted = await page.locator(".cs-tabs").count();
+          const leaked = entry.forbidden.filter((needle) => countRequests(needle) > 0);
+
+          if (!/没有访问/.test(deniedText)) {
+            problems.push(`[perm-matrix] ${entry.tab}：无权限直达未被拦截（正文「${deniedText.replace(/\s+/g, " ").slice(0, 40)}」）`);
+          }
+          if (deniedMounted > 0) {
+            problems.push(`[perm-matrix] ${entry.tab}：无权限直达时 CaseDetailPage 仍然挂载（${deniedMounted} 个 .cs-tabs）`);
+          }
+          if (leaked.length > 0) {
+            problems.push(`[perm-matrix] ${entry.tab}：无权限直达时仍然请求了 ${JSON.stringify(leaked)}`);
+          }
+          const deniedHrefs = await tabHrefOf();
+
+          /* ---- allow：完整权限，既要进得去也要真的加载到数据 ---- */
+          await setSession(SESSION.permissions);
+          requestLog.length = 0;
+          await page.goto(`${base}/cases/${CASE_ID}/overview`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(1200);
+          const allowedHrefs = await tabHrefOf();
+          const linkShown = allowedHrefs.some((href) => href.endsWith(`/${entry.tab}`));
+
+          await page.goto(url, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(1500);
+          const allowedText = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+          const allowedMounted = await page.locator(".cs-tabs").count();
+          const ownCalls = entry.own.reduce((sum, matcher) => sum + countRequests(matcher), 0);
+
+          if (!linkShown) {
+            problems.push(`[perm-matrix] ${entry.tab}：有权限时 Tab 入口没有显示（${JSON.stringify(allowedHrefs)}）`);
+          }
+          if (/没有访问/.test(allowedText)) {
+            problems.push(`[perm-matrix] ${entry.tab}：有权限却被拦（权限收得过紧）`);
+          }
+          if (allowedMounted === 0) {
+            problems.push(`[perm-matrix] ${entry.tab}：有权限时 CaseDetailPage 没有挂载`);
+          }
+          if (ownCalls === 0) {
+            problems.push(`[perm-matrix] ${entry.tab}：进入后没有请求自己的数据接口（Tab 是空的）`);
+          }
+
+          summary.push(
+            `${entry.tab}: 拒绝[拦截${!/没有访问/.test(deniedText) ? "✗" : "✓"} 未挂载${deniedMounted > 0 ? "✗" : "✓"} 零请求${leaked.length > 0 ? "✗" : "✓"}] ` +
+              `允许[入口${linkShown ? "✓" : "✗"} 挂载${allowedMounted > 0 ? "✓" : "✗"} 请求${ownCalls}]`,
+          );
+          /* deny 那趟必须确实少了入口——否则"隐藏"这件事根本没验证。 */
+          if (!/没有访问/.test(deniedText) && deniedHrefs.some((href) => href.endsWith(`/${entry.tab}`))) {
+            problems.push(`[perm-matrix] ${entry.tab}：无权限时 Tab 入口仍然可见`);
+          }
         }
 
-        /* ---- D. 有权限时该 Tab 必须照常可进（收得过紧同样是缺陷） ---- */
+        /* ---- 数据最小化：停在概览时不得请求成员/证据等敏感接口 ---- */
         requestLog.length = 0;
-        await page.goto(`${base}/cases/case-0001/members`, { waitUntil: "domcontentloaded" });
+        await page.goto(`${base}/cases/${CASE_ID}/overview`, { waitUntil: "domcontentloaded" });
         await page.waitForTimeout(1800);
-        const allowedMembers = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
-        if (/没有访问/.test(allowedMembers)) {
-          problems.push("[permission] 拥有 case:member:list 的用户被挡在了成员 Tab 外（权限收得过紧）");
-        } else if (countRequests("/api/v2/cases/case-0001/members") === 0) {
-          problems.push("[permission] 成员 Tab 可进入但没有请求成员接口（Tab 没有真正加载数据）");
-        } else {
-          notes.push("[permission] 有权限时成员 Tab 正常进入并加载数据");
+        for (const needle of ["/api/v2/cases/case-0001/members", "/api/v2/cases/case-0001/subjects", "/api/v2/cases/case-0001/activity"]) {
+          const calls = countRequests(needle);
+          if (calls > 0) {
+            problems.push(`[perm-matrix] 停留在概览页时仍然请求了 ${needle} ${calls} 次——数据没有跟随 Tab 按需加载`);
+          }
         }
 
-        /* 还原完整权限夹具 */
-        await page.route("**/api/auth/v1/session", (route) =>
-          route.fulfill({ status: 200, contentType: "application/json", body: envelope(SESSION) }),
-        );
+        await setSession(SESSION.permissions);
+        notes.push(`[perm-matrix] 7 个 Tab 双向通过：${summary.join(" · ")}`);
       }
 
       /*
