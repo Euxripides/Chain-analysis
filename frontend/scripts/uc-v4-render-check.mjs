@@ -380,6 +380,38 @@ const JOB = {
   stats: {},
 };
 
+/*
+ * 任务**列表**行（GET /api/v2/jobs 的 items[]）。
+ *
+ * 与 JOB 是同一份事实的两种形状：详情接口返回 job+progress 的组合，
+ * 列表接口把进度摊平成一行。字段名严格照 JobRow，不额外编造。
+ */
+const JOB_ROW = {
+  id: JOB_ID,
+  job_no: JOB.job_no,
+  status: JOB.status,
+  chain: JOB.chain,
+  datasets: JOB.datasets,
+  source: JOB.source,
+  reuse_policy: JOB.reuse_policy,
+  range_type: JOB.range_type,
+  from_block: JOB.from_block,
+  to_block: JOB.to_block,
+  requested_mode: JOB.requested_mode,
+  effective_mode: JOB.effective_mode,
+  mode_reason: JOB.mode_reason,
+  created_at: JOB.created_at,
+  updated_at: JOB.updated_at,
+  progress: 0.64,
+  addresses: { total: 3, completed: 2 },
+  datasets_progress: { total: 1 },
+  shards: { total: 4, completed: 2, failed: 0 },
+  downloaded_rows: 1_240_000,
+  downloaded_bytes: 13_300_000_000,
+  last_success_at: JOB.updated_at,
+  failure: { kind: "", message_safe: "" },
+};
+
 const PROGRESS = {
   status: "RUNNING",
   progress: 0.64,
@@ -581,7 +613,8 @@ async function main() {
       const LIST_FIXTURES = [
         listRoute("notifications", NOTIFICATIONS),
         listRoute("dashboard", DASHBOARD),
-        listRoute("jobs", { items: [] }),
+        /* 空列表会让 L1 表格契约在这一页变成空断言（同 exports 的教训）。 */
+        listRoute("jobs", { items: [JOB_ROW], next_cursor: null }),
         listRoute("investigations", INVESTIGATION_ROWS),
         listRoute("inbox", []),
         listRoute("cases", CASE_ROWS),
@@ -948,13 +981,29 @@ async function main() {
           ["/exports", "导出中心", "导出"],
           ["/cases", "案件列表", "案件"],
           ["/investigations", "调查任务", "调查"],
+          ["/jobs", "任务中心", "任务号"],
         ]) {
           await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
           const root = page.locator(".cs-protable").first();
+          let hasProTable = true;
           try {
             await root.waitFor({ timeout: 20_000 });
           } catch {
-            problems.push(`[${vp.name}] ${label} 没有渲染 L1 表格（.cs-protable 缺失）`);
+            hasProTable = false;
+          }
+          if (!hasProTable) {
+            /*
+             * 窄屏下有两种合法形态：CsProTable 自己的卡片形态（.cs-protable--cards），
+             * 以及页面**自带**的卡片列表（任务中心的 .cs-rowcards）。
+             * 后者不是"漏了 L1"，是页面为宽表单独做的移动端表达——
+             * 拿桌面的组件形态去卡它，等于要求移动端照搬桌面端的 DOM。
+             */
+            const cards = await page.locator(".cs-rowcards").count();
+            if (vp.width < 900 && cards > 0) {
+              l1Summary.push(`${label}=卡片形态`);
+              continue;
+            }
+            problems.push(`[${vp.name}] ${label} 没有渲染 L1 表格（.cs-protable 缺失，且没有卡片形态）`);
             continue;
           }
           if (vp.width < 900) continue;

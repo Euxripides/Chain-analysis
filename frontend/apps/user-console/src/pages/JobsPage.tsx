@@ -10,7 +10,6 @@ import { ApiError,
 import {
   BulkActionBar,
   CompactProgress,
-  DataTable,
   DateTimeRange,
   EmptyState,
   FilterBar,
@@ -27,7 +26,8 @@ import {
   progressStateFor,
   useDialog,
 } from "@chain/ui";
-import { CsPageHeader } from "@chain/user-ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
+import { CsProTable } from "@chain/user-ui/pro-table";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
 /* ============================================================================
@@ -36,7 +36,7 @@ import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Acti
  * 数据层保持不变：请求参数、cursor 分页、批量取消的逐个 POST 与审计原因全部照旧。
  * 本次只改表现层：
  *   - 顶部状态统计来自当前接口真实返回的条目（单一 status 逐条计数，点击即按该状态筛选）。
- *   - 列表换成 DataTable（<900px 换成 .cs-rowcards 任务卡片，进度与主操作始终可见）。
+ *   - 列表用 L1 的 CsProTable（§17.1；<900px 换成 .cs-rowcards 任务卡片，进度与主操作始终可见）。
  *   - 点击行开右侧快速预览；点击任务号进入详情。
  *   - 批量取消走 BulkActionBar + 原因与确认 Dialog，只允许选择可取消任务。
  *   - 失败详情、Trace、口径与计算方式只通过 Dialog 呈现。
@@ -473,8 +473,16 @@ export default function JobsPage() {
     />
   );
 
+  /*
+   * L1 普通业务表格用 ProTable（§17.1：Jobs 在普通数据量下属于 L1）。
+   *
+   * 选中列与批量操作**照旧**：选中是页面自己的一列（不是 antd 的 rowSelection），
+   * 批量取消仍走 BulkActionBar + 原因确认弹窗，数据层与审计路径一行未动。
+   */
   const table = (
-    <DataTable<JobRow>
+    <div style={{ position: "relative", minWidth: 0 }}>
+      <CsRefreshBar active={jobsApi.loading && viewRows.length > 0} />
+      <CsProTable<JobRow>
       loading={jobsApi.loading}
       /* §17.5：任务列表由 SSE 高频触发 reload，刷新时保留旧行尤其重要。 */
       keepPreviousData
@@ -504,6 +512,8 @@ export default function JobsPage() {
           key: "job",
           header: "任务号",
           width: "220px",
+          /* §17.2：主标识列冻结，横向滚动时不跟着走。 */
+          frozen: true,
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <Link
@@ -661,7 +671,8 @@ export default function JobsPage() {
           ),
         },
       ]}
-    />
+      />
+    </div>
   );
 
   const cards = (

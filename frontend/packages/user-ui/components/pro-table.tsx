@@ -46,6 +46,13 @@ export interface CsProTableProps<T> {
   /** 行激活只负责"选中/预览"；跳转仍由行内明确链接承担（§17.3）。 */
   onRowActivate?: (row: T) => void;
   rowActivateLabel?: (row: T) => string;
+  /**
+   * 行上的稳定测试钩子（`data-testid`）。
+   *
+   * 与 DataTable 的 `rowTestId` 同义：端到端脚本要按业务 id 定位某一行，
+   * 而 `rowKey` 在 DOM 上不一定可见。迁移层级时不该顺手把这个钩子丢掉。
+   */
+  rowTestId?: (row: T) => string;
   /** 刷新已有数据时保留旧行（§17.5）。 */
   keepPreviousData?: boolean;
   /** <900px 的卡片形态；不传则退化成可横向滚动的表格。 */
@@ -65,6 +72,7 @@ export function CsProTable<T extends object>({
   caption,
   onRowActivate,
   rowActivateLabel,
+  rowTestId,
   keepPreviousData = true,
   mobileCard,
   pageSize = 20,
@@ -141,21 +149,29 @@ export function CsProTable<T extends object>({
         size="small"
         cardProps={{ bordered: false }}
         tableStyle={{ minWidth: 0 }}
-        /* 行激活（§17.3）：行不上浮，只给键盘一个可聚焦、可 Enter 的入口。 */
-        onRow={
-          onRowActivate
-            ? (row) => ({
-                tabIndex: 0,
-                "aria-label": rowActivateLabel ? rowActivateLabel(row) : undefined,
-                onKeyDown: (event: React.KeyboardEvent) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    onRowActivate(row);
-                  }
-                },
-              })
-            : undefined
-        }
+        /*
+         * 行属性（§17.3 与测试钩子）。
+         *
+         * 必须**总是**提供 onRow：只在 `onRowActivate` 存在时才给，
+         * 会让"没有行激活、但有 rowTestId"的表格丢掉 data-testid——
+         * 这种"某个 prop 组合下功能静默失效"的情况很难在评审里看出来。
+         */
+        onRow={(row) => {
+          const attrs: Record<string, unknown> = {};
+          if (rowTestId) attrs["data-testid"] = rowTestId(row);
+          if (onRowActivate) {
+            /* 行不上浮，只给键盘一个可聚焦、可 Enter 的入口。 */
+            attrs.tabIndex = 0;
+            if (rowActivateLabel) attrs["aria-label"] = rowActivateLabel(row);
+            attrs.onKeyDown = (event: React.KeyboardEvent) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onRowActivate(row);
+              }
+            };
+          }
+          return attrs as React.HTMLAttributes<HTMLElement>;
+        }}
         tableAlertRender={false}
         scroll={{ x: "max-content" }}
       />
