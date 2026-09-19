@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "check:tokens": "node scripts/check-token-contrast.mjs",
     "check:uc-render": "node scripts/uc-v4-render-check.mjs",
     "check:graph": "node scripts/graph-engine-check.mjs",

@@ -772,7 +772,7 @@ interface InkBox {
 }
 
 /** 数一个屏幕矩形里"非背景"的像素数。坐标是 CSS 像素，内部按 DPR 折算到画布像素。 */
-function countInk(pixels: ImageData, rect: { x: number; y: number; width: number; height: number }): number {
+function countInk(pixels: ImageData, rect: InkBox): number {
   const dpr = Math.max(1, Math.round(pixels.width / Math.max(1, rect.canvasWidth)));
   const x0 = Math.max(0, Math.floor(rect.x * dpr));
   const y0 = Math.max(0, Math.floor(rect.y * dpr));

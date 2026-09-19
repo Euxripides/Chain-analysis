@@ -1,4 +1,4 @@
-import type { RenderStyle } from "../renderer/WebGLRenderer";
+import type { RenderStyle } from "./renderer/WebGLRenderer";
 
 /**
  * 视图维度（用户端重构规范 V4 §30.8 的"看什么"维度；工具栏 `视图维度`）

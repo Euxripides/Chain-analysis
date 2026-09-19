@@ -1,0 +1,46 @@
+{
+  /*
+   * 统一类型检查配置（本轮修复）。
+   *
+   * 为什么需要它：仓库根目录的 `tsc -b` 走的是 tsconfig.app.json 的
+   * `include: ["src"]`——那是 frontend/src 下的一套遗留源码，
+   * **完全不包含 apps/ 与 packages/**。也就是说在此之前，
+   * "类型检查通过"从来没有检查过这次重构真正改动的任何一行代码。
+   *
+   * 两个 app 自带的 tsconfig 也各自有缺口：
+   *   · apps/user-console/tsconfig.json 映射齐全，但只 include 自己的 src；
+   *   · apps/admin-console/tsconfig.json include 了 ../../packages，
+   *     却没有映射 @chain/user-ui / @chain/graph-*，于是共享包一律报 TS2307。
+   * 本文件把两者合并：baseUrl 落在 frontend 根，paths 一次性映射全部包，
+   * include 同时覆盖两个 app 的 src 与 packages。
+   *
+   * 不修改 admin-console 目录下的任何文件（规范 §1.3）。
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@chain/ui": ["packages/ui/index.ts"],
+      "@chain/ui/dialog-core": ["packages/ui/dialog-core.tsx"],
+      "@chain/ui/dialog-legacy-renderer": ["packages/ui/dialog-legacy-renderer.tsx"],
+      "@chain/design-tokens": ["packages/design-tokens/index.ts"],
+      "@chain/api-client": ["packages/api-client/index.ts"],
+      "@chain/user-ui": ["packages/user-ui/index.ts"],
+      "@chain/user-ui/pro-table": ["packages/user-ui/components/pro-table.tsx"],
+      "@chain/graph-engine": ["packages/graph-engine/index.ts"],
+      "@chain/graph-react": ["packages/graph-react/index.ts"]
+    }
+  },
+  "include": ["apps/user-console/src", "apps/admin-console/src", "packages"]
+}
