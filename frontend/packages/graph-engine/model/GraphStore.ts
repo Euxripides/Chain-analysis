@@ -61,6 +61,14 @@ export interface GraphEdgeInput {
   target: string;
   /** 金额/资产在字典池里的下标，仅用于分组与 LOD，不参与几何。 */
   amountIndex?: number;
+  /**
+   * 颜色分组下标（资产透镜：同一 token 同色）。
+   *
+   * 与 `amountIndex` 分开：后者是"金额量级分组"，服务于 LOD 与聚合；
+   * 把两者合并会让"按金额分层"和"按 token 上色"互相绑架，
+   * 任何一边改分组方式都会顺手改掉另一边的颜色。
+   */
+  colorGroup?: number;
   weight?: number;
 }
 
@@ -86,6 +94,8 @@ export class GraphStore {
   edgeTarget = new Uint32Array(0);
   edgeWeight = new Float32Array(0);
   edgeAmount = new Uint32Array(0);
+  /** 每条边的颜色分组下标（资产透镜用）。 */
+  edgeColorGroup = new Uint32Array(0);
 
   /** CSR 邻接（§30.4 adjacency index）：offset[i]..offset[i+1] 是节点 i 的出边下标。 */
   outOffset = new Uint32Array(0);
@@ -179,12 +189,14 @@ export class GraphStore {
     this.edgeTarget = new Uint32Array(edges.length);
     this.edgeWeight = new Float32Array(edges.length);
     this.edgeAmount = new Uint32Array(edges.length);
+    this.edgeColorGroup = new Uint32Array(edges.length);
     for (let i = 0; i < edges.length; i += 1) {
       const edge = edges[i];
       this.edgeSource[i] = Math.max(0, this.indexOfNodeId(edge.source));
       this.edgeTarget[i] = Math.max(0, this.indexOfNodeId(edge.target));
       this.edgeWeight[i] = edge.weight ?? 1;
       this.edgeAmount[i] = edge.amountIndex ?? 0;
+      this.edgeColorGroup[i] = edge.colorGroup ?? 0;
     }
 
     this.buildAdjacency();
@@ -248,6 +260,7 @@ export class GraphStore {
       this.positions.byteLength + this.sizes.byteLength + this.kinds.byteLength + this.flags.byteLength +
       this.nodeIds.byteLength + this.nodeLabels.byteLength + this.nodeSublabels.byteLength + this.edgeSource.byteLength +
       this.edgeTarget.byteLength + this.edgeWeight.byteLength + this.edgeAmount.byteLength +
+      this.edgeColorGroup.byteLength +
       this.outOffset.byteLength + this.outEdges.byteLength + this.inOffset.byteLength + this.inEdges.byteLength;
     let strings = 0;
     for (const value of this.strings) strings += value.length * 2;

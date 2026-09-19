@@ -212,6 +212,17 @@ async function main() {
         `LOD：far=${report.renderedEdgesFar} 边 · near=${report.renderedEdgesNear} 边 · 预算档位=${report.budgetModeForProbe} · 保留主干=${report.farKeepsHeaviest}`,
       );
     }
+    /* 视图维度（§30.8）。 */
+    if (report.lensChecks === "webgl2-unavailable") {
+      notes.push("视图维度检查跳过：WebGL2 不可用");
+    } else if (report.lensChecks !== "ok") {
+      problems.push("视图维度检查失败（" + report.lensChecks + "）：" + report.lensStyleChecks +
+        " · 虚线断口 " + report.lensDashGaps + " / 实线断口 " + report.lensSolidGaps +
+        " · " + report.lensEdgeColorText);
+    } else {
+      notes.push("视图维度：证据透镜 " + report.lensDashGaps + " 个虚线段（共 " + report.lensSamples +
+        " 个采样点）· 资金流透镜 " + report.lensSolidGaps + " 个断口 · " + report.lensEdgeColorText);
+    }
     /* 高亮边的实际颜色（§30.11）。 */
     if (report.highlightChecks === "webgl2-unavailable") {
       notes.push("高亮边颜色检查跳过：WebGL2 不可用");

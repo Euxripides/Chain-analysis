@@ -46,6 +46,16 @@ export { LabelAtlas } from "./renderer/LabelAtlas";
 export type { AtlasStats, GlyphBox } from "./renderer/LabelAtlas";
 export { LabelProgram } from "./renderer/LabelProgram";
 export type { LabelInstance } from "./renderer/LabelProgram";
+export {
+  ASSET_PALETTE,
+  EVIDENCE_DASH,
+  LENS_EDGE_COLORS,
+  LENS_EFFECTS,
+  LENS_OPTIONS,
+  assetColorGroup,
+  lensStyle,
+} from "./lenses";
+export type { Lens, LensEffect, LensOption } from "./lenses";
 export { LabelLayer, orderByDegree, shortId } from "./labels/LabelLayer";
 export type { LabelLayerOptions, LabelPriority } from "./labels/LabelLayer";
 export {

@@ -9,7 +9,20 @@
  */
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { GraphEngine, GraphStore, bfsLayers, decideBudget, findPath, handleLayoutRequest, lodLevelFor, runLayout } from "../index";
+import {
+  ASSET_PALETTE,
+  EVIDENCE_DASH,
+  GraphEngine,
+  GraphStore,
+  LENS_EFFECTS,
+  bfsLayers,
+  decideBudget,
+  findPath,
+  handleLayoutRequest,
+  lensStyle,
+  lodLevelFor,
+  runLayout,
+} from "../index";
 import type { GraphEdgeInput, GraphNodeInput, LayoutMode, LayoutRequest } from "../index";
 import { FundGraph } from "@chain/graph-react";
 
@@ -118,6 +131,23 @@ interface ProbeReport {
   /** 采样了几个边中点。 */
   highlightSamples: number;
   highlightChecks: string;
+  /* 视图维度（§30.8）。 */
+  /** 证据透镜下，沿一条长边采样得到的**空隙段**数（虚线必须真的有断口）。 */
+  lensDashGaps: number;
+  /** 资金流透镜下同一位置的空隙段数——必须为 0，否则"虚线"只是噪声。 */
+  lensSolidGaps: number;
+  /** 沿边一共采了多少个像素。 */
+  lensSamples: number;
+  /** 资产透镜下两条不同 `colorGroup` 的边，实测颜色是否确实不同。 */
+  lensEdgeColorsDistinct: boolean;
+  /** 两条边是否分别落在各自调色板色的混合线上。 */
+  lensEdgeColorsMatchPalette: boolean;
+  lensEdgeColorText: string;
+  /** 纯函数层面的透镜策略断言（不看渲染，逐字段核对效果表）。 */
+  lensStyleChecks: string;
+  /** `setLens` 是否发出了事件、`lens` 是否随之改变。 */
+  lensSwitchEvent: boolean;
+  lensChecks: string;
 }
 
 declare global {
@@ -220,6 +250,15 @@ async function run(): Promise<ProbeReport> {
     highlightPixelsLit: 0,
     highlightSamples: 0,
     highlightChecks: "",
+    lensDashGaps: 0,
+    lensSolidGaps: 0,
+    lensSamples: 0,
+    lensEdgeColorsDistinct: false,
+    lensEdgeColorsMatchPalette: false,
+    lensEdgeColorText: "",
+    lensStyleChecks: "",
+    lensSwitchEvent: false,
+    lensChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -288,6 +327,9 @@ async function run(): Promise<ProbeReport> {
 
   /* 5c. 高亮边的**实际颜色**（§30.11）。 */
   await runHighlightColorCheck(report);
+
+  /* 5d. 视图维度：虚线（证据）与分组着色（资产）（§30.8）。 */
+  await runLensChecks(report);
 
   /* 6. dispose 之后必须停止渲染且可重入调用。 */
   engine.dispose();
@@ -1080,6 +1122,201 @@ async function runHighlightColorCheck(report: ProbeReport): Promise<void> {
   host.remove();
 }
 
+
+/* ------------------------------------------------- 视图维度（§30.8） */
+
+/** 沿一条水平线段逐像素采样，数出"背景段"（=虚线的断口）的段数。 */
+function countGapsAlong(pixels: ImageData, row: number, x0: number, x1: number, dprScale: number): { gaps: number; samples: number } {
+  const y = Math.round(row * dprScale);
+  let gaps = 0;
+  let samples = 0;
+  let inGap = false;
+  for (let sx = x0; sx <= x1; sx += 1) {
+    const x = Math.round(sx * dprScale);
+    if (x < 0 || x >= pixels.width || y < 0 || y >= pixels.height) continue;
+    const i = (y * pixels.width + x) * 4;
+    const d =
+      Math.abs(pixels.data[i] - BG[0]) + Math.abs(pixels.data[i + 1] - BG[1]) + Math.abs(pixels.data[i + 2] - BG[2]);
+    samples += 1;
+    const isGap = d <= FG_DISTANCE;
+    if (isGap && !inGap) gaps += 1;
+    inGap = isGap;
+  }
+  return { gaps, samples };
+}
+
+/** 取一个屏幕点的 RGB。 */
+function pixelAt(pixels: ImageData, sx: number, sy: number, dprScale: number): [number, number, number] {
+  const x = Math.round(sx * dprScale);
+  const y = Math.round(sy * dprScale);
+  const i = (y * pixels.width + x) * 4;
+  return [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+}
+
+/**
+ * 视图维度验收。
+ *
+ * 这一轮给引擎加的两个能力都**只能靠读像素证明**：
+ *   - 虚线：断口是 `discard` 出来的，实例数 / 边数完全看不出来；
+ *   - 分组着色：颜色烘焙进顶点缓冲，缓冲区长度与边数一致，也看不出来。
+ */
+async function runLensChecks(report: ProbeReport): Promise<void> {
+  /* ---- 1. 纯函数部分：效果表逐字段核对（不渲染，先钉住策略本身）---- */
+  const baseStyle = {
+    kindColors: [[0, 0, 0]] as Array<[number, number, number]>,
+    edgeColor: [0, 0, 0] as [number, number, number],
+    edgeActiveColor: [0, 0, 0] as [number, number, number],
+    background: [1, 1, 1] as [number, number, number],
+    dimmedAlpha: 0.22,
+  };
+  const problems: string[] = [];
+  const flow = lensStyle("flow", baseStyle);
+  const evidence = lensStyle("evidence", baseStyle);
+  const asset = lensStyle("asset", baseStyle);
+  const time = lensStyle("time", baseStyle);
+  if (flow.edgeDash) problems.push("flow 不应是虚线");
+  if (!evidence.edgeDash) problems.push("evidence 应为虚线");
+  if (evidence.edgeDash && (evidence.edgeDash.on !== EVIDENCE_DASH.on || evidence.edgeDash.off !== EVIDENCE_DASH.off)) {
+    problems.push("evidence 虚线周期与 EVIDENCE_DASH 不一致");
+  }
+  if (evidence.edgeColorMode !== "uniform") problems.push("evidence 不应按分组着色");
+  if (asset.edgeColorMode !== "group") problems.push("asset 应按分组着色");
+  if ((asset.edgeGroupColors?.length ?? 0) !== ASSET_PALETTE.length) problems.push("asset 调色板长度不符");
+  if (!LENS_EFFECTS.time.sublabel) problems.push("time 应显示副标签");
+  if (!LENS_EFFECTS.evidence.evidenceOnly) problems.push("evidence 应只保留证据节点及其一跳邻居");
+  report.lensStyleChecks = problems.length === 0 ? "ok" : problems.join("；");
+
+  /* ---- 2. 渲染部分 ---- */
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;width:520px;height:240px;";
+  document.body.appendChild(host);
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  host.appendChild(canvas);
+
+  /*
+   * 夹具：中间一条**很长**的水平边（虚线才看得出周期），
+   * 外加上方/下方各一条不同 colorGroup 的边（分组着色才看得出差异）。
+   */
+  const nodes = [
+    { id: "L", kind: "address" as const, x: -220, y: 0, size: 3 },
+    { id: "R", kind: "address" as const, x: 220, y: 0, size: 3 },
+    { id: "u0", kind: "transaction" as const, x: -60, y: -70, size: 3 },
+    { id: "u1", kind: "transaction" as const, x: 0, y: -70, size: 3 },
+    { id: "d0", kind: "transaction" as const, x: -60, y: 70, size: 3 },
+    { id: "d1", kind: "transaction" as const, x: 0, y: 70, size: 3 },
+  ];
+  const edges = [
+    { id: "main", source: "L", target: "R" },
+    { id: "g0", source: "u0", target: "u1", colorGroup: 0 },
+    { id: "g1", source: "d0", target: "d1", colorGroup: 1 },
+  ];
+
+  const engine = new GraphEngine({ nodes, edges });
+  if (!engine.mount(canvas)) {
+    report.lensChecks = "webgl2-unavailable";
+    host.remove();
+    return;
+  }
+  const waitFrames = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+
+  engine.camera.state.scale = 1;
+  engine.camera.state.cx = 0;
+  engine.camera.state.cy = 0;
+  engine.invalidate();
+  await waitFrames();
+
+  const viewport = engine.viewport();
+
+  /* --- 2a. 证据透镜：主线必须是虚线 --- */
+  let events = 0;
+  engine.events.on("lens:change", () => {
+    events += 1;
+  });
+  engine.setLens("evidence");
+  engine.invalidate();
+  await waitFrames();
+  report.lensSwitchEvent = events === 1 && engine.lens === "evidence";
+
+  const dashedUrl = engine.exportView();
+  if (dashedUrl) {
+    const pixels = await decodePng(dashedUrl);
+    const dprScale = pixels.width / Math.max(1, viewport.width);
+    const [, sy] = engine.camera.worldToScreen(0, 0, viewport.width, viewport.height);
+    const [sx0] = engine.camera.worldToScreen(-200, 0, viewport.width, viewport.height);
+    const [sx1] = engine.camera.worldToScreen(200, 0, viewport.width, viewport.height);
+    const dashed = countGapsAlong(pixels, sy, sx0 + 2, sx1 - 2, dprScale);
+    report.lensDashGaps = dashed.gaps;
+    report.lensSamples = dashed.samples;
+  }
+
+  /* --- 2b. 资金流透镜：同一位置不应有断口 --- */
+  engine.setLens("flow");
+  engine.invalidate();
+  await waitFrames();
+  const solidUrl = engine.exportView();
+  if (solidUrl) {
+    const pixels = await decodePng(solidUrl);
+    const dprScale = pixels.width / Math.max(1, viewport.width);
+    const [, sy] = engine.camera.worldToScreen(0, 0, viewport.width, viewport.height);
+    const [sx0] = engine.camera.worldToScreen(-200, 0, viewport.width, viewport.height);
+    const [sx1] = engine.camera.worldToScreen(200, 0, viewport.width, viewport.height);
+    report.lensSolidGaps = countGapsAlong(pixels, sy, sx0 + 2, sx1 - 2, dprScale).gaps;
+  }
+
+  /* --- 2c. 资产透镜：两条不同分组的边必须颜色不同，且各自对得上调色板 --- */
+  engine.setLens("asset");
+  engine.invalidate();
+  await waitFrames();
+  const assetUrl = engine.exportView();
+  if (assetUrl) {
+    const pixels = await decodePng(assetUrl);
+    const dprScale = pixels.width / Math.max(1, viewport.width);
+    const sample = (y: number) => {
+      const [sx, sy] = engine.camera.worldToScreen(-30, y, viewport.width, viewport.height);
+      return pixelAt(pixels, sx, sy, dprScale);
+    };
+    const got0 = sample(-70);
+    const got1 = sample(70);
+    const distance = Math.abs(got0[0] - got1[0]) + Math.abs(got0[1] - got1[1]) + Math.abs(got0[2] - got1[2]);
+    report.lensEdgeColorsDistinct = distance > 30;
+
+    /* 每条边都必须落在"背景 → 自己的调色板色"这条混合线上（同 2×alpha=0.5 的覆盖率问题）。 */
+    const onLine = (rgb: [number, number, number], target: [number, number, number]): boolean => {
+      const ts: number[] = [];
+      for (let c = 0; c < 3; c += 1) {
+        const span = target[c] - BG[c];
+        if (Math.abs(span) < 20) continue;
+        ts.push((rgb[c] - BG[c]) / span);
+      }
+      if (ts.length < 2) return false;
+      return Math.max(...ts) - Math.min(...ts) <= 0.2 && Math.min(...ts) >= 0.2;
+    };
+    const to255 = (c: [number, number, number]): [number, number, number] => [c[0] * 255, c[1] * 255, c[2] * 255];
+    const ok0 = onLine(got0, to255(ASSET_PALETTE[0]));
+    const ok1 = onLine(got1, to255(ASSET_PALETTE[1]));
+    report.lensEdgeColorsMatchPalette = ok0 && ok1;
+    report.lensEdgeColorText = `group0 rgb(${got0.join(",")}) vs group1 rgb(${got1.join(",")}) · 对板=${ok0}/${ok1}`;
+  }
+
+  report.lensChecks =
+    report.lensStyleChecks !== "ok"
+      ? "style-table-mismatch"
+      : !report.lensSwitchEvent
+        ? "lens-switch-broken"
+        : report.lensDashGaps < 5
+          ? "dash-missing"
+          : report.lensSolidGaps !== 0
+            ? "solid-has-gaps"
+            : !report.lensEdgeColorsDistinct || !report.lensEdgeColorsMatchPalette
+              ? "group-color-mismatch"
+              : "ok";
+
+  engine.dispose();
+  host.remove();
+}
+
 run()
   .then((report) => {
     window.__graphProbe = report;
@@ -1103,6 +1340,8 @@ run()
       labelGlyphs: 0, labelDropped: 0, labelPixelsNear: 0, labelPixelsFar: 0,
       labelPixelsBackground: 0, labelPixelsSublabel: 0, labelAnchoredRightOfNode: false, labelChecks: "",
       highlightPixelMatch: false, highlightPixelRgb: "", highlightPixelsLit: 0, highlightSamples: 0, highlightChecks: "",
+      lensDashGaps: 0, lensSolidGaps: 0, lensSamples: 0, lensEdgeColorsDistinct: false,
+      lensEdgeColorsMatchPalette: false, lensEdgeColorText: "", lensStyleChecks: "", lensSwitchEvent: false, lensChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });

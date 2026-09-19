@@ -10,6 +10,7 @@ import { decideBudget, type BudgetDecision, type BudgetLimits, type RenderMode }
 import { lodLevelFor, policyFor, type LodLevel } from "../perf/lod";
 import { LabelLayer, type LabelLayerOptions } from "../labels/LabelLayer";
 import type { LabelInstance } from "../renderer/LabelProgram";
+import { lensStyle, type Lens } from "../lenses";
 
 /**
  * 图谱引擎门面（用户端重构规范 V4 §30.2 / §30.3）
@@ -39,6 +40,8 @@ export interface GraphEngineEvents extends Record<string, unknown> {
   "lod:change": { level: LodLevel; scale: number; renderedEdges: number };
   /** 标签集合被重建（§30.8）。验收用它断言"远景下标签确实消失了"，而不是靠截图。 */
   "labels:change": { count: number; glyphs: number; dropped: number; lod: LodLevel };
+  /** 视图维度切换（§30.8）。 */
+  "lens:change": { lens: Lens };
 }
 
 export interface GraphEngineOptions {
@@ -59,6 +62,8 @@ export interface GraphEngineOptions {
   labels?: LabelLayerOptions;
   /** 初始标签开关，默认开。 */
   showLabels?: boolean;
+  /** 初始视图维度（§30.8），默认资金流。 */
+  lens?: Lens;
 }
 
 export class GraphEngine {
@@ -141,6 +146,8 @@ export class GraphEngine {
     this.hiddenFps = options.hiddenFps ?? 4;
     this.labelOptions = options.labels ?? {};
     this.showLabels = options.showLabels ?? true;
+    this.currentLens = options.lens ?? "flow";
+    this.baseStyle = options.style ?? DEFAULT_STYLE;
     this.store.load(options.nodes, options.edges);
     if (options.style) this.pendingStyle = options.style;
     this.budget = decideBudget(options.nodes.length, options.edges.length, options.budgetLimits);
@@ -162,13 +169,20 @@ export class GraphEngine {
 
   private highlightColor: [number, number, number] = DEFAULT_STYLE.edgeActiveColor;
 
+  /** 当前视图维度（工具栏"视图维度"）。 */
+  private currentLens: Lens = "flow";
+  /** 页面传入的基础样式；透镜样式由它派生，不反过来污染调用方的对象。 */
+  private readonly baseStyle: RenderStyle;
+
   private pendingStyle: RenderStyle | null = null;
 
   /** 挂载到画布。返回是否拿到了 WebGL2 上下文（false = 调用方应显示降级 UI，§30.6）。 */
   mount(canvas: HTMLCanvasElement): boolean {
     this.canvas = canvas;
     this.container = canvas.parentElement ?? canvas;
-    this.renderer = new WebGLRenderer(canvas, this.pendingStyle ?? DEFAULT_STYLE);
+    /* 初始样式也要过一遍透镜：否则"打开页面时就是证据透镜"会漏掉虚线与琥珀色。 */
+    const initialStyle = lensStyle(this.currentLens, this.pendingStyle ?? DEFAULT_STYLE);
+    this.renderer = new WebGLRenderer(canvas, initialStyle);
     if (!this.renderer.available) {
       /* 不抛异常：调用方负责提示"性能受限模式"，引擎保持可查询但不出图。 */
       return false;
@@ -559,6 +573,26 @@ export class GraphEngine {
       scale: this.camera.scale,
       renderedEdges: this.renderer?.renderedEdges ?? 0,
     });
+  }
+
+  /**
+   * 切换视图维度（§30.8 的"看什么"维度）。
+   *
+   * 引擎只负责**样式类**效果（虚线 / 分组着色）；数据类效果（证据透镜只留
+   * 证据节点及其一跳邻居、时间透镜的副标签）由页面按 `LENS_EFFECTS` 执行。
+   * 两条路径读的是同一张效果表，不会再各写一套。
+   */
+  setLens(lens: Lens): void {
+    if (this.currentLens === lens) return;
+    this.currentLens = lens;
+    this.renderer?.setStyle(lensStyle(lens, this.baseStyle));
+    if (this.pendingStyle) this.pendingStyle = lensStyle(lens, this.baseStyle);
+    this.frameDirty = true;
+    this.events.emit("lens:change", { lens });
+  }
+
+  get lens(): Lens {
+    return this.currentLens;
   }
 
   /**

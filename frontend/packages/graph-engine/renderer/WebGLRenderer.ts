@@ -155,13 +155,25 @@ void main() {
   outColor = vec4(r, g, b, 1.0);
 }`;
 
+/*
+ * 边着色器（§30.8 远期"次要边弱化" / 证据透镜虚线）
+ *
+ * `a_t` 与 `a_len` 是**为了虚线**：线宽在 WebGL 里固定为 1 像素，
+ * 而且 GL_LINES 只有两个顶点，片元阶段拿不到"沿这条线走了多远"。
+ * 把 (0/1, 世界长度) 作为顶点属性传进来，插值后 `v_dist` 就是沿线方向的
+ * **世界距离**；乘 `u_scale` 换成屏幕距离，虚线的疏密就与缩放无关
+ * （否则放大时虚线会跟着变长，看起来像实线）。
+ */
 const EDGE_VS = `#version 300 es
 in vec2 a_pos;
 in vec4 a_rgba;
+in vec2 a_dash;   // x = 沿线参数 t(0..1)，y = 该边的世界长度
 uniform mat3 u_matrix;
 out vec4 v_rgba;
+out float v_dist;
 void main() {
   v_rgba = a_rgba;
+  v_dist = a_dash.x * a_dash.y;
   vec3 clip = u_matrix * vec3(a_pos, 1.0);
   gl_Position = vec4(clip.xy, 0.0, 1.0);
 }`;
@@ -169,8 +181,23 @@ void main() {
 const EDGE_FS = `#version 300 es
 precision highp float;
 in vec4 v_rgba;
+in float v_dist;
+uniform float u_scale;    // 世界单位 → CSS 像素
+uniform vec2 u_dash;      // x = 实线长度，y = 空白长度；x <= 0 表示画实线
 out vec4 outColor;
 void main() {
+  if (u_dash.x > 0.0) {
+    float period = u_dash.x + u_dash.y;
+    /* 屏幕空间的相位：世界距离乘 scale 之后就与缩放无关。 */
+    float phase = mod(v_dist * u_scale, period);
+    /*
+     * 用 discard 而不是把 alpha 置 0：置 0 仍然会参与混合，
+     * 虚线之间的空隙会变成"半透明的实线"。断开就必须真的不画。
+     * （注意 GLSL 是写在 TS 模板字符串里的，注释里不能出现反引号，
+     *   否则模板字符串会提前结束——tsc 能过，打包器会在这一步炸掉。）
+     */
+    if (phase > u_dash.x) discard;
+  }
   outColor = v_rgba;
 }`;
 
@@ -181,6 +208,14 @@ export interface RenderStyle {
   edgeActiveColor: [number, number, number];
   background: [number, number, number];
   dimmedAlpha: number;
+  /**
+   * `uniform`：所有边同色；`group`：按 `GraphEdgeInput.colorGroup` 从
+   * `edgeGroupColors` 取色（资产透镜"一眼区分不同 token"）。
+   */
+  edgeColorMode?: "uniform" | "group";
+  edgeGroupColors?: Array<[number, number, number]>;
+  /** 虚线开关（屏幕像素）。null = 实线。 */
+  edgeDash?: { on: number; off: number } | null;
 }
 
 export const DEFAULT_STYLE: RenderStyle = {
@@ -198,6 +233,9 @@ export const DEFAULT_STYLE: RenderStyle = {
   background: [0.957, 0.973, 0.996],
   /* 选中无关节点的淡化值（§30.10 select：其他无关节点 opacity 0.15–0.3）。 */
   dimmedAlpha: 0.22,
+  edgeColorMode: "uniform",
+  edgeGroupColors: [],
+  edgeDash: null,
 };
 
 export class WebGLRenderer {
@@ -264,6 +302,25 @@ export class WebGLRenderer {
   setStyle(style: RenderStyle): void {
     this.style = style;
     this.styleDirty = true;
+    /*
+     * 边的颜色是**烘焙进顶点缓冲**的（见 rebuildEdges），不是逐帧从 style 读的，
+     * 所以换了样式必须重建边缓冲——只置 styleDirty 会让"切换视图维度后颜色没变"，
+     * 而且因为节点颜色确实变了，看起来会像是"边忘了改"，极难定位。
+     */
+    this.pendingEdgeRebuild = true;
+  }
+
+  /**
+   * 下发虚线参数（证据透镜）。
+   *
+   * 实线时传 (0, 0)：着色器用 `u_dash.x > 0` 作为"是否虚线"的开关，
+   * 这样"关掉虚线"不需要重新编译着色器或换变体。
+   */
+  private setDashUniform(): void {
+    const gl = this.gl;
+    if (!gl || !this.edgeProgram) return;
+    const dash = this.style.edgeDash ?? null;
+    gl.uniform2f(gl.getUniformLocation(this.edgeProgram, "u_dash"), dash ? dash.on : 0, dash ? dash.off : 0);
   }
 
   private initGL(): void {
@@ -376,24 +433,46 @@ export class WebGLRenderer {
     if (!gl || this.contextLost) return;
     const total = this.edgeOrder.length;
     const count = Math.max(0, Math.min(total, Number.isFinite(maxEdges) ? maxEdges : total));
-    const edgeData = new Float32Array(count * 2 * 6);
+    const byGroup = this.style.edgeColorMode === "group" && (this.style.edgeGroupColors?.length ?? 0) > 0;
+    /* 每个顶点 8 个 float：(x, y, r, g, b, a, t, 世界长度)。 */
+    const edgeData = new Float32Array(count * 2 * 8);
     for (let i = 0; i < count; i += 1) {
       const e = this.edgeOrder[i];
       const s = store.edgeSource[e];
       const t = store.edgeTarget[e];
-      const base = i * 12;
-      edgeData[base] = store.positions[s * 2];
-      edgeData[base + 1] = store.positions[s * 2 + 1];
-      edgeData[base + 2] = this.style.edgeColor[0];
-      edgeData[base + 3] = this.style.edgeColor[1];
-      edgeData[base + 4] = this.style.edgeColor[2];
-      edgeData[base + 5] = s === t ? 0 : 0.5;
-      edgeData[base + 6] = store.positions[t * 2];
-      edgeData[base + 7] = store.positions[t * 2 + 1];
-      edgeData[base + 8] = this.style.edgeColor[0];
-      edgeData[base + 9] = this.style.edgeColor[1];
-      edgeData[base + 10] = this.style.edgeColor[2];
-      edgeData[base + 11] = s === t ? 0 : 0.5;
+      const sx = store.positions[s * 2];
+      const sy = store.positions[s * 2 + 1];
+      const tx = store.positions[t * 2];
+      const ty = store.positions[t * 2 + 1];
+      /*
+       * 资产透镜下每条边按自己的分组取色。
+       * 取色在**这里**做而不是在着色器里：分组索引是整数，
+       * 在着色器里查调色板要传数组或纹理，而重建边缓冲本来就是 O(N) 的 CPU 写入。
+       */
+      const groupColors = this.style.edgeGroupColors ?? [];
+      const color =
+        byGroup && groupColors.length > 0
+          ? groupColors[store.edgeColorGroup[e] % groupColors.length] ?? this.style.edgeColor
+          : this.style.edgeColor;
+      /* 自环长度按 0 处理：虚线相位对退化线段没有意义，而且除零会变成 NaN。 */
+      const length = s === t ? 0 : Math.hypot(tx - sx, ty - sy);
+      const base = i * 16;
+      edgeData[base] = sx;
+      edgeData[base + 1] = sy;
+      edgeData[base + 2] = color[0];
+      edgeData[base + 3] = color[1];
+      edgeData[base + 4] = color[2];
+      edgeData[base + 5] = 0.5;
+      edgeData[base + 6] = 0;
+      edgeData[base + 7] = length;
+      edgeData[base + 8] = tx;
+      edgeData[base + 9] = ty;
+      edgeData[base + 10] = color[0];
+      edgeData[base + 11] = color[1];
+      edgeData[base + 12] = color[2];
+      edgeData[base + 13] = 0.5;
+      edgeData[base + 14] = 1;
+      edgeData[base + 15] = length;
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.edgeBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, edgeData, gl.DYNAMIC_DRAW);
@@ -489,21 +568,29 @@ export class WebGLRenderer {
      * 典型布局里 y 恒为 0，所以整条高亮路径的 alpha 是 0——
      * 高亮边完全不可见，而"高亮边数量""粒子数量"这些断言**全都照常通过**。
      */
-    const data = new Float32Array(edges.length * 2 * 6);
+    const data = new Float32Array(edges.length * 2 * 8);
     let cursor = 0;
     for (let i = 0; i < edges.length; i += 1) {
       const edge = edges[i];
       const s = store.edgeSource[edge];
       const t = store.edgeTarget[edge];
-      for (const node of [s, t]) {
-        data[cursor++] = store.positions[node * 2];
-        data[cursor++] = store.positions[node * 2 + 1];
+      const sx = store.positions[s * 2];
+      const sy = store.positions[s * 2 + 1];
+      const tx = store.positions[t * 2];
+      const ty = store.positions[t * 2 + 1];
+      const length = s === t ? 0 : Math.hypot(tx - sx, ty - sy);
+      const nodes = [s, t];
+      for (let k = 0; k < 2; k += 1) {
+        data[cursor++] = store.positions[nodes[k] * 2];
+        data[cursor++] = store.positions[nodes[k] * 2 + 1];
         data[cursor++] = color[0];
         data[cursor++] = color[1];
         data[cursor++] = color[2];
         /* 高亮边是**不透明**的：它是"资金实际走了哪条链路"的唯一表达，
            半透明会让它在叠加于普通边之上时几乎看不出来。 */
         data[cursor++] = 1;
+        data[cursor++] = k;
+        data[cursor++] = length;
       }
     }
     this.highlightVertexCount = edges.length * 2;
@@ -572,32 +659,49 @@ export class WebGLRenderer {
     if (this.edgeVertexCount > 0 && this.edgeProgram) {
       gl.useProgram(this.edgeProgram);
       gl.uniformMatrix3fv(gl.getUniformLocation(this.edgeProgram, "u_matrix"), false, matrix);
+      gl.uniform1f(gl.getUniformLocation(this.edgeProgram, "u_scale"), camera.scale);
+      this.setDashUniform();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.edgeBuffer);
       const posLoc = gl.getAttribLocation(this.edgeProgram, "a_pos");
       const rgbaLoc = gl.getAttribLocation(this.edgeProgram, "a_rgba");
+      const dashLoc = gl.getAttribLocation(this.edgeProgram, "a_dash");
       gl.enableVertexAttribArray(posLoc);
-      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 24, 0);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 32, 0);
       gl.enableVertexAttribArray(rgbaLoc);
-      gl.vertexAttribPointer(rgbaLoc, 4, gl.FLOAT, false, 24, 8);
+      gl.vertexAttribPointer(rgbaLoc, 4, gl.FLOAT, false, 32, 8);
+      gl.enableVertexAttribArray(dashLoc);
+      gl.vertexAttribPointer(dashLoc, 2, gl.FLOAT, false, 32, 24);
       gl.drawArrays(gl.LINES, 0, this.edgeVertexCount);
       gl.disableVertexAttribArray(posLoc);
       gl.disableVertexAttribArray(rgbaLoc);
+      gl.disableVertexAttribArray(dashLoc);
     }
 
     /* 高亮边画在普通边之上、节点之下。 */
     if (this.highlightVertexCount > 0 && this.edgeProgram) {
       gl.useProgram(this.edgeProgram);
       gl.uniformMatrix3fv(gl.getUniformLocation(this.edgeProgram, "u_matrix"), false, matrix);
+      gl.uniform1f(gl.getUniformLocation(this.edgeProgram, "u_scale"), camera.scale);
+      /*
+       * 高亮边**永远实线**，即使当前是证据透镜：
+       * 虚线表达的是"证据引用"关系，而高亮表达的是"资金确实走了这条链路"——
+       * 把被点亮的路径也打成虚线，等于同时说了两句矛盾的话。
+       */
+      gl.uniform2f(gl.getUniformLocation(this.edgeProgram, "u_dash"), 0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.highlightBuffer);
       const hlPos = gl.getAttribLocation(this.edgeProgram, "a_pos");
       const hlRgba = gl.getAttribLocation(this.edgeProgram, "a_rgba");
+      const hlDash = gl.getAttribLocation(this.edgeProgram, "a_dash");
       gl.enableVertexAttribArray(hlPos);
-      gl.vertexAttribPointer(hlPos, 2, gl.FLOAT, false, 24, 0);
+      gl.vertexAttribPointer(hlPos, 2, gl.FLOAT, false, 32, 0);
       gl.enableVertexAttribArray(hlRgba);
-      gl.vertexAttribPointer(hlRgba, 4, gl.FLOAT, false, 24, 8);
+      gl.vertexAttribPointer(hlRgba, 4, gl.FLOAT, false, 32, 8);
+      gl.enableVertexAttribArray(hlDash);
+      gl.vertexAttribPointer(hlDash, 2, gl.FLOAT, false, 32, 24);
       gl.drawArrays(gl.LINES, 0, this.highlightVertexCount);
       gl.disableVertexAttribArray(hlPos);
       gl.disableVertexAttribArray(hlRgba);
+      gl.disableVertexAttribArray(hlDash);
     }
 
     /*
