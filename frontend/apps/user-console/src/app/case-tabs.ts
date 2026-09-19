@@ -87,6 +87,27 @@ export function caseTabDef(tab: string): CaseTabDef | null {
   return CASE_TABS.find((item) => item.key === tab) ?? null;
 }
 
+/**
+ * 判断一个 URL 指向的案件子 Tab 当前是否可访问（**入口过滤**用）。
+ *
+ * 命令面板（搜索命中 / 最近访问）、报告详情里的深链接、面包屑等入口，
+ * 必须与路由守卫用**同一判据**：否则会出现"入口看得见、点进去被拦"——
+ * 用户会以为是自己点错了，而实际上是被权限挡住了。
+ *
+ * 前缀权限表（ROUTE_PERMISSIONS）在这里是不够的：`/cases/x/members` 的前缀是
+ * `/cases` → `case:list`，它对"有没有 case:member:list"一无所知。
+ *
+ * 非案件子 Tab 的 URL 一律返回 true —— 不由本模块负责，交回各自原有逻辑。
+ */
+export function canVisitCaseTabUrl(url: string, can: (permission: string) => boolean): boolean {
+  const match = /^\/cases\/([^/?#]+)\/([^/?#]+)/.exec(url);
+  if (!match) return true;
+  const def = caseTabDef(match[2]);
+  /* 未知 tab 保持原行为（CaseDetailPage 会把它回落成概览）。 */
+  if (!def) return true;
+  return def.permissions.every((permission) => can(permission));
+}
+
 /** 当前会话在某个 tab 上**缺少**的权限；为空表示可以进入。 */
 export function missingCaseTabPermissions(tab: string, can: (permission: string) => boolean): string[] {
   const def = caseTabDef(tab);

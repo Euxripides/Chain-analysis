@@ -25,6 +25,7 @@ import {
 } from "@chain/ui";
 import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
+import { canVisitCaseTabUrl } from "../app/case-tabs";
 
 interface Approval {
   id: string;
@@ -381,7 +382,11 @@ export default function ReportDetailPage() {
               <Link className="btn btn--sm" to={`/investigations/${data.investigation_id}/workbench`}>
                 调查工作台
               </Link>
-              {data.case_id ? (
+              {/*
+                深链接必须与案件 Tab 的路由守卫同源：没有 report:list 就不该给出这个入口，
+                否则用户点进去只会看到无权限页，还以为是页面坏了。
+              */}
+              {data.case_id && canVisitCaseTabUrl(`/cases/${data.case_id}/reports`, can) ? (
                 <Link className="btn btn--sm" to={`/cases/${data.case_id}/reports`}>
                   案件报告
                 </Link>

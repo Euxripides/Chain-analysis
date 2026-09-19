@@ -669,6 +669,31 @@ async function main() {
         }),
         listRoute("reports", REPORT_ROWS),
         listRoute("canvases", { items: [] }),
+        /*
+         * 搜索结果夹具：**必须有一条指向案件子 Tab 的命中**，
+         * 否则"命令面板会不会把无权限的成员页搜出来"这条断言就是空转
+         * （hits 为空时过滤逻辑根本没被走到）。
+         * 另一条概览命中作为对照：它在任何情况下都该出现，
+         * 用来确认"过滤"没有把整个命中列表清空。
+         */
+        listRoute("search", {
+          items: [
+            {
+              type: "case",
+              id: "case-0001",
+              title: "案件成员",
+              subtitle: "CS-20260919-0001",
+              url: "/cases/case-0001/members",
+            },
+            {
+              type: "case",
+              id: "case-0001-overview",
+              title: "案件概览",
+              subtitle: "CS-20260919-0001",
+              url: "/cases/case-0001/overview",
+            },
+          ],
+        }),
       ];
       for (const [pattern, body] of LIST_FIXTURES) {
         await page.route(pattern, (route) =>
@@ -2169,6 +2194,52 @@ async function main() {
 
         await setSession(SESSION.permissions);
         notes.push(`[perm-matrix] 7 个 Tab 双向通过：${summary.join(" · ")}`);
+
+        /*
+         * ---- 命令面板这个"绕过 Tab 的入口"必须与路由守卫同源 ----
+         *
+         * 路由守卫能兜住"跳进去"，但入口本身不该出现：
+         * 用户明确要求过"命令面板不能搜到「成员」还跳得进去"。
+         * 最近的实现只用前缀权限表判断（/cases → case:list），
+         * 对 case:member:list 一无所知，所以这一条是真实缺口。
+         */
+        const paletteTextFor = async () => {
+          await page.goto(`${base}/home`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(600);
+          await page.keyboard.press("Control+k");
+          await page.waitForSelector(".cs-command", { timeout: 10_000 });
+          /* 查询长度必须 ≥2 才会真的发检索请求（CommandPalette 的门槛）。 */
+          await page.keyboard.type("案件");
+          await page.waitForTimeout(900);
+          const text = ((await page.locator(".cs-command").first().innerText().catch(() => "")) ?? "").trim();
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(200);
+          return text;
+        };
+
+        /* 必须**先切换会话**再读面板：第一版两次都跑在完整权限下，断言因此恒真。 */
+        await setSession(SESSION.permissions);
+        const withMembers = await paletteTextFor();
+        await setSession(SESSION.permissions.filter((permission) => permission !== "case:member:list"));
+        const withoutMembers = await paletteTextFor();
+
+        if (!withMembers.includes("案件成员")) {
+          problems.push("[perm-entry] 有 case:member:list 时命令面板反而搜不到「案件成员」（过滤收得过紧）");
+        }
+        if (!withMembers.includes("案件概览")) {
+          problems.push("[perm-entry] 对照失败：命令面板连普通概览命中都没有，这条断言无法证明任何事");
+        }
+        if (withoutMembers.includes("案件成员")) {
+          problems.push("[perm-entry] 无 case:member:list 时命令面板仍然能搜到「案件成员」并跳转");
+        }
+        if (!withoutMembers.includes("案件概览")) {
+          problems.push("[perm-entry] 无 case:member:list 时连概览命中也被过滤掉了（过滤过度）");
+        }
+        if (withMembers.includes("案件成员") && !withoutMembers.includes("案件成员") && withoutMembers.includes("案件概览")) {
+          notes.push("[perm-entry] 命令面板：有权限时「案件成员」可见，撤销后消失，对照命中「案件概览」始终在位");
+        }
+
+        await setSession(SESSION.permissions);
 
         /*
          * ---- 权限在运行中变化：撤销后必须立刻把敏感数据从屏幕上拿掉 ----

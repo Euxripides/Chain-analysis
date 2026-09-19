@@ -4,6 +4,7 @@ import { Command, CornerDownLeft, FileText, FolderOpen, Hash, Plus, Search, Slid
 import { ApiError, useAuth } from "@chain/api-client";
 import { useDialog } from "@chain/ui";
 import { baseNavGroups, requiredPermission } from "../../app/navigation";
+import { canVisitCaseTabUrl } from "../../app/case-tabs";
 import { readRecentObjects } from "./recentObjects";
 
 /**
@@ -211,7 +212,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       });
     }
     for (const recent of readRecentObjects()) {
+      /*
+       * 两道判据：前缀权限表管"这个模块能不能进"，
+       * canVisitCaseTabUrl 管"这个案件子 Tab 能不能进"——后者才是 Tab 级的那道门。
+       * 只查前者会把 /cases/x/members 放进来（它的前缀只要求 case:list）。
+       */
       if (!can(requiredPermission(recent.path) ?? "")) continue;
+      if (!canVisitCaseTabUrl(recent.path, can)) continue;
       items.push({
         key: "recent:" + recent.path,
         group: "最近访问",
@@ -231,7 +238,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, [baseItems, query]);
 
   const hitItems = useMemo<CommandItem[]>(() => {
-    return hits.map((hit) => ({
+    /*
+     * 搜索命中此前**没有任何权限过滤**：接口返回什么就能跳什么。
+     * 路由守卫能兜住"跳进去"，但入口本身不该出现——
+     * 用户明确要求过"命令面板不能搜到「成员」还跳得进去"。
+     */
+    return hits
+      .filter((hit) => canVisitCaseTabUrl(hit.url, can))
+      .map((hit) => ({
       key: "hit:" + hit.type + ":" + hit.id,
       group: TYPE_LABEL[hit.type] ?? hit.type,
       title: hit.title || hit.id,
@@ -239,9 +253,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       detail: hit.subtitle ? hit.subtitle + " · " + hit.id : hit.id,
       target: hit.url,
       icon: hit.type === "address" || hit.type === "transaction" ? <Hash size={15} /> : <FileText size={15} />,
-      run: () => navigate(hit.url),
-    }));
-  }, [hits, navigate]);
+        run: () => navigate(hit.url),
+      }));
+  }, [hits, navigate, can]);
 
   const flat = useMemo(() => [...hitItems, ...commands], [commands, hitItems]);
   const grouped = useMemo(() => {
