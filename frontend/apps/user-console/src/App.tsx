@@ -1,9 +1,12 @@
 import React, { Suspense, lazy } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@chain/api-client";
-import { EmptyState, ErrorState, PageSkeleton } from "@chain/ui";
+import { EmptyState, ErrorState } from "@chain/ui";
+import { CsSkeleton } from "@chain/user-ui";
 import { UserShell } from "./app/UserShell";
 import { ROUTE_PERMISSIONS } from "./app/navigation";
+import { routeMetaFor } from "./app/route-meta";
+import { RoutedContent } from "./app/route-transitions";
 
 /**
  * 用户端路由表（蓝图 §5.4）
@@ -11,7 +14,8 @@ import { ROUTE_PERMISSIONS } from "./app/navigation";
  * 本次重构**不改变任何路由路径、参数名、权限名或重定向行为**（§19.4）。
  * 变化只有两处表现层内容：
  *   1. Shell 换成 `UserShell`（AppShell 的 user variant + 命令面板 + 通知中心）；
- *   2. 路由懒加载的回退从"裸骨架行"换成与目标页面形状一致的 `PageSkeleton`（§11.9）。
+ *   2. 路由懒加载的回退换成与目标页面形状一致的骨架（§11.9 / §23.4），
+ *      形状与过渡策略统一由 `app/route-meta.ts` 决定（§9.3 / §61）。
  */
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -81,7 +85,7 @@ function Shell() {
     return (
       <div className="cs-shell cs-shell--boot">
         <main className="cs-shell__content" id="main-content">
-          <PageSkeleton shape="detail" />
+          <CsSkeleton shape="detail" />
         </main>
       </div>
     );
@@ -89,7 +93,7 @@ function Shell() {
 
   if (!session) {
     return (
-      <Suspense fallback={<PageSkeleton shape="detail" />}>
+      <Suspense fallback={<CsSkeleton shape="form" />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<Navigate to="/login" replace state={{ from: location.pathname }} />} />
@@ -98,9 +102,16 @@ function Shell() {
     );
   }
 
+  /*
+   * 页面骨架与过渡策略来自同一张路由元信息表（§9.3 / §23.4 / §61）：
+   * 懒加载回退的形状必须和目标页面一致，否则会先闪一个"表格骨架"再变成图谱。
+   */
+  const meta = routeMetaFor(location.pathname);
+
   return (
     <UserShell>
-      <Suspense fallback={<PageSkeleton shape="table" />}>
+      <Suspense fallback={<CsSkeleton shape={meta.skeleton} />}>
+        <RoutedContent pathname={location.pathname}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/login" element={<Navigate to="/home" replace />} />
@@ -131,6 +142,7 @@ function Shell() {
           <Route path="/exports" element={<Guard permission="export:list"><ExportsPage /></Guard>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </RoutedContent>
       </Suspense>
     </UserShell>
   );

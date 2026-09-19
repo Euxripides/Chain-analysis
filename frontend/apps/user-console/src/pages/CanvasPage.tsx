@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate,
+  useParams } from "react-router-dom";
 import {
   Maximize2,
   PanelLeftClose,
@@ -12,7 +18,7 @@ import {
   Undo2,
   ZoomIn,
   ZoomOut,
-} from "lucide-react";
+  } from "lucide-react";
 import { ApiError } from "@chain/api-client";
 import {
   BackLink,
@@ -28,7 +34,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   SearchInput,
   SegmentedControl,
@@ -37,6 +42,7 @@ import {
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import type { KeyValueEntry } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
@@ -2313,7 +2319,7 @@ export default function CanvasPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title={canvasName}
         breadcrumb={[{ label: "资金图谱", to: "/graph" }, { label: canvasName }]}
         status={dirty ? <StatusBadge tone="warn">有未保存修改</StatusBadge> : <StatusBadge tone="ok">已同步</StatusBadge>}

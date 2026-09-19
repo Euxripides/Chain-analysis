@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useState } from "react";
+import { Link,
+  useNavigate,
+  useParams } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
 import {
   Button,
@@ -13,7 +18,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   PageSkeleton,
   RelativeTime,
@@ -25,6 +29,7 @@ import {
   dialogInputValue,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { DeepTabs, formatTime, useAction, useAsync } from "../sprint4/common";
 
 /**
@@ -237,7 +242,7 @@ export default function CaseDetailPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title={detail.name}
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "案件中心", to: "/cases" }, { label: detail.name }]}
         status={<StatusBadgeForState value={detail.status} />}

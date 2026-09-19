@@ -2,18 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
-  Card,
   CompactProgress,
-  DataTable,
+  EmptyState,
   FilterBar,
   HashValue,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   StatusBadgeForState,
   progressStateFor,
 } from "@chain/ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
+/* 子路径导入：让 ProComponents 只落在这个懒加载路由的 chunk 里（§56.1）。 */
+import { CsProTable } from "@chain/user-ui/pro-table";
 import { useAsync } from "../sprint4/common";
 
 /**
@@ -78,7 +79,7 @@ export default function InvestigationsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="调查任务"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "调查任务" }]}
         meta={<MetaLine items={[{ label: "数据源", value: "postgres:investigations" }]} />}
@@ -114,9 +115,12 @@ export default function InvestigationsPage() {
           </select>
         </FilterBar>
 
-        <Card flush>
-          <DataTable<InvestigationRow>
+        <div style={{ position: "relative", minWidth: 0 }}>
+          <CsRefreshBar active={loading && rows.length > 0} />
+          <CsProTable<InvestigationRow>
             loading={loading}
+            /* §17.5：刷新保留旧行，不清屏、不丢表头。 */
+            keepPreviousData
             error={error}
             onRetry={reload}
             rows={rows}
@@ -124,12 +128,17 @@ export default function InvestigationsPage() {
             caption="调查任务列表"
             onRowActivate={(row) => navigate(`/investigations/${row.id}/workbench`)}
             rowActivateLabel={(row) => `打开调查工作台 ${row.goal}`}
-            emptyAction={
-              status !== "all" ? (
-                <Button size="sm" onClick={() => setStatus("all")}>
-                  清除筛选
-                </Button>
-              ) : null
+            empty={
+              <EmptyState
+                title="没有符合条件的调查"
+                action={
+                  status !== "all" ? (
+                    <Button size="sm" onClick={() => setStatus("all")}>
+                      清除筛选
+                    </Button>
+                  ) : null
+                }
+              />
             }
             columns={[
               {
@@ -224,7 +233,7 @@ export default function InvestigationsPage() {
               },
             ]}
           />
-        </Card>
+        </div>
       </PageSection>
     </>
   );

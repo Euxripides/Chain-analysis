@@ -1,7 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { FileText, FolderOpen, Hash, ListChecks, ScrollText, SlidersHorizontal } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
+import type { ComponentType,
+  FormEvent } from "react";
+import { useNavigate,
+  useSearchParams } from "react-router-dom";
+import { FileText,
+  FolderOpen,
+  Hash,
+  ListChecks,
+  ScrollText,
+  SlidersHorizontal } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -11,7 +22,6 @@ import {
   HashValue,
   InspectorDrawer,
   KeyValueList,
-  PageHeader,
   PageSection,
   SearchInput,
   SkeletonRows,
@@ -19,6 +29,7 @@ import {
   StatusBadge,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { useApi } from "../sprint5/common";
 import { Highlight } from "../components/command/CommandPalette";
 
@@ -381,7 +392,7 @@ export default function SearchPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="全局搜索"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "全局搜索" }]}
         subtitle={subtitle}

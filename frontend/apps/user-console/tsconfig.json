@@ -15,8 +15,14 @@
     "baseUrl": ".",
     "paths": {
       "@chain/ui": ["../../packages/ui/index.ts"],
+      "@chain/ui/dialog-core": ["../../packages/ui/dialog-core.tsx"],
+      "@chain/ui/dialog-legacy-renderer": ["../../packages/ui/dialog-legacy-renderer.tsx"],
       "@chain/design-tokens": ["../../packages/design-tokens/index.ts"],
-      "@chain/api-client": ["../../packages/api-client/index.ts"]
+      "@chain/api-client": ["../../packages/api-client/index.ts"],
+      "@chain/user-ui": ["../../packages/user-ui/index.ts"],
+      "@chain/user-ui/pro-table": ["../../packages/user-ui/components/pro-table.tsx"],
+      "@chain/graph-engine": ["../../packages/graph-engine/index.ts"],
+      "@chain/graph-react": ["../../packages/graph-react/index.ts"]
     }
   },
   "include": ["src", "../../packages"]

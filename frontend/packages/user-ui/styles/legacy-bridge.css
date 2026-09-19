@@ -1,0 +1,565 @@
+/*
+ * Legacy Bridge —— 把既有页面类一次性切到 ChainSight V4 视觉语言
+ * （用户端重构规范 V4 §58 / §59 / §60 Phase R1）
+ *
+ * 为什么需要这一层：用户端 25 个页面直接使用 `@chain/ui` 的 .card / .btn / .input /
+ * .table 等类。逐页重写在 R1 阶段既慢又危险；这里用**同一组选择器**重新声明取值，
+ * 让全部页面立即获得 V4 的淡蓝语言，而业务代码、data-testid、权限与状态机零改动。
+ *
+ * 加载顺序：必须在 `apps/user-console/src/styles/components.css` **之后**载入，
+ * 才能在相同特异性下覆盖旧值。R7 清理阶段会逐条删除已经被 Cs* 组件取代的规则。
+ *
+ * 取值只引用 `--cs-*`（theme/css-vars.css），本文件不出现裸十六进制色值，
+ * 便于以后统一换肤。
+ */
+
+/* =========================================================================
+ * 页面容器与页面头（§8）
+ * ========================================================================= */
+html[data-app="user"] .page-head { align-items: flex-start; gap: 16px 20px; }
+html[data-app="user"] .page-head__title { font-size: var(--fs-24, 1.5rem); font-weight: 650; letter-spacing: -0.025em; color: var(--cs-text-primary); }
+html[data-app="user"] .page-head__sub { font-size: var(--fs-13); color: var(--cs-text-secondary); }
+html[data-app="user"] .page-head__crumbs { color: var(--cs-text-secondary); }
+html[data-app="user"] .page-head__crumb-sep { color: var(--cs-border-strong); }
+
+/* =========================================================================
+ * 卡片（§10.2）：白面 + 1px 淡蓝描边 + 16px 圆角 + 很轻阴影；
+ * hover 只上浮 2px 并增强阴影——**不做** scale 1.03。
+ * ========================================================================= */
+html[data-app="user"] .card {
+  border-radius: var(--cs-radius-card);
+  border-color: var(--cs-border);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  transition:
+    transform var(--cs-dur-standard) var(--cs-ease-enter),
+    border-color var(--cs-dur-standard) var(--cs-ease-enter),
+    box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .card:hover {
+  transform: translateY(-2px);
+  border-color: var(--cs-border-strong);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+html[data-app="user"] .card--flat {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-app="user"] .card--flat:hover { transform: none; box-shadow: none; }
+html[data-app="user"] .card--interactive:hover { border-color: var(--cs-primary); }
+html[data-app="user"] .card--interactive:focus-within { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .card--selected { border-color: var(--cs-primary); box-shadow: 0 0 0 1px var(--cs-primary); }
+html[data-app="user"] .card__head {
+  padding: 14px var(--card-pad);
+  background: var(--cs-surface-blue);
+  border-bottom-color: var(--cs-border-subtle);
+}
+html[data-app="user"] .card__title { font-size: var(--fs-14); font-weight: 650; color: var(--cs-text-primary); }
+html[data-app="user"] .card__body { padding: var(--card-pad); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .card:hover { transform: none; }
+}
+
+/* =========================================================================
+ * 指标（§10.4）
+ * ========================================================================= */
+html[data-app="user"] .metric {
+  border-radius: var(--cs-radius-card-sm);
+  padding: 16px 18px;
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+  box-shadow: var(--cs-shadow-surface);
+  transition:
+    transform var(--cs-dur-standard) var(--cs-ease-enter),
+    border-color var(--cs-dur-standard) var(--cs-ease-enter),
+    box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .metric:hover {
+  transform: translateY(-2px);
+  border-color: var(--cs-border-strong);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+html[data-app="user"] .metric__label { color: var(--cs-text-secondary); font-size: var(--fs-12); }
+html[data-app="user"] .metric__value {
+  font-size: var(--fs-28);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  color: var(--cs-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+html[data-app="user"] .metric__unit { color: var(--cs-text-secondary); }
+html[data-app="user"] .metric__info { border-color: var(--cs-border-strong); color: var(--cs-text-secondary); }
+html[data-app="user"] .metric__info:hover { border-color: var(--cs-primary); color: var(--cs-primary-text); }
+html[data-app="user"] .metric--link:hover { border-color: var(--cs-primary); }
+html[data-app="user"] .metric--link:focus-visible { outline: none; box-shadow: var(--cs-shadow-ring); border-color: var(--cs-primary); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .metric:hover { transform: none; }
+}
+
+/* =========================================================================
+ * 按钮（§11）：10px 圆角、hover y -1px、press scale .98、主按钮渐变
+ * ========================================================================= */
+html[data-app="user"] .btn {
+  min-height: var(--control-h);
+  padding: 0 16px;
+  border-radius: var(--cs-radius-control);
+  font-size: var(--fs-13);
+  font-weight: 550;
+  box-shadow: none;
+  transition:
+    background var(--cs-dur-fast) var(--cs-ease-enter),
+    border-color var(--cs-dur-fast) var(--cs-ease-enter),
+    color var(--cs-dur-fast) var(--cs-ease-enter),
+    box-shadow var(--cs-dur-fast) var(--cs-ease-enter),
+    transform var(--cs-dur-micro) var(--cs-ease-enter);
+}
+html[data-app="user"] .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(45, 94, 180, .12);
+}
+html[data-app="user"] .btn:active:not(:disabled) {
+  transform: scale(.98);
+  box-shadow: none;
+}
+html[data-app="user"] .btn:focus-visible { outline: none; box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .btn--primary {
+  border-color: transparent;
+  color: var(--cs-text-inverse);
+  background-color: var(--cs-primary);
+  background-image: linear-gradient(135deg, #4E8BFA 0%, var(--cs-primary) 58%, var(--cs-primary-active) 100%);
+  background-size: 160% 100%;
+  background-position: 0% 50%;
+  transition: background-position var(--cs-dur-standard) var(--cs-ease-enter), transform var(--cs-dur-micro) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .btn--primary:hover:not(:disabled) {
+  background-position: 60% 50%;
+  box-shadow: 0 6px 18px rgba(52, 120, 246, .26);
+}
+html[data-app="user"] .btn--primary:active:not(:disabled) { box-shadow: none; }
+html[data-app="user"] .btn--danger {
+  border-color: var(--cs-danger);
+  background: var(--cs-danger);
+  color: var(--cs-text-inverse);
+  background-image: none;
+}
+/* Danger 不使用炫光（§11.4）：hover 只增强红底 */
+html[data-app="user"] .btn--danger:hover:not(:disabled) {
+  background: var(--cs-danger-text);
+  border-color: var(--cs-danger-text);
+  box-shadow: none;
+}
+html[data-app="user"] .btn--ghost {
+  color: var(--cs-text-primary);
+  border-color: var(--cs-border);
+  background: var(--cs-surface);
+}
+html[data-app="user"] .btn--ghost:hover:not(:disabled) { background: var(--cs-surface-blue); border-color: var(--cs-border-strong); }
+html[data-app="user"] .btn--sm { min-height: var(--control-h-sm); padding: 0 12px; font-size: var(--fs-12); }
+html[data-app="user"] .btn--busy { cursor: progress; }
+html[data-app="user"] .btn__spinner {
+  width: 14px; height: 14px; flex: none;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: cs-spin 640ms linear infinite;
+}
+
+/* =========================================================================
+ * 表单控件（§14）：focus 只改描边与 ring，**输入框不允许上下移动**（§14.3）
+ * ========================================================================= */
+html[data-app="user"] .input,
+html[data-app="user"] .select,
+html[data-app="user"] .textarea {
+  min-height: var(--control-h);
+  padding: 8px 12px;
+  border-radius: var(--cs-radius-control);
+  border: 1px solid var(--cs-border-strong);
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  font-size: var(--fs-14);
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .input:hover:not(:disabled),
+html[data-app="user"] .select:hover:not(:disabled),
+html[data-app="user"] .textarea:hover:not(:disabled) { border-color: var(--cs-primary); }
+html[data-app="user"] .input:focus,
+html[data-app="user"] .select:focus,
+html[data-app="user"] .textarea:focus {
+  border-color: var(--cs-primary);
+  box-shadow: var(--cs-shadow-ring);
+  outline: none;
+}
+html[data-app="user"] .input[aria-invalid="true"],
+html[data-app="user"] .textarea[aria-invalid="true"] { border-color: var(--cs-danger); }
+html[data-app="user"] .input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px rgba(216, 74, 74, .16); }
+html[data-app="user"] .field__label { font-size: var(--fs-13); font-weight: 600; color: var(--cs-text-primary); }
+html[data-app="user"] .field__hint { font-size: var(--fs-12); color: var(--cs-text-secondary); }
+html[data-app="user"] .field__hint--error { color: var(--cs-danger-text); }
+html[data-app="user"] .field__required { color: var(--cs-danger-text); }
+
+/* =========================================================================
+ * 表格（§17）：淡蓝表头、行 hover 只改背景、行选中 2px 左侧指示
+ * ========================================================================= */
+html[data-app="user"] .table { font-size: var(--fs-13); }
+html[data-app="user"] .table th {
+  padding: 10px 16px;
+  background: var(--cs-surface-blue);
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-11);
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--cs-border);
+}
+html[data-app="user"] .table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--cs-border-subtle);
+  color: var(--cs-text-primary);
+}
+/* 行 hover 只变背景 + 左边缘标记，行不上浮（§17.3） */
+html[data-app="user"] .table tbody tr { transition: background var(--cs-dur-fast) var(--cs-ease-enter); }
+html[data-app="user"] .table tbody tr:hover { background: var(--cs-surface-blue); }
+html[data-app="user"] .table tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--cs-primary); }
+html[data-app="user"] .table tbody tr[data-selected="true"] { background: var(--cs-primary-soft); }
+html[data-app="user"] .table tbody tr[data-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--cs-primary); }
+html[data-app="user"] .table tbody tr:focus-visible { outline: 2px solid var(--cs-primary); outline-offset: -2px; }
+html[data-app="user"] .table__th--frozen,
+html[data-app="user"] .table__td--frozen { background: var(--cs-surface); box-shadow: 1px 0 0 var(--cs-border); }
+html[data-app="user"] .table thead .table__th--frozen { background: var(--cs-surface-blue); }
+html[data-app="user"] .table tbody tr:hover .table__td--frozen { background: var(--cs-surface-blue); }
+html[data-app="user"] .table-scroll[data-overflow="start"] { box-shadow: inset -14px 0 12px -12px rgba(45, 80, 130, .16); }
+html[data-app="user"] .table-scroll[data-overflow="end"] { box-shadow: inset 14px 0 12px -12px rgba(45, 80, 130, .16); }
+html[data-app="user"] .table-scroll[data-overflow="both"] {
+  box-shadow: inset -14px 0 12px -12px rgba(45, 80, 130, .16), inset 14px 0 12px -12px rgba(45, 80, 130, .16);
+}
+
+/* =========================================================================
+ * 徽标与状态（§25.1：文字 + 形状 + 颜色三通道）
+ * ========================================================================= */
+html[data-app="user"] .badge {
+  padding: 2px 9px;
+  border-radius: var(--cs-radius-pill);
+  font-size: var(--fs-11);
+  gap: 5px;
+}
+html[data-app="user"] .badge--info { background: var(--cs-primary-soft); border-color: #BFD8FB; color: var(--cs-primary-text); }
+html[data-app="user"] .badge--ok { background: var(--cs-success-soft); border-color: #B7E3CD; color: var(--cs-success-text); }
+html[data-app="user"] .badge--warn { background: var(--cs-warning-soft); border-color: #F1D9AE; color: var(--cs-warning-text); }
+html[data-app="user"] .badge--danger { background: var(--cs-danger-soft); border-color: #F4C9C9; color: var(--cs-danger-text); }
+html[data-app="user"] .badge--neutral { background: var(--cs-neutral-soft); border-color: var(--cs-border); color: var(--cs-text-secondary); }
+
+/* =========================================================================
+ * 空 / 错 / 无权限状态（§24）
+ * ========================================================================= */
+html[data-app="user"] .state { gap: 12px; padding: 28px 20px; min-height: 156px; }
+html[data-app="user"] .state__title { font-size: var(--fs-16); font-weight: 650; color: var(--cs-text-primary); }
+html[data-app="user"] .state__body { font-size: var(--fs-13); color: var(--cs-text-secondary); }
+
+/* =========================================================================
+ * 骨架屏（§23.2）：1.3–1.6s 淡蓝灰，Reduced Motion 下静态
+ * ========================================================================= */
+html[data-app="user"] .skeleton {
+  background: linear-gradient(90deg, #E9F0FB 25%, #DCE8F9 37%, #E9F0FB 63%);
+  background-size: 400% 100%;
+  animation: cs-shimmer 1.5s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .skeleton { animation: none; background: #E9F0FB; }
+}
+
+/* =========================================================================
+ * Dialog（§21.3）：API 与可访问行为完全不变，只换视觉
+ * 动画所有权归 DialogHost（§9.6）——这里给的是入场 keyframes，不再叠加 Motion。
+ * ========================================================================= */
+html[data-app="user"] .dialog-backdrop {
+  background: rgba(16, 33, 61, .34);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: cs-dialog-backdrop-in 160ms var(--cs-ease-enter) both;
+}
+html[data-app="user"] .dialog {
+  border-radius: var(--cs-radius-modal);
+  border: 1px solid var(--cs-border);
+  box-shadow: var(--cs-shadow-floating);
+  width: min(520px, 100%);
+  max-height: min(86vh, 860px);
+  animation: cs-dialog-in var(--cs-dur-standard) var(--cs-ease-enter) both;
+}
+html[data-app="user"] .dialog--wide { width: min(720px, 100%); }
+html[data-app="user"] .dialog__head { padding: 20px 24px 12px; align-items: center; }
+html[data-app="user"] .dialog__title { font-size: var(--fs-16); font-weight: 650; color: var(--cs-text-primary); }
+html[data-app="user"] .dialog__body { padding: 0 24px 20px; font-size: var(--fs-13); color: var(--cs-text-secondary); }
+html[data-app="user"] .dialog__foot { padding: 12px 24px; background: var(--cs-surface-blue); border-top: 1px solid var(--cs-border-subtle); gap: 8px; }
+html[data-app="user"] .dialog__close { border-radius: var(--cs-radius-control); color: var(--cs-text-secondary); }
+html[data-app="user"] .dialog__close:hover { background: var(--cs-canvas-strong); color: var(--cs-text-primary); }
+html[data-app="user"] .dialog__kv dt { color: var(--cs-text-secondary); }
+html[data-app="user"] .dialog__kv dd { color: var(--cs-text-primary); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .dialog,
+  html[data-app="user"] .dialog-backdrop { animation: none !important; }
+}
+
+/* =========================================================================
+ * Tabs / Segmented / Filter（§13）
+ * ========================================================================= */
+html[data-app="user"] .cs-tabs { border-bottom-color: var(--cs-border); }
+html[data-app="user"] .cs-tab {
+  padding: 10px 16px;
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-13);
+  border-bottom: 2px solid transparent;
+  transition: color var(--cs-dur-fast) var(--cs-ease-enter), border-color var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-tab:hover { color: var(--cs-text-primary); background: var(--cs-canvas-strong); }
+html[data-app="user"] .cs-tab[aria-selected="true"],
+html[data-app="user"] .cs-tab[aria-current="page"] { color: var(--cs-primary-text); border-bottom-color: var(--cs-primary); font-weight: 620; }
+html[data-app="user"] .cs-tab__count { background: var(--cs-neutral-soft); color: var(--cs-text-secondary); border-radius: var(--cs-radius-pill); }
+html[data-app="user"] .cs-tab[aria-selected="true"] .cs-tab__count,
+html[data-app="user"] .cs-tab[aria-current="page"] .cs-tab__count { background: var(--cs-primary-soft); color: var(--cs-primary-text); }
+
+html[data-app="user"] .cs-segmented {
+  padding: 3px;
+  border-color: var(--cs-border);
+  border-radius: var(--cs-radius-control);
+  background: var(--cs-canvas-strong);
+}
+html[data-app="user"] .cs-segmented__item {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-12);
+  transition: background var(--cs-dur-fast) var(--cs-ease-enter), color var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-segmented__item[aria-pressed="true"] {
+  background: var(--cs-surface);
+  color: var(--cs-primary-text);
+  font-weight: 620;
+  box-shadow: 0 1px 2px rgba(45, 80, 130, .10);
+}
+
+html[data-app="user"] .cs-chip {
+  border-color: var(--cs-border);
+  border-radius: var(--cs-radius-pill);
+  background: var(--cs-surface);
+  color: var(--cs-text-secondary);
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter), color var(--cs-dur-fast) var(--cs-ease-enter), transform var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-chip:hover { border-color: var(--cs-border-strong); color: var(--cs-text-primary); }
+html[data-app="user"] .cs-chip[aria-pressed="true"] { background: var(--cs-primary-soft); border-color: #BFD8FB; color: var(--cs-primary-text); font-weight: 620; }
+html[data-app="user"] .cs-chip:focus-visible { outline: none; box-shadow: var(--cs-shadow-ring); border-color: var(--cs-primary); }
+
+/* =========================================================================
+ * SplitPane / InspectorDrawer / StickyActionBar（§22 / §15.2）
+ * ========================================================================= */
+html[data-app="user"] .cs-inspector {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-panel);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-inspector__head { border-bottom: 1px solid var(--cs-border-subtle); }
+html[data-app="user"] .cs-inspector__title { font-size: var(--fs-14); font-weight: 650; color: var(--cs-text-primary); }
+html[data-app="user"] .cs-inspector__actions { border-top: 1px solid var(--cs-border-subtle); background: var(--cs-surface); }
+html[data-app="user"] .cs-stickybar {
+  border-top: 1px solid var(--cs-border);
+  background: var(--cs-surface-glass);
+  -webkit-backdrop-filter: var(--cs-glass-blur);
+  backdrop-filter: var(--cs-glass-blur);
+}
+html[data-app="user"] .cs-split__handle { background: var(--cs-border-subtle); }
+html[data-app="user"] .cs-split__handle:hover,
+html[data-app="user"] .cs-split__handle:focus-visible { background: var(--cs-primary-soft); }
+
+/* =========================================================================
+ * 命令面板 / Popover / 下拉（§12.3 / §18.2 / §19.2）
+ * ========================================================================= */
+html[data-app="user"] .cs-command-backdrop {
+  background: rgba(16, 33, 61, .30);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+html[data-app="user"] .cs-command {
+  width: min(720px, 100%);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-panel);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-floating);
+}
+html[data-app="user"] .cs-command__search { border-bottom: 1px solid var(--cs-border-subtle); }
+html[data-app="user"] .cs-command__item { border-radius: var(--cs-radius-control); }
+html[data-app="user"] .cs-command__item:hover,
+html[data-app="user"] .cs-command__item[aria-selected="true"] { background: var(--cs-primary-soft); }
+html[data-app="user"] .cs-command__group { color: var(--cs-text-muted); }
+html[data-app="user"] .cs-command__kind { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-command__foot { border-top: 1px solid var(--cs-border-subtle); color: var(--cs-text-secondary); }
+
+html[data-app="user"] .cs-popover {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-floating);
+}
+html[data-app="user"] .cs-popover__head { border-bottom: 1px solid var(--cs-border-subtle); background: var(--cs-surface-blue); }
+html[data-app="user"] .cs-popover__title { font-size: var(--fs-13); font-weight: 650; color: var(--cs-text-primary); }
+html[data-app="user"] .cs-popover__item { border-radius: var(--cs-radius-control); transition: background var(--cs-dur-fast) var(--cs-ease-enter); }
+html[data-app="user"] .cs-popover__item:hover { background: var(--cs-surface-blue); }
+html[data-app="user"] .cs-popover__item[data-unread="true"] { background: var(--cs-primary-soft); }
+html[data-app="user"] .cs-popover__dot { background: var(--cs-primary); }
+
+html[data-app="user"] .cs-combo__pop {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card-sm);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-floating);
+  animation: cs-dropdown-in var(--cs-dur-fast) var(--cs-ease-enter) both;
+}
+html[data-app="user"] .cs-combo__option[aria-selected="true"],
+html[data-app="user"] .cs-combo__option:hover { background: var(--cs-primary-soft); color: var(--cs-primary-text); }
+html[data-app="user"] .cs-combo__trigger { border-radius: var(--cs-radius-control); }
+html[data-app="user"] .cs-combo__trigger[aria-expanded="true"] { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+
+/* =========================================================================
+ * 步进器（§16）与工作台
+ * ========================================================================= */
+html[data-app="user"] .cs-stepper__index { background: var(--cs-neutral-soft); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-stepper__step[aria-current="step"] .cs-stepper__index { background: var(--cs-primary); color: var(--cs-text-inverse); }
+html[data-app="user"] .cs-stepper__step[data-state="done"] .cs-stepper__index { background: var(--cs-success); color: var(--cs-text-inverse); }
+html[data-app="user"] .cs-stepper__step[data-state="error"] .cs-stepper__index { background: var(--cs-danger); color: var(--cs-text-inverse); }
+html[data-app="user"] .cs-stepper__sep { background: var(--cs-border); }
+html[data-app="user"] .cs-stepper__step[aria-current="step"] { color: var(--cs-text-primary); font-weight: 620; }
+
+/* =========================================================================
+ * 对象头 / 元信息 / 键值 / 时间线（§8.2 / §40）
+ * ========================================================================= */
+html[data-app="user"] .cs-objecthead {
+  border-bottom: 1px solid var(--cs-border-subtle);
+  padding-bottom: 14px;
+}
+html[data-app="user"] .cs-objecthead__value { color: var(--cs-text-primary); }
+html[data-app="user"] .cs-objecthead__kind { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-meta { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-kv__row { border-bottom-color: var(--cs-border-subtle); }
+html[data-app="user"] .cs-kv__row dt, html[data-app="user"] .cs-kv__row th { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-kv__row dd, html[data-app="user"] .cs-kv__row td { color: var(--cs-text-primary); }
+html[data-app="user"] .cs-timeline__dot { background: var(--cs-primary); }
+html[data-app="user"] .cs-timeline__rail { background: var(--cs-border); }
+html[data-app="user"] .cs-timeline__title { color: var(--cs-text-primary); }
+html[data-app="user"] .cs-timeline__meta { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-hash__text { color: inherit; }
+html[data-app="user"] .cs-copybtn { border-radius: var(--cs-radius-control); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-copybtn:hover { background: var(--cs-canvas-strong); color: var(--cs-primary-text); }
+html[data-app="user"] .cs-mark { background: var(--cs-primary-soft); color: var(--cs-primary-text); border-radius: 4px; }
+
+/* =========================================================================
+ * 上传 / 地址列表 / 批量操作（§14.15 / §14.16）
+ * ========================================================================= */
+html[data-app="user"] .cs-dropzone {
+  border: 1px dashed var(--cs-border-strong);
+  border-radius: var(--cs-radius-card);
+  background: var(--cs-surface-blue);
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-dropzone:hover,
+html[data-app="user"] .cs-dropzone[data-dragging="true"] {
+  border-color: var(--cs-primary);
+  background: var(--cs-primary-soft);
+}
+html[data-app="user"] .cs-dropzone__title { color: var(--cs-text-primary); }
+html[data-app="user"] .cs-dropzone__hint { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-addrs__summary { background: var(--cs-surface-blue); border-radius: var(--cs-radius-card-sm); }
+html[data-app="user"] .cs-addrs__item { border-bottom-color: var(--cs-border-subtle); }
+html[data-app="user"] .cs-addrs__item[data-status="duplicate"] { background: var(--cs-warning-soft); }
+html[data-app="user"] .cs-addrs__item[data-status="rejected"],
+html[data-app="user"] .cs-addrs__error { background: var(--cs-danger-soft); color: var(--cs-danger-text); }
+html[data-app="user"] .cs-bulkbar {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card-sm);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+html[data-app="user"] .cs-bulkbar__count { color: var(--cs-text-primary); font-weight: 620; }
+
+/* =========================================================================
+ * 首页 Bento / 统计块 / 章节 / 行卡片 / 图表 / 加载更多（§32 / §41）
+ * ========================================================================= */
+html[data-app="user"] .cs-bento > * { min-width: 0; }
+html[data-app="user"] .cs-section__title { font-size: var(--fs-15, 0.9375rem); font-weight: 650; color: var(--cs-text-primary); letter-spacing: -0.01em; }
+html[data-app="user"] .cs-section__count { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-stattiles { gap: 12px; }
+html[data-app="user"] .cs-stattile {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card-sm);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  padding: 14px 16px;
+  transition: transform var(--cs-dur-standard) var(--cs-ease-enter), border-color var(--cs-dur-standard) var(--cs-ease-enter), box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-stattile:hover {
+  transform: translateY(-2px);
+  border-color: var(--cs-border-strong);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+html[data-app="user"] .cs-stattile__label { color: var(--cs-text-secondary); font-size: var(--fs-12); }
+html[data-app="user"] .cs-stattile__value { color: var(--cs-text-primary); font-size: var(--fs-18); font-weight: 650; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { html[data-app="user"] .cs-stattile:hover { transform: none; } }
+
+html[data-app="user"] .cs-rowcard {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card-sm);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-rowcard__title { color: var(--cs-text-primary); font-weight: 620; }
+/* 未读项淡蓝底；标记已读后 180ms 过渡回白（§19.3 / §52），不闪、不重排。 */
+html[data-app="user"] .cs-rowcard[data-unread="true"] {
+  background: var(--cs-primary-soft);
+  border-color: #BFD8FB;
+}
+html[data-app="user"] .cs-rowcard[data-unread="false"] { background: var(--cs-surface); }
+html[data-app="user"] .cs-rowcard {
+  transition: background var(--cs-dur-standard) var(--cs-ease-enter), border-color var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-rowcard__meta { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-chartpanel__summary { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-chart-frame { border-radius: var(--cs-radius-card-sm); }
+html[data-app="user"] .cs-loadmore { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-recentlist__item { border-bottom-color: var(--cs-border-subtle); }
+html[data-app="user"] .cs-recentlist__item:hover { background: var(--cs-surface-blue); }
+html[data-app="user"] .cs-recentlist__meta { color: var(--cs-text-secondary); }
+
+/* =========================================================================
+ * 查询入口（§42）与搜索框
+ * ========================================================================= */
+html[data-app="user"] .cs-search-hero {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-hero);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-searchfield {
+  border-radius: var(--cs-radius-control);
+  border-color: var(--cs-border-strong);
+}
+html[data-app="user"] .cs-searchfield:focus-within { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .cs-searchfield__icon { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-searchfield__input--big { font-size: var(--fs-16); }
+
+/* =========================================================================
+ * Switch / Checkbox / Radio 的选中色（§14.10）
+ * ========================================================================= */
+html[data-app="user"] .cs-switch[aria-checked="true"] { background: var(--cs-primary); }
+html[data-app="user"] .cs-switch__knob { background: var(--cs-surface); }
+
+/* =========================================================================
+ * 响应式兜底（§54）：移动端触摸目标与单列
+ * ========================================================================= */
+@media (max-width: 899px) {
+  html[data-app="user"] .table tbody tr:hover td:first-child,
+  html[data-app="user"] .table tbody tr[data-selected="true"] td:first-child { box-shadow: none; }
+}
+@media (pointer: coarse) {
+  html[data-app="user"] .btn:hover:not(:disabled),
+  html[data-app="user"] .card:hover,
+  html[data-app="user"] .metric:hover,
+  html[data-app="user"] .cs-stattile:hover { transform: none; }
+}

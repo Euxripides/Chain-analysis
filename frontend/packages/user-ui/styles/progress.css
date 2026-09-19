@@ -1,0 +1,181 @@
+/*
+ * 进度系统（用户端重构规范 V4 §25 / §26 / §27 / §28）
+ *
+ * 选择器与 `@chain/ui/progress.tsx` 的真实 DOM 对齐：
+ *   .cs-progress__track / .cs-progress__fill[data-tone=<ProgressState>]
+ *   .cs-compactprogress__* / .cs-ring__* / .cs-pipeline__glyph[data-state] / .cs-hier__*
+ * 业务语义（状态机、ETA 口径、速率来源）由组件与调用方决定，本文件只负责视觉与节奏。
+ *
+ * 三通道原则（§25.1）：每种状态都必须同时用「文字 + 形状/图标 + 颜色」表达，不只靠颜色。
+ */
+
+/* ---------------- Linear（§25.2） ---------------- */
+html[data-app="user"] .cs-progress { gap: 6px; }
+html[data-app="user"] .cs-progress__meta { font-size: var(--fs-12); }
+html[data-app="user"] .cs-progress__label { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-progress__value {
+  color: var(--cs-text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+html[data-app="user"] .cs-progress__track {
+  height: 8px;
+  border-radius: var(--cs-radius-pill);
+  background: var(--cs-primary-soft);
+}
+html[data-app="user"] .cs-progress__track--lg { height: 12px; }
+html[data-app="user"] .cs-progress__fill {
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cs-primary) 0%, #4E8BFA 54%, var(--cs-cyan) 100%);
+  transition: width var(--cs-dur-spatial) var(--cs-ease-standard), background var(--cs-dur-standard) var(--cs-ease-enter);
+}
+/* 状态色（与组件 data-tone 一一对应） */
+html[data-app="user"] .cs-progress__fill[data-tone="queued"] { background: var(--cs-text-muted); }
+html[data-app="user"] .cs-progress__fill[data-tone="running"] { background: linear-gradient(90deg, var(--cs-primary) 0%, #4E8BFA 54%, var(--cs-cyan) 100%); background-size: 180% 100%; }
+html[data-app="user"] .cs-progress__fill[data-tone="waiting"] { background: linear-gradient(90deg, var(--cs-warning) 0%, var(--cs-cyan) 100%); }
+html[data-app="user"] .cs-progress__fill[data-tone="paused"] { background: var(--cs-warning); }
+html[data-app="user"] .cs-progress__fill[data-tone="completed"] { background: var(--cs-success); }
+html[data-app="user"] .cs-progress__fill[data-tone="failed"] { background: var(--cs-danger); }
+html[data-app="user"] .cs-progress__fill[data-tone="cancelled"] { background: var(--cs-text-muted); }
+html[data-app="user"] .cs-progress__fill[data-tone="info"] { background: var(--cs-primary); }
+
+/* indeterminate：流动 1.4s（§25.2）。Reduced Motion 下变静态斑纹（见 motion.css）。 */
+html[data-app="user"] .cs-progress__fill--indeterminate {
+  width: 34% !important;
+  background: linear-gradient(90deg, transparent, var(--cs-primary), var(--cs-cyan), transparent);
+  animation: cs-indeterminate 1.4s var(--cs-ease-standard) infinite;
+}
+
+/* ---------------- Compact（§25.3）：高 4px，数字右侧固定宽，不触发滚动行高跳动 ---------------- */
+html[data-app="user"] .cs-compactprogress { min-width: 148px; }
+html[data-app="user"] .cs-compactprogress__track { height: 4px; border-radius: var(--cs-radius-pill); background: var(--cs-primary-soft); }
+html[data-app="user"] .cs-compactprogress__fill { border-radius: inherit; background: var(--cs-primary); transition: width var(--cs-dur-standard) var(--cs-ease-standard); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="running"] { background: var(--cs-primary); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="waiting"] { background: var(--cs-warning); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="paused"] { background: var(--cs-warning); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="completed"] { background: var(--cs-success); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="failed"] { background: var(--cs-danger); }
+html[data-app="user"] .cs-compactprogress__fill[data-tone="cancelled"],
+html[data-app="user"] .cs-compactprogress__fill[data-tone="queued"] { background: var(--cs-text-muted); }
+html[data-app="user"] .cs-compactprogress__fill--indeterminate {
+  width: 40% !important;
+  background: linear-gradient(90deg, transparent, var(--cs-primary), transparent);
+  animation: cs-indeterminate 1.4s var(--cs-ease-standard) infinite;
+}
+html[data-app="user"] .cs-compactprogress__pct {
+  min-width: 34px;
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--cs-text-secondary);
+}
+
+/* ---------------- Ring（§25.4）：stroke-dashoffset 340ms ---------------- */
+html[data-app="user"] .cs-ring__track { stroke: var(--cs-primary-soft); }
+html[data-app="user"] .cs-ring__fill { stroke: var(--cs-primary); transition: stroke-dashoffset var(--cs-dur-spatial) var(--cs-ease-standard); }
+html[data-app="user"] .cs-ring__fill[data-tone="running"] { stroke: var(--cs-primary); }
+html[data-app="user"] .cs-ring__fill[data-tone="completed"] { stroke: var(--cs-success); }
+html[data-app="user"] .cs-ring__fill[data-tone="failed"] { stroke: var(--cs-danger); }
+html[data-app="user"] .cs-ring__fill[data-tone="paused"],
+html[data-app="user"] .cs-ring__fill[data-tone="waiting"] { stroke: var(--cs-warning); }
+html[data-app="user"] .cs-ring__value { color: var(--cs-text-primary); font-variant-numeric: tabular-nums; }
+
+/* ---------------- 状态字形（§25.1）：颜色 + 符号双通道 ---------------- */
+html[data-app="user"] .cs-progressglyph[data-state="running"] { color: var(--cs-primary-text); }
+html[data-app="user"] .cs-progressglyph[data-state="completed"] { color: var(--cs-success-text); }
+html[data-app="user"] .cs-progressglyph[data-state="failed"] { color: var(--cs-danger-text); }
+html[data-app="user"] .cs-progressglyph[data-state="paused"],
+html[data-app="user"] .cs-progressglyph[data-state="waiting"] { color: var(--cs-warning-text); }
+html[data-app="user"] .cs-progressglyph[data-state="cancelled"],
+html[data-app="user"] .cs-progressglyph[data-state="queued"] { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-progressglyph[data-state="info"] { color: var(--cs-primary-text); }
+html[data-app="user"] .cs-progressglyph[data-state="running"] svg { animation: cs-spin 2.4s linear infinite; }
+
+/* ---------------- Pipeline（§25.5）：阶段转换不整条重绘闪烁 ---------------- */
+html[data-app="user"] .cs-pipeline__rail { background: var(--cs-border); }
+html[data-app="user"] .cs-pipeline__glyph {
+  transition:
+    background var(--cs-dur-standard) var(--cs-ease-enter),
+    border-color var(--cs-dur-standard) var(--cs-ease-enter),
+    color var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-pipeline__glyph[data-state="completed"] {
+  background: var(--cs-success-soft);
+  border-color: var(--cs-success);
+  color: var(--cs-success-text);
+  animation: none;
+}
+html[data-app="user"] .cs-pipeline__glyph[data-state="failed"] {
+  background: var(--cs-danger-soft);
+  border-color: var(--cs-danger);
+  color: var(--cs-danger-text);
+  animation: none;
+}
+html[data-app="user"] .cs-pipeline__glyph[data-state="cancelled"] {
+  background: var(--cs-neutral-soft);
+  border-color: var(--cs-text-muted);
+  color: var(--cs-text-secondary);
+  animation: none;
+}
+html[data-app="user"] .cs-pipeline__glyph[data-state="running"] {
+  background: var(--cs-primary-soft);
+  border-color: var(--cs-primary);
+  color: var(--cs-primary-text);
+  animation: cs-pulse 2.4s var(--cs-ease-standard) infinite;
+}
+/* completed 的 check 用 scale in 接管，而不是继续 pulse */
+html[data-app="user"] .cs-pipeline__glyph[data-state="completed"] svg { animation: cs-check-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-pipeline__label { font-size: var(--fs-13); color: var(--cs-text-primary); }
+
+/* ---------------- Hierarchical（§25.6）：折叠 220ms ---------------- */
+html[data-app="user"] .cs-hier__children { transition: opacity var(--cs-dur-standard) var(--cs-ease-enter); }
+html[data-app="user"] .cs-hier__toggle { transition: transform var(--cs-dur-standard) var(--cs-ease-enter); }
+html[data-app="user"] .cs-hier__label { color: var(--cs-text-primary); }
+
+/* ---------------- 速率（§25.7）：tabular nums，不做老虎机式翻滚 ---------------- */
+html[data-app="user"] .cs-rate__value,
+html[data-app="user"] .cs-rate__label,
+html[data-app="user"] .cs-rate__hint { font-variant-numeric: tabular-nums; }
+html[data-app="user"] .cs-rate__label { font-size: var(--fs-11); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-rate__value { font-size: var(--fs-13); font-weight: 600; color: var(--cs-text-primary); }
+html[data-app="user"] .cs-rate__hint { color: var(--cs-text-secondary); }
+
+/* ---------------- 状态点（§28.6）：运行态低频 pulse ---------------- */
+html[data-app="user"] .cs-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--cs-text-muted);
+}
+html[data-app="user"] .cs-dot--running { background: var(--cs-primary); animation: cs-pulse-dot 1.8s var(--cs-ease-standard) infinite; }
+html[data-app="user"] .cs-dot--completed { background: var(--cs-success); }
+html[data-app="user"] .cs-dot--failed { background: var(--cs-danger); }
+html[data-app="user"] .cs-dot--paused,
+html[data-app="user"] .cs-dot--waiting { background: var(--cs-warning); }
+
+/* ---------------- Job 主进度卡（§28.1）：尺寸固定，位数变化不抖动 ---------------- */
+html[data-app="user"] .cs-jobprogress { display: grid; gap: 14px; padding: 22px; }
+html[data-app="user"] .cs-jobprogress__pct {
+  font-size: var(--fs-34);
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--cs-text-primary);
+}
+html[data-app="user"] .cs-jobprogress__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+  gap: 16px 22px;
+}
+html[data-app="user"] .cs-jobprogress__fact { display: grid; gap: 3px; min-width: 0; }
+html[data-app="user"] .cs-jobprogress__factlabel { font-size: var(--fs-11); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-jobprogress__factvalue {
+  font-size: var(--fs-16);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--cs-text-primary);
+  min-height: 1.35em;
+}
+html[data-app="user"] .cs-jobprogress__stage { font-size: var(--fs-13); color: var(--cs-text-secondary); min-height: 1.5em; }

@@ -10,13 +10,13 @@ import {
   FilterChip,
   HashValue,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   SearchInput,
   SkeletonRows,
   StatusBadgeForState,
 } from "@chain/ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
 import { useAsync } from "../sprint4/common";
 
 /**
@@ -69,6 +69,18 @@ export default function CasesPage() {
   const narrow = useIsNarrow();
   const hasFilter = status !== "all" || appliedQ !== "";
 
+  /*
+   * 首次加载 vs 刷新（规范 §23.3 / §33）。
+   *
+   * `useAsync` 在每次请求时都会把 loading 置真，但**不清空 data**，
+   * 因此 `data === null` 才是真正的"这一屏还没有任何数据"。
+   * 规范要求：首次加载用完整 skeleton；**已有数据刷新时不清屏**，
+   * 只在顶部显示一条 2px 进度，表格本身保留旧行。
+   * 重构前这里用 `loading` 直接替换成 skeleton，每次点刷新整张表都会闪白。
+   */
+  const firstLoad = loading && data === null;
+  const refreshing = loading && data !== null;
+
   const href = (id: string) => `/app-v2/cases/${id}/overview`;
   const open = (id: string) => navigate(`/cases/${id}/overview`);
   const clearFilters = () => {
@@ -79,7 +91,7 @@ export default function CasesPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="案件中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "案件中心" }]}
         meta={<MetaLine items={[{ label: "数据源", value: "postgres:cases" }]} />}
@@ -138,9 +150,12 @@ export default function CasesPage() {
         </FilterBar>
 
         <Card flush>
-          {loading ? <SkeletonRows rows={6} columns={8} widths={COLUMN_WIDTHS} /> : null}
-          {!loading && error ? <ErrorState title="案件加载失败" message={error} onRetry={reload} /> : null}
-          {!loading && !error && rows.length === 0 ? (
+          {/* 刷新指示器与内容同处一个定位上下文，进度条贴在数据区顶部而不是页面顶部。 */}
+          <div style={{ position: "relative", minWidth: 0 }}>
+          <CsRefreshBar active={refreshing} />
+          {firstLoad ? <SkeletonRows rows={6} columns={8} widths={COLUMN_WIDTHS} /> : null}
+          {!firstLoad && error ? <ErrorState title="案件加载失败" message={error} onRetry={reload} /> : null}
+          {!firstLoad && !error && rows.length === 0 ? (
             <EmptyState
               title="没有符合条件的案件"
               body={
@@ -158,7 +173,7 @@ export default function CasesPage() {
             />
           ) : null}
 
-          {!loading && !error && rows.length > 0 && narrow ? (
+          {!error && rows.length > 0 && narrow ? (
             <div className="cs-rowcards">
               {rows.map((row) => (
                 <div className="cs-rowcard" key={row.id}>
@@ -194,7 +209,7 @@ export default function CasesPage() {
             </div>
           ) : null}
 
-          {!loading && !error && rows.length > 0 && !narrow ? (
+          {!error && rows.length > 0 && !narrow ? (
             <DataTable<CaseRow>
               rows={rows}
               rowKey={(row) => row.id}
@@ -247,6 +262,7 @@ export default function CasesPage() {
               ]}
             />
           ) : null}
+          </div>
         </Card>
       </PageSection>
     </>

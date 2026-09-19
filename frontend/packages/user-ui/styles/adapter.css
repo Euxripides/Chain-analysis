@@ -1,0 +1,153 @@
+/*
+ * Ant Design 适配层（用户端重构规范 V4 §4.6 / §58）
+ *
+ * 规则：
+ *   1. 能用 `chainSightTheme` token 表达的，**一律进 token**，不进本文件；
+ *   2. 只有 token 表达不了的结构性样式（层级、滚动容器、Portal 归属、动画所有权）
+ *      才写在这里，并且统一挂在 `html[data-app="user"]` 作用域下；
+ *   3. 禁止在一个业务页面里覆写 `.ant-*`；需要调整时改这里或改 token（§1.3）；
+ *   4. 尽量不用 `!important`。下面仅有的两处是为了压过 Ant 的行内 style
+ *      与 rc-* 运行时注入的高优先级规则，且都带作用域限定。
+ */
+
+/* ---------------- Portal 与层级（§22.4） ---------------- */
+/* Ant 默认把根级弹层挂在 body 下；统一交给 overlay root 之后仍要保证层级有序。 */
+html[data-app="user"] .ant-modal-root,
+html[data-app="user"] .ant-drawer-root {
+  z-index: var(--cs-z-modal-backdrop);
+}
+html[data-app="user"] .ant-modal-wrap,
+html[data-app="user"] .ant-modal-mask {
+  z-index: var(--cs-z-modal-backdrop);
+}
+html[data-app="user"] .ant-modal {
+  z-index: var(--cs-z-modal);
+}
+html[data-app="user"] .ant-drawer {
+  z-index: var(--cs-z-inspector);
+}
+html[data-app="user"] .ant-dropdown,
+html[data-app="user"] .ant-select-dropdown,
+html[data-app="user"] .ant-picker-dropdown,
+html[data-app="user"] .ant-tooltip,
+html[data-app="user"] .ant-popover {
+  z-index: var(--cs-z-dropdown);
+}
+
+/* ---------------- 动画所有权（§9.6） ---------------- */
+/*
+ * CsButton 自己用 Motion 做 press/hover，因此关掉 Ant 的 Wave 涟漪，
+ * 避免"Ant Wave + Motion scale + 自定义 ripple"三套效果叠加。
+ * 只对带 .cs-btn 的元素生效；其它地方的 Ant Button 行为不变。
+ */
+html[data-app="user"] .cs-btn .ant-wave { display: none; }
+
+/* ---------------- 结构性样式（token 覆盖不到的部分） ---------------- */
+html[data-app="user"] .ant-modal-content,
+html[data-app="user"] .ant-drawer-content {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-modal);
+}
+html[data-app="user"] .ant-modal-content { box-shadow: var(--cs-shadow-floating); }
+html[data-app="user"] .ant-drawer-content-wrapper { box-shadow: var(--cs-shadow-floating); }
+html[data-app="user"] .ant-modal-header { border-bottom: 1px solid var(--cs-border-subtle); margin-bottom: 16px; }
+html[data-app="user"] .ant-modal-footer { border-top: 1px solid var(--cs-border-subtle); padding-top: 16px; margin-top: 20px; }
+
+html[data-app="user"] .ant-table-wrapper .ant-table {
+  border-radius: var(--cs-radius-card-sm);
+}
+html[data-app="user"] .ant-table-wrapper .ant-table-thead > tr > th {
+  border-bottom: 1px solid var(--cs-border);
+}
+html[data-app="user"] .ant-table-wrapper .ant-table-tbody > tr > td:first-child {
+  box-shadow: none;
+  transition: box-shadow var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .ant-table-wrapper .ant-table-tbody > tr:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--cs-primary);
+}
+html[data-app="user"] .ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td:first-child {
+  box-shadow: inset 2px 0 0 var(--cs-primary);
+}
+/* 刷新时不清空表格：用顶部薄进度条而不是整表 spinner（§17.5 / §23.3） */
+html[data-app="user"] .ant-spin-container > .ant-spin {
+  max-height: none;
+}
+
+html[data-app="user"] .ant-pro-table-list-toolbar-container { padding-block: 12px; }
+
+/* ---------------- L1 业务表格（CsProTable / §17.1） ---------------- */
+html[data-app="user"] .cs-protable {
+  max-width: 100%;
+  min-width: 0;
+  /*
+   * `contain: paint` 与既有 `.table-scroll` 的做法一致，原因也一样：
+   * Ant 表格内部是 `min-width: max-content`，Chromium 会把它计入**根元素**的
+   * scrollable overflow，于是 390px 下 documentElement.scrollWidth 会虚高——
+   * 用户侧其实没有横向滚动，但所有按 scrollWidth 判定的验收用例都会误报，
+   * 而且会掩盖真正的溢出。必须消除，而不是绕过。
+   */
+  contain: paint;
+}
+html[data-app="user"] .cs-protable .ant-table-wrapper,
+html[data-app="user"] .cs-protable .ant-table-content,
+html[data-app="user"] .cs-protable .ant-table-body {
+  max-width: 100%;
+}
+/* 表格自己滚动，不把页面撑开（§17：宽表只能在自己的滚动容器内滚动）。 */
+html[data-app="user"] .cs-protable .ant-table-content,
+html[data-app="user"] .cs-protable .ant-table-body {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+html[data-app="user"] .cs-protable__error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 24px;
+}
+/* 工具栏里的密度/列设置按钮用设计系统的次级按钮形态，不用 Ant 默认观感。 */
+html[data-app="user"] .cs-protable .ant-pro-table-list-toolbar-container .ant-space-item > .ant-btn,
+html[data-app="user"] .cs-protable .ant-pro-table-list-toolbar-container .anticon {
+  color: var(--cs-text-secondary);
+}
+html[data-app="user"] .cs-protable .ant-pro-table-list-toolbar-container .ant-btn:hover { color: var(--cs-primary-text); }
+
+html[data-app="user"] .ant-tabs-top > .ant-tabs-nav::before { border-bottom-color: var(--cs-border); }
+html[data-app="user"] .ant-tabs-tab { transition: color var(--cs-dur-fast) var(--cs-ease-enter); }
+
+html[data-app="user"] .ant-form-item-label > label { color: var(--cs-text-primary); }
+html[data-app="user"] .ant-input,
+html[data-app="user"] .ant-input-affix-wrapper,
+html[data-app="user"] .ant-select-selector,
+html[data-app="user"] .ant-picker {
+  border-color: var(--cs-border-strong);
+}
+html[data-app="user"] .ant-input:hover,
+html[data-app="user"] .ant-input-affix-wrapper:hover,
+html[data-app="user"] .ant-select:not(.ant-select-disabled):hover .ant-select-selector,
+html[data-app="user"] .ant-picker:hover { border-color: var(--cs-primary); }
+/* 输入框 focus 不允许上下移动（§14.3）——Ant 默认也不位移，这里显式钉住。 */
+html[data-app="user"] .ant-input:focus,
+html[data-app="user"] .ant-input-affix-wrapper-focused,
+html[data-app="user"] .ant-select-focused .ant-select-selector,
+html[data-app="user"] .ant-picker-focused {
+  transform: none;
+  border-color: var(--cs-primary);
+  box-shadow: var(--cs-shadow-ring);
+}
+
+/* 长标识（地址/哈希）保持 mono + tabular nums，且**不被截断成展示值**（§5.3） */
+html[data-app="user"] .ant-typography code,
+html[data-app="user"] .ant-typography kbd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scroll Container 规则（§22.5）：Ant Drawer / Modal 内部独立滚动，不带动页面 */
+html[data-app="user"] .ant-drawer-body,
+html[data-app="user"] .ant-modal-body {
+  overscroll-behavior: contain;
+}

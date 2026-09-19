@@ -11,7 +11,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   PageSkeleton,
   RelativeTime,
@@ -20,6 +19,7 @@ import {
   StatusBadgeForState,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
 import { formatTime, useAsync } from "../sprint4/common";
 
 /**
@@ -140,6 +140,14 @@ export default function InboxPage() {
 
   const selected = rows.find((item) => item.id === selectedId) ?? null;
 
+  /*
+   * 首次加载 vs 刷新（规范 §17.5 / §23.3）。
+   * `useAsync` 每次请求都会把 loading 置真但保留 data，
+   * 因此只有 `data === null` 才是"这一屏还没有任何数据"；刷新时保留旧列表并只显示顶部进度条。
+   */
+  const firstLoad = loading && data === null;
+  const refreshing = loading && data !== null;
+
   const openScope = () =>
     dialog.notify("info", "待我处理口径", null, [
       { label: "接口", value: "GET /api/v2/inbox?status=pending" },
@@ -152,9 +160,10 @@ export default function InboxPage() {
   const list = (
     <PageSection title="待处理请求" count={rows.length + " 项"}>
       <Card>
-        {loading ? <PageSkeleton shape="cards" rows={3} /> : null}
-        {!loading && error ? <ErrorState title="Inbox 加载失败" message={error} onRetry={reload} /> : null}
-        {!loading && !error && rows.length === 0 ? (
+        <CsRefreshBar active={refreshing} />
+        {firstLoad ? <PageSkeleton shape="cards" rows={3} /> : null}
+        {!firstLoad && error ? <ErrorState title="Inbox 加载失败" message={error} onRetry={reload} /> : null}
+        {!firstLoad && !error && rows.length === 0 ? (
           <EmptyState
             title="没有待处理的复核请求"
             body="需要你确认的 Finding、报告、Evidence 或调查会出现在这里。"
@@ -174,7 +183,7 @@ export default function InboxPage() {
             }
           />
         ) : null}
-        {!loading && !error && rows.length > 0 ? (
+        {!error && rows.length > 0 ? (
           <div className="cs-rowcards cs-stagger">
             {rows.map((item) => {
               const target = targetFor(item);
@@ -246,7 +255,7 @@ export default function InboxPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="待我处理"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "待我处理" }]}
         meta={

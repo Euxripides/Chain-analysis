@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useState } from "react";
+import { Link,
+  useNavigate,
+  useParams } from "react-router-dom";
+import { ChevronLeft,
+  ChevronRight } from "lucide-react";
 import { useAuth } from "@chain/api-client";
 import {
   Button,
@@ -16,7 +22,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   PageSkeleton,
   PipelineProgress,
@@ -32,6 +37,7 @@ import {
   type DataTableColumn,
   type PipelineStage,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
 
 interface InvestigationDetail {
@@ -389,7 +395,7 @@ export default function InvestigationWorkbenchPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title={inv.goal}
         breadcrumb={[
           { label: "调查任务", to: "/investigations" },

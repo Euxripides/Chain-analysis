@@ -675,12 +675,24 @@ export function DataTable<T>({
   rowTestId,
   caption,
   emptyAction,
+  keepPreviousData = false,
 }: {
   columns: Array<DataTableColumn<T>>;
   rows: T[];
   rowKey: (row: T, index: number) => string;
   loading?: boolean;
   error?: string | null;
+  /**
+   * 刷新已有数据时**保留旧行**，只在表格顶部显示一条 2px 进度（用户端重构规范 V4 §17.5 / §23.3）。
+   *
+   * 默认 false —— 后台端行为与此前**逐字一致**（loading 时整表换成骨架），
+   * 只有显式传入的用户端页面才启用新行为。共享组件的形态变化必须由调用方选择，
+   * 不能让 admin-console 被动改变（§1.3 / §2.1）。
+   *
+   * 注意：首次加载（rows 为空）无论是否开启都仍然走骨架屏——
+   * "还没有任何数据"和"数据正在更新"是两种不同的状态，不该用同一种表现。
+   */
+  keepPreviousData?: boolean;
   empty?: React.ReactNode;
   onRetry?: () => void;
   /**
@@ -698,7 +710,9 @@ export function DataTable<T>({
   /** 空结果时提供的可执行动作（§11.4"提供清除筛选"）。 */
   emptyAction?: React.ReactNode;
 }) {
-  if (loading) return <SkeletonRows rows={6} columns={columns.length} />;
+  /* 首次加载（或未开启保留策略）才用骨架屏；刷新已有数据不清屏。 */
+  const firstLoad = Boolean(loading) && (!keepPreviousData || rows.length === 0);
+  if (firstLoad) return <SkeletonRows rows={6} columns={columns.length} />;
   if (error) return <ErrorState title="数据加载失败" message={error} onRetry={onRetry} />;
   if (rows.length === 0) {
     return (
@@ -718,7 +732,7 @@ export function DataTable<T>({
    * §30.1：>100 行必须虚拟化。保留既有"分页窗口 + 视口虚拟滚动"实现，
    * 保证不会把 10k 行 DOM 一次性插入；DOM 行数上限不变。
    */
-  return (
+  const table = (
     <PagedTable
       columns={columns}
       rows={rows}
@@ -731,6 +745,23 @@ export function DataTable<T>({
       rowTestId={rowTestId}
       caption={caption}
     />
+  );
+
+  /* 未开启保留策略时原样返回，DOM 结构与此前完全一致（后台端路径）。 */
+  if (!keepPreviousData) return table;
+
+  /*
+   * 刷新态：表格保持挂载（**表头不消失、旧行不清空**），只在顶部叠一条 2px 进度。
+   * 进度条样式由 @chain/user-ui 的 `html[data-app="user"] .cs-refreshbar` 提供；
+   * 后台端不传 keepPreviousData，因此不会渲染到这个分支。
+   */
+  return (
+    <div style={{ position: "relative", minWidth: 0 }}>
+      {loading ? (
+        <div className="cs-refreshbar" role="progressbar" aria-label="正在刷新" aria-valuetext="正在刷新" />
+      ) : null}
+      {table}
+    </div>
   );
 }
 

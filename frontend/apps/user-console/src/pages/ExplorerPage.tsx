@@ -1,7 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, EmptyState, ErrorState, MetaLine, PageHeader, PageSection, StatusBadge, useDialog } from "@chain/ui";
+import { Card,
+  EmptyState,
+  ErrorState,
+  MetaLine,
+  PageSection,
+  StatusBadge,
+  useDialog,
+} from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, shortValue, useApi } from "../sprint5/common";
 
 /**
@@ -193,7 +205,7 @@ export default function ExplorerPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="地址与交易查询"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "地址与交易查询" }]}
         subtitle={chains.length > 0 ? `已启用链：${chains.map((item) => item.slug).join(" / ")}` : undefined}

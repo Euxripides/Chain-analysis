@@ -1,0 +1,134 @@
+/*
+ * ChainSight CSS 变量层（用户端重构规范 V4 §4 / §5 / §6 / §9 / §22.4）
+ *
+ * 作用域：`html[data-app="user"]`。
+ * 为什么不写 :root：@chain/design-tokens/tokens.css 被用户端与后台端共用，
+ * 直接改 :root 会让 admin-console 被动换肤（规范 §1.3 / §2.1）。
+ *
+ * 与 `theme/tokens.ts` 一一对应：
+ *   色板（palette）用于填充 / 描边 / 图形；文字安全变体（-text）用于任何字符。
+ *   浅底（-soft）只与同族 -text 配对使用（组合登记在 check-token-contrast.mjs）。
+ */
+
+html[data-app="user"] {
+  /* ---------------- 色板（规范 §4.1） ---------------- */
+  --cs-canvas: #F4F8FF;
+  --cs-canvas-strong: #EEF5FF;
+  --cs-surface: #FFFFFF;
+  --cs-surface-glass: rgba(255, 255, 255, 0.82);
+  --cs-surface-blue: #F7FAFF;
+  --cs-surface-rail: #F8FBFF;
+  --cs-surface-sunken: #EEF4FD;
+
+  --cs-border: #DFE9F7;
+  --cs-border-strong: #C8D9F0;
+  --cs-border-subtle: #EAF1FB;
+
+  --cs-text-primary: #10213D;
+  --cs-text-secondary: #5B6B84;
+  --cs-text-muted: #8796AC;
+  --cs-text-inverse: #FFFFFF;
+
+  --cs-primary: #3478F6;
+  --cs-primary-hover: #2568E8;
+  --cs-primary-active: #1F5ED6;
+  --cs-primary-soft: #EAF2FF;
+
+  --cs-cyan: #1DB8E8;
+  --cs-violet: #6A63FF;
+  --cs-success: #169B62;
+  --cs-warning: #D98C16;
+  --cs-danger: #D84A4A;
+
+  /* ---------------- 文字安全变体（同色相压暗到 ≥4.5:1） ---------------- */
+  /* 括号：(白底, 画布 #F4F8FF, 自身浅底) —— 由 npm run check:tokens 强制校验 */
+  --cs-primary-text: #1F5ED6; /* 5.78 / 5.43 / 5.14 */
+  --cs-cyan-text: #0A7191; /*    5.59 / 5.25 / 4.97 */
+  --cs-violet-text: #5A52E8; /*  5.52 / 5.18 / 4.90 */
+  --cs-success-text: #0F7A4C; /* 5.37 / 5.04 / 4.77 */
+  --cs-warning-text: #9C6109; /* 5.09 / 4.78 / 4.52 */
+  --cs-danger-text: #C43C3C; /*  5.17 / 4.86 / 4.59 */
+
+  /* ---------------- 状态浅底 ---------------- */
+  --cs-primary-soft-2: #EAF2FF;
+  --cs-cyan-soft: #E6F6FC;
+  --cs-violet-soft: #EFEEFF;
+  --cs-success-soft: #E8F7F0;
+  --cs-warning-soft: #FDF3E4;
+  --cs-danger-soft: #FDECEB;
+  --cs-neutral-soft: #EEF2F9;
+
+  /* ---------------- 圆角（§4.3） ---------------- */
+  --cs-radius-control: 10px;
+  --cs-radius-card-sm: 12px;
+  --cs-radius-card: 16px;
+  --cs-radius-panel: 18px;
+  --cs-radius-modal: 18px;
+  --cs-radius-hero: 24px;
+  --cs-radius-pill: 999px;
+
+  /* ---------------- 阴影（§4.4） ---------------- */
+  --cs-shadow-surface: 0 1px 2px rgba(45, 80, 130, .04), 0 8px 24px rgba(45, 80, 130, .06);
+  --cs-shadow-surface-hover: 0 4px 12px rgba(45, 94, 180, .08), 0 16px 40px rgba(45, 94, 180, .10);
+  --cs-shadow-floating: 0 8px 30px rgba(20, 52, 100, .14), 0 30px 80px rgba(20, 52, 100, .18);
+  --cs-shadow-ring: 0 0 0 3px rgba(52, 120, 246, .18);
+  --cs-shadow-rail-active: 0 2px 8px rgba(52, 120, 246, .16);
+
+  /* ---------------- 玻璃（§4.5） ---------------- */
+  --cs-glass-blur: blur(18px) saturate(130%);
+
+  /* ---------------- 布局（§6.1 / §6.2 / §54） ---------------- */
+  --cs-rail-w: 248px;
+  --cs-rail-w-collapsed: 72px;
+  --cs-topbar-h: 60px;
+  --cs-inspector-w: 340px;
+  --cs-inspector-w-lg: 420px;
+  --cs-form-max-w: 1040px;
+  --cs-form-field-w: 840px;
+  --cs-reading-w: 760px;
+  --cs-gutter: 24px;
+
+  /* ---------------- 动效（§9.1 / §9.2） ---------------- */
+  --cs-dur-micro: 90ms;
+  --cs-dur-fast: 140ms;
+  --cs-dur-standard: 220ms;
+  --cs-dur-spatial: 340ms;
+  --cs-dur-hero: 480ms;
+  --cs-ease-enter: cubic-bezier(.16, 1, .3, 1);
+  --cs-ease-exit: cubic-bezier(.4, 0, 1, 1);
+  --cs-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --cs-stagger-step: 28ms;
+
+  /* ---------------- Overlay 层级 Registry（§22.4） ---------------- */
+  /* 禁止页面自行写 z-index: 9999。所有层级只能引用这几个变量。 */
+  --cs-z-base: 0;
+  --cs-z-sticky-table: 20;
+  --cs-z-graph-chrome: 40;
+  --cs-z-rail: 50;
+  --cs-z-topbar: 50;
+  --cs-z-dropdown: 100;
+  --cs-z-inspector: 200;
+  --cs-z-modal-backdrop: 300;
+  --cs-z-modal: 310;
+  --cs-z-command: 320;
+  --cs-z-critical: 330;
+}
+
+/* Reduced Motion（§9.5）：时长压到 0，但**保留状态切换的最终值**，
+   而不是删掉 transition——否则组件会停在中间态。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] {
+    --cs-dur-micro: 0ms;
+    --cs-dur-fast: 0ms;
+    --cs-dur-standard: 0ms;
+    --cs-dur-spatial: 0ms;
+    --cs-dur-hero: 0ms;
+    --cs-stagger-step: 0ms;
+  }
+}
+
+/* 两个 overlay 根节点本身不参与布局（Portal 容器）。 */
+#cs-overlay-root,
+#cs-graph-overlay-root {
+  position: static;
+}

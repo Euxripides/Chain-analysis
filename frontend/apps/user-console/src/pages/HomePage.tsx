@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, FolderOpen, Inbox, ListChecks, Plus, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, FolderOpen, Inbox, ListChecks, SlidersHorizontal } from "lucide-react";
 import { ApiError, useAuth, type UserDashboard } from "@chain/api-client";
 import {
   BentoCell,
@@ -9,9 +9,7 @@ import {
   CompactProgress,
   EmptyState,
   ErrorState,
-  MetricCard,
   MetaLine,
-  PageHeader,
   PageSection,
   SkeletonRows,
   StatusBadgeForState,
@@ -19,11 +17,29 @@ import {
   RelativeTime,
   useDialog,
 } from "@chain/ui";
+import { CsPage } from "@chain/user-ui";
 import { useAsync } from "../sprint4/common";
+import { HomeHero } from "./home/HomeHero";
+import { KpiStrip } from "./home/KpiStrip";
 
 /**
  * §12.2 我的概览 —— Bento 工作台
  *
+ * 2026-09 V4 重构（规范 §32.1）：首屏结构从"Header + 6 张 Bento 卡"改成
+ *   Hero / Quick Investigation  →  KPI strip  →  进行中  →  待我处理  →  最近案件  →  快捷操作
+ *
+ * 三处**只改表现、不改数据**的调整：
+ *   1. PageHeader 换成 HomeHero（同一份问候语 + 同样的权限裁剪主操作），
+ *      并补上规范 §32.2 要求的全局检索入口——提交后跳 `/search?q=`，
+ *      这是 /search **已经支持**的深链接参数，不是新增契约；
+ *   2. "关键指标"从 Bento 的 B 区提成独立 KPI 条（§32.3）：不再用 4 张超宽卡，
+ *      而是列数随视口自适应的紧凑网格。**没有加 sparkline**——接口的 cards[]
+ *      不含时间序列，规范 §64 #1/#25 禁止前端编造趋势数据；
+ *   3. 删掉与 Header meta 完全重复的"工作区状态"卡片（§32.4 禁止空壳大卡），
+ *      组织 / 工作区 / 统计范围 / 数据源仍然全部可以在"口径说明"弹窗里看到。
+ *
+ * 数据来源（一字未改，每一块都必须是接口真实返回）：
+
  * 数据来源说明（每一块都必须是接口真实返回，不写假数据）：
  *   A 问候 / 工作区 / 数据时间 / 主操作 ← GET /api/v2/dashboard（as_of · scope · data_source）
  *   B 关键业务指标                     ← GET /api/v2/dashboard（cards，原样显示，不做前端二次计算）
@@ -66,60 +82,48 @@ export default function HomePage() {
     return "neutral";
   };
 
+  /*
+   * 口径说明的唯一入口（AGENTS.md：说明性内容只能走弹窗，不得内嵌页面正文）。
+   * 重构前 PageHeader 的 subtitle 是一段页面内说明段落，与仓库规范冲突；
+   * 那段话的信息量与"统计范围"完全一致，因此并入这个弹窗，
+   * 用户能拿到的信息没有减少，页面正文则只剩业务数据与操作控件。
+   */
+  const explainScope = () =>
+    dialog.notify("info", "工作台口径", "当前工作区内未归档对象的实时统计。每个指标的统计范围与来源见各指标卡上的说明按钮。", [
+      { label: "组织", value: data?.scope.organization_id ?? "—" },
+      { label: "工作区", value: session?.workspace_id ?? data?.scope.workspace_id ?? "—" },
+      { label: "统计范围", value: "当前工作区内未归档对象" },
+      { label: "数据源", value: data?.data_source ?? "—" },
+      { label: "数据截至", value: data ? new Date(data.as_of).toLocaleString("zh-CN") : "—" },
+    ]);
+
+  const scopeMeta = data ? (
+    <MetaLine
+      items={[
+        { label: "数据截至", value: new Date(data.as_of).toLocaleString("zh-CN") },
+        { label: "数据源", value: data.data_source },
+        { label: "工作区", value: session?.workspace_id ?? data.scope.workspace_id },
+      ]}
+    />
+  ) : null;
+
   return (
-    <>
-      <PageHeader
-        title={"你好，" + (session?.display_name ?? "")}
-        subtitle="当前工作区内未归档对象的实时统计；每个指标的统计范围与来源可通过指标卡上的说明按钮查看。"
-        meta={
-          data ? (
-            <MetaLine
-              items={[
-                { label: "数据截至", value: new Date(data.as_of).toLocaleString("zh-CN") },
-                { label: "数据源", value: data.data_source },
-                { label: "工作区", value: session?.workspace_id ?? data.scope.workspace_id },
-              ]}
-            />
-          ) : null
-        }
-        primaryAction={
-          can("case:create") ? (
-            <Link className="btn btn--primary btn--sm" to="/cases/new">
-              <Plus size={14} />
-              新建案件
-            </Link>
-          ) : null
-        }
-        secondaryAction={
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() =>
-              dialog.notify("info", "工作台口径", null, [
-                { label: "组织", value: data?.scope.organization_id ?? "—" },
-                { label: "工作区", value: data?.scope.workspace_id ?? "—" },
-                { label: "统计范围", value: "当前工作区内未归档对象" },
-                { label: "数据源", value: data?.data_source ?? "—" },
-              ])
-            }
-          >
-            口径说明
-          </button>
-        }
+    <CsPage kind="dashboard">
+      <HomeHero
+        displayName={session?.display_name ?? ""}
+        canTraceFunds={can("canvas:list")}
+        canCreateCase={can("case:create")}
+        meta={scopeMeta}
+        onExplainScope={explainScope}
       />
 
       {loading ? (
-        <div className="cs-bento">
-          <BentoCell area="a">
-            <Card>
-              <SkeletonRows rows={2} columns={3} />
+        <div className="cs-kpistrip">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}>
+              <SkeletonRows rows={2} columns={1} />
             </Card>
-          </BentoCell>
-          <BentoCell area="b">
-            <Card>
-              <SkeletonRows rows={2} columns={4} />
-            </Card>
-          </BentoCell>
+          ))}
         </div>
       ) : error ? (
         <Card>
@@ -130,46 +134,20 @@ export default function HomePage() {
           <EmptyState title="暂无数据" body="当前工作区还没有可统计的对象。" />
         </Card>
       ) : (
-        <BentoGrid>
-          {/* A 区：问候、当前工作区、数据时间、全局主操作 —— 已并入 PageHeader 的 meta 与主操作。 */}
-          <BentoCell area="a">
-            <PageSection title="工作区状态">
-              <Card>
-                <MetaLine
-                  items={[
-                    { label: "组织", value: data.scope.organization_id },
-                    { label: "工作区", value: data.scope.workspace_id },
-                    { label: "数据截至", value: new Date(data.as_of).toLocaleString("zh-CN") },
-                  ]}
-                />
-              </Card>
-            </PageSection>
-          </BentoCell>
+        <>
+          {/* KPI 条（§32.3）：独立于 Bento，列数随视口自适应，不再用 4 张超宽空卡。 */}
+          <KpiStrip
+            cards={data.cards}
+            toneFor={toneFor}
+            noteFor={() => (
+              <>
+                该数值由服务端在当前工作区范围内聚合，界面不做二次计算。
+                统计范围是「当前工作区内未归档对象」；口径变化会随接口响应一并更新。
+              </>
+            )}
+          />
 
-          {/* B 区：关键业务指标，按服务端 cards 原样显示。 */}
-          <BentoCell area="b">
-            <PageSection title="关键指标" count={data.cards.length + " 项"}>
-              <div className="metric-grid cs-stagger">
-                {data.cards.map((card) => (
-                  <MetricCard
-                    key={card.key}
-                    label={card.label}
-                    value={card.value}
-                    unit={card.unit}
-                    tone={toneFor(card.key)}
-                    source={card.key}
-                    sourceNote={
-                      <>
-                        该数值由服务端在当前工作区范围内聚合，界面不做二次计算。
-                        统计范围是"当前工作区内未归档对象"；口径变化会随接口响应一并更新。
-                      </>
-                    }
-                  />
-                ))}
-              </div>
-            </PageSection>
-          </BentoCell>
-
+          <BentoGrid>
           {/* C 区：进行中的调查与下载任务。 */}
           <BentoCell area="c">
             <RunningWork canInvestigations={can("investigation:list")} canJobs={can("job:list:self")} />
@@ -212,9 +190,10 @@ export default function HomePage() {
               </Card>
             </PageSection>
           </BentoCell>
-        </BentoGrid>
+          </BentoGrid>
+        </>
       )}
-    </>
+    </CsPage>
   );
 }
 

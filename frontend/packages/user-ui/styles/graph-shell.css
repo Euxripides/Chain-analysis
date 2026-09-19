@@ -1,0 +1,139 @@
+/*
+ * Graph Workspace 外壳（用户端重构规范 V4 §31 / §58）
+ *
+ * 这一层只负责**画布容器、降级提示与可访问对象列表**的布局与外观。
+ * 真正的节点与边由 @chain/graph-engine 的 WebGL2 渲染器绘制（§30.1：
+ * React 不渲染图谱节点），因此这里没有任何逐帧样式，也没有给节点预留的 DOM 结构。
+ *
+ * 无障碍（§55.2）：可访问对象列表默认视觉隐藏，**聚焦时展开**。
+ * 这样它既不会在正常看图时挤占空间，也不是"只给读屏看的摆设"——
+ * 键盘用户可以 Tab 到它、用 ↑↓ 在相邻节点之间移动。
+ */
+
+html[data-app="user"] .cs-fundgraph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-panel);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  overflow: hidden;
+}
+
+html[data-app="user"] .cs-fundgraph__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-fundgraph__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  /* 触摸设备上由引擎接管手势，禁止浏览器把拖拽解释成页面滚动。 */
+  touch-action: none;
+}
+html[data-app="user"] .cs-fundgraph__canvas:active { cursor: grabbing; }
+html[data-app="user"] .cs-fundgraph__canvas:focus-visible {
+  outline: 2px solid var(--cs-primary);
+  outline-offset: -2px;
+}
+
+/* 性能受限模式（§30.6）：不是白屏，也不是静默降级。 */
+html[data-app="user"] .cs-fundgraph__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: var(--cs-surface-blue);
+}
+html[data-app="user"] .cs-fundgraph__fallback-title {
+  margin: 0;
+  font-size: var(--fs-15, 0.9375rem);
+  font-weight: 650;
+  color: var(--cs-text-primary);
+}
+html[data-app="user"] .cs-fundgraph__fallback-body {
+  margin: 0;
+  max-width: 44ch;
+  font-size: var(--fs-13);
+  line-height: 1.6;
+  color: var(--cs-text-secondary);
+}
+
+/* ---------------------------------------------------------------- 可访问列表 */
+
+html[data-app="user"] .cs-fundgraph__a11y {
+  /* 默认视觉隐藏，但仍可聚焦（不能用 display:none，那样键盘也到不了）。 */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+html[data-app="user"] .cs-fundgraph__a11y.is-focused {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border-top: 1px solid var(--cs-border-subtle);
+  background: var(--cs-surface-blue);
+  max-height: 220px;
+  overflow-y: auto;
+}
+html[data-app="user"] .cs-fundgraph__a11y-hint,
+html[data-app="user"] .cs-fundgraph__a11y-current {
+  margin: 0 0 6px;
+  font-size: var(--fs-12);
+  color: var(--cs-text-secondary);
+}
+html[data-app="user"] .cs-fundgraph__a11y-current { color: var(--cs-text-primary); font-weight: 600; }
+html[data-app="user"] .cs-fundgraph__a11y-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+html[data-app="user"] .cs-fundgraph__a11y-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h-sm);
+  padding: 0 10px;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-pill);
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  font: inherit;
+  font-size: var(--fs-12);
+  cursor: pointer;
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-fundgraph__a11y-item:hover { border-color: var(--cs-primary); background: var(--cs-primary-soft); }
+html[data-app="user"] .cs-fundgraph__a11y-item:focus-visible { outline: none; border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+/* 方向不只靠颜色（§55）：文字标签始终存在。 */
+html[data-app="user"] .cs-fundgraph__a11y-dir { color: var(--cs-text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-fundgraph__a11y-item { transition: none; }
+}

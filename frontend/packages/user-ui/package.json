@@ -1,0 +1,20 @@
+{
+  "name": "@chain/user-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./theme/css-vars.css": "./theme/css-vars.css",
+    "./styles/surface.css": "./styles/surface.css",
+    "./styles/motion.css": "./styles/motion.css",
+    "./styles/progress.css": "./styles/progress.css",
+    "./styles/states.css": "./styles/states.css",
+    "./styles/shell.css": "./styles/shell.css",
+    "./styles/graph-shell.css": "./styles/graph-shell.css",
+    "./pro-table": "./components/pro-table.tsx",
+    "./styles/legacy-bridge.css": "./styles/legacy-bridge.css",
+    "./styles/adapter.css": "./styles/adapter.css"
+  }
+}

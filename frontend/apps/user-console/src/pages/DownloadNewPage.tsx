@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@chain/api-client";
 import {
@@ -14,7 +19,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetricCard,
-  PageHeader,
   PageSection,
   ParseProgressBody,
   RadioGroup,
@@ -25,6 +29,7 @@ import {
   StickyActionBar,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import type { KeyValueEntry } from "@chain/ui";
 import { formatRawAmount, formatTime, useApi, useS5Action } from "../sprint5/common";
 import { IMPORT_FILE_EXTENSIONS, IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../import/parse-core";
@@ -40,225 +45,24 @@ import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddress
  * ≤899px 时预览摘要移动到提交之前。业务 hook、请求参数与错误语义一律未改。
  * ==========================================================================*/
 
-interface ChainMeta {
-  slug: string;
-  name: string;
-  type: string;
-  enabled: boolean;
-  supports_trace: boolean;
-}
-
-interface DatasetMeta {
-  id: string;
-  label: string;
-  status: string;
-}
-
-type RangeType = "full" | "block" | "time";
-type ReusePolicy = "prefer_local" | "refresh";
-type PerformanceMode = "safe" | "fast" | "turbo";
-
-interface RangeBody {
-  type: RangeType;
-  from_block?: number;
-  to_block?: number;
-  from?: string;
-  to?: string;
-}
-
-interface DownloadBody {
-  chain: string;
-  addresses: string[];
-  datasets: string[];
-  range: RangeBody;
-  reuse_policy: ReusePolicy;
-  performance_mode: PerformanceMode;
-  /** §23 per-address 案件/标签覆盖；键为服务端 normalized 地址。 */
-  subject_meta?: Record<string, { case_name: string; tags: string[] }>;
-}
-
-interface PreviewCoverageItem {
-  subject: string;
-  dataset: string;
-  covered_blocks: number;
-  total_blocks: number;
-  ratio: number;
-  gaps: Array<{ from_block: number; to_block: number }>;
-}
-
-interface PreviewCandidate {
-  job_id: string;
-  job_no: string;
-  status: string;
-  coverage: number;
-  updated_at: string;
-}
-
-interface PreviewReuse {
-  policy: string;
-  will_reuse: boolean;
-  candidate: PreviewCandidate | null;
-  coverage_hit: boolean;
-  refresh: boolean;
-}
-
-interface DownloadEstimate {
-  estimated_missing_blocks: number | null;
-  estimated_rows: number | null;
-  estimated_cost_usd: string | null;
-  estimated_time_seconds: number | null;
-  basis: string;
-}
-
-interface DownloadPreviewData {
-  request: {
-    chain: string;
-    addresses: string[];
-    datasets: string[];
-    range: RangeBody;
-    reuse_policy: ReusePolicy;
-    performance_mode: PerformanceMode;
-  };
-  coverage: { chain: string; datasets: string[]; items: PreviewCoverageItem[]; overall_ratio: number };
-  missing_blocks: number;
-  provider_work_required: boolean;
-  reuse: PreviewReuse;
-  estimate: DownloadEstimate;
-  risks: string[];
-  source: Record<string, unknown>;
-}
-
-interface DownloadCreateData {
-  status: "ready" | "reused" | "planned";
-  created: boolean;
-  reused: boolean;
-  provider_work_required: boolean;
-  coverage: number;
-  job_id: string | null;
-  job_no?: string;
-}
-
-function parseAddressInput(raw: string) {
-  const tokens = raw
-    .split(/[\s,;，；|]+/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const seen = new Set<string>();
-  const list: string[] = [];
-  let duplicates = 0;
-  for (const token of tokens) {
-    const localKey = token.toLowerCase();
-    if (seen.has(localKey)) {
-      duplicates += 1;
-      continue;
-    }
-    seen.add(localKey);
-    list.push(token);
-  }
-  return { tokens: tokens.length, list, duplicates };
-}
-
-/* ---- §18.10 导入：CSV/XLSX 解析（浏览器） + 服务端再次验证 ---- */
-
-export interface ServerAddressVerdict {
-  index: number;
-  row: number;
-  input: string;
-  chain: string;
-  code: string;
-  message: string;
-}
-
-export interface ServerFieldRejection {
-  row: number;
-  index: number;
-  field: string;
-  code: string;
-  count: number;
-  limit: number;
-  message: string;
-}
-
-export interface ServerMetaVerdict {
-  name: string;
-  kind: string;
-  status: "resolved" | "missing" | "will_create" | "denied";
-  case_id?: string | null;
-  tag_id?: string | null;
-  required_permission?: string;
-}
-
-export interface ServerValidateResult {
-  accepted: Array<{ index: number; row: number; input: string; chain: string; normalized: string; case_name: string; tags: string[] }>;
-  rejected: ServerAddressVerdict[];
-  field_rejections: ServerFieldRejection[];
-  scope: { organization_id: string; workspace_id: string };
-  grants: { "download:create": boolean; "case:create": boolean; "case:update": boolean; create_missing_meta_requested: boolean };
-  summary: {
-    submitted: number; accepted: number; rejected: number; blank: number; invalid: number;
-    duplicate: number; cap_rejected: number; tags_over_limit: number; field_rejections: number;
-    meta_denied: number; max_addresses: number; max_tags: number;
-    chains: Record<string, number>; distinct_chains: number;
-  };
-  meta: { cases: ServerMetaVerdict[]; tags: ServerMetaVerdict[] };
-  source: string;
-}
-/**
- * 按链分组：契约 1043 要求"每个地址可单独选择链"，而服务端一次请求只接受同一条链。
- *
- * **纯函数**：只依赖入参。若改成读组件 state，首次"预览"触发导入后 setState 尚未生效，
- * 就会用旧集合提交（服务端过滤/normalize 之后更是如此）。
- */
-export function groupAddressesByChain(rows: ImportedAddress[], defaultChain: string): Array<{ chain: string; items: ImportedAddress[] }> {
-  const groups = new Map<string, ImportedAddress[]>();
-  for (const item of rows) {
-    const key = item.chain || defaultChain;
-    if (!key) continue;
-    const list = groups.get(key) ?? [];
-    list.push(item);
-    groups.set(key, list);
-  }
-  return [...groups.entries()].map(([chain, items]) => ({ chain, items }));
-}
-
-/**
- * 以"预览指纹 + 链 + 地址集合"派生稳定幂等键：同一批地址重试时复用同一个 key，
- * 避免第一次部分成功后重试又创建一遍。
- */
-export async function stableIdempotencyKey(scope: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(scope));
-  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
-
-
-function toIso(localValue: string): string {
-  if (!localValue) return "";
-  const date = new Date(localValue);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString();
-}
-
-function percent(value: number | null | undefined, digits = 1): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return `${(value * 100).toFixed(digits)}%`;
-}
-
-function rangeText(body: { range: RangeBody }): string {
-  const range = body.range;
-  if (range.type === "full") return "全量范围";
-  if (range.type === "block") return `区块 ${range.from_block ?? "—"} → ${range.to_block ?? "—"}`;
-  return `时间 ${range.from ? formatTime(range.from) : "—"} → ${range.to ? formatTime(range.to) : "—"}`;
-}
-
-/** 五个业务步骤：顺序即真实填写顺序（蓝图 §12.17），跳转只允许回到已完成步骤。 */
-const STEP_ITEMS = [
-  { key: "objects", label: "① 对象与地址" },
-  { key: "range", label: "② 链与范围" },
-  { key: "datasets", label: "③ Dataset" },
-  { key: "reuse", label: "④ 复用策略" },
-  { key: "preview", label: "⑤ 预览与创建" },
-];
+/* 类型、常量与纯函数已抽到 ./downloads/download.types.ts（规范 §45.1 的目标模块之一）。 */
+import { parseAddressInput, groupAddressesByChain, stableIdempotencyKey, toIso, percent, rangeText, STEP_ITEMS } from "./downloads/download.types";
+import type {
+  ChainMeta,
+  DatasetMeta,
+  RangeType,
+  ReusePolicy,
+  PerformanceMode,
+  RangeBody,
+  DownloadBody,
+  PreviewCoverageItem,
+  DownloadPreviewData,
+  DownloadCreateData,
+  ServerAddressVerdict,
+  ServerFieldRejection,
+  ServerMetaVerdict,
+  ServerValidateResult,
+} from "./downloads/download.types";
 
 /**
  * 断点与 responsive.css 中 SplitPane 的折叠断点一致（≤899px 单列）。
@@ -940,7 +744,14 @@ export default function DownloadNewPage() {
       { label: "整体覆盖率", value: percent(shownPreview.coverage.overall_ratio) },
       { label: "未覆盖区块", value: formatRawAmount(String(shownPreview.missing_blocks), 0) },
       { label: "预估成本（USD）", value: shownPreview.estimate.estimated_cost_usd ?? "—" },
-      { label: "估算依据", value: shownPreview.estimate.basis, wide: true },
+      /*
+       * 估算依据（estimate.basis）刻意**不在这里渲染**。
+       *
+       * 仓库 AGENTS.md / docs/code-standards.md：口径说明属于提示性内容，只能通过弹窗呈现，
+       * 不得作为说明段落或说明性条目嵌进页面正文。同一份 basis 已经在
+       * 「复用说明 / 成本风险说明」弹窗里（见 previewDetails），因此移除这一行
+       * 不减少任何信息，只是把说明放回它唯一该在的通道。
+       */
       { label: "Coverage 来源", value: String(shownPreview.source.coverage ?? "—") },
       { label: "Provider 来源", value: String(shownPreview.source.provider ?? "—") },
       { label: "数据时点", value: shownPreview.source.as_of ? formatTime(String(shownPreview.source.as_of)) : "—" },
@@ -969,7 +780,12 @@ export default function DownloadNewPage() {
       {summaryItems.length === 0 ? (
         <EmptyState title="尚未预览" />
       ) : (
-        <div style={stalePreview ? { opacity: 0.6 } : undefined}>
+        /*
+         * 失效预览（规范 §45.4）：用**一次性淡黄边框**表达"这份数据已经过期"，
+         * 不用 opacity —— 半透明会同时压低所有文字的对比度，把"过期"和"不可读"混为一谈。
+         * 边框常驻（状态随时可见），高光只播一次（不闪）。
+         */
+        <div className={stalePreview ? "cs-preview-stale" : undefined}>
           <KeyValueList items={summaryItems} ariaLabel="预览摘要" />
         </div>
       )}
@@ -1270,7 +1086,12 @@ export default function DownloadNewPage() {
                 }
               />
             ) : (
-              <div style={stalePreview ? { opacity: 0.6 } : undefined}>
+              <div className={stalePreview ? "cs-preview-stale" : undefined}>
+                {/*
+                  预览汇总（规范 §45.4）：Coverage Summary / Provider Work / Missing Blocks /
+                  Estimated Blocks / Estimated Rows / Estimated Cost / Reuse Hit。
+                  全部字段直接来自 /api/v2/downloads/preview 的响应，前端不做任何二次估算。
+                */}
                 <div className="metric-grid">
                   <MetricCard
                     label="整体覆盖率"
@@ -1278,6 +1099,29 @@ export default function DownloadNewPage() {
                     tone={shownPreview.coverage.overall_ratio >= 1 ? "ok" : "warn"}
                   />
                   <MetricCard label="未覆盖区块" value={formatRawAmount(String(shownPreview.missing_blocks), 0)} />
+                  {/*
+                    预估缺失区块 = 服务端对"还要拉多少区块"的估算。
+                    规范 §45.4 这一格写的是 "Estimated Requests"，但接口**没有**返回请求数，
+                    只有区块数；按 §64 #1/#5 不能用区块数冒充请求数，因此按真实语义命名。
+                  */}
+                  <MetricCard
+                    label="预估缺失区块"
+                    value={
+                      shownPreview.estimate.estimated_missing_blocks === null
+                        ? "—"
+                        : formatRawAmount(String(shownPreview.estimate.estimated_missing_blocks), 0)
+                    }
+                    source="estimate.estimated_missing_blocks"
+                    sourceNote="服务端按未覆盖区间估算的待拉取区块数。接口未返回请求数，界面不把区块数折算成请求数。"
+                  />
+                  <MetricCard
+                    label="复用命中"
+                    value={
+                      <StatusBadge tone={shownPreview.reuse.coverage_hit ? "ok" : "neutral"}>
+                        {shownPreview.reuse.coverage_hit ? "命中" : "未命中"}
+                      </StatusBadge>
+                    }
+                  />
                   <MetricCard
                     label="预估行数"
                     value={shownPreview.estimate.estimated_rows === null ? "—" : formatRawAmount(String(shownPreview.estimate.estimated_rows), 0)}
@@ -1338,7 +1182,7 @@ export default function DownloadNewPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="新建数据下载"
         breadcrumb={[{ label: "任务中心", to: "/jobs" }, { label: "新建数据下载" }]}
         status={

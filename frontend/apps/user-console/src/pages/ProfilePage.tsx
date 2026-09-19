@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState } from "react";
 import {
   ApiError,
   MFA_ERROR_CODES,
   useAuth,
   type MfaEnrollStart,
   type SessionRow,
-} from "@chain/api-client";
+  } from "@chain/api-client";
 import {
   Button,
   Card,
@@ -18,7 +21,6 @@ import {
   KeyValueList,
   MetaLine,
   MetricCard,
-  PageHeader,
   PageSection,
   PageSkeleton,
   PasswordInput,
@@ -29,6 +31,7 @@ import {
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 
 interface Profile {
   id: string;
@@ -409,7 +412,7 @@ export default function ProfilePage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="个人资料与安全"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "个人资料与安全" }]}
         status={<StatusBadge tone={profile.status === "active" ? "ok" : "warn"}>{profile.status}</StatusBadge>}

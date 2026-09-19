@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useState } from "react";
+import { Link,
+  useNavigate,
+  useParams } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
 import {
   Button,
@@ -13,7 +18,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   SearchInput,
   SkeletonRows,
@@ -24,6 +28,7 @@ import {
   useDialog,
   type DataTableColumn,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
 
 interface EvidenceRef {
@@ -365,7 +370,7 @@ export default function FindingsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="Findings 复核"
         breadcrumb={[
           { label: "调查任务", to: "/investigations" },

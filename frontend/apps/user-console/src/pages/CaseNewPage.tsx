@@ -1,7 +1,16 @@
-import { useState } from "react";
+import {
+  useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError, useAuth } from "@chain/api-client";
-import { Button, Card, Field, PageHeader, PageSection, StickyActionBar, useDialog } from "@chain/ui";
+import { ApiError,
+  useAuth } from "@chain/api-client";
+import { Button,
+  Card,
+  Field,
+  PageSection,
+  StickyActionBar,
+  useDialog,
+} from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 
 /**
  * §12.5 新建案件 /cases/new
@@ -81,7 +90,7 @@ export default function CaseNewPage() {
 
   return (
     <div className="cs-page--reading" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)" }}>
-      <PageHeader
+      <CsPageHeader
         title="新建案件"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "案件中心", to: "/cases" }, { label: "新建案件" }]}
       />

@@ -14,6 +14,15 @@ import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(here, "../packages/design-tokens/tokens.css"), "utf-8");
+/**
+ * 用户端 ChainSight V4 色板（规范 §4.1）。
+ *
+ * 为什么不放进 tokens.css：那份文件被用户端与后台端共用，改它等于让
+ * admin-console 被动换肤（规范 §1.3 / §2.1）。V4 的取值挂在
+ * `html[data-app="user"]` 作用域下的 @chain/user-ui/theme/css-vars.css 里，
+ * 因此守卫必须也读这一份，否则新色板完全没有对比度保护。
+ */
+const userCss = readFileSync(resolve(here, "../packages/user-ui/theme/css-vars.css"), "utf-8");
 
 /**
  * 只收集**直接写成十六进制**的令牌：语义角色层（--bg-* / --text-* 等）
@@ -23,7 +32,11 @@ const css = readFileSync(resolve(here, "../packages/design-tokens/tokens.css"), 
 function parseTokens(text) {
   const out = {};
   for (const m of text.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) {
-    if (m[1].startsWith("c-") || /^(ink|graphite|slate|canvas|indigo|cyan|amber|green|red|chart|state|graph)-/.test(m[1])) {
+    if (
+      m[1].startsWith("c-") ||
+      m[1].startsWith("cs-") ||
+      /^(ink|graphite|slate|canvas|indigo|cyan|amber|green|red|chart|state|graph)-/.test(m[1])
+    ) {
       out[m[1]] = m[2].toLowerCase();
     }
   }
@@ -82,14 +95,43 @@ const PAIRS = [
   ["ink-950", "bg-surface-placeholder", 4.5, "反色正文（哨兵：深底浅面）"],
 ];
 
+/**
+ * 用户端 V4 色板的实际前景/背景组合。
+ *
+ * 规范 §4.1 的原始色是**填充色**：主色 #3478F6 在白底只有 4.07:1，
+ * success/warning/cyan 更低（3.56 / 2.72 / 2.31），都不能做正文。
+ * 因此文字一律用同色相的 `-text` 变体，浅底用 `-soft` 变体，
+ * 这张表就是这两组配对的可执行契约——任何一方被改坏都会在这里被拦下。
+ */
+const USER_PAIRS = [
+  ["cs-text-primary", "cs-surface", 4.5, "用户端卡片正文"],
+  ["cs-text-primary", "cs-canvas", 4.5, "用户端画布正文"],
+  ["cs-text-primary", "cs-primary-soft", 4.5, "选中项正文"],
+  ["cs-text-secondary", "cs-surface", 4.5, "用户端次级文字"],
+  ["cs-text-secondary", "cs-canvas", 4.5, "用户端画布次级文字"],
+  ["cs-text-secondary", "cs-surface-rail", 4.5, "浅色侧栏未选中项"],
+  ["cs-primary-text", "cs-surface", 4.5, "主操作/链接"],
+  ["cs-primary-text", "cs-primary-soft", 4.5, "当前导航项"],
+  ["cs-primary-text", "cs-canvas", 4.5, "画布上的链接"],
+  ["cs-cyan-text", "cs-cyan-soft", 4.5, "实时数据徽标"],
+  ["cs-violet-text", "cs-violet-soft", 4.5, "图谱序列徽标"],
+  ["cs-success-text", "cs-success-soft", 4.5, "已完成徽标"],
+  ["cs-success-text", "cs-surface", 4.5, "成功文字"],
+  ["cs-warning-text", "cs-warning-soft", 4.5, "待复核徽标"],
+  ["cs-warning-text", "cs-surface", 4.5, "注意文字"],
+  ["cs-danger-text", "cs-danger-soft", 4.5, "失败徽标"],
+  ["cs-danger-text", "cs-surface", 4.5, "危险文字"],
+  ["cs-text-primary", "cs-surface-rail", 4.5, "侧栏当前项文字"],
+];
+
 /** `--bg-surface` 是 #FFFFFF 的语义别名；守卫解析不到 var()，这里补一个等价哨兵。 */
 const ALIAS = { "bg-surface-placeholder": "#ffffff" };
 
-const tokens = { ...parseTokens(css) };
+const tokens = { ...parseTokens(css), ...parseTokens(userCss) };
 for (const [name, value] of Object.entries(ALIAS)) tokens[name] = value;
 const failures = [];
 console.log("设计令牌对比度检查（WCAG 2.1 AA）");
-for (const [fg, bg, need, label] of PAIRS) {
+for (const [fg, bg, need, label] of [...PAIRS, ...USER_PAIRS]) {
   if (!tokens[fg] || !tokens[bg]) {
     failures.push(`${label}: 令牌缺失（${fg} / ${bg}）`);
     continue;

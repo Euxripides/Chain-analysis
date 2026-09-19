@@ -1,0 +1,693 @@
+/*
+ * Surface / Card / 页面骨架（用户端重构规范 V4 §8 / §10 / §15 / §22）
+ *
+ * 只有六种卡片（§10.1）：SurfaceCard / InteractiveCard / MetricCard / ObjectCard / PanelCard / GlassHeroCard。
+ * 页面不得再发明新的卡片外观——需要新容器时先判断能不能用这六种之一表达。
+ *
+ * 类名一律挂在 `html[data-app="user"]` 作用域下：@chain/ui 的共享 CSS 不受影响，
+ * admin-console 不会被动换肤（§1.3 / §2.1）。
+ */
+
+/* =========================================================================
+ * 1. Surface —— 所有卡片的基础面
+ * ========================================================================= */
+html[data-app="user"] .cs-surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card);
+  box-shadow: var(--cs-shadow-surface);
+  transition:
+    transform var(--cs-dur-standard) var(--cs-ease-enter),
+    border-color var(--cs-dur-standard) var(--cs-ease-enter),
+    box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+}
+
+html[data-app="user"] .cs-surface--flat {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+}
+
+html[data-app="user"] .cs-surface--panel {
+  border-radius: var(--cs-radius-panel);
+}
+
+html[data-app="user"] .cs-surface--selected {
+  border-color: var(--cs-primary);
+  box-shadow: 0 0 0 1px var(--cs-primary), var(--cs-shadow-surface);
+}
+
+/*
+ * 普通卡片 hover（§10.2）：y -2px + 描边提蓝 + 阴影增强，220ms。
+ * 明确**不做** scale 1.03 那种放大——那是规范禁止的观感。
+ */
+html[data-app="user"] .cs-surface--hoverable:hover {
+  transform: translateY(-2px);
+  border-color: var(--cs-border-strong);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-surface--hoverable:hover { transform: none; }
+}
+
+/* =========================================================================
+ * 2. InteractiveCard（§10.3）
+ * 首页快捷入口 / 最近案件 / 最近任务。
+ * ========================================================================= */
+html[data-app="user"] .cs-interactivecard {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  text-decoration: none;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+}
+/* highlight 伪层：hover 时 0 → 1，只覆盖卡片内部，不产生额外布局 */
+html[data-app="user"] .cs-interactivecard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--cs-primary-soft) 0%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-interactivecard:hover {
+  transform: translateY(-3px) scale(1.004);
+  border-color: var(--cs-border-strong);
+  box-shadow: var(--cs-shadow-surface-hover);
+}
+html[data-app="user"] .cs-interactivecard:hover::after { opacity: 1; }
+html[data-app="user"] .cs-interactivecard:active {
+  transform: scale(.988);
+  transition-duration: var(--cs-dur-micro);
+}
+html[data-app="user"] .cs-interactivecard:focus-visible {
+  outline: none;
+  border-color: var(--cs-primary);
+  box-shadow: var(--cs-shadow-ring);
+}
+/* 图标随 hover 右移 2px（§10.3） */
+html[data-app="user"] .cs-interactivecard__icon {
+  transition: transform var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-interactivecard:hover .cs-interactivecard__icon { transform: translateX(2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-interactivecard:hover,
+  html[data-app="user"] .cs-interactivecard:active { transform: none; }
+  html[data-app="user"] .cs-interactivecard__icon { transition: none; }
+}
+
+/* =========================================================================
+ * 3. MetricCard（§10.4）
+ * 结构：Icon Tile | Delta / Label / Value / Hint
+ * ========================================================================= */
+html[data-app="user"] .cs-metriccard {
+  padding: 16px 18px;
+  gap: 6px;
+  border-radius: var(--cs-radius-card-sm);
+}
+html[data-app="user"] .cs-metriccard__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+html[data-app="user"] .cs-metriccard__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+}
+html[data-app="user"] .cs-metriccard__icon[data-tone="success"] { background: var(--cs-success-soft); color: var(--cs-success-text); }
+html[data-app="user"] .cs-metriccard__icon[data-tone="warning"] { background: var(--cs-warning-soft); color: var(--cs-warning-text); }
+html[data-app="user"] .cs-metriccard__icon[data-tone="danger"] { background: var(--cs-danger-soft); color: var(--cs-danger-text); }
+html[data-app="user"] .cs-metriccard__icon[data-tone="neutral"] { background: var(--cs-neutral-soft); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-metriccard__label {
+  font-size: var(--fs-12);
+  color: var(--cs-text-secondary);
+  line-height: 1.4;
+}
+html[data-app="user"] .cs-metriccard__value {
+  font-size: var(--fs-28);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--cs-text-primary);
+  font-variant-numeric: tabular-nums;
+  min-height: 1.15em;
+}
+/* 高精度金额不滚数字，只做一次背景高光（§10.4 / §63B）。 */
+html[data-app="user"] .cs-metriccard__value--exact {
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+}
+html[data-app="user"] .cs-metriccard__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--cs-text-secondary);
+}
+html[data-app="user"] .cs-metriccard__delta[data-dir="up"] { color: var(--cs-success-text); }
+html[data-app="user"] .cs-metriccard__delta[data-dir="down"] { color: var(--cs-danger-text); }
+html[data-app="user"] .cs-metriccard__hint {
+  font-size: var(--fs-11);
+  color: var(--cs-text-secondary);
+  line-height: 1.45;
+}
+
+/* =========================================================================
+ * 4. ObjectCard / PanelCard / GlassHeroCard
+ * ========================================================================= */
+html[data-app="user"] .cs-objectcard__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-objectcard__body { padding: 18px; }
+
+html[data-app="user"] .cs-panelcard__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-panelcard__title {
+  font-size: var(--fs-14);
+  font-weight: 650;
+  color: var(--cs-text-primary);
+  letter-spacing: -0.01em;
+}
+html[data-app="user"] .cs-panelcard__extra { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+html[data-app="user"] .cs-panelcard__body { padding: 18px; }
+html[data-app="user"] .cs-panelcard__body--flush { padding: 0; }
+
+/* Hero 是唯一允许大面积光晕与玻璃的容器（§4.5 / §32.2）。 */
+html[data-app="user"] .cs-glasshero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--cs-radius-hero);
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  isolation: isolate;
+}
+html[data-app="user"] .cs-glasshero__aurora {
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 120%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 52% at 18% 22%, rgba(52, 120, 246, .20) 0%, transparent 68%),
+    radial-gradient(34% 46% at 78% 12%, rgba(29, 184, 232, .16) 0%, transparent 70%),
+    radial-gradient(30% 40% at 58% 78%, rgba(106, 99, 255, .12) 0%, transparent 72%);
+  filter: blur(2px);
+  animation: cs-aurora var(--cs-aurora-dur, 22s) var(--cs-ease-standard) infinite alternate;
+}
+html[data-app="user"] .cs-glasshero__content { position: relative; z-index: 1; }
+@keyframes cs-aurora {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-glasshero__aurora { animation: none; }
+}
+html[data-page-visible="false"] .cs-glasshero__aurora { animation-play-state: paused; }
+
+/* =========================================================================
+ * 5. PageHeader（§8）
+ * 结构：Breadcrumb / Title + Status + Tags / Subtitle+Meta / Actions
+ * ========================================================================= */
+html[data-app="user"] .cs-pageheader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px 20px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+html[data-app="user"] .cs-pageheader__main { flex: 1 1 420px; min-width: 0; }
+html[data-app="user"] .cs-pageheader__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-size: var(--fs-12);
+  color: var(--cs-text-secondary);
+}
+html[data-app="user"] .cs-pageheader__crumbs a { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-pageheader__crumbs a:hover { color: var(--cs-primary-text); }
+html[data-app="user"] .cs-pageheader__crumbs [aria-current="page"] { color: var(--cs-text-primary); font-weight: 600; }
+html[data-app="user"] .cs-pageheader__sep { color: var(--cs-border-strong); flex: none; }
+html[data-app="user"] .cs-pageheader__titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+html[data-app="user"] .cs-pageheader__title {
+  font-size: var(--fs-22);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--cs-text-primary);
+  min-width: 0;
+}
+html[data-app="user"] .cs-pageheader__sub {
+  margin-top: 5px;
+  font-size: var(--fs-13);
+  color: var(--cs-text-secondary);
+  line-height: 1.5;
+}
+html[data-app="user"] .cs-pageheader__meta { margin-top: 6px; }
+html[data-app="user"] .cs-pageheader__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+/* 页面进入：breadcrumb 先出现，title 再淡入上移，actions 延迟 30–60ms（§8.1） */
+@keyframes cs-header-crumb-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cs-header-title-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+html[data-app="user"] .cs-pageheader__crumbs { animation: cs-header-crumb-in var(--cs-dur-fast) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-pageheader__titlerow { animation: cs-header-title-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-pageheader__actions { animation: cs-header-title-in var(--cs-dur-standard) var(--cs-ease-enter) 50ms both; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-pageheader__crumbs,
+  html[data-app="user"] .cs-pageheader__titlerow,
+  html[data-app="user"] .cs-pageheader__actions { animation: none; }
+}
+
+/* =========================================================================
+ * 6. StickyActionBar（§15.2）
+ * ========================================================================= */
+html[data-app="user"] .cs-actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--cs-z-sticky-table);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--cs-border);
+  border-radius: 0 0 var(--cs-radius-panel) var(--cs-radius-panel);
+  background: var(--cs-surface-glass);
+  -webkit-backdrop-filter: var(--cs-glass-blur);
+  backdrop-filter: var(--cs-glass-blur);
+  animation: cs-actionbar-in var(--cs-dur-standard) var(--cs-ease-enter) both;
+}
+@keyframes cs-actionbar-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+html[data-app="user"] .cs-actionbar__spacer { flex: 1; min-width: 8px; }
+html[data-app="user"] .cs-actionbar[data-at-end="true"] { border-top-color: transparent; }
+@media (prefers-reduced-motion: reduce) { html[data-app="user"] .cs-actionbar { animation: none; } }
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-actionbar { flex-wrap: wrap; }
+  html[data-app="user"] .cs-actionbar > * { flex: 1 1 auto; }
+}
+
+/* =========================================================================
+ * 7. Inspector / SplitView（§22）
+ * ========================================================================= */
+html[data-app="user"] .cs-inspectorpanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: var(--cs-inspector-w);
+  max-width: 100%;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-panel);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  animation: cs-inspector-in var(--cs-dur-spatial) var(--cs-ease-enter) both;
+}
+html[data-app="user"] .cs-inspectorpanel[data-size="large"] { width: var(--cs-inspector-w-lg); }
+html[data-app="user"] .cs-inspectorpanel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-inspectorpanel__title {
+  font-size: var(--fs-14);
+  font-weight: 650;
+  color: var(--cs-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-app="user"] .cs-inspectorpanel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+html[data-app="user"] .cs-inspectorpanel__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--cs-border-subtle);
+  background: var(--cs-surface);
+}
+@keyframes cs-inspector-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { html[data-app="user"] .cs-inspectorpanel { animation: none; } }
+
+html[data-app="user"] .cs-splitview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+html[data-app="user"] .cs-splitview[data-aside="true"] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (max-width: 1199px) {
+  html[data-app="user"] .cs-splitview[data-aside="true"] { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* =========================================================================
+ * 8. Dialog（§21.2）：结构由 UserDialogRenderer 提供，样式在这里统一
+ *
+ * 只有这一处定义用户端弹窗的外观；业务页面不得再写任何 `.ant-modal` 覆写。
+ * ========================================================================= */
+html[data-app="user"] .cs-dialog .ant-modal-content {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-modal);
+  box-shadow: var(--cs-shadow-floating);
+  padding: 0;
+  overflow: hidden;
+}
+html[data-app="user"] .cs-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 12px;
+  min-width: 0;
+}
+html[data-app="user"] .cs-dialog__kind {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+}
+html[data-app="user"] .cs-dialog__kind--ok { background: var(--cs-success-soft); color: var(--cs-success-text); }
+html[data-app="user"] .cs-dialog__kind--warn { background: var(--cs-warning-soft); color: var(--cs-warning-text); }
+html[data-app="user"] .cs-dialog__kind--danger { background: var(--cs-danger-soft); color: var(--cs-danger-text); }
+html[data-app="user"] .cs-dialog__kind--info { background: var(--cs-primary-soft); color: var(--cs-primary-text); }
+/* 成功/警告/错误图标各播一次入场；不左右 shake（§21.3） */
+html[data-app="user"] .cs-dialog__kind--ok { animation: cs-check-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-dialog__kind--warn,
+html[data-app="user"] .cs-dialog__kind--danger { animation: cs-icon-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+
+html[data-app="user"] .cs-dialog__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-16);
+  font-weight: 650;
+  color: var(--cs-text-primary);
+  letter-spacing: -0.01em;
+}
+html[data-app="user"] .cs-dialog__close { margin-left: auto; flex: none; }
+html[data-app="user"] .cs-dialog__body {
+  padding: 0 24px 20px;
+  font-size: var(--fs-13);
+  color: var(--cs-text-secondary);
+  max-height: min(62vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+html[data-app="user"] .cs-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 24px;
+  background: var(--cs-surface-blue);
+  border-top: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-dialog__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+@media (max-width: 599px) {
+  /* 复杂表单在窄屏整屏化（§54 <600px）。 */
+  html[data-app="user"] .cs-dialog { max-width: 100%; margin: 0; top: 0; padding-bottom: 0; }
+  html[data-app="user"] .cs-dialog__body { max-height: none; }
+  html[data-app="user"] .cs-dialog__foot > * { flex: 1 1 auto; }
+}
+
+/* =========================================================================
+ * 9. 页面容器（§6.4 的 5 种骨架）
+ *
+ * 注意：`.cs-shell__content` 本身是 `display:flex; gap:18px` 的纵向容器。
+ * `<CsPage>` 在它内部再包一层 div，因此**必须自己复现同一套纵向节奏**，
+ * 否则首屏的 Hero / KPI 条 / Bento 会被压成 0 间距的一块。
+ * ========================================================================= */
+html[data-app="user"] .cs-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+html[data-app="user"] .cs-page--reading { max-width: var(--cs-reading-w); }
+
+/* =========================================================================
+ * 10. 首页 Hero 与 KPI 条（§32.2 / §32.3）
+ * ========================================================================= */
+html[data-app="user"] .cs-homehero { padding: 0; }
+html[data-app="user"] .cs-homehero__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  gap: 24px;
+  align-items: center;
+  padding: 32px;
+}
+html[data-app="user"] .cs-homehero__main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+html[data-app="user"] .cs-homehero__title {
+  font-size: var(--fs-28);
+  font-weight: 680;
+  line-height: 1.24;
+  letter-spacing: -0.03em;
+  color: var(--cs-text-primary);
+  margin: 0;
+}
+html[data-app="user"] .cs-homehero__greet { margin: 0; font-size: var(--fs-13); color: var(--cs-text-secondary); }
+
+html[data-app="user"] .cs-homehero__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: var(--cs-radius-control);
+  background: var(--cs-surface);
+  box-shadow: var(--cs-shadow-surface);
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter);
+  max-width: 620px;
+}
+html[data-app="user"] .cs-homehero__search:focus-within {
+  border-color: var(--cs-primary);
+  box-shadow: var(--cs-shadow-ring);
+}
+html[data-app="user"] .cs-homehero__searchicon { color: var(--cs-text-secondary); flex: none; }
+html[data-app="user"] .cs-homehero__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-14);
+  color: var(--cs-text-primary);
+  padding: 8px 0;
+}
+/* 地址/哈希输入用 mono（§5.3），且不因为字号变化而抖动 */
+html[data-app="user"] .cs-homehero__input { font-family: var(--font-mono); }
+html[data-app="user"] .cs-btn-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--cs-text-inverse);
+  font: inherit;
+  font-size: var(--fs-13);
+  font-weight: 600;
+  cursor: pointer;
+  background-color: var(--cs-primary);
+  background-image: linear-gradient(135deg, #4E8BFA 0%, var(--cs-primary) 58%, var(--cs-primary-active) 100%);
+  background-size: 160% 100%;
+  transition: background-position var(--cs-dur-standard) var(--cs-ease-enter), transform var(--cs-dur-micro) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-btn-hero:hover:not(:disabled) { background-position: 60% 50%; box-shadow: 0 6px 18px rgba(52, 120, 246, .26); }
+html[data-app="user"] .cs-btn-hero:active:not(:disabled) { transform: scale(.98); box-shadow: none; }
+html[data-app="user"] .cs-btn-hero:disabled { opacity: .55; cursor: not-allowed; }
+html[data-app="user"] .cs-btn-hero:focus-visible { outline: none; box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .cs-homehero__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+html[data-app="user"] .cs-homehero__meta { margin-top: 2px; }
+
+/* 装饰视觉：只表达结构，不含任何数值（§64 #25）。 */
+html[data-app="user"] .cs-homehero__art { justify-self: end; width: 100%; max-width: 380px; }
+html[data-app="user"] .cs-homehero__svg { width: 100%; height: auto; display: block; }
+html[data-app="user"] .cs-homehero__edge {
+  fill: none;
+  stroke: url(#cs-homehero-line);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+html[data-app="user"] .cs-homehero__node circle,
+html[data-app="user"] .cs-homehero__node rect,
+html[data-app="user"] .cs-homehero__node polygon {
+  fill: var(--cs-surface);
+  stroke: var(--cs-primary);
+  stroke-width: 1.6;
+}
+html[data-app="user"] .cs-homehero__node--hub rect { fill: var(--cs-primary-soft); stroke: var(--cs-primary); }
+html[data-app="user"] .cs-homehero__art { animation: cs-hero-float 9s var(--cs-ease-standard) infinite alternate; }
+@keyframes cs-hero-float {
+  from { transform: translateY(-3px); }
+  to { transform: translateY(3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-homehero__art { animation: none; }
+}
+
+/* KPI 条：5–6 个紧凑 KPI，列数随视口自适应（§32.3） */
+html[data-app="user"] .cs-kpistrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+@media (min-width: 1600px) {
+  html[data-app="user"] .cs-kpistrip { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+}
+
+@media (max-width: 1199px) {
+  html[data-app="user"] .cs-homehero__grid { grid-template-columns: minmax(0, 1fr); padding: 26px; }
+  html[data-app="user"] .cs-homehero__art { display: none; }
+}
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-homehero__grid { padding: 20px 18px; }
+  html[data-app="user"] .cs-homehero__title { font-size: var(--fs-22); }
+  html[data-app="user"] .cs-homehero__search { flex-wrap: wrap; padding: 10px; }
+  html[data-app="user"] .cs-btn-hero { width: 100%; justify-content: center; min-height: 44px; }
+  html[data-app="user"] .cs-kpistrip { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
+
+/* =========================================================================
+ * 11. 通知中心（§19 / §52）
+ *
+ * 用列表 + 时间分组，不用密集表格（§52 第一条）。
+ * 未读状态走「圆点（形状）+ 徽标文字（可读）」双通道，不只靠颜色（§55）。
+ * ========================================================================= */
+html[data-app="user"] .cs-notifgroups { display: flex; flex-direction: column; gap: 22px; }
+html[data-app="user"] .cs-notifgroup { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+html[data-app="user"] .cs-notifgroup__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-12);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--cs-text-secondary);
+}
+html[data-app="user"] .cs-notifgroup__count {
+  padding: 0 7px;
+  border-radius: var(--cs-radius-pill);
+  background: var(--cs-neutral-soft);
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+html[data-app="user"] .cs-notifgroup__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--cs-primary);
+  /* 读后圆点 scale → 0（§19.2 / §52），而不是瞬间消失。 */
+  transition: transform var(--cs-dur-fast) var(--cs-ease-enter), opacity var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-notifgroup__dot[data-unread="false"] { transform: scale(0); opacity: 0; }
+
+/* =========================================================================
+ * 12. 失效预览标记（§45.4）
+ *
+ * "参数变化后标记 stale；stale 区块淡黄边框一次，不闪"。
+ *
+ * 为什么**不用 opacity**：把整块调成半透明会让所有文字一起掉对比度，
+ * 于是"这份数据过期了"和"这块内容读不清"变成同一个视觉信号；
+ * 而失效状态需要的是**持续可见的边框** + **一次性的注意力提示**。
+ * 因此边框常驻（随时能看出这是旧数据），高光只播一次且不循环。
+ * ========================================================================= */
+html[data-app="user"] .cs-preview-stale {
+  position: relative;
+  border: 1px solid var(--cs-warning);
+  border-radius: var(--cs-radius-card-sm);
+  padding: 14px;
+  /* 一次性：不设 infinite，避免规范明令禁止的持续闪烁（§7.3 / §9.5）。 */
+  animation: cs-stale-once 1000ms var(--cs-ease-exit) 1 both;
+}
+@keyframes cs-stale-once {
+  from {
+    background-color: var(--cs-warning-soft);
+    box-shadow: 0 0 0 3px rgba(217, 140, 22, .22);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 rgba(217, 140, 22, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-preview-stale { animation: none; }
+}
+
+/* =========================================================================
+ * 13. 表单页宽度（§15.1）
+ * ========================================================================= */
+html[data-app="user"] .cs-formpage { max-width: var(--cs-form-max-w); width: 100%; }
+html[data-app="user"] .cs-formpage__fields { max-width: var(--cs-form-field-w); }
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-actionbar { position: static; }
+}

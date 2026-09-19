@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, useAuth } from "@chain/api-client";
+import { ApiError,
+  useAuth } from "@chain/api-client";
 import {
   BulkActionBar,
   CompactProgress,
@@ -13,7 +19,6 @@ import {
   KeyValueList,
   MetricCard,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   RowCheckbox,
@@ -22,6 +27,7 @@ import {
   progressStateFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
 /* ============================================================================
@@ -470,6 +476,8 @@ export default function JobsPage() {
   const table = (
     <DataTable<JobRow>
       loading={jobsApi.loading}
+      /* §17.5：任务列表由 SSE 高频触发 reload，刷新时保留旧行尤其重要。 */
+      keepPreviousData
       error={jobsApi.error ? "任务列表加载失败，请重试。" : null}
       onRetry={() => void reloadJobs()}
       rows={viewRows}
@@ -769,7 +777,7 @@ export default function JobsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="任务中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "任务中心" }]}
         meta={

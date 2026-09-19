@@ -1,62 +1,201 @@
 /*
- * 用户调查工作台 —— 令牌重映射层（设计蓝图 §6）
+ * 用户调查工作台 —— 令牌桥接层（用户端重构规范 V4 §4 / §58）
  *
- * 为什么需要这一层：`@chain/design-tokens/tokens.css` 被用户端与后台端共用。
- * 蓝图第 16 行要求"不得让后台页面被动改变"，所以色值刷新不能直接改 :root。
- * 这里把新配色挂在 `html[data-app="user"]` 作用域下，只覆盖**既有 `--c-*`
- * 变量名的取值**——25 个页面里所有 `.card / .btn / .table` 等类一次性换肤，
- * 业务代码零改动；后台读取到的仍是 tokens.css 里的原值。
+ * 位置：这是 `@chain/design-tokens` 与 `@chain/user-ui/theme/css-vars.css` 之间的桥。
  *
- * 取值来源：蓝图 §6.1 表格。所有前景/背景组合已登记进 `npm run check:tokens`，
- * 对比度不达标的组合无法进入本文件。
+ * 为什么需要这一层：`tokens.css` 被用户端与后台端共用。规范 §1.3 / §2.1 要求
+ * **admin-console 不被动改变**，所以新配色不能写进 `:root`。这里把 V4 取值挂在
+ * `html[data-app="user"]` 作用域下，并且**只覆盖既有变量名的取值**——
+ * 25 个页面里所有 `.card / .btn / .table` 一次性换肤，业务代码零改动。
+ *
+ * 取值全部来自 `--cs-*`（@chain/user-ui），本文件不出现裸十六进制，
+ * 保证以后换肤只需要改一处（§4.6）。
+ *
+ * 最终形态（§58 / §61）：Ant theme token 负责 70%，组件 CSS 20%，页面特定 10%；
+ * 本文件在 R7 清理阶段会收缩成只服务尚未迁移的 legacy 页面。
  */
 
 html[data-app="user"] {
-  /* --- 品牌与结构色 --- */
-  --c-graphite: var(--graphite-900);        /* #111827 主文字 */
-  --c-ink: var(--ink-950);                  /* #0A0E14 侧栏最深背景 */
-  --c-ink-soft: var(--ink-900);             /* #111720 侧栏表面、暗色浮层 */
-  --c-cobalt: var(--indigo-600);            /* #4353E6 主操作、焦点、当前对象 */
-  --c-cobalt-strong: var(--indigo-700);
-  --c-cobalt-soft: var(--indigo-soft);
-  --c-ice: var(--canvas-50);                /* #F5F6F8 页面底色 */
-  --c-slate: var(--slate-600);              /* #596273 次级文字 */
-  --c-amber: var(--amber-600);
-  --c-amber-soft: var(--amber-soft-2);
-  --c-amber-text: var(--amber-600);
-  --c-green: var(--green-700);
-  --c-green-soft: var(--green-soft-2);
+  /* ==========================================================================
+   * 1. 品牌与结构色（兼容旧 `--c-*` 命名）
+   * ========================================================================== */
+  --c-graphite: var(--cs-text-primary);
+  --c-ink: var(--cs-text-primary);          /* 旧"深色面"语义：V4 改用浅色侧栏 */
+  --c-ink-soft: var(--cs-surface-rail);
+  --c-cobalt: var(--cs-primary);
+  --c-cobalt-strong: var(--cs-primary-active);
+  --c-cobalt-soft: var(--cs-primary-soft);
+  --c-ice: var(--cs-canvas);
+  --c-slate: var(--cs-text-secondary);
+  --c-amber: var(--cs-warning-text);
+  --c-amber-soft: var(--cs-warning-soft);
+  --c-amber-text: var(--cs-warning-text);
+  --c-green: var(--cs-success-text);
+  --c-green-soft: var(--cs-success-soft);
+  --c-primary: var(--cs-primary);
 
-  /* --- 表面与边框 --- */
-  --c-surface: var(--bg-surface);
-  --c-surface-muted: var(--bg-surface-muted);
-  --c-surface-sunken: var(--bg-surface-sunken);
-  --c-border: var(--border-default);        /* #E3E6EB */
-  --c-border-strong: var(--border-strong);
+  /* ==========================================================================
+   * 2. 表面与边框（§4.1）
+   * ========================================================================== */
+  --c-surface: var(--cs-surface);
+  --c-surface-muted: var(--cs-surface-blue);
+  --c-surface-sunken: var(--cs-surface-sunken);
+  --c-border: var(--cs-border);
+  --c-border-strong: var(--cs-border-strong);
 
-  /* --- 状态语义 --- */
-  --c-danger: var(--red-700);
-  --c-danger-soft: var(--red-soft-2);
-  --c-neutral: var(--state-neutral);
-  --c-neutral-soft: #F2F3F5;
-  --c-focus: var(--indigo-600);
+  --bg-canvas: var(--cs-canvas);
+  --bg-surface: var(--cs-surface);
+  --bg-surface-muted: var(--cs-surface-blue);
+  --bg-surface-sunken: var(--cs-surface-sunken);
+  /* 侧栏从"近墨黑"改成"淡蓝白"（§6.1.1）——这是 V4 最直观的一处变化。 */
+  --bg-rail: var(--cs-surface-rail);
+  --bg-rail-raised: var(--cs-surface);
+  --bg-overlay: rgba(16, 33, 61, 0.34);
 
-  /* --- 交互与状态角色（新组件引用这些，不引用上面的兼容层） --- */
-  --c-interactive: var(--interactive);
-  --c-interactive-soft: var(--interactive-soft);
-  --c-realtime: var(--cyan-500);
-  --c-realtime-text: var(--cyan-text);
+  --border-subtle: var(--cs-border-subtle);
+  --border-default: var(--cs-border);
+  --border-strong: var(--cs-border-strong);
+  --border-on-rail: var(--cs-border);
 
-  /* --- 兼容层：sprint5.css 里早期写下的 `--c-primary` 兜底 --- */
-  --c-primary: var(--indigo-600);
+  /* ==========================================================================
+   * 3. 文字（浅色侧栏后的取值全部换成 AA 安全变体）
+   * ========================================================================== */
+  --text-primary: var(--cs-text-primary);
+  --text-secondary: var(--cs-text-secondary);
+  --text-muted: var(--cs-text-muted);
+  --text-inverse: var(--cs-text-inverse);
+  --text-on-rail: var(--cs-text-secondary);
+  --text-on-rail-muted: var(--cs-text-muted);
+  /* 反色正文：深底浅面（例如深色浮层上的文字）用真正的深色作底。 */
+  --ink-950: var(--cs-text-primary);
+
+  /* ==========================================================================
+   * 4. 交互与状态语义
+   * ========================================================================== */
+  --interactive: var(--cs-primary);
+  --interactive-hover: var(--cs-primary-hover);
+  --interactive-soft: var(--cs-primary-soft);
+  --interactive-ring: rgba(52, 120, 246, 0.18);
+  --interactive-on-rail: var(--cs-primary);
+
+  --c-danger: var(--cs-danger-text);
+  --c-danger-soft: var(--cs-danger-soft);
+  --c-neutral: var(--cs-text-secondary);
+  --c-neutral-soft: var(--cs-neutral-soft);
+  --c-focus: var(--cs-primary);
+
+  --state-queued: var(--cs-text-muted);
+  --state-running: var(--cs-primary);
+  --state-running-text: var(--cs-primary-text);
+  --state-paused: var(--cs-warning-text);
+  --state-waiting: var(--cs-warning-text);
+  --state-completed: var(--cs-success-text);
+  --state-failed: var(--cs-danger-text);
+  --state-cancelled: var(--cs-text-muted);
+  --state-info: var(--cs-primary-text);
+  --state-neutral: var(--cs-text-secondary);
+
+  /* 实时数据 / 链路流动：图形填充色，不用于正文（保持既有语义） */
+  --c-realtime: var(--cs-cyan);
+  --c-realtime-text: var(--cs-cyan-text);
+  --cyan-500: var(--cs-cyan);
+  --cyan-text: var(--cs-cyan-text);
+  --cyan-soft: var(--cs-cyan-soft);
+  --green-700: var(--cs-success-text);
+  --green-soft-2: var(--cs-success-soft);
+  --red-700: var(--cs-danger-text);
+  --red-soft-2: var(--cs-danger-soft);
+  --amber-600: var(--cs-warning-text);
+  --amber-soft-2: var(--cs-warning-soft);
+  --indigo-600: var(--cs-primary);
+  --indigo-700: var(--cs-primary-active);
+  --indigo-soft: var(--cs-primary-soft);
+  --graphite-900: var(--cs-text-primary);
+  --slate-600: var(--cs-text-secondary);
+  --slate-400: var(--cs-text-muted);
+  --canvas-50: var(--cs-canvas);
+
+  /* ==========================================================================
+   * 5. 图谱与图表序列
+   * ========================================================================== */
+  --graph-node-address: var(--cs-primary);
+  --graph-node-transaction: var(--cs-cyan-text);
+  --graph-node-contract: var(--cs-violet-text);
+  --graph-node-entity: var(--cs-warning-text);
+  --graph-node-evidence: var(--cs-success-text);
+  --graph-node-selected: var(--cs-text-primary);
+  --graph-edge-default: var(--cs-border-strong);
+  --graph-edge-active: var(--cs-cyan);
+
+  --chart-1: var(--cs-primary);
+  --chart-2: var(--cs-cyan);
+  --chart-3: var(--cs-violet);
+  --chart-4: var(--cs-success);
+  --chart-5: var(--cs-warning);
+  --chart-6: var(--cs-danger);
+  --chart-7: #4E8BFA;
+  --chart-8: var(--cs-text-muted);
+
+  /* ==========================================================================
+   * 6. 圆角 / 阴影（§4.3 / §4.4）
+   * ========================================================================== */
+  --radius-xs: 6px;
+  --radius-sm: var(--cs-radius-control);
+  --radius-md: var(--cs-radius-card-sm);
+  --radius-lg: var(--cs-radius-card);
+  --radius-xl: var(--cs-radius-hero);
+  --shadow-sm: var(--cs-shadow-surface);
+  --shadow-md: var(--cs-shadow-surface-hover);
+  --shadow-lg: var(--cs-shadow-floating);
+  --shadow-focus: var(--cs-shadow-ring);
+
+  /* ==========================================================================
+   * 7. 动效（§9.1 / §9.2）：四档语义时长对齐 V4 的五档
+   * ========================================================================== */
+  --motion-instant: var(--cs-dur-micro);
+  --motion-fast: var(--cs-dur-fast);
+  --motion-standard: var(--cs-dur-standard);
+  --motion-spatial: var(--cs-dur-spatial);
+  --ease-out: var(--cs-ease-enter);
+  --ease-in: var(--cs-ease-exit);
+  --ease-standard: var(--cs-ease-standard);
+  --stagger-step: var(--cs-stagger-step);
+  --dur-fast: var(--cs-dur-fast);
+  --dur: var(--cs-dur-standard);
+  --ease: var(--cs-ease-enter);
+
+  /* ==========================================================================
+   * 8. 层级（§22.4）：全部指向 @chain/user-ui 的 registry
+   * ========================================================================== */
+  --z-sticky: var(--cs-z-sticky-table);
+  --z-rail: var(--cs-z-rail);
+  --z-popover: var(--cs-z-dropdown);
+  --z-command: var(--cs-z-command);
+  --z-dialog: var(--cs-z-modal);
+  --z-dialog-queue: var(--cs-z-critical);
+  --z-toast: var(--cs-z-critical);
+
+  /* ==========================================================================
+   * 9. 组件尺寸（§6.1 / §6.2 / §8.2）
+   * ========================================================================== */
+  --rail-w: var(--cs-rail-w);
+  --rail-w-collapsed: var(--cs-rail-w-collapsed);
+  --topbar-h: var(--cs-topbar-h);
+  --page-gutter: var(--cs-gutter);
+  --card-pad: 20px;
+  --reading-width: var(--cs-reading-w);
+  --control-h-sm: 32px;
+  --control-h: 40px;
+  --control-h-mobile: 44px;
 }
 
 /*
- * 浅色层：用户端用冷白工作区承载长时间阅读（蓝图 §4.2）。
- * 页面底色比后台更深一档，卡片纯白，靠 1px 描边分层而不是靠阴影堆叠。
+ * 浅色工作区底色（§4.1）。
+ * 侧栏已改为浅色，因此这里不再需要"深色侧栏 + 冷白工作区"的对比处理；
+ * 页面底色带一层极浅的径向光晕由 .cs-shell 提供。
  */
 html[data-app="user"] body {
-  background: var(--bg-canvas);
-  color: var(--text-primary);
+  background: var(--cs-canvas);
+  color: var(--cs-text-primary);
   font-size: var(--fs-14);
 }

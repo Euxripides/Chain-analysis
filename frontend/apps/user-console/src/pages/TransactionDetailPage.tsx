@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { ApiError, useAuth } from "@chain/api-client";
+import {
+  useEffect,
+  useRef,
+  useState } from "react";
+import { useParams,
+  useSearchParams } from "react-router-dom";
+import { ChevronDown,
+  ChevronRight } from "lucide-react";
+import { ApiError,
+  useAuth } from "@chain/api-client";
 import {
   Amount,
   BackLink,
@@ -17,13 +23,13 @@ import {
   LinearProgress,
   MetaLine,
   MetricCard,
-  PageHeader,
   PageSection,
   SkeletonRows,
   StatusBadge,
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import type { StatusTone } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
@@ -742,7 +748,7 @@ export default function TransactionDetailPage() {
   return (
     <>
       <BackLink to="/explorer" label="返回地址与交易查询" />
-      <PageHeader
+      <CsPageHeader
         breadcrumb={[{ label: "地址与交易查询", to: "/explorer" }, { label: "交易详情" }]}
         title="交易详情"
         status={<StatusBadge tone={statusToneOf(record)}>{statusLabel(record)}</StatusBadge>}

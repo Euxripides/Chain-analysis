@@ -1,0 +1,189 @@
+/*
+ * Shell：淡蓝统一工作台（用户端重构规范 V4 §6.1 / §7）
+ *
+ * 从「左黑右白传统后台」改成**浅色侧栏 + 玻璃顶栏**：
+ *   侧栏底色 #F8FBFF，右边框极淡蓝线，Logo 区 64px，
+ *   当前项 = 淡蓝胶囊 + 左侧 3px 亮蓝指示 + 加重字重（形状/字重/颜色三通道，不只靠颜色）。
+ *
+ * 几何：展开 248px / 收起 72px（规范 §6.1.1，原 264px），顶栏 60px。
+ * 本文件只覆盖 .cs-shell__* 这些**用户端专属类**，后台端的 .shell__* 不受影响。
+ */
+
+html[data-app="user"] .cs-shell {
+  grid-template-columns: var(--cs-rail-w) minmax(0, 1fr);
+  background: var(--cs-canvas);
+  /* 页面底色带一层极浅的径向光晕，让大面积淡蓝不发灰 */
+  background-image:
+    radial-gradient(60% 46% at 12% -6%, rgba(52, 120, 246, .07) 0%, transparent 62%),
+    radial-gradient(52% 42% at 96% 4%, rgba(29, 184, 232, .06) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+html[data-app="user"] .cs-shell[data-collapsed="true"] {
+  grid-template-columns: var(--cs-rail-w-collapsed) minmax(0, 1fr);
+}
+
+/* ---------------- 侧栏 ---------------- */
+html[data-app="user"] .cs-shell__rail {
+  padding: 0 12px 12px;
+  gap: 4px;
+  background: var(--cs-surface-rail);
+  color: var(--cs-text-secondary);
+  border-right: 1px solid var(--cs-border);
+  scrollbar-color: var(--cs-border-strong) transparent;
+}
+html[data-app="user"] .cs-shell__rail::-webkit-scrollbar-thumb { background: var(--cs-border-strong); }
+
+/* Logo 区固定 64px（§6.1.1） */
+html[data-app="user"] .cs-brand {
+  min-height: 64px;
+  padding: 0 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  /* 底色必须显式声明，否则白字会被对比度工具量成"白底白字"（既有约定，保持） */
+  background-color: var(--cs-primary);
+  background-image: linear-gradient(150deg, #5E96F8 0%, var(--cs-primary) 52%, var(--cs-primary-active) 100%);
+  box-shadow: 0 4px 14px rgba(52, 120, 246, .30);
+}
+html[data-app="user"] .cs-brand__name { color: var(--cs-text-primary); }
+html[data-app="user"] .cs-brand__tag { color: var(--cs-text-secondary); }
+
+html[data-app="user"] .cs-nav { gap: 14px; }
+html[data-app="user"] .cs-nav__label {
+  padding: 0 10px 6px;
+  color: var(--cs-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+html[data-app="user"] .cs-nav__link {
+  position: relative;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: var(--cs-radius-control);
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-13);
+  transition:
+    background var(--cs-dur-fast) var(--cs-ease-enter),
+    color var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-nav__link:hover {
+  background: var(--cs-canvas-strong);
+  color: var(--cs-text-primary);
+}
+html[data-app="user"] .cs-nav__link[aria-current="page"] {
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+  font-weight: 620;
+  box-shadow: var(--cs-shadow-rail-active);
+}
+/* 左侧 3px 亮蓝指示条：形状通道，灰度下依然可辨 */
+html[data-app="user"] .cs-nav__link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  margin-top: -10px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cs-primary);
+}
+/* 当前图标轻微蓝色辉光（§6.1.1） */
+html[data-app="user"] .cs-nav__link[aria-current="page"] .cs-nav__icon {
+  color: var(--cs-primary);
+  filter: drop-shadow(0 0 6px rgba(52, 120, 246, .35));
+}
+
+html[data-app="user"] .cs-railfoot { border-top-color: var(--cs-border-subtle); }
+html[data-app="user"] .cs-railfoot__scope { color: var(--cs-text-muted); padding: 0 10px; }
+html[data-app="user"] .cs-railfoot__collapse { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-railfoot__collapse:hover {
+  background: var(--cs-canvas-strong);
+  color: var(--cs-text-primary);
+}
+
+/* ---------------- 顶栏（§6.1.2）：60px + 玻璃 + 滚动后 0.86 透明度 ---------------- */
+html[data-app="user"] .cs-shell__topbar {
+  height: var(--cs-topbar-h);
+  padding: 0 var(--cs-gutter);
+  background: var(--cs-surface-glass);
+  border-bottom: 1px solid var(--cs-border);
+  -webkit-backdrop-filter: var(--cs-glass-blur);
+  backdrop-filter: var(--cs-glass-blur);
+  transition: background var(--cs-dur-standard) var(--cs-ease-enter), box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-shell__topbar[data-scrolled="true"] {
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 1px 0 rgba(45, 80, 130, .05), 0 8px 24px rgba(45, 80, 130, .06);
+}
+html[data-app="user"] .cs-shell__content {
+  padding: var(--cs-gutter) var(--cs-gutter) 56px;
+  gap: 18px;
+}
+
+html[data-app="user"] .cs-cmdtrigger {
+  border-color: var(--cs-border);
+  border-radius: var(--cs-radius-control);
+  background: var(--cs-surface);
+  color: var(--cs-text-secondary);
+  transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-cmdtrigger:hover { border-color: var(--cs-border-strong); background: var(--cs-surface-blue); }
+html[data-app="user"] .cs-cmdtrigger:focus-visible { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .cs-kbd {
+  border-color: var(--cs-border);
+  border-radius: 6px;
+  background: var(--cs-canvas-strong);
+  color: var(--cs-text-secondary);
+}
+
+html[data-app="user"] .cs-iconbtn {
+  border-radius: var(--cs-radius-control);
+  color: var(--cs-text-secondary);
+  transition: background var(--cs-dur-fast) var(--cs-ease-enter), color var(--cs-dur-fast) var(--cs-ease-enter), transform var(--cs-dur-micro) var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-iconbtn:hover { background: var(--cs-canvas-strong); color: var(--cs-text-primary); }
+html[data-app="user"] .cs-iconbtn:active { transform: scale(.92); }
+html[data-app="user"] .cs-iconbtn:focus-visible { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .cs-iconbtn[aria-expanded="true"] { background: var(--cs-primary-soft); color: var(--cs-primary-text); }
+html[data-app="user"] .cs-iconbtn__dot { background: var(--cs-danger); border-color: var(--cs-surface); }
+
+html[data-app="user"] .cs-avatar {
+  background-color: var(--cs-primary);
+  background-image: linear-gradient(150deg, #5E96F8, var(--cs-primary));
+}
+html[data-app="user"] .cs-usermenu__trigger:hover { background: var(--cs-canvas-strong); }
+html[data-app="user"] .cs-usermenu__trigger:focus-visible { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
+html[data-app="user"] .cs-usermenu__name > span { color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-avatar { color: var(--cs-text-inverse); }
+
+/* ---------------- 响应式（§6.2 / §54） ---------------- */
+@media (min-width: 1600px) {
+  html[data-app="user"] { --cs-rail-w: 248px; --cs-inspector-w: 360px; }
+}
+@media (max-width: 1599px) and (min-width: 1200px) {
+  html[data-app="user"] { --cs-rail-w: 236px; --cs-inspector-w: 340px; --cs-gutter: 22px; }
+}
+@media (max-width: 1365px) {
+  html[data-app="user"] { --cs-gutter: 20px; --cs-inspector-w: 320px; }
+}
+@media (max-width: 1199px) {
+  html[data-app="user"] { --cs-rail-w: 220px; --cs-gutter: 20px; }
+}
+@media (max-width: 899px) {
+  html[data-app="user"] { --cs-gutter: 16px; --cs-topbar-h: 54px; }
+  html[data-app="user"] .cs-shell__rail[data-open="true"] { box-shadow: var(--cs-shadow-floating); }
+  html[data-app="user"] .cs-shell__content { padding: 16px 16px 48px; gap: 14px; }
+  html[data-app="user"] .cs-nav__link { min-height: 44px; }
+  html[data-app="user"] .cs-nav__link[aria-current="page"]::before { left: -12px; }
+  html[data-app="user"] .cs-iconbtn { width: 44px; height: 44px; }
+}
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-shell__topbar { padding: 0 12px; }
+  html[data-app="user"] .cs-shell__content { padding: 12px 12px 44px; }
+}

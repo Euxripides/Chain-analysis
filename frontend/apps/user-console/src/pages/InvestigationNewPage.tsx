@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { ApiError, useAuth } from "@chain/api-client";
+import {
+  useEffect,
+  useMemo,
+  useState } from "react";
+import { useNavigate,
+  useSearchParams } from "react-router-dom";
+import { ApiError,
+  useAuth } from "@chain/api-client";
 import {
   Button,
   Card,
@@ -11,7 +16,6 @@ import {
   HashValue,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   SkeletonRows,
   StatusBadge,
@@ -20,6 +24,7 @@ import {
   useDialog,
   type DataTableColumn,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { useAsync } from "../sprint4/common";
 
 interface CaseOption {
@@ -241,7 +246,7 @@ export default function InvestigationNewPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="发起调查"
         breadcrumb={[{ label: "调查任务", to: "/investigations" }, { label: "发起调查" }]}
         status={<StatusBadge tone="info">{`第 ${stepIndex + 1} / ${STEPS.length} 步`}</StatusBadge>}

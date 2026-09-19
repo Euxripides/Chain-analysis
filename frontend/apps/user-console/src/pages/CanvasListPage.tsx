@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from "react";
+import { useNavigate,
+  useSearchParams } from "react-router-dom";
 import { ApiError } from "@chain/api-client";
 import {
   Button,
@@ -11,7 +16,6 @@ import {
   FilterChip,
   HashValue,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   SearchInput,
@@ -21,6 +25,7 @@ import {
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, useApi, useS5Action } from "../sprint5/common";
 
 /**
@@ -348,7 +353,7 @@ export default function CanvasListPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="资金图谱"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "资金图谱" }]}
         status={

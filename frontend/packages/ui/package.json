@@ -4,5 +4,10 @@
   "private": true,
   "type": "module",
   "main": "index.ts",
-  "exports": { ".": "./index.ts", "./ui.css": "./ui.css" }
+  "exports": {
+    ".": "./index.ts",
+    "./ui.css": "./ui.css",
+    "./dialog-core": "./dialog-core.tsx",
+    "./dialog-legacy-renderer": "./dialog-legacy-renderer.tsx"
+  }
 }

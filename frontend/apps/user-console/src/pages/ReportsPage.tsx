@@ -1,5 +1,8 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  useMemo,
+  useState } from "react";
+import { Link,
+  useNavigate } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
 import {
   Button,
@@ -9,13 +12,13 @@ import {
   FilterBar,
   HashValue,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   StatusBadge,
   useDialog,
   type StatusTone,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { useAsync } from "../sprint4/common";
 
 /**
@@ -168,7 +171,7 @@ export default function ReportsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="报告中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "报告中心" }]}
         meta={
@@ -217,6 +220,8 @@ export default function ReportsPage() {
           <DataTable<ReportRow>
             caption="报告列表"
             loading={loading}
+            /* §17.5：刷新保留旧行与表头，不清屏。 */
+            keepPreviousData
             error={error}
             onRetry={reload}
             rows={timeFiltered}

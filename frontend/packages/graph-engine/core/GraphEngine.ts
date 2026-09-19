@@ -1,0 +1,519 @@
+import { EventBus } from "./EventBus";
+import { Camera, type Bounds } from "../interaction/camera";
+import { DEFAULT_STYLE, WebGLRenderer, type RenderStyle } from "../renderer/WebGLRenderer";
+import { GraphStore, NODE_FLAG, type GraphEdgeInput, type GraphNodeInput } from "../model/GraphStore";
+import { runLayout as runLayoutOnGraph, type LayoutMode, type LayoutOptions } from "../layout";
+import { layoutTransferables, type LayoutRequest, type LayoutResponse } from "../worker/protocol";
+
+/**
+ * 图谱引擎门面（用户端重构规范 V4 §30.2 / §30.3）
+ *
+ * 这一层是 React 与 GPU 之间**唯一**的边界：
+ *   - React 只调用这里的方法、只订阅这里的事件；
+ *   - React **不参与**逐帧渲染（§9.6 / §30.1）。
+ *
+ * 生命周期（§63C）全部由 `dispose()` 收口：停 RAF、解绑指针与键盘、
+ * 断开 ResizeObserver、释放 GPU 资源。路由卸载后 20 次进出不应线性增长显存。
+ *
+ * 本文件**不引入任何 React 依赖**，因此可以被 worker、测试或纯 JS 场景复用。
+ */
+
+export interface GraphEngineEvents extends Record<string, unknown> {
+  "node:hover": { nodeIndex: number; nodeId: string | null };
+  "node:click": { nodeIndex: number; nodeId: string };
+  "node:dblclick": { nodeIndex: number; nodeId: string };
+  "edge:hover": { edgeIndex: number };
+  "selection:change": { nodeIds: string[] };
+  "camera:change": { cx: number; cy: number; scale: number };
+  "performance:warning": { fps: number; nodeCount: number; edgeCount: number };
+}
+
+export interface GraphEngineOptions {
+  /** 结构化克隆的图数据（也接受 worker 传来的 TypedArray 版本）。 */
+  nodes: GraphNodeInput[];
+  edges: GraphEdgeInput[];
+  style?: RenderStyle;
+  /**
+   * 设备像素比上限（§63C "DPR cap"）。
+   * 4K + DPR 2 会让一个 1000px 的画布有 4M 像素，粒子与边的填充率会直接压垮中端 GPU。
+   */
+  maxDpr?: number;
+  /** 装饰性动画的最低帧率下限；页面隐藏时降到这个值（业务订阅不受影响）。 */
+  hiddenFps?: number;
+}
+
+export class GraphEngine {
+  readonly store = new GraphStore();
+  readonly camera = new Camera();
+  readonly events = new EventBus<GraphEngineEvents>();
+
+  private renderer: WebGLRenderer | null = null;
+  private canvas: HTMLCanvasElement | null = null;
+  private container: HTMLElement | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private rafId = 0;
+  private disposed = false;
+  private frameDirty = true;
+  private hoveredNode = -1;
+  private selected = new Set<number>();
+  private readonly maxDpr: number;
+  private readonly hiddenFps: number;
+  private lastFrameAt = 0;
+  private fpsSamples: number[] = [];
+  private warned = false;
+
+  /* 指针手势状态。 */
+  private dragging = false;
+  private dragLastX = 0;
+  private dragLastY = 0;
+  private pointerDownAt = 0;
+
+  private readonly onPointerDown = (event: PointerEvent) => this.handlePointerDown(event);
+  private readonly onPointerMove = (event: PointerEvent) => this.handlePointerMove(event);
+  private readonly onPointerUp = (event: PointerEvent) => this.handlePointerUp(event);
+  private readonly onPointerLeave = () => this.handlePointerLeave();
+  private readonly onWheel = (event: WheelEvent) => this.handleWheel(event);
+  private readonly onDoubleClick = (event: MouseEvent) => this.handleDoubleClick(event);
+  private readonly onContextLost = (event: Event) => {
+    event.preventDefault();
+    this.renderer?.handleContextLost();
+  };
+  private readonly onContextRestored = () => {
+    this.renderer?.handleContextRestored();
+    this.renderer?.upload(this.store);
+    this.frameDirty = true;
+  };
+
+  constructor(options: GraphEngineOptions) {
+    this.maxDpr = options.maxDpr ?? 2;
+    this.hiddenFps = options.hiddenFps ?? 4;
+    this.store.load(options.nodes, options.edges);
+    if (options.style) this.pendingStyle = options.style;
+  }
+
+  private pendingStyle: RenderStyle | null = null;
+
+  /** 挂载到画布。返回是否拿到了 WebGL2 上下文（false = 调用方应显示降级 UI，§30.6）。 */
+  mount(canvas: HTMLCanvasElement): boolean {
+    this.canvas = canvas;
+    this.container = canvas.parentElement ?? canvas;
+    this.renderer = new WebGLRenderer(canvas, this.pendingStyle ?? DEFAULT_STYLE);
+    if (!this.renderer.available) {
+      /* 不抛异常：调用方负责提示"性能受限模式"，引擎保持可查询但不出图。 */
+      return false;
+    }
+    this.renderer.upload(this.store);
+    this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+
+    canvas.addEventListener("pointerdown", this.onPointerDown);
+    canvas.addEventListener("pointermove", this.onPointerMove);
+    canvas.addEventListener("pointerup", this.onPointerUp);
+    canvas.addEventListener("pointercancel", this.onPointerUp);
+    canvas.addEventListener("pointerleave", this.onPointerLeave);
+    canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    canvas.addEventListener("dblclick", this.onDoubleClick);
+    canvas.addEventListener("contextlost", this.onContextLost);
+    canvas.addEventListener("contextrestored", this.onContextRestored);
+
+    if (typeof ResizeObserver !== "undefined" && this.container) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.frameDirty = true;
+      });
+      this.resizeObserver.observe(this.container);
+    }
+
+    this.loop();
+    return true;
+  }
+
+  private cssWidth(): number {
+    return Math.max(1, this.container?.clientWidth ?? this.canvas?.clientWidth ?? 1);
+  }
+
+  private cssHeight(): number {
+    return Math.max(1, this.container?.clientHeight ?? this.canvas?.clientHeight ?? 1);
+  }
+
+  private currentDpr(): number {
+    const raw = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+    return Math.min(raw, this.maxDpr);
+  }
+
+  private loop = (): void => {
+    if (this.disposed) return;
+    this.rafId = requestAnimationFrame(this.loop);
+    const now = performance.now();
+    const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+    const minInterval = hidden ? 1000 / this.hiddenFps : 0;
+    if (!this.frameDirty && minInterval === 0) return;
+    if (now - this.lastFrameAt < minInterval) return;
+    this.lastFrameAt = now;
+
+    const started = performance.now();
+    this.renderer?.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr());
+    this.frameDirty = false;
+
+    /* 帧耗时采样：连续超标时报 performance:warning，让 UI 有机会提示降级。 */
+    const cost = performance.now() - started;
+    this.fpsSamples.push(cost);
+    if (this.fpsSamples.length > 60) this.fpsSamples.shift();
+    if (!this.warned && this.fpsSamples.length === 60) {
+      const avg = this.fpsSamples.reduce((a, b) => a + b, 0) / this.fpsSamples.length;
+      if (avg > 24) {
+        this.warned = true;
+        this.events.emit("performance:warning", {
+          fps: Math.round(1000 / Math.max(avg, 1)),
+          nodeCount: this.store.nodeCount,
+          edgeCount: this.store.edgeCount,
+        });
+      }
+    }
+  };
+
+  /* ------------------------------------------------------------ 公开 API（§30.3） */
+
+  loadGraph(nodes: GraphNodeInput[], edges: GraphEdgeInput[]): void {
+    this.store.load(nodes, edges);
+    this.selected.clear();
+    this.renderer?.upload(this.store);
+    this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    this.frameDirty = true;
+    this.events.emit("selection:change", { nodeIds: [] });
+  }
+
+  /** 增量补丁：只追加新点（实时新增交易），不重排已有位置。 */
+  patchGraph(nodes: GraphNodeInput[], edges: GraphEdgeInput[]): void {
+    const mergedNodes = [...this.nodesSnapshot(), ...nodes];
+    const mergedEdges = [...this.edgesSnapshot(), ...edges];
+    this.store.load(mergedNodes, mergedEdges);
+    this.renderer?.upload(this.store);
+    this.frameDirty = true;
+  }
+
+  private nodesSnapshot(): GraphNodeInput[] {
+    const out: GraphNodeInput[] = [];
+    for (let i = 0; i < this.store.nodeCount; i += 1) {
+      out.push({ id: this.store.idAt(i), x: this.store.positions[i * 2], y: this.store.positions[i * 2 + 1] });
+    }
+    return out;
+  }
+
+  private edgesSnapshot(): GraphEdgeInput[] {
+    const out: GraphEdgeInput[] = [];
+    for (let e = 0; e < this.store.edgeCount; e += 1) {
+      out.push({
+        id: "e" + e,
+        source: this.store.idAt(this.store.edgeSource[e]),
+        target: this.store.idAt(this.store.edgeTarget[e]),
+      });
+    }
+    return out;
+  }
+
+  focusNode(nodeId: string, zoom = true): boolean {
+    const index = this.store.indexOfNodeId(nodeId);
+    if (index < 0) return false;
+    this.camera.state.cx = this.store.positions[index * 2];
+    this.camera.state.cy = this.store.positions[index * 2 + 1];
+    if (zoom) this.camera.state.scale = Math.max(this.camera.state.scale, 2);
+    this.setSelection([index]);
+    this.frameDirty = true;
+    this.emitCamera();
+    return true;
+  }
+
+  fitSelection(nodeIds: string[]): void {
+    const indices = nodeIds.map((id) => this.store.indexOfNodeId(id)).filter((i) => i >= 0);
+    if (indices.length === 0) {
+      this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    } else {
+      const bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      for (const i of indices) {
+        const x = this.store.positions[i * 2];
+        const y = this.store.positions[i * 2 + 1];
+        bounds.minX = Math.min(bounds.minX, x);
+        bounds.minY = Math.min(bounds.minY, y);
+        bounds.maxX = Math.max(bounds.maxX, x);
+        bounds.maxY = Math.max(bounds.maxY, y);
+      }
+      this.camera.fit(bounds, this.cssWidth(), this.cssHeight(), 80);
+    }
+    this.frameDirty = true;
+    this.emitCamera();
+  }
+
+  fitAll(): void {
+    this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    this.frameDirty = true;
+    this.emitCamera();
+  }
+
+  setSelection(nodeIndices: number[]): void {
+    this.selected = new Set(nodeIndices);
+    this.applySelectionFlags();
+    const nodeIds = [...this.selected].map((i) => this.store.idAt(i));
+    this.events.emit("selection:change", { nodeIds });
+  }
+
+  /** 选中后淡化无关节点（§30.10 select）。 */
+  private applySelectionFlags(): void {
+    this.store.clearFlags();
+    if (this.selected.size === 0) {
+      this.markStyle();
+      return;
+    }
+    const keep = new Set<number>(this.selected);
+    for (const index of this.selected) {
+      this.store.forEachNeighbor(index, (_edge, other) => keep.add(other));
+    }
+    for (let i = 0; i < this.store.nodeCount; i += 1) {
+      if (keep.has(i)) this.store.setFlag(i, NODE_FLAG.inPath, true);
+      else this.store.setFlag(i, NODE_FLAG.dimmed, true);
+    }
+    for (const index of this.selected) this.store.setFlag(index, NODE_FLAG.selected, true);
+    this.markStyle();
+  }
+
+  clearSelection(): void {
+    this.selected.clear();
+    this.store.clearFlags();
+    this.markStyle();
+    this.events.emit("selection:change", { nodeIds: [] });
+  }
+
+  /** 导出当前视图为 PNG（§30.3 exportView）。会先同步重绘一帧，保证读到的是最新画面。 */
+  exportView(): string | null {
+    if (!this.canvas || !this.renderer) return null;
+    this.renderer.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr());
+    return this.canvas.toDataURL("image/png");
+  }
+
+  /**
+   * 在**主线程同步**运行布局。
+   *
+   * 只适用于小图或无 Worker 的环境——规范 §30.5 要求大图布局必须在 worker：
+   * 十万节点的力导向在主线程上就是一次几百毫秒的 long task，
+   * 直接违反 §30.15 的"main-thread long task 不得持续 > 50ms"。
+   * 大图请用 `layoutInWorker`。
+   */
+  runLayout(mode: LayoutMode, options: LayoutOptions = {}): LayoutMode {
+    const resolved = runLayoutOnGraph(mode, this.store, options);
+    this.renderer?.upload(this.store);
+    this.frameDirty = true;
+    return resolved;
+  }
+
+  /**
+   * 通过 Worker 运行布局（§30.5）。
+   *
+   * Worker 由**调用方**构造并传入：Vite 需要 `new Worker(new URL("./x.worker.ts", import.meta.url))`
+   * 这种静态形态才能识别 worker 边界，而那个 URL 必须写在应用代码里。
+   * 引擎只负责协议与所有权管理。
+   *
+   * 零拷贝的边界要说清楚：**发送前必须复制**，因为 transfer 会把本引擎持有的
+   * TypedArray 置空（neutered）；结果回传后再 set 回来。
+   * 这次复制的代价是 2N 个 float（10 万节点约 800KB），远小于结构化克隆整个图。
+   */
+  layoutInWorker(worker: Worker, mode: LayoutMode, options: LayoutOptions = {}): Promise<LayoutMode> {
+    const requestId = ++this.layoutRequestId;
+    const request: LayoutRequest = {
+      type: "layout",
+      requestId,
+      mode,
+      options,
+      nodeCount: this.store.nodeCount,
+      edgeCount: this.store.edgeCount,
+      positions: this.store.positions.slice(),
+      kinds: this.store.kinds.slice(),
+      edgeSource: this.store.edgeSource.slice(),
+      edgeTarget: this.store.edgeTarget.slice(),
+      times: this.layoutTimes ? this.layoutTimes.slice() : null,
+    };
+
+    return new Promise<LayoutMode>((resolve, reject) => {
+      const onMessage = (event: MessageEvent<LayoutResponse>) => {
+        const response = event.data;
+        if (!response || response.requestId !== requestId) return;
+        worker.removeEventListener("message", onMessage);
+        if (response.type === "layout:error") {
+          reject(new Error(response.message));
+          return;
+        }
+        /* 把 worker 算好的位置写回本引擎的存储，并重绘。 */
+        this.store.positions.set(response.positions);
+        this.renderer?.upload(this.store);
+        this.frameDirty = true;
+        resolve(response.resolvedMode);
+      };
+      worker.addEventListener("message", onMessage);
+      worker.postMessage(request, layoutTransferables(request));
+    });
+  }
+
+  /** 时间轴布局用的时间戳（由调用方从真实业务字段灌入；没有就不传，**不伪造**）。 */
+  setLayoutTimes(times: Float64Array | null): void {
+    this.layoutTimes = times;
+  }
+
+  private layoutRequestId = 0;
+  private layoutTimes: Float64Array | null = null;
+
+  /**
+   * 在**画布内的 CSS 坐标**上做一次命中测试，返回节点下标（-1 = 没点到）。
+   *
+   * 公开它是必要的：React 侧有时需要在引擎之外的坐标上做判定
+   * （例如把浏览器原生拖拽的落点映射到节点），而验收也需要一个不依赖
+   * "看图"的方式证明几何真的被光栅化了——见 scripts/graph-engine-check.mjs。
+   */
+  pickAt(cssX: number, cssY: number): number {
+    if (!this.renderer || !this.canvas) return -1;
+    return this.renderer.pickNode(this.store, this.camera, cssX, cssY, this.currentDpr());
+  }
+
+  /** 画布当前尺寸（CSS 像素）与 DPR，供外部换算坐标。 */
+  viewport(): { width: number; height: number; dpr: number } {
+    return { width: this.cssWidth(), height: this.cssHeight(), dpr: this.currentDpr() };
+  }
+
+  /** 统计信息（验收与性能报告用，不做业务判断）。 */
+  stats(): { nodes: number; edges: number; bytes: number; webgl2: boolean } {
+    return {
+      nodes: this.store.nodeCount,
+      edges: this.store.edgeCount,
+      bytes: this.store.approximateBytes(),
+      webgl2: this.renderer?.available ?? false,
+    };
+  }
+
+  /** 主动请求下一帧（React 侧状态变化后调用）。 */
+  invalidate(): void {
+    this.frameDirty = true;
+  }
+
+  private markStyle(): void {
+    this.renderer?.markStyleDirty();
+    this.frameDirty = true;
+  }
+
+  private emitCamera(): void {
+    this.events.emit("camera:change", {
+      cx: this.camera.state.cx,
+      cy: this.camera.state.cy,
+      scale: this.camera.state.scale,
+    });
+  }
+
+  /* ------------------------------------------------------------------ 指针 */
+
+  private localPoint(event: PointerEvent | MouseEvent | WheelEvent): [number, number] {
+    const rect = this.canvas?.getBoundingClientRect();
+    if (!rect) return [0, 0];
+    return [event.clientX - rect.left, event.clientY - rect.top];
+  }
+
+  private handlePointerDown(event: PointerEvent): void {
+    this.dragging = true;
+    this.pointerDownAt = performance.now();
+    this.dragLastX = event.clientX;
+    this.dragLastY = event.clientY;
+    this.canvas?.setPointerCapture?.(event.pointerId);
+  }
+
+  private handlePointerMove(event: PointerEvent): void {
+    if (this.dragging) {
+      const dx = event.clientX - this.dragLastX;
+      const dy = event.clientY - this.dragLastY;
+      this.dragLastX = event.clientX;
+      this.dragLastY = event.clientY;
+      if (dx !== 0 || dy !== 0) {
+        this.camera.pan(dx, dy);
+        this.frameDirty = true;
+        this.emitCamera();
+      }
+      return;
+    }
+    const [x, y] = this.localPoint(event);
+    const index = this.renderer?.pickNode(this.store, this.camera, x, y, this.currentDpr()) ?? -1;
+    if (index !== this.hoveredNode) {
+      this.hoveredNode = index;
+      this.store.clearFlags();
+      if (index >= 0) this.store.setFlag(index, NODE_FLAG.hovered, true);
+      for (const selected of this.selected) this.store.setFlag(selected, NODE_FLAG.selected, true);
+      this.applySelectionFlags();
+      this.markStyle();
+      this.events.emit("node:hover", { nodeIndex: index, nodeId: index >= 0 ? this.store.idAt(index) : null });
+    }
+  }
+
+  private handlePointerUp(event: PointerEvent): void {
+    const wasDragging = this.dragging;
+    this.dragging = false;
+    this.canvas?.releasePointerCapture?.(event.pointerId);
+    /* 只有"短按且没怎么移动"才算点击，否则拖拽结束时会误选节点。 */
+    if (!wasDragging || performance.now() - this.pointerDownAt > 400) return;
+    const [x, y] = this.localPoint(event);
+    const index = this.renderer?.pickNode(this.store, this.camera, x, y, this.currentDpr()) ?? -1;
+    if (index >= 0) {
+      this.setSelection([index]);
+      this.events.emit("node:click", { nodeIndex: index, nodeId: this.store.idAt(index) });
+    } else {
+      this.clearSelection();
+    }
+  }
+
+  private handlePointerLeave(): void {
+    this.dragging = false;
+    if (this.hoveredNode >= 0) {
+      this.hoveredNode = -1;
+      this.applySelectionFlags();
+      this.events.emit("node:hover", { nodeIndex: -1, nodeId: null });
+    }
+  }
+
+  private handleWheel(event: WheelEvent): void {
+    event.preventDefault();
+    const [x, y] = this.localPoint(event);
+    const factor = Math.exp(-event.deltaY * 0.0015);
+    this.camera.zoomAt(x, y, factor, this.cssWidth(), this.cssHeight());
+    this.frameDirty = true;
+    this.emitCamera();
+  }
+
+  private handleDoubleClick(event: MouseEvent): void {
+    const [x, y] = this.localPoint(event);
+    const index = this.renderer?.pickNode(this.store, this.camera, x, y, this.currentDpr()) ?? -1;
+    if (index >= 0) {
+      this.focusNode(this.store.idAt(index), false);
+      this.events.emit("node:dblclick", { nodeIndex: index, nodeId: this.store.idAt(index) });
+    } else {
+      this.fitAll();
+    }
+  }
+
+  /* --------------------------------------------------------------- 生命周期 */
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    cancelAnimationFrame(this.rafId);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    const canvas = this.canvas;
+    if (canvas) {
+      canvas.removeEventListener("pointerdown", this.onPointerDown);
+      canvas.removeEventListener("pointermove", this.onPointerMove);
+      canvas.removeEventListener("pointerup", this.onPointerUp);
+      canvas.removeEventListener("pointercancel", this.onPointerUp);
+      canvas.removeEventListener("pointerleave", this.onPointerLeave);
+      canvas.removeEventListener("wheel", this.onWheel);
+      canvas.removeEventListener("dblclick", this.onDoubleClick);
+      canvas.removeEventListener("contextlost", this.onContextLost);
+      canvas.removeEventListener("contextrestored", this.onContextRestored);
+    }
+    this.renderer?.dispose();
+    this.renderer = null;
+    this.canvas = null;
+    this.container = null;
+    this.events.clear();
+  }
+}

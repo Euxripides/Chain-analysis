@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "problems": [],
+  "notes": [
+    "[1440x900] overflow={\"docScroll\":1440,\"docClient\":1440,\"bodyScroll\":1440}",
+    "[1440x900] rail background=rgb(248, 251, 255)",
+    "[1440x900] topbar height=60",
+    "[1440x900] active nav indicator width=3px",
+    "[1440x900] 失效预览 border=rgb(217, 140, 22) opacity=1",
+    "[1440x900] 案件 Tab href=[\"/app-v2/cases/case-0001/overview\",\"/app-v2/cases/case-0001/subjects\",\"/app-v2/cases/case-0001/investigations\",\"/app-v2/cases/case-0001/evidence\",\"/app-v2/cases/case-0001/reports\",\"/app-v2/cases/case-0001/members\",\"/app-v2/cases/case-0001/activity\"]",
+    "[1440x900] 地址 Tab href=[\"?tab=overview\",\"?tab=assets\",\"?tab=transactions\",\"?tab=transfers\",\"?tab=internal\",\"?tab=counterparties\",\"?tab=semantic\",\"?tab=analysis\",\"?tab=coverage\"]",
+    "[1440x900] console=0 pageerror=0 csp=0",
+    "[390x844] overflow={\"docScroll\":390,\"docClient\":390,\"bodyScroll\":390}",
+    "[390x844] rail background=rgb(248, 251, 255)",
+    "[390x844] topbar height=54",
+    "[390x844] active nav indicator width=3px",
+    "[390x844] 失效预览 border=rgb(217, 140, 22) opacity=1",
+    "[390x844] 案件 Tab href=[\"/app-v2/cases/case-0001/overview\",\"/app-v2/cases/case-0001/subjects\",\"/app-v2/cases/case-0001/investigations\",\"/app-v2/cases/case-0001/evidence\",\"/app-v2/cases/case-0001/reports\",\"/app-v2/cases/case-0001/members\",\"/app-v2/cases/case-0001/activity\"]",
+    "[390x844] 地址 Tab href=[\"?tab=overview\",\"?tab=assets\",\"?tab=transactions\",\"?tab=transfers\",\"?tab=internal\",\"?tab=counterparties\",\"?tab=semantic\",\"?tab=analysis\",\"?tab=coverage\"]",
+    "[390x844] console=0 pageerror=0 csp=0"
+  ],
+  "at": "2026-09-19T07:24:00.022Z"
+}

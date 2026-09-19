@@ -1,5 +1,9 @@
-import { useCallback, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  useCallback,
+  useState } from "react";
+import { Link,
+  useNavigate,
+  useParams } from "react-router-dom";
 import { useAuth } from "@chain/api-client";
 import {
   Button,
@@ -10,7 +14,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   PageSkeleton,
   SplitPane,
@@ -20,6 +23,7 @@ import {
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatTime, useAction, useAsync } from "../sprint4/common";
 
 interface Approval {
@@ -234,7 +238,7 @@ export default function ReportDetailPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title={`报告 r${data.revision}`}
         breadcrumb={[
           { label: "工作台", to: "/home" },

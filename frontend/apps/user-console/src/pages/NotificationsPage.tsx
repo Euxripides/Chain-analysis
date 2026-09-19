@@ -16,13 +16,13 @@ import {
   EmptyState,
   ErrorState,
   MetaLine,
-  PageHeader,
   PageSection,
   RelativeTime,
   SkeletonRows,
   TabPanel,
   Tabs,
 } from "@chain/ui";
+import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
 import { useNotifications, type NotificationItem } from "../components/notifications/useNotifications";
 
 /**
@@ -50,6 +50,47 @@ function typeIcon(type: string) {
   return <Bell size={15} aria-hidden="true" />;
 }
 
+/**
+ * 按**本地自然日**把通知分组（规范 §52：今天 / 昨天 / 更早）。
+ *
+ * 日界一律用浏览器本地时区，与页面里 `formatTime` / `RelativeTime` 的口径一致——
+ * 规范 §63B 要求不得静默改变全站时区语义，所以这里不做任何 UTC 换算。
+ * 分组只是展示层：不新增请求参数，也不改变任何条目字段。
+ */
+const DAY_LABELS: Array<{ key: string; label: string }> = [
+  { key: "today", label: "今天" },
+  { key: "yesterday", label: "昨天" },
+  { key: "earlier", label: "更早" },
+];
+
+function dayKeyOf(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "earlier";
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  if (at >= startOfToday) return "today";
+  if (at >= startOfYesterday) return "yesterday";
+  return "earlier";
+}
+
+function groupByDay(items: NotificationItem[]): Array<{ key: string; label: string; items: NotificationItem[] }> {
+  const buckets = new Map<string, NotificationItem[]>();
+  for (const item of items) {
+    const key = dayKeyOf(item.created_at);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(item);
+    else buckets.set(key, [item]);
+  }
+  return DAY_LABELS.filter((day) => (buckets.get(day.key)?.length ?? 0) > 0).map((day) => ({
+    key: day.key,
+    label: day.label,
+    /* 组内保持服务端返回的顺序（列表接口已按时间倒序），前端不再重排。 */
+    items: buckets.get(day.key) ?? [],
+  }));
+}
+
 export default function NotificationsPage() {
   const { items, loading, error, reload, markRead, markAllRead, open, unreadCount } = useNotifications();
   const [tab, setTab] = useState("all");
@@ -57,6 +98,14 @@ export default function NotificationsPage() {
 
   /* 未读 tab 是对共享数据源的**视图筛选**，不发新请求；标记已读后该项自然离开未读视图。 */
   const visible = useMemo(() => (tab === "unread" ? items.filter((item) => !item.read_at) : items), [items, tab]);
+  const groups = useMemo(() => groupByDay(visible), [visible]);
+
+  /*
+   * 首次加载 vs 刷新（§23.3）：共享 provider 的 loading 在每次 reload 都会置真，
+   * 但不清空 items，因此 `items.length === 0` 才是"真的还没有数据"。
+   */
+  const firstLoad = loading && items.length === 0;
+  const refreshing = loading && items.length > 0;
 
   const onMarkAll = async () => {
     setMarkingAll(true);
@@ -69,7 +118,7 @@ export default function NotificationsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="通知"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "通知" }]}
         meta={
@@ -101,9 +150,10 @@ export default function NotificationsPage() {
         />
         <Card>
           <TabPanel tabKey={tab}>
-            {loading ? <SkeletonRows rows={5} columns={3} /> : null}
-            {!loading && error ? <ErrorState title="通知加载失败" message={error} onRetry={() => void reload()} /> : null}
-            {!loading && !error && visible.length === 0 ? (
+            <CsRefreshBar active={refreshing} />
+            {firstLoad ? <SkeletonRows rows={5} columns={3} /> : null}
+            {!firstLoad && error ? <ErrorState title="通知加载失败" message={error} onRetry={() => void reload()} /> : null}
+            {!firstLoad && !error && visible.length === 0 ? (
               <EmptyState
                 title="没有通知"
                 body={tab === "unread" ? "当前没有未读通知。" : "当前工作区内还没有通知。"}
@@ -116,15 +166,26 @@ export default function NotificationsPage() {
                 }
               />
             ) : null}
-            {!loading && !error && visible.length > 0 ? (
-              <div className="cs-rowcards cs-stagger">
-                {visible.map((item) => (
-                  <NotificationRow
-                    key={item.id}
-                    item={item}
-                    onOpen={() => void open(item)}
-                    onMarkRead={() => void markRead(item.id)}
-                  />
+            {!error && visible.length > 0 ? (
+              /* 按时间分组（§52）。分组标题参与 stagger，但**不逐条**给几百条通知做入场动画。 */
+              <div className="cs-notifgroups">
+                {groups.map((group) => (
+                  <section className="cs-notifgroup" key={group.key} aria-label={group.label}>
+                    <h3 className="cs-notifgroup__label">
+                      {group.label}
+                      <span className="cs-notifgroup__count">{group.items.length}</span>
+                    </h3>
+                    <div className="cs-rowcards">
+                      {group.items.map((item) => (
+                        <NotificationRow
+                          key={item.id}
+                          item={item}
+                          onOpen={() => void open(item)}
+                          onMarkRead={() => void markRead(item.id)}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             ) : null}
@@ -165,12 +226,9 @@ function NotificationRow({
         >
           {item.title || item.title_key}
         </button>
-        {unread ? (
-          <>
-            <span className="cs-popover__dot" aria-hidden="true" />
-            <span className="badge badge--info">未读</span>
-          </>
-        ) : null}
+        {/* 未读是「形状 + 文字」双通道：圆点是给扫读的，徽标文字是给读屏与灰度打印的（§55）。 */}
+        <span className="cs-notifgroup__dot" data-unread={unread ? "true" : "false"} aria-hidden="true" />
+        {unread ? <span className="badge badge--info">未读</span> : <span className="visually-hidden">已读</span>}
       </div>
       <div className="cs-rowcard__meta">
         <span>{item.type}</span>

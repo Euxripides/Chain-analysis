@@ -1,7 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState } from "react";
 import type { ReactNode } from "react";
-import { Braces, Database, FileArchive, FileSpreadsheet, Table2 } from "lucide-react";
-import { ApiError, canUseDirectDownload, directTicketUrl, useAuth } from "@chain/api-client";
+import { Braces,
+  Database,
+  FileArchive,
+  FileSpreadsheet,
+  Table2 } from "lucide-react";
+import { ApiError,
+  canUseDirectDownload,
+  directTicketUrl,
+  useAuth } from "@chain/api-client";
 import {
   Checkbox,
   CompactProgress,
@@ -14,7 +26,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetaLine,
-  PageHeader,
   PageSection,
   SplitPane,
   StatusBadge,
@@ -23,6 +34,7 @@ import {
   progressStateFor,
   useDialog,
 } from "@chain/ui";
+import { CsPageHeader } from "@chain/user-ui";
 import { formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
 
 /* ============================================================================
@@ -581,6 +593,8 @@ export default function ExportsPage() {
   const table = (
     <DataTable<ExportItem>
       loading={exportsApi.loading}
+      /* §17.5：刷新保留旧行与表头，只在顶部显示进度，不清屏。 */
+      keepPreviousData
       error={exportsApi.error ? "导出列表加载失败，请重试。" : null}
       onRetry={() => void reloadExports()}
       rows={rows}
@@ -789,7 +803,7 @@ export default function ExportsPage() {
 
   return (
     <>
-      <PageHeader
+      <CsPageHeader
         title="导出中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "导出中心" }]}
         meta={

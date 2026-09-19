@@ -1,0 +1,280 @@
+/*
+ * 动效层（用户端重构规范 V4 §9 / §62）
+ *
+ * 职责边界（§9.6 Animation Ownership）：
+ *   本文件只负责**纯 CSS 的系统级动画**——页面/容器进出场、状态切换、骨架屏、无限循环指示。
+ *   hover/press/spring/shared-layout 由 Motion 组件变体负责（@chain/user-ui/components/motion）。
+ *   同一个状态只能有一个动画所有者：组件已经用 Motion 驱动的位移，这里不再叠加 keyframes。
+ *
+ * 与用户端既有 `apps/user-console/src/styles/motion.css` 的关系：
+ *   同名 keyframes 在这里被**重新声明覆盖为 V4 的时长与缓动**，因此 25 个既有页面
+ *   无需改动即可切换到新的动效节奏；新的 class 只在本文件里新增。
+ *
+ * 页面级禁止 `filter: blur()` 作为常规进出场（§9.3）。blur 只允许出现在
+ * Dialog/Popover backdrop 与 Hero 装饰层。
+ */
+
+/* =========================================================================
+ * 1. 页面进入（§9.3 Standard Route）
+ * opacity 0→1、y 8→0，180–220ms。不等待旧页面退出。
+ * ========================================================================= */
+@keyframes cs-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+html[data-app="user"] .cs-page-enter {
+  animation: cs-page-in var(--cs-dur-standard) var(--cs-ease-enter) both;
+}
+
+/* =========================================================================
+ * 2. 基础淡入淡出
+ * ========================================================================= */
+@keyframes cs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cs-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* =========================================================================
+ * 3. 浮层：Popover / Dropdown / Command / Drawer / Dialog（§12.3 / §18.2 / §19.2 / §21.3）
+ * ========================================================================= */
+@keyframes cs-popover-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-command-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.965); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-command-backdrop-in {
+  from { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
+  to { opacity: 1; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+}
+@keyframes cs-drawer-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cs-dialog-backdrop-in {
+  from { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
+  to { opacity: 1; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+}
+@keyframes cs-bulkbar-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+ * Dialog（§21.3）：由 UserDialogRenderer 独占的进出场
+ *
+ * Ant Modal 用 rc-motion，通过 transitionName 生成 `<name>-enter-active` 这类状态类。
+ * 组件里传的 `transitionName="cs-dialog"` / `maskTransitionName="cs-dialog-mask"`
+ * 就把默认的 zoom（scale .2→1，视觉过冲）换成了规范要求的
+ * `opacity 0→1 + scale .96→1 + y 10→0 / 220ms`，遮罩则是 160ms 的 blur 0→6px。
+ * ------------------------------------------------------------------------- */
+.cs-dialog-appear,
+.cs-dialog-enter {
+  opacity: 0;
+  transform: translateY(10px) scale(.96);
+}
+.cs-dialog-appear-active,
+.cs-dialog-enter-active {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--cs-dur-standard) var(--cs-ease-enter),
+    transform var(--cs-dur-standard) var(--cs-ease-enter);
+}
+.cs-dialog-leave { opacity: 1; transform: none; }
+.cs-dialog-leave-active {
+  opacity: 0;
+  transition: opacity 160ms var(--cs-ease-exit);
+}
+.cs-dialog-mask-appear,
+.cs-dialog-mask-enter {
+  opacity: 0;
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
+}
+.cs-dialog-mask-appear-active,
+.cs-dialog-mask-enter-active {
+  opacity: 1;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition:
+    opacity 160ms var(--cs-ease-enter),
+    -webkit-backdrop-filter 160ms var(--cs-ease-enter),
+    backdrop-filter 160ms var(--cs-ease-enter);
+}
+.cs-dialog-mask-leave-active { opacity: 0; transition: opacity 160ms var(--cs-ease-exit); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-dialog-appear-active,
+  .cs-dialog-enter-active,
+  .cs-dialog-leave-active,
+  .cs-dialog-mask-appear-active,
+  .cs-dialog-mask-enter-active,
+  .cs-dialog-mask-leave-active {
+    transition: none !important;
+  }
+}
+
+html[data-app="user"] .cs-popover { animation: cs-popover-in var(--cs-dur-fast) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-dropdown-panel { animation: cs-dropdown-in var(--cs-dur-fast) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-command { animation: cs-command-in 180ms var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-command-backdrop { animation: cs-command-backdrop-in 180ms var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-drawer-enter { animation: cs-drawer-in var(--cs-dur-spatial) var(--cs-ease-enter) both; }
+html[data-app="user"] .cs-bulkbar { animation: cs-bulkbar-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+
+/* =========================================================================
+ * 4. 列表 stagger（§9.4）：只对首屏 6–8 个区块，步长 28ms。
+ *    表格 100 行绝不逐行 stagger。
+ * ========================================================================= */
+@keyframes cs-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+html[data-app="user"] .cs-stagger > * {
+  animation: cs-item-in var(--cs-dur-standard) var(--cs-ease-enter) backwards;
+}
+html[data-app="user"] .cs-stagger > *:nth-child(1) { animation-delay: calc(var(--cs-stagger-step) * 1); }
+html[data-app="user"] .cs-stagger > *:nth-child(2) { animation-delay: calc(var(--cs-stagger-step) * 2); }
+html[data-app="user"] .cs-stagger > *:nth-child(3) { animation-delay: calc(var(--cs-stagger-step) * 3); }
+html[data-app="user"] .cs-stagger > *:nth-child(4) { animation-delay: calc(var(--cs-stagger-step) * 4); }
+html[data-app="user"] .cs-stagger > *:nth-child(5) { animation-delay: calc(var(--cs-stagger-step) * 5); }
+html[data-app="user"] .cs-stagger > *:nth-child(6) { animation-delay: calc(var(--cs-stagger-step) * 6); }
+html[data-app="user"] .cs-stagger > *:nth-child(n+7) { animation-delay: calc(var(--cs-stagger-step) * 7); }
+
+/* =========================================================================
+ * 5. 数值与状态反馈
+ * ========================================================================= */
+/* 高精度金额/Token raw amount：淡入 + 背景高光，不滚数字（§5.3 / §63B） */
+@keyframes cs-flash-soft {
+  from { background-color: rgba(52, 120, 246, .16); }
+  to { background-color: transparent; }
+}
+html[data-app="user"] .cs-flash { animation: cs-flash-soft var(--cs-dur-spatial) var(--cs-ease-exit); }
+
+/* 状态点低频 pulse：只用于"正在运行"，不用于正文（§25.5 / §28.6） */
+@keyframes cs-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29, 184, 232, .42); }
+  50% { box-shadow: 0 0 0 4px rgba(29, 184, 232, 0); }
+}
+@keyframes cs-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(.86); }
+}
+/* 成功一次性：check 路径 220ms，不放烟花（§21.3） */
+@keyframes cs-check-in {
+  from { opacity: 0; transform: scale(.72); }
+  60% { opacity: 1; transform: scale(1.06); }
+  to { opacity: 1; transform: scale(1); }
+}
+html[data-app="user"] .cs-check-in { animation: cs-check-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+/* 警告/错误图标：scale .9 → 1，不左右 shake（§21.3） */
+@keyframes cs-icon-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+html[data-app="user"] .cs-icon-in { animation: cs-icon-in var(--cs-dur-standard) var(--cs-ease-enter) both; }
+
+/* 风险节点/对象的一次性扩散环：只播一次，不无限闪烁（§30.10） */
+@keyframes cs-ripple-once {
+  from { opacity: .55; transform: scale(.6); }
+  to { opacity: 0; transform: scale(1.9); }
+}
+html[data-app="user"] .cs-ripple-once { animation: cs-ripple-once 700ms var(--cs-ease-exit) 1 both; }
+
+/* 通知铃铛：新通知到达时轻微摆动一次，不持续摇动（§19.1） */
+@keyframes cs-bell-once {
+  0%, 100% { transform: rotate(0deg); }
+  22% { transform: rotate(-6deg); }
+  55% { transform: rotate(6deg); }
+  78% { transform: rotate(-2deg); }
+}
+html[data-app="user"] .cs-bell-once { animation: cs-bell-once 620ms var(--cs-ease-standard) 1 both; }
+
+/* 通知项到达：淡蓝背景闪现 400ms（§19.2） */
+@keyframes cs-newrow-flash {
+  from { background-color: var(--cs-primary-soft); }
+  to { background-color: transparent; }
+}
+html[data-app="user"] .cs-newrow-flash { animation: cs-newrow-flash 400ms var(--cs-ease-exit) both; }
+
+/* =========================================================================
+ * 6. 无限循环（系统级，不属于业务状态）
+ * ========================================================================= */
+@keyframes cs-spin { to { transform: rotate(360deg); } }
+@keyframes cs-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes cs-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+html[data-app="user"] .cs-spin { animation: cs-spin 640ms linear infinite; }
+
+/* =========================================================================
+ * 7. 页面隐藏只暂停装饰动画，不停业务订阅（既有机制，保持）
+ * ========================================================================= */
+html[data-page-visible="false"] .cs-page-enter,
+html[data-page-visible="false"] .cs-stagger > *,
+html[data-page-visible="false"] .cs-pipeline__glyph,
+html[data-page-visible="false"] .cs-progressglyph svg,
+html[data-page-visible="false"] .cs-progress__fill--indeterminate,
+html[data-page-visible="false"] .cs-compactprogress__fill--indeterminate,
+html[data-page-visible="false"] .skeleton,
+html[data-page-visible="false"] .auth-flow__edge,
+html[data-page-visible="false"] .auth-flow__node,
+html[data-page-visible="false"] .btn__spinner,
+html[data-page-visible="false"] .cs-spin,
+html[data-page-visible="false"] .cs-dot--running,
+html[data-page-visible="false"] .cs-ripple-once {
+  animation-play-state: paused !important;
+}
+
+/* =========================================================================
+ * 8. Reduced Motion（§9.5）
+ * 位移/缩放/脉冲全部关闭，但**最终状态必须完整可见**。
+ * ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-page-enter,
+  html[data-app="user"] .cs-drawer-enter,
+  html[data-app="user"] .cs-stagger > *,
+  html[data-app="user"] .cs-flash,
+  html[data-app="user"] .cs-popover,
+  html[data-app="user"] .cs-dropdown-panel,
+  html[data-app="user"] .cs-command,
+  html[data-app="user"] .cs-command-backdrop,
+  html[data-app="user"] .cs-bulkbar,
+  html[data-app="user"] .cs-check-in,
+  html[data-app="user"] .cs-icon-in,
+  html[data-app="user"] .cs-ripple-once,
+  html[data-app="user"] .cs-bell-once,
+  html[data-app="user"] .cs-newrow-flash,
+  html[data-app="user"] .cs-inspectorpanel,
+  html[data-app="user"] .cs-actionbar,
+  html[data-app="user"] .cs-pageheader__crumbs,
+  html[data-app="user"] .cs-pageheader__titlerow,
+  html[data-app="user"] .cs-pageheader__actions,
+  html[data-app="user"] .cs-surface,
+  html[data-app="user"] .cs-interactivecard {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* 无限动画停掉，但状态仍要可读 */
+  html[data-app="user"] .cs-pipeline__glyph[data-state="running"],
+  html[data-app="user"] .cs-progress__fill--indeterminate,
+  html[data-app="user"] .cs-compactprogress__fill--indeterminate,
+  html[data-app="user"] .btn__spinner,
+  html[data-app="user"] .cs-dot--running {
+    animation: none !important;
+  }
+  /* indeterminate 变成静态斑纹，而不是消失 */
+  html[data-app="user"] .cs-progress__fill--indeterminate,
+  html[data-app="user"] .cs-compactprogress__fill--indeterminate {
+    width: 100% !important;
+    background: repeating-linear-gradient(90deg, var(--cs-cyan) 0 6px, transparent 6px 12px);
+    transform: none !important;
+  }
+  html[data-app="user"] .skeleton { animation: none; }
+}
