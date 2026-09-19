@@ -305,7 +305,19 @@ export class GraphEngine {
     this.selected.clear();
     this.renderer?.upload(this.store);
     this.labelLayer?.invalidate(this.store);
-    this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    /*
+     * 相机归谁管，取决于交互模式（见 GraphEngineOptions.interactive）：
+     *
+     *   · interactive=true（引擎自己接管指针）——装载后铺满视口是合理的默认；
+     *   · interactive=false（宿主自己管 pan/zoom）——**绝不能动相机**。
+     *     宿主用自己的坐标系表达 pan/zoom，它会在需要时调用 setCamera；
+     *     引擎在这里偷偷 fit 一次，画面就与宿主的坐标系错位了：
+     *     渲染看着正常，但点选、框选会整体偏掉——因为两者不再用同一套换算。
+     *     数据一变（切换布局、筛选、新增节点）就会重新错位一次。
+     */
+    if (this.interactive) {
+      this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    }
     this.frameDirty = true;
     this.events.emit("selection:change", { nodeIds: [] });
   }

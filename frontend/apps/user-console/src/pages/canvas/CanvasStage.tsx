@@ -166,7 +166,13 @@ export function CanvasStage({
     engine.loadGraph(graphNodes, graphEdges);
   }, [graphNodes, graphEdges, ready]);
 
-  /* ---------- 相机：页面 pan/zoom 是唯一真值 ---------- */
+  /*
+   * ---------- 相机：页面 pan/zoom 是唯一真值 ----------
+   *
+   * 依赖里带上 graphNodes：装载新数据之后必须**重新下发**一次相机。
+   * 即便引擎侧已经不擅自 fit（见 loadGraph），这一步也不能省——
+   * 它保证"数据变了的下一帧"画面与页面坐标系仍然一致。
+   */
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || size.width === 0 || size.height === 0) return;
@@ -181,7 +187,7 @@ export function CanvasStage({
     const k = Math.min(size.width / 1000, size.height / 600) || 1;
     engine.setLodThresholds({ near: 3 * k, mid: 0.8 * k });
     engine.setCamera(cameraForViewport(pan, zoom, size.width, size.height));
-  }, [pan, zoom, size, ready]);
+  }, [pan, zoom, size, ready, graphNodes]);
 
   /* ---------- 选中 ---------- */
   useEffect(() => {

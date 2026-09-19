@@ -1398,6 +1398,89 @@ async function main() {
           problems.push(`[${vp.name}] 画布没有上报引擎状态（data-canvas-stats 缺失）`);
         }
         notes.push(`[${vp.name}] 画布契约=${JSON.stringify(canvasContract)}`);
+
+        /*
+         * 画布**交互**契约：点一个节点，选中必须真的落到页面上。
+         *
+         * 这一条补的是迁移后最大的验证缺口：上面那些只证明了引擎在渲染，
+         * 证明不了"点位换算 + pickAny + onSelect"这条链是对的。
+         * 渲染正确但点不中，是迁移里最典型的"看着没事"的缺陷。
+         *
+         * 位置不是猜的：先切到**环形**布局，此时 layoutPositions 的第一个节点
+         * 落在环心（半径 0），再按同一套 viewBox 归一化与相机换算反推出屏幕坐标。
+         * 如果页面那侧的坐标换算错了，点就会落空，选中不会发生。
+         */
+        if (vp.width >= 900 && canvasContract.stage) {
+          const layoutGroup = page.locator('[aria-label^="布局方式"]');
+          const ringButton = layoutGroup.getByRole("button", { name: "环形" });
+          if ((await ringButton.count()) > 0) {
+            await ringButton.first().click();
+            await page.waitForTimeout(600);
+
+            const stageBox = await page.locator(".cs-canvas-stage").first().boundingBox();
+            const before = (await page.locator(".cs-fundgraph__a11y-current").first().innerText().catch(() => "")) ?? "";
+            /*
+             * 不能假设进来时"尚未选中"：画布夹具本身带选中，页面一进来就有聚焦对象。
+             * 所以点两个不同的节点，只要**任意一次**让选中发生变化，就证明
+             * "点位换算 → pickAny → onSelect" 这条链是通的。
+             */
+            {
+              const width = stageBox ? stageBox.width : 0;
+              const height = stageBox ? stageBox.height : 0;
+              /* 环心节点的 viewBox 坐标（与 layoutPositions 的环形分支同源）。 */
+              const RING_RADIUS = 172;
+              const raw = [
+                { x: 0, y: 0 },
+                { x: Math.cos(-Math.PI / 2) * RING_RADIUS, y: Math.sin(-Math.PI / 2) * RING_RADIUS },
+                { x: Math.cos(-Math.PI / 6) * RING_RADIUS, y: Math.sin(-Math.PI / 6) * RING_RADIUS },
+              ];
+              const xs = raw.map((p) => p.x);
+              const ys = raw.map((p) => p.y);
+              const minX = Math.min(...xs);
+              const minY = Math.min(...ys);
+              const spanX = Math.max(...xs) - minX || 1;
+              const spanY = Math.max(...ys) - minY || 1;
+              const pad = 96;
+              const fit = Math.min((1000 - pad * 2) / spanX, (600 - pad * 2) / spanY);
+              const worldX = raw[0].x * fit + ((1000 - spanX * fit) / 2 - minX * fit);
+              const worldY = raw[0].y * fit + ((600 - spanY * fit) / 2 - minY * fit);
+              /* 页面相机：zoom=1、pan=0；viewBox → 容器像素用 xMidYMid meet。 */
+              const k = Math.min(width / 1000, height / 600) || 1;
+              const screenX = worldX * k + (width - 1000 * k) / 2;
+              const screenY = worldY * k + (height - 600 * k) / 2;
+              /* 依次尝试环心节点与环上第一个节点，任一命中即可。 */
+              const candidates = [
+                { x: worldX, y: worldY, name: "环心节点" },
+                {
+                  x: raw[1].x * fit + ((1000 - spanX * fit) / 2 - minX * fit),
+                  y: raw[1].y * fit + ((600 - spanY * fit) / 2 - minY * fit),
+                  name: "环上节点",
+                },
+              ];
+              let clicked = false;
+              for (const candidate of candidates) {
+                const sx = candidate.x * k + (width - 1000 * k) / 2;
+                const sy = candidate.y * k + (height - 600 * k) / 2;
+                if (!stageBox || sx < 4 || sy < 4 || sx > width - 4 || sy > height - 4) continue;
+                await page.mouse.click(stageBox.x + sx, stageBox.y + sy);
+                await page.waitForTimeout(400);
+                const after = (await page.locator(".cs-fundgraph__a11y-current").first().innerText().catch(() => "")) ?? "";
+                if (after !== before) {
+                  notes.push(
+                    `[${vp.name}] 画布交互：点击${candidate.name}后选中变为「${after.replace(/^当前选中：/, "").slice(0, 36)}」`,
+                  );
+                  clicked = true;
+                  break;
+                }
+              }
+              if (!clicked) {
+                problems.push(
+                  `[${vp.name}] 点击画布节点后选中没有变化（尝试了 ${candidates.length} 个位置）——命中换算或 onSelect 链路断了`,
+                );
+              }
+            }
+          }
+        }
       }
 
       /* ---------- 6c. 路由过渡策略（§9.3 / §61） ---------- */
