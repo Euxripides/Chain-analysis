@@ -1,11 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
-  Card,
-  DataTable,
   EmptyState,
-  ErrorState,
   FilterBar,
   FilterChip,
   HashValue,
@@ -13,10 +10,11 @@ import {
   PageSection,
   RelativeTime,
   SearchInput,
-  SkeletonRows,
   StatusBadgeForState,
 } from "@chain/ui";
 import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
+/* 子路径导入：让 ProComponents 只落在这个懒加载路由的 chunk 里（§56.1）。 */
+import { CsProTable } from "@chain/user-ui/pro-table";
 import { useAsync } from "../sprint4/common";
 
 /**
@@ -43,8 +41,6 @@ interface CaseRow {
 }
 
 /** 桌面列宽：骨架屏复用同一组宽度，避免加载完成时列宽跳动（蓝图 §8.4）。 */
-const COLUMN_WIDTHS = ["12%", "26%", "10%", "10%", "9%", "8%", "15%", "10%"];
-
 /** 状态选项与接口接受的 status 值一一对应，标签保持原样。 */
 const STATUS_OPTIONS = [
   { value: "all", label: "全部状态" },
@@ -66,19 +62,9 @@ export default function CasesPage() {
     q: appliedQ || undefined,
   });
   const rows = data ?? [];
-  const narrow = useIsNarrow();
   const hasFilter = status !== "all" || appliedQ !== "";
 
-  /*
-   * 首次加载 vs 刷新（规范 §23.3 / §33）。
-   *
-   * `useAsync` 在每次请求时都会把 loading 置真，但**不清空 data**，
-   * 因此 `data === null` 才是真正的"这一屏还没有任何数据"。
-   * 规范要求：首次加载用完整 skeleton；**已有数据刷新时不清屏**，
-   * 只在顶部显示一条 2px 进度，表格本身保留旧行。
-   * 重构前这里用 `loading` 直接替换成 skeleton，每次点刷新整张表都会闪白。
-   */
-  const firstLoad = loading && data === null;
+  /* 刷新指示：首次加载由 CsProTable 出骨架，刷新时保留旧行 + 顶部进度条（§17.5）。 */
   const refreshing = loading && data !== null;
 
   const href = (id: string) => `/app-v2/cases/${id}/overview`;
@@ -149,141 +135,112 @@ export default function CasesPage() {
           ) : null}
         </FilterBar>
 
-        <Card flush>
-          {/* 刷新指示器与内容同处一个定位上下文，进度条贴在数据区顶部而不是页面顶部。 */}
-          <div style={{ position: "relative", minWidth: 0 }}>
+        <div style={{ position: "relative", minWidth: 0 }}>
           <CsRefreshBar active={refreshing} />
-          {firstLoad ? <SkeletonRows rows={6} columns={8} widths={COLUMN_WIDTHS} /> : null}
-          {!firstLoad && error ? <ErrorState title="案件加载失败" message={error} onRetry={reload} /> : null}
-          {!firstLoad && !error && rows.length === 0 ? (
-            <EmptyState
-              title="没有符合条件的案件"
-              body={
-                hasFilter
-                  ? "当前筛选条件会保留，方便你修改而不是重新输入。"
-                  : "创建案件后即可在这里跟踪对象、调查与报告。"
-              }
-              action={
-                hasFilter ? (
-                  <Button size="sm" onClick={clearFilters}>
-                    清除筛选
+          <CsProTable<CaseRow>
+            rows={rows}
+            rowKey={(row) => row.id}
+            caption="案件列表"
+            loading={loading}
+            error={error ? "案件加载失败，请重试。" : null}
+            onRetry={reload}
+            onRowActivate={(row) => open(row.id)}
+            rowActivateLabel={(row) => `打开案件 ${row.name}`}
+            empty={
+              <EmptyState
+                title="没有符合条件的案件"
+                body={
+                  hasFilter
+                    ? "当前筛选条件会保留，方便你修改而不是重新输入。"
+                    : "创建案件后即可在这里跟踪对象、调查与报告。"
+                }
+                action={
+                  hasFilter ? (
+                    <Button size="sm" onClick={clearFilters}>
+                      清除筛选
+                    </Button>
+                  ) : null
+                }
+              />
+            }
+            mobileCard={(row) => (
+              <div className="cs-rowcard" key={row.id}>
+                <div className="cs-rowcard__head">
+                  <a
+                    className="cs-rowcard__title"
+                    href={href(row.id)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      open(row.id);
+                    }}
+                  >
+                    {row.name}
+                  </a>
+                  <StatusBadgeForState value={row.status} />
+                </div>
+                <div className="cs-rowcard__meta">
+                  <span className="mono">{row.case_no || "—"}</span>
+                  <span>密级 {row.classification || "—"}</span>
+                  <span>优先级 {row.priority || "—"}</span>
+                  <span className="mono">{"r" + row.revision}</span>
+                  <RelativeTime value={row.updated_at} />
+                </div>
+                {row.description ? <div className="cs-rowcard__meta">{row.description}</div> : null}
+                <div className="cs-rowcard__actions">
+                  <Button size="sm" aria-label={"打开案件 " + row.name} onClick={() => open(row.id)}>
+                    打开案件
                   </Button>
-                ) : null
-              }
-            />
-          ) : null}
-
-          {!error && rows.length > 0 && narrow ? (
-            <div className="cs-rowcards">
-              {rows.map((row) => (
-                <div className="cs-rowcard" key={row.id}>
-                  <div className="cs-rowcard__head">
+                  <HashValue value={row.id} label="案件 ID" />
+                </div>
+              </div>
+            )}
+            columns={[
+              {
+                key: "no",
+                header: "案件编号",
+                width: "150px",
+                frozen: true,
+                render: (row) => <span className="mono">{row.case_no || "—"}</span>,
+              },
+              {
+                key: "name",
+                header: "名称",
+                render: (row) => (
+                  <span>
                     <a
-                      className="cs-rowcard__title"
                       href={href(row.id)}
                       onClick={(event) => {
                         event.preventDefault();
+                        event.stopPropagation();
                         open(row.id);
                       }}
                     >
-                      {row.name}
+                      <strong>{row.name}</strong>
                     </a>
-                    <StatusBadgeForState value={row.status} />
-                  </div>
-                  <div className="cs-rowcard__meta">
-                    <span className="mono">{row.case_no || "—"}</span>
-                    <span>密级 {row.classification || "—"}</span>
-                    <span>优先级 {row.priority || "—"}</span>
-                    <span className="mono">{"r" + row.revision}</span>
-                    <RelativeTime value={row.updated_at} />
-                  </div>
-                  {row.description ? <div className="cs-rowcard__meta">{row.description}</div> : null}
-                  <div className="cs-rowcard__actions">
-                    <Button size="sm" aria-label={"打开案件 " + row.name} onClick={() => open(row.id)}>
-                      打开案件
-                    </Button>
+                    {row.description ? <div className="s4-list__sub">{row.description}</div> : null}
+                  </span>
+                ),
+              },
+              { key: "status", header: "状态", width: "120px", render: (row) => <StatusBadgeForState value={row.status} /> },
+              { key: "class", header: "密级", width: "110px", render: (row) => <span>{row.classification || "—"}</span> },
+              { key: "priority", header: "优先级", width: "100px", render: (row) => <span>{row.priority || "—"}</span> },
+              { key: "revision", header: "revision", width: "90px", render: (row) => <span className="mono">{"r" + row.revision}</span> },
+              {
+                key: "id",
+                header: "案件 ID",
+                width: "190px",
+                /* 复制按钮不能顺带触发整行的 Enter/点击激活。 */
+                render: (row) => (
+                  <span onClick={(event) => event.stopPropagation()}>
                     <HashValue value={row.id} label="案件 ID" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {!error && rows.length > 0 && !narrow ? (
-            <DataTable<CaseRow>
-              rows={rows}
-              rowKey={(row) => row.id}
-              caption="案件列表"
-              onRowActivate={(row) => open(row.id)}
-              rowActivateLabel={(row) => `打开案件 ${row.name}`}
-              columns={[
-                {
-                  key: "no",
-                  header: "案件编号",
-                  width: "150px",
-                  frozen: true,
-                  render: (row) => <span className="mono">{row.case_no || "—"}</span>,
-                },
-                {
-                  key: "name",
-                  header: "名称",
-                  render: (row) => (
-                    <span>
-                      <a
-                        href={href(row.id)}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          open(row.id);
-                        }}
-                      >
-                        <strong>{row.name}</strong>
-                      </a>
-                      {row.description ? <div className="s4-list__sub">{row.description}</div> : null}
-                    </span>
-                  ),
-                },
-                { key: "status", header: "状态", width: "120px", render: (row) => <StatusBadgeForState value={row.status} /> },
-                { key: "class", header: "密级", width: "110px", render: (row) => <span>{row.classification || "—"}</span> },
-                { key: "priority", header: "优先级", width: "100px", render: (row) => <span>{row.priority || "—"}</span> },
-                { key: "revision", header: "revision", width: "90px", render: (row) => <span className="mono">{"r" + row.revision}</span> },
-                {
-                  key: "id",
-                  header: "案件 ID",
-                  width: "190px",
-                  /* 复制按钮不能顺带触发整行的 Enter/点击激活。 */
-                  render: (row) => (
-                    <span onClick={(event) => event.stopPropagation()}>
-                      <HashValue value={row.id} label="案件 ID" />
-                    </span>
-                  ),
-                },
-                { key: "updated", header: "最近更新", width: "130px", render: (row) => <RelativeTime value={row.updated_at} /> },
-              ]}
-            />
-          ) : null}
-          </div>
-        </Card>
-      </PageSection>
+                  </span>
+                ),
+              },
+              { key: "updated", header: "最近更新", width: "130px", render: (row) => <RelativeTime value={row.updated_at} /> },
+            ]}
+          />
+        </div>      </PageSection>
     </>
   );
 }
 
-/**
- * 蓝图 §13：<900px 把宽表格换成 `.cs-rowcards` 卡片列表。
- * 与 CanvasPage 的 `useIsMobile` 同一写法：媒体查询是展示层选择，不进入任何请求参数。
- */
-function useIsNarrow(): boolean {
-  const [narrow, setNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 899px)").matches,
-  );
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const query = window.matchMedia("(max-width: 899px)");
-    const update = () => setNarrow(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return narrow;
-}

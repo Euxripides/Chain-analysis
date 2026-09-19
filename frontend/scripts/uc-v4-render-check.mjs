@@ -781,27 +781,34 @@ async function main() {
 
       /* ---------- 4b. 案件中心：刷新不清屏（§17.5 / §23.3 / §33） ---------- */
       {
+        /*
+         * 案件列表已迁移到 CsProTable（§17.1），桌面端是 Ant 表格、窄屏是行卡片，
+         * 因此行选择器必须同时覆盖三种形态。用 \`tr.ant-table-row\` 而不是 \`tr\`，
+         * 是为了排除 Ant 用来测量列宽的隐藏行（.ant-table-measure-row）。
+         */
+        const CASE_ROWS_SELECTOR = ".cs-protable .ant-table-tbody tr.ant-table-row, .cs-rowcards .cs-rowcard, .table tbody tr";
         await page.goto(`${base}/cases`, { waitUntil: "domcontentloaded" });
-        await page.waitForSelector(".table tbody tr, .cs-rowcard", { timeout: 20_000 });
-        const beforeRows = await page.locator(".table tbody tr, .cs-rowcard").count();
+        await page.waitForSelector(CASE_ROWS_SELECTOR, { timeout: 20_000 });
+        const beforeRows = await page.locator(CASE_ROWS_SELECTOR).count();
         if (beforeRows === 0) problems.push(`[${vp.name}] 案件列表未渲染任何行`);
 
         await page.getByRole("button", { name: /^刷新/ }).first().click();
         /* 立刻采样：此时请求还在飞行中（上面注入了 700ms 延迟）。 */
         await page.waitForTimeout(220);
-        const duringRows = await page.locator(".table tbody tr, .cs-rowcard").count();
+        const duringRows = await page.locator(CASE_ROWS_SELECTOR).count();
         if (duringRows < beforeRows) {
           problems.push(`[${vp.name}] 刷新时清屏了：${beforeRows} → ${duringRows} 行`);
         }
-        const skeletonDuringRefresh = await page.locator(".cs-refreshbar, .skeleton").count();
+        const skeletonDuringRefresh = await page.locator(".cs-refreshbar, .skeleton, .ant-skeleton").count();
         if (skeletonDuringRefresh === 0) {
           problems.push(`[${vp.name}] 刷新期间没有任何进度指示`);
         }
-        if ((await page.locator(".skeleton").count()) > 0) {
+        /* .ant-skeleton 也要算进来：CsProTable 首次加载用的是 antd 的 Skeleton。 */
+        if ((await page.locator(".skeleton, .ant-skeleton").count()) > 0) {
           problems.push(`[${vp.name}] 刷新期间仍在渲染 skeleton（应只在首次加载出现）`);
         }
         await page.waitForTimeout(1200);
-        const afterRows = await page.locator(".table tbody tr, .cs-rowcard").count();
+        const afterRows = await page.locator(CASE_ROWS_SELECTOR).count();
         if (afterRows !== beforeRows) {
           problems.push(`[${vp.name}] 刷新后行数变化：${beforeRows} → ${afterRows}`);
         }
