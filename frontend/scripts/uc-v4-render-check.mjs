@@ -1942,6 +1942,72 @@ async function main() {
         `[${vp.name}] console=${signals.consoleErrors.length} pageerror=${signals.pageErrors.length} csp=${signals.csp.length}`,
       );
 
+      /*
+       * ---------- 6f. Reduced Motion（§9.5 / §65「Reduced Motion 完整」） ----------
+       *
+       * 这一条以前**从来没有在运行时验证过**：所有检查都跑在默认（无偏好）上下文里，
+       * 于是 CSS 里那几十行 prefers-reduced-motion 规则、以及页面里
+       * "读 matchMedia 后禁用自动播放"的那几处 JS，全都只是"写了"，没人验过。
+       *
+       * 两个方向都要断：开启后动画必须停；**没开时必须还在动**。
+       * 只验前者的话，把动画全局关掉也能过。
+       *
+       * 用 emulateMedia 在**同一个 page** 上切换，而不是新开 context——
+       * 新 context 不继承 page.route 注册的夹具，重挂一遍既啰嗦又容易漏。
+       */
+      if (vp.width >= 900) {
+        const readCommandAnimation = async () => {
+          await page.goto(`${base}/home`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(700);
+          await page.keyboard.press("Control+k");
+          await page.waitForTimeout(500);
+          const name = await page
+            .locator(".cs-command")
+            .first()
+            .evaluate((el) => getComputedStyle(el).animationName)
+            .catch(() => "(未渲染)");
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(200);
+          return name;
+        };
+
+        const normalAnimation = await readCommandAnimation();
+        if (normalAnimation === "none" || normalAnimation === "(未渲染)") {
+          problems.push(`[reduced-motion] 对照失败：默认偏好下命令面板就没有入场动画（${normalAnimation}），这条断言无法证明任何事`);
+        }
+
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        const reducedAnimation = await readCommandAnimation();
+        if (reducedAnimation !== "none") {
+          problems.push(`[reduced-motion] 开启减少动效后命令面板仍有动画（animation-name=${reducedAnimation}）`);
+        } else {
+          notes.push(`[reduced-motion] 命令面板入场动画：默认 ${normalAnimation} → 减少动效 none`);
+        }
+
+        /* JS 侧：画布自动播放必须被禁用，并且给出可读原因。 */
+        await page.goto(`${base}/canvases/canvas-demo`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1200);
+        const playButton = page.getByRole("button", { name: "播放" });
+        /*
+         * 按钮不存在要**报错**而不是跳过：画布契约里明确有「路径播放控制」这一组，
+         * 找不到它说明前面的假设已经失效，此时静默跳过等于这条断言没写。
+         */
+        if ((await playButton.count()) === 0) {
+          problems.push("[reduced-motion] 画布上找不到「播放」按钮，无法验证自动播放是否被禁用");
+        } else {
+          const disabled = await playButton.first().isDisabled();
+          const title = (await playButton.first().getAttribute("title")) ?? "";
+          if (!disabled) {
+            problems.push("[reduced-motion] 减少动效下画布的自动播放仍可点击");
+          } else if (!title.includes("减少动态效果")) {
+            problems.push(`[reduced-motion] 自动播放被禁用了，但没有说明原因（title=${title.slice(0, 40)}）`);
+          } else {
+            notes.push("[reduced-motion] 画布自动播放已禁用并给出原因");
+          }
+        }
+        await page.emulateMedia({ reducedMotion: null });
+      }
+
       await context.close();
     }
   } finally {
