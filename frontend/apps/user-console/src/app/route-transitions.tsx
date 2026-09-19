@@ -18,14 +18,23 @@ import { routeMetaFor, type RouteTransitionPolicy } from "./route-meta";
  */
 export function RoutedContent({
   pathname,
+  instant = false,
   children,
 }: {
   pathname: string;
+  /**
+   * 安全相关跳转（例如权限被撤销后跳走）传 true，跳过页面级动画。
+   *
+   * 权限变更引发的跳转不该有 Motion 延迟：用户正在看的页面已经因为权限不足
+   * 被卸载了，此时再播一段入场淡入，等于让"你已经没有权限"这件事慢半拍才生效。
+   * 这类跳转由发起方用 `{ state: { csInstant: true } }` 标记。
+   */
+  instant?: boolean;
   children: React.ReactNode;
 }) {
   const { policy } = routeMetaFor(pathname);
 
-  if (policy !== "standard") {
+  if (instant || policy !== "standard") {
     /*
      * heavy / streaming / security：
      * 直接返回 children，连一层包裹 div 都不加——多一层容器就可能多一个

@@ -111,7 +111,11 @@ function Shell() {
   return (
     <UserShell>
       <Suspense fallback={<CsSkeleton shape={meta.skeleton} />}>
-        <RoutedContent pathname={location.pathname}>
+        <RoutedContent
+          pathname={location.pathname}
+          /* 权限被撤销后的跳转会带 csInstant 标记：安全跳转不播页面动画。 */
+          instant={Boolean((location.state as { csInstant?: boolean } | null)?.csInstant)}
+        >
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/login" element={<Navigate to="/home" replace />} />

@@ -303,7 +303,21 @@ const REPORT_ROWS = [
   },
 ];
 
-/* 通知夹具：跨"今天 / 昨天 / 更早"三个自然日，用于验证 §52 的时间分组。 */
+/*
+ * 通知夹具：跨"今天 / 昨天 / 更早"三个自然日，用于验证 §52 的时间分组。
+ *
+ * 时间戳必须**按自然日锚定**，不能用 "Date.now() - 2 小时" 这种相对偏移：
+ * 那样只有在"当前时刻晚于 02:00"时才属于今天。凌晨跑测试（本会话就跑到了凌晨）
+ * 会让两条本该在"今天"的通知落到"昨天"，分组断言随之假失败——
+ * 失败原因看着像产品缺陷，实际是夹具依赖了运行时刻。
+ */
+const dayAnchor = (daysAgo, hour) => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+};
+
 const NOTIFICATIONS = [
   {
     id: "n-1",
@@ -315,7 +329,7 @@ const NOTIFICATIONS = [
     object_id: "f-0001",
     href: "/inbox",
     read_at: null,
-    created_at: new Date(Date.now() - 3600_000).toISOString(),
+    created_at: dayAnchor(0, 9),
   },
   {
     id: "n-2",
@@ -327,7 +341,7 @@ const NOTIFICATIONS = [
     object_id: "job-fixture-1",
     href: "/jobs/job-fixture-1",
     read_at: new Date().toISOString(),
-    created_at: new Date(Date.now() - 7200_000).toISOString(),
+    created_at: dayAnchor(0, 8),
   },
   {
     id: "n-3",
@@ -339,7 +353,7 @@ const NOTIFICATIONS = [
     object_id: "r-0001",
     href: "/reports/r-0001",
     read_at: null,
-    created_at: new Date(Date.now() - 30 * 3600_000).toISOString(),
+    created_at: dayAnchor(1, 10),
   },
   {
     id: "n-4",
@@ -351,7 +365,7 @@ const NOTIFICATIONS = [
     object_id: "case-0001",
     href: "/cases/case-0001/overview",
     read_at: new Date().toISOString(),
-    created_at: new Date(Date.now() - 5 * 86400_000).toISOString(),
+    created_at: dayAnchor(5, 10),
   },
 ];
 
@@ -2155,6 +2169,66 @@ async function main() {
 
         await setSession(SESSION.permissions);
         notes.push(`[perm-matrix] 7 个 Tab 双向通过：${summary.join(" · ")}`);
+
+        /*
+         * ---- 权限在运行中变化：撤销后必须立刻把敏感数据从屏幕上拿掉 ----
+         *
+         * 应用会在窗口 focus 与每 30s 重新拉会话（auth.tsx 的 onFocus 定时器），
+         * 所以"运行中撤销"是真实可触发的，不是假想场景。
+         *
+         * 断言四件事（对应要求的四步）：
+         *   ① 受限 Tab 被卸载；② 已取回的成员数据不再出现在屏幕上；
+         *   ③ 跳到仍有权限的 Tab；④ 这次跳转是即时容器（不播页面动画）。
+         */
+        await setSession(SESSION.permissions);
+        await page.goto(`${base}/cases/case-0001/members`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(1800);
+        const beforeRevoke = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        const hadMemberData = beforeRevoke.includes("案件成员") || beforeRevoke.includes("加入时间");
+        if (!hadMemberData) {
+          problems.push("[perm-revoke] 前置条件不成立：有权限时成员 Tab 没有渲染出成员数据，撤销用例无法验证");
+        }
+
+        /* 把会话换成"已撤销 case:member:list"，再用 focus 事件触发一次会话刷新。 */
+        requestLog.length = 0;
+        await setSession(SESSION.permissions.filter((permission) => permission !== "case:member:list"));
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await page.waitForTimeout(1800);
+
+        const afterRevoke = ((await page.locator("#main-content").first().innerText().catch(() => "")) ?? "").trim();
+        const afterUrl = page.url();
+        const afterMounted = await page.locator(".cs-tabs").count();
+        const afterInstant = await page.locator(".cs-route--instant").count();
+        const membersCallsAfter = countRequests("/api/v2/cases/case-0001/members");
+
+        if (afterUrl.includes("/members")) {
+          problems.push("[perm-revoke] 权限被撤销后仍停留在成员 Tab（没有跳走）");
+        }
+        if (afterRevoke.includes("加入时间")) {
+          problems.push("[perm-revoke] 权限被撤销后屏幕上仍留着成员数据（敏感信息未清除）");
+        }
+        if (afterMounted === 0) {
+          problems.push("[perm-revoke] 撤销后连可访问的 Tab 都没有渲染（应当跳到仍有权限的 Tab）");
+        }
+        if (afterInstant === 0) {
+          problems.push("[perm-revoke] 安全跳转没有走即时容器（cs-route--instant 缺失，会播页面动画）");
+        }
+        if (membersCallsAfter > 0) {
+          problems.push(`[perm-revoke] 撤销后仍然重新请求了成员接口 ${membersCallsAfter} 次`);
+        }
+        if (
+          !afterUrl.includes("/members") &&
+          !afterRevoke.includes("加入时间") &&
+          afterMounted > 0 &&
+          afterInstant > 0 &&
+          membersCallsAfter === 0
+        ) {
+          notes.push(
+            `[perm-revoke] 运行中撤销 case:member:list：已卸载成员 Tab · 成员数据已从屏幕移除 · 跳到 ${afterUrl.replace(base, "")} · 即时容器（无动画）· 撤销后 0 次成员请求`,
+          );
+        }
+
+        await setSession(SESSION.permissions);
       }
 
       /*

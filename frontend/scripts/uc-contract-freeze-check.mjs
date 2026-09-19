@@ -66,13 +66,13 @@ const CASE_TAB_CONTRACT = {
   combination: "AND",
   tabs: [
     { key: "overview", permissions: ["case:read"] },
-    { key: "subjects", permissions: ["subject:list"] },
-    { key: "investigations", permissions: ["investigation:list"] },
+    { key: "subjects", permissions: ["case:read", "subject:list"] },
+    { key: "investigations", permissions: ["case:read", "investigation:list"] },
     /* temporary：临时兼容规则，等案件级证据接口就绪后应收回单一 evidence:list。 */
-    { key: "evidence", permissions: ["evidence:list", "investigation:list"], temporary: true },
-    { key: "reports", permissions: ["report:list", "investigation:list"] },
-    { key: "members", permissions: ["case:member:list"] },
-    { key: "activity", permissions: ["case:activity:read"] },
+    { key: "evidence", permissions: ["case:read", "evidence:list", "investigation:list"], temporary: true },
+    { key: "reports", permissions: ["case:read", "report:list", "investigation:list"] },
+    { key: "members", permissions: ["case:read", "case:member:list"] },
+    { key: "activity", permissions: ["case:read", "case:activity:read"] },
   ],
 };
 
