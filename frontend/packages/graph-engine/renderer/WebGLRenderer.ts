@@ -229,6 +229,11 @@ export class WebGLRenderer {
   private instanceCount = 0;
   private edgeVertexCount = 0;
   private styleDirty = true;
+  /** 边下标按权重降序排列；降采样取前 N 条。 */
+  private edgeOrder = new Uint32Array(0);
+  private renderedEdgeOrder = new Uint32Array(0);
+  private edgeBudget = Number.POSITIVE_INFINITY;
+  private pendingEdgeRebuild = false;
 
   private colorCache = new Float32Array(0);
   private alphaCache = new Float32Array(0);
@@ -310,29 +315,79 @@ export class WebGLRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, store.sizes, gl.DYNAMIC_DRAW);
     this.instanceCount = store.nodeCount;
 
-    const edgeData = new Float32Array(store.edgeCount * 2 * 6);
-    for (let e = 0; e < store.edgeCount; e += 1) {
+    /*
+     * 边按**权重降序**排一次序，之后所有降采样都取这个序列的前 N 条。
+     * 这样远景下留下的是"主干资金流"，而不是任意前 N 条——
+     * 规范 §30.8 要求远景"展示 cluster 与主干资金流"，随便截断会把主干截掉。
+     * 排序只在装载时做一次，不在每帧。
+     */
+    this.edgeOrder = new Uint32Array(store.edgeCount);
+    for (let e = 0; e < store.edgeCount; e += 1) this.edgeOrder[e] = e;
+    this.edgeOrder.sort((a, b) => store.edgeWeight[b] - store.edgeWeight[a] || a - b);
+
+    this.rebuildEdges(store, this.edgeBudget);
+    this.styleDirty = true;
+  }
+
+  /**
+   * 按预算重建边缓冲（§30.8 远景边降采样）。
+   *
+   * 只在 LOD 档位变化时调用，不在每帧调用：这是一次 O(N) 的 CPU 写入 +
+   * 一次 bufferData 上传，放进 RAF 循环会直接吃掉帧率。
+   */
+  private rebuildEdges(store: GraphStore, maxEdges: number): void {
+    const gl = this.gl;
+    if (!gl || this.contextLost) return;
+    const total = this.edgeOrder.length;
+    const count = Math.max(0, Math.min(total, Number.isFinite(maxEdges) ? maxEdges : total));
+    const edgeData = new Float32Array(count * 2 * 6);
+    for (let i = 0; i < count; i += 1) {
+      const e = this.edgeOrder[i];
       const s = store.edgeSource[e];
       const t = store.edgeTarget[e];
-      const base = e * 12;
+      const base = i * 12;
       edgeData[base] = store.positions[s * 2];
       edgeData[base + 1] = store.positions[s * 2 + 1];
       edgeData[base + 2] = this.style.edgeColor[0];
       edgeData[base + 3] = this.style.edgeColor[1];
       edgeData[base + 4] = this.style.edgeColor[2];
-      edgeData[base + 5] = store.edgeSource[e] === t ? 0 : 0.5;
+      edgeData[base + 5] = s === t ? 0 : 0.5;
       edgeData[base + 6] = store.positions[t * 2];
       edgeData[base + 7] = store.positions[t * 2 + 1];
       edgeData[base + 8] = this.style.edgeColor[0];
       edgeData[base + 9] = this.style.edgeColor[1];
       edgeData[base + 10] = this.style.edgeColor[2];
-      edgeData[base + 11] = store.edgeSource[e] === t ? 0 : 0.5;
+      edgeData[base + 11] = s === t ? 0 : 0.5;
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.edgeBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, edgeData, gl.DYNAMIC_DRAW);
-    this.edgeVertexCount = store.edgeCount * 2;
+    this.edgeVertexCount = count * 2;
+    this.renderedEdgeOrder = this.edgeOrder.subarray(0, count);
+  }
 
-    this.styleDirty = true;
+  /** 设置边预算；返回是否真的发生了变化（没变就不重建）。 */
+  setEdgeBudget(maxEdges: number): boolean {
+    if (maxEdges === this.edgeBudget) return false;
+    this.edgeBudget = maxEdges;
+    this.pendingEdgeRebuild = true;
+    return true;
+  }
+
+  /** 由引擎在渲染前调用：真正执行延迟的边重建。 */
+  applyPendingEdgeRebuild(store: GraphStore): void {
+    if (!this.pendingEdgeRebuild) return;
+    this.pendingEdgeRebuild = false;
+    this.rebuildEdges(store, this.edgeBudget);
+  }
+
+  /** 当前实际绘制的边数（验收读的是这个真实值，不是算出来的）。 */
+  get renderedEdges(): number {
+    return this.edgeVertexCount / 2;
+  }
+
+  /** 当前实际绘制的边下标（按权重降序），用于断言"留下的是主干"。 */
+  get renderedEdgeIndices(): Uint32Array {
+    return this.renderedEdgeOrder;
   }
 
   /**
@@ -451,6 +506,8 @@ export class WebGLRenderer {
     if (!gl || this.contextLost) return;
     this.resize(cssWidth, cssHeight, dpr);
     if (this.styleDirty) this.refreshStyleCache(store);
+    /* 边预算变化时在这里落地重建（每帧最多一次，且只在档位真的变了才发生）。 */
+    this.applyPendingEdgeRebuild(store);
 
     const width = this.canvas.width;
     const height = this.canvas.height;

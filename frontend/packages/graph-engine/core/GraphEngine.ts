@@ -6,6 +6,8 @@ import { runLayout as runLayoutOnGraph, type LayoutMode, type LayoutOptions } fr
 import { layoutTransferables, type LayoutRequest, type LayoutResponse } from "../worker/protocol";
 import { findPath, type FindPathOptions, type GraphPath } from "../model/paths";
 import { PlaybackController } from "../interaction/playback";
+import { decideBudget, type BudgetDecision, type BudgetLimits, type RenderMode } from "../perf/budget";
+import { lodLevelFor, policyFor, type LodLevel } from "../perf/lod";
 
 /**
  * 图谱引擎门面（用户端重构规范 V4 §30.2 / §30.3）
@@ -31,6 +33,8 @@ export interface GraphEngineEvents extends Record<string, unknown> {
   /** 路径播放每前进一步（edgeIndex = -1 表示"起点亮起"）。 */
   "path:hop": { path: { hopIndex: number; nodeIndex: number; edgeIndex: number } };
   "path:complete": { nodeIds: string[] };
+  /** 细节层次切换（远景 / 中景 / 近景，§30.8）。 */
+  "lod:change": { level: LodLevel; scale: number; renderedEdges: number };
 }
 
 export interface GraphEngineOptions {
@@ -45,6 +49,8 @@ export interface GraphEngineOptions {
   maxDpr?: number;
   /** 装饰性动画的最低帧率下限；页面隐藏时降到这个值（业务订阅不受影响）。 */
   hiddenFps?: number;
+  /** 覆盖预算阈值（默认取 §30.15 的固定夹具配比）。 */
+  budgetLimits?: BudgetLimits;
 }
 
 export class GraphEngine {
@@ -60,6 +66,18 @@ export class GraphEngine {
   readonly playback = new PlaybackController();
   /** Reduced Motion（§9.5）：关闭粒子，但**不关闭状态**——点亮的边照常显示。 */
   private reducedMotion = false;
+
+  /** 渲染预算判定（§30.15 / §63C）：超出规模时自动降级，而不是卡死。 */
+  readonly budget: BudgetDecision;
+  /**
+   * 当前细节层次，随相机缩放变化。
+   *
+   * 初值是 `null` 而不是 `"far"` —— 这一点很关键：
+   * 如果初始化成 "far"，那么一张**一开始就处于远景**的大图在首帧会命中
+   * "档位没变" 的短路，边预算永远不会下发，于是第一次渲染把全部边都画出来——
+   * 正是最该被降采样的那一次。用 null 强制首帧一定同步一次。
+   */
+  private currentLod: LodLevel | null = null;
 
   private renderer: WebGLRenderer | null = null;
   private canvas: HTMLCanvasElement | null = null;
@@ -103,6 +121,7 @@ export class GraphEngine {
     this.hiddenFps = options.hiddenFps ?? 4;
     this.store.load(options.nodes, options.edges);
     if (options.style) this.pendingStyle = options.style;
+    this.budget = decideBudget(options.nodes.length, options.edges.length, options.budgetLimits);
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     }
@@ -134,6 +153,8 @@ export class GraphEngine {
     }
     this.renderer.upload(this.store);
     this.camera.fit(this.store.bounds(), this.cssWidth(), this.cssHeight());
+    /* 挂载后立刻按当前缩放定档：首帧就该是正确规模，而不是"等用户缩一下才对"。 */
+    this.syncLod();
 
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("pointermove", this.onPointerMove);
@@ -185,6 +206,9 @@ export class GraphEngine {
      */
     this.playback.tick(now);
     if (this.playback.state === "playing") this.frameDirty = true;
+
+    /* 细节层次：由相机缩放决定，变化时调整边预算（§30.8）。 */
+    this.syncLod();
 
     const started = performance.now();
     this.renderer?.render(this.store, this.camera, this.cssWidth(), this.cssHeight(), this.currentDpr(), {
@@ -473,12 +497,54 @@ export class GraphEngine {
     return { width: this.cssWidth(), height: this.cssHeight(), dpr: this.currentDpr() };
   }
 
+  /** 当前细节层次（§30.8）。 */
+  get lod(): LodLevel {
+    return this.currentLod ?? lodLevelFor(this.camera.scale);
+  }
+
+  /**
+   * 把边预算同步到当前缩放对应的档位。
+   *
+   * 只在档位**真的变了**时才下发，避免每帧重建边缓冲；
+   * 而 `currentLod` 初值为 null 保证首帧一定会同步一次。
+   */
+  private syncLod(): void {
+    const level = lodLevelFor(this.camera.scale);
+    if (level === this.currentLod) return;
+    this.currentLod = level;
+    this.renderer?.setEdgeBudget(policyFor(level).maxEdges);
+    this.events.emit("lod:change", {
+      level,
+      scale: this.camera.scale,
+      renderedEdges: this.renderer?.renderedEdges ?? 0,
+    });
+  }
+
+  /** 当前渲染模式（full / aggregate / limit，§30.15）。 */
+  get renderMode(): RenderMode {
+    return this.budget.mode;
+  }
+
+  /**
+   * 当前**实际绘制**的边下标（按权重降序）。
+   *
+   * 公开它有两个用途：验收需要断言"远景下留下的是主干而不是任意前 N 条"；
+   * 页面侧的"当前可见边"统计也不能靠前端自己再算一遍——
+   * 那会和渲染器的真实行为漂移。
+   */
+  renderedEdgeIndices(): Uint32Array {
+    return this.renderer?.renderedEdgeIndices ?? new Uint32Array(0);
+  }
+
   /** 统计信息（验收与性能报告用，不做业务判断）。 */
   stats(): {
     nodes: number;
     edges: number;
     bytes: number;
     webgl2: boolean;
+    renderedEdges: number;
+    lod: LodLevel;
+    renderMode: RenderMode;
     /** 当前真正上传到 GPU 的高亮边数——不是算出来的，是渲染器的实际状态。 */
     highlightedEdges: number;
     /** 当前真正会绘制的粒子实例数。 */
@@ -491,6 +557,9 @@ export class GraphEngine {
       webgl2: this.renderer?.available ?? false,
       highlightedEdges: this.renderer?.highlightedEdges ?? 0,
       particles: this.renderer?.particleCount ?? 0,
+      renderedEdges: this.renderer?.renderedEdges ?? 0,
+      lod: this.lod,
+      renderMode: this.budget.mode,
     };
   }
 

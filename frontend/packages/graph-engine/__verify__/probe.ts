@@ -9,7 +9,7 @@
  */
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { GraphEngine, GraphStore, bfsLayers, findPath, handleLayoutRequest, runLayout } from "../index";
+import { GraphEngine, GraphStore, bfsLayers, decideBudget, findPath, handleLayoutRequest, lodLevelFor, runLayout } from "../index";
 import type { LayoutMode, LayoutRequest } from "../index";
 import { FundGraph } from "@chain/graph-react";
 
@@ -62,6 +62,18 @@ interface ProbeReport {
   /* 节点形状（§30.9）。 */
   shapesDistinct: boolean;
   shapeChecks: string;
+  /* 细节层次与预算（§30.8 / §30.15）。 */
+  budgetFull: boolean;
+  budgetAggregate: boolean;
+  budgetLimit: boolean;
+  lodThresholds: boolean;
+  lodFarLevel: string;
+  lodNearLevel: string;
+  renderedEdgesFar: number;
+  renderedEdgesNear: number;
+  farKeepsHeaviest: boolean;
+  budgetModeForProbe: string;
+  lodChecks: string;
 }
 
 declare global {
@@ -136,6 +148,17 @@ async function run(): Promise<ProbeReport> {
     enginePathEdges: 0,
     shapesDistinct: false,
     shapeChecks: "",
+    budgetFull: false,
+    budgetAggregate: false,
+    budgetLimit: false,
+    lodThresholds: false,
+    lodFarLevel: "",
+    lodNearLevel: "",
+    renderedEdgesFar: 0,
+    renderedEdgesNear: 0,
+    farKeepsHeaviest: false,
+    budgetModeForProbe: "",
+    lodChecks: "",
   };
   if (!mounted) {
     report.error = "webgl2-unavailable";
@@ -212,7 +235,82 @@ async function run(): Promise<ProbeReport> {
 
   /* 9. 节点形状（§30.9）：形状必须真的不同，且拾取热区与所见形状一致。 */
   runShapeChecks(report);
+
+  /* 10. 细节层次与渲染预算（§30.8 / §30.15）。 */
+  await runLodChecks(report);
   return report;
+}
+
+/**
+ * LOD 与预算验收。
+ *
+ * 边数刻意取到**超过远景上限（20000）**，否则降采样根本不会发生，
+ * 断言就会变成"永远通过"。用 20500 条边：远景应留下 20000 条且是权重最高的那些，
+ * 近景应全部画出来。
+ */
+async function runLodChecks(report: ProbeReport) {
+  /* 纯函数部分：预算档位。 */
+  report.budgetFull = decideBudget(10_000, 30_000).mode === "full";
+  report.budgetAggregate = decideBudget(50_000, 150_000).mode === "aggregate";
+  report.budgetLimit = decideBudget(200_000, 600_000).mode === "limit";
+  report.lodThresholds =
+    lodLevelFor(0.2) === "far" && lodLevelFor(1.5) === "mid" && lodLevelFor(6) === "near";
+
+  const NODE_COUNT = 2_050;
+  const EDGE_COUNT = 20_500;
+  const nodes = Array.from({ length: NODE_COUNT }, (_, i) => ({
+    id: "p" + i,
+    kind: "address" as const,
+    x: (i % 64) * 24,
+    y: Math.floor(i / 64) * 24,
+    size: 5,
+  }));
+  const edges = Array.from({ length: EDGE_COUNT }, (_, i) => ({
+    id: "q" + i,
+    source: "p" + (i % NODE_COUNT),
+    target: "p" + ((i * 7 + 3) % NODE_COUNT),
+    /* 权重随下标递增 → 权重最高的是最后一条，便于断言"留下的是主干"。 */
+    weight: i + 1,
+  }));
+
+  report.budgetModeForProbe = decideBudget(NODE_COUNT, EDGE_COUNT).mode;
+
+  const stage = document.getElementById("lod") as HTMLDivElement;
+  stage.style.width = "560px";
+  stage.style.height = "320px";
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  stage.appendChild(canvas);
+
+  const engine = new GraphEngine({ nodes, edges });
+  if (!engine.mount(canvas)) {
+    report.lodChecks = "webgl2-unavailable";
+    return;
+  }
+
+  /* 强制远景：相机缩得很小。 */
+  engine.camera.state.scale = 0.2;
+  engine.camera.state.cx = 700;
+  engine.camera.state.cy = 300;
+  engine.invalidate();
+  await frames(3);
+
+  report.lodFarLevel = engine.stats().lod;
+  report.renderedEdgesFar = engine.stats().renderedEdges;
+  const farIndices = [...engine.renderedEdgeIndices()];
+  /* 留下的必须是权重最高的那些：第一条是权重最大的边（下标 EDGE_COUNT-1）。 */
+  report.farKeepsHeaviest = farIndices.length > 0 && farIndices[0] === EDGE_COUNT - 1;
+
+  /* 强制近景：应把全部边画出来。 */
+  engine.camera.state.scale = 8;
+  engine.invalidate();
+  await frames(3);
+  report.lodNearLevel = engine.stats().lod;
+  report.renderedEdgesNear = engine.stats().renderedEdges;
+
+  engine.dispose();
+  stage.removeChild(canvas);
 }
 
 /**
@@ -544,6 +642,9 @@ run()
       pathNodes: 0, pathCostUnweighted: 0, pathPrefersCheapEdge: false, pathUndirected: false,
       playbackHopsAtTick: 0, playbackCompleted: false, playbackSpeed2xFaster: false, playbackManualStep: false,
       litEdgesAfterHighlight: 0, particleCount: 0, enginePathEdges: 0, shapesDistinct: false, shapeChecks: "",
+      budgetFull: false, budgetAggregate: false, budgetLimit: false, lodThresholds: false,
+      lodFarLevel: "", lodNearLevel: "", renderedEdgesFar: 0, renderedEdgesNear: 0,
+      farKeepsHeaviest: false, budgetModeForProbe: "", lodChecks: "",
       error: String(error && (error as Error).stack ? (error as Error).stack : error),
     };
   });

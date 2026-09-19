@@ -62,7 +62,7 @@ async function main() {
     join(outDir, "index.html"),
     `<!doctype html><html><head><meta charset="utf-8"><title>graph-engine probe</title>
 <style>html,body{margin:0;background:#F4F8FF}#stage{position:relative}#shapes{position:relative}</style></head>
-<body><div id="stage"></div><div id="shapes"></div><script type="module" src="./probe.js"></script></body></html>`,
+<body><div id="stage"></div><div id="shapes"></div><div id="lod"></div><script type="module" src="./probe.js"></script></body></html>`,
     "utf8",
   );
 
@@ -189,6 +189,28 @@ async function main() {
       problems.push(`节点形状未能区分，或拾取热区与形状不一致：${report.shapeChecks}`);
     } else {
       notes.push(`形状检查：${report.shapeChecks}`);
+    }
+
+    /* 细节层次与渲染预算（§30.8 / §30.15）。 */
+    if (!report.budgetFull || !report.budgetAggregate || !report.budgetLimit) {
+      problems.push(`预算档位判定不正确：full=${report.budgetFull} aggregate=${report.budgetAggregate} limit=${report.budgetLimit}`);
+    }
+    if (!report.lodThresholds) problems.push("LOD 阈值判定不正确（远景/中景/近景）");
+    if (report.lodChecks === "webgl2-unavailable") {
+      notes.push("LOD 检查跳过：WebGL2 不可用");
+    } else {
+      if (report.lodFarLevel !== "far") problems.push(`远景缩放下的 LOD 是 ${report.lodFarLevel}，期望 far`);
+      if (report.lodNearLevel !== "near") problems.push(`近景缩放下的 LOD 是 ${report.lodNearLevel}，期望 near`);
+      if (report.renderedEdgesFar !== 20_000) {
+        problems.push(`远景应把边降到 20000 条，实际 ${report.renderedEdgesFar}`);
+      }
+      if (report.renderedEdgesNear !== 20_500) {
+        problems.push(`近景应画出全部 20500 条边，实际 ${report.renderedEdgesNear}`);
+      }
+      if (!report.farKeepsHeaviest) problems.push("远景降采样没有保留权重最高的边（截断成了任意前 N 条）");
+      notes.push(
+        `LOD：far=${report.renderedEdgesFar} 边 · near=${report.renderedEdgesNear} 边 · 预算档位=${report.budgetModeForProbe} · 保留主干=${report.farKeepsHeaviest}`,
+      );
     }
     if (consoleErrors.length > 0) problems.push("console/pageerror：" + JSON.stringify(consoleErrors.slice(0, 3)));
 

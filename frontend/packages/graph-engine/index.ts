@@ -41,6 +41,16 @@ export { PLAYBACK_SPEEDS, PlaybackController } from "./interaction/playback";
 export type { PlaybackOptions, PlaybackState } from "./interaction/playback";
 export { DEFAULT_PARTICLE_APPEARANCE, ParticleProgram } from "./renderer/ParticleProgram";
 export type { ParticleAppearance } from "./renderer/ParticleProgram";
+export {
+  LOD_MID_SCALE,
+  LOD_NEAR_SCALE,
+  LOD_POLICIES,
+  lodLevelFor,
+  policyFor,
+} from "./perf/lod";
+export type { LodLevel, LodPolicy } from "./perf/lod";
+export { DEFAULT_BUDGET_LIMITS, decideBudget } from "./perf/budget";
+export type { BudgetDecision, BudgetLimits, RenderMode } from "./perf/budget";
 export { buildCsr } from "./model/indices";
 export type { CsrIndex, LayoutGraph } from "./model/indices";
 export { attachLayoutWorker, handleLayoutRequest } from "./worker/handleLayoutRequest";
