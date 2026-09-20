@@ -1186,7 +1186,12 @@ export default function AddressDetailPage() {
         defaultAsideWidth={360}
         minAsideWidth={300}
         maxAsideWidth={640}
-        aside={inspector}
+        /*
+         * 活动类 Tab（普通交易 / Token Transfer / Internal）默认收起检查器，让七列表格拿到
+         * 整幅宽度（列表参考站点没有右侧常驻面板）；点任意一行仍然展开它看证据。
+         * 其他 Tab 维持原行为：检查器常驻显示数据来源与口径。
+         */
+        aside={activityActive && !selectedActivity && !selectedCounterparty ? undefined : inspector}
         main={<div className="cs-bento-stack">{content}</div>}
       />
     </>

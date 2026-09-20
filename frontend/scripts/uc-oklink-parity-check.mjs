@@ -55,7 +55,11 @@ const widths = await page.evaluate(() => {
     table: table ? { client: table.clientWidth, width: table.scrollWidth } : null,
   };
 });
-check("关掉检查器后表格无横向溢出", widths.table ? widths.table.width <= widths.table.client + 2 : false, JSON.stringify(widths));
+check(
+  "活动 Tab 默认全宽且七列不需要横向滚动",
+  widths.scroll ? widths.table.width <= widths.scroll.client + 2 : false,
+  JSON.stringify(widths),
+);
 const headers = await page.$$eval("th", (nodes) => nodes.map((n) => n.innerText.trim()));
 check("七列全部可见", ["交易哈希", "方法", "时间", "发送方", "接收方", "数量", "代币"].every((h) => headers.includes(h)), headers.join("|"));
 const rowText = await page.evaluate(() => {
@@ -81,7 +85,7 @@ const nftRow = await page.evaluate(() => {
 });
 check("NFT 行：方法=Transfer", /Transfer/.test(nftRow[1] ?? ""), JSON.stringify(nftRow));
 check("NFT 行：时间 YYYY/MM/DD", /\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/.test(nftRow[2] ?? ""), nftRow[2] ?? "");
-check("NFT 行：双方地址 + Out/In 标签", /0xfe348a/.test(nftRow[3] ?? "") && /0x26db94/.test(nftRow[4] ?? "") && /Out/.test(nftRow[3] ?? ""), JSON.stringify(nftRow.slice(3, 5)));
+check("NFT 行：双方地址 + Out/In 标签", /0xfe34/.test(nftRow[3] ?? "") && /0x26db/.test(nftRow[4] ?? "") && /Out/.test(nftRow[3] ?? ""), JSON.stringify(nftRow.slice(3, 5)));
 check("NFT 行：合集 + #编号 + 标准", /BAYC|BoredApe/.test(nftRow[6] ?? "") && /4937/.test(nftRow[6] ?? "") && /ERC721/.test(nftRow[6] ?? ""), nftRow[6] ?? "");
 await page.screenshot({ path: "/tmp/ok2-nft-wide.png", fullPage: false });
 check("无页面级 JS 错误", errors.length === 0, errors.slice(0, 2).join(" | "));

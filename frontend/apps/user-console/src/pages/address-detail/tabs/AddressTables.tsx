@@ -195,8 +195,12 @@ function PartyCell({
         value={value}
         to={addressPath(chain, value)}
         label={side === "from" ? "发送方地址" : "接收方地址"}
-        head={8}
-        tail={6}
+        /*
+         * 缩略到 6+4：七列要在一屏内放下（参考站点同样只留头尾几位）。
+         * 完整值与复制仍然走 EntityHash 的 title / CopyButton（§2.5）。
+         */
+        head={6}
+        tail={4}
       />
       <SideTag direction={direction} side={side} />
     </span>
@@ -213,9 +217,9 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
     ? "#" + (row.token_id || "—") + (row.token_standard ? " · " + row.token_standard : "")
     : row.token_name || "";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: 150 }}>
       <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
-      <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <span style={{ display: "flex", flexDirection: "column", minWidth: 0, maxWidth: 122 }}>
         <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {primary}
         </span>
@@ -237,7 +241,7 @@ function AmountCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const fiat = fiatText(row.amount_usd);
   const color = row.direction === "in" ? "var(--success, #16a34a)" : row.direction === "out" ? "var(--danger, #dc2626)" : undefined;
   return (
-    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 0 }}>
+    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 0, maxWidth: 150 }}>
       <span className="mono" title={raw ?? ""} style={{ color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {text ? sign + text : "—"}
       </span>
@@ -432,7 +436,7 @@ function TransferTable({ rows, chain, loading, emptyTitle = "没有活动记录"
           width: "150px",
           render: (row) =>
             row.tx_hash ? (
-              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" head={8} tail={6} />
+              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" head={6} tail={4} />
             ) : (
               <span>—</span>
             ),
