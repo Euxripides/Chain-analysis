@@ -299,7 +299,7 @@ func (s *Server) localHistoricalNetFlow(ctx context.Context, sub explorerSubject
 					symbol = nativeSymbol(sub.Chain)
 				}
 				if decimals == 0 {
-					decimals = uint16(nativeDecimals(sub.Chain))
+					decimals = uint16(s.nativeDecimals(sub.Chain))
 				}
 			}
 			out = append(out, map[string]any{
@@ -338,7 +338,7 @@ func (s *Server) localHistoricalNetFlowHeavy(ctx context.Context, sub explorerSu
 	if err == nil && nativeCount > 0 {
 		out = append(out, map[string]any{
 			"asset": "native", "token_symbol": nativeSymbol(sub.Chain), "token_address": "",
-			"decimals": nativeDecimals(sub.Chain), "in_raw": inRaw, "out_raw": outRaw,
+			"decimals": s.nativeDecimals(sub.Chain), "in_raw": inRaw, "out_raw": outRaw,
 			"net_raw":           subtractDecimalStrings(inRaw, outRaw),
 			"transaction_count": nativeCount, "source": "local_index", "is_current_balance": false,
 		})
@@ -387,7 +387,16 @@ func nativeSymbol(chainSlug string) string {
 	}
 }
 
-func nativeDecimals(chainSlug string) int {
+// nativeDecimals 返回链原生资产精度。
+//
+// 唯一事实来源是链注册表（Native.Decimals）：EVM=18、TRON=6、Solana=9。
+// 旧实现硬编码 tron=6/其余=18，会把 SOL 的 9 位精度显示成 18 位。
+func (s *Server) nativeDecimals(chainSlug string) int {
+	if s.deps.ChainRead != nil && s.deps.ChainRead.Chains() != nil {
+		if cfg, err := s.deps.ChainRead.Chains().Require(chainSlug); err == nil && cfg.Native.Decimals > 0 {
+			return int(cfg.Native.Decimals)
+		}
+	}
 	if chainSlug == "tron" {
 		return 6
 	}

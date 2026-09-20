@@ -16,8 +16,12 @@ export interface ChainMeta {
   type: string;
   enabled: boolean;
   supports_trace: boolean;
-  /** 只有下载取数、没有 Explorer 读路径的链（Solana）：下载页可用，Explorer 排除。 */
-  download_only?: boolean;
+  /**
+   * Explorer 读能力：full = 有链上 RPC 读路径；local_index = 只有本地索引（Solana）。
+   * 已不再用于"隐藏整条链"：Solana 的活动/对手方/资金流都读本地索引，数据来源会在
+   * 地址详情的口径弹窗里如实标注（source.provider = local_index）。
+   */
+  explorer_mode?: "full" | "local_index";
 }
 
 export interface DatasetMeta {

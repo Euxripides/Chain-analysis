@@ -15,21 +15,24 @@ func (s *Server) handleUserChains(w http.ResponseWriter, r *http.Request) {
 			items = append(items, map[string]any{
 				"slug": cfg.Slug, "name": cfg.Name, "type": cfg.Type, "enabled": cfg.Enabled,
 				"supports_trace": cfg.SupportsTraceConcept, "default_provider": cfg.DefaultProvider,
-				// download_only：该链只有下载取数，没有 Explorer 读路径（Solana），
-				// 前端据此把它排除在 Explorer 之外，而不是让用户点进去拿到错误。
-				"download_only": downloadOnlyChainType(cfg.Type),
+				// explorer_mode 让前端知道该链能读到什么（见 explorerModeForChainType）。
+				"explorer_mode": explorerModeForChainType(cfg.Type),
 			})
 		}
 	}
 	respondOK(w, r, map[string]any{"items": items, "source": "chain_registry"})
 }
 
-// downloadOnlyChainType 判定链类型是否只有下载取数、没有 Explorer 读路径。
+// explorerModeForChainType 表达该链在 Explorer 里的读能力：
 //
-// Solana 走标准 JSON-RPC（getSignaturesForAddress/getTransaction），没有 EVM 的
-// eth_getCode/eth_getBalance 读接口，也没有本地索引表，因此 Explorer 侧必须排除。
-func downloadOnlyChainType(chainType string) bool {
-	return strings.EqualFold(chainType, "solana")
+//	full        —— 链上有 RPC 读路径（EVM/TRON），地址类型、余额快照等都能取。
+//	local_index —— 只有下载入库的本地索引（Solana）：活动/对手方/资金流可读，
+//	               地址类型与实时余额快照不适用。前端据此给出说明，而不是隐藏整条链。
+func explorerModeForChainType(chainType string) string {
+	if strings.EqualFold(chainType, "solana") {
+		return "local_index"
+	}
+	return "full"
 }
 
 func (s *Server) handleUserDatasets(w http.ResponseWriter, r *http.Request) {
