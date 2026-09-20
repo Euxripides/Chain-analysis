@@ -28,3 +28,4 @@
 | [ADR-020](ADR-020-gate-request-audit-joins-transaction.md) | commit gate 请求内的审计写入加入请求事务 | Accepted | §6.5、§6.6.5、§27 AUDIT-004、§28.6 |
 | [ADR-021](ADR-021-feature-flags-on-request-paths.md) | 功能开关在真实请求路径上求值 | Accepted | §7.3、§16.7、§21.6 |
 | [ADR-022](ADR-022-case-evidence-tab-permission.md) | 案件证据 Tab 的临时双权限（技术债，待产品决策） | Accepted (临时) | §0.4.2、§24.3、AD-003 |
+| [ADR-023](ADR-023-solana-token-transfers-semantics.md) | Solana `token_transfers` 的指令解析口径（钱包 owner、Token-2022、合成排序键） | Proposed | —（计划外新增能力，待批准） |
