@@ -35,6 +35,8 @@ interface ChainItem {
   type: string;
   enabled: boolean;
   supports_trace?: boolean;
+  /** 只有下载取数、没有 Explorer 读路径的链（Solana）：必须排除，避免点进去后报错。 */
+  download_only?: boolean;
 }
 
 interface ChainsData {
@@ -104,7 +106,10 @@ export default function ExplorerPage() {
   const navigate = useNavigate();
   const dialog = useDialog();
   const { data: chainsData, loading: chainsLoading, error: chainsError, reload: reloadChains } = useApi<ChainsData>("/api/v2/meta/chains");
-  const chains = useMemo(() => (chainsData?.items ?? []).filter((item) => item.enabled), [chainsData]);
+  const chains = useMemo(
+    () => (chainsData?.items ?? []).filter((item) => item.enabled && !item.download_only),
+    [chainsData],
+  );
   const [chain, setChain] = useState("");
   const [input, setInput] = useState("");
   const [recent, setRecent] = useState<RecentItem[]>([]);

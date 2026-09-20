@@ -90,7 +90,6 @@ export default function DownloadNewPage() {
   const { busy, run, client } = useS5Action();
 
   const chainsApi = useApi<{ items: ChainMeta[] }>("/api/v2/meta/chains");
-  const datasetsApi = useApi<{ items: DatasetMeta[] }>("/api/v2/meta/datasets");
 
   const [addressText, setAddressText] = useState("");
   const [addresses, setAddresses] = useState<string[]>([]);
@@ -122,6 +121,13 @@ export default function DownloadNewPage() {
   const lastNotifiedError = useRef<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Dataset 白名单必须按链获取：服务端 chainDatasetsByChain 是唯一事实来源
+   * （Solana 目前只有 transactions；TRON 有 internal_transactions 而没有 nft/logs/balances）。
+   * 路径字面量保持不变、链以 query 传递，契约冻结检查因此仍与基线逐字一致。
+   */
+  const datasetsApi = useApi<{ items: DatasetMeta[] }>("/api/v2/meta/datasets", [chain], chain ? { chain } : undefined);
+
   /* 加载错误：ErrorState 只显示通用文案，原始错误正文只允许出现在 Dialog。 */
   useEffect(() => {
     for (const error of [chainsApi.error, datasetsApi.error]) {
@@ -134,6 +140,8 @@ export default function DownloadNewPage() {
 
   const chainItems = chainsApi.data?.items ?? [];
   const datasetItems = datasetsApi.data?.items ?? [];
+  /** Solana 的取数面与 EVM/TRON 不同：全量与时间区间都没有可用的本地索引。 */
+  const solanaChain = chain === "solana";
 
   useEffect(() => {
     if (chain) return;
@@ -147,6 +155,21 @@ export default function DownloadNewPage() {
     if (available.length === 0) return;
     const preferred = ["transactions", "token_transfers"].filter((id) => available.includes(id));
     setDatasets(preferred.length > 0 ? preferred : [available[0]]);
+  }, [datasetItems]);
+
+  /**
+   * 链切换后服务端会返回该链的白名单：已选但新链不支持的 Dataset 必须移除，
+   * 绝不把无效选择带到预览/创建（服务端同样会拒绝）。
+   */
+  useEffect(() => {
+    if (datasetItems.length === 0) return;
+    const available = new Set(datasetItems.map((item) => item.id));
+    setDatasets((current) => {
+      const next = current.filter((id) => available.has(id));
+      if (next.length > 0) return next;
+      const preferred = ["transactions", "token_transfers"].filter((id) => available.has(id));
+      return preferred.length > 0 ? preferred : [datasetItems[0].id];
+    });
   }, [datasetItems]);
 
   const buildPayload = useCallback(
@@ -684,6 +707,21 @@ export default function DownloadNewPage() {
     setPreviewFingerprint(null);
   }, []);
 
+  /**
+   * Solana 只支持显式 slot 区间（服务端 solanaRangeGuard 同样拒绝 full/time）：
+   * 切到 Solana 时若当前范围不是 block，就地纠正并弹窗说明，绝不提交必然失败的请求。
+   */
+  useEffect(() => {
+    if (chain !== "solana" || rangeType === "block") return;
+    setRangeType("block");
+    invalidatePreview();
+    dialog.notify(
+      "info",
+      "已切换为区块区间",
+      "Solana 目前只支持显式 slot（区块）区间：全量与时间区间没有可用的本地索引。",
+    );
+  }, [chain, rangeType, dialog, invalidatePreview]);
+
   const toggleDataset = useCallback((next: string[]) => {
     datasetsTouched.current = true;
     setDatasets(next);
@@ -938,9 +976,13 @@ export default function DownloadNewPage() {
                     invalidatePreview();
                   }}
                 >
-                  <option value="full">full · 全量</option>
+                  <option value="full" disabled={solanaChain}>
+                    full · 全量{solanaChain ? "（Solana 不支持）" : ""}
+                  </option>
                   <option value="block">block · 区块区间</option>
-                  <option value="time">time · 时间区间</option>
+                  <option value="time" disabled={solanaChain}>
+                    time · 时间区间{solanaChain ? "（Solana 不支持）" : ""}
+                  </option>
                 </select>
               </Field>
               {rangeType === "block" ? (

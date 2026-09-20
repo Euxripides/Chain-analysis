@@ -16,6 +16,8 @@ export interface ChainMeta {
   type: string;
   enabled: boolean;
   supports_trace: boolean;
+  /** 只有下载取数、没有 Explorer 读路径的链（Solana）：下载页可用，Explorer 排除。 */
+  download_only?: boolean;
 }
 
 export interface DatasetMeta {

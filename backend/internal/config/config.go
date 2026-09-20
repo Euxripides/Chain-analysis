@@ -465,6 +465,7 @@ type Config struct {
 	ExportReadOrder   string
 	WorkerMetricsPort int
 	Ankr              AnkrConfig
+	Solana            SolanaConfig
 	Tron              TronConfig
 	Method            MethodConfig
 	TokenMetadata     TokenMetadataConfig
@@ -510,6 +511,59 @@ type OIDCConfig struct {
 	ClientSecret string
 	RedirectURL  string
 	Scopes       []string
+}
+
+// SolanaConfig：Solana 走标准 JSON-RPC（Ankr Advanced API 明确拒绝 solana）。
+//
+// 默认复用 Ankr 的 Solana RPC 入口（https://rpc.ankr.com/solana/<API_KEY>）与同一把密钥；
+// 也可以指向任意标准 Solana JSON-RPC（此时 APIKey 通常为空）。
+type SolanaConfig struct {
+	Enabled        bool
+	Endpoint       string
+	APIKey         string
+	MaxPageSize    int
+	Concurrency    int
+	RequestTimeout time.Duration
+}
+
+// solanaEndpointFromEnv 推导 Solana RPC 端点：显式 SOLANA_RPC_ENDPOINT 优先，
+// 否则取 ANKR_ENDPOINT 的 scheme://host 并替换路径为 /solana。
+func solanaEndpointFromEnv() string {
+	if explicit := strings.TrimSpace(os.Getenv("SOLANA_RPC_ENDPOINT")); explicit != "" {
+		return explicit
+	}
+	base := env("ANKR_ENDPOINT", "https://rpc.ankr.com/multichain")
+	scheme := "https://"
+	rest := base
+	if strings.HasPrefix(rest, "https://") {
+		rest = strings.TrimPrefix(rest, "https://")
+	} else if strings.HasPrefix(rest, "http://") {
+		scheme = "http://"
+		rest = strings.TrimPrefix(rest, "http://")
+	}
+	if idx := strings.IndexByte(rest, '/'); idx >= 0 {
+		rest = rest[:idx]
+	}
+	if rest == "" {
+		return ""
+	}
+	return scheme + rest + "/solana"
+}
+
+// solanaConfigFromEnv 组装 Solana Provider 配置。
+func solanaConfigFromEnv() SolanaConfig {
+	endpoint := solanaEndpointFromEnv()
+	key := env("SOLANA_API_KEY", os.Getenv("ANKR_API_KEY"))
+	// 没有凭据的 Ankr 端点运行期必然 401：宁可不开，也不注册一个注定失败的 Provider。
+	ready := endpoint != "" && (key != "" || !strings.Contains(endpoint, "rpc.ankr.com"))
+	return SolanaConfig{
+		Enabled:        envBool("SOLANA_ENABLED", true) && ready,
+		Endpoint:       endpoint,
+		APIKey:         key,
+		MaxPageSize:    envInt("SOLANA_MAX_PAGE_SIZE", 20),
+		Concurrency:    envInt("SOLANA_CONCURRENCY", 4),
+		RequestTimeout: time.Duration(envInt("SOLANA_REQUEST_TIMEOUT_SECONDS", 30)) * time.Second,
+	}
 }
 
 // AnkrManagementConfig controls the account-scoped Management MCP connection.
@@ -1139,6 +1193,7 @@ func Load() *Config {
 			EncryptionKey: os.Getenv("ANKR_MANAGEMENT_ENCRYPTION_KEY"),
 			SyncTTL:       time.Duration(envInt("ANKR_MANAGEMENT_SYNC_TTL_SECONDS", 300)) * time.Second,
 		},
+		Solana: solanaConfigFromEnv(),
 		Ankr: AnkrConfig{
 			Mode:                    env("ANKR_MODE", "mock"),
 			APIKey:                  os.Getenv("ANKR_API_KEY"),

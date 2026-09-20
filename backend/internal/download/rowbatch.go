@@ -80,12 +80,15 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 		}
 		return b, nil
 	}
+	// 非 TRON 分支：Provider 名随链决定（EVM=ankr，Solana=solana），
+	// 它同时决定 raw 路径、source_provider 列与 activity 的 provider 字段。
+	providerName := sc.sourceProviderForDataset(chain, dataset)
 	switch dataset {
 	case "transactions":
 		b.txs = make([]ingest.TxRow, 0, len(rows))
 		b.acts = make([]ingest.ActivityRow, 0, len(rows))
 		for _, raw := range rows {
-			r, err := ingest.NormalizeTransaction(raw, chain, "ankr")
+			r, err := ingest.NormalizeTransaction(raw, chain, providerName)
 			if err != nil {
 				return b, err
 			}
@@ -97,7 +100,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			b.acts = append(b.acts, ingest.ActivityRow{
 				Chain: chain, Address: address, Counterparty: cp, Direction: dir,
 				ActivityType: "transaction", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
-				TxHash: r.TxHash, Dataset: "transactions", Provider: "ankr",
+				TxHash: r.TxHash, Dataset: "transactions", Provider: providerName,
 			})
 		}
 		return b, nil
@@ -105,7 +108,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 		b.transfers = make([]ingest.TokenTransferRow, 0, len(rows))
 		b.acts = make([]ingest.ActivityRow, 0, len(rows))
 		for _, raw := range rows {
-			r, err := ingest.NormalizeTokenTransfer(raw, chain, "ankr")
+			r, err := ingest.NormalizeTokenTransfer(raw, chain, providerName)
 			if err != nil {
 				return b, err
 			}
@@ -117,7 +120,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 				ActivityType: "transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
 				TxHash: r.TxHash, LogIndex: r.LogIndex, TokenAddress: r.TokenAddress,
 				TokenSymbol: r.TokenSymbol, TokenDecimals: r.TokenDecimals, AmountRaw: r.AmountRaw, Amount: r.Amount,
-				Dataset: "token_transfers", Provider: "ankr",
+				Dataset: "token_transfers", Provider: providerName,
 			})
 		}
 		// Enrichment 批量去重、best-effort：绝不让已完成页失败（§52）。
@@ -130,7 +133,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 	case "nft_transfers":
 		b.nfts = make([]ingest.NftTransferRow, 0, len(rows))
 		for _, raw := range rows {
-			r, err := ingest.NormalizeNftTransfer(raw, chain, "ankr")
+			r, err := ingest.NormalizeNftTransfer(raw, chain, providerName)
 			if err != nil {
 				return b, err
 			}
@@ -141,7 +144,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 	case "logs":
 		b.logRows = make([]ingest.LogRow, 0, len(rows))
 		for _, raw := range rows {
-			r, err := ingest.NormalizeLog(raw, chain, "ankr")
+			r, err := ingest.NormalizeLog(raw, chain, providerName)
 			if err != nil {
 				return b, err
 			}
@@ -153,7 +156,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 	case "balances":
 		b.bals = make([]ingest.BalanceRow, 0, len(rows))
 		for _, raw := range rows {
-			r, err := ingest.NormalizeBalance(raw, chain, address, snapshotBlock, "ankr")
+			r, err := ingest.NormalizeBalance(raw, chain, address, snapshotBlock, providerName)
 			if err != nil {
 				return b, err
 			}

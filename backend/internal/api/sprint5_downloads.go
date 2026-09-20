@@ -183,7 +183,9 @@ func (s *Server) prepareDownloadPlan(w http.ResponseWriter, r *http.Request, req
 		}
 		origin := make(map[string]string, len(req.SubjectMeta))
 		for key, meta := range req.SubjectMeta {
-			list, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, []string{strings.ToLower(strings.TrimSpace(key))})
+			// 不能在这里统一 ToLower：EVM 由 NormalizeAndDedupeAddressesForChain 折叠，
+			// 而 Solana 的 base58 地址大小写敏感，先折叠会得到另一个无效地址。
+			list, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, []string{strings.TrimSpace(key)})
 			if err != nil || len(list) == 0 || !allowed[list[0]] {
 				validationError(w, r, "subject_meta 含未通过服务端校验的地址", []fieldError{{Field: "subject_meta", Code: "invalid", Message: key}})
 				return nil, false

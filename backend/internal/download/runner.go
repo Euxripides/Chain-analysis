@@ -73,7 +73,20 @@ func (sc *Scheduler) sourceProviderForDataset(chain, dataset string) string {
 	if chain == "tron" {
 		return sc.cfg.Tron.ProviderForDataset(dataset)
 	}
+	if strings.EqualFold(chain, "solana") {
+		// Solana 走标准 JSON-RPC（Ankr Advanced API 不支持 solana）。
+		return "solana"
+	}
 	return "ankr"
+}
+
+// downloadMethod 返回该链/数据集实际使用的 Provider 方法名；
+// 它进入 request hash 与 raw manifest，必须反映真实来源而不是默认假设。
+func downloadMethod(chain, dataset string) string {
+	if strings.EqualFold(chain, "solana") {
+		return "getTransaction"
+	}
+	return downloadMethodByDataset[dataset]
 }
 
 func downloadPriority(priority int) string {
@@ -142,7 +155,7 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		envelope = &e
 	}
 
-	method := downloadMethodByDataset[sh.Dataset]
+	method := downloadMethod(chain, sh.Dataset)
 	providerName := sc.sourceProviderForDataset(chain, sh.Dataset)
 	if chain == "tron" {
 		if providerName == "trongrid" && sh.Dataset == "transactions" {

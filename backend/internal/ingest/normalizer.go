@@ -44,6 +44,17 @@ func pickAddress(m map[string]any, keys ...string) string {
 	return strings.ToLower(pickString(m, keys...))
 }
 
+// pickAddressForChain 按链决定是否折叠大小写。
+//
+// EVM/Ankr 返回校验和大小写混合，必须折叠才能与查询一致；Solana 的 base58
+// 地址大小写敏感，折叠等于换了一个（无效的）地址，因此必须原样保留。
+func pickAddressForChain(chain string, m map[string]any, keys ...string) string {
+	if strings.EqualFold(chain, "solana") {
+		return pickString(m, keys...)
+	}
+	return pickAddress(m, keys...)
+}
+
 // RawTimestamp 提取原始行的时间戳。
 func RawTimestamp(raw json.RawMessage) (time.Time, bool) {
 	var m map[string]any
@@ -234,8 +245,8 @@ func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, e
 		BlockHash:   pickString(m, "blockHash"),
 		TxHash:      pickString(m, "hash", "transactionHash"),
 		Timestamp:   asTime(m, "timestamp"),
-		From:        pickAddress(m, "from", "fromAddress"),
-		To:          pickAddress(m, "to", "toAddress"),
+		From:        pickAddressForChain(chain, m, "from", "fromAddress"),
+		To:          pickAddressForChain(chain, m, "to", "toAddress"),
 		ValueRaw:    pickString(m, "value"),
 		Nonce:       asUint64(m, "nonce"),
 		Gas:         asUint64(m, "gasLimit"),
@@ -308,9 +319,9 @@ func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenT
 	return TokenTransferRow{
 		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTime(m, "timestamp"),
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		TokenAddress: pickAddress(m, "contractAddress"), TokenSymbol: pickString(m, "tokenSymbol"),
+		TokenAddress: pickAddressForChain(chain, m, "contractAddress"), TokenSymbol: pickString(m, "tokenSymbol"),
 		TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
-		From:          pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
+		From:          pickAddressForChain(chain, m, "fromAddress", "from"), To: pickAddressForChain(chain, m, "toAddress", "to"),
 		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"), Provider: provider,
 	}, nil
 }
@@ -348,8 +359,8 @@ func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTrans
 	return NftTransferRow{
 		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTime(m, "timestamp"),
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		Contract: pickAddress(m, "contractAddress"), TokenID: pickString(m, "tokenId"),
-		From: pickAddress(m, "fromAddress", "from"), To: pickAddress(m, "toAddress", "to"),
+		Contract: pickAddressForChain(chain, m, "contractAddress"), TokenID: pickString(m, "tokenId"),
+		From: pickAddressForChain(chain, m, "fromAddress", "from"), To: pickAddressForChain(chain, m, "toAddress", "to"),
 		TokenName:   pickString(m, "name", "collectionName", "tokenName"),
 		TokenSymbol: pickString(m, "collectionSymbol", "tokenSymbol"),
 		AmountRaw:   pickString(m, "value"), Provider: provider,
@@ -407,7 +418,7 @@ func NormalizeLog(raw json.RawMessage, chain, provider string) (LogRow, error) {
 	return LogRow{
 		Chain: chain, BlockNumber: asUint64(m, "blockNumber"), BlockHash: pickString(m, "blockHash"),
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
-		Address: pickAddress(m, "address"), Topics: topics, Data: pickString(m, "data"),
+		Address: pickAddressForChain(chain, m, "address"), Topics: topics, Data: pickString(m, "data"),
 		Removed: removed, Timestamp: asTime(m, "timestamp"), Provider: provider,
 	}, nil
 }
@@ -455,13 +466,13 @@ func NormalizeBalance(raw json.RawMessage, chain, address string, snapshot uint6
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return BalanceRow{}, err
 	}
-	holder := pickAddress(m, "holderAddress")
+	holder := pickAddressForChain(chain, m, "holderAddress")
 	if holder == "" {
 		holder = address
 	}
 	return BalanceRow{
 		Chain: chain, Address: holder, TokenSymbol: pickString(m, "tokenSymbol"),
-		TokenName: pickString(m, "tokenName"), TokenAddress: pickAddress(m, "contractAddress"),
+		TokenName: pickString(m, "tokenName"), TokenAddress: pickAddressForChain(chain, m, "contractAddress"),
 		TokenType: pickString(m, "tokenType"), TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
 		BalanceRaw: pickString(m, "balanceRawInteger", "balance"), Balance: asBigIntValue(m, "balanceRawInteger"),
 		BalanceUSD: pickString(m, "balanceUsd"), TokenPrice: pickString(m, "tokenPrice"),

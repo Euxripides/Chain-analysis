@@ -12,11 +12,21 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
 var addrRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+
+// solanaRangeGuard：Solana 取数没有可用的时间→slot 索引，主网 slot 已达数亿，
+// full 区间既无法解析也不可安全全量下载，因此只接受显式 slot 区间（2026-09-20）。
+func solanaRangeGuard(chain, rangeType string) error {
+	if !strings.EqualFold(chain, "solana") || rangeType == "block" {
+		return nil
+	}
+	return errors.New("Solana 目前只支持显式区块（slot）区间：请选择 block 范围")
+}
 
 type HeadFn func(ctx context.Context, chain string) (int64, error)
 type ChainValidator func(chain string) error
@@ -94,6 +104,13 @@ func NormalizeAndDedupeAddressesForChain(chain string, in []string) ([]string, e
 			if err != nil {
 				continue
 			}
+		} else if strings.EqualFold(chain, "solana") {
+			// Solana 地址大小写敏感：只校验 32 字节 base58，绝不折叠大小写。
+			normalized, err := solana.NormalizeSolanaAddress(a)
+			if err != nil {
+				continue
+			}
+			a = normalized
 		} else {
 			a = strings.ToLower(a)
 			if !addrRe.MatchString(a) {
@@ -113,6 +130,9 @@ func NormalizeAndDedupeAddressesForChain(chain string, in []string) ([]string, e
 
 func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec) (model.DownloadJobRange, error) {
 	r := model.DownloadJobRange{RangeType: spec.Type}
+	if err := solanaRangeGuard(chain, spec.Type); err != nil {
+		return r, err
+	}
 	switch spec.Type {
 	case "full", "":
 		// Keep the legacy direct-call guard for services that only expose the
@@ -171,6 +191,9 @@ func (s *Service) ResolveRange(ctx context.Context, chain string, spec RangeSpec
 // 链头探测只发生在本地缺口确实需要新建下载任务时（§28.7 验收）。
 func (s *Service) ResolveRangeLocal(chain string, spec RangeSpec) (model.DownloadJobRange, error) {
 	r := model.DownloadJobRange{RangeType: spec.Type}
+	if err := solanaRangeGuard(chain, spec.Type); err != nil {
+		return r, err
+	}
 	switch spec.Type {
 	case "full", "":
 		if strings.EqualFold(chain, "tron") && strings.EqualFold(s.TronProvider, "ankr") && s.TronDefaultProvider == "" && len(s.TronDatasetProviders) == 0 {

@@ -23,6 +23,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
+	solprovider "github.com/blockchain-platform/blockchain-platform/internal/provider/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
@@ -131,6 +132,18 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	} else {
 		prov = ankr.NewMock(cfg.Ankr.MaxPageSize, usageHook)
 		log.Info("provider: ankr-mock (ANKR_MODE=mock)", "hint", "set ANKR_API_KEY and ANKR_MODE=live for real data")
+	}
+	// Solana 走标准 JSON-RPC（Ankr Advanced API 不支持 solana）：用一层按链路由接入，
+	// 未登记的链继续回落 Ankr，下载引擎无需感知。
+	if cfg.Solana.Enabled {
+		if solanaProvider := solprovider.New(solprovider.Options{
+			Endpoint: cfg.Solana.Endpoint, APIKey: cfg.Solana.APIKey,
+			MaxPageSize: cfg.Solana.MaxPageSize, Concurrency: cfg.Solana.Concurrency,
+			RequestTimeout: cfg.Solana.RequestTimeout, UsageHook: usageHook, Log: log,
+		}, usageHook); solanaProvider != nil {
+			prov = provider.NewRouter(prov, map[string]provider.Provider{"solana": solanaProvider})
+			log.Info("provider: solana (standard json-rpc)", "datasets", []string{"transactions"})
+		}
 	}
 	if cfg.Tron.Enabled {
 		needsAnkr, needsTronGrid := false, false

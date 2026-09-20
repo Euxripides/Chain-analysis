@@ -310,7 +310,12 @@ func (sc *Scheduler) writeShardManifest(ctx context.Context, sh model.Shard) str
 	if jerr == nil {
 		m.Chain = job.Chain
 		m.Provider = sc.sourceProviderForDataset(job.Chain, sh.Dataset)
-		if job.Chain == "tron" {
+		if job.Chain == "solana" {
+			// Solana 的数据行由 getSignaturesForAddress + getTransaction 合成，
+			// manifest 记录后者（真正产出行的调用）。
+			m.Method = "getTransaction"
+			m.Provider = "solana"
+		} else if job.Chain == "tron" {
 			if m.Provider == "trongrid" && sh.Dataset == "transactions" {
 				m.Method = "trongrid_transactions"
 			} else {
