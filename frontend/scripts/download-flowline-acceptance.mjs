@@ -263,16 +263,21 @@ function effectiveBackground(ancestors) {
   return base;
 }
 
+/*
+ * 字号下限以《全量整改实施规范》§7.1 为准（它明确取代旧规范的 §8.2 取值）：
+ *   页面标题 桌面 24 / 移动 20；章节标题 15；正文 13（移动 14）；辅助文字 12；
+ *   输入 14（移动 16）；指标数值 18。
+ * 旧值 26/16/13/14/20 由旧规范 §8.2 给出，已被本轮整改规范显式取代。
+ */
 const TEXT_TARGETS = [
-  /* §8.2：页面标题桌面 26px / 移动 22px。 */
-  { name: "页面标题", selector: ".cs-pageheader__title", minSize: 26, minSizeMobile: 22 },
-  { name: "章节标题", selector: ".dl-section-head__title", minSize: 16 },
-  { name: "字段标签", selector: ".dl-field-label", minSize: 13 },
-  { name: "Dataset 标签", selector: ".dl-dataset-card__label", minSize: 14 },
+  { name: "页面标题", selector: ".cs-pageheader__title", minSize: 24, minSizeMobile: 20 },
+  { name: "章节标题", selector: ".dl-section-head__title", minSize: 15 },
+  { name: "字段标签", selector: ".dl-field-label", minSize: 12 },
+  { name: "Dataset 标签", selector: ".dl-dataset-card__label", minSize: 13 },
   { name: "右侧指标标签", selector: ".dl-preview-metric__label", minSize: 12 },
-  { name: "右侧指标数值", selector: ".dl-preview-metric__value", minSize: 20 },
-  { name: "主按钮", selector: ".dl-btn--primary:not([disabled])", minSize: 14 },
-  { name: "轨道标签", selector: ".dl-rail__label", minSize: 13 },
+  { name: "右侧指标数值", selector: ".dl-preview-metric__value", minSize: 18 },
+  { name: "主按钮", selector: ".dl-btn--primary:not([disabled])", minSize: 13 },
+  { name: "轨道标签", selector: ".dl-rail__label", minSize: 12 },
 ];
 
 async function checkClarity(page, viewport, sink) {
@@ -635,7 +640,8 @@ async function runPreviewFlow(page, vp, sink, options = {}) {
     if (!summary.includes("1 个地址")) problem("[" + vp.name + "] 服务端接受后第 ① 步摘要没有反映 1 个地址：" + summary.replace(/\n/g, " "));
   }
 
-  await page.getByRole("button", { name: "预览 Coverage 与成本" }).click();
+  /* 短屏桌面右栏 footer 也有一个次级「预览 Coverage 与成本」：取第一个（左栏 ④ 区）。 */
+  await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
   const previewDialog = page.locator(".cs-dialog").filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
   await previewDialog.waitFor({ state: "visible", timeout: 20_000 });
   await waitForDialogSettled(page);
@@ -1038,7 +1044,7 @@ async function runMultiChainCheck(browser) {
   await verdict.getByRole("button", { name: "使用服务端结果" }).click();
   await page.waitForTimeout(400);
 
-  await page.getByRole("button", { name: "预览 Coverage 与成本" }).click();
+  await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
   for (let index = 0; index < 4; index += 1) {
     const dialog = page.locator(".cs-dialog").filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
     if ((await dialog.count()) === 0) break;
