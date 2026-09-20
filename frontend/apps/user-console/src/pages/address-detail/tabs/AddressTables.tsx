@@ -207,6 +207,27 @@ function PartyCell({
   );
 }
 
+/**
+ * 未验证代币警示标（列表里符号前的小三角）。
+ *
+ * 为什么需要：代币符号是**合约自报**的，任何人都能发一个叫 USDT 的合约；
+ * 参考站点在未审核代币旁挂警示三角，我们也照做，避免用户把山寨符号当成官方资产。
+ * 判定用 explorer enrich 回填的 token_verified；没有该字段（NFT 行等）不显示。
+ */
+function UnverifiedMark({ verified, symbol }: { verified?: boolean; symbol?: string }) {
+  if (verified !== false) return null;
+  const title = (symbol ? symbol + " " : "") + "未通过平台元数据审核：符号与名称来自合约自报，请核对合约地址。";
+  return (
+    <span title={title} aria-label={title} style={{ display: "inline-flex", flex: "0 0 auto", color: "#f59e0b" }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3.5 22 20.5H2L12 3.5Z" fill="currentColor" />
+        <path d="M12 9.5v5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="12" cy="17.4" r="1.2" fill="#fff" />
+      </svg>
+    </span>
+  );
+}
+
 /** 代币单元格：图标 + 符号 +（代币全称 | NFT 的 #编号 · 标准）。 */
 function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const fallback = row.token_address ? shortValue(row.token_address, 6, 4) : "原生代币";
@@ -220,8 +241,15 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: 150 }}>
       <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, maxWidth: 122 }}>
-        <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {primary}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+          {/* 有合约地址却没有"已审核"标记 → 挂警示；原生币与 NFT 合集不挂。 */}
+          <UnverifiedMark
+            verified={row.token_address ? row.token_verified === true : true}
+            symbol={row.token_symbol || primary}
+          />
+          <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {primary}
+          </span>
         </span>
         {secondary ? (
           <span className="s4-list__sub" title={secondary}>

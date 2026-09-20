@@ -69,10 +69,31 @@ func (s *Service) ConfigureLogo(raw *rawstore.Store, cfg LogoConfig) {
 		s.logoQueue = make(chan Metadata, 128)
 	}
 }
+
+const (
+	// logoSweepInterval：存量扫描周期。目录回填（cmd/tokenindex -resolve-logos）是批量
+	// UPDATE，不会产生逐条"元数据已解析"事件，因此必须靠扫描把它们捡起来。
+	logoSweepInterval = 5 * time.Minute
+	// logoSweepBatch：每轮最多本地化多少个图标，避免与请求路径抢带宽。
+	logoSweepBatch = 50
+)
+
 func (s *Service) StartLogoWorker(ctx context.Context) {
 	if !s.Logo.Enabled || s.Raw == nil {
 		return
 	}
+	go func() {
+		ticker := time.NewTicker(logoSweepInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.sweepPendingLogos(ctx)
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
@@ -89,6 +110,34 @@ func (s *Service) StartLogoWorker(ctx context.Context) {
 		}
 	}()
 }
+
+// sweepPendingLogos 把"已有 logo_url、还没有自托管对象"的代币送进队列。
+func (s *Service) sweepPendingLogos(ctx context.Context) {
+	if !s.Logo.Enabled || s.Raw == nil {
+		return
+	}
+	rows, err := s.Store.Pool.Query(ctx, `SELECT chain, contract_address FROM token_metadata
+        WHERE COALESCE(logo_url, '') <> '' AND COALESCE(logo_object_key, '') = ''
+        ORDER BY updated_at DESC LIMIT $1`, logoSweepBatch)
+	if err != nil {
+		s.Log.Warn("token logo sweep query failed", "err", err)
+		return
+	}
+	defer rows.Close()
+	queued := 0
+	for rows.Next() {
+		var chain, contract string
+		if err := rows.Scan(&chain, &contract); err != nil {
+			continue
+		}
+		s.queueLogo(ctx, chain, contract)
+		queued++
+	}
+	if queued > 0 {
+		s.Log.Info("token logo sweep queued", "count", queued)
+	}
+}
+
 func (s *Service) queueLogo(ctx context.Context, chain, contract string) {
 	if !s.Logo.Enabled || s.Raw == nil {
 		return

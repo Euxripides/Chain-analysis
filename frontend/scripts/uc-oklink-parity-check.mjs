@@ -69,6 +69,11 @@ const rowText = await page.evaluate(() => {
 check("数量列有千分位/符号", /^[+−-][\d,]/.test((rowText[rowText.length - 2] || "").trim()), JSON.stringify(rowText));
 check("代币列有符号+全称", /[A-Z]{2,}/.test(rowText[rowText.length - 1] || ""), JSON.stringify(rowText[rowText.length - 1] ?? ""));
 check("发送方列带 Out/In 标签", /Out|In/.test((rowText[3] || "") + (rowText[4] || "")), JSON.stringify(rowText.slice(3, 5)));
+check(
+  "未验证代币有警示三角",
+  (await page.locator('[aria-label*="未通过平台元数据审核"]').count()) > 0,
+  String(await page.locator('[aria-label*="未通过平台元数据审核"]').count()),
+);
 await page.screenshot({ path: "/tmp/ok2-token-wide.png", fullPage: false });
 
 // --- NFT 模式 ---

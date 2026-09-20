@@ -98,6 +98,12 @@ export interface ActivityRow {
   token_symbol?: string;
   /** 代币图标（平台自托管路径；CSP 只允许同源图，为空时前端用首字母兜底）。 */
   token_logo?: string;
+  /**
+   * 元数据是否通过平台审核（explorer enrich 的 token_verified）。
+   * 未审核 / 未知的代币在列表里带一个警示三角，提示"这个符号不可全信"。
+   */
+  token_verified?: boolean;
+  token_metadata_status?: string;
   /** NFT 转账的合集名（来自 nft_transfers.token_name）。 */
   token_name?: string;
   token_decimals?: number;
