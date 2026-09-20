@@ -37,3 +37,26 @@ go run ./cmd/tokenindex -trustwallet /home/euripides/tw-assets-full
 - **CoinGecko 数字 ID**：官方 `/coins/list?include_platform=true` 与 `assets.coingecko.com` 在本机仍 000；
   已导入的聚合 tokenlist 快照（13,234 行）不含 `coingeckoId`。放开出网或提供 JSON 后
   `go run ./cmd/tokenindex -coingecko <file>` 一次性补齐。
+
+## 图标管线修复（同日收尾）
+
+下载完成后，图标本地化曾停在 1,163 且无任何错误日志。逐层排查出四个真缺陷：
+
+1. **进程放错**：logo worker 由 `cmd/worker` 的 `StartTokenMetadataBackground(..., true)` 启动，
+   只重建 `blockchain-api` 不生效 → 必须重建并重启 `blockchain-worker`；
+2. **扫描回查用了错的键**：`sweepPendingLogos` 通过 `Get` 回查元数据，TRON 这类大小写敏感地址
+   在 `normalized_address` 上查不到，33 行永远排不进队列 → 改为直接从行里取
+   `chain/contract_address/logo_url` 组队列元素；
+3. **URL 大小写不合规 → 404**：早期用全小写地址拼 raw URL，而 Trust Wallet 目录名是 EIP-55
+   校验和形式，78 行 bsc 行永远抓不到 → 新增 `tokenindex -repair-logos` 以目录里的源目录名重写；
+4. **单协程静默停摆 + 落库归一化**：单消费者遇到卡住的上传会停住整条管线（改为 4 并发 +
+   单条 60s 墙钟上限）；`localizeLogo` 落库与 `Get` 取键都要用 `normalizeAddressForChain`
+   （全局 `normalizeAddress` 会把 base58 小写化，对象进了 MinIO、行却永远停在未本地化）。
+
+收尾实测：自托管图标 **1,196**（待本地化 0），关键图标路由全部 200 image/png：
+
+| 代币 | 路由 | 结果 |
+| --- | --- | --- |
+| TRON USDT | `/api/v1/tokens/tron/TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/logo` | 200 image/png 21,909B |
+| BSC USDT | `/api/v1/tokens/bsc/0x55d398326f99059ff775485246999027b3197955/logo` | 200 image/png 21,909B |
+| ETH SHIB | `/api/v1/tokens/eth/0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce/logo` | 200 image/png 99,246B |
