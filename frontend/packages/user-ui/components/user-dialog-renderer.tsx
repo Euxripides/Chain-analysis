@@ -265,6 +265,7 @@ export function UserDialogRenderer({ request, onResolve }: DialogRendererProps) 
         {actions.map((action) => (
           <CsButton
             key={action.label}
+            data-testid={action.testId}
             size="middle"
             variant={action.variant === "primary" ? "primary" : action.variant === "danger" ? "danger" : "secondary"}
             title={action.disabled ? action.title : undefined}

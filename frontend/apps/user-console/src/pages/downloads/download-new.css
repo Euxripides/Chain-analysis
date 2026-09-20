@@ -1,0 +1,2946 @@
+/* =============================================================================
+ * 新建数据下载 · Flowline 页面样式（《新建数据下载 Flowline 界面重构实施规范》§8 / §23）
+ *
+ * 作用域：所有规则都挂在 .dl-flow-page 之下，令牌只在该作用域里声明 ——
+ * 不写进共享 :root，也不改 @chain/user-ui 的全局令牌，后台端与其他用户页不受影响（§8.1）。
+ *
+ * 清晰度硬约束（§8.2，这是验收阻断项）：
+ *   · 普通卡片背景 alpha = 1，禁止 backdrop-filter；
+ *   · 不给正文祖先设置 opacity < 1 / filter；
+ *   · 标题不使用 text-shadow，文字不常驻 scale；
+ *   · 失效预览不靠降低 opacity，而是 1px 琥珀边框 + 一次性高光；
+ *   · 数值统一 tabular-nums。
+ * ========================================================================== */
+
+.dl-flow-page,
+.dl-dialog,
+.dl-actionbar {
+  /* ---- 页面级颜色令牌（§8.1）：只在页面、本页 Dialog 与 Portal 出去的移动操作栏内生效 ---- */
+  --dl-canvas: #F5F8FC;
+  --dl-surface: #FFFFFF;
+  --dl-surface-soft: #F8FBFF;
+  --dl-text: #0B1F3A;
+  --dl-text-secondary: #52627A;
+  --dl-text-muted: #6A7890;
+  --dl-border: #D7E1EF;
+  --dl-border-strong: #AFC5E3;
+  --dl-primary: #3478F6;
+  --dl-primary-active: #205FCC;
+  /*
+   * 承载白色文字的实色面必须自己达到 4.5:1：主色 #3478F6 上的白字只有 4.07:1
+   * （与仓库既有色板注释一致），因此填充面统一用压暗一档的 strong 变体，
+   * 而 #3478F6 继续用于描边、图标、渐变与光点这些不承载正文的位置。
+   */
+  --dl-primary-strong: #2563EB;
+  --dl-primary-text: #1F5ED6;
+  --dl-success-text: #0F7A4C;
+  --dl-warning-text: #8F5A08;
+  --dl-danger-text: #B73535;
+  --dl-cyan: #00B9D7;
+  --dl-violet: #7567E8;
+  --dl-success: #079669;
+  --dl-warning: #A65F00;
+  --dl-warning-soft: #FFF7E8;
+  --dl-danger: #B42318;
+
+  /* ---- 轨道几何（§10.3）与结构化补充 ---- */
+  --dl-track: #D7E4F4;
+  --dl-track-soft: #E3EBF6;
+  --dl-radius-surface: 18px;
+  --dl-radius-card: 12px;
+  --dl-radius-input: 10px;
+  --dl-shadow-surface: 0 12px 32px rgba(33, 63, 108, .07);
+  --dl-shadow-hover: 0 16px 36px rgba(33, 63, 108, .12);
+  --dl-shadow-primary: 0 8px 18px rgba(52, 120, 246, .22);
+  --dl-ring: 0 0 0 3px rgba(52, 120, 246, .22);
+
+  position: relative;
+  min-width: 0;
+  padding-bottom: 8px;
+  color: var(--dl-text);
+  isolation: isolate;
+}
+
+/* 背景（§8.4）：两个低透明度径向光晕 + 极淡 32px 网格，全部放在内容下面。 */
+.dl-flow-page::before {
+  content: "";
+  position: absolute;
+  /* 装饰层必须留在页面盒内：向外扩 24px 会在窄视口制造 2–12px 的横向滚动。 */
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 4%, rgba(52, 120, 246, .08), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(0, 185, 215, .07), transparent 30%);
+}
+
+.dl-flow-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .5;
+  background-image:
+    linear-gradient(to right, rgba(52, 120, 246, .045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(52, 120, 246, .045) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .9), transparent 420px);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .9), transparent 420px);
+}
+
+.dl-flow-page,
+.dl-flow-page button,
+.dl-flow-page input,
+.dl-flow-page select,
+.dl-flow-page textarea {
+  font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+.dl-flow-page :focus-visible {
+  outline: none;
+  box-shadow: var(--dl-ring);
+}
+
+.dl-flow-page .mono,
+.dl-flow-page code {
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-flow-page .dl-num,
+.dl-flow-page .dl-fact__value,
+.dl-flow-page .dl-metric__value,
+.dl-flow-page .dl-preview-metric__value,
+.dl-flow-page .dl-ring__value,
+.dl-flow-page .dl-summary dd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- 页面头部 */
+
+/*
+ * 页面头：共享层用的是 `html[data-app="user"] .cs-pageheader__title`（0,2,1），
+ * 页面级规则必须同样带上 html[data-app="user"] 才能赢过它 —— 否则标题会停在共享的 22px/次级色，
+ * 与本规范 §8.2 的"桌面 26px / 主文字色"不一致。
+ */
+html[data-app="user"] .dl-flow-page .cs-pageheader {
+  min-height: 72px;
+  margin-bottom: 16px;
+}
+
+html[data-app="user"] .dl-flow-page .cs-pageheader__title {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--dl-text);
+  text-shadow: none;
+}
+
+.dl-flow-page .dl-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-flow-page .dl-status b {
+  color: var(--dl-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- 工作区 */
+
+.dl-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  gap: 16px;
+  /* 右栏必须与主栏同高，栏内的 sticky 预览才有可粘附的空间（否则它随页面一起滚走）。 */
+  align-items: stretch;
+  min-width: 0;
+}
+
+.dl-aside {
+  min-width: 0;
+  align-self: stretch;
+}
+
+.dl-config-surface,
+.dl-task-preview {
+  min-width: 0;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-surface);
+  background: var(--dl-surface);
+  box-shadow: var(--dl-shadow-surface);
+}
+
+.dl-config-surface {
+  overflow: hidden;
+}
+
+.dl-config-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--dl-border);
+}
+
+.dl-config-section:last-child {
+  border-bottom: 0;
+}
+
+/* ---------------------------------------------------------- 章节头（§7.1） */
+
+.dl-section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+
+.dl-section-head__no {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--dl-border-strong);
+  background: var(--dl-surface);
+  color: var(--dl-primary);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-config-section[data-state="current"] .dl-section-head__no {
+  border-color: var(--dl-primary-strong);
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+}
+
+.dl-config-section[data-state="done"] .dl-section-head__no {
+  border-color: var(--dl-cyan);
+  color: var(--dl-cyan);
+}
+
+.dl-section-head__text {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.dl-section-head__title {
+  margin: 0;
+  color: var(--dl-text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-shadow: none;
+}
+
+.dl-section-head__desc {
+  margin: 2px 0 0;
+  color: var(--dl-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.dl-section-head__meta {
+  margin-left: auto;
+  max-width: 100%;
+  color: var(--dl-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dl-section-head__edit {
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------ 按钮与表单 */
+
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: var(--dl-radius-input);
+  border: 1px solid transparent;
+  background: var(--dl-surface);
+  color: var(--dl-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.dl-btn--sm {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.dl-btn--primary {
+  background: var(--dl-primary-strong);
+  border-color: var(--dl-primary-strong);
+  color: #FFFFFF;
+  box-shadow: var(--dl-shadow-primary);
+}
+
+.dl-btn--primary:hover:not(:disabled) {
+  background: var(--dl-primary-active);
+  border-color: var(--dl-primary-active);
+}
+
+.dl-btn--primary-soft {
+  background: rgba(52, 120, 246, .1);
+  border-color: rgba(52, 120, 246, .28);
+  color: var(--dl-primary-active);
+}
+
+.dl-btn--primary-soft:hover:not(:disabled) {
+  background: rgba(52, 120, 246, .16);
+}
+
+.dl-btn--secondary {
+  background: var(--dl-surface);
+  border-color: var(--dl-border-strong);
+  color: var(--dl-text);
+}
+
+.dl-btn--secondary:hover:not(:disabled),
+.dl-btn--ghost:hover:not(:disabled) {
+  border-color: var(--dl-primary);
+  color: var(--dl-primary-active);
+}
+
+.dl-btn--ghost {
+  background: transparent;
+  border-color: var(--dl-border);
+  color: var(--dl-text-secondary);
+}
+
+.dl-btn--block {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* 禁用态不靠整体 opacity：文字仍然可读（§13.5 的同类要求）。 */
+.dl-btn:disabled {
+  cursor: not-allowed;
+  /* 禁用态仍然要读得清：用次级文字色而不是更浅的弱化色。 */
+  color: var(--dl-text-secondary);
+  background: var(--dl-surface-soft);
+  border-color: var(--dl-border);
+  box-shadow: none;
+}
+
+.dl-flow-page .dl-spin {
+  animation: dl-spin 1s linear infinite;
+}
+
+@keyframes dl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dl-field-label {
+  color: var(--dl-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.dl-textarea,
+.dl-input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--dl-border-strong);
+  border-radius: var(--dl-radius-input);
+  background: var(--dl-surface);
+  color: var(--dl-text);
+  font-size: 14px;
+  line-height: 1.55;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.dl-textarea {
+  min-height: 124px;
+  resize: vertical;
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.dl-input {
+  height: 42px;
+}
+
+.dl-input.mono {
+  font-size: 13px;
+}
+
+.dl-textarea:focus-visible,
+.dl-input:focus-visible {
+  border-color: var(--dl-primary);
+}
+
+.dl-textarea[aria-invalid="true"],
+.dl-input[aria-invalid="true"] {
+  border-color: var(--dl-danger);
+}
+
+/* ------------------------------------------------------ ① 对象与地址（§11） */
+
+.dl-address__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 208px;
+  gap: 14px;
+  align-items: start;
+}
+
+.dl-address__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dl-address__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  min-height: 20px;
+}
+
+.dl-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dl-fact__label {
+  color: var(--dl-text-muted);
+  font-weight: 500;
+}
+
+.dl-fact__value {
+  color: var(--dl-text);
+  font-weight: 700;
+}
+
+.dl-fact[data-tone="ok"] .dl-fact__value { color: var(--dl-success-text); }
+.dl-fact[data-tone="warn"] .dl-fact__value { color: var(--dl-warning-text); }
+.dl-fact[data-tone="danger"] .dl-fact__value { color: var(--dl-danger-text); }
+
+.dl-address__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dl-address__reset {
+  margin-left: auto;
+}
+
+.dl-filebtn {
+  position: relative;
+  overflow: hidden;
+}
+
+.dl-filebtn input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.dl-address__import {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 1px dashed var(--dl-border-strong);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface-soft);
+  text-align: center;
+}
+
+.dl-address__import[data-busy="true"] {
+  border-style: solid;
+  border-color: var(--dl-primary);
+  background: var(--dl-surface);
+}
+
+.dl-address__importicon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-primary);
+}
+
+.dl-address__importtitle {
+  margin: 0;
+  color: var(--dl-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.dl-address__importhint {
+  margin: 0;
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.dl-address__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.dl-address__progressbar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--dl-track-soft);
+}
+
+.dl-address__progressbar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--dl-primary), var(--dl-cyan));
+  animation: dl-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes dl-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+/* ------------------------------------------------------ ② 链与范围（§12） */
+
+.dl-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dl-scope__row {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.dl-scope__row--fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 560px;
+}
+
+.dl-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--dl-border);
+  border-radius: 12px;
+  background: var(--dl-surface-soft);
+}
+
+.dl-segmented[data-invalid="true"] {
+  border-color: var(--dl-danger);
+}
+
+.dl-segmented__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  color: var(--dl-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .18s ease, color .18s ease;
+}
+
+/*
+ * 隐藏的原生控件铺满整个可点区域（而不是缩成 1×1px）：
+ * 这样鼠标、触摸与自动化点击都命中真正的 form control，
+ * 不会出现"点在内层文字上触发 label 转发、再被外层接住"的双重切换。
+ */
+.dl-segmented__item input,
+.dl-mode__hit input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dl-segmented__item > *:not(input),
+.dl-mode__hit > *:not(input) {
+  pointer-events: none;
+}
+
+.dl-segmented__item:has(input:disabled) input,
+.dl-mode__hit input:disabled {
+  cursor: not-allowed;
+}
+
+.dl-segmented__mark {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dl-border-strong);
+  background: var(--dl-surface);
+}
+
+.dl-segmented__item[data-active="true"] {
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+}
+
+.dl-segmented__item[data-active="true"] .dl-segmented__mark {
+  border-color: #FFFFFF;
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 3px var(--dl-primary-strong);
+}
+
+.dl-segmented__item:has(input:disabled) {
+  cursor: not-allowed;
+  color: var(--dl-text-muted);
+}
+
+/* 能力不允许的范围类型（data-disabled）与"正忙"分开：虚线圆点是形状通道，灰度下也可辨。 */
+.dl-segmented__item[data-disabled="true"] .dl-segmented__mark {
+  border-style: dashed;
+}
+
+.dl-segmented__item:has(input:focus-visible) {
+  box-shadow: var(--dl-ring);
+}
+
+.dl-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 560px;
+}
+
+.dl-mode {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.dl-mode:hover {
+  border-color: var(--dl-border-strong);
+}
+
+.dl-mode[data-active="true"] {
+  border-color: var(--dl-primary);
+  box-shadow: inset 0 0 0 .5px var(--dl-primary);
+  background: var(--dl-surface-soft);
+}
+
+.dl-mode__hit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 58px;
+  padding: 8px 6px 8px 12px;
+  cursor: pointer;
+}
+
+.dl-mode__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-primary);
+}
+
+.dl-mode[data-active="true"] .dl-mode__icon {
+  border-color: var(--dl-primary-strong);
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+}
+
+.dl-mode__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dl-mode__label {
+  color: var(--dl-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.dl-mode__hint {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.dl-mode__mark {
+  display: none;
+}
+
+.dl-mode__info {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dl-text-muted);
+  cursor: pointer;
+}
+
+.dl-mode__info:hover {
+  background: var(--dl-surface-soft);
+  color: var(--dl-primary);
+}
+
+/* --------------------------------------------------------- ③ Dataset（§13） */
+
+.dl-dataset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 10px;
+}
+
+.dl-dataset-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface);
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.dl-dataset-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--dl-border-strong);
+  box-shadow: var(--dl-shadow-surface);
+}
+
+.dl-dataset-card[data-selected="true"] {
+  border-color: var(--dl-primary);
+  box-shadow: inset 0 0 0 .5px var(--dl-primary);
+  background: var(--dl-surface-soft);
+}
+
+.dl-dataset-card[data-blocked="true"]:hover {
+  border-color: var(--dl-warning);
+}
+
+.dl-dataset-card[data-disabled="true"] {
+  cursor: not-allowed;
+  background: var(--dl-surface-soft);
+}
+
+.dl-dataset-card[data-disabled="true"] .dl-dataset-card__label {
+  color: var(--dl-text-secondary);
+}
+
+/* 不可用（unsupported）与"暂时不可操作（busy）"分开表达：
+   虚线边框是**形状通道**，灰度下也能与可选项区分，且不在卡片里堆说明文字。 */
+.dl-dataset-card[data-unavailable="true"] {
+  border-style: dashed;
+  background: var(--dl-surface-soft);
+  cursor: not-allowed;
+}
+
+.dl-dataset-card[data-unavailable="true"]:hover {
+  transform: none;
+  border-color: var(--dl-border);
+  box-shadow: none;
+}
+
+.dl-dataset-card[data-unavailable="true"] .dl-dataset-card__icon {
+  color: var(--dl-text-muted);
+}
+
+.dl-dataset-card:has(.dl-dataset-card__input:focus-visible) {
+  box-shadow: var(--dl-ring);
+}
+
+.dl-dataset-card__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dl-dataset-card > *:not(.dl-dataset-card__input) {
+  pointer-events: none;
+}
+
+.dl-dataset-card[data-disabled="true"] .dl-dataset-card__input {
+  cursor: not-allowed;
+}
+
+.dl-dataset-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dl-dataset-card__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-primary);
+}
+
+.dl-dataset-card__check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+}
+
+.dl-dataset-card[data-selected="true"] .dl-dataset-card__icon {
+  border-color: var(--dl-primary-strong);
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+}
+
+.dl-dataset-card__label {
+  color: var(--dl-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dl-dataset-card__desc {
+  color: var(--dl-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dl-dataset-card__arc {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 6px;
+  overflow: visible;
+}
+
+.dl-dataset-card--skeleton {
+  background: var(--dl-surface-soft);
+  border-style: dashed;
+}
+
+/* --------------------------------------------------- ④ Coverage 预览（§14） */
+
+.dl-coverage {
+  border: 1px solid transparent;
+  border-radius: var(--dl-radius-card);
+}
+
+.dl-coverage[data-stale="true"],
+.dl-preview-stale {
+  border-color: var(--dl-warning);
+  background: var(--dl-warning-soft);
+}
+
+.dl-coverage--idle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-color: var(--dl-border);
+  background: var(--dl-surface-soft);
+}
+
+.dl-coverage__idleicon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-primary);
+}
+
+.dl-coverage__idlelabel {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--dl-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.dl-coverage__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dl-coverage__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-coverage__state[data-tone="ok"] {
+  border-color: rgba(15, 122, 76, .3);
+  background: rgba(15, 122, 76, .08);
+  color: var(--dl-success-text);
+}
+
+.dl-coverage__state[data-tone="warn"] {
+  border-color: rgba(143, 90, 8, .3);
+  background: var(--dl-warning-soft);
+  color: var(--dl-warning-text);
+}
+
+.dl-coverage__headactions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dl-coverage__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dl-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface);
+}
+
+.dl-metric__label {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dl-metric__value {
+  color: var(--dl-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.dl-metric[data-strong="true"] .dl-metric__value {
+  font-size: 26px;
+  color: var(--dl-primary-active);
+}
+
+.dl-coverage__table {
+  margin-top: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface);
+}
+
+.dl-coverage__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dl-coverage__table th,
+.dl-coverage__table td {
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--dl-border);
+  color: var(--dl-text);
+}
+
+.dl-coverage__table th {
+  background: var(--dl-surface-soft);
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.dl-coverage__table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------ ⑤ 任务预览（§15） */
+
+.dl-task-preview {
+  position: sticky;
+  top: calc(var(--cs-topbar-h, 60px) + 16px);
+  overflow: hidden;
+}
+
+.dl-task-preview__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--dl-border);
+}
+
+.dl-task-preview__title {
+  margin: 0;
+  color: var(--dl-text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.dl-task-preview__state {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface-soft);
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-task-preview__state[data-tone="ok"] {
+  border-color: rgba(15, 122, 76, .3);
+  background: rgba(15, 122, 76, .08);
+  color: var(--dl-success-text);
+}
+
+.dl-task-preview__state[data-tone="warn"] {
+  border-color: rgba(143, 90, 8, .3);
+  background: var(--dl-warning-soft);
+  color: var(--dl-warning-text);
+}
+
+.dl-task-preview__body {
+  padding: 16px 18px 0;
+}
+
+.dl-task-preview__body[data-stale="true"] {
+  border-left: 1px solid var(--dl-warning);
+  border-right: 1px solid var(--dl-warning);
+  background: var(--dl-warning-soft);
+}
+
+.dl-task-preview__ring {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dl-ring {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.dl-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dl-ring__value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -62%);
+  color: var(--dl-text);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.dl-ring__caption {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 42%);
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dl-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.dl-legend b {
+  color: var(--dl-text);
+  font-weight: 700;
+}
+
+.dl-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dl-legend__dot--covered { background: var(--dl-primary); }
+.dl-legend__dot--open { background: var(--dl-track-soft); border: 1px solid var(--dl-border-strong); }
+
+.dl-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface-soft);
+}
+
+.dl-path__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+
+.dl-path__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--dl-border);
+  background: var(--dl-surface);
+  color: var(--dl-text-secondary);
+}
+
+.dl-path__node[data-state="done"] .dl-path__icon {
+  border-color: var(--dl-cyan);
+  color: var(--dl-cyan);
+}
+
+.dl-path__node[data-state="partial"] .dl-path__icon {
+  border-color: var(--dl-warning);
+  color: var(--dl-warning);
+  background: var(--dl-warning-soft);
+}
+
+.dl-path__label {
+  color: var(--dl-text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.dl-path__hint {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.dl-path__arrow {
+  flex: 0 0 auto;
+  color: var(--dl-border-strong);
+}
+
+.dl-preview-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.dl-preview-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface);
+}
+
+.dl-preview-metric__label {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dl-preview-metric__value {
+  color: var(--dl-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.dl-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 16px 0 0;
+  padding: 0 18px;
+}
+
+.dl-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--dl-border);
+}
+
+.dl-summary__row:last-child {
+  border-bottom: 0;
+}
+
+.dl-summary dt {
+  flex: 0 0 auto;
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dl-summary dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.dl-summary__chain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dl-task-preview__actions {
+  padding: 16px 18px 18px;
+}
+
+/* -------------------------------------------------------- 轨道：横向（§10.3） */
+
+.dl-rail {
+  position: relative;
+  height: 96px;
+  margin: 0 0 16px;
+}
+
+.dl-rail__track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 96px;
+  overflow: visible;
+}
+
+.dl-rail__base {
+  fill: none;
+  stroke: var(--dl-track);
+  stroke-width: 2;
+}
+
+.dl-rail__echo {
+  fill: none;
+  stroke: var(--dl-track);
+  stroke-width: 1;
+  opacity: .35;
+}
+
+.dl-rail__active {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.dl-rail__dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dl-rail__dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dl-cyan);
+  box-shadow: 0 0 0 4px rgba(0, 185, 215, .16);
+  transform: translate(-50%, -50%);
+}
+
+.dl-rail__dot--trail {
+  width: 5px;
+  height: 5px;
+  background: var(--dl-primary);
+  box-shadow: none;
+  opacity: .35;
+}
+
+.dl-rail__steps {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dl-rail__item {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.dl-rail__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 128px;
+  min-height: 96px;
+  padding: 16px 8px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.dl-rail__node:disabled {
+  cursor: default;
+}
+
+.dl-rail__nodebody {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dl-border-strong);
+  background: var(--dl-surface);
+  color: var(--dl-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.dl-rail__node[data-state="current"] .dl-rail__nodebody {
+  border-color: var(--dl-primary-strong);
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+  box-shadow: 0 0 0 8px rgba(52, 120, 246, .14);
+}
+
+.dl-rail__node[data-state="done"] .dl-rail__nodebody {
+  border-color: var(--dl-cyan);
+  background: var(--dl-surface);
+  color: var(--dl-cyan);
+}
+
+.dl-rail__index {
+  line-height: 1;
+}
+
+.dl-rail__label {
+  margin-top: 14px;
+  color: var(--dl-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.dl-rail__node[data-state="todo"] .dl-rail__label {
+  color: var(--dl-text-secondary);
+}
+
+.dl-rail__sublabel {
+  margin-top: 2px;
+  color: var(--dl-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.dl-rail__node[data-state="current"] .dl-rail__sublabel {
+  color: var(--dl-primary-active);
+  font-weight: 600;
+}
+
+.dl-rail__node[data-running="true"] .dl-rail__nodebody {
+  border-color: var(--dl-primary);
+  color: var(--dl-primary);
+  box-shadow: 0 0 0 6px rgba(52, 120, 246, .14);
+  animation: dl-node-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes dl-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(52, 120, 246, .1); }
+  50% { box-shadow: 0 0 0 9px rgba(52, 120, 246, .2); }
+}
+
+/* -------------------------------------------------------- 竖向轨道（§7.5） */
+
+.dl-vrail {
+  width: 72px;
+}
+
+.dl-vrail__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dl-vrail__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dl-vrail__node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dl-vrail__node:disabled {
+  cursor: default;
+}
+
+.dl-vrail__nodebody {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dl-border-strong);
+  background: var(--dl-surface);
+  color: var(--dl-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-vrail__node[data-state="current"] .dl-vrail__nodebody {
+  border-color: var(--dl-primary-strong);
+  background: var(--dl-primary-strong);
+  color: #FFFFFF;
+  box-shadow: 0 0 0 6px rgba(52, 120, 246, .14);
+}
+
+.dl-vrail__node[data-state="done"] .dl-vrail__nodebody {
+  border-color: var(--dl-cyan);
+  color: var(--dl-cyan);
+}
+
+.dl-vrail__label {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.dl-vrail__node[data-state="current"] .dl-vrail__label,
+.dl-vrail__node[data-state="done"] .dl-vrail__label {
+  color: var(--dl-text);
+}
+
+.dl-vrail__line {
+  width: 2px;
+  height: 22px;
+  margin: 2px 0;
+  border-radius: 2px;
+  background: var(--dl-track);
+}
+
+.dl-vrail__line[data-active="true"] {
+  background: linear-gradient(180deg, var(--dl-primary), var(--dl-cyan));
+}
+
+/* ------------------------------------------------- 空态（§20）
+ *
+ * 元数据加载失败不再有内联横幅：提示一律走 Dialog（AGENTS.md / code-standards 第 5 条），
+ * 页面里只保留业务空态（EmptyState / .state）。
+ */
+
+/* --------------------------------------------------- 移动端动作栏（§16.2） */
+
+.dl-actionbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--cs-z-topbar, 50);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--dl-border);
+  background: #FFFFFF;
+}
+
+.dl-actionbar .dl-btn {
+  min-height: 48px;
+}
+
+/* ------------------------------------------------- 折叠摘要卡（§7.5 / §16.2） */
+
+.dl-step-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.dl-step-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dl-step-summary__item span {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dl-mobile-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------- 响应式 */
+
+@media (max-width: 1199px) {
+  .dl-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-task-preview {
+    position: static;
+  }
+
+  .dl-coverage__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1199px) {
+  /* 轨道节点中心固定在 6% / 94%：窄视口下节点必须收窄，否则最后一个节点会顶出页面。 */
+  .dl-rail__node {
+    min-width: 96px;
+  }
+}
+
+@media (max-width: 899px) {
+  .dl-rail,
+  .dl-rail__track {
+    height: 88px;
+  }
+
+  .dl-rail__node {
+    min-height: 88px;
+    padding-top: 12px;
+  }
+
+  .dl-rail__sublabel {
+    display: none;
+  }
+
+  .dl-address__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-scope__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-dataset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .dl-flow-page {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  html[data-app="user"] .dl-flow-page .cs-pageheader {
+    min-height: 0;
+  }
+
+  html[data-app="user"] .dl-flow-page .cs-pageheader__title {
+    font-size: 22px;
+  }
+
+  /* iOS 上小于 16px 的输入控件会自动放大页面（§7.5）。 */
+  .dl-flow-page input,
+  .dl-flow-page select,
+  .dl-flow-page textarea,
+  .dl-flow-page .dl-textarea {
+    font-size: 16px;
+  }
+
+  .dl-mobile-flow-layout {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 12px 8px;
+    min-width: 0;
+  }
+
+  .dl-mobile-flow-layout .dl-config-surface {
+    border-radius: 16px;
+  }
+
+  .dl-config-surface {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .dl-config-section {
+    padding: 16px;
+    border: 1px solid var(--dl-border);
+    border-radius: 16px;
+    background: var(--dl-surface);
+    box-shadow: var(--dl-shadow-surface);
+  }
+
+  .dl-config-section[data-collapsed="true"] .dl-section-body {
+    display: none;
+  }
+
+  .dl-config-section[data-collapsed="false"] .dl-section-head {
+    margin-bottom: 16px;
+  }
+
+  .dl-section-head {
+    margin-bottom: 0;
+  }
+
+  .dl-section-head__desc {
+    display: none;
+  }
+
+  .dl-dataset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dl-dataset-card {
+    min-height: 128px;
+  }
+
+  .dl-coverage__grid,
+  .dl-preview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dl-metric__value {
+    font-size: 18px;
+  }
+
+  .dl-task-preview__ring {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .dl-legend {
+    align-items: center;
+  }
+
+  .dl-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-btn {
+    min-height: 46px;
+  }
+
+  .dl-segmented {
+    width: 100%;
+  }
+
+  .dl-segmented__item {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .dl-coverage--idle {
+    flex-wrap: wrap;
+  }
+
+  .dl-coverage__idlelabel {
+    flex: 1 1 100%;
+    order: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dl-flow-page *,
+  .dl-flow-page *::before,
+  .dl-flow-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+/* =============================================================================
+ * 本页 Dialog 的窄屏滚动（§17.4 / DL-FLOW-005）
+ *
+ * 共享 renderer 在 <600px 会取消 .cs-dialog__body 的 max-height（那是给短表单
+ * 整屏化用的）。本页弹窗正文较长（结论卡 + 数据路径 + 明细表），取消高度上限后
+ * 整个弹窗会超出视口，底部"知道了"要滚动整页才够得到。
+ * 这里只对**包含本页内容**的弹窗恢复"内部滚动"，标题与按钮始终留在视口内。
+ * ========================================================================== */
+
+@media (max-width: 599px) {
+  .cs-dialog:has(.dl-dialog) .cs-dialog__body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* =============================================================================
+ * 本页 Dialog 内容（规范 §17）
+ *
+ * Dialog 由共享 renderer Portal 到 body，因此这些规则挂在 .dl-dialog 类上
+ * （不依赖 .dl-flow-page 祖先）：令牌块与页面共用同一份声明。
+ * 前景永远是 #FFFFFF / alpha 1，正文 #52627A 或更深，标题 #0B1F3A（§17.4）。
+ * ========================================================================== */
+
+.dl-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dl-dialog__lead {
+  margin: 0;
+  color: var(--dl-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+/* Provider 计划区块（开发文档 §13.1 / §15.2）：标签 + 引导语 + 计划表。 */
+.dl-dialog__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dl-dialog__planlabel {
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dl-dialog__plan .dl-coverage__table {
+  margin-top: 0;
+}
+
+.dl-dialog__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dl-dialog__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: 12px;
+  background: #FFFFFF;
+}
+
+.dl-dialog__factlabel {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-dialog__factvalue {
+  color: var(--dl-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-dialog__path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--dl-border);
+  border-radius: 12px;
+  background: var(--dl-surface-soft);
+}
+
+.dl-dialog__node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dl-border);
+  border-radius: 10px;
+  background: #FFFFFF;
+  text-align: center;
+}
+
+.dl-dialog__node b {
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dl-dialog__node span {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dl-dialog__node[data-state="done"] {
+  border-color: var(--dl-cyan);
+}
+
+.dl-dialog__node[data-state="partial"] {
+  border-color: var(--dl-warning);
+  background: var(--dl-warning-soft);
+}
+
+.dl-dialog__arrow {
+  flex: 0 0 auto;
+  color: var(--dl-border-strong);
+  font-size: 14px;
+}
+
+.dl-dialog__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dl-dialog__metarow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--dl-border);
+}
+
+.dl-dialog__metarow:last-child {
+  border-bottom: 0;
+}
+
+.dl-dialog__metarow dt {
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dl-dialog__metarow dd {
+  margin: 0;
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dl-dialog__risks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dl-dialog__risks li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(166, 95, 0, .28);
+  border-radius: 12px;
+  background: var(--dl-warning-soft);
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.dl-dialog__risk {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--dl-warning-soft);
+  color: var(--dl-text);
+  font-weight: 600;
+}
+
+.dl-dialog__riskno {
+  flex: 0 0 auto;
+  color: var(--dl-warning-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 639px) {
+  .dl-dialog__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dl-dialog__path {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dl-dialog__arrow {
+    transform: rotate(90deg);
+    text-align: center;
+  }
+}
+
+/* =============================================================================
+ * 桌面受控工作台（《全量整改实施规范》§6）
+ *
+ * 1200px 以上：页面用 AppShell 剩余高度，根节点不产生纵向滚动；
+ * 标题 / Flowline / 工作区是三行 Grid；左栏只在真实超高时局部滚动；
+ * 右栏 CTA 独占 footer，永不进入滚动区。
+ *
+ * 高度算式从共享外壳的实际取值推导（不改共享 CSS）：
+ *   .cs-shell__topbar  height = var(--cs-topbar-h)（桌面 60px）
+ *   .cs-shell__content padding = var(--cs-gutter)（24px） / 56px
+ * 因此页面可用高度 = 100dvh - 60 - 24 - 56。
+ * ========================================================================== */
+
+.dl-page-head,
+.dl-flow-rail-shell,
+.dl-workspace {
+  width: min(100%, 1920px);
+  margin-inline: auto;
+}
+
+.dl-flow-rail__inner {
+  position: relative;
+  width: min(100%, 1600px);
+  height: 100%;
+  margin-inline: auto;
+}
+
+/* 移动端失效状态芯片（REM-008）：图标 + 文案，灰度下同样可辨。 */
+.dl-stale-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(143, 90, 8, .32);
+  border-radius: 999px;
+  background: var(--dl-warning-soft);
+  color: var(--dl-warning-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+/* 配置行（右栏）：真实业务数据，一行放得下。 */
+.dl-configline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--dl-border);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dl-configline__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dl-text);
+  font-weight: 600;
+}
+
+.dl-configline__label {
+  color: var(--dl-text-secondary);
+  font-weight: 500;
+}
+
+.dl-task-preview__details {
+  width: 100%;
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+.dl-task-preview__trace {
+  color: var(--dl-text-muted);
+  font-size: 12px;
+}
+
+/* 轨道脉冲（§8.5）：一次性数据流，不循环。 */
+.dl-rail__pulse {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dl-rail__pulsepath {
+  fill: none;
+  stroke: var(--dl-cyan);
+  stroke-width: 3;
+}
+
+@media (min-width: 1200px) {
+  .dl-flow-page {
+    --dl-page-chrome: calc(var(--cs-topbar-h, 60px) + var(--cs-gutter, 24px) + 56px);
+    height: calc(100dvh - var(--dl-page-chrome));
+    max-height: calc(100dvh - var(--dl-page-chrome));
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto clamp(72px, 8.5vh, 80px) minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px clamp(16px, 1.35vw, 28px) 12px;
+  }
+
+  /* 页面头：面包屑 + 标题 + 状态 + 次操作压到 52–60px（§6.5）。 */
+  html[data-app="user"] .dl-page-head .cs-pageheader {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+  }
+
+  html[data-app="user"] .dl-page-head .cs-pageheader__crumbs {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  html[data-app="user"] .dl-page-head .cs-pageheader__title {
+    font-size: clamp(24px, 1.4vw, 28px);
+    line-height: 1.2;
+  }
+
+  html[data-app="user"] .dl-page-head .cs-pageheader__titlerow {
+    gap: 10px;
+  }
+
+  /* 左栏 = 独立滚动容器，右栏 = 固定 CTA 的五行 Grid。 */
+  .dl-workspace {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 20vw, 400px);
+    gap: clamp(12px, 1vw, 18px);
+    align-items: stretch;
+  }
+
+  .dl-config-viewport,
+  .dl-aside {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .dl-config-surface {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .dl-aside-card {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .dl-task-preview {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  }
+
+  .dl-task-preview__ring,
+  .dl-path {
+    margin: 12px 16px 0;
+  }
+
+  .dl-task-preview__body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 12px 16px 0;
+  }
+
+  .dl-task-preview__actions {
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--dl-border);
+    background: var(--dl-surface);
+  }
+
+  /* 章节密度：head 与内容同一行节奏，降低上下 padding（§6.5）。 */
+  .dl-config-section {
+    padding: 12px 18px;
+  }
+
+  .dl-section-head {
+    align-items: baseline;
+    gap: 6px 12px;
+    margin-bottom: 10px;
+  }
+
+  .dl-section-head__no {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+  }
+
+  .dl-section-head__title {
+    font-size: 15px;
+  }
+
+  .dl-section-head__desc {
+    margin: 0;
+    font-size: 12px;
+  }
+
+  .dl-section-head__meta {
+    font-size: 12px;
+  }
+
+  /* 地址区：textarea 与导入卡等高，工具行只有一层（§6.6）。 */
+  .dl-address__grid {
+    grid-template-columns: minmax(0, 1fr) 188px;
+    gap: 12px;
+  }
+
+  .dl-textarea {
+    min-height: 84px;
+    height: 84px;
+  }
+
+  .dl-address__import {
+    padding: 10px;
+    gap: 3px;
+  }
+
+  .dl-address__importicon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .dl-address__importtitle {
+    font-size: 13px;
+  }
+
+  .dl-address__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .dl-address__facts {
+    gap: 4px 12px;
+    margin-left: auto;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .dl-address__actions {
+    order: -1;
+    flex-wrap: nowrap;
+  }
+
+  .dl-btn {
+    min-height: 40px;
+  }
+
+  .dl-btn--sm {
+    min-height: 32px;
+  }
+
+  /* 链与范围：链 + 范围分段同一行，性能卡压到 52–56px（§6.7）。 */
+  .dl-scope {
+    gap: 10px;
+  }
+
+  .dl-scope__row {
+    grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+    gap: 14px;
+    align-items: end;
+  }
+
+  .dl-field {
+    gap: 4px;
+  }
+
+  .dl-field--mode {
+    gap: 6px;
+  }
+
+  .dl-modes {
+    gap: 8px;
+    max-width: none;
+  }
+
+  .dl-mode__hit {
+    min-height: 52px;
+    padding: 6px 4px 6px 10px;
+  }
+
+  .dl-mode__icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+
+  .dl-mode__label {
+    font-size: 13px;
+  }
+
+  .dl-mode__hint {
+    font-size: 12px;
+  }
+
+  .dl-input {
+    height: 40px;
+  }
+
+  .dl-segmented__item {
+    min-height: 30px;
+  }
+
+  /* Dataset：桌面卡 60–68px，超宽屏固定 5–6 列逻辑（§6.8）。 */
+  .dl-dataset-grid {
+    gap: 9px;
+    max-width: 1020px;
+  }
+
+  .dl-dataset-card {
+    min-height: 62px;
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .dl-dataset-card__icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .dl-dataset-card__label {
+    font-size: 13px;
+  }
+
+  .dl-dataset-card__desc {
+    font-size: 12px;
+  }
+
+  /* Coverage 启动区：64–76px 的业务操作行（§6.9）。 */
+  .dl-coverage--idle {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .dl-coverage__idleicon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .dl-coverage__grid {
+    gap: 8px;
+  }
+
+  .dl-metric {
+    padding: 8px 10px;
+  }
+
+  .dl-metric__value {
+    font-size: 18px;
+  }
+
+  .dl-metric[data-strong="true"] .dl-metric__value {
+    font-size: 22px;
+  }
+
+  .dl-preview-metrics {
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .dl-preview-metric {
+    padding: 8px 10px;
+  }
+
+  .dl-preview-metric__value {
+    font-size: 19px;
+  }
+
+  /* Flowline：72–80px，节点 30px，标签 13px，副标签在桌面不再渲染（§6.5 / §6.11）。 */
+  .dl-rail {
+    --dl-rail-h: clamp(72px, 8.5vh, 80px);
+    height: var(--dl-rail-h);
+    margin: 0;
+  }
+
+  .dl-rail__track {
+    height: var(--dl-rail-h);
+  }
+
+  .dl-rail__node {
+    min-width: 112px;
+    min-height: var(--dl-rail-h);
+    padding: calc((34 / 96) * var(--dl-rail-h) - 15px) 6px 0;
+  }
+
+  .dl-rail__nodebody {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .dl-rail__label {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .dl-ring {
+    width: 136px;
+    height: 136px;
+  }
+
+  .dl-ring__value {
+    font-size: 26px;
+  }
+
+  .dl-summary {
+    margin-top: 10px;
+    padding: 0;
+  }
+
+  .dl-summary__row {
+    padding: 5px 0;
+  }
+}
+
+/* 短屏桌面（1200px+ 且高度 < 900px）：只压缩密度，不缩放页面、不隐藏字段（§6.11）。 */
+@media (min-width: 1200px) and (max-height: 899px) {
+  .dl-flow-page {
+    grid-template-rows: auto clamp(68px, 9vh, 72px) minmax(0, 1fr);
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 8px;
+  }
+
+  .dl-rail {
+    --dl-rail-h: 70px;
+  }
+
+  .dl-rail__track {
+    height: 70px;
+  }
+
+  .dl-rail__node {
+    min-height: 70px;
+    padding-top: calc((34 / 96) * 70px - 14px);
+  }
+
+  .dl-rail__nodebody {
+    width: 28px;
+    height: 28px;
+  }
+
+  .dl-rail__label {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .dl-config-section {
+    padding: 10px 16px;
+  }
+
+  .dl-section-head {
+    margin-bottom: 8px;
+  }
+
+  .dl-textarea {
+    min-height: 76px;
+    height: 76px;
+  }
+
+  .dl-dataset-card {
+    min-height: 58px;
+  }
+
+  .dl-mode__hit {
+    min-height: 46px;
+  }
+
+  .dl-ring {
+    width: 104px;
+    height: 104px;
+  }
+
+  .dl-ring__value {
+    font-size: 22px;
+  }
+
+  .dl-ring__caption {
+    font-size: 11px;
+  }
+
+  .dl-task-preview__ring,
+  .dl-path {
+    margin-top: 8px;
+  }
+
+  .dl-preview-metric__value {
+    font-size: 17px;
+  }
+
+  .dl-coverage--idle {
+    padding: 8px 12px;
+  }
+}
+
+/* 中窄屏与移动端：自然滚动，不做嵌套滚动容器（§6.2）。 */
+@media (max-width: 1199px) {
+  .dl-config-viewport {
+    min-width: 0;
+  }
+}
+
+
+/* 桌面密度第二遍：把四个章节压到 §6.5 的高度预算内（1440×900 / 1920×1080 左栏初始不滚动）。 */
+@media (min-width: 1200px) {
+  .dl-config-section {
+    padding: 10px 18px;
+  }
+
+  .dl-section-head {
+    margin-bottom: 8px;
+  }
+
+  .dl-section-head__no {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .dl-section-head__desc {
+    font-size: 12px;
+  }
+
+  .dl-address__field {
+    gap: 6px;
+  }
+
+  .dl-textarea {
+    min-height: 84px;
+    height: 84px;
+    padding: 8px 10px;
+  }
+
+  .dl-address__import {
+    padding: 8px 10px;
+    gap: 2px;
+    justify-content: center;
+  }
+
+  .dl-address__importicon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+
+  .dl-address__importtitle {
+    font-size: 13px;
+  }
+
+  .dl-address__importhint {
+    font-size: 12px;
+  }
+
+  .dl-btn {
+    min-height: 38px;
+  }
+
+  .dl-btn--sm {
+    min-height: 30px;
+  }
+
+  .dl-scope {
+    gap: 8px;
+  }
+
+  .dl-field {
+    gap: 2px;
+  }
+
+  .dl-field-label {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .dl-input {
+    height: 38px;
+  }
+
+  .dl-segmented {
+    padding: 3px;
+  }
+
+  .dl-segmented__item {
+    min-height: 30px;
+  }
+
+  .dl-mode__hit {
+    min-height: 50px;
+    padding: 4px 4px 4px 10px;
+    gap: 8px;
+  }
+
+  .dl-mode__label {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .dl-mode__hint {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  /* Dataset 桌面卡只留名称：描述行属于移动端的信息量（§6.8）。 */
+  .dl-dataset-card {
+    min-height: 60px;
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .dl-dataset-card__desc {
+    display: none;
+  }
+
+  .dl-coverage--idle {
+    padding: 8px 12px;
+  }
+
+  .dl-coverage__idleicon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .dl-coverage__idlelabel {
+    font-size: 13px;
+  }
+}
+
+
+/* 桌面密度第三遍：目标是 1440×900 与 1920×1080 左栏初始不滚动（§6.2 标准桌面）。 */
+@media (min-width: 1200px) {
+  .dl-flow-page {
+    /* 外壳已经给了 24px/56px 的上下留白，页面自身不再重复加纵向 padding。 */
+    padding: 0 clamp(16px, 1.35vw, 28px);
+  }
+
+  .dl-config-section {
+    padding: 8px 16px;
+  }
+
+  .dl-section-head {
+    margin-bottom: 6px;
+    gap: 4px 10px;
+  }
+
+  .dl-section-head__no {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+  }
+
+  .dl-address__field {
+    gap: 2px;
+  }
+
+  .dl-address__grid {
+    gap: 10px;
+  }
+
+  .dl-scope {
+    gap: 6px;
+  }
+
+  .dl-mode__hit {
+    min-height: 48px;
+  }
+
+  .dl-coverage--idle {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .dl-task-preview__preview {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) and (max-height: 899px) {
+  .dl-task-preview__preview {
+    display: inline-flex;
+    margin-bottom: 8px;
+  }
+}
+
+
+/* 桌面密度第四遍：章节标题与副标签同一行（省一行高度，§6.5）。 */
+@media (min-width: 1200px) {
+  .dl-section-head__text {
+    flex: 0 1 auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .dl-section-head__title {
+    white-space: nowrap;
+  }
+
+  .dl-section-head {
+    align-items: baseline;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /* 标题与副标签同一行：__text 原本是块级容器，必须显式变成 flex 行。 */
+  .dl-section-head__text {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /* 再留 16px 余量：1440×900 的左栏刚好等于可视高度，任何一行换行都会触发滚动。 */
+  .dl-config-section {
+    padding: 6px 16px;
+  }
+}
+
+/* Dataset 卡：桌面单行（图标 / 名称 / 勾选），移动端三行；勾选不再压住名称。 */
+.dl-dataset-card__icon { order: 1; }
+.dl-dataset-card__check { order: 2; margin-left: auto; }
+.dl-dataset-card__label { order: 3; }
+.dl-dataset-card__desc { order: 4; }
+
+.dl-dataset-card {
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.dl-dataset-card__label,
+.dl-dataset-card__desc {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 1200px) {
+  .dl-dataset-card {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 18px;
+    align-items: center;
+    align-content: center;
+    gap: 8px;
+  }
+
+  .dl-dataset-card__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dl-dataset-card__check {
+    margin-left: 0;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /* 桌面 Dataset 卡的名称允许折到两行（60–68px 仍然放得下），不要截断关键名称。 */
+  .dl-dataset-card__label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .dl-dataset-grid {
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    max-width: 1080px;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /*
+   * order 会参与 grid 自动放置：桌面必须清零，否则 label 会落进 18px 的勾选列。
+   * 桌面卡 = 图标 / 名称（可折两行） / 勾选 三列。
+   */
+  .dl-dataset-card > * {
+    order: 0;
+  }
+
+  /* 5–6 列逻辑：1440 一行 5 项，超宽屏最多 6 列（§6.8）。 */
+  .dl-dataset-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    max-width: 840px;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /* 名称可读性优先：1440 一行 4 项（名称单行），超宽屏最多 6 列（§6.8）。 */
+  .dl-dataset-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    max-width: 1020px;
+  }
+
+  .dl-dataset-card__label {
+    overflow-wrap: break-word;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /*
+   * 1440×900 必须单屏（DONE-04）：Dataset 卡在标准桌面一行 5 项（136px 级），
+   * 名称允许折两行；超宽屏最多 6 列。真实服务端返回的是人类可读 label（如"普通交易"/
+   * "Token Transfer"），按词折行即可读，不会出现长串单词被切碎的问题。
+   */
+  .dl-dataset-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    max-width: 840px;
+  }
+
+  .dl-dataset-card {
+    padding: 8px 8px;
+    gap: 6px;
+    grid-template-columns: 22px minmax(0, 1fr) 16px;
+  }
+
+  .dl-dataset-card__icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .dl-dataset-card__check {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+
+@media (min-width: 1200px) {
+  /* §7.4：被检查的 CTA 必须完整可见且高度 >= 44px；创建按钮按 §16.1 保持 48px。 */
+  .dl-coverage--idle .dl-btn,
+  .dl-task-preview__actions .dl-btn,
+  .dl-actionbar .dl-btn {
+    min-height: 44px;
+  }
+
+  .dl-task-preview__actions .dl-btn--primary {
+    min-height: 48px;
+  }
+
+  /* 回收 4px 章节内边距，抵消 CTA 增高（1440×900 仍为单屏）。 */
+  .dl-config-section {
+    padding: 4px 16px;
+  }
+}
+

@@ -46,6 +46,13 @@ export interface DialogAction {
    */
   disabled?: boolean;
   title?: string;
+  /**
+   * 给自动化测试一个稳定锚点（可选，纯属性透传，不改变任何语义）。
+   *
+   * 需要它的原因：暗色/中文文案会随产品措辞调整，而"提交服务端校验"这类
+   * 关键安全路径必须能被稳定定位（见《全量整改实施规范》§15.2）。
+   */
+  testId?: string;
 }
 
 /**

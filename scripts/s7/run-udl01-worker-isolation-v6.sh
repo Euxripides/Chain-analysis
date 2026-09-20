@@ -14,11 +14,17 @@ TS="$(date -u +%Y%m%dT%H%M%SZ)"
 EV="${EV:-$R/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-$TS}"
 XC="${XC:-$R/scripts/s7/udl01-crosscheck-v6.py}"
 D="$R/frontend/apps/user-console"
+REMED="${REMED:-$R/frontend/acceptance-evidence/download-flowline-remediation}"
+# 权威夹具生成器（§14.3 第 1/2 条）：v5b/v6 都必须明确调用它，并记录其 SHA256。
+GEN="$R/frontend/scripts/r9-make-fixtures-v5c.mjs"
+SELFCHECK_PY="$R/scripts/s7/udl01-fixture-selfcheck.py"
 if [ -e "$EV" ]; then echo "EV_EXISTS_FAILCLOSED $EV"; exit 9; fi
 mkdir -p "$EV"; chmod 700 "$EV"
 exec > >(tee -a "$EV/runner.console.log") 2>&1
 echo "script_sha256=$(sha256sum "$0" | cut -d' ' -f1)" | tee "$EV/run-meta.txt"
 echo "crosscheck_sha256=$(sha256sum "$XC" | cut -d' ' -f1)" | tee -a "$EV/run-meta.txt"
+echo "fixture_generator=$GEN" | tee -a "$EV/run-meta.txt"
+echo "fixture_generator_sha256=$(sha256sum "$GEN" | cut -d' ' -f1)" | tee -a "$EV/run-meta.txt"
 echo "evidence=$EV" | tee -a "$EV/run-meta.txt"
 echo "started_utc=$TS" | tee -a "$EV/run-meta.txt"
 GATE="$EV/gate.txt"
@@ -89,6 +95,15 @@ sys.exit(0 if d.get("status")=="ready" and all(c.get(k)=="ok" for k in ("postgre
 done
 [ "$READY" -eq 1 ] || { echo "READINESS_FAILED $B"; exit 8; }
 echo "ready_attempts=$i body=$B" | tee -a "$EV/run-meta.txt"
+# 用户端静态入口就绪（并发部署窗口会短暂 404，必须先等到 200 再开浏览器）。
+WEB_READY=0
+for i in $(seq 1 30); do
+  CODE="$(curl -s -k -m 5 -o /dev/null -w '%{http_code}' https://127.0.0.1:8448/app-v2/login || true)"
+  if [ "$CODE" = "200" ]; then WEB_READY=1; break; fi
+  sleep 1
+done
+[ "$WEB_READY" -eq 1 ] || { echo "WEB_ENTRY_NOT_READY code=$CODE"; exit 8; }
+echo "web_entry_attempts=$i code=$CODE" | tee -a "$EV/run-meta.txt"
 set -a; . /home/euripides/.s7jobscope-creds.env; set +a
 for v in S7JS_INVESTIGATOR_EMAIL S7JS_INVESTIGATOR_PW; do
   eval "val=\$$v"; [ -n "${val:-}" ] || { echo "PREFLIGHT_MISSING $v"; exit 3; }
@@ -121,14 +136,21 @@ json.dump({"served_index_sha": served, "disk_index_sha": disk, "page_chunk": pag
 PY
 cat "$EV/bundle-binding.json" | tee -a "$EV/run-meta.txt"
 
-echo "=== P1 真实夹具（v5b：200k 行 .xls + 60k 行 .xlsx + 6 类恶意 ZIP + 正常对照） ==="
+echo "=== P1 真实夹具（权威生成器 r9-make-fixtures-v5c.mjs：200k 请求 .xls + 60k 行 .xlsx + 6 类恶意 ZIP + 正常对照） ==="
 mkdir -p "$EV/fixtures"
-node "$R/frontend/scripts/r9-make-fixtures-v5c.mjs" "$EV/fixtures" 200000 60000 > "$EV/p1-fixtures.log" 2>&1
+node "$GEN" "$EV/fixtures" 200000 60000 > "$EV/p1-fixtures.log" 2>&1
 FIXRC=$?
 echo "fixtures_rc=$FIXRC" | tee -a "$EV/run-meta.txt"
 gate_note "fixtures_rc=$FIXRC"
 tail -3 "$EV/p1-fixtures.log"
 ls -l "$EV/fixtures" | awk '{print $5, $9}' | grep udl01 || true
+
+echo "=== P1b 夹具机器自检（§13.3 行数语义 + §14.3 ZIP64 布局 + 大小/sha256） ==="
+python3 "$SELFCHECK_PY" "$EV/fixtures/udl01-fixtures-selfcheck.json" "$EV/fixtures/udl01-fixtures-manifest.json" > "$EV/p1b-fixture-selfcheck.txt" 2>&1
+SELF_RC=$?
+echo "fixture_selfcheck_rc=$SELF_RC" | tee -a "$EV/run-meta.txt"
+cat "$EV/p1b-fixture-selfcheck.txt"
+gate_note "fixture_selfcheck_rc=$SELF_RC"
 
 echo "=== P2 真实浏览器（隔离解析 / 超时 / 取消 / 恶意 ZIP / 回归） ==="
 cd "$R/frontend" || exit 90
@@ -206,10 +228,20 @@ SUMMARY_RC=$?
 cat "$EV/p5-summary-render.out"
 gate_note "summary_render_rc=$SUMMARY_RC"
 
+echo "=== P5b 证据归档（§21 证据目录） ==="
+mkdir -p "$REMED/udl01/v6"
+for f in playwright-report.json run-matrix.json udl01-summary.json bundle-binding.json run-meta.txt gate.txt playwright.console.log p1b-fixture-selfcheck.txt; do
+  [ -f "$EV/$f" ] && cp -f "$EV/$f" "$REMED/udl01/v6/$f"
+done
+[ -f "$EV/uc-desktop/udl01-a-evidence.json" ] && cp -f "$EV/uc-desktop/udl01-a-evidence.json" "$REMED/udl01/v6/udl01-a-evidence.json"
+[ -f "$EV/uc-desktop/udl01-d-evidence.json" ] && cp -f "$EV/uc-desktop/udl01-d-evidence.json" "$REMED/udl01/v6/udl01-d-evidence.json"
+[ -f "$EV/uc-desktop/udl01-e-evidence.json" ] && cp -f "$EV/uc-desktop/udl01-e-evidence.json" "$REMED/udl01/v6/udl01-e-evidence.json"
+echo "archived_to=$REMED/udl01/v6" | tee -a "$EV/run-meta.txt"
+
 echo "=== P6 最终 gate（fail-closed） ==="
 sleep 1
 TB=0
-for f in "$EV/runner.console.log" "$EV/playwright.console.log" "$EV/udl01-crosscheck.err" "$EV/p3-report-check.txt" "$EV/p3b-report-identity.txt" "$EV/p4b-u5-gate.txt" "$EV/p5-summary-render.out" "$EV/p1-fixtures.log"; do
+for f in "$EV/runner.console.log" "$EV/playwright.console.log" "$EV/udl01-crosscheck.err" "$EV/p3-report-check.txt" "$EV/p3b-report-identity.txt" "$EV/p4b-u5-gate.txt" "$EV/p5-summary-render.out" "$EV/p1-fixtures.log" "$EV/p1b-fixture-selfcheck.txt"; do
   [ -f "$f" ] || continue
   if grep -q "Traceback (most recent call last)" "$f"; then TB=1; echo "traceback_found_in=$f"; fi
 done
@@ -224,10 +256,11 @@ gate_chk crosscheck "$XRC"
 gate_chk u5-gate "$U5_RC"
 gate_chk summary-render "$SUMMARY_RC"
 gate_chk fixtures "$FIXRC"
+gate_chk fixture-selfcheck "$SELF_RC"
 [ "$FREEZE_STABLE" -eq 1 ] || GATE_FAILS="$GATE_FAILS freeze-unstable"
 [ "$TB" -eq 0 ] || GATE_FAILS="$GATE_FAILS traceback-found"
 echo "gate_failures=$(echo $GATE_FAILS | tr -s ' ' | sed 's/^ *//')" >> "$GATE"
 cat "$GATE" | tee -a "$EV/run-meta.txt"
 if [ -n "$GATE_FAILS" ]; then echo "UDL01_V6_VERDICT=FAIL gate_failures=$GATE_FAILS" | tee -a "$EV/run-meta.txt"; exit 1; fi
-echo "UDL01_V6_VERDICT=PASS playwright_rc=$RC report_rc=$REPORT_RC crosscheck_rc=$XRC summary_render_rc=$SUMMARY_RC fixtures_rc=$FIXRC freeze_stable=$FREEZE_STABLE traceback=$TB" | tee -a "$EV/run-meta.txt"
+echo "UDL01_V6_VERDICT=PASS playwright_rc=$RC report_rc=$REPORT_RC crosscheck_rc=$XRC summary_render_rc=$SUMMARY_RC fixtures_rc=$FIXRC fixture_selfcheck_rc=$SELF_RC freeze_stable=$FREEZE_STABLE traceback=$TB" | tee -a "$EV/run-meta.txt"
 exit 0

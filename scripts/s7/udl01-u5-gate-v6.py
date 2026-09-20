@@ -15,8 +15,13 @@ import sys
 REQUIRED = [
     "b-budget-no-zero-seconds",
     "b-budget-shows-milliseconds",
-    "c-progress-budget-no-zero-seconds",
-    "c-progress-budget-shows-seconds",
+    # 180000ms → “180 秒”的判据（§17.3）：由服务端实际服务的 page chunk 里同一个
+    # formatParseBudget 求值验证，且探针 SHA 必须绑定到 served page chunk。
+    "c-progress-shows-file",
+    "c-budget-shows-300ms",
+    "c-budget-shows-180s",
+    "c-budget-no-zero-seconds",
+    "c-budget-probe-bound-to-served-chunk",
     "bundle-page-chunk-200",
     "bundle-page-chunk-bytes-match",
     "bundle-page-chunk-has-budget-unit",

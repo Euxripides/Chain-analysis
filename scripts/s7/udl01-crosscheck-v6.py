@@ -64,6 +64,27 @@ def main():
         check("fixture-bytes-match-manifest:udl01-big.xls", digest == (by_name.get("udl01-big.xls") or {}).get("sha256"),
               {"disk": digest[:16], "manifest": str((by_name.get("udl01-big.xls") or {}).get("sha256"))[:16]})
 
+    # ---- 行数语义（§13.3）：夹具 manifest 同时记录 requestedRows 与 actualFormatCapacity ----
+    selfcheck_path = os.path.join(EV, "fixtures", "udl01-fixtures-selfcheck.json")
+    if os.path.exists(selfcheck_path):
+        selfcheck = load(selfcheck_path)
+        rows_sem = selfcheck.get("rowSemantics") or {}
+        z64 = selfcheck.get("zip64Layout") or {}
+        check("fixture-selfcheck-ok", selfcheck.get("ok") is True and not (selfcheck.get("problems") or []), selfcheck.get("problems"))
+        check("fixture-row-semantics", int(rows_sem.get("requestedRows") or 0) == 200000
+              and int((rows_sem.get("actualFormatCapacity") or {}).get("maxDataRows") or 0) == 65535
+              and 0 < int(rows_sem.get("actualDataRowsOnDisk") or 0) <= 65535, rows_sem)
+        check("fixture-zip64-layout-machine-checked", all(z64.get(k) is True for k in (
+            "eocd_present", "locator_is_20_bytes_before_eocd", "locator_signature_ok",
+            "zip64_eocd_signature_ok", "locator_points_at_zip64_eocd"))
+            and z64.get("locator_signature") == "0x07064b50" and z64.get("zip64_eocd_signature") == "0x06064b50",
+            z64)
+    else:
+        check("fixture-selfcheck-present", False, selfcheck_path)
+
+    bind_path = os.path.join(EV, "bundle-binding.json")
+    bind = load(bind_path) if os.path.exists(bind_path) else {}
+
     # ---- 矩阵联合判据 ----
     actual = {}
     def walk(suite, hint):
@@ -140,6 +161,16 @@ def main():
     check("a-elapsed-positive", int(a.get("elapsedMs") or 0) > 0, {"elapsedMs": a.get("elapsedMs")})
     check("a-dialog-scanned-biff8-max-rows", "扫描行数" in str(a.get("dialogText")) and re.search(r"6553[0-9]", str(a.get("dialogText"))) is not None,
           {"dialogText": str(a.get("dialogText"))[:200]})
+    a_rows = int(a.get("actualDataRowsOnDisk") or 0)
+    a_reported = int(a.get("rowCountReportedByPage") or -1)
+    check("a-row-count-matches-fixture-actual", a_rows > 0 and a_reported == a_rows,
+          {"actualDataRowsOnDisk": a.get("actualDataRowsOnDisk"), "rowCountReportedByPage": a.get("rowCountReportedByPage")})
+    check("a-row-count-within-format-capacity", 0 < a_reported <= 65535
+          and a_reported > 65535 - 8
+          and a_reported < int(a.get("requestedRows") or 0),
+          {"reported": a_reported, "requestedRows": a.get("requestedRows"),
+           "actualFormatCapacity": a.get("actualFormatCapacity")})
+    check("a-isolated-worker-used", a.get("isolatedWorkerUsed") is True, {"workerUrls": a.get("workerUrls")})
     am = a.get("metrics") or {}
     check("a-frame-gaps-sampled", int(am.get("gapSamples") or 0) > 10, am)
     check("a-no-second-long-longtask", float(am.get("maxLongTask") or 0) < 1000, am)
@@ -167,10 +198,21 @@ def main():
     check("c-cancel-notice", ("终止" in str(c.get("cancelText"))) or ("停止" in str(c.get("cancelText"))), {"cancelText": str(c.get("cancelText"))[:200]})
     check("c-no-address-after-cancel", int(c.get("addressValueAfterCancel") or 0) == 0, {"len": c.get("addressValueAfterCancel")})
     check("c-followup-parse-works", "扫描行数" in str(c.get("followUpDialogText")), {"text": str(c.get("followUpDialogText"))[:200]})
-    # U5：进度弹窗同样不得出现"0 秒"，且必须给出真实预算（180000ms -> "180 秒"）
+    # U5（v6 硬判据）：局部进度必须如实指出正在解析的文件名；预算文案由**服务端实际服务**的
+    # page chunk 里同一个 formatParseBudget 求值验证（300ms -> "300 毫秒"、180000ms -> "180 秒"）。
+    # 为什么不是直接在进度区读 180 秒：Flowline 页面的局部进度只显示“正在解析哪个文件”，
+    # 预算文案只出现在超时弹窗；300ms 的真实超时文案已在 UDL01-A2a 端到端验证，
+    # 180000ms 的映射则用同一份已部署字节里的同一个函数求值（其 SHA 必须等于 served page chunk）。
     c_progress = str(c.get("progressText"))
-    check("c-progress-budget-no-zero-seconds", c_progress != "" and re.search(r"(?:^|[^0-9])0\s*秒", c_progress) is None, {"progressText": c_progress[:220]})
-    check("c-progress-budget-shows-seconds", re.search(r"180\s*秒", c_progress) is not None, {"progressText": c_progress[:220]})
+    check("c-progress-shows-file", "udl01-big.xlsx" in c_progress, {"progressText": c_progress[:220]})
+    probe = c.get("budgetFormatProbe") or {}
+    probe_rows = {str(r.get("input")): r for r in (probe.get("rows") or [])}
+    check("c-budget-shows-300ms", (probe_rows.get("300") or {}).get("actual") == "300 毫秒", probe_rows.get("300"))
+    check("c-budget-shows-180s", (probe_rows.get("180000") or {}).get("actual") == "180 秒", probe_rows.get("180000"))
+    check("c-budget-no-zero-seconds", probe.get("no_zero_second_token") is True
+          and len(probe.get("rows") or []) >= 5 and all(r.get("ok") for r in (probe.get("rows") or [])), probe)
+    check("c-budget-probe-bound-to-served-chunk", bool(probe.get("chunk_sha256")) and probe.get("chunk_sha256") == bind.get("page_chunk_served_sha"),
+          {"probe_sha": str(probe.get("chunk_sha256"))[:16], "served_sha": str(bind.get("page_chunk_served_sha"))[:16], "chunk": probe.get("chunk")})
 
     # ---- UDL01-D：恶意 ZIP 逐条 ----
     d = ev("D")
@@ -182,15 +224,43 @@ def main():
         check("d-not-blocking:" + str(case.get("file")), float((case.get("metrics") or {}).get("maxLongTask") or 0) < 1000,
               case.get("metrics"))
     check("d-no-pageerror", not (d.get("pageErrors") or []), d.get("pageErrors"))
+    for case in cases:
+        calls = case.get("serverCalls") or {}
+        check("d-no-sheetjs-chunk:" + str(case.get("file")), int(case.get("sheetjsChunkRequests") or 0) == 0,
+              {"sheetjsChunkRequests": case.get("sheetjsChunkRequests"), "chunks": (case.get("chunkRequests") or [])[:6]})
+        check("d-no-server-calls:" + str(case.get("file")),
+              int(calls.get("validate") or 0) == 0 and int(calls.get("preview") or 0) == 0 and int(calls.get("create") or 0) == 0,
+              calls)
+        check("d-no-local-summary:" + str(case.get("file")), case.get("summaryVisible") is False,
+              {"summaryVisible": case.get("summaryVisible")})
+    z64 = d.get("zip64Layout") or {}
+    branch = d.get("zip64Branch") or {}
+    check("d-zip64-layout-machine-checked", all(z64.get(k) is True for k in (
+        "eocd_present", "locator_is_20_bytes_before_eocd", "locator_signature_ok",
+        "zip64_eocd_signature_ok", "locator_points_at_zip64_eocd"))
+        and z64.get("locator_signature") == "0x07064b50" and z64.get("zip64_eocd_signature") == "0x06064b50", z64)
+    check("d-zip64-branch-hit", branch.get("matched") is True and "ZIP64" in str(branch.get("reason")),
+          {"reason": str(branch.get("reason"))[:200]})
+    check("d-zip64-no-sheetjs", int(branch.get("sheetjsChunkRequests") or 0) == 0, branch)
+    check("d-zip64-no-server-calls", int((branch.get("serverCalls") or {}).get("validate") or 0) == 0
+          and int((branch.get("serverCalls") or {}).get("preview") or 0) == 0
+          and int((branch.get("serverCalls") or {}).get("create") or 0) == 0, branch.get("serverCalls"))
+    check("d-zip64-no-task-created", branch.get("taskCreated") is False, branch)
 
     # ---- UDL01-E：正向回归 ----
     e = ev("E")
     check("e-header-recognized", "address 表头" in str(e.get("dialogText")), {"text": str(e.get("dialogText"))[:220]})
-    check("e-one-address", "1 个地址" in str(e.get("dialogText")), {"text": str(e.get("dialogText"))[:220]})
+    # §15.3 稳定业务语义：不再依赖“本次送校验 1 个地址”这一整句易变文案。
+    stable = e.get("stableSemantics") or {}
+    check("e-stable-row-count-one", str(stable.get("rowCount")) == "1", stable)
+    check("e-stable-address-count-one", str(stable.get("addressCount")) == "1", stable)
+    check("e-stable-header-detected", str(stable.get("headerDetected")) == "true", stable)
+    check("e-stable-submit-enabled", stable.get("submitEnabled") is True, stable)
+    calls_after = e.get("serverCallsAfterCancel") or {}
+    check("e-no-server-call-after-cancel", int(calls_after.get("validate") or 0) == 0
+          and int(calls_after.get("preview") or 0) == 0 and int(calls_after.get("create") or 0) == 0, calls_after)
 
-    bind_path = os.path.join(EV, "bundle-binding.json")
-    if os.path.exists(bind_path):
-        bind = load(bind_path)
+    if bind:
         check("bundle-index-served-matches-disk", bind.get("served_index_sha") == bind.get("disk_index_sha"), bind)
         check("bundle-worker-chunk-200", str(bind.get("worker_chunk_http")) == "200", bind)
         check("bundle-worker-chunk-bytes-match", bind.get("worker_chunk_disk_sha") == bind.get("worker_chunk_served_sha"), bind)

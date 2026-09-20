@@ -1,5 +1,6 @@
-import { expect, test, type Page, type Request, type Response } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -18,6 +19,13 @@ import path from "node:path";
  *   D5 格式防线：v2 实测 45 字节垃圾 bad.xlsx 被 SheetJS 宽松嗅探当表格读入，
  *      浏览器弹“解析摘要”而不是“文件解析失败”。产品已改为扩展名+魔数+OOXML 条目+
  *      条目数/解压尺寸/压缩比校验（§23.7 plan 1852）；v3 新增 R9-07 真实负向。
+ *
+ * v4（《新建数据下载 Flowline 界面重构实施规范》落地后重跑，v4 原文件即本文件）：
+ *   交互链路从"一个按钮串起 校验→预览→创建"改成两段：
+ *     ① 文件导入 →「本地解析摘要」弹窗 →「提交服务端校验」→「服务端地址校验结果」→「使用服务端结果」；
+ *     ② 「预览 Coverage 与成本」→ Coverage 弹窗 →「创建下载任务」→「确认创建下载任务？」→ 结果弹窗。
+ *   业务断言（服务端接受/拒绝计数、被移除的案件/标签、preview/create 请求体、幂等、
+ *   坏文件与压缩炸弹负向）逐条保留，未放宽。本地摘要 data-testid="file-parse-summary" 不变。
  *
  * 范围声明：R9-05 只证明 **API 幂等**（同 key 同 payload 不重复建任务），
  * 不等于“UI 多链第二组失败后重试保持已成功组”的回归——后者需要独立授权的故障注入夹具。
@@ -103,15 +111,96 @@ async function login(page: Page) {
 async function openDownloadsNew(page: Page) {
   await page.goto("/app-v2/downloads/new", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#download-addresses"), "address textarea").toBeVisible({ timeout: 30_000 });
-  // 链与 Dataset 来自服务端 registry，等它们加载完成再操作。
-  await expect.poll(async () => page.locator("#download-chain option").count(), { timeout: 30_000 }).toBeGreaterThan(1);
+  // 链与 Dataset 来自服务端 registry；链选择器在第 ② 步（Ant Select）才渲染，
+  // 这里只等地址输入框就绪，展开下拉见 selectChain()。
 }
 
 async function importFile(page: Page, file: string) {
   await page.locator('input[aria-label="导入地址文件"]').setInputFiles(file);
 }
 
+/**
+ * Flowline 重构后的两段交互（《新建数据下载 Flowline 界面重构实施规范》§11.2/§11.3）：
+ *   ① 解析导入 / 文件导入 → 「本地解析摘要」/「服务端地址校验结果」弹窗 → 「使用服务端结果」
+ *   ② 「预览 Coverage 与成本」→ Coverage 弹窗 → 「创建下载任务」→ 「确认创建下载任务？」→ 结果弹窗
+ * 校验与预览不再由同一个按钮串起；本文件因此把两步拆成独立助手。
+ */
+
+/**
+ * 链选择器仍是 .cs-chainselect（Ant Design Select）。
+ * 选项列表是**虚拟滚动**：未过滤时 DOM 里只有前 8 项，靠后的链（例如 tron）永远等不到；
+ * 展开后搜索框自动获得焦点，先按 slug 过滤（filterOption 同时匹配链名与 slug）再点选项。
+ */
+async function selectChain(page: Page, slug: string) {
+  await expect(page.locator(".cs-chainselect"), "链选择器").not.toHaveClass(/ant-select-disabled/, { timeout: 30_000 });
+  await page.locator(".cs-chainselect").click();
+  await page.locator(".cs-chainselect input").first().fill(slug);
+  await page.locator(".cs-select-dropdown-wizard .ant-select-item-option", { hasText: new RegExp(slug, "i") }).first().click();
+  await page.keyboard.press("Escape");
+}
+
+/**
+ * 范围类型是分段控件（Segmented，fieldset + radio）：点 <label> 本体。
+ * 直接点里面的 <span> 会被覆盖其上的 radio input 拦截（元素的命中目标必须是目标本身或后代）。
+ */
+async function selectRange(page: Page, label: string) {
+  await page.locator('#download-range-type label:has(input[name="download-range-type"])').filter({ hasText: label }).click();
+}
+
 const dialog = (page: Page) => page.locator('[role="dialog"]');
+const PREVIEW_TITLE = /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/;
+
+/**
+ * 文件导入的第 ① 段：选文件 → 「本地解析摘要」弹窗。
+ * 摘要本体 data-testid="file-parse-summary" 仍挂在同一个 <dl> 上，只是现在位于弹窗内。
+ */
+async function openFileSummary(page: Page, file: string) {
+  await importFile(page, file);
+  const summaryDialog = dialog(page).filter({ hasText: "本地解析摘要" });
+  await expect(summaryDialog, "本地解析摘要弹窗").toBeVisible({ timeout: 30_000 });
+  const summary = summaryDialog.locator('[data-testid="file-parse-summary"]');
+  await expect(summary, "本地解析摘要数据行").toBeVisible({ timeout: 30_000 });
+  return { summaryDialog, summary };
+}
+
+/** 摘要弹窗 → 「提交服务端校验」→ 「服务端地址校验结果」弹窗。 */
+async function submitToServerValidation(page: Page, summaryDialog: Locator) {
+  await summaryDialog.getByRole("button", { name: "提交服务端校验" }).click();
+  const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
+  await expect(serverDialog, "服务端地址校验结果弹窗").toBeVisible({ timeout: 60_000 });
+  return serverDialog;
+}
+
+/** 点「使用服务端结果」采用服务端 accepted 的规范化地址（唯一权威集合）。 */
+async function useServerVerdict(page: Page, serverDialog: Locator) {
+  await serverDialog.getByRole("button", { name: "使用服务端结果" }).click();
+  await expect(serverDialog).toBeHidden({ timeout: 20_000 });
+}
+
+/** 第 ② 段预览：点「预览 Coverage 与成本」→ 等真实 preview 响应 → Coverage 弹窗。 */
+async function previewCoverage(page: Page) {
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().includes("/api/v2/downloads/preview") && response.request().method() === "POST",
+    { timeout: 120_000 },
+  );
+  await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
+  const response = await responsePromise;
+  expect(response.status(), "preview 必须成功").toBeLessThan(300);
+  const previewDialog = dialog(page).filter({ hasText: PREVIEW_TITLE });
+  await expect(previewDialog, "Coverage 预览弹窗").toBeVisible({ timeout: 90_000 });
+  return { previewDialog, response };
+}
+
+/** 第 ② 段创建：点「创建下载任务」→ 「确认创建下载任务？」→ 结果弹窗。 */
+async function createAndConfirm(page: Page) {
+  await page.getByRole("button", { name: "创建下载任务" }).first().click();
+  const confirmDialog = dialog(page).filter({ hasText: "确认创建下载任务？" });
+  await expect(confirmDialog, "创建确认弹窗").toBeVisible({ timeout: 30_000 });
+  await confirmDialog.getByRole("button", { name: "确认创建" }).click();
+  const resultDialog = dialog(page).filter({ hasText: /下载任务已创建|已复用现有任务|本地数据已覆盖|部分创建成功/ });
+  await expect(resultDialog, "创建结果弹窗").toBeVisible({ timeout: 90_000 });
+  return resultDialog;
+}
 
 test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
   test("R9-01 最小 .xlsx 导入：浏览器摘要 → 服务端再次验证 → 未解析案件/标签被移除 → 真实创建", async ({ page }, testInfo) => {
@@ -121,21 +210,19 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
-    await importFile(page, path.join(FIX, "min.xlsx"));
+    /* 校验是**按链作用域**的（chain + normalized address 才是去重键），且入参显式带 chain：
+       链必须在提交校验之前选定（旧链路由「预览并创建任务」一键串起，新链路拆成两段）。 */
+    await selectChain(page, CHAIN);
 
-    // 1) 浏览器解析摘要（本地）
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const localText = await localDialog.innerText();
+    // 1) 本地解析摘要（数据行在「本地解析摘要」弹窗里）
+    const { summaryDialog, summary } = await openFileSummary(page, path.join(FIX, "min.xlsx"));
+    const localText = await summary.innerText();
     expect(localText, "本地摘要必须报出 chain 列与案件/标签列被识别").toContain("chain");
     expect(localText, "本地摘要必须报出 case 列").toContain("case");
     expect(localText, "本地摘要必须报出 tags 列").toContain("tags");
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
 
-    // 2) 服务端再次验证
-    const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
-    await expect(serverDialog).toBeVisible({ timeout: 30_000 });
+    // 2) 服务端再次验证（「提交服务端校验」→ 「服务端地址校验结果」）
+    const serverDialog = await submitToServerValidation(page, summaryDialog);
     const serverText = await serverDialog.innerText();
     expect(serverText, "服务端必须返回接受/拒绝计数").toContain("服务端接受");
     expect(serverText, "不存在的案件必须被明确标注为已移除，而不是只写不发生绑定").toContain("已从本次提交中移除");
@@ -143,22 +230,15 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     expect(serverText, "必须列出不存在的标签名").toContain(MISSING_TAG);
     expect(serverText, "必须说明名称已从 payload 中移除").toContain("已从创建请求的 payload 中移除");
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "01-server-verdict.png"), fullPage: false });
-    await page.getByRole("button", { name: "使用服务端结果" }).click();
+    await useServerVerdict(page, serverDialog);
 
-    // 3) 预览（真实服务端 Coverage）
-    await page.getByRole("button", { name: "预览 Coverage 与成本" }).click();
-    const previewDialog = dialog(page).filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
-    await expect(previewDialog).toBeVisible({ timeout: 60_000 });
+    // 3) 预览（真实服务端 Coverage）：独立按钮，独立弹窗
+    const { previewDialog } = await previewCoverage(page);
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "02-preview.png"), fullPage: false });
     await previewDialog.getByRole("button", { name: "知道了" }).click();
 
-    // 4) 真实创建
-    await page.getByRole("button", { name: /创建下载任务|正在创建/ }).click();
-    const confirmDialog = dialog(page).filter({ hasText: "确认创建下载任务？" });
-    await expect(confirmDialog).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "确认创建" }).click();
-    const resultDialog = dialog(page).filter({ hasText: /下载任务已创建|已复用现有任务|本地数据已覆盖|部分创建成功/ });
-    await expect(resultDialog).toBeVisible({ timeout: 90_000 });
+    // 4) 真实创建：「创建下载任务」→「确认创建下载任务？」→ 结果弹窗
+    const resultDialog = await createAndConfirm(page);
     const resultText = await resultDialog.innerText();
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "03-created.png"), fullPage: false });
 
@@ -215,17 +295,12 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
-    await importFile(page, path.join(FIX, "large.xlsx"));
-
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const localText = await localDialog.innerText();
+    await selectChain(page, CHAIN);
+    const { summaryDialog, summary } = await openFileSummary(page, path.join(FIX, "large.xlsx"));
+    const localText = await summary.innerText();
     expect(localText, "本地摘要必须报出超上限行数").toContain("超出单次上限");
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
 
-    const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
-    await expect(serverDialog).toBeVisible({ timeout: 60_000 });
+    const serverDialog = await submitToServerValidation(page, summaryDialog);
     const serverText = await serverDialog.innerText();
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "05-large-file.png"), fullPage: false });
     const validateCall = net.filter((r) => r.url.includes("validate-addresses")).pop();
@@ -251,8 +326,8 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     expect(direct.status(), "direct validate").toBe(200);
     expect(directSummary.accepted, "服务端直连也必须只接受 100 条").toBe(100);
     expect(directSummary.cap_rejected, "服务端必须显式拒绝其余 50 条").toBe(50);
-    await page.getByRole("button", { name: "取消" }).click();
-    await expect(serverDialog).toBeHidden();
+    await serverDialog.getByRole("button", { name: "取消" }).click();
+    await expect(serverDialog).toBeHidden({ timeout: 20_000 });
     expect(net.filter((r) => r.url.includes("/api/v2/downloads/preview")).length, "取消后不得预览").toBe(0);
   });
 
@@ -263,22 +338,15 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
-    await importFile(page, path.join(FIX, "mixed.xlsx"));
-
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
-    const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
-    await expect(serverDialog).toBeVisible({ timeout: 60_000 });
+    await selectChain(page, CHAIN);
+    const { summaryDialog } = await openFileSummary(page, path.join(FIX, "mixed.xlsx"));
+    const serverDialog = await submitToServerValidation(page, summaryDialog);
     const serverText = await serverDialog.innerText();
     const verdict = unwrap(net.filter((r) => r.url.includes("validate-addresses")).pop()?.responseBody);
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "06-mixed.png"), fullPage: false });
-    await page.getByRole("button", { name: "使用服务端结果" }).click();
+    await useServerVerdict(page, serverDialog);
 
-    await page.getByRole("button", { name: "预览 Coverage 与成本" }).click();
-    const previewDialog = dialog(page).filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
-    await expect(previewDialog).toBeVisible({ timeout: 60_000 });
+    const { previewDialog } = await previewCoverage(page);
     await previewDialog.getByRole("button", { name: "知道了" }).click();
 
     const previewCall = net.filter((r) => r.url.includes("/api/v2/downloads/preview")).pop();
@@ -317,38 +385,73 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     expect(matching.length, "the reused job must exist exactly once in the job list").toBe(1);
   });
 
-  test("R9-07 格式防线：改名文件与压缩炸弹必须在浏览器被拒（真实上限），且不发出任何请求", async ({ page }, testInfo) => {
+  test("R9-07 格式防线：改名文件与三个压缩炸弹必须逐条命中各自的安全分支（真实上限），且不发出任何请求", async ({ page }, testInfo) => {
     test.skip(!EMAIL || !PASSWORD || !ADDRESS, "creds not provided");
     test.skip(testInfo.project.name !== "uc-desktop", "desktop-only assertion set");
-    const cases: Array<{ file: string; expectReason: string }> = [
-      { file: "renamed.xlsx", expectReason: "不是 ZIP/OOXML" },
-      { file: "bomb-size.xlsx", expectReason: "超过上限" },
-      { file: "bomb-ratio.xlsx", expectReason: "压缩比" },
-      { file: "bomb-lie.xlsx", expectReason: "声明值不可信" },
+    /*
+     * 每个夹具断言**自己的**安全分支（§11.3 / §11.6），不是笼统的"被拒绝"：
+     *   renamed     → 扩展名/魔数分支（不是 ZIP/OOXML）
+     *   bomb-size   → 中央目录声明解压总大小分支（> 64MiB）
+     *   bomb-ratio  → 中央目录声明压缩比分支（> 200）
+     *   bomb-lie    → 真实 deflate 解压分支（声明值不可信 / 超过剩余预算）
+     * 三个炸弹都带齐 OOXML 必需条目（[Content_Types].xml + xl/workbook.xml），
+     * 恶意内容在 xl/worksheets/sheet1.xml —— 由 frontend/scripts/r9-make-fixtures-v4.mjs
+     * 生成并在生成时做机器自检（r9-07-fixture-selfcheck.json）。
+     * 生产校验顺序一行未改；这里只证明每个分支真实可达。
+     */
+    const cases: Array<{ file: string; expectAll: string[]; why: string }> = [
+      { file: "renamed.xlsx", expectAll: ["不是 ZIP/OOXML"], why: "改名文件：扩展名与真实魔数不符" },
+      { file: "bomb-size.xlsx", expectAll: ["声明解压后总大小", "超过上限"], why: "声明解压总大小 > 64MiB 分支" },
+      { file: "bomb-ratio.xlsx", expectAll: ["声明压缩比", "超过上限"], why: "声明压缩比 > 200 分支" },
+      { file: "bomb-lie.xlsx", expectAll: ["真实解压", "声明值不可信"], why: "真实 deflate 解压超出剩余预算分支" },
     ];
-    const observed: Array<{ file: string; reason: string; validateCalls: number; createCalls: number }> = [];
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(String(error).slice(0, 400)));
+    const observed: Array<{ file: string; why: string; expect_all: string[]; reason: string; all_matched: boolean; sha256: string; bytes: number; summaryVisible: boolean; validateCalls: number; previewCalls: number; createCalls: number; totalApiCalls: number; pageErrors: string[] }> = [];
     await login(page);
     for (const item of cases) {
       const net: NetRecord[] = [];
       startCapture(page, net);
       await openDownloadsNew(page);
-      await importFile(page, path.join(FIX, item.file));
+      const filePath = path.join(FIX, item.file);
+      const fixtureBytes = readFileSync(filePath);
+      await importFile(page, filePath);
       const errDialog = dialog(page).filter({ hasText: "文件解析失败" });
-      await expect(errDialog, item.file + " 必须走文件解析失败 Dialog").toBeVisible({ timeout: 30_000 });
+      await expect(errDialog, item.file + " 必须走文件解析失败 Dialog").toBeVisible({ timeout: 60_000 });
       const text = await errDialog.innerText();
       await page.screenshot({ path: path.join(OUT, testInfo.project.name, "09-guard-" + item.file + ".png"), fullPage: false });
+      /* 安全分支命中后不得再弹"本地解析摘要"（summary 是解析**成功**才会出现的数据行）：
+         这同时证明 SheetJS 没有被用来宽松嗅探这些文件。 */
+      const summaryVisible = await page.getByTestId("local-parse-summary").isVisible().catch(() => false);
       await errDialog.getByRole("button", { name: "知道了" }).click();
+      const validateCalls = net.filter((r) => r.url.includes("validate-addresses")).length;
+      const previewCalls = net.filter((r) => r.url.includes("/api/v2/downloads/preview")).length;
+      const createCalls = net.filter((r) => /\/api\/v2\/downloads$/.test(r.url)).length;
+      const matched = item.expectAll.filter((needle) => text.includes(needle));
       observed.push({
-        file: item.file, reason: text,
-        validateCalls: net.filter((r) => r.url.includes("validate-addresses")).length,
-        createCalls: net.filter((r) => r.url.includes("/api/v2/downloads")).length,
+        file: item.file, why: item.why, expect_all: item.expectAll, reason: text,
+        all_matched: matched.length === item.expectAll.length,
+        sha256: createHash("sha256").update(fixtureBytes).digest("hex"), bytes: fixtureBytes.length,
+        summaryVisible, validateCalls, previewCalls, createCalls,
+        totalApiCalls: net.length, pageErrors: pageErrors.slice(),
       });
-      expect(text, item.file + " 的拒绝原因必须点名真实格式问题").toContain(item.expectReason);
-      expect(text).toContain(item.file);
-      expect(observed[observed.length - 1].validateCalls, item.file + " 不得触发服务端校验").toBe(0);
-      expect(observed[observed.length - 1].createCalls, item.file + " 不得触发创建").toBe(0);
+      for (const needle of item.expectAll) {
+        expect(text, item.file + " 的拒绝原因必须命中「" + needle + "」（" + item.why + "）：" + text).toContain(needle);
+      }
+      expect(text, item.file + " 的拒绝原因必须点名文件").toContain(item.file);
+      expect(summaryVisible, item.file + " 不得出现本地解析摘要（说明它进了 SheetJS 解析路径）").toBe(false);
+      expect(validateCalls, item.file + " 不得触发服务端校验").toBe(0);
+      expect(previewCalls, item.file + " 不得触发预览").toBe(0);
+      expect(createCalls, item.file + " 不得触发创建").toBe(0);
+      expect(pageErrors, item.file + " 不得产生页面异常").toEqual([]);
     }
-    dump(testInfo, "r9-07-evidence.json", { cases: observed, limits: { maxFileBytes: 16 * 1024 * 1024, maxZipEntries: 512, maxUncompressedBytes: 64 * 1024 * 1024, maxCompressionRatio: 200 } });
+    dump(testInfo, "r9-07-evidence.json", {
+      cases: observed,
+      pageErrors,
+      limits: { maxFileBytes: 16 * 1024 * 1024, maxZipEntries: 512, maxUncompressedBytes: 64 * 1024 * 1024, maxCompressionRatio: 200 },
+      fixture_self_check: path.join(FIX, "r9-07-fixture-selfcheck.json"),
+    });
+    expect(pageErrors, "四个夹具全轮不得产生页面异常").toEqual([]);
   });
 
   test("R9-06 手机断点：导入 Dialog 在 390x844 可读且无横向溢出", async ({ page }, testInfo) => {
@@ -360,14 +463,13 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     await openDownloadsNew(page);
     const vp = page.viewportSize();
     const overflow = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
-    await importFile(page, path.join(FIX, "min.csv"));
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const box = await localDialog.boundingBox();
+    /* 移动端（<640px）非当前步骤折叠成摘要卡：链选择器在第 ② 步折叠态里不渲染。
+       本用例只验证导入弹窗的可读性与断点溢出，链由页面按服务端元数据自动预选，
+       因此不再点击 .cs-chainselect（旧链路的「预览并创建任务」已拆成两段）。 */
+    const { summaryDialog, summary } = await openFileSummary(page, path.join(FIX, "min.csv"));
+    const box = await summary.boundingBox();
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "07-mobile-import.png"), fullPage: true });
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
-    const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
-    await expect(serverDialog).toBeVisible({ timeout: 60_000 });
+    const serverDialog = await submitToServerValidation(page, summaryDialog);
     const serverBox = await serverDialog.boundingBox();
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "08-mobile-verdict.png"), fullPage: true });
     dump(testInfo, "r9-06-evidence.json", { viewport: vp, document_overflow: overflow, local_dialog_box: box, server_dialog_box: serverBox, api_calls: net.map((c) => ({ method: c.method, url: c.url, status: c.status })) });
