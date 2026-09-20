@@ -88,7 +88,7 @@ import type {
  * 这里复用设计系统同一组类（.cs-hash / .cs-hash__text）与同一个 CopyButton：
  * 视觉省略规则、完整 title、完整复制值与 HashValue 完全一致，只把链接换成 router Link。
  */
-import { EntityHash, CurrentBalanceTable, NetFlowTable, ActivityTable, CounterpartyTable, SemanticTable, AnalysisView, CoverageTable } from "./address-detail/tabs/AddressTables";
+import { EntityHash, CurrentBalanceTable, NetFlowTable, ActivityTable, NftTransferTable, CounterpartyTable, SemanticTable, AnalysisView, CoverageTable } from "./address-detail/tabs/AddressTables";
 
 export default function AddressDetailPage() {
   const { chain = "", address = "" } = useParams();
@@ -99,6 +99,11 @@ export default function AddressDetailPage() {
   // 服务端的 Filter 一直支持 from_time/to_time（会写成 WHERE timestamp >=/<=），此前只是前端
   // 从不传、handler 也不透传，所以每次都是全量拉。选「全部」会退回较慢的全量查询。
   const [windowDays, setWindowDays] = useState(30);
+  /**
+   * 转账资产类别：代币走 address_activity，NFT 走 nft_transfers（同一接口的 asset_type）。
+   * NFT 行不进地址活动投影，所以必须切数据集读，而不是在前端过滤。
+   */
+  const [assetType, setAssetType] = useState<"token" | "nft">("token");
   const [bulkRows, setBulkRows] = useState<ActivityRow[] | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   // 仅用于展示"已经真实拿到多少行"——服务端不提供总量，因此进度条保持 indeterminate。
@@ -136,13 +141,14 @@ export default function AddressDetailPage() {
   const activityActive = tab === "transactions" || tab === "transfers" || tab === "internal";
   const activity = useApi<{ items: ActivityRow[] }>(
     activityActive && base ? base + "/activity" : null,
-    [chain, address, tab, cursor, direction, token, windowDays],
+    [chain, address, tab, cursor, direction, token, windowDays, assetType],
     activityActive
       ? {
           limit: 200,
           cursor: cursor || undefined,
           direction: direction || undefined,
-          token: tab === "transfers" ? token || undefined : undefined,
+          token: tab === "transfers" && assetType === "token" ? token || undefined : undefined,
+          asset_type: tab === "transfers" && assetType === "nft" ? "nft" : undefined,
           from_time: activityFromTime,
         }
       : undefined,
@@ -452,7 +458,11 @@ export default function AddressDetailPage() {
     const rows = activity.data?.items ?? [];
     const filtered =
       tab === "transfers"
-        ? rows.filter((row) => row.activity_type === "transfer")
+        ? rows.filter((row) =>
+            assetType === "nft"
+              ? row.activity_type === "nft_transfer"
+              : row.activity_type === "transfer",
+          )
         : tab === "internal"
           ? rows.filter((row) => row.activity_type === "internal_transfer")
           : rows.filter((row) => row.activity_type !== "transfer" && row.activity_type !== "internal_transfer");
@@ -495,27 +505,53 @@ export default function AddressDetailPage() {
           </select>
           {tab === "transfers" ? (
             <>
-              <input
-                className="input"
-                style={{ flex: "1 1 220px", minWidth: 0 }}
-                aria-label="Token 筛选"
-                placeholder="Token 符号 / 合约地址"
-                value={tokenDraft}
-                onChange={(event) => setTokenDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    updateParams({ token: tokenDraft.trim() || null, cursor: null });
-                  }
-                }}
-              />
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => updateParams({ token: tokenDraft.trim() || null, cursor: null })}
-              >
-                应用
-              </Button>
+              <div role="group" aria-label="资产类别" style={{ display: "flex", gap: 4 }}>
+                <Button
+                  size="sm"
+                  variant={assetType === "token" ? "primary" : "ghost"}
+                  onClick={() => {
+                    setAssetType("token");
+                    updateParams({ cursor: null });
+                  }}
+                >
+                  代币
+                </Button>
+                <Button
+                  size="sm"
+                  variant={assetType === "nft" ? "primary" : "ghost"}
+                  onClick={() => {
+                    setAssetType("nft");
+                    updateParams({ cursor: null });
+                  }}
+                >
+                  NFT
+                </Button>
+              </div>
+              {assetType === "token" ? (
+                <>
+                  <input
+                    className="input"
+                    style={{ flex: "1 1 220px", minWidth: 0 }}
+                    aria-label="Token 筛选"
+                    placeholder="Token 符号 / 合约地址"
+                    value={tokenDraft}
+                    onChange={(event) => setTokenDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        updateParams({ token: tokenDraft.trim() || null, cursor: null });
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => updateParams({ token: tokenDraft.trim() || null, cursor: null })}
+                  >
+                    应用
+                  </Button>
+                </>
+              ) : null}
             </>
           ) : null}
           {tab === "internal" ? (
@@ -546,13 +582,22 @@ export default function AddressDetailPage() {
               />
             </div>
           ) : null}
-          <ActivityTable
-            rows={bulkRows ?? filtered}
-            chain={chain}
-            loading={activity.loading || bulkLoading}
-            emptyTitle={"没有 " + activityTitle + " 记录"}
-            onSelectActivity={setSelectedActivity}
-          />
+          {tab === "transfers" && assetType === "nft" ? (
+            <NftTransferTable
+              rows={bulkRows ?? filtered}
+              chain={chain}
+              loading={activity.loading || bulkLoading}
+              onSelectActivity={setSelectedActivity}
+            />
+          ) : (
+            <ActivityTable
+              rows={bulkRows ?? filtered}
+              chain={chain}
+              loading={activity.loading || bulkLoading}
+              emptyTitle={"没有 " + activityTitle + " 记录"}
+              onSelectActivity={setSelectedActivity}
+            />
+          )}
           {activity.data ? (
             <div
               className="toolbar"

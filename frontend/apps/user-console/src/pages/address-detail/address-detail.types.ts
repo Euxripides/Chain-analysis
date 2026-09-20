@@ -92,10 +92,18 @@ export interface ActivityRow {
   log_index?: number;
   token_address?: string;
   token_symbol?: string;
+  /** NFT 转账的合集名（来自 nft_transfers.token_name）。 */
+  token_name?: string;
   token_decimals?: number;
   amount_raw?: string;
   amount?: string;
   amount_usd?: string;
+  /** NFT 转账读取面（/activity?asset_type=nft）：合约 / token_id / 标准 / 双方地址。 */
+  contract_address?: string;
+  token_id?: string;
+  token_standard?: string;
+  from_address?: string;
+  to_address?: string;
   /** Solana 证据（ADR-023 D10）：主体/对手方的代币账户与被代扣的手续费；其他链为空。 */
   token_account?: string;
   counterparty_token_account?: string;

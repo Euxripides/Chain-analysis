@@ -294,6 +294,80 @@ export function ActivityTable({
   );
 }
 
+/**
+ * NFT 转账表（读取面 /activity?asset_type=nft）。
+ *
+ * 列对齐参考样式：交易哈希 / 时间 / 发送方 / 接收方 / 数量 / 代币（合集 + token_id + 标准）。
+ * 纯展示组件：只接收已取好的行，不发请求、不做业务判断（与 ActivityTable 同一约定）。
+ */
+export function NftTransferTable({
+  rows,
+  chain,
+  loading,
+  emptyTitle = "没有 NFT 转账记录",
+  onSelectActivity,
+}: {
+  rows: ActivityRow[];
+  chain: string;
+  loading?: boolean;
+  emptyTitle?: string;
+  onSelectActivity?: (row: ActivityRow) => void;
+}) {
+  return (
+    <DataTable<ActivityRow>
+      rows={rows}
+      loading={loading}
+      rowKey={(row, index) => (row.tx_hash ?? "tx") + "-" + (row.log_index ?? index) + "-" + (row.token_id ?? "")}
+      empty={<EmptyState title={emptyTitle} />}
+      onRowActivate={onSelectActivity}
+      rowActivateLabel={(row) => "在检查器中查看 " + formatTime(row.timestamp) + " 的 NFT 转账详情"}
+      columns={[
+        {
+          key: "tx",
+          header: "交易哈希",
+          width: "170px",
+          render: (row) =>
+            row.tx_hash ? (
+              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" />
+            ) : (
+              <span>—</span>
+            ),
+        },
+        { key: "time", header: "时间", width: "160px", render: (row) => <span>{formatTime(row.timestamp)}</span> },
+        {
+          key: "from",
+          header: "发送方",
+          width: "170px",
+          render: (row) =>
+            row.from_address ? <HashValue value={row.from_address} label="发送方地址" head={8} tail={6} /> : <span>—</span>,
+        },
+        {
+          key: "to",
+          header: "接收方",
+          width: "170px",
+          render: (row) =>
+            row.to_address ? <HashValue value={row.to_address} label="接收方地址" head={8} tail={6} /> : <span>—</span>,
+        },
+        { key: "amount", header: "数量", align: "right", render: (row) => <span className="mono">{row.amount_raw ?? "—"}</span> },
+        {
+          key: "nft",
+          header: "代币",
+          width: "220px",
+          render: (row) => (
+            <div style={{ minWidth: 0 }}>
+              <div>{row.token_name || row.token_symbol || shortValue(row.contract_address, 8, 6)}</div>
+              <div className="s4-list__sub mono">
+                {"#" + (row.token_id || "—")}
+                {row.token_standard ? " · " + row.token_standard : ""}
+              </div>
+            </div>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
 export function CounterpartyTable({
   rows,
   chain,
