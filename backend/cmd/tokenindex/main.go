@@ -564,13 +564,15 @@ func upsertPlatforms(ctx context.Context, st *store.Store, rows []platformRow) e
 	args := make([]any, 0, len(rows)*5)
 	for i, row := range rows {
 		base := i * 5
-		placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)", base+1, base+2, base+3, base+4, base+5))
+		placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,'official',now())", base+1, base+2, base+3, base+4, base+5))
 		args = append(args, row.CoinID, row.PlatformKey, row.Contract, row.Chain, row.NormalizedAddress)
 	}
-	sql := `INSERT INTO coingecko_platforms (coin_id, platform_key, contract, chain, normalized_address, updated_at)
+	// 官方导入一律标 official（含把先前 derived-name-symbol 的同一主键行升级为官方口径）。
+	sql := `INSERT INTO coingecko_platforms (coin_id, platform_key, contract, chain, normalized_address, match_method, matched_at)
         VALUES ` + strings.Join(placeholders, ",") + `
         ON CONFLICT (coin_id, platform_key, contract) DO UPDATE SET
-          chain = EXCLUDED.chain, normalized_address = EXCLUDED.normalized_address, updated_at = now()`
+          chain = EXCLUDED.chain, normalized_address = EXCLUDED.normalized_address,
+          match_method = 'official', matched_at = now(), updated_at = now()`
 	_, err := st.Pool.Exec(ctx, sql, args...)
 	return err
 }
