@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | Proposed（2026-09-20；按本目录 README 规则 1，批准后改 Accepted 再动代码） |
+| 状态 | Accepted（2026-09-20，产品已批准三项口径：gross/net 分列、证据详情展示 ATA 与手续费、CPI 调用树独立数据集） |
 | 关联 | AGENTS.md、ADR-003 权限声明、`internal/provider/solana`（commit 835b6ca）、`acceptance-evidence/dual-system-v1/SOLANA-AND-POLYGON-DOWNLOAD-20260920.md` |
 | 触发项 | 「Solana 能不能下 token_transfers」；当前 `chainDatasetsByChain["solana"]` 只有 `transactions` |
 
@@ -71,11 +71,14 @@ meta.preTokenBalances：
   （Token-2022 的 `TransferCheckedWithFee` 属于 TransferFee 扩展的子指令，判别值与 SPL Token 不同，实现时以官方 program 可见判别表为准）。
 - 未识别的 Token-2022 扩展指令：记 `unsupported_extension`（原始 data 进 raw），**不静默丢弃、不猜金额**。
 
-### D6：`amount_raw` = 指令声明金额（gross）；手续费写进 raw，不进 ClickHouse 列
+### D6：`amount_raw` = **净额（net，实际移动/到账）**；新增 `gross_amount_raw` / `fee_amount_raw` 分列
 
-- 与 EVM 日志金额口径一致（都是「链上声明的转账额」），避免同一笔 transfer 在两条链上口径分裂。
-- Token-2022 的 transfer fee 差额由 provider 在原始行里附加 `fee_raw` / `net_amount_raw`（落 MinIO raw part，供审计与后续加列），存在差额时计数上报。
-- 若产品需要把费用做成可查询列 → 另开 ADR + ClickHouse 迁移，不在本决策内扩 schema。
+产品决策（2026-09-20）：必须能区分 gross / net，因此扩 ClickHouse 列，而不是把费用只塞进 raw。
+
+- `blockchain.token_transfers` 新增 `gross_amount_raw String`、`fee_amount_raw String`（既有 `amount_raw` / `amount` 语义统一为**净额**）。
+- 不变量（跨链一致，单测冻结）：`amount_raw = gross_amount_raw - fee_amount_raw`；EVM/TRON 无费用概念时 `gross_amount_raw = amount_raw`、`fee_amount_raw = "0"`；Solana 的 SPL Token（非 Token-2022）同理。
+- Token-2022 带费转账：`gross_amount_raw` = 指令声明金额，`fee_amount_raw` = 代扣手续费，`amount_raw` = 收款人实收（与 `pre/postTokenBalances` 差额自洽）。
+- `amount Decimal(76,38)` 仍由 `amount_raw` + `token_decimals` 换算，即展示净额。
 
 ### D7：失败交易不产出 token_transfers 行
 
@@ -88,9 +91,28 @@ meta.preTokenBalances：
 首选 `jsonParsed`（节点已给 `parsed.type/info`）；节点未返回 parsed 时回退 `json`（结构已解、指令 data 是 base58，按 D5 判别表自己解）。
 自研 wire 反序列化被明确否决（见下表）。
 
-### D9：只有实现 + 验收通过后，才把 `token_transfers` 加进 `chainDatasetsByChain["solana"]`
+### D9：只有实现 + 验收通过后，才把新数据集加进 `chainDatasetsByChain["solana"]`
 
-口径落地前，`/api/v2/meta/datasets?chain=solana` 必须继续只返回 `transactions`——前端不暴露做不到的能力。
+口径落地前，`/api/v2/meta/datasets?chain=solana` 必须继续只返回已实现的数据集——前端不暴露做不到的能力。
+
+### D10：证据详情展示代币账户（ATA）与手续费明细
+
+产品决策（2026-09-20）：`blockchain.token_transfers` 新增 `from_token_account` / `to_token_account`，
+`blockchain.address_activity` 同步新增 `token_account`（主体在该笔转账中的 ATA）、`counterparty_token_account`、`fee_amount_raw`。
+地址详情（Token Transfer 行）的详情视图必须能展开看到：主体 ATA、对手方 ATA、gross / fee / net 三个金额。
+非 Solana 链这些列写空串，前端只在非空时展示（绝不显示伪造的 ATA）。
+
+### D11：CPI 调用树作为独立数据集 `internal_transactions`
+
+产品决策（2026-09-20）：Solana 的 CPI 调用树单独成数据集，复用既有 `blockchain.internal_calls` 表：
+
+- 每个 CPI 节点一行：`from_address` = 发起方 program，`to_address` = 被调用 program，
+  `call_type` = `cpi`，`depth` = 嵌套深度，`trace_path` = 稳定的路径串（如 `3.0.1`），
+  `method_id` = 指令判别值或 `parsed.type`（取得到时），`success` 取自交易 `meta.err`，
+  `call_index` 用与 D3 相同的 `outer*256+inner` 合成键。
+- `value_raw` 只在节点确实是系统转账（System Program `transfer`）时填 lamports，其余为 `0`——
+  不把代币金额塞进 `value_raw` 冒充原生转账。
+- 该数据集同样受 D9 约束：实现 + 验收通过后才出现在链级白名单。
 
 ## 被否决的方案
 
@@ -105,17 +127,20 @@ meta.preTokenBalances：
 
 ## 影响
 
-- **正向**：Solana 与 EVM/TRON 在 `token_transfers` 上语义一致；地址维度可直接进案件与图谱；费用差额不丢证据（raw 保留）。
-- **代价**：provider 增加一个解码器（约 1 天，含判别表常量与 fixture 单测）；owner 映射缺失时有有界回退调用。
-- **边界**：`nft_transfers` / `logs` / `balances` / CPI 内部调用仍不支持；Solana 仍只接受显式 slot 区间（见 `solanaRangeGuard`）。
+- **正向**：Solana 与 EVM/TRON 在 `token_transfers` 上语义一致；gross/net/手续费可查询、可核对；ATA 可追溯到具体代币账户；CPI 调用树补齐程序间调用视角。
+- **代价**：provider 增加指令解码器与 CPI 提取（约 1.5 天，含判别表常量与 fixture 单测）；owner 映射缺失时有有界回退调用；
+  ClickHouse 与 `address_activity` 各加少量列（String，默认空串，向后兼容）。
+- **边界**：`nft_transfers` / `logs` / `balances` 仍不支持；Solana 仍只接受显式 slot 区间（见 `solanaRangeGuard`）。
 
 ## 验证计划（实现完成时必须全部通过）
 
-1. 单测 fixture：`transferChecked` 正常样本、CPI 内层样本、Token-2022 带费样本、失败交易样本、owner 映射缺失样本。
-2. 真链对账：同一笔交易解出的 transfer 集合必须与 `pre/postTokenBalances` 的账户差额一致；
-   不一致即 `reconciliation_mismatch`，必须可见，绝不静默。
-3. 一次真实下载任务：ClickHouse 行的 `from/to` 是钱包、`token_address` = mint、`log_index` 可按 (outer,inner) 复算；Coverage / MinIO raw 三层证据齐全。
-4. 前端：`/api/v2/meta/datasets?chain=solana` 返回两类；Dataset 选择与创建流程在桌面端与移动端各验一次。
+1. 单测 fixture：`transferChecked` 正常样本、CPI 内层样本、Token-2022 带费样本、失败交易样本、owner 映射缺失样本、CPI 树样本。
+2. 真链对账：同一笔交易解出的 transfer 集合必须与 `pre/postTokenBalances` 的账户差额一致；不一致即 `reconciliation_mismatch`，必须可见，绝不静默。
+3. 金额不变量：每一行都满足 `amount_raw = gross_amount_raw - fee_amount_raw`（EVM/TRON 与无费的 Solana 行为 `fee="0"`），由单测与一次线上抽样断言。
+4. 一次真实下载任务：ClickHouse 行的 `from/to` 是钱包、`token_address` = mint、`log_index` 可按 (outer,inner) 复算、ATA 与 fee 列有值；Coverage / MinIO raw 三层证据齐全。
+5. CPI 树：`internal_calls` 行的 `from/to` 是 program、`depth/trace_path` 与交易内嵌套一致、`success` 与 `meta.err` 一致。
+6. 前端：`/api/v2/meta/datasets?chain=solana` 返回三类；Dataset 选择与创建流程在桌面端与移动端各验一次；
+   地址详情的 Token Transfer 行详情能看到主体 ATA、对手方 ATA 与 gross/fee/net。
 
 ## 回滚方式
 
@@ -123,8 +148,7 @@ meta.preTokenBalances：
 2. **数据**：已写入的 Solana `token_transfers` 行可按 `chain='solana'` 识别；无需迁移（历史保留，Coverage 行按链/ provider 区分）；
 3. 本决策无 schema 变更、无权限变更，因此不涉及 expand-compatible 发布流程。
 
-## 开放项（需产品确认后才实施）
+## 开放项
 
-1. `amount_raw` 是否最终区分 gross / net（需要 ClickHouse 加列）。
-2. 证据详情是否展示代币账户（ATA）与 transfer fee 明细。
-3. Solana 的 `internal_transactions`（CPI 调用树）是否作为独立数据集。
+无。三项产品决策已在本 ADR 内落实（D6 / D10 / D11）；后续若要把 `nft_transfers` / `logs` / `balances` 也纳入 Solana，
+按 README 规则 2 另开 ADR，不修改本文正文。
