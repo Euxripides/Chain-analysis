@@ -123,7 +123,9 @@ type nftTransferRow struct {
 	ToAddress       string `json:"toAddress"`
 	TokenName       string `json:"name"`
 	TokenSymbol     string `json:"tokenSymbol"`
-	Value           string `json:"value"`
+	// Solana 没有 ERC 标准：经典 NFT 由 SPL Token / Token-2022 承载，如实标注。
+	TokenStandard string `json:"tokenStandard"`
+	Value         string `json:"value"`
 }
 
 // toNFTRows 只保留判定为经典 NFT 的转账。
@@ -140,7 +142,8 @@ func toNFTRows(rows []tokenTransferRow, classes map[string]mintClass) []nftTrans
 			TokenID:     "",
 			FromAddress: row.FromAddress, ToAddress: row.ToAddress,
 			TokenName: "", TokenSymbol: "",
-			Value: row.GrossAmountRaw,
+			TokenStandard: "SPL",
+			Value:         row.GrossAmountRaw,
 		})
 	}
 	return out

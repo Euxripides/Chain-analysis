@@ -48,7 +48,9 @@ func NormalizeNftTransfer(raw json.RawMessage) (ingest.NftTransferRow, error) {
 		To:       strings.TrimSpace(stringField(m, "toAddress")),
 		// 没有元数据来源：留空，不用 mint 冒充 NFT 名称。
 		TokenName: "", TokenSymbol: "",
-		AmountRaw: strings.TrimSpace(stringField(m, "value")),
-		Provider:  "solana",
+		// Solana 没有 ERC 标准；Provider 标注 SPL，缺失时留空而不是冒充 ERC721。
+		TokenStandard: strings.TrimSpace(stringField(m, "tokenStandard")),
+		AmountRaw:     strings.TrimSpace(stringField(m, "value")),
+		Provider:      "solana",
 	}, nil
 }

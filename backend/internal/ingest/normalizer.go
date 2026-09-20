@@ -374,8 +374,10 @@ type NftTransferRow struct {
 	To          string
 	TokenName   string
 	TokenSymbol string
-	AmountRaw   string
-	Provider    string
+	// TokenStandard：ERC721 / ERC1155 / Solana SPL。没有来源时留空，不猜。
+	TokenStandard string
+	AmountRaw     string
+	Provider      string
 }
 
 func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTransferRow, error) {
@@ -390,7 +392,9 @@ func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTrans
 		From: pickAddressForChain(chain, m, "fromAddress", "from"), To: pickAddressForChain(chain, m, "toAddress", "to"),
 		TokenName:   pickString(m, "name", "collectionName", "tokenName"),
 		TokenSymbol: pickString(m, "collectionSymbol", "tokenSymbol"),
-		AmountRaw:   pickString(m, "value"), Provider: provider,
+		// Ankr 的 NFT 行把标准放在 type（实测 "ERC721"）；Solana 行用 tokenStandard。
+		TokenStandard: pickString(m, "tokenStandard", "tokenType", "type"),
+		AmountRaw:     pickString(m, "value"), Provider: provider,
 	}, nil
 }
 

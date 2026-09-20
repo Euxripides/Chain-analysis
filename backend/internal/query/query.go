@@ -115,17 +115,19 @@ type tokenTransferRow struct {
 }
 
 type nftTransferRow struct {
-	Chain          string    `ch:"chain" json:"chain"`
-	BlockNumber    uint64    `ch:"block_number" json:"block_number"`
-	Timestamp      time.Time `ch:"timestamp" json:"timestamp"`
-	TxHash         string    `ch:"tx_hash" json:"tx_hash"`
-	LogIndex       uint32    `ch:"log_index" json:"log_index"`
-	Contract       string    `ch:"contract_address" json:"contract_address"`
-	TokenID        string    `ch:"token_id" json:"token_id"`
-	FromAddress    string    `ch:"from_address" json:"from_address"`
-	ToAddress      string    `ch:"to_address" json:"to_address"`
-	TokenName      string    `ch:"token_name" json:"token_name"`
-	TokenSymbol    string    `ch:"token_symbol" json:"token_symbol"`
+	Chain       string    `ch:"chain" json:"chain"`
+	BlockNumber uint64    `ch:"block_number" json:"block_number"`
+	Timestamp   time.Time `ch:"timestamp" json:"timestamp"`
+	TxHash      string    `ch:"tx_hash" json:"tx_hash"`
+	LogIndex    uint32    `ch:"log_index" json:"log_index"`
+	Contract    string    `ch:"contract_address" json:"contract_address"`
+	TokenID     string    `ch:"token_id" json:"token_id"`
+	FromAddress string    `ch:"from_address" json:"from_address"`
+	ToAddress   string    `ch:"to_address" json:"to_address"`
+	TokenName   string    `ch:"token_name" json:"token_name"`
+	TokenSymbol string    `ch:"token_symbol" json:"token_symbol"`
+	// token_standard 随 SELECT * 返回；结构体必须接住，否则整条查询会在扫描阶段失败。
+	TokenStandard  string    `ch:"token_standard" json:"token_standard"`
 	AmountRaw      string    `ch:"amount_raw" json:"amount_raw"`
 	SourceProvider string    `ch:"source_provider" json:"source_provider"`
 	SourceIngested time.Time `ch:"source_ingested_at" json:"source_ingested_at"`

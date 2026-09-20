@@ -139,13 +139,13 @@ func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRo
 func (w *Writer) WriteNftTransfers(ctx context.Context, rows []NftTransferRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []NftTransferRow) error {
 		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.nft_transfers "+
-			"(chain, block_number, timestamp, tx_hash, log_index, contract_address, token_id, from_address, to_address, token_name, token_symbol, amount_raw, source_provider) VALUES")
+			"(chain, block_number, timestamp, tx_hash, log_index, contract_address, token_id, from_address, to_address, token_name, token_symbol, token_standard, amount_raw, source_provider) VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
 			if err := stmt.Append(r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.Contract, r.TokenID,
-				r.From, r.To, r.TokenName, r.TokenSymbol, r.AmountRaw, r.Provider); err != nil {
+				r.From, r.To, r.TokenName, r.TokenSymbol, r.TokenStandard, r.AmountRaw, r.Provider); err != nil {
 				return err
 			}
 		}
