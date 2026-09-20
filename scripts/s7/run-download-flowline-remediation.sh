@@ -207,19 +207,42 @@ if isinstance(r9_matrix, dict):
 r9_07_ok = None
 if isinstance(r9_evidence, dict):
     cases = r9_evidence.get("cases") or []
-    r9_07_ok = bool(cases) and all(case.get("matched") for case in cases) and all(int(case.get("validateCalls") or 0) == 0 for case in cases)
+    # R9 的逐例证据字段是 all_matched（每个文件都必须命中自己的预期原因），
+    # 并且每例的 validate/preview/create 请求数必须为 0。
+    r9_07_ok = bool(cases) and all(case.get("all_matched") for case in cases) and all(
+        int(case.get("validateCalls") or 0) == 0
+        and int(case.get("previewCalls") or 0) == 0
+        and int(case.get("createCalls") or 0) == 0
+        for case in cases
+    )
 
 base["r9"] = {
     "r9_07_passed": r9_07_ok,
     "report_present": os.path.exists(os.path.join(remed, "r9", "playwright-report.json")),
     "matrix_missing": r9_missing,
 }
+zip64_d = None
+for candidate in ("v6", "v5b"):
+    loaded = load(os.path.join(remed, "udl01", candidate, "udl01-d-evidence.json"))
+    if loaded and (loaded.get("zip64Branch") or loaded.get("zip64Layout")):
+        zip64_d = loaded
+        break
+zip64_layout_ok = bool((zip64_d or {}).get("zip64Layout", {}).get("locator_is_20_bytes_before_eocd")) and bool(
+    (zip64_d or {}).get("zip64Layout", {}).get("locator_signature_ok")
+) and bool((zip64_d or {}).get("zip64Layout", {}).get("zip64_eocd_signature_ok"))
+zip64_branch_ok = bool((zip64_d or {}).get("zip64Branch", {}).get("matched")) and all(
+    int(value or 0) == 0 for value in ((zip64_d or {}).get("zip64Branch", {}).get("serverCalls") or {}).values()
+) and (zip64_d or {}).get("zip64Branch", {}).get("taskCreated") is False
 base["udl01"] = {
     "v5b_passed": verdict_of(v5b) == "PASS",
     "v6_passed": verdict_of(v6) == "PASS",
-    "zip64_branch_hit": bool((v6 or {}).get("zip64_branch_hit") or (v5b or {}).get("zip64_branch_hit")),
-    "stable_semantic_assertions": True,
+    "zip64_branch_hit": bool(zip64_layout_ok and zip64_branch_ok),
+    "zip64_layout_ok": zip64_layout_ok,
+    "zip64_rejection": (zip64_d or {}).get("zip64Branch", {}).get("reason"),
+    "stable_semantic_assertions": bool((v6 or {}).get("verdict") == "PASS"),
 }
+if not base["udl01"]["zip64_branch_hit"]:
+    problems.append("ZIP64 分支未命中或布局自检不通过")
 base["dataset_limit"] = {
     "real_e2e_passed": bool((dataset or {}).get("verdict") == "PASS"),
     "seven_item_component_test_passed": bool((base.get("dataset_limit") or {}).get("seven_item_component_test_passed")),

@@ -151,6 +151,12 @@ const CREATE_RESULT = {
   coverage: 0.888, job_id: "job-fixture-created", job_no: "DL-20260920-0001",
 };
 
+/*
+ * 部署绑定校验要读 https://127.0.0.1:8448（nginx 自签证书）。
+ * 这是本机验收脚本，明确关闭 Node 的证书校验（浏览器侧另有 ignoreHTTPSErrors）。
+ */
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 /* ------------------------------------------------------------------ server */
 
 function startStaticServer() {
@@ -1136,8 +1142,10 @@ async function sourceBinding() {
     out.served_entry_chunk = servedEntry ? servedEntry[1] : null;
     if (servedEntry) {
       const chunkResponse = await fetch(LIVE_URL + "assets/" + servedEntry[1]);
-      out.served_entry_chunk_sha256 = sha256(Buffer.from(await chunkResponse.arrayBuffer()));
-      const chunkSource = await chunkResponse.text();
+      /* 响应体只能读一次：先取 ArrayBuffer，再从中解出文本（否则第二次读会抛异常）。 */
+      const chunkBuffer = Buffer.from(await chunkResponse.arrayBuffer());
+      out.served_entry_chunk_sha256 = sha256(chunkBuffer);
+      const chunkSource = chunkBuffer.toString("utf8");
       const servedPage = /(DownloadNewPage-[A-Za-z0-9_-]+\.js)/.exec(chunkSource);
       out.served_page_chunk = servedPage ? servedPage[1] : null;
       if (servedPage) {
