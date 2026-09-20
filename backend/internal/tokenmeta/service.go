@@ -221,7 +221,9 @@ func (s *Service) Get(ctx context.Context, chain, contract string) (*Metadata, e
 	if err != nil {
 		return nil, err
 	}
-	m, ok := items[normalizeAddress(contract)]
+	// 必须按链归一化取键：GetMany 的键是 normalizeAddressForChain（TRON 保留 base58 大小写），
+	// 这里若用全局 normalizeAddress 会小写化，TRON 代币永远查不到（图标路由因此 404）。
+	m, ok := items[normalizeAddressForChain(chain, contract)]
 	if !ok {
 		return nil, nil
 	}
