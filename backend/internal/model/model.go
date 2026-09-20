@@ -74,7 +74,7 @@ var chainDatasetsByChain = map[string][]string{
 	"optimism":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
 	"avalanche": {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
 	"tron":      {"transactions", "token_transfers", "internal_transactions"},
-	"solana":    {"transactions", "token_transfers", "internal_transactions"},
+	"solana":    {"transactions", "token_transfers", "internal_transactions", "logs"},
 }
 
 // ChainDatasets 返回该链可下载的 Dataset；chain 为空或未登记时返回全量（向后兼容）。

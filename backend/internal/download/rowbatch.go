@@ -115,6 +115,18 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 				})
 			}
 			return b, nil
+		case "logs":
+			// 程序日志是排障证据而不是资金流：只落 logs，不写地址活动。
+			for _, raw := range rows {
+				r, err := solana.NormalizeProgramLog(raw)
+				if err != nil {
+					sc.log.Warn("Solana program log normalization skipped", "err", err)
+					continue
+				}
+				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
+				b.logRows = append(b.logRows, r)
+			}
+			return b, nil
 		case "internal_transactions":
 			// CPI 节点是程序调用：只落 internal_calls，不写地址活动（ADR-023 D11）。
 			for _, raw := range rows {

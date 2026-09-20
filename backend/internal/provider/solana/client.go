@@ -108,7 +108,7 @@ func (c *Client) Name() string { return "solana" }
 func (c *Client) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
 		Name:        "solana",
-		Datasets:    []string{"transactions", "token_transfers", "internal_transactions"},
+		Datasets:    []string{"transactions", "token_transfers", "internal_transactions", "logs"},
 		MaxPageSize: c.maxPageSize,
 		// Solana 没有可用的时间→slot 索引：时间区间在 API 层直接拒绝。
 		SupportsTimeRange: map[string]bool{"transactions": false},
@@ -307,7 +307,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			Message: "solana provider only serves chain=solana, got " + req.Chain}
 	}
 	switch req.Dataset {
-	case "transactions", "token_transfers", "internal_transactions":
+	case "transactions", "token_transfers", "internal_transactions", "logs":
 	default:
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassUnsupported,
 			Message: "solana provider does not serve dataset " + req.Dataset}
@@ -387,7 +387,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			return provider.FetchResult{}, txErr
 		}
 		encoded, payloadBytes = encodeRows(txRows), txBytes
-	case "token_transfers", "internal_transactions":
+	case "token_transfers", "internal_transactions", "logs":
 		decoded, txErr := c.fetchInstructionRows(ctx, req.Dataset, selected)
 		if txErr != nil {
 			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
@@ -695,6 +695,13 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 					tx.Transaction.Message.Instructions, tx.Meta.InnerInstructions, index)
 				results[i].stats = stats
 				results[i].rows = encodeRows(rows)
+			case "logs":
+				// 程序日志：来源与归属都来自 logMessages + invoke 栈（ADR-024 D1）。
+				var logLines []string
+				if tx.Meta != nil {
+					logLines = tx.Meta.LogMessages
+				}
+				results[i].rows = encodeRows(buildProgramLogRows(tx.Slot, tx.blockTimeValue(), selected[i].Signature, logLines))
 			case "internal_transactions":
 				nodes := buildCPITree(tx.Meta.LogMessages, tx.outerPrograms())
 				rows, unpaired := cpiRowsFor(selected[i].Signature, tx, nodes)

@@ -9,7 +9,7 @@ import (
 func TestChainDatasetsIsPerChain(t *testing.T) {
 	// Solana 暴露且只暴露已实现的数据集（ADR-023 D9）：transactions / token_transfers / CPI 树。
 	solana := model.ChainDatasets("solana")
-	wantSolana := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true}
+	wantSolana := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true, "logs": true}
 	if len(solana) != len(wantSolana) {
 		t.Fatalf("unexpected solana datasets: %v", solana)
 	}
@@ -18,7 +18,7 @@ func TestChainDatasetsIsPerChain(t *testing.T) {
 			t.Fatalf("solana advertises unimplemented dataset %s", dataset)
 		}
 	}
-	for _, dataset := range []string{"nft_transfers", "logs", "balances"} {
+	for _, dataset := range []string{"nft_transfers", "balances"} {
 		for _, advertised := range solana {
 			if advertised == dataset {
 				t.Fatalf("solana must not advertise %s", dataset)

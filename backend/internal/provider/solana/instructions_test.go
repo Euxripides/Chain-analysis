@@ -154,6 +154,50 @@ func TestBuildTokenTransferRowsSkipsUnresolvedOwners(t *testing.T) {
 	}
 }
 
+func TestBuildProgramLogRows(t *testing.T) {
+	logs := []string{
+		"Program A invoke [1]",
+		"Program log: hello",
+		"Program data: QUJD",
+		"Program B invoke [2]",
+		"Program log: inner",
+		"Program B success",
+		"Program A consumed 100 of 200 compute units",
+		"Program A success",
+	}
+	rows := buildProgramLogRows(448611120, 1789875226, "SIG", logs)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 log rows (invoke/consumed lines are not logs), got %d: %+v", len(rows), rows)
+	}
+	if rows[0].LogIndex != 1 || rows[0].Address != "A" || rows[0].Data != "hello" || rows[0].EventSource != "solana_program_log" {
+		t.Fatalf("unexpected first row: %+v", rows[0])
+	}
+	if rows[1].LogIndex != 2 || rows[1].EventSource != "solana_program_data" || rows[1].Data != "QUJD" {
+		t.Fatalf("unexpected data row: %+v", rows[1])
+	}
+	// 内层日志归属 invoked program，序号连续且跨层递增。
+	if rows[2].LogIndex != 3 || rows[2].Address != "B" || rows[2].Data != "inner" {
+		t.Fatalf("unexpected inner row: %+v", rows[2])
+	}
+	for _, row := range rows {
+		if len(row.Topics) != 0 {
+			t.Fatalf("solana rows must not carry topics: %+v", row)
+		}
+		if row.EventSignature != "" || row.EventVerified {
+			t.Fatalf("solana rows must not claim an EVM signature: %+v", row)
+		}
+		if row.BlockNumber != "448611120" || row.Timestamp != 1789875226 || row.TransactionHash != "SIG" {
+			t.Fatalf("unexpected identity: %+v", row)
+		}
+	}
+}
+
+func TestBuildProgramLogRowsEmpty(t *testing.T) {
+	if rows := buildProgramLogRows(1, 1, "SIG", nil); len(rows) != 0 {
+		t.Fatalf("empty logs must produce no rows, got %+v", rows)
+	}
+}
+
 func TestBuildCPITree(t *testing.T) {
 	logs := []string{
 		"Program A invoke [1]",

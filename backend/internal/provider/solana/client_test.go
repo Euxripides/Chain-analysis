@@ -165,7 +165,7 @@ func TestCapabilitiesAdvertiseImplementedDatasetsOnly(t *testing.T) {
 	defer server.Close()
 	client := newTestClient(t, server.URL)
 	caps := client.Capabilities()
-	want := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true}
+	want := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true, "logs": true}
 	if len(caps.Datasets) != len(want) {
 		t.Fatalf("unexpected datasets: %v", caps.Datasets)
 	}
@@ -175,7 +175,7 @@ func TestCapabilitiesAdvertiseImplementedDatasetsOnly(t *testing.T) {
 		}
 	}
 	// 未实现的数据集绝不能被声明（ADR-023 D9）。
-	for _, dataset := range []string{"nft_transfers", "logs", "balances"} {
+	for _, dataset := range []string{"nft_transfers", "balances"} {
 		for _, advertised := range caps.Datasets {
 			if advertised == dataset {
 				t.Fatalf("dataset %s must not be advertised", dataset)

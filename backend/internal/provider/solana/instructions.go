@@ -40,6 +40,28 @@ type parsedSemantic struct {
 	Info json.RawMessage `json:"info"`
 }
 
+// UnmarshalJSON 容忍节点返回的两种形态：对象 {type, info} 与字符串。
+//
+// 实测（2026-09-20）：某些程序的指令在 jsonParsed 下 parsed 是字符串而不是对象，
+// 严格按对象解析会让**整页**解码失败（一笔交易毁掉一个 shard）。字符串形态没有可用
+// 语义，按"未解析"处理，让调用方回退到原始 data；绝不因此丢弃整页。
+func (p *parsedSemantic) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" {
+		return nil
+	}
+	if strings.HasPrefix(trimmed, "\"") {
+		return nil
+	}
+	type alias parsedSemantic
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = parsedSemantic(value)
+	return nil
+}
+
 func (p *parsedSemantic) infoMap() map[string]any {
 	if p == nil || len(p.Info) == 0 {
 		return nil
@@ -559,6 +581,74 @@ func parentOuterIndex(frame *cpiFrame) int {
 		return value
 	}
 	return 0
+}
+
+// ---- 程序日志（logs，ADR-024 D1）----
+
+// programLogRow 与 EVM 日志行同构但语义不同：topics 恒空、来源由 eventSource 标注。
+type programLogRow struct {
+	BlockNumber     string   `json:"blockNumber"`
+	TransactionHash string   `json:"transactionHash"`
+	LogIndex        uint32   `json:"logIndex"`
+	Address         string   `json:"address"`
+	Topics          []string `json:"topics"`
+	Data            string   `json:"data"`
+	Removed         bool     `json:"removed"`
+	Timestamp       int64    `json:"timestamp"`
+	EventName       string   `json:"eventName"`
+	EventSource     string   `json:"eventSource"`
+	EventSignature  string   `json:"eventSignature"`
+	EventVerified   bool     `json:"eventVerified"`
+}
+
+// buildProgramLogRows 把 meta.logMessages 逐行转成日志行。
+//
+// 归属：用 invoke 栈推断当前 program（与 CPI 树同一份栈语义）；序号从 1 连续递增，
+// 只对真正的日志行（Program log: / Program data:）编号——invoke/success/consumed
+// 这些运行时行不是日志内容，不占序号。
+func buildProgramLogRows(slot uint64, blockTime int64, signature string, logs []string) []programLogRow {
+	rows := make([]programLogRow, 0, len(logs))
+	var stack []string
+	index := uint32(0)
+	appendRow := func(program, data, source string) {
+		index++
+		rows = append(rows, programLogRow{
+			BlockNumber: strconv.FormatUint(slot, 10), TransactionHash: signature,
+			LogIndex: index, Address: program, Topics: []string{}, Data: data,
+			Removed: false, Timestamp: blockTime, EventName: "",
+			EventSource: source, EventSignature: "", EventVerified: false,
+		})
+	}
+	for _, raw := range logs {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "Program ") {
+			rest := strings.TrimPrefix(line, "Program ")
+			if idx := strings.Index(rest, " invoke ["); idx >= 0 {
+				stack = append(stack, strings.TrimSpace(rest[:idx]))
+				continue
+			}
+			if strings.HasSuffix(rest, " success") || strings.Contains(rest, " failed") {
+				if len(stack) > 0 {
+					stack = stack[:len(stack)-1]
+				}
+				continue
+			}
+		}
+		program := ""
+		if len(stack) > 0 {
+			program = stack[len(stack)-1]
+		}
+		switch {
+		case strings.HasPrefix(line, "Program log: "):
+			appendRow(program, strings.TrimPrefix(line, "Program log: "), "solana_program_log")
+		case strings.HasPrefix(line, "Program data: "):
+			appendRow(program, strings.TrimPrefix(line, "Program data: "), "solana_program_data")
+		}
+	}
+	return rows
 }
 
 // cpiRow 与 TRON internal 行同构，供 solana.NormalizeInternal 消费。
