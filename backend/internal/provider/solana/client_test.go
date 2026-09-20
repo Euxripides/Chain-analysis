@@ -144,7 +144,7 @@ func TestFetchRejectsUnsupportedInputs(t *testing.T) {
 
 	cases := []provider.FetchRequest{
 		{Chain: "bsc", Dataset: "transactions"},
-		{Chain: "solana", Dataset: "nft_transfers"},
+		{Chain: "solana", Dataset: "unknown_dataset"},
 		{Chain: "solana", Dataset: "balances"},
 	}
 	for _, req := range cases {
@@ -165,7 +165,7 @@ func TestCapabilitiesAdvertiseImplementedDatasetsOnly(t *testing.T) {
 	defer server.Close()
 	client := newTestClient(t, server.URL)
 	caps := client.Capabilities()
-	want := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true, "logs": true, "balances": true}
+	want := map[string]bool{"transactions": true, "token_transfers": true, "nft_transfers": true, "internal_transactions": true, "logs": true, "balances": true}
 	if len(caps.Datasets) != len(want) {
 		t.Fatalf("unexpected datasets: %v", caps.Datasets)
 	}
@@ -175,13 +175,7 @@ func TestCapabilitiesAdvertiseImplementedDatasetsOnly(t *testing.T) {
 		}
 	}
 	// 未实现的数据集绝不能被声明（ADR-023 D9）。
-	for _, dataset := range []string{"nft_transfers"} {
-		for _, advertised := range caps.Datasets {
-			if advertised == dataset {
-				t.Fatalf("dataset %s must not be advertised", dataset)
-			}
-		}
-	}
+
 	if caps.Name != "solana" {
 		t.Fatalf("unexpected name: %s", caps.Name)
 	}

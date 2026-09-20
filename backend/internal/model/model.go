@@ -74,7 +74,9 @@ var chainDatasetsByChain = map[string][]string{
 	"optimism":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
 	"avalanche": {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
 	"tron":      {"transactions", "token_transfers", "internal_transactions"},
-	"solana":    {"transactions", "token_transfers", "internal_transactions", "logs", "balances"},
+	// nft_transfers 的实现与单测已在位，但真链验收未通过（抽样的 NFT 转账解不出 transfer），
+	// 按 ADR-023 D9 暂不进白名单；验收通过后再加回这一项。
+	"solana": {"transactions", "token_transfers", "internal_transactions", "logs", "balances"},
 }
 
 // ChainDatasets 返回该链可下载的 Dataset；chain 为空或未登记时返回全量（向后兼容）。

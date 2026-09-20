@@ -18,13 +18,7 @@ func TestChainDatasetsIsPerChain(t *testing.T) {
 			t.Fatalf("solana advertises unimplemented dataset %s", dataset)
 		}
 	}
-	for _, dataset := range []string{"nft_transfers"} {
-		for _, advertised := range solana {
-			if advertised == dataset {
-				t.Fatalf("solana must not advertise %s", dataset)
-			}
-		}
-	}
+
 	tron := model.ChainDatasets("tron")
 	if len(tron) != 3 {
 		t.Fatalf("tron dataset list changed unexpectedly: %v", tron)

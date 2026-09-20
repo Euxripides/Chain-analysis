@@ -399,6 +399,11 @@ type tokenTransferStats struct {
 	FeeMismatch         int
 	SkippedNoBalance    int
 	UnsupportedPrograms int
+	// NFT 归类（ADR-024 D3）：判定为 NFT 的转账只进 nft_transfers；
+	// 判定不出（known=false）的保守留在 token_transfers，并计入 unknown。
+	NFTTransfers             int
+	FungibleSkipped          int
+	NFTClassificationUnknown int
 }
 
 // buildTokenTransferRows 按执行顺序（外层 → 该外层的 CPI 内层）解码转账并生成行。

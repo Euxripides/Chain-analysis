@@ -115,6 +115,18 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 				})
 			}
 			return b, nil
+		case "nft_transfers":
+			// 经典 NFT：tokenId 留空，元数据没有来源就留空（ADR-024 D3）。
+			for _, raw := range rows {
+				r, err := solana.NormalizeNftTransfer(raw)
+				if err != nil {
+					sc.log.Warn("Solana NFT normalization skipped", "err", err)
+					continue
+				}
+				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
+				b.nfts = append(b.nfts, r)
+			}
+			return b, nil
 		case "balances":
 			// 快照行：snapshotBlock 来自 Provider 实测的 getSlot 槽位（ADR-024 D2）。
 			for _, raw := range rows {

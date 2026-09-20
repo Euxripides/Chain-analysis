@@ -107,8 +107,9 @@ func (c *Client) Name() string { return "solana" }
 
 func (c *Client) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
-		Name:        "solana",
-		Datasets:    []string{"transactions", "token_transfers", "internal_transactions", "logs", "balances"},
+		Name: "solana",
+		Datasets: []string{"transactions", "token_transfers", "nft_transfers", "internal_transactions",
+			"logs", "balances"},
 		MaxPageSize: c.maxPageSize,
 		// Solana 没有可用的时间→slot 索引：时间区间在 API 层直接拒绝。
 		SupportsTimeRange: map[string]bool{"transactions": false},
@@ -307,7 +308,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			Message: "solana provider only serves chain=solana, got " + req.Chain}
 	}
 	switch req.Dataset {
-	case "transactions", "token_transfers", "internal_transactions", "logs", "balances":
+	case "transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "balances":
 	default:
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassUnsupported,
 			Message: "solana provider does not serve dataset " + req.Dataset}
@@ -392,7 +393,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			return provider.FetchResult{}, txErr
 		}
 		encoded, payloadBytes = encodeRows(txRows), txBytes
-	case "token_transfers", "internal_transactions", "logs":
+	case "token_transfers", "nft_transfers", "internal_transactions", "logs":
 		decoded, txErr := c.fetchInstructionRows(ctx, req.Dataset, selected)
 		if txErr != nil {
 			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
@@ -694,12 +695,24 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 			results[i].bytes = size
 			keys := tx.accountKeys()
 			switch dataset {
-			case "token_transfers":
+			case "token_transfers", "nft_transfers":
 				index := buildTokenAccountIndex(keys, tx.Meta.PreTokenBalances, tx.Meta.PostTokenBalances)
 				rows, stats := buildTokenTransferRows(tx.Slot, tx.blockTimeValue(), selected[i].Signature, keys,
 					tx.Transaction.Message.Instructions, tx.Meta.InnerInstructions, index)
+				// ADR-024 D3：同一笔转账只进一个数据集——判定为 NFT 的不再进 token_transfers。
+				classes, unknown := c.classifyPageMints(ctx, rows)
+				stats.NFTClassificationUnknown = unknown
+				if dataset == "nft_transfers" {
+					nftRows := toNFTRows(rows, classes)
+					stats.NFTTransfers = len(nftRows)
+					results[i].stats = stats
+					results[i].rows = encodeRows(nftRows)
+					break
+				}
+				kept, skipped := filterFungibleTransfers(rows, classes)
+				stats.FungibleSkipped = skipped
 				results[i].stats = stats
-				results[i].rows = encodeRows(rows)
+				results[i].rows = encodeRows(kept)
 			case "logs":
 				// 程序日志：来源与归属都来自 logMessages + invoke 栈（ADR-024 D1）。
 				var logLines []string
@@ -728,6 +741,9 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 		result.stats.FeeFromBalances += res.stats.FeeFromBalances
 		result.stats.FeeMismatch += res.stats.FeeMismatch
 		result.stats.SkippedNoBalance += res.stats.SkippedNoBalance
+		result.stats.NFTTransfers += res.stats.NFTTransfers
+		result.stats.FungibleSkipped += res.stats.FungibleSkipped
+		result.stats.NFTClassificationUnknown += res.stats.NFTClassificationUnknown
 		result.cpiNodes += res.nodes
 		result.cpiValueUnpaired += res.unpaired
 	}
