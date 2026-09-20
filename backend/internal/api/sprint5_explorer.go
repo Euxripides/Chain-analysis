@@ -496,8 +496,17 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 		validationError(w, r, "limit 不合法", nil)
 		return
 	}
+	// asset_type=nft：同一入口读 NFT 转账（本地 nft_transfers 索引），游标/限额/过滤语义一致。
+	// 复用同一路径而不是新开 API，前端的契约冻结检查因此不受影响（ADR-024 前端参考实现）。
+	assetType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("asset_type")))
+	dataset, sourceTable := "activity", "clickhouse:blockchain.address_activity"
+	caliberText := "blockchain.address_activity（地址 × 方向 × 对手方口径）"
+	if assetType == "nft" {
+		dataset, sourceTable = "nft_transfers", "clickhouse:blockchain.nft_transfers"
+		caliberText = "blockchain.nft_transfers（合约 / token_id / token_standard，来自本地索引）"
+	}
 	req := explorer.QueryRequest{
-		Chain: sub.Chain, Addresses: []string{sub.Normalized}, Dataset: "activity",
+		Chain: sub.Chain, Addresses: []string{sub.Normalized}, Dataset: dataset,
 		Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")), Limit: limit,
 		Light: r.URL.Query().Get("full") == "1",
 		Filters: explorer.Filter{
@@ -527,17 +536,38 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "查询活动失败", nil)
 		return
 	}
+	if assetType == "nft" {
+		// NFT 行来自 nft_transfers：补出方向/对手方与统一的展示字段，
+		// 让前端可以在同一张表里渲染（金额、时间、双方地址、合集与 token_id）。
+		for _, row := range res.Rows {
+			from := strings.ToLower(fmt.Sprint(row["from_address"]))
+			to := strings.ToLower(fmt.Sprint(row["to_address"]))
+			subjectAddr := strings.ToLower(sub.Normalized)
+			direction, counterparty := "in", from
+			if from == subjectAddr {
+				direction, counterparty = "out", to
+			}
+			row["direction"] = direction
+			row["counterparty"] = counterparty
+			row["activity_type"] = "nft_transfer"
+			row["dataset"] = "nft_transfers"
+			row["address"] = sub.Normalized
+		}
+	}
 	if res.Rows == nil {
 		res.Rows = []map[string]any{}
 	}
 	subject := map[string]any{"type": "address", "chain": sub.Chain, "address": sub.Address, "normalized_address": sub.Normalized}
 	summary := map[string]any{"count": res.Count, "limit": limit}
 	caliber := map[string]any{
-		"dataset": "blockchain.address_activity（地址 × 方向 × 对手方口径）",
+		"dataset": caliberText,
 		"amount":  "amount_raw 为原始整数；未知 decimals 不擅自换算。",
 	}
+	if assetType == "nft" {
+		caliber["token_standard"] = "ERC721 / ERC1155 / Solana SPL；缺失时为空，不默认成 ERC721。"
+	}
 	next := res.NextCursor
-	respondList(w, r, explorerEnvelope(subject, res.Rows, summary, nil, caliber, "clickhouse:blockchain.address_activity"), -1, &next)
+	respondList(w, r, explorerEnvelope(subject, res.Rows, summary, nil, caliber, sourceTable), -1, &next)
 }
 
 func (s *Server) handleExplorerCounterparties(w http.ResponseWriter, r *http.Request) {
