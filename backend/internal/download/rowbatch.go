@@ -115,6 +115,17 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 				})
 			}
 			return b, nil
+		case "balances":
+			// 快照行：snapshotBlock 来自 Provider 实测的 getSlot 槽位（ADR-024 D2）。
+			for _, raw := range rows {
+				r, err := solana.NormalizeBalance(raw)
+				if err != nil {
+					sc.log.Warn("Solana balance normalization skipped", "err", err)
+					continue
+				}
+				b.bals = append(b.bals, r)
+			}
+			return b, nil
 		case "logs":
 			// 程序日志是排障证据而不是资金流：只落 logs，不写地址活动。
 			for _, raw := range rows {

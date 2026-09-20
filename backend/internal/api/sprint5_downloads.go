@@ -160,6 +160,13 @@ func (s *Server) prepareDownloadPlan(w http.ResponseWriter, r *http.Request, req
 		validationError(w, r, "Dataset 不合法", []fieldError{{Field: "datasets", Code: "invalid", Message: err.Error()}})
 		return nil, false
 	}
+	// Solana 的 balances 是"取数时刻的快照"（ADR-024 D2）：区间对它没有意义，
+	// 而 full 会去解析 chain head（Solana 没有可用的 head 读路径，solanaRangeGuard 会拒绝）。
+	// 这里把它规范化成显式的 [0,0] block 区间让 guard 放行，Provider 的快照语义不受影响。
+	if req.Chain == "solana" && isBalancesOnly(datasets) && (req.Range.Type == "" || req.Range.Type == "full") {
+		zero := int64(0)
+		req.Range = dataset.RangeSpec{Type: "block", FromBlock: &zero, ToBlock: &zero}
+	}
 	if req.CaseID != "" {
 		if _, err := uuid.Parse(req.CaseID); err != nil {
 			validationError(w, r, "case_id 必须是 UUID", nil)
@@ -245,6 +252,11 @@ func (s *Server) prepareDownloadPlan(w http.ResponseWriter, r *http.Request, req
 		EnsureReq: ensureReq, Preview: preview, Candidate: candidate, CoverageHit: coverageHit,
 		Refresh: refresh, MissingBlock: missingBlocks, Estimate: estimate, Risks: risks,
 	}, true
+}
+
+// isBalancesOnly 判断本次请求是否只是余额快照（快照不需要区间语义）。
+func isBalancesOnly(datasets []string) bool {
+	return len(datasets) == 1 && datasets[0] == "balances"
 }
 
 func normalizeDatasetsForDownload(in []string) ([]string, error) {

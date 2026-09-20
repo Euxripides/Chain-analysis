@@ -108,7 +108,7 @@ func (c *Client) Name() string { return "solana" }
 func (c *Client) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
 		Name:        "solana",
-		Datasets:    []string{"transactions", "token_transfers", "internal_transactions", "logs"},
+		Datasets:    []string{"transactions", "token_transfers", "internal_transactions", "logs", "balances"},
 		MaxPageSize: c.maxPageSize,
 		// Solana 没有可用的时间→slot 索引：时间区间在 API 层直接拒绝。
 		SupportsTimeRange: map[string]bool{"transactions": false},
@@ -307,7 +307,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			Message: "solana provider only serves chain=solana, got " + req.Chain}
 	}
 	switch req.Dataset {
-	case "transactions", "token_transfers", "internal_transactions", "logs":
+	case "transactions", "token_transfers", "internal_transactions", "logs", "balances":
 	default:
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassUnsupported,
 			Message: "solana provider does not serve dataset " + req.Dataset}
@@ -315,6 +315,11 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	if req.FromTime != nil || req.ToTime != nil {
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassInvalidRequest,
 			Message: "solana provider does not support time ranges; use a slot (block) range"}
+	}
+	// balances 是"取数时刻的快照"，与服务端区间无关：直接走 getSlot + 两个余额调用，
+	// 不经过 getSignaturesForAddress（ADR-024 D2）。
+	if req.Dataset == "balances" {
+		return c.fetchBalancesPage(ctx, req, time.Now())
 	}
 
 	pageSize := req.PageSize
