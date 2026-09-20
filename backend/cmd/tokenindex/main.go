@@ -109,12 +109,13 @@ func main() {
 	cgTokenList := flag.String("coingecko-tokenlist", "", "CoinGecko 聚合 tokenlist JSON（含 chainId/address，无 CoinGecko 数字 ID）")
 	cgURL := flag.String("coingecko-url", "", "直接抓取 CoinGecko coins/list（留空表示不用；传 default 使用官方地址）")
 	resolve := flag.Bool("resolve-logos", false, "把目录里的 logo_url 回填到缺图标的 token_metadata")
+	repair := flag.Bool("repair-logos", false, "把已指向 Trust Wallet 但 URL 与目录不一致的 logo_url 纠正为规范 URL")
 	chains := flag.String("chains", "", "只导入这些链（逗号分隔，默认全部）")
 	batch := flag.Int("batch", 500, "每批 upsert 行数")
 	limit := flag.Int("limit", 0, "最多导入多少条（0=不限，用于试跑）")
 	flag.Parse()
 
-	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && !*resolve {
+	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && !*resolve && !*repair {
 		fmt.Fprintln(os.Stderr, "至少指定 -trustwallet / -coingecko / -coingecko-url / -resolve-logos 之一")
 		flag.Usage()
 		os.Exit(2)
@@ -186,6 +187,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("resolve-logos: 回填 %d 行 token_metadata.logo_url\n", n)
+	}
+	if *repair {
+		n, err := repairLogos(ctx, st)
+		if err != nil {
+			log.Error("repair logos failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("repair-logos: 纠正 %d 行指向 Trust Wallet 的错误 URL\n", n)
 	}
 }
 
@@ -546,6 +555,32 @@ func upsertPlatforms(ctx context.Context, st *store.Store, rows []platformRow) e
           chain = EXCLUDED.chain, normalized_address = EXCLUDED.normalized_address, updated_at = now()`
 	_, err := st.Pool.Exec(ctx, sql, args...)
 	return err
+}
+
+// repairLogos 纠正"已经是 Trust Wallet 来源、但 URL 与仓库目录名不一致"的行。
+//
+// 典型成因：早期用全小写地址拼 raw URL，而 Trust Wallet 的目录名是 EIP-55 校验和形式，
+// raw.githubusercontent 区分大小写 → 全部 404（2026-09-20 实测 111 个待本地化图标里
+// 78 个 bsc 行都是这种"有 URL 但永远抓不到"的状态，日志里只有 logo http 404）。
+// 目录表里的 source_address 就是仓库里的真实目录名，因此以它为准重写。
+// 注意必须要求 a.logo_url 非空：目录里还有 803 行只有 info.json、没有 logo.png，
+// 早期漏了这个条件会把 78 行的 logo_url 直接写成空（2026-09-20 已实测并修正）。
+func repairLogos(ctx context.Context, st *store.Store) (int64, error) {
+	tag, err := st.Pool.Exec(ctx, `UPDATE token_metadata AS m
+        SET logo_url = a.logo_url, updated_at = now()
+        FROM token_logo_assets AS a
+        WHERE a.source = 'trustwallet'
+          AND a.chain = m.chain
+          AND a.normalized_address = m.normalized_address
+          AND COALESCE(a.logo_url, '') <> ''
+          AND COALESCE(m.logo_object_key, '') = ''
+          AND COALESCE(m.logo_url, '') <> ''
+          AND m.logo_url <> a.logo_url
+          AND m.logo_url LIKE 'https://raw.githubusercontent.com/trustwallet/%'`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 // resolveLogos 把 Trust Wallet 目录里的 logo_url 回填给缺图标的代币。

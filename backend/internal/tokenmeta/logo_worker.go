@@ -78,6 +78,13 @@ const (
 	// 200 是"整库回填后一轮清空"与"不与请求路径抢带宽"的折中：单张图 ~20-50KB，
 	// 200 张约 10MB / 轮；worker 是独立进程，不占用 API 的交互预算。
 	logoSweepBatch = 200
+	// logoWorkers：并发本地化协程数。
+	// 单协程时一次卡住的 MinIO 上传会让整条管线停摆：2026-09-20 实测本地化在 1,163 处
+	// 停滞一个多小时、且没有任何错误日志（协程卡在不可中断的调用里，错误永远不返回）。
+	logoWorkers = 4
+	// logoFetchTimeout：单张图从校验到落库的墙钟上限。
+	// 任何一步（DNS / 下载 / 上传）超时都按失败计，下一轮扫描会重新捡起，不会占住协程。
+	logoFetchTimeout = 60 * time.Second
 )
 
 func (s *Service) StartLogoWorker(ctx context.Context) {
@@ -96,21 +103,26 @@ func (s *Service) StartLogoWorker(ctx context.Context) {
 			}
 		}
 	}()
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case meta := <-s.logoQueue:
-				if err := s.localizeLogo(ctx, meta); err != nil {
-					s.Log.Warn("token logo localization failed", "contract", meta.ContractAddress, "err", err)
-					LogoFetchTotal.WithLabelValues("error").Inc()
-				} else {
-					LogoFetchTotal.WithLabelValues("ok").Inc()
+	for i := 0; i < logoWorkers; i++ {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case meta := <-s.logoQueue:
+					itemCtx, cancel := context.WithTimeout(ctx, logoFetchTimeout)
+					err := s.localizeLogo(itemCtx, meta)
+					cancel()
+					if err != nil {
+						s.Log.Warn("token logo localization failed", "contract", meta.ContractAddress, "err", err)
+						LogoFetchTotal.WithLabelValues("error").Inc()
+					} else {
+						LogoFetchTotal.WithLabelValues("ok").Inc()
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 // sweepPendingLogos 把"已有 logo_url、还没有自托管对象"的代币送进队列。
@@ -118,7 +130,10 @@ func (s *Service) sweepPendingLogos(ctx context.Context) {
 	if !s.Logo.Enabled || s.Raw == nil {
 		return
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT chain, contract_address FROM token_metadata
+	// 直接取行里的 logo_url 构造队列元素，不再回查 Get：
+	// Get 用 normalized_address 做键，TRON 这类大小写敏感的地址会查不到而静默跳过
+	//（2026-09-20 实测：33 个 tron 行因此永远排不进队列）。
+	rows, err := s.Store.Pool.Query(ctx, `SELECT chain, contract_address, COALESCE(logo_url, '') FROM token_metadata
         WHERE COALESCE(logo_url, '') <> '' AND COALESCE(logo_object_key, '') = ''
         ORDER BY updated_at DESC LIMIT $1`, logoSweepBatch)
 	if err != nil {
@@ -128,12 +143,16 @@ func (s *Service) sweepPendingLogos(ctx context.Context) {
 	defer rows.Close()
 	queued := 0
 	for rows.Next() {
-		var chain, contract string
-		if err := rows.Scan(&chain, &contract); err != nil {
+		var chain, contract, logoURL string
+		if err := rows.Scan(&chain, &contract, &logoURL); err != nil {
 			continue
 		}
-		s.queueLogo(ctx, chain, contract)
-		queued++
+		select {
+		case s.logoQueue <- Metadata{Chain: chain, ContractAddress: contract, LogoURL: logoURL}:
+			queued++
+		default:
+			s.Log.Warn("token logo queue full")
+		}
 	}
 	if queued > 0 {
 		s.Log.Info("token logo sweep queued", "count", queued)
@@ -228,7 +247,9 @@ func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 	if _, err = s.Raw.Client().PutObject(ctx, s.Raw.Bucket(), key, bytes.NewReader(body), int64(len(body)), minio.PutObjectOptions{ContentType: mime}); err != nil {
 		return err
 	}
-	_, err = s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET logo_object_key=$3,logo_mime_type=$4,updated_at=now() WHERE chain=$1 AND normalized_address=$2`, meta.Chain, normalizeAddress(meta.ContractAddress), key, mime)
+	// normalized_address 必须按链归一化：TRON 的 base58 区分大小写，用全局 normalizeAddress
+	// 会把地址小写化，UPDATE 匹配不到任何行（图标写进了 MinIO，行却永远停在"待本地化"）。
+	_, err = s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET logo_object_key=$3,logo_mime_type=$4,updated_at=now() WHERE chain=$1 AND normalized_address=$2`, meta.Chain, normalizeAddressForChain(meta.Chain, meta.ContractAddress), key, mime)
 	return err
 }
 func imageDimensions(body []byte, mime string) (int, int, error) {
