@@ -636,6 +636,20 @@ func (s *Service) hydrateActivityAmounts(ctx context.Context, chain string, rows
 	return nil
 }
 
+// isEmptyCell 判断单元格是否为空。
+//
+// 不能直接用 fmt.Sprint：缺失的 key 会格式化成 "<nil>"，被误判成"已有值"而跳过回填。
+func isEmptyCell(v any) bool {
+	switch value := v.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(value) == ""
+	default:
+		return false
+	}
+}
+
 // HydrateActivityMethods 给活动行补方法名：address_activity 不存方法，方法在 transactions 里。
 //
 // 只按本页 distinct 交易哈希回查一次（有界：一页最多几十个哈希），
@@ -644,7 +658,7 @@ func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows
 	hashSet := map[string]bool{}
 	for _, row := range rows {
 		hash := strings.TrimSpace(fmt.Sprint(row["tx_hash"]))
-		if hash == "" || strings.TrimSpace(fmt.Sprint(row["method_name"])) != "" {
+		if hash == "" || !isEmptyCell(row["method_name"]) {
 			continue
 		}
 		hashSet[hash] = true
@@ -666,7 +680,7 @@ func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows
 		byHash[fmt.Sprint(candidate["tx_hash"])] = candidate
 	}
 	for _, row := range rows {
-		if strings.TrimSpace(fmt.Sprint(row["method_name"])) != "" {
+		if !isEmptyCell(row["method_name"]) {
 			continue
 		}
 		candidate, ok := byHash[fmt.Sprint(row["tx_hash"])]
