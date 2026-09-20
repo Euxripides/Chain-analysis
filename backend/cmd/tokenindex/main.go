@@ -107,6 +107,8 @@ func main() {
 	twDir := flag.String("trustwallet", "", "Trust Wallet assets 解压目录（指向包含 blockchains/ 的那一层）")
 	cgFile := flag.String("coingecko", "", "CoinGecko coins/list JSON 文件")
 	cgTokenList := flag.String("coingecko-tokenlist", "", "CoinGecko 聚合 tokenlist JSON（含 chainId/address，无 CoinGecko 数字 ID）")
+	cgBasic := flag.String("coingecko-basic", "", "CoinGecko 基础列表 JSON（id/symbol/name，无 platforms）")
+	derive := flag.Bool("derive-platforms", false, "用基础列表的 ID + 聚合 tokenlist 的名称/符号推导 ID↔链↔合约映射")
 	cgURL := flag.String("coingecko-url", "", "直接抓取 CoinGecko coins/list（留空表示不用；传 default 使用官方地址）")
 	resolve := flag.Bool("resolve-logos", false, "把目录里的 logo_url 回填到缺图标的 token_metadata")
 	repair := flag.Bool("repair-logos", false, "把已指向 Trust Wallet 但 URL 与目录不一致的 logo_url 纠正为规范 URL")
@@ -115,7 +117,7 @@ func main() {
 	limit := flag.Int("limit", 0, "最多导入多少条（0=不限，用于试跑）")
 	flag.Parse()
 
-	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && !*resolve && !*repair {
+	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && *cgBasic == "" && !*derive && !*resolve && !*repair {
 		fmt.Fprintln(os.Stderr, "至少指定 -trustwallet / -coingecko / -coingecko-url / -resolve-logos 之一")
 		flag.Usage()
 		os.Exit(2)
@@ -179,6 +181,22 @@ func main() {
 		}
 		fmt.Printf("coingecko-tokenlist: 代币 %d 行，带 logoURI %d 行，跳过链 %d 个（用时 %s）\n",
 			stats.Rows, stats.WithLogo, stats.SkippedChains, time.Since(start).Round(time.Second))
+	}
+	if *cgBasic != "" {
+		stats, err := importCoinGeckoBasic(ctx, st, *cgBasic, *batch)
+		if err != nil {
+			log.Error("coingecko basic import failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("coingecko-basic: 币种 %d 行（带 market_cap_rank 的 %d 行）\n", stats.Coins, stats.WithLogo)
+	}
+	if *derive {
+		n, err := deriveCoinGeckoPlatforms(ctx, st)
+		if err != nil {
+			log.Error("derive platforms failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("derive-platforms: 写入 %d 行 CoinGecko ID ↔ 链 ↔ 合约映射\n", n)
 	}
 	if *resolve {
 		n, err := resolveLogos(ctx, st)
@@ -532,7 +550,7 @@ func upsertCoins(ctx context.Context, st *store.Store, coins []cgCoin) error {
 		placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d)", base+1, base+2, base+3))
 		args = append(args, coin.ID, coin.Symbol, coin.Name)
 	}
-	sql := `INSERT INTO coingecko_coins (id, symbol, name, updated_at) VALUES ` + strings.Join(placeholders, ",") + `
+	sql := `INSERT INTO coingecko_coins (id, symbol, name) VALUES ` + strings.Join(placeholders, ",") + `
         ON CONFLICT (id) DO UPDATE SET symbol = EXCLUDED.symbol, name = EXCLUDED.name, updated_at = now()`
 	_, err := st.Pool.Exec(ctx, sql, args...)
 	return err
@@ -555,6 +573,83 @@ func upsertPlatforms(ctx context.Context, st *store.Store, rows []platformRow) e
           chain = EXCLUDED.chain, normalized_address = EXCLUDED.normalized_address, updated_at = now()`
 	_, err := st.Pool.Exec(ctx, sql, args...)
 	return err
+}
+
+// cgBasicRow 是 CoinGecko 基础列表（id/symbol/name[/market_cap_rank]）的一行。
+//
+// 官方 /coins/list?include_platform=true 在本机被上游封堵（DNS 投毒 + IP 层拦截，
+// 2026-09-20 实测：本机解析 107.181.166.244、AliDNS 52.58.1.161、DNSPod 69.50.221.20，
+// 443 全部超时；8.8.8.8/1.1.1.1 的 53 也被拦），所以先用可达的基础列表拿到 CoinGecko ID，
+// 再与聚合 tokenlist 的名称/符号做**推导**匹配；官方接口可达后用 -coingecko 覆盖为准。
+type cgBasicRow struct {
+	ID            string `json:"id"`
+	Symbol        string `json:"symbol"`
+	Name          string `json:"name"`
+	MarketCapRank *int   `json:"market_cap_rank"`
+}
+
+func importCoinGeckoBasic(ctx context.Context, st *store.Store, path string, batchSize int) (importStats, error) {
+	var stats importStats
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return stats, err
+	}
+	var rows []cgBasicRow
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return stats, fmt.Errorf("解析 %s: %w", path, err)
+	}
+	coins := make([]cgCoin, 0, batchSize)
+	flush := func() error {
+		if err := upsertCoins(ctx, st, coins); err != nil {
+			return err
+		}
+		stats.Coins += len(coins)
+		coins = coins[:0]
+		return nil
+	}
+	// 必须去重：同一批 INSERT ... ON CONFLICT DO UPDATE 里出现重复 id 时 Postgres 直接报
+	// "cannot affect row a second time"（实测这份快照确有重复 id，导入在第 1,000 行失败）。
+	seen := map[string]bool{}
+	for _, row := range rows {
+		id := strings.TrimSpace(row.ID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if row.MarketCapRank != nil {
+			stats.WithLogo++ // 复用该计数器表示"带排名"，仅用于打印
+		}
+		coins = append(coins, cgCoin{ID: id, Symbol: strings.ToLower(strings.TrimSpace(row.Symbol)), Name: strings.TrimSpace(row.Name)})
+		if len(coins) >= batchSize {
+			if err := flush(); err != nil {
+				return stats, err
+			}
+		}
+	}
+	return stats, flush()
+}
+
+// deriveCoinGeckoPlatforms 用"名称 + 符号完全匹配"把 CoinGecko ID 挂到聚合 tokenlist 的
+// 链/合约行上。匹配口径严格（name 与 symbol 都相等），冲突时 ON CONFLICT 不覆盖已有映射；
+// 结果属于推导数据，官方接口可达后应以其为准。
+func deriveCoinGeckoPlatforms(ctx context.Context, st *store.Store) (int64, error) {
+	tag, err := st.Pool.Exec(ctx, `INSERT INTO coingecko_platforms (coin_id, platform_key, contract, chain, normalized_address, match_method, matched_at, updated_at)
+        SELECT c.id, m.platform_key, a.source_address, a.chain, a.normalized_address, 'derived-name-symbol', now(), now()
+        FROM token_logo_assets AS a
+        JOIN coingecko_coins AS c
+          ON lower(c.symbol) = lower(a.symbol) AND lower(c.name) = lower(a.name)
+        JOIN (VALUES
+            ('1', 'ethereum'), ('56', 'binance-smart-chain'), ('137', 'polygon-pos'),
+            ('42161', 'arbitrum-one'), ('8453', 'base'), ('10', 'optimistic-ethereum'),
+            ('43114', 'avalanche')
+        ) AS m(chain_id, platform_key) ON m.chain_id = a.source_chain
+        WHERE a.source = 'coingecko-tokenlist' AND COALESCE(a.symbol, '') <> ''
+        ON CONFLICT (coin_id, platform_key, contract) DO NOTHING`)
+	// 只统计本次真正写入的推导行；已有 official 行不会被覆盖。
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 // repairLogos 纠正"已经是 Trust Wallet 来源、但 URL 与仓库目录名不一致"的行。
