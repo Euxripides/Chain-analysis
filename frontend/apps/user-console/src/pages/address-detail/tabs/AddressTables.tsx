@@ -237,16 +237,31 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const secondary = nft
     ? "#" + (row.token_id || "—") + (row.token_standard ? " · " + row.token_standard : "")
     : row.token_name || "";
+  // 未通过元数据审核的代币整格加虚线警示框（参考站点样式）：有合约地址却没有
+  // "已审核"标记就是未官方；原生币与 NFT 合集不加。
+  const unverified = Boolean(row.token_address) && row.token_verified !== true;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: 150 }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 0,
+        maxWidth: 150,
+        ...(unverified
+          ? {
+              border: "1px dashed #f59e0b",
+              borderRadius: 4,
+              padding: "2px 6px",
+              background: "rgba(245, 158, 11, 0.06)",
+            }
+          : {}),
+      }}
+    >
       <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, maxWidth: 122 }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-          {/* 有合约地址却没有"已审核"标记 → 挂警示；原生币与 NFT 合集不挂。 */}
-          <UnverifiedMark
-            verified={row.token_address ? row.token_verified === true : true}
-            symbol={row.token_symbol || primary}
-          />
+          <UnverifiedMark verified={unverified ? false : true} symbol={row.token_symbol || primary} />
           <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {primary}
           </span>
