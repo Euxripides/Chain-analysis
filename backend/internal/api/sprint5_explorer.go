@@ -557,6 +557,12 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 			row["address"] = sub.Normalized
 		}
 	}
+	// 代币符号 / 全称 / 图标：Light 路径不做完整 enrich，这里只补 tokenmeta 那部分（单页一次查询）。
+	s.explorer.EnrichTokenMetadata(readCtx, sub.Chain, res.Rows)
+	// 方法列：address_activity 没有方法，按本页交易哈希回查 transactions（同样单页一次查询）。
+	if s.explorer.Q != nil {
+		_ = s.explorer.Q.HydrateActivityMethods(readCtx, sub.Chain, res.Rows)
+	}
 	if res.Rows == nil {
 		res.Rows = []map[string]any{}
 	}

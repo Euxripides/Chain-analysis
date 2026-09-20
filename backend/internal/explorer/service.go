@@ -454,6 +454,94 @@ func partitionBy(ds string) string {
 }
 
 // enrich Token Symbol/Name/Logo + matched_addresses + 案件/标签（`12/`21/`29/`50）。
+// EnrichTokenMetadata 只补代币元数据（name/symbol/decimals/logo），不做需要 RPC 的地址类型解析。
+//
+// 活动读默认走 Light 路径（handler 只在 full=1 时才跑完整 enrich），因此此前活动行拿不到
+// token_name/logo；OKLink 式列表需要"符号 + 全称 + 图标"，而这三样都在 tokenmeta 里。
+// 单页只查一次 GetMany（按本页 distinct 合约地址），代价可控，故无条件执行。
+func (s *Service) EnrichTokenMetadata(ctx context.Context, chain string, rows []map[string]any) {
+	if s.Tokens == nil || len(rows) == 0 {
+		return
+	}
+	contracts := make([]string, 0, 8)
+	seen := map[string]bool{}
+	for _, row := range rows {
+		addr, _ := row["token_address"].(string)
+		if addr == "" || seen[addr] {
+			continue
+		}
+		seen[addr] = true
+		contracts = append(contracts, addr)
+	}
+	if len(contracts) == 0 {
+		return
+	}
+	metas, err := s.Tokens.GetMany(ctx, chain, contracts)
+	if err != nil {
+		return
+	}
+	for _, row := range rows {
+		addr, _ := row["token_address"].(string)
+		if meta, ok := metas[addr]; ok {
+			applyTokenMetadata(chain, row, addr, meta)
+		}
+	}
+}
+
+// applyTokenMetadata 把 tokenmeta 条目写进一条活动/NFT 记录。
+//
+// 完整 enrich 与 EnrichTokenMetadata 共用它，避免两条路径的字段名漂移：
+// 图标只有 LogoObjectKey（自托管对象）或"已审核 + LogoURL"才给，其余留空由前端兜底。
+func applyTokenMetadata(chain string, row map[string]any, contract string, meta tokenmeta.Metadata) {
+	row["token_symbol"] = meta.Symbol
+	row["token_name"] = meta.Name
+	if meta.Decimals != nil {
+		row["token_decimals"] = *meta.Decimals
+	} else {
+		row["token_decimals"] = nil
+	}
+	row["token_type"] = meta.TokenType
+	if meta.LogoObjectKey != "" {
+		row["token_logo"] = "/api/v1/tokens/" + chain + "/" + contract + "/logo"
+	} else if meta.Verified && meta.LogoURL != "" {
+		row["token_logo"] = meta.LogoURL
+	} else {
+		row["token_logo"] = ""
+	}
+	row["token_metadata_status"] = meta.MetadataStatus
+	row["token_metadata_source"] = meta.MetadataSource
+	row["token_metadata_confidence"] = meta.Confidence
+	row["token_verified"] = meta.Verified
+}
+
+// rowDecimals 兼容 ClickHouse 扫描出来的各种整数形态；拿不到就当 0。
+func rowDecimals(row map[string]any) int64 {
+	switch v := row["token_decimals"].(type) {
+	case uint8:
+		return int64(v)
+	case uint16:
+		return int64(v)
+	case uint32:
+		return int64(v)
+	case uint64:
+		return int64(v)
+	case int:
+		return int64(v)
+	case int8:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
+}
+
 func (s *Service) enrich(ctx context.Context, chain string, addresses []string, rows []map[string]any, wsID string) {
 	set := map[string]bool{}
 	for _, a := range addresses {
@@ -506,26 +594,7 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 		r["matched_addresses"] = matched
 		if ta, ok := r["token_address"].(string); ok && ta != "" {
 			if meta, ok2 := metas[ta]; ok2 {
-				r["token_symbol"] = meta.Symbol
-				r["token_name"] = meta.Name
-				if meta.Decimals != nil {
-					r["token_decimals"] = *meta.Decimals
-				} else {
-					r["token_decimals"] = nil
-				}
-				r["token_type"] = meta.TokenType
-				if meta.LogoObjectKey != "" {
-					r["token_logo"] = "/api/v1/tokens/" + chain + "/" + ta + "/logo"
-				} else if meta.Verified && meta.LogoURL != "" {
-					// Only reviewed registry entries may fall back to a remote logo.
-					r["token_logo"] = meta.LogoURL
-				} else {
-					r["token_logo"] = ""
-				}
-				r["token_metadata_status"] = meta.MetadataStatus
-				r["token_metadata_source"] = meta.MetadataSource
-				r["token_metadata_confidence"] = meta.Confidence
-				r["token_verified"] = meta.Verified
+				applyTokenMetadata(chain, r, ta, meta)
 			} else {
 				if sym, ok3 := r["token_symbol"].(string); ok3 && sym != "" {
 					r["token_symbol"] = sym

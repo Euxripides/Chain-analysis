@@ -630,6 +630,50 @@ func (s *Service) hydrateActivityAmounts(ctx context.Context, chain string, rows
 	return nil
 }
 
+// HydrateActivityMethods 给活动行补方法名：address_activity 不存方法，方法在 transactions 里。
+//
+// 只按本页 distinct 交易哈希回查一次（有界：一页最多几十个哈希），
+// 与 hydrateActivityAmounts 同一套路，失败不致命（前端"方法"列退化为空/转账）。
+func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows []map[string]any) error {
+	hashSet := map[string]bool{}
+	for _, row := range rows {
+		hash := strings.TrimSpace(fmt.Sprint(row["tx_hash"]))
+		if hash == "" || strings.TrimSpace(fmt.Sprint(row["method_name"])) != "" {
+			continue
+		}
+		hashSet[hash] = true
+	}
+	if len(hashSet) == 0 {
+		return nil
+	}
+	hashes := make([]string, 0, len(hashSet))
+	for hash := range hashSet {
+		hashes = append(hashes, hash)
+	}
+	candidates, err := s.queryRows(ctx, "transactions",
+		"SELECT * FROM blockchain.transactions FINAL WHERE chain=? AND tx_hash IN (?)", chain, hashes)
+	if err != nil {
+		return err
+	}
+	byHash := make(map[string]map[string]any, len(candidates))
+	for _, candidate := range candidates {
+		byHash[fmt.Sprint(candidate["tx_hash"])] = candidate
+	}
+	for _, row := range rows {
+		if strings.TrimSpace(fmt.Sprint(row["method_name"])) != "" {
+			continue
+		}
+		candidate, ok := byHash[fmt.Sprint(row["tx_hash"])]
+		if !ok {
+			continue
+		}
+		row["method_id"] = candidate["method_id"]
+		row["method_name"] = candidate["method_name"]
+		row["method_signature"] = candidate["method_signature"]
+	}
+	return nil
+}
+
 func activityCandidateMatches(activity, transfer map[string]any) bool {
 	address := strings.ToLower(fmt.Sprint(activity["address"]))
 	counterparty := strings.ToLower(fmt.Sprint(activity["counterparty"]))
