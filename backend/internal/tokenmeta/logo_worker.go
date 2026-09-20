@@ -74,8 +74,10 @@ const (
 	// logoSweepInterval：存量扫描周期。目录回填（cmd/tokenindex -resolve-logos）是批量
 	// UPDATE，不会产生逐条"元数据已解析"事件，因此必须靠扫描把它们捡起来。
 	logoSweepInterval = 5 * time.Minute
-	// logoSweepBatch：每轮最多本地化多少个图标，避免与请求路径抢带宽。
-	logoSweepBatch = 50
+	// logoSweepBatch：每轮最多本地化多少个图标。
+	// 200 是"整库回填后一轮清空"与"不与请求路径抢带宽"的折中：单张图 ~20-50KB，
+	// 200 张约 10MB / 轮；worker 是独立进程，不占用 API 的交互预算。
+	logoSweepBatch = 200
 )
 
 func (s *Service) StartLogoWorker(ctx context.Context) {
