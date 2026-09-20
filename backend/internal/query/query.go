@@ -112,6 +112,12 @@ type tokenTransferRow struct {
 	Amount         decimal.Decimal `ch:"amount" json:"amount"`
 	SourceProvider string          `ch:"source_provider" json:"source_provider"`
 	SourceIngested time.Time       `ch:"source_ingested_at" json:"source_ingested_at"`
+	// 0008 迁移新增的转账证据列。SELECT *（hydrateActivityAmounts 的修复查询）要求结构体
+	// 覆盖全部列，缺一列就 ScanStruct 失败并让整条活动读 500。
+	GrossAmountRaw   string `ch:"gross_amount_raw" json:"gross_amount_raw"`
+	FeeAmountRaw     string `ch:"fee_amount_raw" json:"fee_amount_raw"`
+	FromTokenAccount string `ch:"from_token_account" json:"from_token_account"`
+	ToTokenAccount   string `ch:"to_token_account" json:"to_token_account"`
 }
 
 type nftTransferRow struct {
