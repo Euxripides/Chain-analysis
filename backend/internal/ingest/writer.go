@@ -78,13 +78,28 @@ func (w *Writer) WriteInternalTransfers(ctx context.Context, rows []InternalTran
 			return err
 		}
 		for _, r := range batch {
+			// CPI 调用树（ADR-023 D11）：depth/trace_path/method_id 由 Provider 提供；
+			// TRON 不填时保持既有行为（depth=0、trace_path=call_index、method_id 空）。
 			success := uint8(1)
-			errText := ""
+			errText := r.ErrorText
 			if r.Rejected {
-				success, errText = 0, "rejected"
+				success = 0
+				if errText == "" {
+					errText = "rejected"
+				}
 			}
-			if err := stmt.Append(r.Chain, r.TxHash, r.CallIndex, uint16(0), fmt.Sprintf("%d", r.CallIndex), r.CallType,
-				"internal_transfer", r.From, r.To, r.ValueRaw, "", uint64(0), uint64(0), success, errText,
+			if r.Failed {
+				success = 0
+				if errText == "" {
+					errText = "failed"
+				}
+			}
+			tracePath := r.TracePath
+			if tracePath == "" {
+				tracePath = fmt.Sprintf("%d", r.CallIndex)
+			}
+			if err := stmt.Append(r.Chain, r.TxHash, r.CallIndex, r.Depth, tracePath, r.CallType,
+				"internal_transfer", r.From, r.To, r.ValueRaw, r.MethodID, uint64(0), uint64(0), success, errText,
 				r.BlockNumber, r.Timestamp, r.Provider); err != nil {
 				return err
 			}
@@ -96,14 +111,24 @@ func (w *Writer) WriteInternalTransfers(ctx context.Context, rows []InternalTran
 func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []TokenTransferRow) error {
 		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.token_transfers "+
-			"(chain, block_number, timestamp, tx_hash, log_index, token_address, token_symbol, token_decimals, from_address, to_address, amount_raw, amount, source_provider) VALUES")
+			"(chain, block_number, timestamp, tx_hash, log_index, token_address, token_symbol, token_decimals, from_address, to_address, amount_raw, amount, gross_amount_raw, fee_amount_raw, from_token_account, to_token_account, source_provider) VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
 			amt := decOrZero(r.Amount, r.TokenDecimals)
+			// 金额不变量（ADR-023 D6）在写入点兜底：任何调用方漏填 gross/fee 时也保证
+			// gross - fee = net（TRON 的 NormalizeTRC20 不经过通用归一化，正是这种调用方）。
+			gross, fee := r.GrossAmountRaw, r.FeeAmountRaw
+			if gross == "" {
+				gross = r.AmountRaw
+			}
+			if fee == "" {
+				fee = "0"
+			}
 			if err := stmt.Append(r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.TokenAddress,
-				r.TokenSymbol, r.TokenDecimals, r.From, r.To, r.AmountRaw, amt, r.Provider); err != nil {
+				r.TokenSymbol, r.TokenDecimals, r.From, r.To, r.AmountRaw, amt, gross, fee,
+				r.FromTokenAccount, r.ToTokenAccount, r.Provider); err != nil {
 				return err
 			}
 		}
@@ -173,14 +198,19 @@ func (w *Writer) WriteBalances(ctx context.Context, rows []BalanceRow) error {
 func (w *Writer) WriteActivity(ctx context.Context, rows []ActivityRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []ActivityRow) error {
 		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.address_activity "+
-			"(chain, address, counterparty, direction, activity_type, timestamp, block_number, tx_hash, log_index, token_address, token_symbol, token_decimals, amount_raw, amount, amount_usd, dataset, source_provider) VALUES")
+			"(chain, address, counterparty, direction, activity_type, timestamp, block_number, tx_hash, log_index, token_address, token_symbol, token_decimals, amount_raw, amount, amount_usd, dataset, source_provider, token_account, counterparty_token_account, fee_amount_raw) VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
+			fee := r.FeeAmountRaw
+			if fee == "" {
+				fee = "0"
+			}
 			if err := stmt.Append(r.Chain, r.Address, r.Counterparty, r.Direction, r.ActivityType, r.Timestamp,
 				r.BlockNumber, r.TxHash, r.LogIndex, r.TokenAddress, r.TokenSymbol, r.TokenDecimals, r.AmountRaw,
-				decOrZero(r.Amount, r.TokenDecimals), r.AmountUSD, r.Dataset, r.Provider); err != nil {
+				decOrZero(r.Amount, r.TokenDecimals), r.AmountUSD, r.Dataset, r.Provider,
+				r.TokenAccount, r.CounterpartyTokenAccount, fee); err != nil {
 				return err
 			}
 		}

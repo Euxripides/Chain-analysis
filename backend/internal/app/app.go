@@ -142,7 +142,8 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			RequestTimeout: cfg.Solana.RequestTimeout, UsageHook: usageHook, Log: log,
 		}, usageHook); solanaProvider != nil {
 			prov = provider.NewRouter(prov, map[string]provider.Provider{"solana": solanaProvider})
-			log.Info("provider: solana (standard json-rpc)", "datasets", []string{"transactions"})
+			log.Info("provider: solana (standard json-rpc)",
+				"datasets", []string{"transactions", "token_transfers", "internal_transactions"})
 		}
 	}
 	if cfg.Tron.Enabled {

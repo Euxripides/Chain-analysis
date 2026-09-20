@@ -189,6 +189,11 @@ type activityRow struct {
 	Dataset        string          `ch:"dataset" json:"dataset"`
 	SourceProvider string          `ch:"source_provider" json:"source_provider"`
 	SourceIngested time.Time       `ch:"source_ingested_at" json:"source_ingested_at"`
+	// Solana 证据字段（ADR-023 D10）：SELECT * 会带出这些列，结构体必须能接住，
+	// 否则整条活动查询在扫描阶段失败（表现为 500）。
+	TokenAccount             string `ch:"token_account" json:"token_account"`
+	CounterpartyTokenAccount string `ch:"counterparty_token_account" json:"counterparty_token_account"`
+	FeeAmountRaw             string `ch:"fee_amount_raw" json:"fee_amount_raw"`
 }
 
 // tableName dataset 逻辑名 → ClickHouse 表名。

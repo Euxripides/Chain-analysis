@@ -7,11 +7,25 @@ import (
 )
 
 func TestChainDatasetsIsPerChain(t *testing.T) {
-	solana := chainDatasets("solana")
-	if len(solana) != 1 || solana[0] != "transactions" {
-		t.Fatalf("solana must only expose transactions, got %v", solana)
+	// Solana 暴露且只暴露已实现的数据集（ADR-023 D9）：transactions / token_transfers / CPI 树。
+	solana := model.ChainDatasets("solana")
+	wantSolana := map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true}
+	if len(solana) != len(wantSolana) {
+		t.Fatalf("unexpected solana datasets: %v", solana)
 	}
-	tron := chainDatasets("tron")
+	for _, dataset := range solana {
+		if !wantSolana[dataset] {
+			t.Fatalf("solana advertises unimplemented dataset %s", dataset)
+		}
+	}
+	for _, dataset := range []string{"nft_transfers", "logs", "balances"} {
+		for _, advertised := range solana {
+			if advertised == dataset {
+				t.Fatalf("solana must not advertise %s", dataset)
+			}
+		}
+	}
+	tron := model.ChainDatasets("tron")
 	if len(tron) != 3 {
 		t.Fatalf("tron dataset list changed unexpectedly: %v", tron)
 	}
@@ -20,13 +34,13 @@ func TestChainDatasetsIsPerChain(t *testing.T) {
 			t.Fatalf("tron must not advertise %s", dataset)
 		}
 	}
-	for _, dataset := range chainDatasets("bsc") {
+	for _, dataset := range model.ChainDatasets("bsc") {
 		if dataset == "internal_transactions" {
 			t.Fatal("EVM chains must not advertise internal_transactions (Ankr Advanced API has no such method)")
 		}
 	}
 	// 空链保持向后兼容：返回全量。
-	if len(chainDatasets("")) != len(model.AllDatasets) {
-		t.Fatalf("empty chain must keep the legacy full list, got %v", chainDatasets(""))
+	if len(model.ChainDatasets("")) != len(model.AllDatasets) {
+		t.Fatalf("empty chain must keep the legacy full list, got %v", model.ChainDatasets(""))
 	}
 }

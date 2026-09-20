@@ -96,7 +96,37 @@ value_raw 144409250 (lamports) · status 1 · tx_type solana · source_provider 
   `internal/dataset`、`internal/ingest`、`internal/api` 单测）。
 - 浏览器验收：见 `~/deploy-frontend.sh both --verify` 输出。
 
-### 2.5 回滚
+### 2.5 追加：已批准的 ADR-023 三项决策落地（2026-09-20 晚）
+
+产品批准后按 `docs/adr/ADR-023-solana-token-transfers-semantics.md`（Accepted）实现并实测：
+
+| 决策 | 落地 | 实测证据 |
+| --- | --- | --- |
+| D6 gross/net 分列 | `clickhouse/0008_solana_transfer_evidence.sql`：`token_transfers` 新增 `gross_amount_raw`/`fee_amount_raw`；`address_activity` 新增 `fee_amount_raw`；`ingest.Writer` 在写入点兜底不变量 `amount_raw = gross - fee` | 线上 USDC 转账：`amount_raw=3090000000`、`gross=3090000000`、`fee=0`（SPL Token 无费） |
+| D10 证据详情 ATA + 手续费 | `token_transfers` 新增 `from_token_account`/`to_token_account`，`address_activity` 新增 `token_account`/`counterparty_token_account`；地址详情检查器在字段非空时展示 | 行内 `from_token_account=7KJjY7rArbydeLBF7gQ5LdqXRKRYyPArT99NEctsHsgU`、`to_token_account=HNhDsdRNVv4UPjxwnrLDfVay3SFjx4wQ984bcDfSfoB`（与主网指令逐字一致） |
+| D11 CPI 调用树独立数据集 | `internal/provider/solana` 解析 `logMessages` 的 invoke 栈 → `internal_calls`；`chainDatasets` 提升到 `model.ChainDatasets` 作为唯一白名单（下载入参校验与 meta 接口同源） | 任务 DL-20260920-0005：4 个节点（System / ComputeBudget×2 / Tokenkeg），`call_index=outer*256`、`depth=1`、`trace_path=0..3`、`success=1` |
+
+任务与数据：
+
+| 任务 | 数据集 | 结果 |
+| --- | --- | --- |
+| DL-20260920-0004 | token_transfers | COMPLETED，1 行；ClickHouse `log_index=768`（外层 #3）、owner 对 `5tzFki…→CGw7M5mw…`、ATA 与手续费列如上 |
+| DL-20260920-0005 | internal_transactions | COMPLETED，4 行 CPI 节点 |
+
+金额口径（写入点兜底，任何调用方漏填都成立）：
+
+```
+amount_raw = gross_amount_raw - fee_amount_raw
+EVM/TRON/SPL Token：fee = "0"，gross = amount_raw
+Token-2022 带费：net 取 pre/postTokenBalances 差额（链上事实），fee = gross - net；
+            指令显式费用与余额差额不一致时以余额为准并计数 fee_mismatch（绝不静默）
+```
+
+边界（与 ADR 一致，未变）：Solana 的 nft_transfers / logs / balances 仍不支持；
+CPI 节点的 `from_address` 对 depth-1 为空（日志不记录顶层调用者），lamport 金额只在
+System Program 内层转账数与节点数一致时配对赋值，否则保持 0 并计数 `cpi_value_unpaired`。
+
+### 2.6 回滚
 
 - 二进制：`backend/bin/api.bak-solana-20260920T030408Z`、`worker.bak-solana-…`（重启即回退）。
 - DB：`0072` 只新增行（`chain_capabilities` / `provider_descriptors` / `routing_policies`），

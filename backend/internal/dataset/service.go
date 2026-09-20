@@ -651,18 +651,17 @@ func downloadRequestFingerprint(chain string, subjects, datasets []string, rng m
 	return hex.EncodeToString(sum[:])
 }
 
-// validateChainDatasetSupport 拒绝当前 Provider 组合无法服务的 (chain, dataset)：
-// Ankr Advanced API 没有任何 internal transactions 方法（2026-09-15 核对官方
-// Query API 方法列表），只有 TRON 侧走 tron-grid 路由。旧实现会为这类请求规划
-// Shard，每个 Shard 立即非重试失败，任务永远停在 RUNNING（现场
-// DL-20260915-0007/0008：25/25 个 bsc internal_transactions 数据集 FAILED_FINAL）。
+// validateChainDatasetSupport 拒绝当前 Provider 组合无法服务的 (chain, dataset)。
+//
+// 白名单唯一事实来源是 model.ChainDatasets（与 /api/v2/meta/datasets 同源）：
+// 旧实现只放行 TRON 的 internal_transactions，会让 Solana 的 CPI 调用树
+// （ADR-023 D11）在预览阶段就被拒绝。历史背景：Ankr Advanced API 没有 internal
+// transactions 方法，放任不管会让每个 Shard 立即非重试失败、任务停在 RUNNING
+// （现场 DL-20260915-0007/0008：25/25 bsc internal_transactions FAILED_FINAL）。
 func validateChainDatasetSupport(chain string, datasets []string) error {
-	if chain == "tron" {
-		return nil
-	}
 	for _, d := range datasets {
-		if d == "internal_transactions" {
-			return fmt.Errorf("dataset %q is not available on %s: the configured provider exposes no internal-transactions method", d, chain)
+		if !model.ChainSupportsDataset(chain, d) {
+			return fmt.Errorf("dataset %q is not available on %s: the configured provider does not implement it for this chain", d, chain)
 		}
 	}
 	return nil

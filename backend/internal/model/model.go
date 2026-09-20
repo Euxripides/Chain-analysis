@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // DownloadJob 状态（必须持久化在 PostgreSQL）
 const (
@@ -55,6 +58,46 @@ const (
 
 var AllDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions"}
 var DefaultDatasets = []string{"transactions", "token_transfers", "nft_transfers", "logs"}
+
+// chainDatasetsByChain 是「该链实际能下载哪些 Dataset」的唯一事实来源（ADR-023 D9）。
+//
+// 事实来源：internal/provider/ankr（EVM Advanced API，没有 internal transactions 方法）、
+// internal/tron（TronGrid，internal_transactions 是一级数据集）、
+// internal/provider/solana（标准 JSON-RPC：SPL 指令解码 + CPI 调用树）。
+// /api/v2/meta/datasets 与下载入参校验都读这里，杜绝两处白名单漂移。
+var chainDatasetsByChain = map[string][]string{
+	"bsc":       {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"eth":       {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"polygon":   {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"arbitrum":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"base":      {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"optimism":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"avalanche": {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
+	"tron":      {"transactions", "token_transfers", "internal_transactions"},
+	"solana":    {"transactions", "token_transfers", "internal_transactions"},
+}
+
+// ChainDatasets 返回该链可下载的 Dataset；chain 为空或未登记时返回全量（向后兼容）。
+func ChainDatasets(chain string) []string {
+	key := strings.ToLower(strings.TrimSpace(chain))
+	if key == "" {
+		return AllDatasets
+	}
+	if list, ok := chainDatasetsByChain[key]; ok {
+		return list
+	}
+	return AllDatasets
+}
+
+// ChainSupportsDataset 判断 (chain, dataset) 是否可用。
+func ChainSupportsDataset(chain, dataset string) bool {
+	for _, candidate := range ChainDatasets(chain) {
+		if candidate == dataset {
+			return true
+		}
+	}
+	return false
+}
 
 func ValidDataset(d string) bool {
 	for _, x := range AllDatasets {

@@ -58,6 +58,32 @@ func DecodeBase58(s string) ([]byte, error) {
 	return append(out, value.Bytes()...), nil
 }
 
+// EncodeBase58 编码为 base58btc（前导零字节编码为 '1'）。
+//
+// 用于把指令 data 里的 32 字节公钥（如 TransferChecked 内嵌的 mint）还原成地址字符串。
+func EncodeBase58(data []byte) string {
+	zeros := 0
+	for zeros < len(data) && data[zeros] == 0 {
+		zeros++
+	}
+	value := new(big.Int).SetBytes(data)
+	radix := big.NewInt(58)
+	var digits []byte
+	for value.Sign() > 0 {
+		mod := new(big.Int)
+		value.DivMod(value, radix, mod)
+		digits = append(digits, base58Alphabet[mod.Int64()])
+	}
+	out := make([]byte, 0, zeros+len(digits))
+	for i := 0; i < zeros; i++ {
+		out = append(out, '1')
+	}
+	for i := len(digits) - 1; i >= 0; i-- {
+		out = append(out, digits[i])
+	}
+	return string(out)
+}
+
 // NormalizeSolanaAddress 校验地址并**原样返回**（只去掉首尾空白，绝不改变大小写）。
 func NormalizeSolanaAddress(raw string) (string, error) {
 	address := strings.TrimSpace(raw)

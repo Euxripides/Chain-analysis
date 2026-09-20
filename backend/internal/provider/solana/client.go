@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,7 +108,7 @@ func (c *Client) Name() string { return "solana" }
 func (c *Client) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
 		Name:        "solana",
-		Datasets:    []string{"transactions"},
+		Datasets:    []string{"transactions", "token_transfers", "internal_transactions"},
 		MaxPageSize: c.maxPageSize,
 		// Solana 没有可用的时间→slot 索引：时间区间在 API 层直接拒绝。
 		SupportsTimeRange: map[string]bool{"transactions": false},
@@ -255,15 +256,24 @@ type txResult struct {
 	Transaction struct {
 		Signatures []string `json:"signatures"`
 		Message    struct {
-			RecentBlockhash string       `json:"recentBlockhash"`
-			AccountKeys     []accountKey `json:"accountKeys"`
+			RecentBlockhash string                 `json:"recentBlockhash"`
+			AccountKeys     []accountKey           `json:"accountKeys"`
+			Instructions    []parsedInstructionRaw `json:"instructions"`
 		} `json:"message"`
 	} `json:"transaction"`
 	Meta *struct {
-		Err          any     `json:"err"`
-		Fee          uint64  `json:"fee"`
-		PreBalances  []int64 `json:"preBalances"`
-		PostBalances []int64 `json:"postBalances"`
+		Err               any                     `json:"err"`
+		Fee               uint64                  `json:"fee"`
+		PreBalances       []int64                 `json:"preBalances"`
+		PostBalances      []int64                 `json:"postBalances"`
+		LogMessages       []string                `json:"logMessages"`
+		PreTokenBalances  []tokenBalanceEntry     `json:"preTokenBalances"`
+		PostTokenBalances []tokenBalanceEntry     `json:"postTokenBalances"`
+		InnerInstructions []innerInstructionGroup `json:"innerInstructions"`
+		LoadedAddresses   struct {
+			Writable []string `json:"writable"`
+			Readonly []string `json:"readonly"`
+		} `json:"loadedAddresses"`
 	} `json:"meta"`
 }
 
@@ -296,7 +306,9 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassInvalidRequest,
 			Message: "solana provider only serves chain=solana, got " + req.Chain}
 	}
-	if req.Dataset != "transactions" {
+	switch req.Dataset {
+	case "transactions", "token_transfers", "internal_transactions":
+	default:
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassUnsupported,
 			Message: "solana provider does not serve dataset " + req.Dataset}
 	}
@@ -365,25 +377,36 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		nextToken = oldestSeen
 	}
 
-	rows, transactionBytes, txErr := c.fetchTransactions(ctx, selected)
-	if txErr != nil {
-		c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
-		return provider.FetchResult{}, txErr
-	}
-	encoded := make([]json.RawMessage, 0, len(rows))
-	for _, row := range rows {
-		payload, err := json.Marshal(row)
-		if err != nil {
-			continue
+	var encoded []json.RawMessage
+	var payloadBytes int64
+	switch req.Dataset {
+	case "transactions":
+		txRows, txBytes, txErr := c.fetchTransactions(ctx, selected)
+		if txErr != nil {
+			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
+			return provider.FetchResult{}, txErr
 		}
-		encoded = append(encoded, payload)
+		encoded, payloadBytes = encodeRows(txRows), txBytes
+	case "token_transfers", "internal_transactions":
+		decoded, txErr := c.fetchInstructionRows(ctx, req.Dataset, selected)
+		if txErr != nil {
+			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
+			return provider.FetchResult{}, txErr
+		}
+		encoded, payloadBytes = decoded.rows, decoded.bytes
+		// 解码异常信号必须可见（ADR-023）：谁被跳过、费用从哪来、有没有对不上。
+		c.log.Info("solana instruction decode", "dataset", req.Dataset, "signatures", len(selected), "rows", len(encoded),
+			"transfers", decoded.stats.Transfers, "owner_unresolved", decoded.stats.OwnerUnresolved,
+			"fee_from_balances", decoded.stats.FeeFromBalances, "fee_mismatch", decoded.stats.FeeMismatch,
+			"skipped_no_mint", decoded.stats.SkippedNoBalance, "cpi_nodes", decoded.cpiNodes,
+			"cpi_value_unpaired", decoded.cpiValueUnpaired)
 	}
 	c.recordUsage(req, MethodTransaction, len(encoded), time.Since(started), "ok", nil)
 	return provider.FetchResult{
 		Rows: encoded, NextPageToken: nextToken, HasMore: hasMore,
 		RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: pageSize,
 		RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock,
-		DecodedBytes: signatureBytes + transactionBytes,
+		DecodedBytes: signatureBytes + payloadBytes,
 		StartedAt:    started, BodyCompleteAt: time.Now(),
 	}, nil
 }
@@ -549,4 +572,208 @@ func (c *Client) recordUsage(req provider.FetchRequest, method string, rows int,
 		}
 	}
 	c.hook(usage)
+}
+
+// ---- 指令级数据集（token_transfers / internal_transactions，ADR-023）----
+
+// instructionDecodeResult 是一页指令解码的产出与可见性计数。
+type instructionDecodeResult struct {
+	rows             []json.RawMessage
+	bytes            int64
+	stats            tokenTransferStats
+	cpiNodes         int
+	cpiValueUnpaired int
+}
+
+// encodeRows 把任意行类型编码为 json.RawMessage；单行编码失败就跳过（不阻断整页）。
+func encodeRows[T any](rows []T) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(rows))
+	for _, row := range rows {
+		payload, err := json.Marshal(row)
+		if err != nil {
+			continue
+		}
+		out = append(out, payload)
+	}
+	return out
+}
+
+// blockTimeValue 返回秒级时间戳；缺失时返回 0（由调用方决定是否兜底）。
+func (tx *txResult) blockTimeValue() int64 {
+	if tx.BlockTime != nil {
+		return *tx.BlockTime
+	}
+	if tx.Meta != nil {
+		return 0
+	}
+	return 0
+}
+
+// accountKeys 汇总静态账户与 v0 交易的地址表账户（下标与指令一致：静态在前、可写后只读）。
+func (tx *txResult) accountKeys() []string {
+	keys := make([]string, 0, len(tx.Transaction.Message.AccountKeys)+8)
+	for _, key := range tx.Transaction.Message.AccountKeys {
+		keys = append(keys, key.Pubkey)
+	}
+	if tx.Meta != nil {
+		keys = append(keys, tx.Meta.LoadedAddresses.Writable...)
+		keys = append(keys, tx.Meta.LoadedAddresses.Readonly...)
+	}
+	return keys
+}
+
+// outerPrograms 按外层指令顺序返回 program id：CPI 树用它把 depth-1 节点对应回外层下标。
+func (tx *txResult) outerPrograms() []string {
+	keys := tx.accountKeys()
+	out := make([]string, 0, len(tx.Transaction.Message.Instructions))
+	for _, ix := range tx.Transaction.Message.Instructions {
+		out = append(out, ix.programID(keys))
+	}
+	return out
+}
+
+func (tx *txResult) failed() (bool, string) {
+	if tx.Meta == nil || tx.Meta.Err == nil {
+		return false, ""
+	}
+	return true, fmt.Sprint(tx.Meta.Err)
+}
+
+// fetchTxDetail 抓取一笔已解析交易（jsonParsed），供三个数据集共用。
+func (c *Client) fetchTxDetail(ctx context.Context, signature string) (*txResult, int64, error) {
+	params := []any{signature, map[string]any{"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}}
+	result, size, err := c.callWithSize(ctx, MethodTransaction, params)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(result) == 0 || string(result) == "null" {
+		return nil, size, fmt.Errorf("transaction %s not found", signature)
+	}
+	var tx txResult
+	if err := json.Unmarshal(result, &tx); err != nil {
+		return nil, size, &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
+			Message: "invalid getTransaction result: " + err.Error(), Retryable: true, Cause: err}
+	}
+	return &tx, size, nil
+}
+
+// fetchInstructionRows 逐笔解码指令；任一交易失败即整页失败（静默丢行会让 Coverage 误判完整）。
+func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selected []signatureInfo) (instructionDecodeResult, error) {
+	result := instructionDecodeResult{}
+	if len(selected) == 0 {
+		return result, nil
+	}
+	type outcome struct {
+		rows     []json.RawMessage
+		bytes    int64
+		stats    tokenTransferStats
+		nodes    int
+		unpaired int
+		err      error
+	}
+	results := make([]outcome, len(selected))
+	sem := make(chan struct{}, c.concurrency)
+	var wg sync.WaitGroup
+	for i := range selected {
+		i := i
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			tx, size, err := c.fetchTxDetail(ctx, selected[i].Signature)
+			if err != nil {
+				results[i].err = err
+				return
+			}
+			results[i].bytes = size
+			keys := tx.accountKeys()
+			switch dataset {
+			case "token_transfers":
+				index := buildTokenAccountIndex(keys, tx.Meta.PreTokenBalances, tx.Meta.PostTokenBalances)
+				rows, stats := buildTokenTransferRows(tx.Slot, tx.blockTimeValue(), selected[i].Signature, keys,
+					tx.Transaction.Message.Instructions, tx.Meta.InnerInstructions, index)
+				results[i].stats = stats
+				results[i].rows = encodeRows(rows)
+			case "internal_transactions":
+				nodes := buildCPITree(tx.Meta.LogMessages, tx.outerPrograms())
+				rows, unpaired := cpiRowsFor(selected[i].Signature, tx, nodes)
+				results[i].nodes = len(nodes)
+				results[i].unpaired = unpaired
+				results[i].rows = encodeRows(rows)
+			}
+		}()
+	}
+	wg.Wait()
+	for i, res := range results {
+		if res.err != nil {
+			return result, fmt.Errorf("solana %s %s failed: %w", dataset, selected[i].Signature, res.err)
+		}
+		result.bytes += res.bytes
+		result.rows = append(result.rows, res.rows...)
+		result.stats.Transfers += res.stats.Transfers
+		result.stats.OwnerUnresolved += res.stats.OwnerUnresolved
+		result.stats.FeeFromBalances += res.stats.FeeFromBalances
+		result.stats.FeeMismatch += res.stats.FeeMismatch
+		result.stats.SkippedNoBalance += res.stats.SkippedNoBalance
+		result.cpiNodes += res.nodes
+		result.cpiValueUnpaired += res.unpaired
+	}
+	return result, nil
+}
+
+// cpiRowsFor 把 CPI 节点转成 internal_calls 行。
+//
+// System Program 的 lamport 转账只在"节点数与其内层转账指令数一致"时配对赋值，
+// 数量不一致就保持 0 并返回 unpaired 计数——宁可不填，也不把金额张冠李戴。
+func cpiRowsFor(signature string, tx *txResult, nodes []cpiNode) ([]cpiRow, int) {
+	slot := strconv.FormatUint(tx.Slot, 10)
+	timestamp := tx.blockTimeValue()
+	failed, failureText := tx.failed()
+	keys := tx.accountKeys()
+
+	lamports := make([]*big.Int, 0, 4)
+	for _, group := range tx.Meta.InnerInstructions {
+		for _, ix := range group.Instructions {
+			if ix.programID(keys) != SystemProgram {
+				continue
+			}
+			data := ix.dataBytes()
+			if len(data) < 9 || data[0] != 2 { // 2 = SystemInstruction::Transfer
+				continue
+			}
+			if amount, ok := littleEndianUint64(data, 1); ok {
+				lamports = append(lamports, amount)
+			}
+		}
+	}
+	unpaired := 0
+	rows := make([]cpiRow, 0, len(nodes))
+	lamportIndex := 0
+	for _, node := range nodes {
+		valueRaw := "0"
+		if node.Program == SystemProgram && lamportIndex < len(lamports) {
+			valueRaw = lamports[lamportIndex].String()
+			lamportIndex++
+		}
+		rows = append(rows, cpiRow{
+			TxHash: signature, CallIndex: node.CallIndex, BlockNumber: slot, Timestamp: timestamp,
+			From: node.Parent, To: node.Program, ValueRaw: valueRaw, AssetType: "PROGRAM", CallType: "cpi",
+			Depth: uint16(node.Depth), TracePath: node.TracePath, MethodID: "",
+			Failed: failed || node.Failed, Error: firstNonEmpty(node.Error, failureText),
+		})
+	}
+	if lamportIndex != len(lamports) {
+		unpaired = len(lamports) - lamportIndex
+	}
+	return rows, unpaired
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

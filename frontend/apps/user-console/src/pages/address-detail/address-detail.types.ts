@@ -96,6 +96,10 @@ export interface ActivityRow {
   amount_raw?: string;
   amount?: string;
   amount_usd?: string;
+  /** Solana 证据（ADR-023 D10）：主体/对手方的代币账户与被代扣的手续费；其他链为空。 */
+  token_account?: string;
+  counterparty_token_account?: string;
+  fee_amount_raw?: string;
   dataset?: string;
   source_provider?: string;
   source_ingested_at?: string;

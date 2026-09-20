@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"strings"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
+	"github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
@@ -79,6 +81,53 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			}
 		}
 		return b, nil
+	}
+	// Solana 的 token_transfers / internal_transactions 由 Provider 解码成与 Ankr 同构的行，
+	// 这里只做类型化与地址活动投影（ADR-023 D4/D10/D11）。
+	if strings.EqualFold(chain, "solana") {
+		providerName := sc.sourceProviderForDataset(chain, dataset)
+		switch dataset {
+		case "token_transfers":
+			b.transfers = make([]ingest.TokenTransferRow, 0, len(rows))
+			b.acts = make([]ingest.ActivityRow, 0, len(rows))
+			for _, raw := range rows {
+				r, err := ingest.NormalizeTokenTransfer(raw, chain, providerName)
+				if err != nil {
+					sc.log.Warn("Solana transfer normalization skipped", "err", err)
+					continue
+				}
+				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
+				b.transfers = append(b.transfers, r)
+				dir, cp := directionOf(address, r.From, r.To)
+				// 主体视角的代币账户：转出看 from ATA，转入看 to ATA（self 取转出侧并注明）。
+				ownAccount, counterpartyAccount := r.FromTokenAccount, r.ToTokenAccount
+				if dir == "in" {
+					ownAccount, counterpartyAccount = r.ToTokenAccount, r.FromTokenAccount
+				}
+				b.acts = append(b.acts, ingest.ActivityRow{
+					Chain: chain, Address: address, Counterparty: cp, Direction: dir,
+					ActivityType: "transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
+					TxHash: r.TxHash, LogIndex: r.LogIndex, TokenAddress: r.TokenAddress,
+					TokenSymbol: r.TokenSymbol, TokenDecimals: r.TokenDecimals,
+					AmountRaw: r.AmountRaw, Amount: r.Amount, Dataset: dataset, Provider: providerName,
+					TokenAccount: ownAccount, CounterpartyTokenAccount: counterpartyAccount,
+					FeeAmountRaw: r.FeeAmountRaw,
+				})
+			}
+			return b, nil
+		case "internal_transactions":
+			// CPI 节点是程序调用：只落 internal_calls，不写地址活动（ADR-023 D11）。
+			for _, raw := range rows {
+				r, err := solana.NormalizeInternal(raw)
+				if err != nil {
+					sc.log.Warn("Solana CPI normalization skipped", "err", err)
+					continue
+				}
+				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
+				b.internals = append(b.internals, r)
+			}
+			return b, nil
+		}
 	}
 	// 非 TRON 分支：Provider 名随链决定（EVM=ankr，Solana=solana），
 	// 它同时决定 raw 路径、source_provider 列与 activity 的 provider 字段。

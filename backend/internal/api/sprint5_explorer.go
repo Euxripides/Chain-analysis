@@ -16,6 +16,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
+	soladdr "github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
@@ -44,7 +45,15 @@ func (s *Server) resolveExplorerSubject(w http.ResponseWriter, r *http.Request) 
 		return explorerSubject{}, false
 	}
 	var normalized string
-	if chainSlug == "tron" {
+	if chainSlug == "solana" {
+		// Solana 地址大小写敏感：base58 校验后原样使用（ADR-023；绝不能 ToLower）。
+		n, err := soladdr.NormalizeSolanaAddress(raw)
+		if err != nil {
+			validationError(w, r, "Solana 地址不合法", []fieldError{{Field: "address", Code: "invalid", Message: "需要 32 字节 base58 地址（大小写敏感）"}})
+			return explorerSubject{}, false
+		}
+		normalized = n
+	} else if chainSlug == "tron" {
 		n, err := tron.NormalizeTronAddress(raw)
 		if err != nil {
 			validationError(w, r, "TRON 地址不合法", []fieldError{{Field: "address", Code: "invalid", Message: "请检查 Base58 校验和"}})

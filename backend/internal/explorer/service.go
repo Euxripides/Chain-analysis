@@ -19,6 +19,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
+	soladdr "github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
@@ -131,13 +132,22 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 		return nil, err
 	}
 	for i := range req.Addresses {
-		if req.Chain == "tron" {
+		// Solana 地址大小写敏感（ADR-023）：只校验 base58，绝不折叠；
+		// 折叠后查询条件会变成另一个地址，表现为"明明有数据却查不到"。
+		switch req.Chain {
+		case "tron":
 			normalized, err := tron.NormalizeTronAddress(req.Addresses[i])
 			if err != nil {
 				return nil, err
 			}
 			req.Addresses[i] = normalized
-		} else {
+		case "solana":
+			normalized, err := soladdr.NormalizeSolanaAddress(req.Addresses[i])
+			if err != nil {
+				return nil, err
+			}
+			req.Addresses[i] = normalized
+		default:
 			req.Addresses[i] = strings.ToLower(req.Addresses[i])
 		}
 	}
@@ -179,6 +189,10 @@ func validateFiltersForChain(chain string, f Filter) error {
 			if chain == "tron" {
 				if tron.ValidateTronAddress(value) != nil {
 					return fmt.Errorf("%w: %s is not a TRON address", ErrInvalidFilter, name)
+				}
+			} else if chain == "solana" {
+				if _, err := soladdr.NormalizeSolanaAddress(value); err != nil {
+					return fmt.Errorf("%w: %s is not a Solana address", ErrInvalidFilter, name)
 				}
 			} else if !addressFilterRe.MatchString(value) {
 				return fmt.Errorf("%w: %s is not an EVM address", ErrInvalidFilter, name)

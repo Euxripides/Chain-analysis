@@ -286,9 +286,15 @@ type TokenTransferRow struct {
 	TokenDecimals uint16
 	From          string
 	To            string
-	AmountRaw     string
-	Amount        *big.Int
-	Provider      string
+	// AmountRaw 是**净额**（实际移动/到账）。GrossAmountRaw 与 FeeAmountRaw 见 ADR-023 D6。
+	AmountRaw      string
+	Amount         *big.Int
+	GrossAmountRaw string
+	FeeAmountRaw   string
+	// 代币账户（Solana ATA）；非 Solana 链为空串，不伪造（ADR-023 D10）。
+	FromTokenAccount string
+	ToTokenAccount   string
+	Provider         string
 }
 
 // InternalTransferRow reuses blockchain.internal_calls for TRON internal
@@ -306,7 +312,14 @@ type InternalTransferRow struct {
 	AssetType   string
 	CallType    string
 	Rejected    bool
-	Provider    string
+	// CPI 调用树字段（ADR-023 D11）：TRON 内部转账保持 Depth=0、TracePath 缺省为 call_index。
+	Depth     uint16
+	TracePath string
+	MethodID  string
+	// Failed/ErrorText 与 Rejected 并列：TRON 用 Rejected，Solana 用交易级失败标记。
+	Failed    bool
+	ErrorText string
+	Provider  string
 }
 
 func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenTransferRow, error) {
@@ -314,15 +327,29 @@ func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenT
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return TokenTransferRow{}, err
 	}
-	// 实测字段：valueRawInteger（原始整数）；value 为展示值
+	// 实测字段：valueRawInteger（原始整数）；value 为展示值。
+	// 金额口径（ADR-023 D6）：amount_raw = 净额；gross/fee 分列，不变量 gross = amount + fee。
+	// 没有费用概念的链（EVM/TRON/SPL Token）gross 缺省等于 amount、fee 缺省为 0，
+	// 这样"每一行都能算 gross - fee = net"，不需要调用方按链特判。
 	amountRaw := pickString(m, "valueRawInteger", "value")
+	grossRaw := pickString(m, "grossAmountRaw")
+	if grossRaw == "" {
+		grossRaw = amountRaw
+	}
+	feeRaw := pickString(m, "feeAmountRaw")
+	if feeRaw == "" {
+		feeRaw = "0"
+	}
 	return TokenTransferRow{
 		Chain: chain, BlockNumber: asUint64(m, "blockHeight"), Timestamp: asTime(m, "timestamp"),
 		TxHash: pickString(m, "transactionHash"), LogIndex: asUint32(m, "logIndex"),
 		TokenAddress: pickAddressForChain(chain, m, "contractAddress"), TokenSymbol: pickString(m, "tokenSymbol"),
 		TokenDecimals: uint16(asUint64(m, "tokenDecimals")),
 		From:          pickAddressForChain(chain, m, "fromAddress", "from"), To: pickAddressForChain(chain, m, "toAddress", "to"),
-		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"), Provider: provider,
+		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"),
+		GrossAmountRaw: grossRaw, FeeAmountRaw: feeRaw,
+		FromTokenAccount: pickString(m, "fromTokenAccount"), ToTokenAccount: pickString(m, "toTokenAccount"),
+		Provider: provider,
 	}, nil
 }
 
@@ -442,6 +469,10 @@ type ActivityRow struct {
 	AmountUSD     string
 	Dataset       string
 	Provider      string
+	// 证据详情（ADR-023 D10）：主体与对手方的代币账户，以及被代扣的手续费。
+	TokenAccount             string
+	CounterpartyTokenAccount string
+	FeeAmountRaw             string
 }
 
 type BalanceRow struct {

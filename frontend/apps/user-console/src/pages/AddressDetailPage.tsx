@@ -813,6 +813,34 @@ export default function AddressDetailPage() {
             wide: true,
           },
           { label: "raw 金额", value: <span className="mono">{selectedActivity.amount_raw ?? "—"}</span>, wide: true },
+          /* Solana 证据（ADR-023 D10）：服务端没有给值就不渲染，绝不为 EVM/TRON 编造代币账户。 */
+          ...(selectedActivity.token_account
+            ? [
+                {
+                  label: "主体代币账户 (ATA)",
+                  value: <HashValue value={selectedActivity.token_account} label="主体代币账户" wrap />,
+                  wide: true,
+                },
+              ]
+            : []),
+          ...(selectedActivity.counterparty_token_account
+            ? [
+                {
+                  label: "对手方代币账户 (ATA)",
+                  value: <HashValue value={selectedActivity.counterparty_token_account} label="对手方代币账户" wrap />,
+                  wide: true,
+                },
+              ]
+            : []),
+          ...(selectedActivity.fee_amount_raw && selectedActivity.fee_amount_raw !== "0"
+            ? [
+                {
+                  label: "代扣手续费",
+                  value: <span className="mono">{selectedActivity.fee_amount_raw}</span>,
+                  wide: true,
+                },
+              ]
+            : []),
           { label: "log_index", value: <span className="mono">{selectedActivity.log_index ?? "—"}</span> },
           { label: "来源 provider", value: selectedActivity.source_provider || "—" },
           { label: "dataset", value: selectedActivity.dataset || "—" },
