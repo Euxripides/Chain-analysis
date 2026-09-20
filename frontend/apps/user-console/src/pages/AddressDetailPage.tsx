@@ -88,6 +88,7 @@ import type {
  * 这里复用设计系统同一组类（.cs-hash / .cs-hash__text）与同一个 CopyButton：
  * 视觉省略规则、完整 title、完整复制值与 HashValue 完全一致，只把链接换成 router Link。
  */
+import { TokenPicker } from "./address-detail/TokenPicker";
 import { EntityHash, CurrentBalanceTable, NetFlowTable, ActivityTable, NftTransferTable, CounterpartyTable, SemanticTable, AnalysisView, CoverageTable } from "./address-detail/tabs/AddressTables";
 
 export default function AddressDetailPage() {
@@ -116,7 +117,19 @@ export default function AddressDetailPage() {
   const cursor = searchParams.get("cursor") ?? "";
   const direction = searchParams.get("direction") ?? "";
   const token = searchParams.get("token") ?? "";
-  const [tokenDraft, setTokenDraft] = useState(token);
+  // OKLink 式工具栏（日期区间 / 数量区间 / 发送方·接收方 / 隐藏 0 数量）全部写进 URL，
+  // 与已有 direction/token/cursor 同一约定：刷新可恢复，变化即重新取数。
+  const fromAddress = searchParams.get("from_address") ?? "";
+  const toAddress = searchParams.get("to_address") ?? "";
+  const minAmount = searchParams.get("min_amount") ?? "";
+  const maxAmount = searchParams.get("max_amount") ?? "";
+  const fromDate = searchParams.get("from_date") ?? "";
+  const toDate = searchParams.get("to_date") ?? "";
+  const hideZero = searchParams.get("hide_zero") === "1";
+  /** 草稿只在点「查询」时写 URL；避免每敲一个字符就发一次请求。 */
+  const [partyDraft, setPartyDraft] = useState({ from: fromAddress, to: toAddress });
+  const [amountDraft, setAmountDraft] = useState({ min: minAmount, max: maxAmount });
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const notifiedErrorsRef = useRef<Set<string>>(new Set());
 
   const ready = Boolean(chain && address);
@@ -132,16 +145,37 @@ export default function AddressDetailPage() {
    * 同时把 /activity 打成请求风暴（2026-09-16 实测：一次页面停留里连着 ERR_ABORTED）。
    * 用 useMemo 绑定到 windowDays：窗口不变就不变。
    */
-  const activityFromTime = useMemo(
-    () => (windowDays > 0 ? new Date(Date.now() - windowDays * 86_400_000).toISOString() : undefined),
-    [windowDays],
+  const activityFromTime = useMemo(() => {
+    // 显式日期区间优先于「最近 N 天」下拉（两者同时存在时以日期为准，避免互相覆盖）。
+    if (fromDate) return new Date(fromDate + "T00:00:00").toISOString();
+    return windowDays > 0 ? new Date(Date.now() - windowDays * 86_400_000).toISOString() : undefined;
+  }, [windowDays, fromDate]);
+  const activityToTime = useMemo(
+    () => (toDate ? new Date(toDate + "T23:59:59.999").toISOString() : undefined),
+    [toDate],
   );
   const overview = useApi<OverviewData>(base ? base + "/overview" : null, [chain, address]);
   const assets = useApi<AssetsPayload>(tab === "assets" && base ? base + "/assets" : null, [chain, address, tab]);
   const activityActive = tab === "transactions" || tab === "transfers" || tab === "internal";
   const activity = useApi<{ items: ActivityRow[] }>(
     activityActive && base ? base + "/activity" : null,
-    [chain, address, tab, cursor, direction, token, windowDays, assetType],
+    [
+      chain,
+      address,
+      tab,
+      cursor,
+      direction,
+      token,
+      windowDays,
+      assetType,
+      fromAddress,
+      toAddress,
+      minAmount,
+      maxAmount,
+      fromDate,
+      toDate,
+      refreshNonce,
+    ],
     activityActive
       ? {
           limit: 200,
@@ -150,6 +184,12 @@ export default function AddressDetailPage() {
           token: tab === "transfers" && assetType === "token" ? token || undefined : undefined,
           asset_type: tab === "transfers" && assetType === "nft" ? "nft" : undefined,
           from_time: activityFromTime,
+          to_time: activityToTime,
+          // 发送方/接收方与数量区间：后端 Filter 早已支持，这里只是把工具栏接上去。
+          from_address: fromAddress || undefined,
+          to_address: toAddress || undefined,
+          min_amount: tab === "transfers" && assetType === "token" ? minAmount || undefined : undefined,
+          max_amount: tab === "transfers" && assetType === "token" ? maxAmount || undefined : undefined,
         }
       : undefined,
   );
@@ -190,10 +230,6 @@ export default function AddressDetailPage() {
     // errorsKey 仅用于在错误集合变化时触发本 effect。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errorsKey, dialog]);
-
-  useEffect(() => {
-    setTokenDraft(token);
-  }, [token]);
 
   const updateParams = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams);
@@ -466,15 +502,47 @@ export default function AddressDetailPage() {
         : tab === "internal"
           ? rows.filter((row) => row.activity_type === "internal_transfer")
           : rows.filter((row) => row.activity_type !== "transfer" && row.activity_type !== "internal_transfer");
+    // 「隐藏数量为 0」是纯展示开关：不重发请求，只过滤本页/全量视图已取到的行。
+    const visible = hideZero
+      ? filtered.filter((row) => {
+          const raw = (row.amount_raw ?? "").trim();
+          if (raw) return !/^[-+]?0+$/.test(raw);
+          const text = (row.amount ?? "").trim();
+          return text ? !/^[-+]?0(\.0+)?$/.test(text) : false;
+        })
+      : filtered;
+    /** 工具栏「查询」：草稿一次性写入 URL（写 URL 即取数），并重置游标。 */
+    const applyToolbar = () => {
+      updateParams({
+        from_address: partyDraft.from.trim() || null,
+        to_address: partyDraft.to.trim() || null,
+        min_amount: assetType === "token" ? amountDraft.min.trim() || null : null,
+        max_amount: assetType === "token" ? amountDraft.max.trim() || null : null,
+        cursor: null,
+      });
+    };
     const tokenFilterActive = tab === "transfers" && Boolean(token);
     return (
-      <PageSection title={activityTitle} count={filtered.length + " 行"}>
+      <PageSection title={activityTitle} count={visible.length + " 行"}>
         {/* 筛选条件与请求参数一一对应，并且全部写进 URL（direction / token / 时间窗）。 */}
         <FilterBar
           ariaLabel="活动筛选"
           showClear
           clearLabel="重置"
-          onClear={() => updateParams({ direction: null, token: null, cursor: null })}
+          onClear={() =>
+            updateParams({
+              direction: null,
+              token: null,
+              from_address: null,
+              to_address: null,
+              min_amount: null,
+              max_amount: null,
+              from_date: null,
+              to_date: null,
+              hide_zero: null,
+              cursor: null,
+            })
+          }
         >
           <select
             className="select"
@@ -528,30 +596,107 @@ export default function AddressDetailPage() {
                 </Button>
               </div>
               {assetType === "token" ? (
+                <TokenPicker
+                  rows={rows}
+                  value={token}
+                  onConfirm={(next) => updateParams({ token: next || null, cursor: null })}
+                  onReset={() => updateParams({ token: null, cursor: null })}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {tab === "transfers" ? (
+            <>
+              <input
+                type="date"
+                className="input"
+                style={{ flex: "0 1 148px", minWidth: 0 }}
+                aria-label="开始日期"
+                value={fromDate}
+                onChange={(event) => updateParams({ from_date: event.target.value || null, cursor: null })}
+              />
+              <input
+                type="date"
+                className="input"
+                style={{ flex: "0 1 148px", minWidth: 0 }}
+                aria-label="结束日期"
+                value={toDate}
+                onChange={(event) => updateParams({ to_date: event.target.value || null, cursor: null })}
+              />
+              <input
+                className="input"
+                style={{ flex: "0 1 190px", minWidth: 0 }}
+                aria-label="发送方地址"
+                placeholder="发送方地址"
+                value={partyDraft.from}
+                onChange={(event) => setPartyDraft((prev) => ({ ...prev, from: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyToolbar();
+                  }
+                }}
+              />
+              <input
+                className="input"
+                style={{ flex: "0 1 190px", minWidth: 0 }}
+                aria-label="接收方地址"
+                placeholder="接收方地址"
+                value={partyDraft.to}
+                onChange={(event) => setPartyDraft((prev) => ({ ...prev, to: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyToolbar();
+                  }
+                }}
+              />
+              {assetType === "token" ? (
                 <>
                   <input
                     className="input"
-                    style={{ flex: "1 1 220px", minWidth: 0 }}
-                    aria-label="Token 筛选"
-                    placeholder="Token 符号 / 合约地址"
-                    value={tokenDraft}
-                    onChange={(event) => setTokenDraft(event.target.value)}
+                    style={{ flex: "0 1 120px", minWidth: 0 }}
+                    aria-label="最小数量"
+                    placeholder="最小数量"
+                    value={amountDraft.min}
+                    onChange={(event) => setAmountDraft((prev) => ({ ...prev, min: event.target.value }))}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        updateParams({ token: tokenDraft.trim() || null, cursor: null });
+                        applyToolbar();
                       }
                     }}
                   />
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => updateParams({ token: tokenDraft.trim() || null, cursor: null })}
-                  >
-                    应用
-                  </Button>
+                  <input
+                    className="input"
+                    style={{ flex: "0 1 120px", minWidth: 0 }}
+                    aria-label="最大数量"
+                    placeholder="最大数量"
+                    value={amountDraft.max}
+                    onChange={(event) => setAmountDraft((prev) => ({ ...prev, max: event.target.value }))}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        applyToolbar();
+                      }
+                    }}
+                  />
                 </>
               ) : null}
+              <Button size="sm" variant="primary" onClick={applyToolbar}>
+                查询
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setRefreshNonce((value) => value + 1)}>
+                刷新
+              </Button>
+              <label className="s4-list__sub" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={hideZero}
+                  onChange={(event) => updateParams({ hide_zero: event.target.checked ? "1" : null, cursor: null })}
+                />
+                隐藏数量为 0
+              </label>
             </>
           ) : null}
           {tab === "internal" ? (
@@ -569,6 +714,38 @@ export default function AddressDetailPage() {
               {"Token：" + token}
             </FilterChip>
           ) : null}
+          {fromAddress || toAddress ? (
+            <FilterChip
+              removeLabel="移除发送方/接收方筛选"
+              onRemove={() => {
+                setPartyDraft({ from: "", to: "" });
+                updateParams({ from_address: null, to_address: null, cursor: null });
+              }}
+            >
+              {"对手方：" +
+                (fromAddress ? "发送 " + fromAddress.slice(0, 10) + "…" : "") +
+                (toAddress ? " 接收 " + toAddress.slice(0, 10) + "…" : "")}
+            </FilterChip>
+          ) : null}
+          {minAmount || maxAmount ? (
+            <FilterChip
+              removeLabel="移除数量区间"
+              onRemove={() => {
+                setAmountDraft({ min: "", max: "" });
+                updateParams({ min_amount: null, max_amount: null, cursor: null });
+              }}
+            >
+              {"数量：" + (minAmount || "0") + " ~ " + (maxAmount || "∞")}
+            </FilterChip>
+          ) : null}
+          {fromDate || toDate ? (
+            <FilterChip
+              removeLabel="移除日期区间"
+              onRemove={() => updateParams({ from_date: null, to_date: null, cursor: null })}
+            >
+              {"日期：" + (fromDate || "最早") + " ~ " + (toDate || "今天")}
+            </FilterChip>
+          ) : null}
         </FilterBar>
         <Card flush>
           {bulkLoading ? (
@@ -584,14 +761,14 @@ export default function AddressDetailPage() {
           ) : null}
           {tab === "transfers" && assetType === "nft" ? (
             <NftTransferTable
-              rows={bulkRows ?? filtered}
+              rows={bulkRows ?? visible}
               chain={chain}
               loading={activity.loading || bulkLoading}
               onSelectActivity={setSelectedActivity}
             />
           ) : (
             <ActivityTable
-              rows={bulkRows ?? filtered}
+              rows={bulkRows ?? visible}
               chain={chain}
               loading={activity.loading || bulkLoading}
               emptyTitle={"没有 " + activityTitle + " 记录"}
@@ -619,7 +796,7 @@ export default function AddressDetailPage() {
                       回到最新
                     </Button>
                   ) : null}
-                  <span className="cs-section__count">本页 {filtered.length} 行</span>
+                  <span className="cs-section__count">本页 {visible.length} 行</span>
                   <Button size="sm" busy={bulkLoading} busyLabel="加载中…" onClick={() => void loadAllActivity()}>
                     加载全量（最多 10,000 行）
                   </Button>

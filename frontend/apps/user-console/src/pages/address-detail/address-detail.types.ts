@@ -12,6 +12,7 @@
 
 export interface Asset {
   token_symbol?: string;
+  /** 代币图标（平台自托管路径，CSP 只允许同源图；为空时前端用首字母兜底）。 */
   token_name?: string;
   token_address?: string;
   token_type?: string;
@@ -86,12 +87,17 @@ export interface ActivityRow {
   counterparty?: string;
   direction?: string;
   activity_type?: string;
+  /** 交易方法名（transactions.method_name，活动读按本页哈希回填；为空前端显示 Transfer）。 */
+  method_name?: string;
+  method_id?: string;
   timestamp?: string;
   block_number?: number;
   tx_hash?: string;
   log_index?: number;
   token_address?: string;
   token_symbol?: string;
+  /** 代币图标（平台自托管路径；CSP 只允许同源图，为空时前端用首字母兜底）。 */
+  token_logo?: string;
   /** NFT 转账的合集名（来自 nft_transfers.token_name）。 */
   token_name?: string;
   token_decimals?: number;

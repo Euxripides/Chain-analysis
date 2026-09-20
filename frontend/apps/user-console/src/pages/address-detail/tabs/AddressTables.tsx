@@ -9,6 +9,7 @@
  * 普通交易 / Token Transfer / Internal 共用 ActivityTable），因此放在共享模块里，
  * 而不是复制三份——Tab 的 key 与顺序仍由 address-detail.types.ts 的 TABS 单一来源决定。
  */
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Amount, CopyButton, DataTable, EmptyState, HashValue, StatusBadge, statusToneFor, Card, PageSection, KeyValueList, MetricCard } from "@chain/ui";
 
@@ -42,6 +43,209 @@ export function EntityHash({
     </span>
   );
 }
+
+/**
+ * OKLink 风格排版助手（列表对齐参考站点：交易哈希 / 方法 / 时间 / 发送方 / 接收方 / 数量 / 代币）。
+ * 纯展示函数，不含业务判断。
+ */
+
+/** 时间统一为 YYYY/MM/DD HH:mm:ss。 */
+function okTime(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const part = (input: number) => String(input).padStart(2, "0");
+  return (
+    date.getFullYear() +
+    "/" +
+    part(date.getMonth() + 1) +
+    "/" +
+    part(date.getDate()) +
+    " " +
+    part(date.getHours()) +
+    ":" +
+    part(date.getMinutes()) +
+    ":" +
+    part(date.getSeconds())
+  );
+}
+
+/** 整数千分位。 */
+function groupDigits(value: string): string {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * 原始整数 + 精度 → 千分位文本。
+ *
+ * 小数最多展示 8 位：Solana 的 38 位精度尾巴只保留有效头部，避免撑破单元格。
+ * 非纯数字（例如已经格式化好的 amount）原样返回。
+ */
+function amountText(raw?: string, decimals?: number): string {
+  const digits = (raw ?? "").trim();
+  if (!digits) return "";
+  if (!/^\d+$/.test(digits)) return digits;
+  const scale = Math.max(0, Math.min(decimals ?? 0, 36));
+  const padded = digits.padStart(scale + 1, "0");
+  const integer = padded.slice(0, padded.length - scale);
+  const fraction = scale > 0 ? padded.slice(padded.length - scale).replace(/0+$/, "").slice(0, 8) : "";
+  return groupDigits(integer) + (fraction ? "." + fraction : "");
+}
+
+/** 金额前缀：流入 +、流出 −（与 OKLink 一致），自转不带符号。 */
+function amountSign(direction?: string): string {
+  if (direction === "in") return "+";
+  if (direction === "out") return "−";
+  return "";
+}
+
+/** 转账双方：NFT 行直接带 from/to，活动行需要按方向推导。 */
+function transferParties(row: ActivityRow): { from?: string; to?: string } {
+  if (row.from_address || row.to_address) {
+    return { from: row.from_address, to: row.to_address };
+  }
+  const own = row.address;
+  const other = row.counterparty;
+  if (row.direction === "out") return { from: own, to: other };
+  if (row.direction === "in") return { from: other, to: own };
+  return { from: other ?? own, to: own };
+}
+
+/** 代币图标：只认同源自托管路径（CSP img-src 不允许外链图），否则退回首字母。 */
+function TokenLogo({ logo, symbol, size = 20 }: { logo?: string; symbol?: string; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  const src = logo && logo.startsWith("/") ? logo : "";
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flex: "0 0 auto" }}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  const letter = (symbol ?? "").trim().slice(0, 1).toUpperCase() || "?";
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        flex: "0 0 auto",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: Math.round(size * 0.55),
+        fontWeight: 600,
+        color: "var(--text-secondary, #64748b)",
+        background: "var(--bg-subtle, #f1f5f9)",
+      }}
+    >
+      {letter}
+    </span>
+  );
+}
+
+/** 主体地址所在侧的方向标签（Out / In），非主体侧不显示。 */
+function SideTag({ direction, side }: { direction?: string; side: "from" | "to" }) {
+  if (direction !== "in" && direction !== "out" && direction !== "self") return null;
+  const subjectSide = direction === "self" || (direction === "out" && side === "from") || (direction === "in" && side === "to");
+  if (!subjectSide) return null;
+  const tone = direction === "in" ? "var(--success, #16a34a)" : direction === "out" ? "var(--danger, #dc2626)" : "var(--text-secondary, #64748b)";
+  const label = direction === "in" ? "In" : direction === "out" ? "Out" : "Self";
+  return (
+    <span
+      style={{
+        marginLeft: 4,
+        padding: "0 4px",
+        fontSize: 10,
+        lineHeight: "14px",
+        borderRadius: 3,
+        border: "1px solid " + tone,
+        color: tone,
+        flex: "0 0 auto",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** 发送方 / 接收方单元格：地址 + 复制 + 主体侧方向标签。 */
+function PartyCell({
+  value,
+  chain,
+  side,
+  direction,
+}: {
+  value?: string;
+  chain: string;
+  side: "from" | "to";
+  direction?: string;
+}) {
+  if (!value) return <span>—</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", minWidth: 0 }}>
+      <EntityHash
+        value={value}
+        to={addressPath(chain, value)}
+        label={side === "from" ? "发送方地址" : "接收方地址"}
+        head={8}
+        tail={6}
+      />
+      <SideTag direction={direction} side={side} />
+    </span>
+  );
+}
+
+/** 代币单元格：图标 + 符号 +（代币全称 | NFT 的 #编号 · 标准）。 */
+function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
+  const fallback = row.token_address ? shortValue(row.token_address, 6, 4) : "原生代币";
+  const primary = nft
+    ? row.token_name || row.token_symbol || shortValue(row.contract_address ?? row.token_address ?? "", 6, 4) || "NFT"
+    : row.token_symbol || fallback;
+  const secondary = nft
+    ? "#" + (row.token_id || "—") + (row.token_standard ? " · " + row.token_standard : "")
+    : row.token_name || "";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
+      <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {primary}
+        </span>
+        {secondary ? (
+          <span className="s4-list__sub" title={secondary}>
+            {secondary}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+/** 数量单元格：符号 + 千分位 + 法币估值。 */
+function AmountCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
+  const raw = nft ? row.amount_raw || "1" : row.amount_raw ?? row.amount;
+  const text = amountText(raw, nft ? 0 : row.token_decimals);
+  const sign = amountSign(row.direction);
+  const fiat = fiatText(row.amount_usd);
+  const color = row.direction === "in" ? "var(--success, #16a34a)" : row.direction === "out" ? "var(--danger, #dc2626)" : undefined;
+  return (
+    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 0 }}>
+      <span className="mono" title={raw ?? ""} style={{ color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {text ? sign + text : "—"}
+      </span>
+      {fiat ? <span className="s4-list__sub">{fiat}</span> : null}
+    </span>
+  );
+}
+
 
 export function CurrentBalanceTable({ items }: { items: Asset[] }) {
   return (
@@ -183,20 +387,22 @@ export function NetFlowTable({ items }: { items: NetFlowAsset[] }) {
   );
 }
 
-export function ActivityTable({
-  rows,
-  chain,
-  loading,
-  emptyTitle = "没有活动记录",
-  onSelectActivity,
-}: {
+interface TransferTableProps {
   rows: ActivityRow[];
   chain: string;
   loading?: boolean;
   emptyTitle?: string;
   /** 行激活只负责"选中到检查器"；跳转仍由行内明确链接承担（蓝图 §8.4）。 */
   onSelectActivity?: (row: ActivityRow) => void;
-}) {
+}
+
+/**
+ * 转账/活动表主体（代币与 NFT 共用列形状，仅"代币"列语义不同）。
+ *
+ * 列顺序对齐参考站点：交易哈希 / 方法 / 时间 / 发送方 / 接收方 / 数量 / 代币。
+ * 纯展示：不发请求、不改状态；来源与原始量在行检查器里查看。
+ */
+function TransferTable({ rows, chain, loading, emptyTitle = "没有活动记录", onSelectActivity, nft }: TransferTableProps & { nft: boolean }) {
   return (
     <DataTable<ActivityRow>
       rows={rows}
@@ -208,6 +414,8 @@ export function ActivityTable({
         "-" +
         (row.activity_type ?? "") +
         "-" +
+        (row.token_id ?? "") +
+        "-" +
         (row.counterparty ?? "") +
         "-" +
         (row.token_address ?? "")
@@ -215,157 +423,77 @@ export function ActivityTable({
       empty={<EmptyState title={emptyTitle} />}
       onRowActivate={onSelectActivity}
       rowActivateLabel={(row) =>
-        "在检查器中查看 " + formatTime(row.timestamp) + " 的 " + (row.activity_type || "活动") + " 详情"
+        "在检查器中查看 " + okTime(row.timestamp) + " 的 " + (row.activity_type || "活动") + " 详情"
       }
       columns={[
-        { key: "time", header: "时间", width: "160px", render: (row) => <span>{formatTime(row.timestamp)}</span> },
         {
-          key: "direction",
-          header: "方向",
-          width: "78px",
-          render: (row) => <StatusBadge tone={directionTone(row.direction)}>{row.direction || "—"}</StatusBadge>,
-        },
-        { key: "type", header: "类型", width: "100px", render: (row) => <span>{row.activity_type || "—"}</span> },
-        {
-          key: "counterparty",
-          header: "对手方",
+          key: "tx",
+          header: "交易哈希",
           width: "150px",
           render: (row) =>
-            row.counterparty ? (
-              <EntityHash value={row.counterparty} to={addressPath(chain, row.counterparty)} label="对手方地址" />
+            row.tx_hash ? (
+              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" head={8} tail={6} />
             ) : (
               <span>—</span>
             ),
         },
         {
-          key: "asset",
-          header: "资产",
-          width: "150px",
+          key: "method",
+          header: "方法",
+          width: "92px",
           render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <div>{row.token_symbol || (row.token_address ? shortValue(row.token_address, 8, 6) : "原生")}</div>
-              {row.token_address ? (
-                <div className="s4-list__sub">
-                  <HashValue value={row.token_address} label="Token 合约地址" head={8} tail={6} />
-                </div>
-              ) : null}
-            </div>
+            <span title={row.method_name || "Transfer"}>{row.method_name || (nft ? "Transfer" : "Transfer")}</span>
           ),
+        },
+        { key: "time", header: "时间", width: "148px", render: (row) => <span>{okTime(row.timestamp)}</span> },
+        {
+          key: "from",
+          header: "发送方",
+          width: "158px",
+          render: (row) => {
+            const parties = transferParties(row);
+            return <PartyCell value={parties.from} chain={chain} side="from" direction={row.direction} />;
+          },
+        },
+        {
+          key: "to",
+          header: "接收方",
+          width: "158px",
+          render: (row) => {
+            const parties = transferParties(row);
+            return <PartyCell value={parties.to} chain={chain} side="to" direction={row.direction} />;
+          },
         },
         {
           key: "amount",
-          header: "金额",
+          header: "数量",
           align: "right",
-          render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <Amount
-                rawAmount={row.amount_raw}
-                decimals={row.token_decimals}
-                unit={row.token_symbol}
-                direction={amountDirection(row.direction)}
-                fiat={fiatText(row.amount_usd)}
-              />
-              <div className="s4-list__sub mono" title={row.amount_raw}>
-                raw {row.amount_raw ?? "—"}
-              </div>
-            </div>
-          ),
+          width: "132px",
+          render: (row) => <AmountCell row={row} nft={nft} />,
         },
         {
-          key: "tx",
-          header: "tx_hash",
-          width: "150px",
-          render: (row) =>
-            row.tx_hash ? <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" /> : <span>—</span>,
-        },
-        {
-          key: "source",
-          header: "来源",
-          width: "140px",
-          render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <div>{row.source_provider || "—"}</div>
-              {row.dataset ? <div className="s4-list__sub">{row.dataset}</div> : null}
-            </div>
-          ),
+          key: "token",
+          header: "代币",
+          width: "190px",
+          render: (row) => <TokenCell row={row} nft={nft} />,
         },
       ]}
     />
   );
 }
 
+/** 代币转账表（读取面 /activity，asset_type=token）。 */
+export function ActivityTable(props: TransferTableProps) {
+  return <TransferTable {...props} nft={false} />;
+}
+
 /**
  * NFT 转账表（读取面 /activity?asset_type=nft）。
  *
- * 列对齐参考样式：交易哈希 / 时间 / 发送方 / 接收方 / 数量 / 代币（合集 + token_id + 标准）。
- * 纯展示组件：只接收已取好的行，不发请求、不做业务判断（与 ActivityTable 同一约定）。
+ * 与代币表同列形状，差别只在"代币"列展示合集名 + #token_id + 标准。
  */
-export function NftTransferTable({
-  rows,
-  chain,
-  loading,
-  emptyTitle = "没有 NFT 转账记录",
-  onSelectActivity,
-}: {
-  rows: ActivityRow[];
-  chain: string;
-  loading?: boolean;
-  emptyTitle?: string;
-  onSelectActivity?: (row: ActivityRow) => void;
-}) {
-  return (
-    <DataTable<ActivityRow>
-      rows={rows}
-      loading={loading}
-      rowKey={(row, index) => (row.tx_hash ?? "tx") + "-" + (row.log_index ?? index) + "-" + (row.token_id ?? "")}
-      empty={<EmptyState title={emptyTitle} />}
-      onRowActivate={onSelectActivity}
-      rowActivateLabel={(row) => "在检查器中查看 " + formatTime(row.timestamp) + " 的 NFT 转账详情"}
-      columns={[
-        {
-          key: "tx",
-          header: "交易哈希",
-          width: "170px",
-          render: (row) =>
-            row.tx_hash ? (
-              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" />
-            ) : (
-              <span>—</span>
-            ),
-        },
-        { key: "time", header: "时间", width: "160px", render: (row) => <span>{formatTime(row.timestamp)}</span> },
-        {
-          key: "from",
-          header: "发送方",
-          width: "170px",
-          render: (row) =>
-            row.from_address ? <HashValue value={row.from_address} label="发送方地址" head={8} tail={6} /> : <span>—</span>,
-        },
-        {
-          key: "to",
-          header: "接收方",
-          width: "170px",
-          render: (row) =>
-            row.to_address ? <HashValue value={row.to_address} label="接收方地址" head={8} tail={6} /> : <span>—</span>,
-        },
-        { key: "amount", header: "数量", align: "right", render: (row) => <span className="mono">{row.amount_raw ?? "—"}</span> },
-        {
-          key: "nft",
-          header: "代币",
-          width: "220px",
-          render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <div>{row.token_name || row.token_symbol || shortValue(row.contract_address, 8, 6)}</div>
-              <div className="s4-list__sub mono">
-                {"#" + (row.token_id || "—")}
-                {row.token_standard ? " · " + row.token_standard : ""}
-              </div>
-            </div>
-          ),
-        },
-      ]}
-    />
-  );
+export function NftTransferTable(props: TransferTableProps) {
+  return <TransferTable {...props} nft={true} />;
 }
 
 export function CounterpartyTable({
