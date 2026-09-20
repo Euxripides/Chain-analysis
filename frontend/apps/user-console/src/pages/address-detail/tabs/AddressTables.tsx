@@ -208,15 +208,44 @@ function PartyCell({
 }
 
 /**
- * 未验证代币警示标（列表里符号前的小三角）。
+ * 代币"可疑"判定 —— 列表警示框与警示三角的**唯一样子**。
+ *
+ * 口径只看**解析质量**，不看"是否人工审核过"：
+ *   - conflict / partial / unknown（含压根没有元数据）→ 可疑，挂框；
+ *   - complete → 正常，不挂框。未人工审核 ≠ 可疑：库里 36k 行里只有 1 行被人工标为
+ *     verified，若按"未审核即警示"，整页都是虚线框，警示本身就没有信息量了；
+ *   - token_verified=true（人工白名单）永远不挂；
+ *   - 原生币（无合约地址）与 NFT 合集不参与。
+ */
+const SUSPICIOUS_TOKEN_STATUS = new Set(["conflict", "partial", "unknown"]);
+
+/** 可疑原因 → 悬停说明（写清"为什么可疑"，而不是只给一个感叹号）。 */
+const SUSPICIOUS_REASON: Record<string, string> = {
+  conflict: "多个来源的元数据互相矛盾，符号/名称可能被篡改或重名",
+  partial: "元数据只解析到一部分，名称或精度可能缺失",
+  unknown: "尚未解析到元数据，符号与名称来自合约自报",
+};
+
+function tokenSuspicion(row: ActivityRow): string {
+  if (!row.token_address || row.token_verified === true) return "";
+  const status = (row.token_metadata_status ?? "").trim().toLowerCase();
+  if (!status) return "unknown";
+  return SUSPICIOUS_TOKEN_STATUS.has(status) ? status : "";
+}
+
+/**
+ * 可疑代币警示标（列表里符号前的小三角）。
  *
  * 为什么需要：代币符号是**合约自报**的，任何人都能发一个叫 USDT 的合约；
- * 参考站点在未审核代币旁挂警示三角，我们也照做，避免用户把山寨符号当成官方资产。
- * 判定用 explorer enrich 回填的 token_verified；没有该字段（NFT 行等）不显示。
+ * 参考站点在可疑代币旁同时给"虚线警示框 + 三角"，我们也照做。
  */
-function UnverifiedMark({ verified, symbol }: { verified?: boolean; symbol?: string }) {
-  if (verified !== false) return null;
-  const title = (symbol ? symbol + " " : "") + "未通过平台元数据审核：符号与名称来自合约自报，请核对合约地址。";
+function UnverifiedMark({ reason, symbol }: { reason?: string; symbol?: string }) {
+  if (!reason) return null;
+  const title =
+    (symbol ? symbol + " " : "") +
+    "代币元数据可疑：" +
+    (SUSPICIOUS_REASON[reason] ?? "来源不明") +
+    "。请核对合约地址。";
   return (
     <span title={title} aria-label={title} style={{ display: "inline-flex", flex: "0 0 auto", color: "#f59e0b" }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -237,9 +266,9 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const secondary = nft
     ? "#" + (row.token_id || "—") + (row.token_standard ? " · " + row.token_standard : "")
     : row.token_name || "";
-  // 未通过元数据审核的代币整格加虚线警示框（参考站点样式）：有合约地址却没有
-  // "已审核"标记就是未官方；原生币与 NFT 合集不加。
-  const unverified = Boolean(row.token_address) && row.token_verified !== true;
+  // 可疑代币（解析冲突/不完整/未知）整格加虚线警示框（参考站点样式）。
+  const suspicion = tokenSuspicion(row);
+  const unverified = Boolean(suspicion);
   return (
     <span
       style={{
@@ -261,7 +290,7 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
       <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, maxWidth: 122 }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-          <UnverifiedMark verified={unverified ? false : true} symbol={row.token_symbol || primary} />
+          <UnverifiedMark reason={suspicion} symbol={row.token_symbol || primary} />
           <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {primary}
           </span>

@@ -69,21 +69,14 @@ const rowText = await page.evaluate(() => {
 check("数量列有千分位/符号", /^[+−-][\d,]/.test((rowText[rowText.length - 2] || "").trim()), JSON.stringify(rowText));
 check("代币列有符号+全称", /[A-Z]{2,}/.test(rowText[rowText.length - 1] || ""), JSON.stringify(rowText[rowText.length - 1] ?? ""));
 check("发送方列带 Out/In 标签", /Out|In/.test((rowText[3] || "") + (rowText[4] || "")), JSON.stringify(rowText.slice(3, 5)));
-check(
-  "未验证代币整格带虚线警示框",
-  await page.evaluate(() =>
-    Array.from(document.querySelectorAll("td span")).some((el) => {
+const dashedCells = () =>
+  page.evaluate(() =>
+    Array.from(document.querySelectorAll("td span")).filter((el) => {
       const style = getComputedStyle(el);
       return style.borderStyle === "dashed" && style.borderTopWidth !== "0px";
-    }),
-  ),
-  "",
-);
-check(
-  "未验证代币有警示三角",
-  (await page.locator('[aria-label*="未通过平台元数据审核"]').count()) > 0,
-  String(await page.locator('[aria-label*="未通过平台元数据审核"]').count()),
-);
+    }).length,
+  );
+check("解析完整的代币不挂警示框（eth 页）", (await dashedCells()) === 0, String(await dashedCells()));
 await page.screenshot({ path: "/tmp/ok2-token-wide.png", fullPage: false });
 
 // --- NFT 模式 ---
@@ -103,6 +96,41 @@ check("NFT 行：时间 YYYY/MM/DD", /\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/.tes
 check("NFT 行：双方地址 + Out/In 标签", /0xfe34/.test(nftRow[3] ?? "") && /0x26db/.test(nftRow[4] ?? "") && /Out/.test(nftRow[3] ?? ""), JSON.stringify(nftRow.slice(3, 5)));
 check("NFT 行：合集 + #编号 + 标准", /BAYC|BoredApe/.test(nftRow[6] ?? "") && /4937/.test(nftRow[6] ?? "") && /ERC721/.test(nftRow[6] ?? ""), nftRow[6] ?? "");
 await page.screenshot({ path: "/tmp/ok2-nft-wide.png", fullPage: false });
+// --- 可疑代币（metadata_status=partial）必须挂框 ---
+// 这个 eth 地址持有 metadata_status=partial 的代币（0xc1436f…，2017 年的转账），
+// 且只有 12 行，加载快；bsc 那个地址走全量窗口会撞 40s 交互预算，验收不稳定。
+await page.goto("https://127.0.0.1:8448/app-v2/addresses/eth/0x0123456789abcdef0123456789abcdef01234567?tab=transfers", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.selectOption('select[aria-label="时间窗筛选"]', "0").catch(() => {});
+// 这个 bsc 地址要走全量窗口（40s 交互预算内），比 eth 的首屏慢得多：
+// 必须等真实行出现再继续，否则读到的是骨架屏（0 行）。
+await page
+  .waitForFunction(() => document.querySelectorAll("table.table tbody tr").length > 0, { timeout: 60000 })
+  .catch(() => {});
+await page.waitForTimeout(1500);
+// 表格是视口虚拟化的：可疑行在最底部（时间最旧），必须先滚到底再数，
+// 否则查到的永远只有首屏那几十行 DOM。
+const scrollTable = async () => {
+  await page.evaluate(() => {
+    const el = document.querySelector(".table-scroll");
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(800);
+};
+await scrollTable();
+let suspiciousDashed = await dashedCells();
+if (suspiciousDashed === 0) {
+  // 再滚一屏，兼容"底部行还没渲染完"的时序
+  await scrollTable();
+  suspiciousDashed = await dashedCells();
+}
+check("可疑代币（partial）挂虚线警示框", suspiciousDashed > 0, "dashed=" + suspiciousDashed);
+check(
+  "可疑代币带警示三角（title 说明原因）",
+  (await page.locator('[aria-label*="代币元数据可疑"]').count()) > 0,
+  String(await page.locator('[aria-label*="代币元数据可疑"]').count()),
+);
+await page.screenshot({ path: "/tmp/ok4-suspicious.png", fullPage: false });
 check("无页面级 JS 错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 await ctx.close();
 await browser.close();
