@@ -514,6 +514,9 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 			Token:     strings.TrimSpace(r.URL.Query().Get("token")),
 			MinAmount: strings.TrimSpace(r.URL.Query().Get("min_amount")),
 			MaxAmount: strings.TrimSpace(r.URL.Query().Get("max_amount")),
+			// 发送方/接收方过滤（OKLink 式工具栏）：查询层早已支持，此前 handler 从不透传。
+			FromAddress: strings.TrimSpace(r.URL.Query().Get("from_address")),
+			ToAddress:   strings.TrimSpace(r.URL.Query().Get("to_address")),
 			// P1-1 第 3 项：活动是长表路径（实测 8.09s @ limit=200，全量窗口）。服务层的
 			// Filter 早已支持时间窗（service.go 会把它写成 WHERE timestamp >=/<= ），
 			// 只是 handler 从来没有把这两个参数透传进来，前端也就只能全量拉。
