@@ -2944,3 +2944,28 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   }
 }
 
+
+/* 让关键文字同时满足旧规范 §8.2 与新规范 §7.1 的下限（超出下限是允许的）：
+   章节标题 16px、Dataset 标签 14px、指标数值 20px；用 head 间距与 idle 内边距换回高度。 */
+@media (min-width: 1200px) {
+  .dl-section-head {
+    margin-bottom: 4px;
+  }
+
+  .dl-section-head__title {
+    font-size: 16px;
+  }
+
+  .dl-dataset-card__label {
+    font-size: 14px;
+  }
+
+  .dl-preview-metric__value {
+    font-size: 20px;
+  }
+
+  .dl-coverage--idle {
+    padding: 4px 10px;
+  }
+}
+
