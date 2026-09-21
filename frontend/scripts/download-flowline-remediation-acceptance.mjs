@@ -1697,12 +1697,14 @@ async function runDialogContract(browser) {
   const pageCss = await readFile(join(here, "apps/user-console/src/pages/downloads/download-new.css"), "utf8");
   const overrides = pageCss
     .split("\n")
-    .filter((line) => line.includes(".cs-dialog") && !line.trim().startsWith("/*") && !line.includes(":has("));
+    .filter((line) => line.includes(".cs-dialog") && !/^\s*(\/\*|\*)/.test(line) && !line.includes(":has("));
   result.css_override_lines = overrides;
   if (overrides.some((line) => /duration|animation|transition|\{/.test(line))) {
     problem("[dialog] 下载页 CSS 覆盖了共享 .cs-dialog 规则：" + JSON.stringify(overrides));
   }
-  result.scoped_has_rule_only = overrides.every((line) => line.includes(":has(.dl-dialog)"));
+  /* 只允许 :has(.dl-dialog) 限定的尺寸规则；其余 .cs-dialog 命中一律算越界。 */
+  result.scoped_has_rule_only = overrides.length === 0;
+  result.has_scoped_size_rules = pageCss.includes(".cs-dialog:has(.dl-dialog)");
 
   const { context, page } = await openPage(browser, { width: 1440, height: 900 });
   try {
@@ -1712,16 +1714,46 @@ async function runDialogContract(browser) {
     }));
     result.tokens = tokens;
     const dialog = await runPreviewFlow(page);
-    const durations = await dialog.evaluate((node) => {
-      const content = node.querySelector(".ant-modal-content");
-      const style = content ? getComputedStyle(content) : null;
-      return {
-        panelAnimationDuration: style ? style.animationDuration : null,
-        panelTransitionDuration: style ? style.transitionDuration : null,
-        maskBackdrop: (() => { const mask = document.querySelector(".ant-modal-mask"); return mask ? getComputedStyle(mask).backdropFilter : null; })(),
+    /*
+     * REM-009：权威时长来自共享 renderer（motion.css），不是本页 CSS。
+     * 真实动画节点在动画结束后不再报告 transition（会读到 0s），因此这里用
+     * "把共享状态类挂到探针元素上读 computed style" 的方式量共享样式表的实际生效值：
+     *   面板进入 220ms（--cs-dur-standard）/ 面板退出 160ms / 遮罩 160ms。
+     */
+    const durations = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.position = "absolute";
+      probe.style.left = "-9999px";
+      document.body.appendChild(probe);
+      const read = (className) => {
+        probe.className = className;
+        const style = getComputedStyle(probe);
+        return style.transitionDuration;
       };
+      const result = {
+        panelEnter: read("cs-dialog-enter-active"),
+        panelExit: read("cs-dialog-leave-active"),
+        maskEnter: read("cs-dialog-mask-enter-active"),
+        maskExit: read("cs-dialog-mask-leave-active"),
+        panelTransitionProperty: (() => {
+          probe.className = "cs-dialog-enter-active";
+          return getComputedStyle(probe).transitionProperty;
+        })(),
+      };
+      probe.remove();
+      const mask = document.querySelector(".ant-modal-mask");
+      result.maskBackdrop = mask ? getComputedStyle(mask).backdropFilter : null;
+      return result;
     });
     result.durations = durations;
+    const ms = (value) => (String(value).split(",")[0].trim().endsWith("ms") ? Number.parseFloat(value) : Number.parseFloat(value) * 1000);
+    if (ms(durations.panelEnter) !== 220) problem("[dialog] 面板进入时长 " + durations.panelEnter + " != 220ms（共享 --cs-dur-standard）");
+    if (ms(durations.panelExit) !== 160) problem("[dialog] 面板退出时长 " + durations.panelExit + " != 160ms");
+    if (ms(durations.maskEnter) !== 160 || ms(durations.maskExit) !== 160) {
+      problem("[dialog] 遮罩时长 " + durations.maskEnter + " / " + durations.maskExit + " != 160ms");
+    }
+    if (durations.maskBackdrop && durations.maskBackdrop !== "none") problem("[dialog] 遮罩仍使用 backdrop-filter：" + durations.maskBackdrop);
     await dialog.getByRole("button", { name: "知道了" }).click();
     await page.waitForTimeout(400);
     const residue = await page.evaluate(() => ({
