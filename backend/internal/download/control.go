@@ -74,53 +74,63 @@ func (sc *Scheduler) planCreatedJobs(ctx context.Context) {
 }
 
 func (sc *Scheduler) convergePauseCancel(ctx context.Context) {
-	jobs, err := sc.store.ListJobs(ctx, "", 200, 0)
-	if err != nil {
-		return
+	// 必须按状态分别取，而不是 ListJobs("", 200, 0)：后者按 created_at DESC 只返回
+	// 最新 200 个任务，超过 200 个更新任务之后的历史 PAUSE_REQUESTED /
+	// CANCEL_REQUESTED 永远扫不到（现场 DL-20260907-0106：210 个更新的任务把它挡在
+	// 窗口外，取消请求永远不收敛）。按状态取时每个状态有自己的窗口。
+	for _, status := range []string{model.JobPauseReq, model.JobCancelReq} {
+		jobs, err := sc.store.ListJobs(ctx, status, 200, 0)
+		if err != nil {
+			continue
+		}
+		for i := range jobs {
+			sc.convergePauseCancelJob(ctx, jobs[i])
+		}
 	}
-	for i := range jobs {
-		j := jobs[i]
-		switch j.Status {
-		case model.JobPauseReq:
-			var active, leftovers int64
-			_ = sc.store.Pool.QueryRow(ctx,
-				"SELECT COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING')), "+
-					"COUNT(*) FILTER (WHERE status IN ('FETCHED','INGESTED')) "+
-					"FROM download_shards WHERE job_id=$1", j.ID).Scan(&active, &leftovers)
-			// 暂停收敛只允许"正在被处理"的 Shard 阻塞；FETCHED/INGESTED 残留
-			// 只有在宽限期内才算阻塞。否则一个永远无法完成的 Shard（例如原始
-			// spool 文件已丢失）会把任务永久钉在 PAUSE_REQUESTED，用户既不能
-			// 完成暂停也不能恢复（现场 DL-20260909-0001，2026-09-08 起）。
-			var sinceRequest time.Duration
-			haveRequestTime := false
-			if leftovers > 0 {
-				var requestedAt time.Time
-				if err := sc.store.Pool.QueryRow(ctx, "SELECT updated_at FROM download_jobs WHERE id=$1", j.ID).Scan(&requestedAt); err == nil {
-					sinceRequest = time.Since(requestedAt)
-					haveRequestTime = true
-				}
+}
+
+// convergePauseCancelJob 收敛单个 PAUSE_REQUESTED / CANCEL_REQUESTED 任务。
+func (sc *Scheduler) convergePauseCancelJob(ctx context.Context, j model.DownloadJob) {
+	switch j.Status {
+	case model.JobPauseReq:
+		var active, leftovers int64
+		_ = sc.store.Pool.QueryRow(ctx,
+			"SELECT COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING')), "+
+				"COUNT(*) FILTER (WHERE status IN ('FETCHED','INGESTED')) "+
+				"FROM download_shards WHERE job_id=$1", j.ID).Scan(&active, &leftovers)
+		// 暂停收敛只允许"正在被处理"的 Shard 阻塞；FETCHED/INGESTED 残留
+		// 只有在宽限期内才算阻塞。否则一个永远无法完成的 Shard（例如原始
+		// spool 文件已丢失）会把任务永久钉在 PAUSE_REQUESTED，用户既不能
+		// 完成暂停也不能恢复（现场 DL-20260909-0001，2026-09-08 起）。
+		var sinceRequest time.Duration
+		haveRequestTime := false
+		if leftovers > 0 {
+			var requestedAt time.Time
+			if err := sc.store.Pool.QueryRow(ctx, "SELECT updated_at FROM download_jobs WHERE id=$1", j.ID).Scan(&requestedAt); err == nil {
+				sinceRequest = time.Since(requestedAt)
+				haveRequestTime = true
 			}
-			blocked := pauseBlocksConvergence(active, leftovers, sinceRequest, haveRequestTime)
-			if !blocked {
-				if err := sc.store.SetJobStatus(ctx, j.ID, model.JobPaused); err == nil {
-					sc.publish("events.jobs."+j.ID, map[string]any{
-						"type": "job_status", "job_id": j.ID, "status": model.JobPaused, "ts": time.Now(),
-					})
-				}
+		}
+		blocked := pauseBlocksConvergence(active, leftovers, sinceRequest, haveRequestTime)
+		if !blocked {
+			if err := sc.store.SetJobStatus(ctx, j.ID, model.JobPaused); err == nil {
+				sc.publish("events.jobs."+j.ID, map[string]any{
+					"type": "job_status", "job_id": j.ID, "status": model.JobPaused, "ts": time.Now(),
+				})
 			}
-		case model.JobCancelReq:
-			_, _ = sc.store.Pool.Exec(ctx,
-				"UPDATE download_shards SET status='CANCELLED', updated_at=now() "+
-					"WHERE job_id=$1 AND status NOT IN ('COMPLETED','CANCELLED','LEASED','RUNNING')", j.ID)
-			var active int64
-			_ = sc.store.Pool.QueryRow(ctx,
-				"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING','FETCHED','INGESTED')", j.ID).Scan(&active)
-			if active == 0 {
-				if err := sc.store.SetJobStatus(ctx, j.ID, model.JobCancelled); err == nil {
-					sc.publish("events.jobs."+j.ID, map[string]any{
-						"type": "job_status", "job_id": j.ID, "status": model.JobCancelled, "ts": time.Now(),
-					})
-				}
+		}
+	case model.JobCancelReq:
+		_, _ = sc.store.Pool.Exec(ctx,
+			"UPDATE download_shards SET status='CANCELLED', updated_at=now() "+
+				"WHERE job_id=$1 AND status NOT IN ('COMPLETED','CANCELLED','LEASED','RUNNING')", j.ID)
+		var active int64
+		_ = sc.store.Pool.QueryRow(ctx,
+			"SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING','FETCHED','INGESTED')", j.ID).Scan(&active)
+		if active == 0 {
+			if err := sc.store.SetJobStatus(ctx, j.ID, model.JobCancelled); err == nil {
+				sc.publish("events.jobs."+j.ID, map[string]any{
+					"type": "job_status", "job_id": j.ID, "status": model.JobCancelled, "ts": time.Now(),
+				})
 			}
 		}
 	}
