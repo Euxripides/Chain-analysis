@@ -152,8 +152,14 @@ func actionRequestSchema(id string) map[string]any {
 				"required":             []string{"type"},
 				"properties": map[string]any{
 					"type": map[string]any{"type": "string", "enum": []string{"full", "block", "time"}},
-					"from": map[string]any{"type": []string{"string", "integer", "null"}},
-					"to":   map[string]any{"type": []string{"string", "integer", "null"}},
+					// block 区间用 from_block/to_block（整数，含端点）；time 区间用
+					// from/to（RFC3339）。旧 schema 只写了 from/to 且允许 integer，
+					// 按它传 block 区间会命中 dataset.RangeSpec 的 time.Time 解析并
+					// 返回 400 Time.UnmarshalJSON（并非下载失败）。
+					"from_block": map[string]any{"type": []string{"integer", "null"}, "description": "Inclusive first block; required when type=block."},
+					"to_block":   map[string]any{"type": []string{"integer", "null"}, "description": "Inclusive last block; required when type=block."},
+					"from":       map[string]any{"type": []string{"string", "null"}, "format": "date-time", "description": "Inclusive start time (RFC3339); required when type=time."},
+					"to":         map[string]any{"type": []string{"string", "null"}, "format": "date-time", "description": "Inclusive end time (RFC3339); required when type=time."},
 				},
 			},
 			"performance_mode": map[string]any{"type": "string", "enum": []string{"safe", "fast", "turbo"}, "default": "fast"},
