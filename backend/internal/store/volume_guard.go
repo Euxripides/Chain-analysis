@@ -102,8 +102,13 @@ func (s *Store) RecordVolumeCommit(ctx context.Context, sh model.Shard, pageNo i
 		return model.VolumeGuard{}, false, err
 	}
 	if newlyTriggered {
+		// $3 必须显式 ::text：jsonb_build_object 是 variadic "any"，Postgres 无法从
+		// 上下文推断该参数类型，预编译直接报 42P18 could not determine data type of
+		// parameter $3。触发路径整笔事务回滚 => volume guard 永远无法把数据集置为
+		// WAITING_USER_CONFIRMATION，也永远无法暂停超预算的 TRON 地址（只会每页刷
+		// 一条 ERROR）。现场：DL-20260908-0049 / DL-20260921-0045 共 6.3 万条。
 		_, err = tx.Exec(ctx, `UPDATE download_datasets SET status=$2,stats=COALESCE(stats,'{}'::jsonb)||
-			jsonb_build_object('coverage','PARTIAL','volume_guard_reason',$3),updated_at=now() WHERE id=$1`, sh.DatasetID, model.ItemWaitingUserConfirmation, reason)
+			jsonb_build_object('coverage','PARTIAL','volume_guard_reason',$3::text),updated_at=now() WHERE id=$1`, sh.DatasetID, model.ItemWaitingUserConfirmation, reason)
 		if err == nil {
 			_, err = tx.Exec(ctx, `UPDATE download_shards SET status='PAUSED',lease_owner='',leased_until=NULL,updated_at=now()
 				WHERE dataset_id=$1 AND status IN ('PENDING','FAILED_RETRYABLE')`, sh.DatasetID)

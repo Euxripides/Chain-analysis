@@ -943,6 +943,29 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 		}
 		return p.store.SetJobStatus(ctx, job.ID, model.JobRunning)
 	}
+	// 先记住"哪些数据集本来就不完整"。RecomputeDataset 只看剩余 Shard 的状态：
+	// 删掉失败 Shard 之后，一个只剩 COMPLETED Shard 的数据集会立刻变成 COMPLETED，
+	// 下面的 continue 就会跳过重规划，缺口被静默丢掉，coverage 反过来断言"完整"
+	// （现场 DL-20260921-0044：186,000 行的失败分片被删后 transactions 直接
+	// COMPLETED，coverage.complete 从 false 翻成 true）。
+	incompleteDatasets := map[string]bool{}
+	rows, err := p.store.Pool.Query(ctx,
+		"SELECT DISTINCT dataset_id FROM download_shards WHERE job_id=$1 AND status NOT IN ('COMPLETED','CANCELLED')", job.ID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var datasetID string
+		if err := rows.Scan(&datasetID); err != nil {
+			rows.Close()
+			return err
+		}
+		incompleteDatasets[datasetID] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	// 删除未完成 Shard（已完成数据保留，属于公共链上数据）
 	if _, err := p.store.Pool.Exec(ctx,
 		"DELETE FROM download_shards WHERE job_id=$1 AND status NOT IN ('COMPLETED','CANCELLED')", job.ID); err != nil {
@@ -970,8 +993,18 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 				return err
 			}
 			item = *fresh
-			if item.Status == model.ItemSkipped || item.Status == model.ItemCompleted {
+			if item.Status == model.ItemSkipped {
 				continue
+			}
+			if item.Status == model.ItemCompleted && !incompleteDatasets[item.ID] {
+				continue
+			}
+			if incompleteDatasets[item.ID] && item.Status == model.ItemCompleted {
+				// 刚被 RecomputeDataset 误判为 COMPLETED；重规划前先恢复 RUNNING，
+				// 避免"新 Shard 已排队、数据集却显示完成"的中间窗口。
+				if err := p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemRunning); err != nil {
+					return err
+				}
 			}
 			if err := p.planDataset(ctx, job, subj, item.Dataset, want, bounded); err != nil {
 				return err
