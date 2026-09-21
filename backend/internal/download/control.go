@@ -149,55 +149,110 @@ func (sc *Scheduler) resumeJobs(ctx context.Context) {
 	}
 }
 
-// convergeCompleted 自愈收敛：RUNNING 任务全部 Shard 已完成且无执行中 Shard → 重算状态。
+// emptyJobGrace 是零 Subject 任务被判为僵尸前的最短存活时间。规划是
+// CREATED→PLANNING→QUEUED 的短过程，规划失败会留在 CREATED 由 planCreatedJobs
+// 重试；因此存活超过宽限期的 QUEUED/RUNNING 空壳只可能是规划被中断留下的
+// （现场 SSEPROBE-20260913T*：9 个任务 0 Subject / 0 Shard，永远 RUNNING）。
+const emptyJobGrace = time.Hour
+
+// convergeCompleted 自愈收敛：任务的全部有效 Shard 都已终态且无在途 Shard → 重算状态。
+//
+// 同时覆盖 RUNNING 与 QUEUED：Shard 在 Fetch 阶段终态失败时，runShard 的失败分支
+// 只写 Shard 行，不做 Dataset/Subject/Job 汇总；单 Shard 数据集没有兄弟 Shard 的
+// 收敛事件兜底，任务会永远停在 QUEUED/RUNNING（现场 DL-20260906-0119 等 19 个任务、
+// DL-20260920-0007）。因此这里按"全部终态"兜底，而不是依赖某次 finalize 事件。
 func (sc *Scheduler) convergeCompleted(ctx context.Context) {
-	jobs, err := sc.store.ListJobs(ctx, model.JobRunning, 20, 0)
-	if err != nil {
+	for _, status := range []string{
+		model.JobRunning, model.JobQueued,
+		model.JobPaused, model.JobPausedFallbackTooExpensive,
+	} {
+		jobs, err := sc.store.ListJobs(ctx, status, 20, 0)
+		if err != nil {
+			continue
+		}
+		for i := range jobs {
+			sc.convergeJob(ctx, jobs[i])
+		}
+	}
+}
+
+// convergeJob 收敛单个 RUNNING/QUEUED 任务，两种形态：
+//   - 空壳（0 Subject / 0 Shard）超过宽限期 → CANCELLED（从未规划，不是数据失败）；
+//   - 全部有效 Shard 终态且无在途 Shard → 重算 Dataset/Subject/Job。
+func (sc *Scheduler) convergeJob(ctx context.Context, j model.DownloadJob) {
+	var total, done, terminal, active, subjects int64
+	_ = sc.store.Pool.QueryRow(ctx,
+		"SELECT COUNT(*) FILTER (WHERE "+store.EffectiveShardSQL("")+"), "+
+			"COUNT(*) FILTER (WHERE status='COMPLETED' AND "+store.EffectiveShardSQL("")+"), "+
+			"COUNT(*) FILTER (WHERE status IN ('COMPLETED','FAILED_FINAL','CANCELLED') AND "+store.EffectiveShardSQL("")+"), "+
+			"COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING') AND "+store.EffectiveShardSQL("")+"), "+
+			"(SELECT COUNT(*) FROM download_subjects ds WHERE ds.job_id=$1) "+
+			"FROM download_shards WHERE job_id=$1", j.ID).
+		Scan(&total, &done, &terminal, &active, &subjects)
+	if subjects == 0 && total == 0 {
+		// 只回收"从未规划"的运行/排队空壳；显式暂停的空任务保留用户意图。
+		if j.Status != model.JobRunning && j.Status != model.JobQueued {
+			return
+		}
+		if time.Since(j.CreatedAt) < emptyJobGrace {
+			return
+		}
+		const reason = "aborted before planning: no subjects were recorded"
+		if err := sc.store.SetJobStatusError(ctx, j.ID, model.JobCancelled, reason); err != nil {
+			sc.log.Error("converge empty job failed", "job_id", j.ID, "err", err)
+			return
+		}
+		sc.log.Warn("empty job converged as cancelled",
+			"job_id", j.ID, "job_no", j.JobNo, "age", time.Since(j.CreatedAt).String())
+		sc.publish("events.jobs."+j.ID, map[string]any{
+			"type": "job_status", "job_id": j.ID, "status": model.JobCancelled, "ts": time.Now(),
+		})
 		return
 	}
-	for i := range jobs {
-		j := jobs[i]
-		var total, done, terminal, active int64
-		_ = sc.store.Pool.QueryRow(ctx,
-			"SELECT COUNT(*) FILTER (WHERE "+store.EffectiveShardSQL("")+"), "+
-				"COUNT(*) FILTER (WHERE status='COMPLETED' AND "+store.EffectiveShardSQL("")+"), "+
-				"COUNT(*) FILTER (WHERE status IN ('COMPLETED','FAILED_FINAL','CANCELLED') AND "+store.EffectiveShardSQL("")+"), "+
-				"COUNT(*) FILTER (WHERE status IN ('LEASED','RUNNING') AND "+store.EffectiveShardSQL("")+") "+
-				"FROM download_shards WHERE job_id=$1", j.ID).
-			Scan(&total, &done, &terminal, &active)
-		// 收敛条件从"全部成功"放宽为"全部终态"：FAILED_FINAL Shard 同样
-		// 结束该任务，否则一个只剩永久失败 Shard 的任务会永远 RUNNING
-		// （现场 DL-20260915-0007/0008/0009）。
-		if total > 0 && terminal == total && active == 0 {
-			subjects, serr := sc.store.SubjectsByJob(ctx, j.ID)
-			if serr != nil {
-				continue
+	// 收敛条件从"全部成功"放宽为"全部终态"：FAILED_FINAL Shard 同样结束该任务，
+	// 否则一个只剩永久失败 Shard 的任务会永远 RUNNING（现场 DL-20260915-0007/0008/0009）。
+	if total == 0 || terminal != total || active != 0 {
+		return
+	}
+	// 暂停态任务若已无任何剩余工作（全部有效 Shard 终态），必须先脱掉暂停态：
+	// RecomputeJob 对 PAUSED/PAUSE_REQUESTED 直接返回、不写终态，于是"已经跑完
+	// 但被暂停"的任务会永远停在 PAUSED（现场 DL-20260831-0036 1800/1800 完成、
+	// DL-20260909-0001 50/51 全终态）。只对确实没有在途工作的任务这样做。
+	if j.Status == model.JobPaused || j.Status == model.JobPausedFallbackTooExpensive || j.Status == model.JobPauseReq {
+		if err := sc.store.SetJobStatus(ctx, j.ID, model.JobRunning); err != nil {
+			sc.log.Error("converge paused job failed", "job_id", j.ID, "err", err)
+			return
+		}
+		sc.log.Info("paused job has no remaining work, converging",
+			"job_id", j.ID, "job_no", j.JobNo, "shards_total", total)
+	}
+	subjectList, serr := sc.store.SubjectsByJob(ctx, j.ID)
+	if serr != nil {
+		return
+	}
+	for _, subj := range subjectList {
+		items, derr := sc.store.DatasetsBySubject(ctx, subj.ID)
+		if derr != nil {
+			sc.log.Warn("converge datasets list failed", "job_id", j.ID, "subject_id", subj.ID, "err", derr)
+			continue
+		}
+		for _, item := range items {
+			if derr := sc.store.RecomputeDataset(ctx, item.ID); derr != nil {
+				sc.log.Warn("converge dataset recompute failed", "dataset_id", item.ID, "err", derr)
 			}
-			for _, subj := range subjects {
-				items, derr := sc.store.DatasetsBySubject(ctx, subj.ID)
-				if derr != nil {
-					sc.log.Warn("converge datasets list failed", "job_id", j.ID, "subject_id", subj.ID, "err", derr)
-					continue
-				}
-				for _, item := range items {
-					if derr := sc.store.RecomputeDataset(ctx, item.ID); derr != nil {
-						sc.log.Warn("converge dataset recompute failed", "dataset_id", item.ID, "err", derr)
-					}
-				}
-				if derr := sc.store.RecomputeSubject(ctx, subj.ID); derr != nil {
-					sc.log.Warn("converge subject recompute failed", "subject_id", subj.ID, "err", derr)
-				}
-			}
-			if _, err := sc.store.RecomputeJob(ctx, j.ID); err == nil {
-				if after, gerr := sc.store.GetJob(ctx, j.ID); gerr == nil && after.Status != model.JobRunning {
-					sc.log.Info("job converged",
-						"job_id", j.ID, "job_no", j.JobNo, "status", after.Status,
-						"shards_total", total, "shards_done", done)
-					sc.publish("events.jobs."+j.ID, map[string]any{
-						"type": "job_status", "job_id": j.ID, "status": after.Status, "ts": time.Now(),
-					})
-				}
-			}
+		}
+		if derr := sc.store.RecomputeSubject(ctx, subj.ID); derr != nil {
+			sc.log.Warn("converge subject recompute failed", "subject_id", subj.ID, "err", derr)
+		}
+	}
+	if _, err := sc.store.RecomputeJob(ctx, j.ID); err == nil {
+		if after, gerr := sc.store.GetJob(ctx, j.ID); gerr == nil && after.Status != model.JobRunning && after.Status != model.JobQueued {
+			sc.log.Info("job converged",
+				"job_id", j.ID, "job_no", j.JobNo, "status", after.Status,
+				"shards_total", total, "shards_done", done)
+			sc.publish("events.jobs."+j.ID, map[string]any{
+				"type": "job_status", "job_id": j.ID, "status": after.Status, "ts": time.Now(),
+			})
 		}
 	}
 }
