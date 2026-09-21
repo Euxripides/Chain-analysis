@@ -30,3 +30,4 @@
 | [ADR-022](ADR-022-case-evidence-tab-permission.md) | 案件证据 Tab 的临时双权限（技术债，待产品决策） | Accepted (临时) | §0.4.2、§24.3、AD-003 |
 | [ADR-023](ADR-023-solana-token-transfers-semantics.md) | Solana `token_transfers`/`internal_transactions` 的指令解析口径（钱包 owner、gross/net、ATA、CPI 树） | Accepted（2026-09-20） | —（计划外新增能力，产品已批准口径） |
 | [ADR-024](ADR-024-solana-logs-balances-nft.md) | Solana 的 logs / balances / nft_transfers 口径（复用 logs 表 + event_source、快照余额、经典 NFT 判定，cNFT 不做） | Accepted（2026-09-20） | —（顺序 logs → balances → nft，产品指定） |
+| [ADR-025](ADR-025-dataset-scoped-coverage-assertion.md) | Coverage 断言按 (address, dataset) 判定，作业状态不再连坐 | Accepted（2026-09-21） | —（MCP 证据口径，产品指定「按 dataset 判定」） |

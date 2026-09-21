@@ -122,10 +122,26 @@ type actionCoverageState struct {
 	committedAt        time.Time
 }
 
+// actionCoverageAssertionSQL 是 full-range 完整性断言的唯一定义（ADR-025）。
+//
+// 只按 (subject, dataset) 判定：dataset 自己在 full-range 作业里 COMPLETED 即成立。
+// **不要**再加 download_jobs.status='COMPLETED'——那会让同作业里其它 dataset 的失败
+// 连带否决已经完成并 commit 覆盖的数据集（DL-20260921-0041 / DL-20260916-0011 现场）。
+const actionCoverageAssertionSQL = `SELECT DISTINCT ds.subject,dd.dataset
+	FROM download_jobs j
+	JOIN download_subjects ds ON ds.job_id=j.id
+	JOIN download_datasets dd ON dd.subject_id=ds.id
+	WHERE j.chain=$1 AND j.range_type='full'
+	  AND ds.subject=ANY($2) AND dd.dataset=ANY($3) AND dd.status='COMPLETED'`
+
 // actionCoverageMeta turns the downloader's durable completion records into
-// an endpoint-scoped evidence assertion. A completed full-range job is the
-// proof; ClickHouse row presence alone is deliberately not treated as proof of
-// completeness (an address or range may legitimately contain zero rows).
+// an endpoint-scoped evidence assertion.
+//
+// 断言粒度是 (address, dataset)（ADR-025）：某个 dataset 在一个 full-range 作业里
+// 达到 COMPLETED，就证明该地址该数据集的全历史已抓取、校验并 commit 覆盖；同一
+// 作业里其它 dataset 的失败不再连带否决它。dataset COMPLETED 本身要求该数据集
+// 全部 Shard 都 COMPLETED 并通过校验，所以这里的放款是"解除作业级连坐"，不是
+// 降低单数据集的证据要求。ClickHouse 有无行都不作为完整性证据（零行地址合法）。
 func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses, datasets []string) map[string]any {
 	coverage := map[string]any{
 		"complete": false, "scope": "full_history", "datasets": datasets,
@@ -144,12 +160,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 			states[key(address, dataset)] = &actionCoverageState{}
 		}
 	}
-	fullRows, err := s.deps.Store.Pool.Query(ctx, `SELECT DISTINCT ds.subject,dd.dataset
-		FROM download_jobs j
-		JOIN download_subjects ds ON ds.job_id=j.id
-		JOIN download_datasets dd ON dd.subject_id=ds.id
-		WHERE j.chain=$1 AND j.status='COMPLETED' AND j.range_type='full'
-		  AND ds.subject=ANY($2) AND dd.dataset=ANY($3) AND dd.status='COMPLETED'`, chain, addresses, datasets)
+	fullRows, err := s.deps.Store.Pool.Query(ctx, actionCoverageAssertionSQL, chain, addresses, datasets)
 	if err != nil {
 		coverage["reason"] = "Unable to read full-range completion assertions"
 		return map[string]any{"coverage": coverage}
@@ -200,7 +211,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 			state := states[key(address, dataset)]
 			if state == nil || !state.full {
 				complete = false
-				missing = append(missing, map[string]any{"address": address, "dataset": dataset, "reason": "No completed full-range download assertion"})
+				missing = append(missing, map[string]any{"address": address, "dataset": dataset, "reason": "No completed full-range download assertion for this dataset"})
 				continue
 			}
 			if !state.committedAt.IsZero() {
@@ -225,7 +236,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	if complete {
 		coverage["reason"] = "Completed full-range downloads are recorded for every address and dataset in this response"
 	} else {
-		coverage["reason"] = "One or more address/dataset pairs lack a completed full-range download assertion"
+		coverage["reason"] = "One or more address/dataset pairs lack a completed full-range download assertion for that dataset"
 	}
 	meta := map[string]any{"coverage": coverage}
 	if !latest.IsZero() {
