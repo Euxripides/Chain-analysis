@@ -24,7 +24,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260920T193526Z/test-results",
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260921T145053Z/test-results",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -49,7 +49,7 @@
       [
         "json",
         {
-          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260920T193526Z/playwright-report.json"
+          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260921T145053Z/playwright-report.json"
         }
       ]
     ],
@@ -76,7 +76,7 @@
         {
           "title": "U-DL-01 v6 隔离解析 / 有界超时 / 可取消 / 恶意 ZIP",
           "file": "udl01-worker-isolation-v6.spec.ts",
-          "line": 221,
+          "line": 224,
           "column": 6,
           "specs": [
             {
@@ -95,12 +95,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 5241,
+                      "duration": 3969,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:35:52.890Z",
+                      "startTime": "2026-09-21T14:51:19.660Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -110,7 +110,7 @@
               ],
               "id": "18873eba6c8503725f33-cdbd599cda3236b340c6",
               "file": "udl01-worker-isolation-v6.spec.ts",
-              "line": 222,
+              "line": 225,
               "column": 3
             },
             {
@@ -129,12 +129,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3776,
+                      "duration": 2829,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:35:58.602Z",
+                      "startTime": "2026-09-21T14:51:24.048Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -144,7 +144,7 @@
               ],
               "id": "18873eba6c8503725f33-a3b4be0d6663be41babf",
               "file": "udl01-worker-isolation-v6.spec.ts",
-              "line": 283,
+              "line": 286,
               "column": 3
             },
             {
@@ -163,12 +163,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4478,
+                      "duration": 3414,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:36:02.392Z",
+                      "startTime": "2026-09-21T14:51:26.900Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -178,7 +178,7 @@
               ],
               "id": "18873eba6c8503725f33-83a9a60df1ebe27e308f",
               "file": "udl01-worker-isolation-v6.spec.ts",
-              "line": 335,
+              "line": 338,
               "column": 3
             },
             {
@@ -197,12 +197,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4940,
+                      "duration": 4163,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:36:06.889Z",
+                      "startTime": "2026-09-21T14:51:30.331Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -212,7 +212,7 @@
               ],
               "id": "18873eba6c8503725f33-ee42965361cb0841bbd3",
               "file": "udl01-worker-isolation-v6.spec.ts",
-              "line": 409,
+              "line": 412,
               "column": 3
             },
             {
@@ -231,12 +231,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3258,
+                      "duration": 2539,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:36:11.843Z",
+                      "startTime": "2026-09-21T14:51:34.510Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -246,7 +246,7 @@
               ],
               "id": "18873eba6c8503725f33-2b1781c64ff1f662b649",
               "file": "udl01-worker-isolation-v6.spec.ts",
-              "line": 493,
+              "line": 496,
               "column": 3
             }
           ]
@@ -256,8 +256,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-20T19:35:52.307Z",
-    "duration": 22957.458,
+    "startTime": "2026-09-21T14:51:19.145Z",
+    "duration": 18106.613,
     "expected": 5,
     "skipped": 0,
     "unexpected": 0,

@@ -2,17 +2,13 @@
   "fixture": "udl01-big.xls",
   "spec": "udl01-worker-isolation-v6.spec.ts",
   "bytes": 8657408,
-  "elapsedMs": 1899,
+  "elapsedMs": 1486,
   "dialogText": "提示 本地解析摘要 以下计数由浏览器本地解析得出；提交后由服务端再次验证，只有服务端 accepted 的地址会被采用。 解析结果 文件 udl01-big.xls 类型 XLSX/Excel 扫描行数 65535 待校验地址 65535 空白行 0 表头 address 表头（列映射） 识别列 chain、tags 带案件/标签的行 9363 链分布 bsc 65535 超出单次上限 65435 行未导入 取消 提交服务端校验",
   "metrics": {
-    "maxGap": 217,
-    "gapSamples": 87,
-    "maxLongTask": 218,
-    "longTasks": [
-      51,
-      218,
-      54
-    ]
+    "maxGap": 33,
+    "gapSamples": 86,
+    "maxLongTask": 0,
+    "longTasks": []
   },
   "pageErrors": [],
   "login": {
@@ -29,7 +25,7 @@
   "rowCountReportedByPage": 65535,
   "rowCountText": "65535",
   "workerUrls": [
-    "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+    "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-CeQCoXhY.js"
   ],
   "isolatedWorkerUsed": true,
   "oldUnreachableAssertion": "旧 v5 的 /20000[01]/ 在 BIFF8 下不可达，已移除",

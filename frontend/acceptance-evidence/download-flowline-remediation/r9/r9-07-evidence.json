@@ -79,5 +79,5 @@
     "maxUncompressedBytes": 67108864,
     "maxCompressionRatio": 200
   },
-  "fixture_self_check": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260920T193353Z/fixtures/r9-07-fixture-selfcheck.json"
+  "fixture_self_check": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260921T144929Z/fixtures/r9-07-fixture-selfcheck.json"
 }

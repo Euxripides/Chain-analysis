@@ -1,6 +1,6 @@
 {
   "suite": "U-DL-01 isolated import parse (worker / bounded timeout / cancel / malicious ZIP) v5b",
-  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v5b-20260920T193437Z",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v5b-20260921T145009Z",
   "checks_total": 77,
   "checks_failed": 0,
   "failed": [],
@@ -9,8 +9,8 @@
       "check": "playwright-stats",
       "ok": true,
       "detail": {
-        "startTime": "2026-09-20T19:35:03.391Z",
-        "duration": 21984.270999999997,
+        "startTime": "2026-09-21T14:50:33.017Z",
+        "duration": 18838.146,
         "expected": 5,
         "skipped": 0,
         "unexpected": 0,
@@ -112,7 +112,7 @@
       "check": "a-elapsed-positive",
       "ok": true,
       "detail": {
-        "elapsedMs": 2008
+        "elapsedMs": 1554
       }
     },
     {
@@ -148,7 +148,7 @@
       "ok": true,
       "detail": {
         "workerUrls": [
-          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-CeQCoXhY.js"
         ]
       }
     },
@@ -156,45 +156,30 @@
       "check": "a-frame-gaps-sampled",
       "ok": true,
       "detail": {
-        "maxGap": 250,
-        "gapSamples": 81,
-        "maxLongTask": 151,
-        "longTasks": [
-          151,
-          141,
-          125,
-          62
-        ]
+        "maxGap": 50,
+        "gapSamples": 87,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "a-no-second-long-longtask",
       "ok": true,
       "detail": {
-        "maxGap": 250,
-        "gapSamples": 81,
-        "maxLongTask": 151,
-        "longTasks": [
-          151,
-          141,
-          125,
-          62
-        ]
+        "maxGap": 50,
+        "gapSamples": 87,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "a-no-second-frame-gap",
       "ok": true,
       "detail": {
-        "maxGap": 250,
-        "gapSamples": 81,
-        "maxLongTask": 151,
-        "longTasks": [
-          151,
-          141,
-          125,
-          62
-        ]
+        "maxGap": 50,
+        "gapSamples": 87,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
@@ -216,7 +201,7 @@
       "check": "b-bounded-elapsed",
       "ok": true,
       "detail": {
-        "elapsedMs": 555
+        "elapsedMs": 464
       }
     },
     {
@@ -237,21 +222,17 @@
       "check": "b-no-second-long-longtask",
       "ok": true,
       "detail": {
-        "maxGap": 117,
-        "gapSamples": 17,
-        "maxLongTask": 68,
-        "longTasks": [
-          68,
-          54,
-          68
-        ]
+        "maxGap": 50,
+        "gapSamples": 23,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "c-cancel-bounded",
       "ok": true,
       "detail": {
-        "cancelMs": 1364
+        "cancelMs": 150
       }
     },
     {
@@ -299,12 +280,11 @@
       "check": "d-not-blocking:udl01-bomb.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 150,
+        "maxGap": 67,
         "gapSamples": 12,
-        "maxLongTask": 59,
+        "maxLongTask": 51,
         "longTasks": [
-          59,
-          50
+          51
         ]
       }
     },
@@ -320,8 +300,8 @@
       "check": "d-not-blocking:udl01-encrypted.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 50,
-        "gapSamples": 8,
+        "maxGap": 17,
+        "gapSamples": 6,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -338,7 +318,7 @@
       "check": "d-not-blocking:udl01-stored-mismatch.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 33,
+        "maxGap": 17,
         "gapSamples": 7,
         "maxLongTask": 0,
         "longTasks": []
@@ -356,8 +336,8 @@
       "check": "d-not-blocking:udl01-method-mismatch.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 33,
-        "gapSamples": 10,
+        "maxGap": 17,
+        "gapSamples": 5,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -375,7 +355,7 @@
       "ok": true,
       "detail": {
         "maxGap": 17,
-        "gapSamples": 6,
+        "gapSamples": 5,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -409,7 +389,7 @@
       "detail": {
         "sheetjsChunkRequests": 0,
         "chunks": [
-          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-CeQCoXhY.js"
         ]
       }
     },
@@ -676,16 +656,16 @@
       "check": "bundle-index-served-matches-disk",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -694,16 +674,16 @@
       "check": "bundle-worker-chunk-200",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -712,16 +692,16 @@
       "check": "bundle-worker-chunk-bytes-match",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -730,16 +710,16 @@
       "check": "bundle-page-chunk-references-worker",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -748,16 +728,16 @@
       "check": "bundle-page-chunk-200",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -766,16 +746,16 @@
       "check": "bundle-page-chunk-bytes-match",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -784,16 +764,16 @@
       "check": "bundle-csp-present",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_references_worker": true,
         "csp_headers": 1
       }
@@ -811,7 +791,7 @@
           "passed"
         ],
         "result_durations": [
-          4645
+          3978
         ],
         "result_error_counts": [
           0
@@ -820,12 +800,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:03.933Z"
+          "2026-09-21T14:50:33.526Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-a-evidence.json",
-      "evidence_bytes": 1395,
+      "evidence_bytes": 1345,
       "ok": true
     },
     {
@@ -839,7 +819,7 @@
           "passed"
         ],
         "result_durations": [
-          3032
+          3018
         ],
         "result_error_counts": [
           0
@@ -848,12 +828,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:09.014Z"
+          "2026-09-21T14:50:38.087Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-b-evidence.json",
-      "evidence_bytes": 738,
+      "evidence_bytes": 702,
       "ok": true
     },
     {
@@ -867,7 +847,7 @@
           "passed"
         ],
         "result_durations": [
-          4917
+          3391
         ],
         "result_error_counts": [
           0
@@ -876,12 +856,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:12.067Z"
+          "2026-09-21T14:50:41.128Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-c-evidence.json",
-      "evidence_bytes": 1239,
+      "evidence_bytes": 1180,
       "ok": true
     },
     {
@@ -895,7 +875,7 @@
           "passed"
         ],
         "result_durations": [
-          5005
+          4659
         ],
         "result_error_counts": [
           0
@@ -904,12 +884,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:17.000Z"
+          "2026-09-21T14:50:44.551Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-d-evidence.json",
-      "evidence_bytes": 5367,
+      "evidence_bytes": 5349,
       "ok": true
     },
     {
@@ -923,7 +903,7 @@
           "passed"
         ],
         "result_durations": [
-          3199
+          2428
         ],
         "result_error_counts": [
           0
@@ -932,12 +912,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:22.020Z"
+          "2026-09-21T14:50:49.228Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-e-evidence.json",
-      "evidence_bytes": 1030,
+      "evidence_bytes": 994,
       "ok": true
     }
   ],

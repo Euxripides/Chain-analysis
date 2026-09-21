@@ -1,10 +1,10 @@
 {
   "verdict": "PASS",
   "source_binding": {
-    "source_commit": "0a0e5e35a0eb93c5d5e34beb4079fe5d3d40f2f5",
+    "source_commit": "25e004dd2f9846e841e2628d979b659ebe3ab453",
     "source_branch": "main",
-    "dist_index_sha256": "4a47d4ef7f418bcc7f3a102f270a784c0e1bc1984890c78d2a421ebb0697a077",
-    "served_index_sha256": "4a47d4ef7f418bcc7f3a102f270a784c0e1bc1984890c78d2a421ebb0697a077",
+    "dist_index_sha256": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+    "served_index_sha256": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
     "served_matches_dist": true,
     "all_equal": true
   },
@@ -20,9 +20,9 @@
       "root_scroll_width": 1366,
       "root_client_width": 1366,
       "cta_preview": {
-        "top": 790,
+        "top": 778,
         "right": 929,
-        "bottom": 834,
+        "bottom": 822,
         "left": 753,
         "width": 176,
         "height": 44
@@ -46,7 +46,7 @@
       "mobile_bar": null,
       "config_internal_scroll": true,
       "config_scroll": [
-        624,
+        612,
         492
       ],
       "task_body_scrollable": true,
@@ -55,7 +55,7 @@
       "dataset_columns": 4,
       "vertical_rail": false,
       "horizontal_rail": true,
-      "cls": 0.0017,
+      "cls": 0.0012,
       "console_errors": [],
       "page_errors": [],
       "csp_errors": [],
@@ -72,9 +72,9 @@
       "root_scroll_width": 1440,
       "root_client_width": 1440,
       "cta_preview": {
-        "top": 733,
+        "top": 732,
         "right": 1001,
-        "bottom": 777,
+        "bottom": 776,
         "left": 826,
         "width": 176,
         "height": 44
@@ -121,9 +121,9 @@
         "bodyScrollHeight": 900,
         "scrollY": 0,
         "ctaPreview": {
-          "top": 749,
+          "top": 728,
           "right": 1011,
-          "bottom": 779,
+          "bottom": 758,
           "left": 933,
           "width": 78,
           "height": 30
@@ -150,7 +150,7 @@
         "verticalRail": false,
         "horizontalRail": true,
         "configScrollable": true,
-        "configScrollHeight": 820,
+        "configScrollHeight": 800,
         "configClientHeight": 613,
         "taskBodyScrollable": true,
         "railInnerWidth": 1121,
@@ -170,9 +170,9 @@
       "root_scroll_width": 1920,
       "root_client_width": 1920,
       "cta_preview": {
-        "top": 742,
+        "top": 741,
         "right": 1425,
-        "bottom": 786,
+        "bottom": 785,
         "left": 1250,
         "width": 176,
         "height": 44
@@ -324,31 +324,31 @@
       "height": 768,
       "screenshot": "viewport/1024x768.png",
       "screenshot_previewed": null,
-      "root_scroll_height": 2229,
+      "root_scroll_height": 2165,
       "root_client_height": 768,
       "root_vertical_overflow": true,
       "root_scroll_width": 1024,
       "root_client_width": 1024,
       "cta_preview": {
-        "top": 1232,
+        "top": 1168,
         "right": 966,
-        "bottom": 1274,
+        "bottom": 1210,
         "left": 790,
         "width": 176,
         "height": 42
       },
       "cta_create": {
-        "top": 2098,
+        "top": 2034,
         "right": 985,
-        "bottom": 2146,
+        "bottom": 2082,
         "left": 259,
         "width": 726,
         "height": 48
       },
       "aside_footer": {
-        "top": 2034,
+        "top": 1970,
         "right": 1003,
-        "bottom": 2164,
+        "bottom": 2100,
         "left": 241,
         "width": 762,
         "height": 130
@@ -356,8 +356,8 @@
       "mobile_bar": null,
       "config_internal_scroll": false,
       "config_scroll": [
-        1028,
-        1028
+        964,
+        964
       ],
       "task_body_scrollable": false,
       "rail_inner_width": 764,
@@ -376,31 +376,31 @@
       "height": 1024,
       "screenshot": "viewport/768x1024.png",
       "screenshot_previewed": null,
-      "root_scroll_height": 2543,
+      "root_scroll_height": 2474,
       "root_client_height": 1024,
       "root_vertical_overflow": true,
       "root_scroll_width": 768,
       "root_client_width": 768,
       "cta_preview": {
-        "top": 1554,
+        "top": 1485,
         "right": 714,
-        "bottom": 1596,
+        "bottom": 1527,
         "left": 538,
         "width": 176,
         "height": 42
       },
       "cta_create": {
-        "top": 2420,
+        "top": 2351,
         "right": 733,
-        "bottom": 2468,
+        "bottom": 2399,
         "left": 35,
         "width": 698,
         "height": 48
       },
       "aside_footer": {
-        "top": 2356,
+        "top": 2287,
         "right": 751,
-        "bottom": 2486,
+        "bottom": 2417,
         "left": 17,
         "width": 734,
         "height": 130
@@ -408,8 +408,8 @@
       "mobile_bar": null,
       "config_internal_scroll": false,
       "config_scroll": [
-        1368,
-        1368
+        1299,
+        1299
       ],
       "task_body_scrollable": false,
       "rail_inner_width": 736,
@@ -428,7 +428,7 @@
       "height": 844,
       "screenshot": "viewport/390x844.png",
       "screenshot_previewed": null,
-      "root_scroll_height": 1660,
+      "root_scroll_height": 1564,
       "root_client_height": 844,
       "root_vertical_overflow": true,
       "root_scroll_width": 390,
@@ -446,8 +446,8 @@
       },
       "config_internal_scroll": false,
       "config_scroll": [
-        1164,
-        1164
+        1068,
+        1068
       ],
       "task_body_scrollable": null,
       "rail_inner_width": null,
@@ -574,9 +574,9 @@
         "reduced_motion_pulse": false
       },
       "hidden": {
-        "visible_move": 128.90000000000003,
+        "visible_move": 128.99999999999994,
         "hidden_move": 0,
-        "resumed_move": 92.20000000000002
+        "resumed_move": 92.6
       },
       "reduced": {
         "dots": 0,
@@ -595,142 +595,144 @@
     "1440x900": {
       "页面标题": {
         "fontSize": "24px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       },
       "章节标题": {
         "fontSize": "16px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "字段标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "Dataset 标签": {
         "fontSize": "14px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 15.92
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.04
       },
       "右侧指标标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "右侧指标数值": {
         "fontSize": "20px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "主按钮": {
         "fontSize": "14px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 5.97
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.22
       },
       "轨道标签": {
         "fontSize": "13px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       }
     },
     "2309x1257": {
       "页面标题": {
         "fontSize": "28px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       },
       "章节标题": {
         "fontSize": "16px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "字段标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "Dataset 标签": {
         "fontSize": "14px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 15.92
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.04
       },
       "右侧指标标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "右侧指标数值": {
         "fontSize": "20px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "主按钮": {
         "fontSize": "14px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 5.97
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.22
       },
       "轨道标签": {
         "fontSize": "13px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       }
     },
     "2560x1440": {
       "页面标题": {
         "fontSize": "28px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       },
       "章节标题": {
         "fontSize": "16px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "字段标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "Dataset 标签": {
         "fontSize": "14px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 15.92
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.04
       },
       "右侧指标标签": {
         "fontSize": "12px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 6.2
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.56
       },
       "右侧指标数值": {
         "fontSize": "20px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 16.52
+        "color": "rgb(16, 35, 63)",
+        "contrast": 15.74
       },
       "主按钮": {
         "fontSize": "14px",
-        "color": "rgb(82, 98, 122)",
-        "contrast": 5.97
+        "color": "rgb(64, 86, 111)",
+        "contrast": 7.22
       },
       "轨道标签": {
         "fontSize": "13px",
-        "color": "rgb(11, 31, 58)",
-        "contrast": 14.06
+        "color": "rgb(16, 35, 63)",
+        "contrast": 14.79
       }
     }
   },
   "dialog": {
-    "css_override_lines": [
-      " * 共享 renderer 在 <600px 会取消 .cs-dialog__body 的 max-height（那是给短表单"
-    ],
-    "scoped_has_rule_only": false,
+    "css_override_lines": [],
+    "scoped_has_rule_only": true,
+    "has_scoped_size_rules": true,
     "tokens": {
       "standard": ".22s",
       "fast": ".14s"
     },
     "durations": {
-      "panelAnimationDuration": "0s",
-      "panelTransitionDuration": "0s",
+      "panelEnter": "0.22s, 0.22s",
+      "panelExit": "0.16s",
+      "maskEnter": "0.16s",
+      "maskExit": "0.16s",
+      "panelTransitionProperty": "opacity, transform",
       "maskBackdrop": "none"
     },
     "residue": {
@@ -792,13 +794,768 @@
   "unexpected_skipped": [],
   "designed_skipped": [],
   "not_run": [],
+  "visual_contract": {
+    "short-desktop": {
+      "width": 1366,
+      "height": 768,
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 154.88,
+          "height": 60,
+          "label_width": 86.88,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 154.88,
+          "height": 60,
+          "label_width": 86.88,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "dataset_label_max_lines": 2,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "file_trigger_count": 1,
+      "textarea_rect": {
+        "top": 276.09,
+        "bottom": 360.09,
+        "height": 84,
+        "left": 293.44,
+        "width": 450.47
+      },
+      "file_trigger_rect": {
+        "top": 276.09,
+        "bottom": 360.09,
+        "height": 84,
+        "left": 755.91,
+        "width": 184
+      },
+      "trigger_is_button": true,
+      "trigger_disabled": false,
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "hr_count": 0,
+      "fieldset_count": 2,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "wrapper_borders": [],
+      "ancestor_effect_violations": [],
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "dataset_card_count": 5,
+      "dataset_card_height_min": 60,
+      "dataset_card_height_max": 60,
+      "dataset_label_wrapped": [
+        "Token Transfer"
+      ]
+    },
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 136.36,
+          "height": 60,
+          "label_width": 68.36,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        }
+      ],
+      "dataset_label_max_lines": 2,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "file_trigger_count": 1,
+      "textarea_rect": {
+        "top": 287.48,
+        "bottom": 383.48,
+        "height": 96,
+        "left": 294.44,
+        "width": 521.73
+      },
+      "file_trigger_rect": {
+        "top": 287.48,
+        "bottom": 383.48,
+        "height": 96,
+        "left": 828.17,
+        "width": 184
+      },
+      "trigger_is_button": true,
+      "trigger_disabled": false,
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "hr_count": 0,
+      "fieldset_count": 2,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "wrapper_borders": [],
+      "ancestor_effect_violations": [],
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "dataset_card_count": 5,
+      "dataset_card_height_min": 60,
+      "dataset_card_height_max": 60,
+      "dataset_label_wrapped": [
+        "Token Transfer",
+        "NFT Transfer",
+        "地址余额快照"
+      ],
+      "screenshot": "visual-clarity/clarity-and-alignment-1440x900.png"
+    },
+    "full-hd": {
+      "width": 1920,
+      "height": 1080,
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "dataset_label_max_lines": 2,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "file_trigger_count": 1,
+      "textarea_rect": {
+        "top": 296.44,
+        "bottom": 392.44,
+        "height": 96,
+        "left": 314.91,
+        "width": 925.19
+      },
+      "file_trigger_rect": {
+        "top": 296.44,
+        "bottom": 392.44,
+        "height": 96,
+        "left": 1252.09,
+        "width": 184
+      },
+      "trigger_is_button": true,
+      "trigger_disabled": false,
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "hr_count": 0,
+      "fieldset_count": 2,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "wrapper_borders": [],
+      "ancestor_effect_violations": [],
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "dataset_card_count": 5,
+      "dataset_card_height_min": 60,
+      "dataset_card_height_max": 60,
+      "dataset_label_wrapped": [
+        "Token Transfer"
+      ]
+    },
+    "reported-screen": {
+      "width": 2309,
+      "height": 1257,
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "dataset_label_max_lines": 2,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "file_trigger_count": 1,
+      "textarea_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 335.5,
+        "width": 1257
+      },
+      "file_trigger_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 1604.5,
+        "width": 184
+      },
+      "trigger_is_button": true,
+      "trigger_disabled": false,
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "hr_count": 0,
+      "fieldset_count": 2,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "wrapper_borders": [],
+      "ancestor_effect_violations": [],
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "dataset_card_count": 5,
+      "dataset_card_height_min": 60,
+      "dataset_card_height_max": 60,
+      "dataset_label_wrapped": [
+        "Token Transfer"
+      ],
+      "screenshot": "visual-clarity/clarity-and-alignment-2309x1257.png"
+    },
+    "qhd": {
+      "width": 2560,
+      "height": 1440,
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "dataset_label_max_lines": 2,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "file_trigger_count": 1,
+      "textarea_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 461,
+        "width": 1257
+      },
+      "file_trigger_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 1730,
+        "width": 184
+      },
+      "trigger_is_button": true,
+      "trigger_disabled": false,
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "hr_count": 0,
+      "fieldset_count": 2,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "wrapper_borders": [],
+      "ancestor_effect_violations": [],
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "dataset_card_count": 5,
+      "dataset_card_height_min": 60,
+      "dataset_card_height_max": 60,
+      "dataset_label_wrapped": [
+        "Token Transfer"
+      ]
+    }
+  },
+  "address_import": {
+    "native_file_input_count": 1,
+    "visible_file_trigger_count": 1,
+    "duplicate_import_button_count": 0,
+    "parse_button_count": 1,
+    "desktop_measured_max_top_delta_px": 0,
+    "desktop_measured_max_bottom_delta_px": 0,
+    "desktop_measured_max_height_delta_px": 0,
+    "desktop_allowed_delta_px": 1,
+    "measured_viewports": [
+      "short-desktop",
+      "desktop",
+      "full-hd",
+      "reported-screen"
+    ],
+    "per_viewport": {
+      "short-desktop": {
+        "top_delta_px": 0,
+        "bottom_delta_px": 0,
+        "height_delta_px": 0,
+        "textarea_rect": {
+          "top": 276.09,
+          "bottom": 360.09,
+          "height": 84,
+          "left": 293.44,
+          "width": 450.47
+        },
+        "file_trigger_rect": {
+          "top": 276.09,
+          "bottom": 360.09,
+          "height": 84,
+          "left": 755.91,
+          "width": 184
+        },
+        "screenshot": null
+      },
+      "desktop": {
+        "top_delta_px": 0,
+        "bottom_delta_px": 0,
+        "height_delta_px": 0,
+        "textarea_rect": {
+          "top": 287.48,
+          "bottom": 383.48,
+          "height": 96,
+          "left": 294.44,
+          "width": 521.73
+        },
+        "file_trigger_rect": {
+          "top": 287.48,
+          "bottom": 383.48,
+          "height": 96,
+          "left": 828.17,
+          "width": 184
+        },
+        "screenshot": "visual-clarity/clarity-and-alignment-1440x900.png"
+      },
+      "full-hd": {
+        "top_delta_px": 0,
+        "bottom_delta_px": 0,
+        "height_delta_px": 0,
+        "textarea_rect": {
+          "top": 296.44,
+          "bottom": 392.44,
+          "height": 96,
+          "left": 314.91,
+          "width": 925.19
+        },
+        "file_trigger_rect": {
+          "top": 296.44,
+          "bottom": 392.44,
+          "height": 96,
+          "left": 1252.09,
+          "width": 184
+        },
+        "screenshot": null
+      },
+      "reported-screen": {
+        "top_delta_px": 0,
+        "bottom_delta_px": 0,
+        "height_delta_px": 0,
+        "textarea_rect": {
+          "top": 297.78,
+          "bottom": 393.78,
+          "height": 96,
+          "left": 335.5,
+          "width": 1257
+        },
+        "file_trigger_rect": {
+          "top": 297.78,
+          "bottom": 393.78,
+          "height": 96,
+          "left": 1604.5,
+          "width": 184
+        },
+        "screenshot": "visual-clarity/clarity-and-alignment-2309x1257.png"
+      }
+    },
+    "opens_file_chooser": {
+      "click": true,
+      "enter": true,
+      "space": true
+    }
+  },
+  "visual_clarity": {
+    "opaque_canvas": true,
+    "page_wide_gradient_present": false,
+    "decorator_pseudo_elements": [],
+    "ancestor_effect_violations": 0,
+    "contrast_failures": 0,
+    "surfaces": {
+      "short-desktop": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "desktop": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "full-hd": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "reported-screen": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "qhd": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      }
+    }
+  },
+  "group_frames": {
+    "fieldset_border_zero": true,
+    "decorative_hr_count": 0,
+    "duplicate_outer_frame_count": 0,
+    "fieldset_count": 2
+  },
   "request_counts": {
     "preview": 1,
     "create": 1
   },
+  "reuse_policy_hits": [],
   "summary": {
     "viewports_checked": 8,
-    "ctas_visible": false,
+    "ctas_visible": true,
     "videos": [
       "motion/01-page-enter.webm",
       "motion/02-address-import.webm",
@@ -818,7 +1575,12 @@
     },
     "mobile_stale_ok": true,
     "dialog_ok": true,
-    "chain_label_ok": true
+    "chain_label_ok": true,
+    "file_entry_unique": true,
+    "desktop_alignment_max_delta_px": 0,
+    "opaque_canvas": true,
+    "group_frames_ok": true,
+    "dataset_seven_item_component_ok": true
   },
   "r9": {
     "r9_07_passed": true,

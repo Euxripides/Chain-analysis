@@ -1,6 +1,6 @@
 {
   "suite": "DL-FLOW remediation (dataset limit: real api / component fixture / server constraint)",
-  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260921T145916Z",
   "checks_total": 22,
   "checks_failed": 0,
   "failed": [],
@@ -260,8 +260,8 @@
       "check": "server-no-new-job",
       "ok": true,
       "detail": {
-        "before": 44,
-        "after": 44
+        "before": 56,
+        "after": 56
       }
     }
   ],

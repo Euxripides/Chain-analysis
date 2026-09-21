@@ -9,14 +9,10 @@
     "submitEnabled": true
   },
   "metrics": {
-    "maxGap": 100,
-    "gapSamples": 18,
-    "maxLongTask": 84,
-    "longTasks": [
-      84,
-      65,
-      77
-    ]
+    "maxGap": 50,
+    "gapSamples": 12,
+    "maxLongTask": 0,
+    "longTasks": []
   },
   "pageErrors": [],
   "login": {

@@ -1,7 +1,7 @@
 {
   "generator": "frontend/scripts/r9-make-fixtures-v4.mjs",
-  "generated_at": "2026-09-20T19:33:55.727Z",
-  "out_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260920T193353Z/fixtures",
+  "generated_at": "2026-09-21T14:49:31.724Z",
+  "out_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260921T144929Z/fixtures",
   "address": "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649",
   "chain": "bsc",
   "limits": {

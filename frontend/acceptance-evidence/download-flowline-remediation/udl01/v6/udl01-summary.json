@@ -1,6 +1,6 @@
 {
   "suite": "U-DL-01 isolated import parse (worker / bounded timeout / cancel / malicious ZIP) v6",
-  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260920T193526Z",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260921T145053Z",
   "checks_total": 86,
   "checks_failed": 0,
   "failed": [],
@@ -9,8 +9,8 @@
       "check": "playwright-stats",
       "ok": true,
       "detail": {
-        "startTime": "2026-09-20T19:35:52.307Z",
-        "duration": 22957.458,
+        "startTime": "2026-09-21T14:51:19.145Z",
+        "duration": 18106.613,
         "expected": 5,
         "skipped": 0,
         "unexpected": 0,
@@ -112,7 +112,7 @@
       "check": "a-elapsed-positive",
       "ok": true,
       "detail": {
-        "elapsedMs": 1899
+        "elapsedMs": 1486
       }
     },
     {
@@ -148,7 +148,7 @@
       "ok": true,
       "detail": {
         "workerUrls": [
-          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-CeQCoXhY.js"
         ]
       }
     },
@@ -156,42 +156,30 @@
       "check": "a-frame-gaps-sampled",
       "ok": true,
       "detail": {
-        "maxGap": 217,
-        "gapSamples": 87,
-        "maxLongTask": 218,
-        "longTasks": [
-          51,
-          218,
-          54
-        ]
+        "maxGap": 33,
+        "gapSamples": 86,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "a-no-second-long-longtask",
       "ok": true,
       "detail": {
-        "maxGap": 217,
-        "gapSamples": 87,
-        "maxLongTask": 218,
-        "longTasks": [
-          51,
-          218,
-          54
-        ]
+        "maxGap": 33,
+        "gapSamples": 86,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "a-no-second-frame-gap",
       "ok": true,
       "detail": {
-        "maxGap": 217,
-        "gapSamples": 87,
-        "maxLongTask": 218,
-        "longTasks": [
-          51,
-          218,
-          54
-        ]
+        "maxGap": 33,
+        "gapSamples": 86,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
@@ -213,7 +201,7 @@
       "check": "b-bounded-elapsed",
       "ok": true,
       "detail": {
-        "elapsedMs": 558
+        "elapsedMs": 459
       }
     },
     {
@@ -248,22 +236,17 @@
       "check": "b-no-second-long-longtask",
       "ok": true,
       "detail": {
-        "maxGap": 133,
-        "gapSamples": 21,
-        "maxLongTask": 130,
-        "longTasks": [
-          67,
-          51,
-          65,
-          130
-        ]
+        "maxGap": 33,
+        "gapSamples": 26,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
       "check": "c-cancel-bounded",
       "ok": true,
       "detail": {
-        "cancelMs": 548
+        "cancelMs": 124
       }
     },
     {
@@ -291,7 +274,7 @@
       "check": "c-progress-shows-file",
       "ok": true,
       "detail": {
-        "progressText": "正在解析文件 udl01-big.xlsx 取消解析"
+        "progressText": "文件导入 正在解析文件 udl01-big.xlsx 取消解析"
       }
     },
     {
@@ -318,8 +301,8 @@
       "check": "c-budget-no-zero-seconds",
       "ok": true,
       "detail": {
-        "chunk": "DownloadNewPage-B4IJfgn5.js",
-        "chunk_sha256": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "chunk": "DownloadNewPage-BoERlvw1.js",
+        "chunk_sha256": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "rows": [
           {
             "input": "300",
@@ -359,9 +342,9 @@
       "check": "c-budget-probe-bound-to-served-chunk",
       "ok": true,
       "detail": {
-        "probe_sha": "10c2761593dd866a",
-        "served_sha": "10c2761593dd866a",
-        "chunk": "DownloadNewPage-B4IJfgn5.js"
+        "probe_sha": "54d26aae6a1189f2",
+        "served_sha": "54d26aae6a1189f2",
+        "chunk": "DownloadNewPage-BoERlvw1.js"
       }
     },
     {
@@ -388,14 +371,10 @@
       "check": "d-not-blocking:udl01-bomb.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 83,
-        "gapSamples": 13,
-        "maxLongTask": 71,
-        "longTasks": [
-          71,
-          51,
-          57
-        ]
+        "maxGap": 50,
+        "gapSamples": 6,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
@@ -411,7 +390,7 @@
       "ok": true,
       "detail": {
         "maxGap": 33,
-        "gapSamples": 7,
+        "gapSamples": 6,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -428,7 +407,7 @@
       "check": "d-not-blocking:udl01-stored-mismatch.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 50,
+        "maxGap": 17,
         "gapSamples": 6,
         "maxLongTask": 0,
         "longTasks": []
@@ -446,12 +425,10 @@
       "check": "d-not-blocking:udl01-method-mismatch.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 100,
-        "gapSamples": 7,
-        "maxLongTask": 92,
-        "longTasks": [
-          92
-        ]
+        "maxGap": 17,
+        "gapSamples": 4,
+        "maxLongTask": 0,
+        "longTasks": []
       }
     },
     {
@@ -466,8 +443,8 @@
       "check": "d-not-blocking:udl01-data-descriptor.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 33,
-        "gapSamples": 5,
+        "maxGap": 17,
+        "gapSamples": 6,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -484,8 +461,8 @@
       "check": "d-not-blocking:udl01-zip64.xlsx",
       "ok": true,
       "detail": {
-        "maxGap": 33,
-        "gapSamples": 6,
+        "maxGap": 17,
+        "gapSamples": 5,
         "maxLongTask": 0,
         "longTasks": []
       }
@@ -501,7 +478,7 @@
       "detail": {
         "sheetjsChunkRequests": 0,
         "chunks": [
-          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-CeQCoXhY.js"
         ]
       }
     },
@@ -768,16 +745,16 @@
       "check": "bundle-index-served-matches-disk",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -788,16 +765,16 @@
       "check": "bundle-worker-chunk-200",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -808,16 +785,16 @@
       "check": "bundle-worker-chunk-bytes-match",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -828,16 +805,16 @@
       "check": "bundle-page-chunk-references-worker",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -848,16 +825,16 @@
       "check": "bundle-page-chunk-200",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -868,16 +845,16 @@
       "check": "bundle-page-chunk-bytes-match",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -888,16 +865,16 @@
       "check": "bundle-page-chunk-has-budget-unit",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -908,16 +885,16 @@
       "check": "bundle-page-chunk-has-timeout-copy",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -928,16 +905,16 @@
       "check": "bundle-csp-present",
       "ok": true,
       "detail": {
-        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
-        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
-        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "served_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "disk_index_sha": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+        "page_chunk": "DownloadNewPage-BoERlvw1.js",
+        "worker_chunk": "import-parse.worker-CeQCoXhY.js",
         "worker_chunk_http": "200",
-        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
-        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_disk_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
+        "worker_chunk_served_sha": "6c16aa6ef7ae1379d7a4ac7fc7a1a0faeb084c3da51032d345f9ba4c400a5f93",
         "page_chunk_http": "200",
-        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
-        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_disk_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
+        "page_chunk_served_sha": "54d26aae6a1189f250b832225076a8610639b01882846f74f7d3619717ee1457",
         "page_chunk_budget_ms_hits": 1,
         "page_chunk_timeout_copy_hits": 1,
         "page_chunk_references_worker": true,
@@ -957,7 +934,7 @@
           "passed"
         ],
         "result_durations": [
-          5241
+          3969
         ],
         "result_error_counts": [
           0
@@ -966,12 +943,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:52.890Z"
+          "2026-09-21T14:51:19.660Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-a-evidence.json",
-      "evidence_bytes": 1382,
+      "evidence_bytes": 1344,
       "ok": true
     },
     {
@@ -985,7 +962,7 @@
           "passed"
         ],
         "result_durations": [
-          3776
+          2829
         ],
         "result_error_counts": [
           0
@@ -994,12 +971,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:35:58.602Z"
+          "2026-09-21T14:51:24.048Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-b-evidence.json",
-      "evidence_bytes": 749,
+      "evidence_bytes": 701,
       "ok": true
     },
     {
@@ -1013,7 +990,7 @@
           "passed"
         ],
         "result_durations": [
-          4478
+          3414
         ],
         "result_error_counts": [
           0
@@ -1022,12 +999,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:36:02.392Z"
+          "2026-09-21T14:51:26.900Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-c-evidence.json",
-      "evidence_bytes": 2036,
+      "evidence_bytes": 1980,
       "ok": true
     },
     {
@@ -1041,7 +1018,7 @@
           "passed"
         ],
         "result_durations": [
-          4940
+          4163
         ],
         "result_error_counts": [
           0
@@ -1050,12 +1027,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:36:06.889Z"
+          "2026-09-21T14:51:30.331Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-d-evidence.json",
-      "evidence_bytes": 5402,
+      "evidence_bytes": 5325,
       "ok": true
     },
     {
@@ -1069,7 +1046,7 @@
           "passed"
         ],
         "result_durations": [
-          3258
+          2539
         ],
         "result_error_counts": [
           0
@@ -1078,12 +1055,12 @@
           0
         ],
         "result_start_times": [
-          "2026-09-20T19:36:11.843Z"
+          "2026-09-21T14:51:34.510Z"
         ]
       },
       "failures": [],
       "evidence_file": "uc-desktop/udl01-e-evidence.json",
-      "evidence_bytes": 1029,
+      "evidence_bytes": 993,
       "ok": true
     }
   ],

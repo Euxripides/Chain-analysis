@@ -1,0 +1,521 @@
+{
+  "note": "REM-021/022/023/024 的真实浏览器 computed style 与 rect 测量",
+  "allowed_alignment_delta_px": 1,
+  "viewports": {
+    "short-desktop": {
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "textarea_rect": {
+        "top": 276.09,
+        "bottom": 360.09,
+        "height": 84,
+        "left": 293.44,
+        "width": 450.47
+      },
+      "file_trigger_rect": {
+        "top": 276.09,
+        "bottom": 360.09,
+        "height": 84,
+        "left": 755.91,
+        "width": 184
+      },
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "hr_count": 0,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "ancestor_effect_violations": [],
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 154.88,
+          "height": 60,
+          "label_width": 86.88,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 154.88,
+          "height": 60,
+          "label_width": 86.88,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 154.86,
+          "height": 60,
+          "label_width": 86.86,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "screenshot": null
+    },
+    "desktop": {
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "textarea_rect": {
+        "top": 287.48,
+        "bottom": 383.48,
+        "height": 96,
+        "left": 294.44,
+        "width": 521.73
+      },
+      "file_trigger_rect": {
+        "top": 287.48,
+        "bottom": 383.48,
+        "height": 96,
+        "left": 828.17,
+        "width": 184
+      },
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "hr_count": 0,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "ancestor_effect_violations": [],
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 136.34,
+          "height": 60,
+          "label_width": 68.34,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 136.36,
+          "height": 60,
+          "label_width": 68.36,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        }
+      ],
+      "screenshot": "visual-clarity/clarity-and-alignment-1440x900.png"
+    },
+    "full-hd": {
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "textarea_rect": {
+        "top": 296.44,
+        "bottom": 392.44,
+        "height": 96,
+        "left": 314.91,
+        "width": 925.19
+      },
+      "file_trigger_rect": {
+        "top": 296.44,
+        "bottom": 392.44,
+        "height": 96,
+        "left": 1252.09,
+        "width": 184
+      },
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "hr_count": 0,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "ancestor_effect_violations": [],
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "screenshot": null
+    },
+    "reported-screen": {
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "textarea_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 335.5,
+        "width": 1257
+      },
+      "file_trigger_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 1604.5,
+        "width": 184
+      },
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "hr_count": 0,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "ancestor_effect_violations": [],
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "screenshot": "visual-clarity/clarity-and-alignment-2309x1257.png"
+    },
+    "qhd": {
+      "surface": {
+        "backgroundColor": "rgb(246, 248, 251)",
+        "backgroundAlpha": 1,
+        "backgroundImage": "none",
+        "opacity": "1",
+        "filter": "none",
+        "backdropFilter": "none",
+        "beforeContent": "none",
+        "afterContent": "none"
+      },
+      "textarea_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 461,
+        "width": 1257
+      },
+      "file_trigger_rect": {
+        "top": 297.78,
+        "bottom": 393.78,
+        "height": 96,
+        "left": 1730,
+        "width": 184
+      },
+      "top_delta_px": 0,
+      "bottom_delta_px": 0,
+      "height_delta_px": 0,
+      "file_input_count": 1,
+      "visible_file_trigger_count": 1,
+      "duplicate_import_button_count": 0,
+      "parse_button_count": 1,
+      "opens_file_chooser": {
+        "click": true,
+        "enter": true,
+        "space": true
+      },
+      "hr_count": 0,
+      "fieldset_borders": [
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ],
+        [
+          "0px",
+          "0px",
+          "0px",
+          "0px"
+        ]
+      ],
+      "duplicate_outer_frame_count": 0,
+      "ancestor_effect_violations": [],
+      "dataset_cards": [
+        {
+          "text": "普通交易",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "Token Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 36.38,
+          "label_lines": 2,
+          "label_clipped": false
+        },
+        {
+          "text": "NFT Transfer",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "事件日志",
+          "width": 160.8,
+          "height": 60,
+          "label_width": 92.8,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        },
+        {
+          "text": "地址余额快照",
+          "width": 160.81,
+          "height": 60,
+          "label_width": 92.81,
+          "label_height": 18.19,
+          "label_lines": 1,
+          "label_clipped": false
+        }
+      ],
+      "screenshot": null
+    }
+  }
+}

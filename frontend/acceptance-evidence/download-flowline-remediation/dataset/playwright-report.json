@@ -26,7 +26,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z/test-results",
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260921T145916Z/test-results",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -51,7 +51,7 @@
       [
         "json",
         {
-          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z/playwright-report.json"
+          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260921T145916Z/playwright-report.json"
         }
       ]
     ],
@@ -97,12 +97,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 5488,
+                      "duration": 4343,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:46:48.143Z",
+                      "startTime": "2026-09-21T14:59:18.077Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -131,12 +131,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4697,
+                      "duration": 3822,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:46:54.092Z",
+                      "startTime": "2026-09-21T14:59:22.836Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -165,12 +165,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1714,
+                      "duration": 1495,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-20T19:46:58.808Z",
+                      "startTime": "2026-09-21T14:59:26.673Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -190,8 +190,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-20T19:46:47.607Z",
-    "duration": 13140.464,
+    "startTime": "2026-09-21T14:59:17.573Z",
+    "duration": 10761.373,
     "expected": 3,
     "skipped": 0,
     "unexpected": 0,
