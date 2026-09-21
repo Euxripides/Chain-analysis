@@ -141,7 +141,7 @@ export function HomeHero({ displayName, canTraceFunds, canCreateCase, meta, onEx
           <svg viewBox="0 0 360 200" className="cs-homehero__svg" focusable="false">
             <defs>
               <linearGradient id="cs-homehero-line" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#3478F6" stopOpacity="0.14" />
+                <stop offset="0%" stopColor="#2563EB" stopOpacity="0.16" />
                 <stop offset="55%" stopColor="#1DB8E8" stopOpacity="0.85" />
                 <stop offset="100%" stopColor="#6A63FF" stopOpacity="0.22" />
               </linearGradient>

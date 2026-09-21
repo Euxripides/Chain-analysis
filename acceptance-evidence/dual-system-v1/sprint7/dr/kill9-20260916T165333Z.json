@@ -1,0 +1,43 @@
+{
+  "drill": "kill9-drill",
+  "ts": "20260916T165333Z",
+  "verdict": "INCOMPLETE",
+  "verdict_note": "PASS 仅当 FAIL=0 且 NOT_VERIFIED=0 且 PARTIAL=0；structural NV 同样不构成通过",
+  "focus_job": "ef898c69-c592-4bae-b1c6-e82b8c5d80b2",
+  "failures": [],
+  "not_verified": [
+    "structural|消费者幂等（DATA-007）：库中不存在消费者去重/投递维度（处理过的 event id / Nats-Msg-Id 未落库），JetStream 的 Nats-Msg-Id 去重只在服务端窗口内生效且 /jsz 不暴露重复计数；因此本次演练**无法证明**订阅者幂等，禁止用 audit_events_v2 主键唯一性冒充。要拿到该证据需先让消费者把处理过的 event id（或 Nats-Msg-Id）落库，再重跑本演练。"
+  ],
+  "nv_class": {
+    "structural": [
+      "消费者幂等（DATA-007）：库中不存在消费者去重/投递维度（处理过的 event id / Nats-Msg-Id 未落库），JetStream 的 Nats-Msg-Id 去重只在服务端窗口内生效且 /jsz 不暴露重复计数；因此本次演练**无法证明**订阅者幂等，禁止用 audit_events_v2 主键唯一性冒充。要拿到该证据需先让消费者把处理过的 event id（或 Nats-Msg-Id）落库，再重跑本演练。"
+    ],
+    "check": []
+  },
+  "nv_counts": {
+    "total": 1,
+    "structural": 1,
+    "check": 0
+  },
+  "partial": [],
+  "partial_count": 0,
+  "truncated_datasets": [],
+  "invariants": [
+    "### 4. 逐 ID 集合不变量核对（F11 / F12 / F13）",
+    "- download_jobs：基线 2494 个，演练后仍存在 2494 个，缺失 0 个",
+    "- 关注作业 ef898c69-c592-4bae-b1c6-e82b8c5d80b2：RUNNING -> RUNNING",
+    "- download_shards：基线 29117；缺失 0；downloaded_rows 回退 0；COMPLETED 回退 0",
+    "- checkpoints：基线 20676；缺失 0；page_no 回退 0；downloaded_rows 回退 0",
+    "- download_pages 成功页（VALIDATED/INGESTED/DURABLE）：基线 170695，演练后 170695；丢失 0，状态回退 0，页游标哈希变化 0",
+    "- provider_usage 成功页按 shard：基线 20823 个分组/合计 414692；演练后合计 414740；回退 0",
+    "- outbox_events id 集合：基线 223，演练后 223，缺失 0（证明 outbox 未丢事件；**不等于**消费者幂等）",
+    "- 消费者幂等维度：本次没有可比的库内去重/投递维度（结论见报告 NOT_VERIFIED 段，禁止用主键唯一性冒充）",
+    "- 本节未发现不变量违规（NOT_VERIFIED 项另见 §5）"
+  ],
+  "baseline_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/kill9-20260916T165333Z.logs/baseline",
+  "after_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/kill9-20260916T165333Z.logs/after",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/kill9-20260916T165333Z.logs",
+  "report": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/kill9-20260916T165333Z.md",
+  "cleanup": "本脚本不删除任何证据、不清理任何目标",
+  "retention_note": "基线/复核对原始 TSV 全部保留（含 baseline/ 与 after/）"
+}

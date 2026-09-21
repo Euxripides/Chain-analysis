@@ -1,0 +1,25 @@
+# 每日备份（2026-09-17 新增）
+# 依据：用户要求「每日备份，并实际恢复成功一次」。
+# 覆盖：PostgreSQL（一致性快照）+ ClickHouse 全库 + MinIO 全桶镜像 + MinIO 桶语义基线（bucket-semantics.json）。
+# 存储：落在 /data（1.1T 卷），避免再占用根分区（/ 仅 21G 余量）。
+# 保留：7 天、至少保留最近 3 份；脚本只删「有 manifest.json 且无失败标记」的目录。
+[Unit]
+Description=Blockchain Platform 每日备份（PG 快照 + ClickHouse + MinIO 全桶 + 语义基线）
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+Environment=BACKUP_ROOT=/data/backups/blockchain-platform
+Environment=BACKUP_RETENTION_DAYS=7
+Environment=BACKUP_RETENTION_APPROVED=1
+Environment=BACKUP_RETENTION_KEEP_MIN=3
+WorkingDirectory=/home/euripides/projects/blockchain-platform
+ExecStart=/bin/bash /home/euripides/projects/blockchain-platform/scripts/backup/backup-all.sh
+StandardOutput=append:/tmp/backup.log
+StandardError=append:/tmp/backup.log
+TimeoutStartSec=infinity
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6

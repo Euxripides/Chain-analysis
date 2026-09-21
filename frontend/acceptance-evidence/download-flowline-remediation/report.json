@@ -1,0 +1,836 @@
+{
+  "verdict": "PASS",
+  "source_binding": {
+    "source_commit": "0a0e5e35a0eb93c5d5e34beb4079fe5d3d40f2f5",
+    "source_branch": "main",
+    "dist_index_sha256": "4a47d4ef7f418bcc7f3a102f270a784c0e1bc1984890c78d2a421ebb0697a077",
+    "served_index_sha256": "4a47d4ef7f418bcc7f3a102f270a784c0e1bc1984890c78d2a421ebb0697a077",
+    "served_matches_dist": true,
+    "all_equal": true
+  },
+  "viewports": {
+    "short-desktop": {
+      "width": 1366,
+      "height": 768,
+      "screenshot": "viewport/1366x768.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 768,
+      "root_client_height": 768,
+      "root_vertical_overflow": false,
+      "root_scroll_width": 1366,
+      "root_client_width": 1366,
+      "cta_preview": {
+        "top": 790,
+        "right": 929,
+        "bottom": 834,
+        "left": 753,
+        "width": 176,
+        "height": 44
+      },
+      "cta_create": {
+        "top": 647,
+        "right": 1309,
+        "bottom": 695,
+        "left": 1003,
+        "width": 306,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 582,
+        "right": 1325,
+        "bottom": 711,
+        "left": 987,
+        "width": 338,
+        "height": 129
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": true,
+      "config_scroll": [
+        624,
+        492
+      ],
+      "task_body_scrollable": true,
+      "rail_inner_width": 1049,
+      "workspace_width": 1049,
+      "dataset_columns": 4,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0.0017,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null
+    },
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "screenshot": "viewport/1440x900.png",
+      "screenshot_previewed": "viewport/desktop-with-preview.png",
+      "root_scroll_height": 900,
+      "root_client_height": 900,
+      "root_vertical_overflow": false,
+      "root_scroll_width": 1440,
+      "root_client_width": 1440,
+      "cta_preview": {
+        "top": 733,
+        "right": 1001,
+        "bottom": 777,
+        "left": 826,
+        "width": 176,
+        "height": 44
+      },
+      "cta_create": {
+        "top": 779,
+        "right": 1382,
+        "bottom": 827,
+        "left": 1076,
+        "width": 306,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 766,
+        "right": 1398,
+        "bottom": 843,
+        "left": 1060,
+        "width": 338,
+        "height": 77
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        613,
+        613
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 1121,
+      "workspace_width": 1121,
+      "dataset_columns": 5,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": {
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "rootClientWidth": 1440,
+        "rootScrollWidth": 1440,
+        "rootClientHeight": 900,
+        "rootScrollHeight": 900,
+        "bodyScrollHeight": 900,
+        "scrollY": 0,
+        "ctaPreview": {
+          "top": 749,
+          "right": 1011,
+          "bottom": 779,
+          "left": 933,
+          "width": 78,
+          "height": 30
+        },
+        "ctaPreviewShort": null,
+        "ctaCreate": {
+          "top": 779,
+          "right": 1382,
+          "bottom": 827,
+          "left": 1076,
+          "width": 306,
+          "height": 48
+        },
+        "asideFooter": {
+          "top": 766,
+          "right": 1398,
+          "bottom": 843,
+          "left": 1060,
+          "width": 338,
+          "height": 77
+        },
+        "mobileBar": null,
+        "datasetColumns": 5,
+        "verticalRail": false,
+        "horizontalRail": true,
+        "configScrollable": true,
+        "configScrollHeight": 820,
+        "configClientHeight": 613,
+        "taskBodyScrollable": true,
+        "railInnerWidth": 1121,
+        "workspaceWidth": 1121,
+        "mobile": false,
+        "desktop": true
+      }
+    },
+    "full-hd": {
+      "width": 1920,
+      "height": 1080,
+      "screenshot": "viewport/1920x1080.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 1080,
+      "root_client_height": 1080,
+      "root_vertical_overflow": false,
+      "root_scroll_width": 1920,
+      "root_client_width": 1920,
+      "cta_preview": {
+        "top": 742,
+        "right": 1425,
+        "bottom": 786,
+        "left": 1250,
+        "width": 176,
+        "height": 44
+      },
+      "cta_create": {
+        "top": 959,
+        "right": 1853,
+        "bottom": 1007,
+        "left": 1503,
+        "width": 350,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 946,
+        "right": 1869,
+        "bottom": 1023,
+        "left": 1487,
+        "width": 382,
+        "height": 77
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        784,
+        784
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 1572,
+      "workspace_width": 1572,
+      "dataset_columns": 6,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null
+    },
+    "reported-screen": {
+      "width": 2309,
+      "height": 1257,
+      "screenshot": "viewport/2309x1257.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 1257,
+      "root_client_height": 1257,
+      "root_vertical_overflow": false,
+      "root_scroll_width": 2309,
+      "root_client_width": 2309,
+      "cta_preview": {
+        "top": 743,
+        "right": 1778,
+        "bottom": 787,
+        "left": 1602,
+        "width": 176,
+        "height": 44
+      },
+      "cta_create": {
+        "top": 1136,
+        "right": 2222,
+        "bottom": 1184,
+        "left": 1856,
+        "width": 366,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 1123,
+        "right": 2238,
+        "bottom": 1200,
+        "left": 1840,
+        "width": 398,
+        "height": 77
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        959,
+        959
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 1600,
+      "workspace_width": 1920,
+      "dataset_columns": 6,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null,
+      "flowline_width_lte_1600": true,
+      "workspace_width_lte_1920": true
+    },
+    "qhd": {
+      "width": 2560,
+      "height": 1440,
+      "screenshot": "viewport/2560x1440.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 1440,
+      "root_client_height": 1440,
+      "root_vertical_overflow": false,
+      "root_scroll_width": 2560,
+      "root_client_width": 2560,
+      "cta_preview": {
+        "top": 743,
+        "right": 1903,
+        "bottom": 787,
+        "left": 1727,
+        "width": 176,
+        "height": 44
+      },
+      "cta_create": {
+        "top": 1319,
+        "right": 2347,
+        "bottom": 1367,
+        "left": 1981,
+        "width": 366,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 1306,
+        "right": 2363,
+        "bottom": 1383,
+        "left": 1965,
+        "width": 398,
+        "height": 77
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        1142,
+        1142
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 1600,
+      "workspace_width": 1920,
+      "dataset_columns": 6,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null,
+      "flowline_width_lte_1600": true,
+      "workspace_width_lte_1920": true
+    },
+    "laptop": {
+      "width": 1024,
+      "height": 768,
+      "screenshot": "viewport/1024x768.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 2229,
+      "root_client_height": 768,
+      "root_vertical_overflow": true,
+      "root_scroll_width": 1024,
+      "root_client_width": 1024,
+      "cta_preview": {
+        "top": 1232,
+        "right": 966,
+        "bottom": 1274,
+        "left": 790,
+        "width": 176,
+        "height": 42
+      },
+      "cta_create": {
+        "top": 2098,
+        "right": 985,
+        "bottom": 2146,
+        "left": 259,
+        "width": 726,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 2034,
+        "right": 1003,
+        "bottom": 2164,
+        "left": 241,
+        "width": 762,
+        "height": 130
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        1028,
+        1028
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 764,
+      "workspace_width": 764,
+      "dataset_columns": 5,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null
+    },
+    "tablet": {
+      "width": 768,
+      "height": 1024,
+      "screenshot": "viewport/768x1024.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 2543,
+      "root_client_height": 1024,
+      "root_vertical_overflow": true,
+      "root_scroll_width": 768,
+      "root_client_width": 768,
+      "cta_preview": {
+        "top": 1554,
+        "right": 714,
+        "bottom": 1596,
+        "left": 538,
+        "width": 176,
+        "height": 42
+      },
+      "cta_create": {
+        "top": 2420,
+        "right": 733,
+        "bottom": 2468,
+        "left": 35,
+        "width": 698,
+        "height": 48
+      },
+      "aside_footer": {
+        "top": 2356,
+        "right": 751,
+        "bottom": 2486,
+        "left": 17,
+        "width": 734,
+        "height": 130
+      },
+      "mobile_bar": null,
+      "config_internal_scroll": false,
+      "config_scroll": [
+        1368,
+        1368
+      ],
+      "task_body_scrollable": false,
+      "rail_inner_width": 736,
+      "workspace_width": 736,
+      "dataset_columns": 3,
+      "vertical_rail": false,
+      "horizontal_rail": true,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "screenshot": "viewport/390x844.png",
+      "screenshot_previewed": null,
+      "root_scroll_height": 1660,
+      "root_client_height": 844,
+      "root_vertical_overflow": true,
+      "root_scroll_width": 390,
+      "root_client_width": 390,
+      "cta_preview": null,
+      "cta_create": null,
+      "aside_footer": null,
+      "mobile_bar": {
+        "top": 771,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 73
+      },
+      "config_internal_scroll": false,
+      "config_scroll": [
+        1164,
+        1164
+      ],
+      "task_body_scrollable": null,
+      "rail_inner_width": null,
+      "workspace_width": null,
+      "dataset_columns": 2,
+      "vertical_rail": true,
+      "horizontal_rail": false,
+      "cls": 0,
+      "console_errors": [],
+      "page_errors": [],
+      "csp_errors": [],
+      "after_preview": null
+    }
+  },
+  "motion": {
+    "videos": [
+      {
+        "name": "01-page-enter",
+        "file": "motion/01-page-enter.webm",
+        "checks": {
+          "settled": true
+        }
+      },
+      {
+        "name": "02-address-import",
+        "file": "motion/02-address-import.webm",
+        "checks": {
+          "driven": true,
+          "dialog": 1
+        }
+      },
+      {
+        "name": "03-range-switch",
+        "file": "motion/03-range-switch.webm",
+        "checks": {
+          "driven": true
+        }
+      },
+      {
+        "name": "04-dataset-and-step",
+        "file": "motion/04-dataset-and-step.webm",
+        "checks": {
+          "driven": true
+        }
+      },
+      {
+        "name": "05-coverage-to-create",
+        "file": "motion/05-coverage-to-create.webm",
+        "checks": {
+          "driven": true
+        }
+      },
+      {
+        "name": "06-reduced-motion",
+        "file": "motion/06-reduced-motion.webm",
+        "checks": {
+          "driven": true
+        }
+      }
+    ],
+    "reduced_motion": {
+      "dots": 0,
+      "dasharray": {
+        "before": "0px, 1px",
+        "after": "1px, 1px"
+      },
+      "dialog_transform": "none",
+      "functional": true
+    },
+    "hidden_page_pauses_loop": true,
+    "interruptible": true,
+    "cls": 0,
+    "severe_long_tasks": 0,
+    "checks": {
+      "enter": {
+        "operable_immediately": true,
+        "settled": {
+          "head": 1,
+          "rail": 1,
+          "workspace": 1,
+          "cls": 0
+        },
+        "cls": 0
+      },
+      "address": {
+        "api_calls_delta": 1,
+        "pulse_rendered": true,
+        "pulse_opacity_after": [
+          "0"
+        ],
+        "busy_delayed": true
+      },
+      "range": {
+        "final_state": {
+          "checked": [
+            "full"
+          ],
+          "blockField": false,
+          "timeField": false,
+          "animated": 0
+        },
+        "block_state": {
+          "from": true,
+          "to": true,
+          "opacity": "1"
+        }
+      },
+      "dataset": {
+        "keyboard_selected": true,
+        "position_shift": 0,
+        "non_color": true,
+        "root_scroll_delta": 0,
+        "scroller_scroll": 0,
+        "current_step": "对象与地址",
+        "disabled_steps": 4
+      },
+      "coverage": {
+        "ring": {
+          "dasharray": "290.911px",
+          "dashoffset": "32.5821px",
+          "text": "88.8%"
+        },
+        "create_requests": 1,
+        "reduced_motion_pulse": false
+      },
+      "hidden": {
+        "visible_move": 128.90000000000003,
+        "hidden_move": 0,
+        "resumed_move": 92.20000000000002
+      },
+      "reduced": {
+        "dots": 0,
+        "range_transform": "none",
+        "dasharray": {
+          "before": "0px, 1px",
+          "after": "1px, 1px"
+        },
+        "dialog_transform": "none",
+        "functional": true
+      }
+    },
+    "videos_present": true
+  },
+  "clarity": {
+    "1440x900": {
+      "页面标题": {
+        "fontSize": "24px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      },
+      "章节标题": {
+        "fontSize": "16px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "字段标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "Dataset 标签": {
+        "fontSize": "14px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 15.92
+      },
+      "右侧指标标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "右侧指标数值": {
+        "fontSize": "20px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "主按钮": {
+        "fontSize": "14px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 5.97
+      },
+      "轨道标签": {
+        "fontSize": "13px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      }
+    },
+    "2309x1257": {
+      "页面标题": {
+        "fontSize": "28px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      },
+      "章节标题": {
+        "fontSize": "16px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "字段标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "Dataset 标签": {
+        "fontSize": "14px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 15.92
+      },
+      "右侧指标标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "右侧指标数值": {
+        "fontSize": "20px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "主按钮": {
+        "fontSize": "14px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 5.97
+      },
+      "轨道标签": {
+        "fontSize": "13px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      }
+    },
+    "2560x1440": {
+      "页面标题": {
+        "fontSize": "28px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      },
+      "章节标题": {
+        "fontSize": "16px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "字段标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "Dataset 标签": {
+        "fontSize": "14px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 15.92
+      },
+      "右侧指标标签": {
+        "fontSize": "12px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 6.2
+      },
+      "右侧指标数值": {
+        "fontSize": "20px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 16.52
+      },
+      "主按钮": {
+        "fontSize": "14px",
+        "color": "rgb(82, 98, 122)",
+        "contrast": 5.97
+      },
+      "轨道标签": {
+        "fontSize": "13px",
+        "color": "rgb(11, 31, 58)",
+        "contrast": 14.06
+      }
+    }
+  },
+  "dialog": {
+    "css_override_lines": [
+      " * 共享 renderer 在 <600px 会取消 .cs-dialog__body 的 max-height（那是给短表单"
+    ],
+    "scoped_has_rule_only": false,
+    "tokens": {
+      "standard": ".22s",
+      "fast": ".14s"
+    },
+    "durations": {
+      "panelAnimationDuration": "0s",
+      "panelTransitionDuration": "0s",
+      "maskBackdrop": "none"
+    },
+    "residue": {
+      "dialogs": 0,
+      "masks": 0
+    }
+  },
+  "chain_label": {
+    "visible_label": "TRON",
+    "slug_occurrences": 1,
+    "selected_chain_value": ""
+  },
+  "mobile_stale": {
+    "selected_before_change": 0,
+    "selected_after_change": 0,
+    "active_step": "Dataset",
+    "summary_text": "4 Coverage 预览 上次预览 · 已失效 编辑 预览已失效 重新预览",
+    "collapsed": true,
+    "has_chip": true,
+    "chip_text": "预览已失效",
+    "role_status": true,
+    "repreview_button": true,
+    "head_meta": "上次预览 · 已失效",
+    "screenshot": "viewport/mobile-stale-390x844.png",
+    "grayscale_distinguishable": true
+  },
+  "dataset_limit": {
+    "real_e2e_passed": true,
+    "seven_item_component_test_passed": true,
+    "server_limit_passed": true
+  },
+  "reuse_policy_visible": false,
+  "preview_request_reuse_policy": "prefer_local",
+  "create_request_reuse_policy": "prefer_local",
+  "request_log": [
+    {
+      "url": "http://127.0.0.1:5431/api/v2/downloads/validate-addresses",
+      "reuse_policy": null,
+      "chain": "tron",
+      "idempotency_key": null
+    },
+    {
+      "url": "http://127.0.0.1:5431/api/v2/downloads/preview",
+      "reuse_policy": "prefer_local",
+      "chain": "tron",
+      "idempotency_key": null
+    },
+    {
+      "url": "http://127.0.0.1:5431/api/v2/downloads",
+      "reuse_policy": "prefer_local",
+      "chain": "tron",
+      "idempotency_key": "582ea152-ee60-5431-abe1-e243b10afa15"
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "csp_errors": [],
+  "failed": [],
+  "unexpected_skipped": [],
+  "designed_skipped": [],
+  "not_run": [],
+  "request_counts": {
+    "preview": 1,
+    "create": 1
+  },
+  "summary": {
+    "viewports_checked": 8,
+    "ctas_visible": false,
+    "videos": [
+      "motion/01-page-enter.webm",
+      "motion/02-address-import.webm",
+      "motion/03-range-switch.webm",
+      "motion/04-dataset-and-step.webm",
+      "motion/05-coverage-to-create.webm",
+      "motion/06-reduced-motion.webm"
+    ],
+    "reduced_motion": {
+      "dots": 0,
+      "dasharray": {
+        "before": "0px, 1px",
+        "after": "1px, 1px"
+      },
+      "dialog_transform": "none",
+      "functional": true
+    },
+    "mobile_stale_ok": true,
+    "dialog_ok": true,
+    "chain_label_ok": true
+  },
+  "r9": {
+    "r9_07_passed": true,
+    "report_present": true,
+    "matrix_missing": 0
+  },
+  "udl01": {
+    "v5b_passed": true,
+    "v6_passed": true,
+    "zip64_branch_hit": true,
+    "zip64_layout_ok": true,
+    "zip64_rejection": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
+    "stable_semantic_assertions": true
+  }
+}

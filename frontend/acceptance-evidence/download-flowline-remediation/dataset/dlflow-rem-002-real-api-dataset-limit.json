@@ -1,0 +1,191 @@
+{
+  "layer": "real-api-dataset-whitelist",
+  "meta_url": "https://127.0.0.1:8448/api/v2/meta/datasets?chain=arbitrum",
+  "page_chain": "arbitrum",
+  "dataset_request_urls": [
+    "https://127.0.0.1:8448/api/v2/meta/datasets",
+    "https://127.0.0.1:8448/api/v2/meta/datasets?chain=arbitrum"
+  ],
+  "real_ids": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances",
+    "internal_transactions"
+  ],
+  "real_count": 6,
+  "real_items": [
+    {
+      "api_channel": "ankr_advanced",
+      "id": "transactions",
+      "label": "普通交易",
+      "provider": "ankr",
+      "status": "available",
+      "supports_block_range": true,
+      "supports_full": true,
+      "supports_time_range": true
+    },
+    {
+      "api_channel": "ankr_advanced",
+      "id": "token_transfers",
+      "label": "Token Transfer",
+      "provider": "ankr",
+      "status": "available",
+      "supports_block_range": true,
+      "supports_full": true,
+      "supports_time_range": true
+    },
+    {
+      "api_channel": "ankr_advanced",
+      "id": "nft_transfers",
+      "label": "NFT Transfer",
+      "provider": "ankr",
+      "status": "available",
+      "supports_block_range": true,
+      "supports_full": true,
+      "supports_time_range": true
+    },
+    {
+      "api_channel": "ankr_advanced",
+      "id": "logs",
+      "label": "事件日志",
+      "provider": "ankr",
+      "status": "available",
+      "supports_block_range": true,
+      "supports_full": true,
+      "supports_time_range": true
+    },
+    {
+      "api_channel": "ankr_advanced",
+      "id": "balances",
+      "label": "地址余额快照",
+      "provider": "ankr",
+      "status": "available",
+      "supports_block_range": false,
+      "supports_full": false,
+      "supports_time_range": false
+    },
+    {
+      "id": "internal_transactions",
+      "label": "内部调用",
+      "status": "unsupported",
+      "supports_block_range": false,
+      "supports_full": false,
+      "supports_time_range": false
+    }
+  ],
+  "dom_ids": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances",
+    "internal_transactions"
+  ],
+  "available_ids": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances"
+  ],
+  "unavailable_ids": [
+    "internal_transactions"
+  ],
+  "available_count": 5,
+  "unavailable_count": 1,
+  "evm_probe": {
+    "chain": "bsc",
+    "status": 200,
+    "ids": [
+      "transactions",
+      "token_transfers",
+      "nft_transfers",
+      "logs",
+      "balances",
+      "internal_transactions"
+    ],
+    "items": [
+      {
+        "api_channel": "ankr_advanced",
+        "id": "transactions",
+        "label": "普通交易",
+        "provider": "ankr",
+        "status": "available",
+        "supports_block_range": true,
+        "supports_full": true,
+        "supports_time_range": true
+      },
+      {
+        "api_channel": "ankr_advanced",
+        "id": "token_transfers",
+        "label": "Token Transfer",
+        "provider": "ankr",
+        "status": "available",
+        "supports_block_range": true,
+        "supports_full": true,
+        "supports_time_range": true
+      },
+      {
+        "api_channel": "ankr_advanced",
+        "id": "nft_transfers",
+        "label": "NFT Transfer",
+        "provider": "ankr",
+        "status": "available",
+        "supports_block_range": true,
+        "supports_full": true,
+        "supports_time_range": true
+      },
+      {
+        "api_channel": "ankr_advanced",
+        "id": "logs",
+        "label": "事件日志",
+        "provider": "ankr",
+        "status": "available",
+        "supports_block_range": true,
+        "supports_full": true,
+        "supports_time_range": true
+      },
+      {
+        "api_channel": "ankr_advanced",
+        "id": "balances",
+        "label": "地址余额快照",
+        "provider": "ankr",
+        "status": "available",
+        "supports_block_range": false,
+        "supports_full": false,
+        "supports_time_range": false
+      },
+      {
+        "id": "internal_transactions",
+        "label": "内部调用",
+        "status": "unsupported",
+        "supports_block_range": false,
+        "supports_full": false,
+        "supports_time_range": false
+      }
+    ],
+    "available_ids": [
+      "transactions",
+      "token_transfers",
+      "nft_transfers",
+      "logs",
+      "balances"
+    ]
+  },
+  "ui_selected": 5,
+  "preview_request_chain": "arbitrum",
+  "preview_request_datasets": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances"
+  ],
+  "preview_request_reuse_policy": "prefer_local",
+  "login": {
+    "attempts": 2,
+    "retriedNavigation": false
+  }
+}

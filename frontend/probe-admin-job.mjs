@@ -1,0 +1,24 @@
+import { chromium } from "@playwright/test";
+const BASE = process.env.E2E_BASE_URL || "https://127.0.0.1:8448";
+const browser = await chromium.launch({ executablePath: process.env.E2E_CHROMIUM_PATH || "/usr/bin/chromium-browser" });
+const ctx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } });
+const page = await ctx.newPage();
+page.on("console", (m) => { if (m.type() === "error") console.log("console.error:", m.text().slice(0, 250)); });
+page.on("pageerror", (e) => console.log("pageerror:", String(e).slice(0, 300)));
+page.on("request", (r) => { if (r.url().includes("/api/")) console.log("REQ", r.method(), r.url().replace(BASE, "").slice(0, 100)); });
+page.on("requestfailed", (r) => console.log("REQFAIL", r.url().replace(BASE, "").slice(0, 100), r.failure()?.errorText));
+page.on("response", (r) => { if (r.url().includes("/api/admin")) console.log("RESP", r.status(), r.url().replace(BASE, "").slice(0, 100)); });
+
+await page.goto(BASE + "/admin/login", { waitUntil: "domcontentloaded" });
+await page.locator("#identifier").fill(process.env.ADMIN_EMAIL);
+await page.locator("#password").fill(process.env.ADMIN_PASSWORD);
+await page.getByRole("button", { name: /^登录(后台)?$/ }).click();
+await page.locator(".auth-card").waitFor({ state: "detached", timeout: 20000 }).catch(() => {});
+const list = await page.request.get(BASE + "/api/admin/v1/jobs?limit=1", { headers: { "X-Auth-Audience": "admin" } });
+const jobId = (await list.json()).data.items[0].id;
+console.log("=== now navigating to job detail", jobId);
+await page.goto(BASE + "/admin/jobs/" + jobId, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(10000);
+console.log("URL:", page.url());
+console.log("MAIN >>>", (await page.locator("main").innerText().catch(() => "")).replace(/\n+/g, " | ").slice(0, 400));
+await browser.close();

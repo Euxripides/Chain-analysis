@@ -1,0 +1,7 @@
+{
+  "passed": 21,
+  "failed": 0,
+  "status": "PASS",
+  "criteria": "failed==0 and passed>0",
+  "suite": "featureflags-real-path"
+}

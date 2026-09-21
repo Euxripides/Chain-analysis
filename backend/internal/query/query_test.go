@@ -33,10 +33,25 @@ func TestNormalizeStoredAmountUsesRowTokenDecimals(t *testing.T) {
 
 func TestActivityCandidateMatchesDirection(t *testing.T) {
 	transfer := map[string]any{"from_address": "0xfrom", "to_address": "0xto"}
-	if !activityCandidateMatches(map[string]any{"address": "0xto", "counterparty": "0xfrom", "direction": "in"}, transfer) {
+	if !activityCandidateMatches("bsc", map[string]any{"address": "0xto", "counterparty": "0xfrom", "direction": "in"}, transfer) {
 		t.Fatal("incoming transfer did not match")
 	}
-	if activityCandidateMatches(map[string]any{"address": "0xfrom", "counterparty": "0xwrong", "direction": "out"}, transfer) {
+	if activityCandidateMatches("bsc", map[string]any{"address": "0xfrom", "counterparty": "0xwrong", "direction": "out"}, transfer) {
 		t.Fatal("wrong counterparty matched")
+	}
+	// Solana base58 大小写敏感：只有逐字符相同的地址才算匹配。
+	solTransfer := map[string]any{
+		"from_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+		"to_address":   "So11111111111111111111111111111111111111112",
+	}
+	if activityCandidateMatches("solana", map[string]any{
+		"address":      "epjfwdd5aufqssqem2qn1xzybapc8g4weggkzwytdt1v",
+		"counterparty": "So11111111111111111111111111111111111111112", "direction": "in"}, solTransfer) {
+		t.Fatal("case-folded solana address must not match")
+	}
+	if !activityCandidateMatches("solana", map[string]any{
+		"address":      "So11111111111111111111111111111111111111112",
+		"counterparty": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "direction": "in"}, solTransfer) {
+		t.Fatal("exact solana address must match")
 	}
 }

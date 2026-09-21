@@ -1,0 +1,8 @@
+script_sha256=2dc0f0a0f44fbd83f16763eb189142a44754202510f0e2221f37f3692bdc78c3
+evidence=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260920T193353Z
+started_utc=20260920T193353Z
+preflight=OK chain=bsc address=0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649
+fixtures_rc=0
+fixture_selfcheck_rc=0
+playwright_rc=0
+report_check_rc=0

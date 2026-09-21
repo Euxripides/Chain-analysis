@@ -64,6 +64,8 @@ func main() {
 		Head: infra.Head, AddressType: infra.AddressType, BalanceRead: infra.BalanceRead,
 		ChainRead: infra.ChainRead, Trace: infra.Trace, RPCGateway: infra.RPCGateway,
 		Capabilities: infra.Capabilities, Investigations: infra.Investigations, Canvases: infra.Canvases,
+		// 工作流 E：dRPC 后台管理（运行时路由注册表 / 分类密钥 / 管理同步 / dRPC 客户端）。
+		Routes: infra.Routes, Secrets: infra.Secrets, DRPCManagement: infra.DRPCManagement, DRPC: infra.DRPC,
 	})
 	srv.StartForwarder()
 

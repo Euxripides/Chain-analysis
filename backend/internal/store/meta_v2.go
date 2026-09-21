@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
+// normalizeWorkspaceAddress 计算 workspace_addresses.normalized_address。
+// 必须与查询侧用同一个函数（addressnorm.NormalizeKey），否则 Solana 会因
+// 写入保留大小写、查询折叠而互相查不到。
 func normalizeWorkspaceAddress(chain, address string) string {
-	address = strings.TrimSpace(address)
-	if strings.EqualFold(strings.TrimSpace(chain), "tron") {
-		return address
-	}
-	return strings.ToLower(address)
+	return addressnorm.NormalizeKey(chain, address)
 }
 
 // ---- Workspace addresses ----
@@ -235,10 +235,8 @@ func (s *Store) UpsertTokenMetadata(ctx context.Context, chain, contract, name, 
 		source = "ankr"
 	}
 	chain = strings.ToLower(strings.TrimSpace(chain))
-	contract = strings.TrimSpace(contract)
-	if chain != "tron" {
-		contract = strings.ToLower(contract)
-	}
+	// Solana 的合约地址是 mint（base58，大小写敏感），不能折叠。
+	contract = addressnorm.NormalizeKey(chain, contract)
 	_, err := s.Pool.Exec(ctx, "INSERT INTO token_metadata (chain, contract_address, normalized_address, name, symbol, decimals, logo_url, token_type, metadata_source) "+
 		"VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$8) "+
 		"ON CONFLICT (chain, contract_address) DO UPDATE SET "+

@@ -79,10 +79,10 @@ func tokenHashP0(token string) string {
 }
 
 type tokenBinding struct {
-	start, end     uint64
-	subject        string
-	dataset        string
-	shards         map[string]struct{}
+	start, end uint64
+	subject    string
+	dataset    string
+	shards     map[string]struct{}
 }
 type tokenRegistry struct {
 	mu     sync.Mutex

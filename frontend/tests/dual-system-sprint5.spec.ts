@@ -183,6 +183,61 @@ test.describe("S5-FE-01 搜索 / Explorer / 地址 / 交易", () => {
   });
 });
 
+/**
+ * Flowline 重构后的 /downloads/new 交互辅助（同 r9-uc-download-import-v4.spec.ts）：
+ * 链与范围是第 ② 步的 Ant Design Select / 分段控件；地址校验、预览、创建是三段独立交互。
+ */
+async function selectChain(page: Page, slug: string) {
+  await expect(page.locator(".cs-chainselect")).not.toHaveClass(/ant-select-disabled/, { timeout: 30_000 });
+  await page.locator(".cs-chainselect").click();
+  /* 选项是虚拟滚动：未过滤时 DOM 只有前 8 项；展开后先按 slug 过滤再点（TRON/bsc 都在列表中）。 */
+  await page.locator(".cs-chainselect input").first().fill(slug);
+  await page.locator(".cs-select-dropdown-wizard .ant-select-item-option", { hasText: new RegExp(slug, "i") }).first().click();
+  await page.keyboard.press("Escape");
+}
+
+/**
+ * 范围类型是分段控件（Segmented，fieldset + radio）：点 <label> 本体。
+ * 直接点里面的 <span> 会被覆盖其上的 radio input 拦截（命中目标必须是目标本身或后代）。
+ */
+async function selectRange(page: Page, label: string) {
+  await page.locator('#download-range-type label:has(input[name="download-range-type"])').filter({ hasText: label }).click();
+}
+
+/**
+ * 移动端（<640px）非当前步骤折叠成摘要卡，section 正文不在 DOM 里；
+ * 桌面端 data-collapsed 恒为 false，这里是无副作用的 no-op。
+ */
+async function ensureSectionExpanded(page: Page, step: string) {
+  const section = page.locator("#download-step-" + step);
+  if ((await section.getAttribute("data-collapsed")) === "true") {
+    await section.getByRole("button", { name: "编辑" }).click();
+    await expect(section).toHaveAttribute("data-collapsed", "false", { timeout: 10_000 });
+  }
+}
+
+function isMobileViewport(page: Page): boolean {
+  return ((page.viewportSize()?.width) ?? 1440) < 640;
+}
+
+/** 首次预览：桌面是 ④ 区的「预览 Coverage 与成本」，移动端用底部操作栏的「预览」。 */
+async function clickPreviewForFirstTime(page: Page) {
+  if (isMobileViewport(page)) {
+    await page.locator(".dl-actionbar button").first().click();
+    return;
+  }
+  await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
+}
+
+/** 创建主按钮：桌面在右侧任务预览卡里，移动端在 Portal 出来的底部操作栏里。 */
+async function clickCreateButton(page: Page) {
+  if (isMobileViewport(page)) {
+    await page.locator(".dl-actionbar button.dl-btn--primary").click();
+    return;
+  }
+  await page.getByRole("button", { name: "创建下载任务" }).first().click();
+}
+
 test.describe("S5-FE-02 下载表单 / 任务列表 / 任务详情", () => {
   test.beforeEach(({}, testInfo) => {
     test.skip(testInfo.project.name.startsWith("admin"), "用户层页面只在 user projects 验证");
@@ -192,38 +247,61 @@ test.describe("S5-FE-02 下载表单 / 任务列表 / 任务详情", () => {
     test.skip(!COVERED_ADDRESS || !COVERED_FROM || !COVERED_TO, "需要 Coverage HIT 夹具");
     await uiLogin(page, INV_EMAIL!, INV_PASSWORD!);
     await page.goto("/app-v2/downloads/new", { waitUntil: "domcontentloaded" });
-    // 导入的服务端复核是**按链作用域**的（chain + normalized address 才是去重键）。
-    // 因此必须先选定链：表单默认会自动选中"第一个可用链"，若它不是本地址所属链，
-    // 服务端会逐条拒绝，界面只会显示 INVALID_ADDRESS —— 这一点已作为 UX 发现记录
-    // （ROUND-20260916 §3 UI-3），用例按当前契约先选链。
-    await page.locator("#download-chain").selectOption(COVERED_CHAIN);
+    // 新链路第 ① 段（地址导入/校验）：地址、链、范围填好后由「解析导入」单独触发服务端复核。
+    // 服务端复核是**按链作用域**的（chain + normalized address 才是去重键），而链由用户
+    // 显式选定 —— 这正是 ROUND-20260916 §3 UI-3 要的语义：不会拿"自动选中的第一个链"去校验。
     await page.locator("#download-addresses").fill(COVERED_ADDRESS);
+    await ensureSectionExpanded(page, "range");
+    await selectChain(page, COVERED_CHAIN);
+    await selectRange(page, "区块范围");
+    await page.locator("#download-from-block").fill(COVERED_FROM);
+    await page.locator("#download-to-block").fill(COVERED_TO);
+    const verdictResponse = page.waitForResponse(
+      (r) => r.url().includes("/api/v2/downloads/validate-addresses") && r.request().method() === "POST",
+      { timeout: 30_000 },
+    );
     await page.getByRole("button", { name: "解析导入" }).click();
-    const importDialog = await expectDialogTitle(page, /地址导入解析摘要/);
-    await importDialog.getByRole("button", { name: "提交服务端校验" }).click();
     // 服务端复核结果必须显式呈现接受/拒绝计数：被拒条目不得静默丢弃。
     const verdictDialog = await expectDialogTitle(page, /服务端地址校验结果/);
     await expect(verdictDialog).toContainText("服务端接受");
     // 链分布必须把该地址记在所选链下（tron:1），且不得出现任何"拒绝 第N行"条目。
     await expect(verdictDialog).toContainText(`${COVERED_CHAIN}:1`);
     await expect(verdictDialog).not.toContainText("拒绝 第");
-    // 第三段交互：服务端结果弹窗里的「使用服务端结果」才是导入的落地点
-    //（旧文案是「使用这些地址」）。按 Escape 关闭等于取消导入，地址数会停在 0。
+    expect((await verdictResponse).status(), "validate-addresses 必须成功").toBeLessThan(300);
+    // 「使用服务端结果」才是导入的落地点（按 Escape 关闭等于取消导入，地址数会停在 0）。
     await verdictDialog.getByRole("button", { name: "使用服务端结果" }).click();
-    await expect(page.getByText(/地址列表（已导入 1 个）/)).toBeVisible({ timeout: 10_000 });
-    // 默认会勾选 transactions+token_transfers；本用例只验证 token_transfers 的 Coverage HIT。
+    await expect(verdictDialog).toBeHidden({ timeout: 20_000 });
+    // 地址是否生效看**常驻 Inspector**（右栏始终显示当前配置）。
+    await expect(page.locator('[data-testid="inspector-addresses"]')).toHaveText("1 个", { timeout: 10_000 });
+
+    // 新链路第 ② 段（预览）：先用默认 datasets（transactions+token_transfers）真实跑一次预览，
+    // 关掉预览弹窗后调整 Dataset —— 与旧链路"一次点击串起校验→预览→创建"的意图一致。
+    if (!isMobileViewport(page)) {
+      await expect(page.getByRole("checkbox", { name: "Token Transfer（token_transfers）" })).toBeVisible({ timeout: 30_000 });
+    }
+    const firstPreviewResponse = page.waitForResponse(
+      (r) => r.url().includes("/api/v2/downloads/preview") && r.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+    await clickPreviewForFirstTime(page);
+    expect((await firstPreviewResponse).status(), "首次 preview 必须成功").toBeLessThan(300);
+    await expectDialogTitle(page, /无需新增 Provider 请求|预览完成|Coverage 与成本预览完成/);
+    await closeDialog(page);
+
+    // 调整 Dataset 到只有 token_transfers：旧预览立即失效（「重新预览」）。
+    await ensureSectionExpanded(page, "datasets");
     const transactionsCheckbox = page.getByRole("checkbox", { name: "普通交易（transactions）" });
     if (await transactionsCheckbox.isChecked()) await transactionsCheckbox.uncheck();
     const transferCheckbox = page.getByRole("checkbox", { name: "Token Transfer（token_transfers）" });
     if (!(await transferCheckbox.isChecked())) await transferCheckbox.check();
-    await page.locator("#download-range-type").selectOption("block");
-    await page.locator("#download-from-block").fill(COVERED_FROM);
-    await page.locator("#download-to-block").fill(COVERED_TO);
+    await expect(page.locator(".dl-preview-stale").first(), "改 Dataset 后旧预览必须失效").toBeVisible({ timeout: 10_000 });
+
+    // 重新预览：必须等**新的** preview 响应，断言的就是这一次的结论。
     const previewResponse = page.waitForResponse(
       (r) => r.url().includes("/api/v2/downloads/preview") && r.request().method() === "POST",
-      { timeout: 20_000 },
+      { timeout: 60_000 },
     );
-    await page.getByRole("button", { name: /预览 Coverage 与成本/ }).click();
+    await page.getByRole("button", { name: /^(重新预览|重新计算)$/ }).first().click();
     const preview = (await (await previewResponse).json()).data as {
       coverage: { overall_ratio: number };
       provider_work_required: boolean;
@@ -235,13 +313,14 @@ test.describe("S5-FE-02 下载表单 / 任务列表 / 任务详情", () => {
     await expectDialogTitle(page, /无需新增 Provider 请求|预览完成|Coverage 与成本预览完成/);
     await closeDialog(page);
 
+    // 创建确认弹窗现在由独立主按钮带出（预览弹窗关闭之后），确认后才真正发创建请求。
+    const createDialog = page.getByRole("dialog").filter({ hasText: "确认创建下载任务" });
+    await clickCreateButton(page);
+    await expect(createDialog).toBeVisible({ timeout: 15_000 });
     const createResponse = page.waitForResponse(
       (r) => r.url().endsWith("/api/v2/downloads") && r.request().method() === "POST",
       { timeout: 20_000 },
     );
-    await page.getByRole("button", { name: "创建下载任务" }).click();
-    const createDialog = page.getByRole("dialog").filter({ hasText: "确认创建下载任务" });
-    await expect(createDialog).toBeVisible({ timeout: 10_000 });
     await createDialog.getByRole("button", { name: "确认创建" }).click();
     const created = (await (await createResponse).json()).data as { status: string; provider_work_required: boolean; created: boolean };
     expect(created.status).toBe("ready");

@@ -1,0 +1,266 @@
+{
+  "config": {
+    "argv": [
+      "/home/euripides/.nvm/versions/node/v24.20.0/bin/node",
+      "/home/euripides/projects/blockchain-platform/frontend/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "playwright.udl01v5b.config.ts"
+    ],
+    "configFile": "/home/euripides/projects/blockchain-platform/frontend/playwright.udl01v5b.config.ts",
+    "rootDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v5b-20260920T193437Z/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "uc-desktop",
+        "name": "uc-desktop",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/udl01-worker-isolation-v5b\\.spec\\.ts/"
+        ],
+        "timeout": 600000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v5b-20260920T193437Z/playwright-report.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "udl01-worker-isolation-v5b.spec.ts",
+      "file": "udl01-worker-isolation-v5b.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "U-DL-01 v5b 隔离解析 / 有界超时 / 可取消 / 恶意 ZIP",
+          "file": "udl01-worker-isolation-v5b.spec.ts",
+          "line": 221,
+          "column": 6,
+          "specs": [
+            {
+              "title": "UDL01-A A1 真实 .xls 格式上限：请求 200000 行落盘 65535 行，由隔离 Worker 解析且主线程无秒级阻塞",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4645,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:35:03.933Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "523f76490ed267b558c8-cd85f42640c021b5fb37",
+              "file": "udl01-worker-isolation-v5b.spec.ts",
+              "line": 222,
+              "column": 3
+            },
+            {
+              "title": "UDL01-B A2a 有界超时：60000 行 .xlsx（< 16MiB）在 300ms 预算内被终止，不导入任何地址",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3032,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:35:09.014Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "523f76490ed267b558c8-12b4c4218d77e317b2c2",
+              "file": "udl01-worker-isolation-v5b.spec.ts",
+              "line": 283,
+              "column": 3
+            },
+            {
+              "title": "UDL01-C A2b 可取消：60000 行 .xlsx 解析中点取消真停止，Worker 重建后小文件仍可解析",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4917,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:35:12.067Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "523f76490ed267b558c8-44a7f458889e0c05885e",
+              "file": "udl01-worker-isolation-v5b.spec.ts",
+              "line": 332,
+              "column": 3
+            },
+            {
+              "title": "UDL01-D 恶意 ZIP 全部被格式防线拒绝（真实字节结构，逐条留证）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5005,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:35:17.000Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "523f76490ed267b558c8-857a1f4b07856f635e15",
+              "file": "udl01-worker-isolation-v5b.spec.ts",
+              "line": 406,
+              "column": 3
+            },
+            {
+              "title": "UDL01-E 正向回归：小工作簿解析成功，稳定业务语义锚点正确且取消后无服务端请求",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3199,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:35:22.020Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "523f76490ed267b558c8-4e74a1deedc449c399f9",
+              "file": "udl01-worker-isolation-v5b.spec.ts",
+              "line": 490,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-20T19:35:03.391Z",
+    "duration": 21984.270999999997,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

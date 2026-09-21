@@ -1,5 +1,6 @@
 import { progressStateFor } from "@chain/ui";
 import type { ProgressState } from "@chain/ui";
+import type { ProviderRuntimeState } from "../../downloads/download.types";
 
 /**
  * Job Detail 的类型与纯函数（用户端重构规范 V4 §28 / §47）
@@ -121,6 +122,14 @@ export interface JobDetailData {
     shards: ShardLayer[];
   };
   exports: JobExport[];
+  /**
+   * 每个 Provider 通道的运行时档位（开发文档 §6.2 / §10.2）。
+   *
+   * 与 downloads/download.types 共用同一份 `ProviderRuntimeState`：这两个界面读的是
+   * 同一个服务端字段，类型只应有一份定义（避免两处口径漂移）。
+   * 旧后端不返回该数组时为 undefined —— 技术详情显示空态，不伪造运行状态。
+   */
+  provider_runtime_states?: ProviderRuntimeState[];
   source: { control: string; usage: string; as_of: string };
 }
 

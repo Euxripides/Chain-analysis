@@ -9,6 +9,13 @@ func TestNormalizeWorkspaceAddressPreservesTronBase58Case(t *testing.T) {
 	}
 }
 
+func TestNormalizeWorkspaceAddressPreservesSolanaBase58Case(t *testing.T) {
+	const solanaAddress = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	if got := normalizeWorkspaceAddress("solana", "  "+solanaAddress+"  "); got != solanaAddress {
+		t.Fatalf("Solana address case changed: got %q want %q", got, solanaAddress)
+	}
+}
+
 func TestNormalizeWorkspaceAddressLowercasesEVM(t *testing.T) {
 	const input = "0xAbCdEf0000000000000000000000000000001234"
 	const want = "0xabcdef0000000000000000000000000000001234"

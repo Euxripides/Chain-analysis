@@ -2492,3 +2492,183 @@ paths:
           content:
             application/json:
               schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/quota:
+    get:
+      operationId: adminProviderQuota
+      tags: [admin-v1]
+      x-required-permission: admin:cost:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/quota-history:
+    get:
+      operationId: adminProviderQuotaHistory
+      tags: [admin-v1]
+      x-required-permission: admin:cost:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/performance-profiles:
+    get:
+      operationId: adminProviderPerformanceProfiles
+      tags: [admin-v1]
+      x-required-permission: admin:provider:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/performance-profiles/{chain}/{operation}/{mode}:
+    patch:
+      operationId: adminProviderPerformanceProfileUpdate
+      tags: [admin-v1]
+      x-required-permission: admin:performance:update
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或需要 Step-up 认证
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '409':
+          description: If-Match 版本冲突（附当前 revision）
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/runtime-states:
+    get:
+      operationId: adminProviderRuntimeStates
+      tags: [admin-v1]
+      x-required-permission: admin:provider:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/secrets/{kind}:
+    put:
+      operationId: adminProviderSecretSet
+      tags: [admin-v1]
+      x-required-permission: admin:provider:update
+      responses:
+        '200':
+          description: 成功（响应体模型待补充；永不回显明文）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '400':
+          description: secret_kind 或请求体非法
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限或需要 Step-up 认证
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+
+  /api/admin/v1/providers/{id}/commands/sync-quota:
+    post:
+      operationId: adminProviderSyncQuota
+      tags: [admin-v1]
+      x-required-permission: admin:provider:update
+      responses:
+        '200':
+          description: 成功（60 秒内重复调用返回上次快照；未配置管理 Token 时 configured=false）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+  /api/admin/v1/providers/{id}/commands/probe-channels:
+    post:
+      operationId: adminProviderProbeChannels
+      tags: [admin-v1]
+      x-required-permission: admin:provider:update
+      responses:
+        '200':
+          description: 成功（逐通道真实探针：Data API + Solana JSON-RPC getHealth）
+          content:
+            application/json:
+              schema: { $ref: './common/envelope.yaml#/Envelope' }
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+

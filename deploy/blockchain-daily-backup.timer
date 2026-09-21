@@ -1,0 +1,12 @@
+[Unit]
+Description=每日 03:30（UTC+7）触发 Blockchain Platform 备份
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=600
+AccuracySec=1min
+Unit=blockchain-daily-backup.service
+
+[Install]
+WantedBy=timers.target

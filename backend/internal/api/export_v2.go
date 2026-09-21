@@ -23,6 +23,7 @@ import (
 	"github.com/parquet-go/parquet-go/compress/zstd"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
@@ -125,10 +126,8 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	}
 	addresses := req.Addresses
 	for i := range addresses {
-		addresses[i] = strings.TrimSpace(addresses[i])
-		if chain != "tron" {
-			addresses[i] = strings.ToLower(addresses[i])
-		}
+		// 导出键归一化：Solana 保留 base58 大小写，EVM 折叠小写。
+		addresses[i] = addressnorm.NormalizeKey(chain, addresses[i])
 	}
 	if len(addresses) == 0 {
 		writeJSON(w, 400, map[string]any{"error": "addresses required"})
@@ -588,13 +587,8 @@ func prepareZipEntry(format string, rows []map[string]any) (*preparedZipEntry, e
 }
 
 func matchingExportSubjects(chain string, subjects []string, row map[string]any) []string {
-	normalize := func(v string) string {
-		v = strings.TrimSpace(v)
-		if chain != "tron" {
-			return strings.ToLower(v)
-		}
-		return v
-	}
+	// 行对象与主体地址都走同一套按链归一化，Solana 才可能匹配上。
+	normalize := func(v string) string { return addressnorm.NormalizeKey(chain, v) }
 	from, to, address := normalize(fmt.Sprint(row["from_address"])), normalize(fmt.Sprint(row["to_address"])), normalize(fmt.Sprint(row["address"]))
 	out := make([]string, 0, 2)
 	for _, subject := range subjects {
@@ -689,13 +683,8 @@ func (s *Server) annotateRows(ctx context.Context, chain, subject string, rows [
 }
 
 func matchedExportAddresses(chain, subject string, row map[string]any) []string {
-	normalize := func(value string) string {
-		value = strings.TrimSpace(value)
-		if chain == "tron" {
-			return value
-		}
-		return strings.ToLower(value)
-	}
+	// 行对象与主体地址都走同一套按链归一化，Solana 才可能匹配上。
+	normalize := func(value string) string { return addressnorm.NormalizeKey(chain, value) }
 	subject = normalize(subject)
 	if subject == "" {
 		return nil

@@ -1,0 +1,14 @@
+== VACUUM FULL job_event_log 开始 2026-09-17T16:56:46Z ==
+前：大小=4045 MB 行数=539737 死元组=9170
+INFO:  finished analyzing table "blockchain_platform.public.job_event_log"
+avg read rate: 747.761 MB/s, avg write rate: 0.249 MB/s
+buffer usage: 408 hits, 30054 reads, 10 dirtied
+WAL usage: 26 records, 8 full page images, 62437 bytes, 0 buffers full
+system usage: CPU: user: 0.07 s, system: 0.22 s, elapsed: 0.31 s
+VACUUM
+
+real	0m7.170s
+user	0m0.010s
+sys	0m0.042s
+后：大小=1084 MB 行数=539746 死元组=0
+结束 2026-09-17T16:56:54Z

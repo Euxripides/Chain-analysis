@@ -1,0 +1,41 @@
+{
+  "test": "duplicate-event",
+  "ts": "20260916T173134Z",
+  "job": "1f104b01-8c13-40db-8625-fb928f5a84f9",
+  "subject": "events.jobs.1f104b01-8c13-40db-8625-fb928f5a84f9",
+  "baseline": {
+    "steps": "completed:532,failed:7,running:3",
+    "revision_sum": "612",
+    "audit_rows": "93080",
+    "notifications": "104"
+  },
+  "after": {
+    "steps": "completed:532,failed:7,running:3",
+    "revision_sum": "612",
+    "audit_rows": "93080",
+    "notifications": "104"
+  },
+  "stream_messages": {
+    "before": 442696,
+    "after_first": 442691,
+    "after_dup": 442685
+  },
+  "checks": [
+    {
+      "check": "① outbox dedupe_key 唯一",
+      "status": "FAIL",
+      "detail": "重复 dedupe_key 的插入**未被拒绝**"
+    },
+    {
+      "check": "② JetStream msg-id 去重",
+      "status": "FAIL",
+      "detail": "计数不符合预期：442696 → 442691 → 442685（同 msg-id 第二次应被丢弃）"
+    },
+    {
+      "check": "③ 消费者幂等（重投）",
+      "status": "PASS",
+      "detail": "对已终态 job 的 COMPLETED 事件做不同 msg-id 的重投：steps/revision/audit/notifications 全部无变化"
+    }
+  ],
+  "verdict": "FAIL"
+}

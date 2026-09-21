@@ -23,7 +23,7 @@ func readSource(t *testing.T, name string) string {
 }
 
 // stripComment 去掉行内注释，避免"注释里提到旧写法"造成误报
-//（沿用 internal/dataset/scope_tenant_test.go 的做法）。
+// （沿用 internal/dataset/scope_tenant_test.go 的做法）。
 func stripComment(line string) string {
 	if idx := strings.Index(line, "//"); idx >= 0 {
 		return line[:idx]

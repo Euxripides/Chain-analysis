@@ -655,79 +655,252 @@ final-confirmation.log                部署后最终确认
 
 ---
 
-## 阶段 U8：正式部署（scripts/deploy_dual_system.py）与途中发现的三个问题
+## 2026-09-20 清晰度修订：冷白四级明度 + 退役玻璃拟态
 
-按仓库文档的正式部署命令执行：
+**触发**：用户端上线后反馈"低对比度、整页雾化"。复核确认这不是主观观感问题，
+而是配色与材质两个决策叠加的必然结果：
 
-```bash
-python scripts/deploy_dual_system.py --yes
-```
+1. **四个面只差 1–2 个亮度级**：画布 `#F4F8FF`、侧栏 `#F8FBFF`、表格底 `#F7FAFF`、
+   凹陷面 `#EEF4FD` 全是淡蓝近白。卡片虽然写的是 `#FFFFFF`，但在这种底色上
+   分不出层，等于"卡片不存在"。
+2. **边界几乎不可见**：卡片描边 `#DFE9F7` 在白底只有 **1.25:1**，
+   输入框描边 `#C8D9F0` 只有 **1.5:1**——统计上"存在"，视觉上不存在。
+3. **玻璃拟态铺满全局**：顶栏（`rgba(255,255,255,.88)` + `blur(14px)`）、底栏、
+   Hero（三层 12–20% 蓝色 radial-gradient + `blur(2px)` + 22s 漂浮动画）、
+   Dialog 遮罩（`blur(6px)`）、命令面板遮罩（`blur(5px)`）——模糊与半透明把
+   本已微弱的边界进一步糊掉。
+4. **弱化文字不达标**：`--cs-text-muted: #8796AC` 在画布上只有 **2.90:1**，
+   低于 AA 的 4.5:1（占位符、表头小字、时间戳都用它）。
+5. **蓝色被当成装饰色**：KPI 图标底、表格头、悬停行、Hero、选中态全部是蓝，
+   于是"哪里能点、哪里是当前"失去信号价值。
 
-### 部署前拦下的一个 P0 回滚风险
+### 改动（令牌唯一定义在 `packages/user-ui/theme/css-vars.css`，`theme/tokens.ts` 同步镜像）
 
-**仓库里的 `deploy/nginx-blockchain-platform.conf` 比线上旧。** 部署脚本第 3 步会把这份文件
-覆盖到 `/etc/nginx/sites-enabled/`，也就是说直接部署会：
+| 级别 | 令牌 | 旧值 | 新值 |
+|---|---|---:|---:|
+| L1 页面底层 | `--cs-layer-page` | `#F4F8FF` | `#E9EDF3` |
+| L2 内容层 | `--cs-layer-content` | `#FFFFFF` | `#FFFFFF`（不再有半透明变体） |
+| L3 输入层 | `--cs-layer-field` | （无） | `#F4F7FA` |
+| L4 选中层 | `--cs-layer-selected` | `#EAF2FF` | `#DEE9FD` |
+| 卡片描边 | `--cs-border` | `#DFE9F7`（1.25:1） | `#CBD3DC`（1.51:1） |
+| 输入描边 | `--cs-border-field` | `#C8D9F0`（1.50:1） | `#A3AFBD`（2.23:1） |
+| 选中描边 | `--cs-border-selected` | （无） | `#7FA9F5`（2.36:1） |
+| 主文字 | `--cs-text-primary` | `#10213D` | `#101A2B` |
+| 次级文字 | `--cs-text-secondary` | `#5B6B84` | `#48566B` |
+| 弱化文字 | `--cs-text-muted` | `#8796AC`（2.90:1） | `#59667A`（4.96:1） |
+| 主操作蓝 | `--cs-primary` | `#3478F6`（白字 4.07:1） | `#2563EB`（白字 5.17:1） |
+| 注意/危险文字 | `--cs-warning-text` / `--cs-danger-text` | `#9C6109` / `#C43C3C` | `#8F5A08` / `#B73535` |
+| 玻璃 | `--cs-surface-glass` / `--cs-glass-blur` | `rgba(255,255,255,.82)` / `blur(18px) saturate(130%)` | `#FFFFFF` / `none` |
 
-- 把 `location = / { return 302 https://$public_host/app-v2/login; }` 换回
-  `location / { proxy_pass http://127.0.0.1:3000; }`；
-- **重新把老控制台暴露到公网**。配置里的原注释写明了原因：
-  "老控制台自身没有登录页，且入口层会为无会话请求注入共享服务凭据
-  （实测未登录可读到真实业务数据，且审计无法区分到人）"—— 这是 2026-09-18 的 P0 决策 D3。
+结构改动：
 
-处理：把线上正在运行的（已修复的）配置逐字节取回，覆盖仓库里的旧副本，
-并用 `cmp` 验证往返一致（`sha256: 1f3cdec5ca9aa7f8`）。此后部署是幂等的、不会再回滚该修复。
+- 删除 `.cs-shell` 上铺满视口的两条装饰径向光晕（页面底色现在是单一纯色）。
+- 顶栏、底部操作栏、对话框底、命令面板遮罩全部改为不透明面，删除
+  `backdrop-filter`（含 Dialog/命令面板的入场 keyframes 里的模糊）。
+- Hero 从"唯一允许大面积光晕与玻璃"改为与其它卡片同级的纯白实体面；
+  `.cs-glasshero__aurora` 保留 DOM 节点但不再有任何视觉输出。
+- 骨架屏 `#E9F0FB/#DCE8F9` → 中性冷灰 `#E4E8EE/#D3D9E2`（淡蓝骨架会被误读成内容）。
+- Ant 适配层与 legacy 桥接层统一给输入类控件加 L3 输入面
+  （`background: var(--cs-field)` + 2.23:1 描边 + 极浅内阴影）。
+- 步进器当前步骤改为四通道表达（选中层底 + 蓝边界 + 深蓝文字 4.73:1 + 加粗）；
+  未到达步骤取消 `opacity: .6`，改用明确灰边界 + 弱化灰字（5.82:1）。
+- 所有以蓝色当正文色的地方（Tab 选中、chip 选中、批量条计数、stat tile info）
+  改用文字安全蓝 `--cs-primary-text`。
 
-### 修复的三个部署脚本缺陷
-
-| # | 缺陷 | 后果 | 修复 |
-|---|---|---|---|
-| 1 | 同步会把 `acceptance-evidence/` 一起推上 VM | 本机部分证据文件由沙箱 SID 写出、当前用户读不了，`sftp.put` 报 EACCES，**整次部署在第 1 步中止** | 把 `acceptance-evidence` 加入 `SKIP_DIRS`（`sync_to_vm.py` 同步口径）—— 测试产物本就不该参与代码部署 |
-| 2 | `run()` 直接 `print` 远程输出 | Windows 控制台默认 GBK，遇到 `✓` 抛 `UnicodeEncodeError`，脚本**在部署中途崩溃** | 启动时把 stdout/stderr `reconfigure` 成 UTF-8、`errors="replace"` |
-| 3 | 迁移命令 `go run ./cmd/migrate 2>&1 \| tail -8` | ① `\| tail` 让退出码变成 tail 的 0，**迁移失败被静默吞掉**；② 非交互 SSH 不加载 `deploy/.env`，迁移连不上库（`role "euripides" does not exist`） | 改为 `set -a; . deploy/.env; set +a` + `bash -o pipefail -c '… | tail -8'`，让真实退出码能拦住部署 |
-
-### 一次真实事故与恢复（记录在案）
-
-缺陷 2 第一次触发时，流程已经走到第 5 步：`vite build` 的 `emptyOutDir` 先清空了
-两个前端的 `dist/`，随后脚本在打印构建输出时崩溃 —— **产物目录为空，但服务进程仍在运行**。
-此时 `curl` 仍返回 200（preview 进程还持有内存中的旧内容），
-一旦重启就是彻底 500，属于最危险的一类"看起来正常"的故障。
-
-发现后立即：重建两个前端（user 35 个 assets / admin 40 个）→ 重启两个控制台服务 → 全面冒烟。
-全程站点未中断，恢复后产物与已验证版本逐字节一致。
-
-同时清理了我自己在 `/etc/nginx/sites-enabled/` 下留的备份文件：
-nginx 会加载该目录**所有**文件，一份带 `log_format` 的副本会让 `nginx -t` 直接失败
-（`duplicate "log_format" name`）。备份已移到 `/etc/nginx/backups/`。
-
-### 部署结果（脚本自身的 7 步全部通过）
-
-```text
-1. 同步工作区到 VM                                    ✓
-2. 编译后端（api / worker / admin-init）              ✓
-3. 安装 6 个 systemd 单元 + nginx 站点（nginx -t 通过） ✓
-4. 应用迁移（最新已到 postgres/0071_self_service_for_all_roles.sql） ✓
-5. 构建两套前端                                       ✓
-6. nginx reload + 重启 api/worker/两个控制台（api ready after 5s） ✓
-7. 冒烟                                               ✓
-
-  api /health/ready            -> 200
-  user console                 -> 200
-  admin console                -> 200
-  auth methods                 -> 200
-  admin without session        -> 401   （未登录访问后台接口被正确拒绝）
-```
-
-**部署后逐项确认**
+### 验证（全部在真实构建产物上执行）
 
 ```text
-nginx 配置           1f3cdec5ca9aa7f8（= 修好的那版）
-含老控制台代理(3000)  否
-含 P0 重定向          是；GET / -> 302 https://<host>/app-v2/login
-sites-enabled 残留    0
-直连下载通道          download.aurore.online.conf 未被触碰（mtime 09-19 00:45）
-                      [::1]:8443/download-health -> 204
-四个服务              active / active / active / active
-上线产物              user  assets/index-CX4qVDy7.js + assets/index-CK00XSYC.css
-                      admin assets/index-CRFeEJXZ.js
-回滚点                backend/bin/api.bak-dualsystem-20260919-053418 / -053903
+pnpm run check:tokens          58 组前景/背景配对全部 ≥4.5:1（新增 12 组，含弱化文字四底色）
+                                守卫本身修复两处：var() 链解析（四级明度是真源，别名不再被判"缺失"）
+                                扫描前剥离注释（注释里的伪声明曾吞掉 cs-surface-blue）
+pnpm run typecheck             apps/user-console + apps/admin-console + 全部 packages → 0 错误
+uc-contract-freeze-check       路由 28 · 权限 19 · API 字面量 66 · 案件 Tab 契约 → 与基准一致
+E2E_BROWSER_CHANNEL=chromium
+  node scripts/uc-v4-render-check.mjs    ok = true · problems = []
+bundle-budget-check            首屏 gzip 244.44 KB / 预算 250 KB
+CSS 体积                        161,721 B（gzip 25,244 B）→ 比修订前 162,016 B（25,438 B）更小
 ```
+
+真实渲染度量（Chromium 1440×900，静态挂载 `apps/user-console/dist` + 固定夹具，
+逐元素取计算样式并回溯有效背景后算 WCAG 比值）：
+
+```text
+页面底层 #E9EDF3 · 卡片/顶栏/侧栏 #FFFFFF · 输入面 #F4F7FA · 选中层 #DEE9FD
+卡片描边 #CBD3DC · 输入描边 #A3AFBD（全部元素 backdrop-filter = none）
+正文 17.43 / 14.84  ·  次级 7.45 / 6.34  ·  弱化 5.82  ·  侧栏当前项 4.73
+步进器当前步骤 4.73（描边 #2563EB）· 未到达步骤 5.82 · 分隔符 4.96
+```
+
+修订后的首屏证据：`acceptance-evidence/v4-render-check/home-1440x900.png`、
+`download-new-1440x900.png`（同目录另有 390×844 移动端与其余路由截图）。
+
+设计约束已同步进蓝图 §4.2 / §5.1 / §6.1.1：**禁止玻璃拟态、禁止大面积淡蓝、
+禁止画布/卡片/输入框/边框同时取近似色**；蓝色只用于交互与状态。
+
+---
+
+## 2026-09-20 新建数据下载页重构：五段长表单 → 单页四区
+
+**依据**：《ChainSight「新建数据下载」页面重构规范》V1.0 + 用户提供的效果图。
+效果图明确要求"创建过程在完整的页面上"（不是一次一步的向导），因此最终版面是
+**单页四区**：四个区块同时可见，顶部步骤条只表达顺序与当前进度。
+
+### 结构
+
+| 项 | 重构前 | 重构后 |
+|---|---|---|
+| 信息架构 | ① 对象与地址 ② 链与范围 ③ Dataset ④ 复用策略 ⑤ Coverage 预览，五段同时铺开、无分组 | ① 地址与对象 ② 链与范围 ③ 数据类型 ④ 预览与创建，**四区同屏**、每区带序号徽标 + 标题 + 一行说明 |
+| 步骤条 | 自绘胶囊 Stepper，只作锚点跳转 | Ant Design `Steps`（已完成蓝勾 / 当前实心蓝 / 未完成白底灰边），点击滚动到对应区块 |
+| 主操作 | 底部两枚按钮（创建下载任务 / 取消） | 右栏唯一主动作「预览数据并创建任务」，一次点击串起 服务端校验 → 预览 → 创建确认 |
+| 链选择 | 原生 `<select>` | `ChainSelect`（Ant `Select` + 搜索 + 官方链图标）+ `ChainPicker` 链卡片网格，共用同一个单选值 |
+| 范围选择 | 原生 `<select>` | `RangeSelect`（主名称 + 弱化技术 key，统一 popup 容器） |
+| 性能模式 | 原生 `<select>` | Ant `Segmented` |
+| Dataset | 一长排胶囊 checkbox | 2–3 列卡片网格（`DatasetCardSelector`，底层仍是真实 checkbox） |
+| 地址输入 | 三个按钮挤在一行 + 每次粘贴弹"解析摘要"窗 | Tabs（粘贴地址 / 导入文件）+ 内联计数 + 文件解析数据行 |
+| 复用策略 | Radio 可选 `prefer_local` / `refresh` | **整块移除**；请求仍显式带 `reuse_policy: "prefer_local"` |
+| 顶部元信息 | 正文直接打印 `/api/v2/meta/chains` 等三条接口路径 | 正式构建不显示；仅 DEV 构建保留一行对照 |
+| 校验 | 一律弹窗打断 | 字段级错误贴近字段（`Field error`，不用 `role="alert"`）；API/结果类错误仍走弹窗 |
+| 右侧 | `SplitPane` 可拖拽的 360px 摘要 | 固定 340/280px sticky `PreviewInspector`，<1024px 下移 |
+
+### 文件
+
+```text
+apps/user-console/src/pages/DownloadNewPage.tsx            路由入口薄壳（保持懒加载字面量不变）
+apps/user-console/src/pages/downloads/DownloadNewPage.tsx  容器：状态、请求、编排（约 640 行）
+apps/user-console/src/pages/downloads/steps/               AddressStep / ChainScopeStep / DatasetStep / PreviewStep
+apps/user-console/src/pages/downloads/components/          ChainIcon / ChainSelect / RangeSelect / AddressInputPanel /
+                                                           AddressParseSummary / AddressFileSummary / AddressFileImport /
+                                                           DatasetCard / DatasetCardSelector / PreviewInspector / DownloadWizardActions
+apps/user-console/src/pages/downloads/download.types.ts    类型、常量与纯函数（STEP_ITEMS 四步 + DEFAULT_REUSE_STRATEGY）
+apps/user-console/src/pages/downloads/download-new.css     页面作用域样式（无裸色值）
+packages/user-ui/styles/adapter.css                        该页 Ant 结构性覆写（仓库 §1.3：业务页面不得写 .ant-*）
+```
+
+### 业务契约：完全冻结
+
+下载创建 / 预览 / chains / datasets 四个接口、字段 key、scope 与 performance 枚举、Dataset key、
+100 地址 / 6 Dataset 上限、CSV-XLSX 解析行为、权限、创建成功后的跳转、幂等键派生方式**逐字未改**。
+唯一的差异是产品决策：复用策略只在 UI 层隐藏，负载里照旧是 `prefer_local`。
+
+服务端地址校验的触发点从"导入时"移到"第 ② 步出口"，因为 `validate-addresses` 的入参包含 chain，
+而链是第 ② 步才选定的——这同时修掉了 ROUND-20260916 §3 UI-3 记录的
+"先拿自动选中的第一个链去校验、地址被逐条拒绝"的既有 UX 问题。
+
+### 与规范/效果图的两处刻意偏差
+
+1. **"预计大小（约 0 MB）"未做**：`/api/v2/downloads/preview` 不返回字节大小，
+   按"不发明接口没有的数据"的既有约定，右栏只显示真实字段（预计数据量 / 耗时 / 成本 / 覆盖率 /
+   未覆盖区块）；解析进度同理不编造百分比，用不确定态进度条 + 文件名。
+   （页头副标题与分区说明按效果图保留：`docs/code-standards.md` 第 5 条禁止的是"提示性内容"，
+   而这些是页面自身的标题与字段级说明，且不含任何警告/结果/确认语义。）
+
+### 版面定稿：单屏配置工作台（2026-09-20 第四轮，最终形态）
+
+版面经过四轮收敛，**最终形态是"单屏配置工作台"**：
+
+1. 第一轮：五段长表单 →（分步）→ 第二轮：四步向导 → 第三轮：四块同时铺开的长表单
+   → **第四轮（本轮，定稿）：单屏三块 + 右栏摘要，无步骤条、无上一步/下一步**。
+
+| 项 | 定稿形态 |
+|---|---|
+| 左区 | 二维 Grid：第一行「地址与对象」横跨两列；第二行左「链与范围」，右「数据类型」 |
+| 右区 | 独立 320px（≥1280px 360px）「任务预览」：地址数量 / 网络 / 数据类型 / 范围 / 性能模式 / 预计数据量 / 预计大小 / 预计耗时 / 预计成本 + 唯一主按钮「预览并创建任务」 |
+| 步骤条 | **已删除**（没有 `Steps`、没有"下一步/上一步"；`uc-v4-render-check` 直接断言它们为 0） |
+| 紧凑尺寸 | 地址 TextArea 120–150px（实测 124）· 网络选择项 44px（要求 42–46）· Dataset 卡片两列 60px（要求 56–64） |
+| 范围/性能模式 | 都是 Ant `Segmented`（一行放得下），不再纵向铺卡片 |
+| 网络搜索 | 只保留 `ChainSelect` 自带的 showSearch（原来那个独立搜索框与它重复，已删除省一行高度） |
+| 高度策略 | 外壳 `100dvh` + `overflow: hidden`；整条 flex 链 `min-height: 0`；工作台放得下就完全不滚动 |
+
+关键实现点（都在 `download-new.css` 注释里）：
+
+1. 页面外层还有一层路由容器 `.cs-route`（RoutedContent），它默认 `min-height: auto`，
+   会把 flex 链从中间顶开——**必须一起放开**，否则右栏与内容会被顶出视口。
+2. 右上"预计大小"：`/api/v2/downloads/preview` 的真实返回键只有
+   `estimated_missing_blocks / estimated_rows / estimated_cost_usd / estimated_time_seconds / basis`
+   （见 `backend/internal/api/sprint5_downloads.go` 的 `downloadEstimate`），**没有体积字段**。
+   按"不发明接口没有的数据"，这一行照实显示 **"接口未提供"**，不拿行数乘系数折算；
+   后端补 `estimated_bytes` 后，接上该字段即可。
+3. 左侧不再有 Coverage 明细卡片（版面只有三块），因此把"每个对象在每个 Dataset 上的覆盖率 /
+   已覆盖区块 / 缺口"并入**预览弹窗**的明细行，信息不丢失。
+4. 实测（Chromium，真实构建产物）：
+
+**自适应撑满（同日补）**：原来 `.cs-dlbench` 带着 `max-width: 1680px` 且 `align-items: flex-start`，
+在 2404×1246 这类宽屏上会同时留下大片左右留白与底部空白。现在：去掉 `max-width`（配置网格不是正文，
+超宽屏应该用满）· 桌面端 `align-items: stretch` · 左区 `grid-template-rows: auto minmax(0, 1fr)`
+让第二行吃掉剩余高度、两块面板随之撑满 · 右栏 sticky 且撑满可视高度（按钮钉在面板底部）·
+Dataset 网格 `repeat(auto-fill, minmax(200px, 1fr))`：面板变宽自动从 2 列变 3 列。
+
+```text
+2404×1246  初始 / 预览后：doc = body = 1246 = innerHeight · 工作台 177→1230（撑到视口底部）· 右栏同高
+1920×1080  初始 / 预览后：doc = body = 1080 = innerHeight（无页面滚动）
+           同屏区块 ["objects","range","datasets"] · Stepper=false · 上一步/下一步按钮=0
+           右栏 bottom=795（首屏内）· 主按钮 = 预览并创建任务
+           TextArea 124px · 网络选择项 44px · Dataset 卡片 60px
+1440×900   初始 / 预览后：doc = body = 900 = innerHeight（无页面滚动）
+           右栏 bottom=793（首屏内）· 其余同上
+```
+
+验收脚本同步：`uc-v4-render-check.mjs` 断言"三块同屏可见"、"没有 Stepper"、
+"没有下一步/上一步按钮"、"右栏主按钮恰好 1 个"、"桌面端 doc/body 无纵向滚动"、
+"右栏在首屏内"、"右栏含全部摘要项（含预计大小这一行）"；
+E2E 用例（r9 ×4、dual-system-sprint5）改回单屏流程：
+填地址 → 选链/范围 → 勾数据类型 → 右栏「预览并创建任务」→ 服务端校验 → 预览弹窗 → 创建确认。
+
+### 视觉精修（2026-09-20 第二轮：《页面视觉修订规范》）
+
+第一轮把结构改成单页四区之后，页面的"视觉语言"仍是旧后台的灰蓝低对比体系。
+本轮按《ChainSight「新建数据下载」页面视觉修订规范》做**只改视觉与排版**的二次精修，
+业务逻辑 / 字段 / 接口 / 权限 / `prefer_local` 默认行为全部未动（规范 §3 / §29）。
+
+| 项 | 精修前 | 精修后 |
+|---|---|---|
+| 页面底色 | 全局画布 `#E9EDF3`（偏灰） | 本页 `#F7F9FC` 冷白（`.cs-shell:has(.cs-downpage)`，其它页面不变） |
+| 主卡片 | 1px `#CBD3DC` + 短阴影 | 白底 + 1px `#E4E9F2` + 14px 圆角 + 双层轻阴影（§4.2/§23-L1） |
+| 输入控件 | `#F4F7FA` + `#A3AFBD` | `#FBFCFE` + `#D7DEE9`（hover `#AAB8CC`，focus 蓝环），10px 圆角（§4.3） |
+| 字体层级 | 主文字一档到底 | H1 24/650 `#172033`、Section 16/600 `#1F2937`、Label 13/500 `#344054`、辅助 12 `#667085`、技术 key 12 `#98A2B3`（§5） |
+| 步骤条 | 小圆 + 淡字 | 30px 圆、标题 14/600、描述 12；当前实心蓝、已完成浅蓝勾 + 蓝连接线、未完成白底灰边不灰化（§8） |
+| 区块标题 | 标题与说明挤一行 | 徽标 + 标题/说明**分两行**，状态靠右（§9） |
+| 链与范围 | 三个控件平铺一块 | 左"网络"（下拉 + 搜索 + 链卡片网格）／右"范围"（可点击卡片），**性能模式降到下方**次级设置（§11–16） |
+| 右栏 | 一行一行的字段表 | 任务摘要卡：配置分组（字段块上下排、块间 16px、不画线）+ 预估（值 19/600）+ Provider；未预览显示"尚未计算"而不是一排破折号（§18） |
+| 主按钮 | 40px 默认权重 | 44px / 10px / 600，hover `#1D4ED8`；取消按钮白底灰边弱化（§19/§20） |
+| 圆角/间距 | 各组件各自为政 | 主卡 14 / 次级卡 12 / 控件 10 / 小标签 8；区块 24 / 组 20 / 字段 16（§21/§22） |
+
+取值集中在 `pages/downloads/download-new.css` 顶部的一块**页面作用域令牌**（`--dl-*`）里，
+组件规则只引用变量；Ant 的结构性覆写仍然只在 `packages/user-ui/styles/adapter.css`。
+全局四级明度与对比度守卫不受影响（`check:tokens` 58 组仍全过）。
+
+两处从几何/接口出发的偏离（均在代码注释里写明）：
+
+1. **链卡片每行 2 列而不是 3 列**：链网格位于半宽的"网络"列（约 348px），硬排 3 列会把
+   链名截成 "Ar…"，与 §28"链名称和 slug 层级明显"冲突。改用 `auto-fill minmax(150px)`：
+   宽屏自然 3 列，本页半宽列下 2 列，名称始终完整。
+2. **右栏仍无"预计大小"**：`/api/v2/downloads/preview` 不返回字节体积，按"不发明接口没有的
+   数据"只显示 预计数据量 / 耗时 / 成本（§18.4 的 3.8 GB 属于效果图示意值）。
+
+### 链图标的口径
+
+按效果图要求使用**官方链标识**（与公网一致），但仍然是**仓库内本地资源**：
+`apps/user-console/src/assets/chains/*.png` 取自 Trust Wallet Assets（MIT），来源、授权与
+slug 映射逐条记录在该目录的 `README.md`。禁止远程热链（规范 §11）；
+未登记的链不猜图标，回落为"圆形底色 + 链名称首字母"。要增链只需补一个文件并登记到
+`ChainIcon.tsx` 的 `CHAIN_LOGOS`。图标随页面懒加载 chunk 输出，不进首屏包。
+
+### 验证
+
+```text
+pnpm run typecheck                      0 错误
+E2E_BROWSER_CHANNEL=chromium
+  node scripts/uc-v4-render-check.mjs   ok = true · problems = []
+    · 正式界面不含 /api/v2/ 路径
+    · 未到达的步骤不同时渲染（每屏一步）
+    · 第 ④ 步汇总包含 整体覆盖率/未覆盖区块/预估缺失区块/复用命中/Provider 工作/预估行数
+    · 参数变化后 .cs-preview-stale 出现且 opacity=1、border=rgb(217,140,22)
+  node scripts/uc-contract-freeze-check.mjs   路由 28 · 权限 19 · API 字面量 66 与基准一致
+  node scripts/check-token-contrast.mjs       58 组配对全部 ≥4.5:1
+  node scripts/bundle-budget-check.mjs        首屏 gzip 预算内（下载页为懒加载路由，不进入首屏包）
+```
+
+配套测试已同步到新交互（r9 四个版本、dual-system-sprint5、udl01 v5/v5b/v6）：
+原生 `selectOption` → `ChainSelect`/`RangeSelect` 的展开-点选；"解析导入 → 提交服务端校验"两步弹窗
+→ 向导"下一步"推进 + 内联解析数据行。这些用例需要真实后端与夹具（`E2E_BASE_URL`/口令），
+本次未在部署机上重跑，标记为待真实环境复验。

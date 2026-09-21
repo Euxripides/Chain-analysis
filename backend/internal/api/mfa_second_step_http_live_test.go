@@ -411,7 +411,7 @@ func TestMFAAdminResetLive(t *testing.T) {
 	// 7) 用户态会话不得执行管理命令：带上用户自己的 CSRF（否则会先被 CSRF 门挡住，测不出权限判定）。
 	userCSRF := h.str(env, "csrf_token")
 	if userCSRF == "" {
-		t.Fatal("用户态登录必须返回 csrf_token") 
+		t.Fatal("用户态登录必须返回 csrf_token")
 	}
 	status, _, env = h.postAuth(path, map[string]any{"confirm": true, "step_up_password": rig.password},
 		map[string]string{"X-CSRF-Token": userCSRF})

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/audit"
@@ -22,9 +24,13 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpc"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpcmgmt"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	solprovider "github.com/blockchain-platform/blockchain-platform/internal/provider/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
+	"github.com/blockchain-platform/blockchain-platform/internal/secret"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
@@ -62,6 +68,13 @@ type Infra struct {
 	Capabilities   *capability.Registry
 	Investigations *investigation.Service
 	Canvases       *canvas.Service
+
+	// Solana dRPC 接入：路由注册表、受管密钥解析、dRPC 数据面与管理同步。
+	// 后台探针必须经 Routes 取运行时实现，而不是比较 deps.Prov.Name()。
+	Routes         *route.Registry
+	Secrets        *secret.Manager
+	DRPC           *drpc.Client
+	DRPCManagement *drpcmgmt.Service
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
@@ -133,19 +146,152 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		prov = ankr.NewMock(cfg.Ankr.MaxPageSize, usageHook)
 		log.Info("provider: ankr-mock (ANKR_MODE=mock)", "hint", "set ANKR_API_KEY and ANKR_MODE=live for real data")
 	}
-	// Solana 走标准 JSON-RPC（Ankr Advanced API 不支持 solana）：用一层按链路由接入，
-	// 未登记的链继续回落 Ankr，下载引擎无需感知。
+	// Solana 的取数路径有两条：
+	//   1) dRPC（Data API + Solana JSON-RPC）—— 新增主通道；
+	//   2) 既有标准 Solana JSON-RPC（Ankr Solana 端点）—— 回退通道，也是 CPI 调用树
+	//      （internal_transactions）的唯一来源。
+	// 运行期用 Runtime Route Registry 解析，未登记的链继续回落 Ankr。
+	secrets := secret.NewManager(secret.ManagerOptions{FilePath: cfg.DRPC.ProviderSecretsFilePath(), Log: log})
+	routes := route.NewRegistry(log)
+	routes.SetTronRouter(func(dataset string) (string, string) {
+		key := cfg.Tron.ProviderForDataset(dataset)
+		return key, tronChannelFor(key)
+	})
+
+	var solanaLegacy provider.Provider
 	if cfg.Solana.Enabled {
 		if solanaProvider := solprovider.New(solprovider.Options{
 			Endpoint: cfg.Solana.Endpoint, APIKey: cfg.Solana.APIKey,
 			MaxPageSize: cfg.Solana.MaxPageSize, Concurrency: cfg.Solana.Concurrency,
 			RequestTimeout: cfg.Solana.RequestTimeout, UsageHook: usageHook, Log: log,
 		}, usageHook); solanaProvider != nil {
-			prov = provider.NewRouter(prov, map[string]provider.Provider{"solana": solanaProvider})
+			solanaLegacy = solanaProvider
+			// 同时登记 "solana-rpc"：数据库里的既有策略行用的就是这个名字，
+			// 两个 key 指向同一个实现，避免"策略行指向未注册 Provider"。
+			routes.Register("solana", "Solana JSON-RPC (legacy)", []string{route.ChannelSolanaRPC}, solanaProvider)
+			routes.Register("solana-rpc", "Solana JSON-RPC", []string{route.ChannelSolanaRPC}, solanaProvider)
 			log.Info("provider: solana (standard json-rpc)",
 				"datasets", []string{"transactions", "token_transfers", "internal_transactions"})
 		}
 	}
+
+	var drpcClient *drpc.Client
+	if cfg.DRPC.Enabled {
+		drpcClient = drpc.New(drpc.Options{
+			Enabled: cfg.DRPC.Enabled, Tier: cfg.DRPC.Tier, BaseURL: cfg.DRPC.BaseURL,
+			RuntimeKeyRef: cfg.DRPC.RuntimeKeyRef, StatisticsTokenRef: cfg.DRPC.StatisticsTokenRef,
+			KeysTokenRef: cfg.DRPC.KeysTokenRef, Secrets: secrets,
+			HistoryPageSize: cfg.DRPC.HistoryPageSize, MaxTxVersion: cfg.DRPC.MaxTxVersion,
+			RPCTimeout: cfg.DRPC.RPCTimeout, DataTimeout: cfg.DRPC.DataTimeout,
+			SlotTimeSearchLimit: cfg.DRPC.SlotTimeSearchLimit, SlotTimeMargin: cfg.DRPC.SlotTimeMargin,
+			UnknownTierCUPerMinute: cfg.DRPC.UnknownTierCUPerMinute,
+			QuotaWarnPercent:       cfg.DRPC.QuotaWarnPercent, QuotaSafeOnlyPercent: cfg.DRPC.QuotaSafeOnlyPercent,
+			QuotaStopPercent: cfg.DRPC.QuotaStopPercent, BalanceWarn: cfg.DRPC.BalanceWarn,
+			ManagementStaleAfter:    cfg.DRPC.ManagementStaleAfter,
+			ManagementSafeOnlyAfter: cfg.DRPC.ManagementSafeOnlyAfter,
+			// 请求模式由调度器经 context 下传（provider.WithRequestedMode）。
+			ModeResolver:  provider.RequestedModeFrom,
+			ProfileSource: routeProfileAdapter{reg: routes},
+			UsageHook:     usageHook, Log: log,
+		}, usageHook)
+		routes.Register(route.ProviderDRPC, "dRPC Solana",
+			[]string{route.ChannelDataAPI, route.ChannelSolanaRPC}, drpcClient)
+		log.Info("provider: drpc (solana data api + json-rpc)",
+			"base_url", drpcMaskBaseURL(cfg.DRPC.BaseURL), "tier", cfg.DRPC.Tier,
+			"key_ref", cfg.DRPC.RuntimeKeyRef)
+	}
+
+	// dRPC 管理同步：账户余额、当日 CU 与 Key 状态。两类管理 Token 独立解析，
+	// 未配置时服务仍然启动（页面明确显示"额度同步未配置"），只是数据面按未知层级钳制。
+	var drpcManagement *drpcmgmt.Service
+	if drpcClient != nil {
+		statRef := secrets.Describe(ctx, cfg.DRPC.StatisticsTokenRef)
+		keysRef := secrets.Describe(ctx, cfg.DRPC.KeysTokenRef)
+		managementConfigured := statRef.Configured || keysRef.Configured
+		keyStatus := secrets.Describe(ctx, cfg.DRPC.RuntimeKeyRef)
+		drpcManagement = drpcmgmt.New(drpcmgmt.Options{
+			Enabled:      managementConfigured,
+			BaseURL:      cfg.DRPC.ManagementBaseURL,
+			Secrets:      secrets,
+			SyncInterval: cfg.DRPC.ManagementSyncInterval,
+			StaleAfter:   cfg.DRPC.ManagementStaleAfter, SafeOnlyAfter: cfg.DRPC.ManagementSafeOnlyAfter,
+			HTTPTimeout:           cfg.DRPC.RPCTimeout,
+			StatisticsTokenRef:    cfg.DRPC.StatisticsTokenRef,
+			KeysTokenRef:          cfg.DRPC.KeysTokenRef,
+			RuntimeKeyFingerprint: keyStatus.Fingerprint,
+			OnSnapshot: func(snap drpcmgmt.Snapshot) {
+				// 额度闸门跨通道共享：Data API 与 JSON-RPC 同属一个账户，
+				// 任一侧把 CU 用尽都必须同时拦住另一侧。
+				drpcClient.SetQuotaSnapshot(drpcQuotaFromSnapshot(snap))
+			},
+			Log: log,
+		}, st, log)
+		go drpcManagement.Run(ctx)
+		log.Info("drpc management sync configured",
+			"statistics_token", statRef.Configured, "keys_token", keysRef.Configured,
+			"interval_seconds", int(cfg.DRPC.ManagementSyncInterval/time.Second))
+	}
+
+	// 数据库策略行是路由的事实来源；key 需要归一化，因为历史行用的是
+	// 'ankr-multichain' / 'tron-grid' / 'solana-rpc'，而运行时注册的是 'ankr' / 'trongrid' / 'drpc'。
+	//
+	// 注意这里**先读原始行、再按 dRPC 可用性投影**：0075 迁移已把 solana:* 策略指向 drpc
+	// （这是"配置事实"），但运行期 dRPC 没有可用密钥时必须投影回旧通道，
+	// 否则策略行会指向一个拒绝服务的 Provider，Solana 下载直接失败。
+	var rawPolicies []route.PolicyRow
+	if policies, perr := st.RoutingPoliciesForRouting(ctx); perr != nil {
+		log.Warn("routing policies load failed; falling back to builtin routes", "err", perr)
+	} else {
+		rawPolicies = policies
+		log.Info("routing policies loaded", "count", len(policies))
+	}
+	applyPolicies := func(drpcReady bool) {
+		routes.LoadPolicies(projectSolanaPolicies(rawPolicies, drpcReady))
+	}
+
+	// Solana 路由按"密钥是否真的可解析"动态开关（开发文档 §12 的部署顺序）：
+	// 部署时先开着 DRPC_ENABLED、Key 随后在后台录入 —— 在那之前必须继续走旧通道，
+	// 而不是让所有 Solana 下载立刻失败。10 秒重估一次，与 dRPC 客户端的密钥缓存同量级。
+	var lastRouteKey string
+	solanaRouteGate := func(ctx context.Context) {
+		key, ok := "",
+			false
+		if drpcClient != nil && drpcClient.Configured(ctx) {
+			// 密钥"能解析"不等于"能用"：录入错误的 Key 时数据面会 401，
+			// 此时 Health 进入 OPEN。继续把新任务路由到 dRPC 只会让它们全部失败，
+			// 因此熔断打开期间退回旧通道，Key 修正后自动恢复。
+			if health := drpcClient.Health(ctx); health.State != provider.HealthOpen {
+				key, ok = route.ProviderDRPC, true
+			}
+		}
+		if !ok && solanaLegacy != nil {
+			key, ok = "solana-rpc", true
+		}
+		routes.SetSolanaRoute(ok, key)
+		applyPolicies(key == route.ProviderDRPC)
+		model.SetSolanaDataAPI(key == route.ProviderDRPC)
+		if key != lastRouteKey {
+			lastRouteKey = key
+			// 后台录入 Key 后不需要重启，这条日志就是"已生效"的证据。
+			log.Info("solana route resolved", "provider", key, "drpc_configured", drpcClient != nil && drpcClient.Configured(ctx))
+		}
+	}
+	solanaRouteGate(ctx)
+	if drpcClient != nil {
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					solanaRouteGate(ctx)
+				}
+			}
+		}()
+	}
+
 	if cfg.Tron.Enabled {
 		needsAnkr, needsTronGrid := false, false
 		for _, dataset := range []string{"transactions", "token_transfers", "internal_transactions"} {
@@ -233,6 +379,15 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			ReceiptProvider: tronAnkr, TxDetailProvider: tronAnkr,
 		}}
 	}
+
+	// 路由兜底、策略装载与最终装配都必须在 TRON 包装之后：
+	// TRON 的 Dispatcher 才是非 Solana 链的最终取数实现，早于它注册 fallback 会把
+	// TRON 请求直接送回 Ankr，绕过整个 TRON 数据集路由。
+	routes.SetFallback(prov)
+	routes.SetProfileSource(st)
+	// 下载引擎与后台探针共用同一个注册表实例：
+	// 后台"测试连接"取到的实现与真正跑下载的实现因此不可能不一致。
+	prov = routes
 
 	capabilities := capability.NewRegistry()
 	capability.RegisterBuiltins(capabilities)
@@ -390,4 +545,114 @@ func UsageRecorder(st *store.Store, log *slog.Logger) provider.UsageHook {
 			}
 		}()
 	}
+}
+
+// ---- dRPC / 路由接线辅助 ----
+
+// routeProfileAdapter 把 route.Registry 的档位读取适配成 drpc.ProfileSource。
+//
+// 为什么需要适配器：drpc 不能 import route（route 已 import provider，drpc 也 import provider，
+// 但真正的原因是 route.Registry 需要引用 drpc.Client 才能注册，直接互引会成环）。
+// 两个 Profile 结构字段一一对应，这里逐字段拷贝，不做任何默认值填充 —— 缺失即返回 false，
+// 由 drpc 自己回退内置默认档，避免"零值被当成有效档位"。
+type routeProfileAdapter struct{ reg *route.Registry }
+
+func (a routeProfileAdapter) Profile(ctx context.Context, providerKey, chain, dataset, operation, mode string) (drpc.Profile, bool) {
+	p, ok := a.reg.Profile(ctx, providerKey, chain, dataset, operation, mode)
+	if !ok {
+		return drpc.Profile{}, false
+	}
+	return drpc.Profile{
+		ProviderKey: p.ProviderKey, Chain: p.Chain, Dataset: p.Dataset,
+		OperationClass: p.OperationClass, Mode: p.Mode,
+		ShardConcurrency: p.ShardConcurrency, RequestConcurrency: p.RequestConcurrency,
+		RequestsPerMinute: p.RequestsPerMinute, RequestsPerSecond: p.RequestsPerSecond,
+		CUPerMinute: p.CUPerMinute, PageSize: p.PageSize, BatchSize: p.BatchSize,
+		RequestWeight: p.RequestWeight, RequestTimeoutSeconds: p.RequestTimeoutSeconds,
+		HardCeiling: p.HardCeiling, Revision: p.Revision, VerifiedAt: p.VerifiedAt,
+		VerificationSource: p.VerificationSource,
+	}, true
+}
+
+// policyProviderAliases 把数据库里历史 Provider Key 映射到运行时注册的 Key。
+//
+// routing_policies 的既有行（0051/0072 种子）用 'ankr-multichain'、'tron-grid'、'solana-rpc'，
+// 而运行时注册名是 'ankr'、'trongrid'、'drpc'/'solana-rpc'。不归一化会让策略行指向一个
+// 未注册 Provider，路由随之告警并回退 —— 表面能跑，实际"后台改了路由没生效"。
+var policyProviderAliases = map[string]string{
+	"ankr-multichain": "ankr",
+	"ankr":            "ankr",
+	"ankr-mock":       "ankr-mock",
+	"tron-grid":       "trongrid",
+	"trongrid":        "trongrid",
+	"solana-rpc":      "solana-rpc",
+	"drpc":            route.ProviderDRPC,
+}
+
+// normalizePolicyProviders 归一化策略行的主 Provider Key，未知值原样保留（fail closed）。
+func normalizePolicyProviders(rows []route.PolicyRow) []route.PolicyRow {
+	out := make([]route.PolicyRow, 0, len(rows))
+	for _, row := range rows {
+		if mapped, ok := policyProviderAliases[strings.ToLower(strings.TrimSpace(row.PrimaryProvider))]; ok {
+			row.PrimaryProvider = mapped
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// tronChannelFor 把 TRON 的 Provider Key 映射到 API 通道名（与 provider_performance_profiles 口径一致）。
+func tronChannelFor(providerKey string) string {
+	switch strings.ToLower(strings.TrimSpace(providerKey)) {
+	case "trongrid":
+		return route.ChannelTronGrid
+	case "ankr":
+		return route.ChannelAnkrTronNode
+	default:
+		return ""
+	}
+}
+
+// drpcMaskBaseURL 只用于日志：base URL 本身不含密钥，但仍统一去掉可能的路径细节。
+func drpcMaskBaseURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		return u.Scheme + "://" + u.Host
+	}
+	return raw
+}
+
+// drpcQuotaFromSnapshot 把管理同步结果投影成数据面额度闸门的输入。
+//
+// 只映射闸门真正需要的字段；余额用字符串（numeric(38,18) 的精度不能被 float 吃掉），
+// 未知值保持 nil —— 闸门把 nil 解释为"该项未知"，而不是"额度为 0"。
+func drpcQuotaFromSnapshot(snap drpcmgmt.Snapshot) drpc.QuotaSnapshot {
+	return drpc.QuotaSnapshot{
+		Tier: snap.Tier, Balance: snap.BalanceString(), BalanceUnit: snap.BalanceUnit,
+		CUSpentToday: snap.CUSpentToday, CUDayLimit: snap.CUDayLimit,
+		RateLimit: snap.RateLimit, SyncedAt: snap.SyncedAt,
+		KeyEnabled: snap.KeyEnabled, Source: snap.Source,
+	}
+}
+
+// projectSolanaPolicies 按 dRPC 运行时就绪情况投影 Solana 策略行。
+//
+// 背景（本次接入最容易踩的坑）：0075 迁移把 solana:* 策略行的 primary_provider 改成 drpc，
+// 这是「配置事实」。但部署顺序是「先上代码、后录 Key」，在 Key 到位之前 dRPC 无法服务；
+// 如果直接按策略行路由，Solana 下载会全部失败 —— 比不接 dRPC 还差。
+// 因此运行期必须按「密钥是否真的可解析」投影回旧通道，Key 到位后自动切回 drpc。
+//
+// 只改 Provider，不动 api_channel / operation_class / revision：
+// 那两个字段描述的是数据集语义，与由谁承载无关。
+func projectSolanaPolicies(raw []route.PolicyRow, drpcReady bool) []route.PolicyRow {
+	rows := make([]route.PolicyRow, 0, len(raw))
+	for _, row := range raw {
+		if !drpcReady && strings.EqualFold(strings.TrimSpace(row.Chain), route.ChainSolana) {
+			row.PrimaryProvider = "solana-rpc"
+		}
+		rows = append(rows, row)
+	}
+	return normalizePolicyProviders(rows)
 }

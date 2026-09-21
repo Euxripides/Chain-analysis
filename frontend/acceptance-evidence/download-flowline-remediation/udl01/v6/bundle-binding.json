@@ -1,0 +1,16 @@
+{
+  "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+  "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+  "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+  "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+  "worker_chunk_http": "200",
+  "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+  "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+  "page_chunk_http": "200",
+  "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+  "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+  "page_chunk_budget_ms_hits": 1,
+  "page_chunk_timeout_copy_hits": 1,
+  "page_chunk_references_worker": true,
+  "csp_headers": 1
+}

@@ -1,0 +1,65 @@
+==== P0 匿名泄露路径回归 20260912T205640Z  base=http://127.0.0.1:8088 ====
+范围声明（必须与结论一起引用）：本脚本验证的是**匿名访问路径的关闭**与**公开白名单契约**，
+以及已认证受众/权限的**有限负向**。它**不构成**完整 P0（多租户对象级隔离）验收：
+多 org/workspace 的 job/report/export/status/ticket/canvas/investigation 对象负向、受限 Actions key 跨 org、
+审计 authorization.object_denied 与 request/trace 绑定、后台调查 runtime 的 dataset 默认组织回退、
+前端 admin audience 适配等仍未验证。
+二进制：164f33dae3bbe2e4250b7f1663646cf95bbbb309313d7b8ac91b2ec109a89235
+
+== 1) 未认证读（修复前 200，现必须 401）==
+  PASS  unauth GET /api/v1/cases -> 401
+  PASS  unauth GET /api/v1/investigations -> 401
+  PASS  unauth GET /api/v1/download-jobs?limit=1 -> 401
+  PASS  unauth GET /api/v1/api-control/overview -> 401
+  PASS  unauth GET /api/v1/api-control/provider-accounts -> 401
+  PASS  unauth GET /api/v1/api-control/requests?limit=1 -> 401
+  PASS  unauth GET /api/v1/admin/planning-decisions -> 401
+  PASS  unauth GET /api/v1/admin/ankr/benchmarks?limit=1 -> 401
+  PASS  unauth GET /api/v1/data-explorer/addresses?limit=1 -> 401
+  PASS  unauth GET /api/v1/coverage -> 401
+  PASS  unauth GET /api/v1/coverage/stats -> 401
+  PASS  unauth GET /api/v1/tags -> 401
+  PASS  unauth GET /api/v1/providers/ankr/status -> 401
+  PASS  unauth GET /api/v1/count-oracle/status -> 401
+  PASS  unauth GET /api/v1/api-control/costs -> 401
+  PASS  unauth GET /api/v1/api-control/budgets -> 401
+  PASS  unauth GET /api/v1/api-control/alerts -> 401
+  PASS  unauth GET /api/v1/tokens/enrichment -> 401
+  PASS  unauth GET /api/v1/methods/enrichment -> 401
+  PASS  unauth GET /api/v1/admin/methods/backfill -> 401
+  PASS  unauth GET /api/v1/admin/token-metadata/backfill -> 401
+
+== 2) 未认证响应体不得泄露租户字段 ==
+  PASS  未认证响应体无租户字段（224 字节）
+
+== 3) 公开白名单（契约必须保持）==
+  PASS  public GET /api/v1/me -> 200
+  PASS  public GET /api/v1/capabilities -> 200
+  PASS  public GET /api/v1/chains/capabilities -> 200
+  PASS  public GET /api/v1/methods/search -> 200
+  PASS  public GET /openapi.json -> 200
+  PASS  public GET /health/ready -> 200
+
+== 4) 伪造 X-User-* 不得提权 ==
+  PASS  forged X-User-* /api/v1/cases -> 401
+  PASS  forged X-User-* /api/v2/cases -> 401
+  PASS  forged X-User-* /api/admin/v1/jobs -> 401
+
+== 5) GPT Actions 独立 API Key 契约 ==
+  PASS  Actions 无 Key -> 401
+  PASS  Actions 伪造 Key -> 401
+  PASS  Actions 主 Key 正向（200，非 401）
+
+== 6) 已认证负向：admin 受众 / Viewer 403 / 跨组织 404 ==
+  PASS  admin 登录 200（admin@local / audience=admin）
+  PASS  admin+admin 受众 读 /api/v1/api-control/overview -> 200
+  PASS  admin 会话 + user 受众 -> 401（audience 生效）
+  INFO  受众不符的 error.code=unauthenticated
+  PASS  跨组织/不存在 case UUID -> 404
+  PASS  viewer 登录 200（fixture-viewer@fixture.local / audience=user）
+  PASS  Viewer 创建案件 -> 403（error.code=permission_denied，权限拒绝）
+  PASS  viewer 正向对照 读 /api/v2/dashboard -> 200（会话有效）
+
+==== 结果：PASS=41 FAIL=0 BLOCKED=0 （20260912T205640Z）====
+result: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/p0-legacy-v1/result-20260912T205640Z.json
+整体判定：PASS

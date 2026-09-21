@@ -1,0 +1,58 @@
+{
+  "drill": "restore-drill",
+  "ts": "20260916T161418Z",
+  "backup_dir": "/home/euripides/backups/blockchain-platform/20260916T150033Z",
+  "verdict": "INCOMPLETE",
+  "verdict_note": "PASS 仅当 FAIL=0 且 NOT_VERIFIED=0 且 PARTIAL=0；structural NV 同样不构成通过",
+  "failures": [],
+  "not_verified": [
+    "structural|版本历史 / 生命周期规则 / 对象元数据与 tag（mc mirror 只反映当前对象版本，无法冒充完整性；本次未提供 RESTORE_DRILL_MINIO_META_RESULT 独立取证结果）"
+  ],
+  "nv_class": {
+    "structural": [
+      "版本历史 / 生命周期规则 / 对象元数据与 tag（mc mirror 只反映当前对象版本，无法冒充完整性；本次未提供 RESTORE_DRILL_MINIO_META_RESULT 独立取证结果）"
+    ],
+    "check": []
+  },
+  "nv_counts": {
+    "total": 1,
+    "structural": 1,
+    "check": 0
+  },
+  "partial": [],
+  "partial_count": 0,
+  "targets": {
+    "postgres": {
+      "database": "blockchain_platform_dr_47555c7fbe4c"
+    },
+    "clickhouse": {
+      "database": "blockchain_dr_47555c7fbe4c"
+    },
+    "minio": {
+      "blockchain-audit": "blockchain-audit-drill-47555c7fbe4c",
+      "blockchain-backups": "blockchain-backups-drill-47555c7fbe4c",
+      "blockchain-exports": "blockchain-exports-drill-47555c7fbe4c",
+      "blockchain-raw": "blockchain-raw-drill-47555c7fbe4c",
+      "blockchain-reports": "blockchain-reports-drill-47555c7fbe4c"
+    }
+  },
+  "pg_dsn_redacted": "postgres://blockchain:REDACTED@127.0.0.1:5433/blockchain_platform_dr_47555c7fbe4c?sslmode=disable",
+  "restore_rc": {
+    "postgres": "0",
+    "clickhouse": "0"
+  },
+  "rto_seconds": {
+    "postgres": "68.96",
+    "clickhouse": "514.3",
+    "minio": {
+      "blockchain-audit": "0.27",
+      "blockchain-backups": "0.23",
+      "blockchain-exports": "29.45",
+      "blockchain-raw": "288.46",
+      "blockchain-reports": "0.5"
+    }
+  },
+  "logs_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/restore-drill-20260916T161418Z.logs",
+  "cleanup": "演练目标不自动清理；需人工确认后按报告 §5 的命令删除",
+  "retention_note": "本脚本不删除任何备份、不删除任何演练目标；失败的目标一律保留"
+}

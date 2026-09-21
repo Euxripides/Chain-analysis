@@ -53,6 +53,22 @@ func (s *Server) registerAdminProviderRoutes(r chi.Router) {
 		[]string{"admin:provider:read", "admin:provider:update", "admin:provider:key:rotate"},
 		s.handleAdminProviderCommand))
 
+	// ---- 工作流 E：dRPC 额度 / 性能档位 / 运行时状态 / 分类密钥（规范 §5） ----
+	// 静态命令段优先于上面的 {command} 通配段（chi 静态边优先），因此这两条命令拿到
+	// 精确的 admin:provider:update 权限，而不是通配路由的 requireAny 兜底。
+	r.Get("/providers/{id}/quota", s.require("admin:cost:read", s.handleAdminProviderQuota))
+	r.Get("/providers/{id}/quota-history", s.require("admin:cost:read", s.handleAdminProviderQuotaHistory))
+	r.Get("/providers/{id}/performance-profiles", s.require("admin:provider:read", s.handleAdminProviderPerformanceProfiles))
+	r.Patch("/providers/{id}/performance-profiles/{chain}/{operation}/{mode}", s.require("admin:performance:update", s.handleAdminProviderPerformanceProfileUpdate))
+	r.Get("/providers/{id}/runtime-states", s.require("admin:provider:read", s.handleAdminProviderRuntimeStates))
+	r.Post("/providers/{id}/commands/sync-quota", s.require("admin:provider:update", s.handleAdminProviderSyncQuota))
+	r.Post("/providers/{id}/commands/probe-channels", s.require("admin:provider:update", s.handleAdminProviderProbeChannels))
+	// 规范 §5 把 PUT secrets/{kind} 归到 admin:provider:update；同时放行 admin:provider:key:rotate，
+	// 与既有 rotate-secret 命令的精确鉴权口径一致（生成器取首项，OpenAPI 仍显示 admin:provider:update）。
+	r.Put("/providers/{id}/secrets/{kind}", s.requireAny(
+		[]string{"admin:provider:update", "admin:provider:key:rotate"},
+		s.handleAdminProviderSecretSet))
+
 	r.Get("/routing-policies", s.require("admin:routing:read", s.handleAdminRoutingPolicies))
 	r.Get("/routing-policies/{id}", s.require("admin:routing:read", s.handleAdminRoutingPolicyDetail))
 	r.Patch("/routing-policies/{id}", s.require("admin:routing:update", s.handleAdminRoutingPolicyUpdate))
@@ -92,7 +108,12 @@ type s6Provider struct {
 	RuntimeHealth      map[string]any `json:"runtime_health,omitempty"`
 	Usage              map[string]any `json:"usage"`
 	ActiveSecret       map[string]any `json:"active_secret,omitempty"`
-	UpdatedAt          time.Time      `json:"updated_at"`
+	// Quota 只在有额度来源时出现（dRPC）：nil 表示"该 Provider 不适用"，
+	// 而不是"额度为 0"，列表页必须能区分这两者。
+	Quota map[string]any `json:"quota,omitempty"`
+	// RuntimeStates 是逐通道的实际档位与并发（provider_runtime_states）。
+	RuntimeStates []map[string]any `json:"runtime_states,omitempty"`
+	UpdatedAt     time.Time        `json:"updated_at"`
 }
 
 const s6ProviderSelect = `SELECT provider_key, display_name, kind, chains, datasets, capabilities, endpoint, status,
@@ -151,6 +172,15 @@ func (s *Server) handleAdminProviders(w http.ResponseWriter, r *http.Request) {
 		items[i].ActiveSecret = s.s6ActiveSecretSummary(ctx, items[i].Key)
 		if health := s.s6RuntimeHealth(ctx, items[i].Key); health != nil {
 			items[i].RuntimeHealth = health
+		}
+		// 列表也要能看出额度（开发文档 §14.1）：余额、当日 CU 已用/上限、剩余百分比、
+		// 同步时间与当前并发。只对有快照或运行时额度的 Provider 填充，
+		// 避免 Ankr 这类没有额度来源的行显示误导性的"未设置日上限"。
+		if quota := s.s6ProviderQuotaSummary(ctx, items[i].Key); quota != nil {
+			items[i].Quota = quota
+		}
+		if states, err := s.deps.Store.RuntimeStates(ctx, items[i].Key); err == nil && len(states) > 0 {
+			items[i].RuntimeStates = states
 		}
 	}
 	respondList(w, r, map[string]any{"items": items}, len(items), nil)
@@ -228,7 +258,9 @@ func (s *Server) handleAdminProviderDetail(w http.ResponseWriter, r *http.Reques
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Provider 读取失败", nil)
 		return
 	}
-	respondOK(w, r, p)
+	// 只增不改：在既有 Provider 字段之上追加 quota / performance_profiles / secrets
+	// 与 runtime_health.channels（规范 §5）。
+	respondOK(w, r, s.s6ProviderDetailEnrich(r.Context(), p))
 }
 
 type s6ProviderUpdate struct {
@@ -307,13 +339,15 @@ func (s *Server) handleAdminProviderSecrets(w http.ResponseWriter, r *http.Reque
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "密钥摘要读取失败", nil)
 		return
 	}
+	// 三类 secret_kind 必须各占一行：库里没有的 kind 补"未配置"占位（工作流 C 事实 2）。
+	items = s6EnsureSecretKindRows(items)
 	respondList(w, r, map[string]any{"items": items}, len(items), nil)
 }
 
 // s6ListSecrets 只返回摘要；明文永不落库、永不回显。
 func (s *Server) s6ListSecrets(ctx context.Context, key string) ([]map[string]any, error) {
 	rows, err := s.deps.Store.Pool.Query(ctx, `
-		SELECT id::text, secret_ref, prefix, fingerprint, status, note, rotated_at, last_used_at, expires_at
+		SELECT id::text, secret_kind, secret_ref, prefix, fingerprint, status, note, rotated_at, last_used_at, expires_at
 		FROM provider_secrets WHERE provider_key=$1 ORDER BY rotated_at DESC LIMIT 50`, key)
 	if err != nil {
 		return nil, err
@@ -321,14 +355,14 @@ func (s *Server) s6ListSecrets(ctx context.Context, key string) ([]map[string]an
 	defer rows.Close()
 	out := make([]map[string]any, 0, 4)
 	for rows.Next() {
-		var id, ref, prefix, fingerprint, status, note string
+		var id, kind, ref, prefix, fingerprint, status, note string
 		var rotatedAt time.Time
 		var lastUsed, expires *time.Time
-		if err := rows.Scan(&id, &ref, &prefix, &fingerprint, &status, &note, &rotatedAt, &lastUsed, &expires); err != nil {
+		if err := rows.Scan(&id, &kind, &ref, &prefix, &fingerprint, &status, &note, &rotatedAt, &lastUsed, &expires); err != nil {
 			return nil, err
 		}
 		out = append(out, map[string]any{
-			"id": id, "secret_ref": s6MaskRef(ref), "prefix": prefix, "fingerprint": fingerprint,
+			"id": id, "secret_kind": kind, "secret_ref": s6MaskRef(ref), "prefix": prefix, "fingerprint": fingerprint,
 			"status": status, "note": note, "rotated_at": rotatedAt,
 			"last_used_at": lastUsed, "expires_at": expires, "plaintext_available": false,
 		})
@@ -509,13 +543,18 @@ func (s *Server) s6ProviderProbe(ctx context.Context, key string) map[string]any
 		"checked_at": start.UTC().Format(time.RFC3339),
 	}
 	var errClass string
-	if s.deps.Prov == nil || s.deps.Prov.Name() != key {
+	prov, hasRuntime := s.s6RuntimeProvider(key)
+	if !hasRuntime {
 		result["ok"] = false
 		result["error_class"] = "not_runtime_provider"
 		result["message"] = "该 Provider 由配置声明但当前进程未加载运行时实现"
 		errClass = "not_runtime_provider"
 	} else {
-		health := s.deps.Prov.Health(ctx)
+		health := prov.Health(ctx)
+		// 支持真实通道探针的实现（dRPC）：把两条通道的探针结果一并返回（规范 §5）。
+		if prober, ok := prov.(s6ChannelProber); ok {
+			result["channels"] = prober.ProbeChannels(ctx)
+		}
 		result["ok"] = string(health.State) == "healthy" || string(health.State) == "ok" || health.Error == ""
 		result["state"] = string(health.State)
 		result["error"] = health.Error
@@ -1406,4 +1445,49 @@ func (s *Server) handleAdminUpdateBudget(w http.ResponseWriter, r *http.Request)
 	}
 	s.s6AuditChange(r, "admin.budget.update", "admin.provider", "budget", id, before, after, map[string]any{"reason": in.Reason})
 	respondOK(w, r, map[string]any{"id": id, "before": before, "after": after})
+}
+
+// s6ProviderQuotaSummary 返回列表行需要的额度摘要。
+//
+// 返回 nil 表示"该 Provider 没有额度来源"（例如 Ankr），而不是"额度为 0"：
+// 列表页必须能区分这两者，否则会把"不适用"渲染成"已耗尽"。
+func (s *Server) s6ProviderQuotaSummary(ctx context.Context, key string) map[string]any {
+	if s.deps.Store == nil {
+		return nil
+	}
+	snap, ok, err := s.deps.Store.LatestAccountSnapshot(ctx, key)
+	if err != nil || !ok || snap == nil {
+		// 没有落库快照时，运行时额度（刚同步完、还没来得及写库）仍然可用。
+		if s.deps.DRPC != nil && s.deps.DRPC.Name() == key {
+			status := s.deps.DRPC.QuotaStatus()
+			if configured, _ := status["configured"].(bool); configured || status["has_snapshot"] == true {
+				return status
+			}
+		}
+		return nil
+	}
+	staleAfter := s.deps.Cfg.DRPC.ManagementStaleAfter
+	if staleAfter <= 0 {
+		staleAfter = 15 * time.Minute
+	}
+	out := map[string]any{
+		"provider": key, "account_tier": snap.AccountTier,
+		"balance": snap.AccountBalance, "balance_unit": snap.AccountBalanceUnit,
+		"cu_spent_today": snap.CUSpentToday, "cu_day_limit": snap.CUDayLimit,
+		"cu_remaining_today": snap.CURemainingToday, "rate_limit": snap.RateLimit,
+		"synced_at": snap.SyncedAt, "stale": time.Since(snap.SyncedAt) > staleAfter,
+		"source": snap.SyncStatus, "sync_status": snap.SyncStatus,
+		"sync_error_class": snap.SyncErrorClass,
+	}
+	// 剩余百分比只在日上限为正时计算：上限为空/0 时显示"未设置日上限"。
+	if snap.CUDayLimit != nil && *snap.CUDayLimit > 0 && snap.CUSpentToday != nil {
+		remaining := *snap.CUDayLimit - *snap.CUSpentToday
+		if remaining < 0 {
+			remaining = 0
+		}
+		out["cu_remaining_percent"] = float64(remaining) / float64(*snap.CUDayLimit) * 100
+	} else {
+		out["cu_remaining_percent"] = nil
+	}
+	return out
 }

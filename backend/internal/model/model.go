@@ -80,15 +80,32 @@ var chainDatasetsByChain = map[string][]string{
 }
 
 // ChainDatasets 返回该链可下载的 Dataset；chain 为空或未登记时返回全量（向后兼容）。
+//
+// Solana 的白名单随实际通道变化：走 dRPC Data API 时 nft_transfers 有明确来源，
+// 走旧的 JSON-RPC 猜测路径时按 ADR-023 D9 排除（见 capability.go 的说明）。
 func ChainDatasets(chain string) []string {
 	key := strings.ToLower(strings.TrimSpace(chain))
 	if key == "" {
 		return AllDatasets
 	}
+	if key == "solana" {
+		return solanaDatasets()
+	}
 	if list, ok := chainDatasetsByChain[key]; ok {
 		return list
 	}
 	return AllDatasets
+}
+
+// solanaDatasets 由 capability.go 的进程级能力开关决定。
+//
+// internal_transactions 两种模式下都在：它由旧的 JSON-RPC 解码器（CPI 调用树）产出，
+// dRPC 不提供该数据集，但也不应该因此把一个既有能力删掉。
+func solanaDatasets() []string {
+	if SolanaDataAPIEnabled() {
+		return []string{"transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "balances"}
+	}
+	return []string{"transactions", "token_transfers", "internal_transactions", "logs", "balances"}
 }
 
 // ChainSupportsDataset 判断 (chain, dataset) 是否可用。
@@ -197,6 +214,14 @@ type Shard struct {
 	DownloadedBytes int64   `json:"downloaded_bytes"`
 	RawObject       string  `json:"raw_object"`
 	Error           string  `json:"error"`
+	// 路由固化（开发文档 §9.1）：Planner 创建 Shard 时写入，恢复旧 Shard 必须沿用，
+	// 后台改路由只影响新 Shard。旧 Shard 这些字段为空，调用方回退到链级默认路由。
+	ProviderKey           string `json:"provider_key"`
+	APIChannel            string `json:"api_channel"`
+	OperationClass        string `json:"operation_class"`
+	RoutingPolicyKey      string `json:"routing_policy_key"`
+	RoutingPolicyRevision int64  `json:"routing_policy_revision"`
+	ProfileRevision       int64  `json:"profile_revision"`
 	// Ankr 引擎（§6/§84）：Fetch/Ingest/Validate 三阶段时间点与字节拆分。
 	FetchedAt        *time.Time `json:"fetched_at"`
 	IngestedAt       *time.Time `json:"ingested_at"`
@@ -399,7 +424,11 @@ type UsageRow struct {
 
 	// V1.5（§39/§40）：统一 RPC 用量。
 	// 成本以 method call 为基准：100 个 call 的 Batch 不得记成 1 次调用。
-	APIType         string
+	APIType string
+	// APIChannel 是同一 Provider 内部的实际取数通道（drpc: data_api|solana_rpc；
+	// Ankr/TronGrid 等单通道 Provider 留空）。同一 Provider 的两条通道并发与速率不同，
+	// 因此用量必须按通道可分辨，否则后台无法核对额度。
+	APIChannel      string
 	Chain           string
 	MethodClass     string
 	MethodCalls     int

@@ -1,0 +1,11 @@
+[Unit]
+Description=每小时触发 job_event_log 进度清理
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+Unit=blockchain-prune-job-event-log.service
+
+[Install]
+WantedBy=timers.target

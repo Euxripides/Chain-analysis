@@ -8,12 +8,12 @@ import (
 // 暂停收敛有界性：残留的 FETCHED/INGESTED Shard 不能永久阻止暂停收敛。
 func TestPauseBlocksConvergence(t *testing.T) {
 	cases := []struct {
-		name            string
-		active          int64
-		leftovers       int64
-		since           time.Duration
-		haveTime        bool
-		want            bool
+		name      string
+		active    int64
+		leftovers int64
+		since     time.Duration
+		haveTime  bool
+		want      bool
 	}{
 		{"in-flight shard always blocks", 1, 0, time.Hour, true, true},
 		{"in-flight shard blocks even past grace", 2, 5, 10 * time.Minute, true, true},

@@ -1,0 +1,74 @@
+{
+  "ok": true,
+  "problems": [],
+  "generator": "frontend/scripts/r9-make-fixtures-v5c.mjs",
+  "requestedRows": 200000,
+  "actualFormatCapacity": {
+    "format": "BIFF8",
+    "maxRowsIncludingHeader": 65536,
+    "maxDataRows": 65535
+  },
+  "actualDataRowsOnDisk": 65535,
+  "zip64Layout": {
+    "bytes": 711,
+    "eocd_offset": 689,
+    "eocd_present": true,
+    "locator_offset": 669,
+    "locator_is_20_bytes_before_eocd": true,
+    "locator_signature": "0x07064b50",
+    "locator_signature_ok": true,
+    "zip64_eocd_offset": 613,
+    "zip64_eocd_signature": "0x06064b50",
+    "zip64_eocd_signature_ok": true,
+    "locator_declared_zip64_eocd_offset": 613,
+    "locator_points_at_zip64_eocd": true,
+    "layout": "ZIP64 EOCD -> ZIP64 locator -> classic EOCD"
+  },
+  "fixtures": [
+    {
+      "name": "udl01-big.xls",
+      "bytes": 8657408,
+      "sha256": "774797ddcc5bc1d7e2c6dd1481ee435f9f68370a7a025962d85f1ee3041fedac"
+    },
+    {
+      "name": "udl01-big.xlsx",
+      "bytes": 9931510,
+      "sha256": "adf3f75e64cc3283ec38da82e067ef293cf941b180d7be35eae6c0b8c2eb12e6"
+    },
+    {
+      "name": "udl01-bomb.xlsx",
+      "bytes": 204472,
+      "sha256": "3ca5d1877ac4fabe2dc113f2889ad83f5fb70b8d5bbf7d19e38dc405d9527c77"
+    },
+    {
+      "name": "udl01-encrypted.xlsx",
+      "bytes": 635,
+      "sha256": "cc33e63b8ed48c93c7cf42a371f54708fa7082e6f61ed7029029a6c74e1996c3"
+    },
+    {
+      "name": "udl01-stored-mismatch.xlsx",
+      "bytes": 633,
+      "sha256": "51f6a2d5397970b89b4deec4ee1038a8661b39cc689e1f012533b1ef8534a7c0"
+    },
+    {
+      "name": "udl01-method-mismatch.xlsx",
+      "bytes": 635,
+      "sha256": "c95d4f7f79f70f693f55fcef938040ba2639aeedaafc2a6a803456ecc1d229b5"
+    },
+    {
+      "name": "udl01-data-descriptor.xlsx",
+      "bytes": 635,
+      "sha256": "8586943a4f4ba3b3c3ca47327c69c6e1afed641707ddcc10f88fe4ea6b8f80bf"
+    },
+    {
+      "name": "udl01-zip64.xlsx",
+      "bytes": 711,
+      "sha256": "87e9bf9982ca6677d364ec475021e2f7a01054c7c342e0d441eacccd58cfa50c"
+    },
+    {
+      "name": "udl01-small-ok.xlsx",
+      "bytes": 16057,
+      "sha256": "3f5fb6152e205fd25ce6e69f1847f2a7ea015bec964a6a13bd5d4e0de743c008"
+    }
+  ]
+}

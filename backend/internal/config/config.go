@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -466,6 +468,7 @@ type Config struct {
 	WorkerMetricsPort int
 	Ankr              AnkrConfig
 	Solana            SolanaConfig
+	DRPC              DRPCConfig
 	Tron              TronConfig
 	Method            MethodConfig
 	TokenMetadata     TokenMetadataConfig
@@ -566,6 +569,93 @@ func solanaConfigFromEnv() SolanaConfig {
 	}
 }
 
+// DRPCConfig 是 dRPC（Solana Data API + Solana JSON-RPC）的配置。
+//
+// 与 Ankr 的关键差别：dRPC 的两条通道属于**同一个账户**，因此额度闸门（CU/余额/Key 状态）
+// 在数据面共享，而并发与速率按通道分别解析（见 provider_performance_profiles）。
+// 凭据只以受控引用形式出现（env:// 或 store://），配置里永远不出现明文 Key。
+type DRPCConfig struct {
+	Enabled bool
+	// Tier 为 paid|free|unknown；unknown/free 时数据面按 DRPC_UNKNOWN_TIER_CU_PER_MINUTE 钳制。
+	Tier string
+	// BaseURL 形如 https://lb.drpc.live/solana —— 不含 API Key，Key 在请求时由 secret.Resolver 解析。
+	BaseURL            string
+	ManagementBaseURL  string
+	RuntimeKeyRef      string
+	StatisticsTokenRef string
+	KeysTokenRef       string
+
+	HistoryPageSize     int
+	MaxTxVersion        int
+	RPCTimeout          time.Duration
+	DataTimeout         time.Duration
+	SlotTimeSearchLimit int
+	SlotTimeMargin      time.Duration
+
+	UnknownTierCUPerMinute int64
+	QuotaWarnPercent       int
+	QuotaSafeOnlyPercent   int
+	QuotaStopPercent       int
+	BalanceWarn            string
+
+	ManagementSyncInterval  time.Duration
+	ManagementStaleAfter    time.Duration
+	ManagementSafeOnlyAfter time.Duration
+
+	// SecretsFile 是受管密钥文件（后台录入明文后写入此处，0600）。
+	SecretsFile string
+}
+
+// drpcConfigFromEnv 组装 dRPC 配置。
+//
+// 默认保持关闭：Solana 当前仍由既有的 Ankr Solana JSON-RPC Provider 承载，
+// 只有在显式开启并且凭据引用可解析时才切到 dRPC，避免把线上 Solana 下载打断。
+func drpcConfigFromEnv() DRPCConfig {
+	return DRPCConfig{
+		Enabled:            envBool("DRPC_ENABLED", false),
+		Tier:               strings.ToLower(env("DRPC_TIER", "unknown")),
+		BaseURL:            strings.TrimRight(env("DRPC_BASE_URL", "https://lb.drpc.live/solana"), "/"),
+		ManagementBaseURL:  strings.TrimRight(env("DRPC_MANAGEMENT_BASE_URL", "https://drpc.org"), "/"),
+		RuntimeKeyRef:      env("DRPC_RUNTIME_KEY_REF", "store://drpc/runtime_api_key"),
+		StatisticsTokenRef: env("DRPC_STATISTICS_TOKEN_REF", "store://drpc/statistics_api_token"),
+		KeysTokenRef:       env("DRPC_KEYS_TOKEN_REF", "store://drpc/keys_api_token"),
+
+		HistoryPageSize:     envInt("DRPC_SOLANA_HISTORY_PAGE_SIZE", 100),
+		MaxTxVersion:        envInt("DRPC_SOLANA_MAX_TX_VERSION", 0),
+		RPCTimeout:          time.Duration(envInt("DRPC_SOLANA_RPC_REQUEST_TIMEOUT_SECONDS", 30)) * time.Second,
+		DataTimeout:         time.Duration(envInt("DRPC_SOLANA_DATA_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
+		SlotTimeSearchLimit: envInt("DRPC_SOLANA_SLOT_TIME_SEARCH_LIMIT", 64),
+		SlotTimeMargin:      time.Duration(envInt("DRPC_SOLANA_SLOT_TIME_MARGIN_SECONDS", 120)) * time.Second,
+
+		UnknownTierCUPerMinute: int64(envInt("DRPC_UNKNOWN_TIER_CU_PER_MINUTE", 45000)),
+		QuotaWarnPercent:       envInt("DRPC_QUOTA_WARN_PERCENT", 80),
+		QuotaSafeOnlyPercent:   envInt("DRPC_QUOTA_SAFE_ONLY_PERCENT", 95),
+		QuotaStopPercent:       envInt("DRPC_QUOTA_STOP_PERCENT", 100),
+		BalanceWarn:            os.Getenv("DRPC_BALANCE_WARN"),
+
+		ManagementSyncInterval:  time.Duration(envInt("DRPC_MANAGEMENT_SYNC_INTERVAL_SECONDS", 300)) * time.Second,
+		ManagementStaleAfter:    time.Duration(envInt("DRPC_MANAGEMENT_STALE_AFTER_SECONDS", 900)) * time.Second,
+		ManagementSafeOnlyAfter: time.Duration(envInt("DRPC_MANAGEMENT_SAFE_ONLY_AFTER_SECONDS", 3600)) * time.Second,
+
+		SecretsFile: strings.TrimSpace(os.Getenv("PROVIDER_SECRETS_FILE")),
+	}
+}
+
+// ProviderSecretsFilePath 返回受管密钥文件的最终路径。
+//
+// 默认落在 $HOME/.blockchain-platform/provider-secrets.json：systemd 单元以该用户运行，
+// 因此不需要额外写权限，也不会污染仓库目录。
+func (c DRPCConfig) ProviderSecretsFilePath() string {
+	if c.SecretsFile != "" {
+		return c.SecretsFile
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "provider-secrets.json"
+	}
+	return filepath.Join(home, ".blockchain-platform", "provider-secrets.json")
+}
+
 // AnkrManagementConfig controls the account-scoped Management MCP connection.
 // The RPC API key is intentionally not accepted here: Management MCP uses OAuth.
 type AnkrManagementConfig struct {
@@ -633,8 +723,85 @@ func parsePageLevels(s string) []int {
 	return out
 }
 
+// drpcAllowedHosts 是 dRPC Endpoint 的允许列表（开发文档 §16-7：防止管理员把 Endpoint
+// 改成内网或本机地址造成 SSRF）。
+var drpcAllowedHosts = map[string]bool{
+	"lb.drpc.live": true,
+	"drpc.org":     true,
+}
+
+// validateDRPC 校验 dRPC 配置。配置错误在启动期失败，而不是等到第一次下载。
+func (c *Config) validateDRPC() error {
+	cfg := c.DRPC
+	switch cfg.Tier {
+	case "paid", "free", "unknown":
+	default:
+		return fmt.Errorf("DRPC_TIER must be paid|free|unknown, got %q", cfg.Tier)
+	}
+	if cfg.BaseURL != "" {
+		u, err := url.Parse(cfg.BaseURL)
+		if err != nil {
+			return fmt.Errorf("DRPC_BASE_URL invalid: %w", err)
+		}
+		// 只允许 HTTPS：生产与测试都不接受明文传输密钥。
+		if u.Scheme != "https" {
+			return fmt.Errorf("DRPC_BASE_URL must use https, got %q", u.Scheme)
+		}
+		if !drpcAllowedHosts[strings.ToLower(u.Hostname())] {
+			return fmt.Errorf("DRPC_BASE_URL host %q is not in the allowed list", u.Hostname())
+		}
+		// Endpoint 里不允许直接内嵌明文 Key（唯一合法形态是不带 key 的 base URL）。
+		if strings.Contains(u.Path, "/lambda") {
+			return fmt.Errorf("DRPC_BASE_URL must not include the /lambda path segment")
+		}
+	}
+	if cfg.ManagementBaseURL != "" {
+		u, err := url.Parse(cfg.ManagementBaseURL)
+		if err != nil || u.Scheme != "https" || !drpcAllowedHosts[strings.ToLower(u.Hostname())] {
+			return fmt.Errorf("DRPC_MANAGEMENT_BASE_URL must be https on an allowed dRPC host")
+		}
+	}
+	if cfg.HistoryPageSize <= 0 || cfg.HistoryPageSize > 1000 {
+		return fmt.Errorf("DRPC_SOLANA_HISTORY_PAGE_SIZE must be within 1..1000")
+	}
+	if cfg.MaxTxVersion < 0 {
+		return fmt.Errorf("DRPC_SOLANA_MAX_TX_VERSION must not be negative")
+	}
+	if cfg.RPCTimeout <= 0 || cfg.DataTimeout <= 0 {
+		return fmt.Errorf("dRPC request timeouts must be positive")
+	}
+	if cfg.SlotTimeSearchLimit <= 0 {
+		return fmt.Errorf("DRPC_SOLANA_SLOT_TIME_SEARCH_LIMIT must be positive")
+	}
+	if cfg.UnknownTierCUPerMinute <= 0 {
+		return fmt.Errorf("DRPC_UNKNOWN_TIER_CU_PER_MINUTE must be positive")
+	}
+	if !(0 < cfg.QuotaWarnPercent && cfg.QuotaWarnPercent <= cfg.QuotaSafeOnlyPercent && cfg.QuotaSafeOnlyPercent <= cfg.QuotaStopPercent) {
+		return fmt.Errorf("DRPC_QUOTA_*_PERCENT must satisfy 0 < warn <= safe_only <= stop")
+	}
+	if cfg.ManagementSyncInterval < time.Minute {
+		return fmt.Errorf("DRPC_MANAGEMENT_SYNC_INTERVAL_SECONDS must be at least 60 (official management API limit is 10/min)")
+	}
+	if cfg.ManagementStaleAfter < cfg.ManagementSyncInterval {
+		return fmt.Errorf("DRPC_MANAGEMENT_STALE_AFTER_SECONDS must be >= the sync interval")
+	}
+	// 生产环境开启 dRPC 但层级未知/免费时**不拒绝启动**：层级只有在后台录入凭据并完成一次
+	// 管理同步之后才能确定，启动期硬失败会把"先部署、后补 Key"的正常上线路堵死。
+	// 数据面按 DRPC_UNKNOWN_TIER_CU_PER_MINUTE 钳制（开发文档 §3.4/§6.2），
+	// 并由 Provider 页面显式标注 degraded_reason=cu_cap_unknown_tier。
+	// 发布验收仍要求 DRPC_TIER=paid（见开发文档 §12），但那是验收条件而非启动条件。
+	// Solana 显式指定 dRPC 时，dRPC 必须真的开启；否则运行期会静默回落到旧 Provider。
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("SOLANA_PROVIDER")), "drpc") && !cfg.Enabled {
+		return fmt.Errorf("SOLANA_PROVIDER=drpc requires DRPC_ENABLED=true")
+	}
+	return nil
+}
+
 // Validate 启动校验（§32：错误配置直接启动失败）。
 func (c *Config) Validate() error {
+	if err := c.validateDRPC(); err != nil {
+		return err
+	}
 	// [FIX 2026-09-13 / P0-密钥] 凭据必须由环境提供：缺失即快速失败。
 	// 历史实现在编译期内置了与生产同值的默认凭据（PG/CH/MinIO 各一组，值已按 §23.8 于 2026-09-13 轮换，
 	// 明文不再出现在任何文件），导致发行二进制内嵌可用凭据（§23.8 FAIL），且生产从未轮换默认值。
@@ -1194,6 +1361,7 @@ func Load() *Config {
 			SyncTTL:       time.Duration(envInt("ANKR_MANAGEMENT_SYNC_TTL_SECONDS", 300)) * time.Second,
 		},
 		Solana: solanaConfigFromEnv(),
+		DRPC:   drpcConfigFromEnv(),
 		Ankr: AnkrConfig{
 			Mode:                    env("ANKR_MODE", "mock"),
 			APIKey:                  os.Getenv("ANKR_API_KEY"),

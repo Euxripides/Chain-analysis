@@ -1,0 +1,34 @@
+{
+  "layer": "component-7-dataset-fixture",
+  "fixture_dataset_ids": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances",
+    "internal_transactions",
+    "dataset_test_only_7"
+  ],
+  "fixture_only_id": "dataset_test_only_7",
+  "ui_max_datasets": 6,
+  "meta_requests": [
+    "https://127.0.0.1:8448/api/v2/meta/datasets",
+    "https://127.0.0.1:8448/api/v2/meta/datasets?chain=bsc"
+  ],
+  "selected_before_block_attempt": 6,
+  "mouse_limit_dialog_text": "注意 Dataset 数量超出上限 单次下载最多选择 6 种 Dataset，无法再加入 测试专用第 7 项。请先取消一个已选项。 知道了",
+  "preview_request_datasets": [
+    "transactions",
+    "token_transfers",
+    "nft_transfers",
+    "logs",
+    "balances",
+    "internal_transactions"
+  ],
+  "preview_request_contains_fixture_only": false,
+  "final_selected_count": 6,
+  "login": {
+    "attempts": 1,
+    "retriedNavigation": false
+  }
+}

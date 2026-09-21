@@ -14,7 +14,6 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
-	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 )
 
 // rampPhase 状态。
@@ -235,7 +234,7 @@ func (sc *Scheduler) rampStep(ctx context.Context, rc *globalRamp, steps []int, 
 
 // errDeltas Provider 错误计数增量（§40：429 → Rate↓；Connection Limit → Concurrency↓）。
 func (sc *Scheduler) errDeltas(rc *globalRamp) (new429, newConn, newTimeout, newTooLarge int64) {
-	if ac, ok := sc.prov.(*ankr.Client); ok {
+	if ac, ok := sc.ankrClient(); ok {
 		c429 := ac.RateLimitCount()
 		cConn := ac.ConnectionLimitCount()
 		cTimeout := ac.TimeoutCount()

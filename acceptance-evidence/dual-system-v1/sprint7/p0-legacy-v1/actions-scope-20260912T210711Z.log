@@ -1,0 +1,15 @@
+==== Actions scope 负向 20260912T210711Z  base=http://127.0.0.1:8088 ====
+api_sha=e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7
+导出夹具：id=7286a67b-05cb-4fc1-a706-c2e3a83519d3 org=acme
+夹具 key：read id=c2442765-f9fd-4587-8840-0ddf418e715b export id=b86210a9-a33f-4d6c-a891-98229233b740
+  FAIL  read key 调 read 范围端点 /api/v1/address/overview -> got=401 want=200
+  PASS  read key 越 scope 调 export 端点 /api/v1/export/status -> 401
+  PASS  read key 访问后台 API /api/admin/v1/jobs -> 401
+  FAIL  export key 被 401（scope 未生效，误伤合法 key）
+  FAIL  export key 读不存在导出 UUID（不得因 UUID 合法而放行） -> got=401 want=404
+  已 disable 测试 key read id=c2442765-f9fd-4587-8840-0ddf418e715b（保留记录，不删除）
+  已 disable 测试 key export id=b86210a9-a33f-4d6c-a891-98229233b740（保留记录，不删除）
+
+==== 结果：PASS=2 FAIL=3 BLOCKED=0 （20260912T210711Z）====
+result: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/p0-legacy-v1/actions-scope-result-20260912T210711Z.json
+整体判定：FAIL/BLOCKED

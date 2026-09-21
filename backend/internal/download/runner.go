@@ -19,6 +19,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	"github.com/blockchain-platform/blockchain-platform/internal/spool"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
@@ -69,7 +70,16 @@ func requestHash(sh model.Shard, chain, address, method, providerName string) st
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// sourceProviderForDataset 解析 (chain, dataset) 的 Provider key。
+//
+// 优先走 Runtime Route Registry（Solana 可能解析到 drpc 或旧的 solana-rpc），
+// 未命中时回落到历史链级特判 —— 这样"后台还没录入 dRPC 密钥"时 Solana 下载不会中断。
 func (sc *Scheduler) sourceProviderForDataset(chain, dataset string) string {
+	if sc.routes != nil {
+		if r, ok := sc.routes.Resolve(chain, dataset); ok {
+			return r.ProviderKey
+		}
+	}
 	if chain == "tron" {
 		return sc.cfg.Tron.ProviderForDataset(dataset)
 	}
@@ -80,6 +90,23 @@ func (sc *Scheduler) sourceProviderForDataset(chain, dataset string) string {
 	return "ankr"
 }
 
+// providerForShard 优先使用 Shard 创建时固化的路由（开发文档 §9.1）：
+// 后台改路由只影响新 Shard，恢复旧 Shard 必须沿用原 Provider。
+func (sc *Scheduler) providerForShard(sh model.Shard, chain string) string {
+	if sh.ProviderKey != "" {
+		return sh.ProviderKey
+	}
+	return sc.sourceProviderForDataset(chain, sh.Dataset)
+}
+
+// apiChannelForShard 返回固化通道；为空时按 Provider 推导（旧 Shard 兼容）。
+func (sc *Scheduler) apiChannelForShard(sh model.Shard) string {
+	if sh.APIChannel != "" {
+		return sh.APIChannel
+	}
+	return ""
+}
+
 // downloadMethod 返回该链/数据集实际使用的 Provider 方法名；
 // 它进入 request hash 与 raw manifest，必须反映真实来源而不是默认假设。
 func downloadMethod(chain, dataset string) string {
@@ -87,6 +114,65 @@ func downloadMethod(chain, dataset string) string {
 		return "getTransaction"
 	}
 	return downloadMethodByDataset[dataset]
+}
+
+// drpcMethod 返回 dRPC 通道上的真实方法名（开发文档 §15.1）。
+//
+// Data API 的一次 HTTP 请求对应一次 get_transactions_history；JSON-RPC 通道按具体方法记，
+// 这样 provider_usage 里的 http_requests 与 method_calls 才对得上。
+func drpcMethod(apiChannel, dataset string) string {
+	switch apiChannel {
+	case route.ChannelDataAPI:
+		return "get_transactions_history"
+	case route.ChannelSolanaRPC:
+		switch dataset {
+		case "balances":
+			return "getBalance"
+		case "logs":
+			return "getTransaction"
+		default:
+			return "getTransaction"
+		}
+	default:
+		return downloadMethodByDataset[dataset]
+	}
+}
+
+// methodForShard 组合固化路由与链语义，得到进入 request hash / manifest 的方法名。
+func (sc *Scheduler) methodForShard(sh model.Shard, chain string) string {
+	providerName := sc.providerForShard(sh, chain)
+	if providerName == route.ProviderDRPC {
+		return drpcMethod(sh.APIChannel, sh.Dataset)
+	}
+	method := downloadMethod(chain, sh.Dataset)
+	if chain == "tron" {
+		if providerName == "trongrid" && sh.Dataset == "transactions" {
+			return "trongrid_transactions"
+		}
+		if m, ok := map[string]string{
+			"transactions": "tron_getblockbylimitnext", "token_transfers": "tron_eth_getLogs",
+			"internal_transactions": "tron_gettransactioninfobyblocknum",
+		}[sh.Dataset]; ok {
+			return m
+		}
+	}
+	return method
+}
+
+// requestedJobMode 取任务请求模式：优先 requested_mode，其次兼容字段。
+//
+// 用户模式只表达业务意图，实际档位由 Provider 按各自通道解析后取其低者（开发文档 §6.3）。
+func requestedJobMode(job *model.DownloadJob) string {
+	if job == nil {
+		return ""
+	}
+	if job.RequestedMode != "" {
+		return string(job.RequestedMode)
+	}
+	if job.EffectiveMode != "" {
+		return string(job.EffectiveMode)
+	}
+	return job.Mode
 }
 
 func downloadPriority(priority int) string {
@@ -141,6 +227,9 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		return
 	}
 	chain := job.Chain
+	// 任务请求模式随 context 下传：dRPC 等按通道解析档位的 Provider 需要它，
+	// 而 FetchRequest 是页级结构，不适合重复携带任务级属性。
+	ctx = provider.WithRequestedMode(ctx, requestedJobMode(job))
 	var envelope *RangeEnvelope
 	if sh.Dataset == "transactions" && (sh.FromBlock != 0 || sh.ToBlock != 0) {
 		if sh.FromBlock < 0 || sh.ToBlock < sh.FromBlock || sh.ToBlock == int64(^uint64(0)>>1) {
@@ -155,15 +244,8 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		envelope = &e
 	}
 
-	method := downloadMethod(chain, sh.Dataset)
-	providerName := sc.sourceProviderForDataset(chain, sh.Dataset)
-	if chain == "tron" {
-		if providerName == "trongrid" && sh.Dataset == "transactions" {
-			method = "trongrid_transactions"
-		} else {
-			method = map[string]string{"transactions": "tron_getblockbylimitnext", "token_transfers": "tron_eth_getLogs", "internal_transactions": "tron_gettransactioninfobyblocknum"}[sh.Dataset]
-		}
-	}
+	providerName := sc.providerForShard(sh, chain)
+	method := sc.methodForShard(sh, chain)
 	reqHash := requestHash(sh, chain, address, method, providerName)
 	manifest := manifestMeta{
 		RequestHash: reqHash, Provider: providerName, Method: method, Chain: chain, Address: address,
@@ -1092,6 +1174,11 @@ func (sc *Scheduler) ingestRows(ctx context.Context, sh model.Shard, rows []json
 	case "logs":
 		if err := sc.writer.WriteLogs(ctx, batch.logRows); err != nil {
 			return 0, 0, err
+		}
+		if len(batch.solanaLogs) > 0 {
+			if err := sc.writer.WriteSolanaProgramLogs(ctx, batch.solanaLogs); err != nil {
+				return 0, 0, err
+			}
 		}
 	case "balances":
 		if err := sc.writer.WriteBalances(ctx, batch.bals); err != nil {

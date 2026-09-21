@@ -1,0 +1,11 @@
+# 每小时清理 job_event_log 中 24 小时前的**进度事件**（状态/控制类不删）
+[Unit]
+Description=Blockchain Platform job_event_log 进度事件保留清理（24h）
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/euripides/projects/blockchain-platform/deploy/.env
+WorkingDirectory=/home/euripides/projects/blockchain-platform
+ExecStart=/bin/bash /home/euripides/projects/blockchain-platform/scripts/ops/prune-job-event-log.sh
+Nice=15

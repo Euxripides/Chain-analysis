@@ -720,16 +720,16 @@ func (s *Server) handleAdminAuditIntegrityDeclareRequest(w http.ResponseWriter, 
 	p := PrincipalFrom(ctx)
 	ref := audit.DeclaredRefFor(chain, "all", s6SeqList(scan.MissingSeqs, scan.ContentAnomalies))
 	payload := map[string]any{
-		"kind":                audit.IncidentKindDeclared,
-		"chain":               chain,
-		"declaration_ref":     ref,
-		"reason":              reason,
-		"lost":                s6DeclaredEventsOf(scan.MissingSeqs),
-		"content_anomalies":   s6DeclaredEventsOf(scan.ContentAnomalies),
-		"detection_method":    "audit.ScanChain（逐行复算整条链并收敛全部问题）",
-		"head_seq":            scan.HeadSeq,
-		"checked":             scan.Checked,
-		"forbidden_actions":   []string{"回填缺失的审计行", "重写既有行的 event_hash", "把已声明事实记为完整"},
+		"kind":              audit.IncidentKindDeclared,
+		"chain":             chain,
+		"declaration_ref":   ref,
+		"reason":            reason,
+		"lost":              s6DeclaredEventsOf(scan.MissingSeqs),
+		"content_anomalies": s6DeclaredEventsOf(scan.ContentAnomalies),
+		"detection_method":  "audit.ScanChain（逐行复算整条链并收敛全部问题）",
+		"head_seq":          scan.HeadSeq,
+		"checked":           scan.Checked,
+		"forbidden_actions": []string{"回填缺失的审计行", "重写既有行的 event_hash", "把已声明事实记为完整"},
 	}
 	approval, err := s.s6CreateApproval(ctx, s6IntegritySealOperation, "audit_chain", chain, payload,
 		p.IdentityID, p.Email, 24*time.Hour)
@@ -752,8 +752,8 @@ func (s *Server) handleAdminAuditIntegrityDeclareRequest(w http.ResponseWriter, 
 			"step_up_method": "password",
 		})
 	respondCreated(w, r, map[string]any{
-		"approval":     approval,
-		"scan":         scan,
+		"approval":        approval,
+		"scan":            scan,
 		"declaration_ref": ref,
 	})
 }

@@ -16,7 +16,7 @@ import (
 // 与 EVM 的差别必须显式保留：symbol/name/USD 价格没有可靠来源 → 留空，
 // 不用 mint 地址冒充符号；快照槽位来自行内的 snapshotBlock（getSlot 实测值），
 // 而不是调用方传进来的 shard 边界。
-func NormalizeBalance(raw json.RawMessage) (ingest.BalanceRow, error) {
+func NormalizeBalance(raw json.RawMessage, provider string) (ingest.BalanceRow, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return ingest.BalanceRow{}, err
@@ -55,6 +55,6 @@ func NormalizeBalance(raw json.RawMessage) (ingest.BalanceRow, error) {
 		BalanceUSD: "", TokenPrice: "",
 		SnapshotBlock: uint64(numberField(m, "snapshotBlock")),
 		Timestamp:     time.Unix(timestamp, 0).UTC(),
-		Provider:      "solana",
+		Provider:      providerOrDefault(provider),
 	}, nil
 }

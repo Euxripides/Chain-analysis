@@ -1,0 +1,270 @@
+{
+  "suite": "DL-FLOW remediation (dataset limit: real api / component fixture / server constraint)",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z",
+  "checks_total": 22,
+  "checks_failed": 0,
+  "failed": [],
+  "checks": [
+    {
+      "check": "evidence-present:component",
+      "ok": true,
+      "detail": "component"
+    },
+    {
+      "check": "evidence-present:real-api",
+      "ok": true,
+      "detail": "real-api"
+    },
+    {
+      "check": "evidence-present:server",
+      "ok": true,
+      "detail": "server"
+    },
+    {
+      "check": "component-seven-item-fixture",
+      "ok": true,
+      "detail": [
+        "transactions",
+        "token_transfers",
+        "nft_transfers",
+        "logs",
+        "balances",
+        "internal_transactions",
+        "dataset_test_only_7"
+      ]
+    },
+    {
+      "check": "component-ui-max-six",
+      "ok": true,
+      "detail": 6
+    },
+    {
+      "check": "component-selected-first-six",
+      "ok": true,
+      "detail": 6
+    },
+    {
+      "check": "component-limit-dialog",
+      "ok": true,
+      "detail": "注意 Dataset 数量超出上限 单次下载最多选择 6 种 Dataset，无法再加入 测试专用第 7 项。请先取消一个已选项。 知道了"
+    },
+    {
+      "check": "component-blocked-seventh-not-sent",
+      "ok": true,
+      "detail": {
+        "preview_request_datasets": [
+          "transactions",
+          "token_transfers",
+          "nft_transfers",
+          "logs",
+          "balances",
+          "internal_transactions"
+        ]
+      }
+    },
+    {
+      "check": "component-final-selected-six",
+      "ok": true,
+      "detail": 6
+    },
+    {
+      "check": "real-page-chain-lte-ui-cap",
+      "ok": true,
+      "detail": {
+        "chain": "arbitrum",
+        "ids": [
+          "transactions",
+          "token_transfers",
+          "nft_transfers",
+          "logs",
+          "balances",
+          "internal_transactions"
+        ]
+      }
+    },
+    {
+      "check": "real-available-lte-five",
+      "ok": true,
+      "detail": {
+        "available_ids": [
+          "transactions",
+          "token_transfers",
+          "nft_transfers",
+          "logs",
+          "balances"
+        ],
+        "unavailable_ids": [
+          "internal_transactions"
+        ]
+      }
+    },
+    {
+      "check": "real-evm-chain-lte-five",
+      "ok": true,
+      "detail": {
+        "chain": "bsc",
+        "status": 200,
+        "ids": [
+          "transactions",
+          "token_transfers",
+          "nft_transfers",
+          "logs",
+          "balances",
+          "internal_transactions"
+        ],
+        "items": [
+          {
+            "api_channel": "ankr_advanced",
+            "id": "transactions",
+            "label": "普通交易",
+            "provider": "ankr",
+            "status": "available",
+            "supports_block_range": true,
+            "supports_full": true,
+            "supports_time_range": true
+          },
+          {
+            "api_channel": "ankr_advanced",
+            "id": "token_transfers",
+            "label": "Token Transfer",
+            "provider": "ankr",
+            "status": "available",
+            "supports_block_range": true,
+            "supports_full": true,
+            "supports_time_range": true
+          },
+          {
+            "api_channel": "ankr_advanced",
+            "id": "nft_transfers",
+            "label": "NFT Transfer",
+            "provider": "ankr",
+            "status": "available",
+            "supports_block_range": true,
+            "supports_full": true,
+            "supports_time_range": true
+          },
+          {
+            "api_channel": "ankr_advanced",
+            "id": "logs",
+            "label": "事件日志",
+            "provider": "ankr",
+            "status": "available",
+            "supports_block_range": true,
+            "supports_full": true,
+            "supports_time_range": true
+          },
+          {
+            "api_channel": "ankr_advanced",
+            "id": "balances",
+            "label": "地址余额快照",
+            "provider": "ankr",
+            "status": "available",
+            "supports_block_range": false,
+            "supports_full": false,
+            "supports_time_range": false
+          },
+          {
+            "id": "internal_transactions",
+            "label": "内部调用",
+            "status": "unsupported",
+            "supports_block_range": false,
+            "supports_full": false,
+            "supports_time_range": false
+          }
+        ],
+        "available_ids": [
+          "transactions",
+          "token_transfers",
+          "nft_transfers",
+          "logs",
+          "balances"
+        ]
+      }
+    },
+    {
+      "check": "real-whitelist-all-selected",
+      "ok": true,
+      "detail": 5
+    },
+    {
+      "check": "real-preview-only-real-datasets",
+      "ok": true,
+      "detail": [
+        "transactions",
+        "token_transfers",
+        "nft_transfers",
+        "logs",
+        "balances"
+      ]
+    },
+    {
+      "check": "real-preview-prefer-local",
+      "ok": true,
+      "detail": "prefer_local"
+    },
+    {
+      "check": "server-preview-400",
+      "ok": true,
+      "detail": 400
+    },
+    {
+      "check": "server-error-code",
+      "ok": true,
+      "detail": {
+        "code": "VALIDATION_INVALID_ARGUMENT",
+        "message": "Dataset 不合法",
+        "field_errors": [
+          {
+            "field": "datasets",
+            "code": "invalid",
+            "message": "单次最多选择 6 个 Dataset"
+          }
+        ],
+        "retryable": false
+      }
+    },
+    {
+      "check": "server-field-error-datasets",
+      "ok": true,
+      "detail": [
+        {
+          "field": "datasets",
+          "code": "invalid",
+          "message": "单次最多选择 6 个 Dataset"
+        }
+      ]
+    },
+    {
+      "check": "server-no-plan-returned",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "check": "server-create-400",
+      "ok": true,
+      "detail": 400
+    },
+    {
+      "check": "server-create-no-job-id",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "success",
+          "data",
+          "meta",
+          "error"
+        ]
+      }
+    },
+    {
+      "check": "server-no-new-job",
+      "ok": true,
+      "detail": {
+        "before": 44,
+        "after": 44
+      }
+    }
+  ],
+  "problems": [],
+  "verdict": "PASS"
+}

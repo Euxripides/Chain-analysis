@@ -199,6 +199,11 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 		kinds = append(kinds, kindDef{"nft", batch.nfts, pr.meta.DecodedBytes, true})
 	case "logs":
 		kinds = append(kinds, kindDef{"log", batch.logRows, pr.meta.DecodedBytes, true})
+		// Solana 程序日志的原生扩展表：只做增强，不计入 fact 行数，
+		// 否则 finalize 的 rows_parsed/rows_inserted 口径会被同一批日志算两遍。
+		if len(batch.solanaLogs) > 0 {
+			kinds = append(kinds, kindDef{"solanalog", batch.solanaLogs, 0, false})
+		}
 	case "balances":
 		kinds = append(kinds, kindDef{"bal", batch.bals, pr.meta.DecodedBytes, true})
 	case "internal_transactions":
@@ -666,6 +671,16 @@ func (a *batchAggregator) flush(ctx context.Context, kind string, chunks []chunk
 		}
 		if err := a.writer.WriteLogs(ctx, rows); err != nil {
 			return err
+		}
+	case "solanalog":
+		rows := make([]ingest.SolanaProgramLogRow, 0)
+		for _, c := range chunks {
+			rows = append(rows, c.rows.([]ingest.SolanaProgramLogRow)...)
+		}
+		if len(rows) > 0 {
+			if err := a.writer.WriteSolanaProgramLogs(ctx, rows); err != nil {
+				return err
+			}
 		}
 	case "bal":
 		rows := make([]ingest.BalanceRow, 0)

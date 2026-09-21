@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -372,19 +374,120 @@ func (s *Server) handleDownloadPreview(w http.ResponseWriter, r *http.Request) {
 			"updated_at": plan.Candidate.UpdatedAt,
 		}
 	}
+	providerPlan, planCU, planCost := providerPlanForDataset(plan.EnsureReq.Chain, plan.EnsureReq.Datasets, plan.Estimate["estimated_rows"])
+	estimate := map[string]any{}
+	for k, v := range plan.Estimate {
+		estimate[k] = v
+	}
+	// §15.2：估算值只从本地 Coverage 与历史用量推导，推不出来就留 null，
+	// 绝不为了"看起来精确"编一个数。
+	estimate["estimated_cu"] = planCU
+	estimate["estimated_cost_usd"] = planCost
 	respondOK(w, r, map[string]any{
 		"request":                plan.Request,
 		"coverage":               plan.Preview,
 		"missing_blocks":         plan.MissingBlock,
 		"provider_work_required": providerWork,
 		"reuse":                  reuseInfo,
-		"estimate":               plan.Estimate,
+		"estimate":               estimate,
+		"provider_plan":          providerPlan,
 		"risks":                  plan.Risks,
 		"source": map[string]any{
 			"coverage": "postgres:dataset_coverage", "provider": "local_index",
 			"as_of": time.Now().UTC().Format(time.RFC3339),
 		},
 	})
+}
+
+// drpcDataAPICUSPerRequest / drpcRPCCUPerCall 与开发文档 §15.1 的官方 CU 表一致：
+// 交易历史每次调用 1837 CU，Solana RPC 方法通常 20 CU。价格 1,000,000 CU = 0.30 USD。
+const (
+	drpcDataAPICUSPerRequest = 1837.0
+	drpcRPCCUPerCall         = 20.0
+	drpcUSDPerCU             = 0.30 / 1_000_000
+	drpcHistoryPageSize      = 100
+)
+
+// providerPlanForDataset 按链能力把 Dataset 归并成 Provider/通道计划（开发文档 §15.2）。
+//
+// 无法从本地密度估算行数时（estimatedRows 非数字或 <= 0）只返回通道与单价口径，
+// 页数/CU/成本留 null —— 前端据此显示"范围"而不是一个假精确值。
+func providerPlanForDataset(chain string, datasets []string, estimatedRows any) ([]map[string]any, any, any) {
+	wanted := map[string]bool{}
+	for _, ds := range datasets {
+		wanted[ds] = true
+	}
+	type group struct {
+		provider, channel string
+		datasets          []string
+		dataAPI           bool
+	}
+	order := []string{}
+	groups := map[string]*group{}
+	for _, cap := range model.ChainDatasetCapabilities(chain) {
+		if cap.Status != model.DatasetAvailable || !wanted[cap.ID] {
+			continue
+		}
+		key := cap.Provider + "|" + cap.APIChannel
+		g := groups[key]
+		if g == nil {
+			g = &group{provider: cap.Provider, channel: cap.APIChannel, dataAPI: cap.APIChannel == "data_api"}
+			groups[key] = g
+			order = append(order, key)
+		}
+		g.datasets = append(g.datasets, cap.ID)
+	}
+	rows, rowsKnown := 0.0, false
+	switch v := estimatedRows.(type) {
+	case int64:
+		rows, rowsKnown = float64(v), v > 0
+	case int:
+		rows, rowsKnown = float64(v), v > 0
+	case float64:
+		rows, rowsKnown = v, v > 0
+	}
+	items := make([]map[string]any, 0, len(order))
+	var totalCU float64
+	cuKnown := true
+	for _, key := range order {
+		g := groups[key]
+		item := map[string]any{
+			"provider": g.provider, "api_channel": g.channel, "datasets": g.datasets,
+			"estimated_pages": nil, "estimated_rpc_calls": nil,
+			"estimated_cu": nil, "estimated_cost_usd": nil,
+		}
+		if rowsKnown {
+			if g.dataAPI {
+				pages := math.Ceil(rows / drpcHistoryPageSize)
+				item["estimated_pages"] = int64(pages)
+				cu := pages * drpcDataAPICUSPerRequest
+				item["estimated_cu"] = int64(cu)
+				item["estimated_cost_usd"] = strconv.FormatFloat(cu*drpcUSDPerCU, 'f', 18, 64)
+				totalCU += cu
+			} else {
+				// RPC 通道按"每笔交易一次调用"的量级估算（详情/日志/余额快照），
+				// 明确标注它是量级而不是精确值。
+				calls := math.Ceil(rows)
+				item["estimated_rpc_calls"] = int64(calls)
+				cu := calls * drpcRPCCUPerCall
+				item["estimated_cu"] = int64(cu)
+				item["estimated_cost_usd"] = strconv.FormatFloat(cu*drpcUSDPerCU, 'f', 18, 64)
+				totalCU += cu
+			}
+			item["basis"] = "local_density_estimate"
+		} else {
+			cuKnown = false
+			item["basis"] = "range_unknown"
+		}
+		items = append(items, item)
+	}
+	if len(items) == 0 {
+		return items, nil, nil
+	}
+	if !cuKnown {
+		return items, nil, nil
+	}
+	return items, int64(totalCU), strconv.FormatFloat(totalCU*drpcUSDPerCU, 'f', 18, 64)
 }
 
 func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {

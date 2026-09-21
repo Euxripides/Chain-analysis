@@ -12,6 +12,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 )
 
@@ -356,9 +357,8 @@ func explorerPartition(dataset string) string {
 
 // Activity 地址活动（§87：资金分析/智能调查统一入口）。
 func (s *Service) Activity(ctx context.Context, chain, address string, limit, offset int) ([]map[string]any, error) {
-	if chain != "tron" {
-		address = strings.ToLower(address)
-	}
+	// 查询键必须与写入侧（dataset/ingest 的按链规范化）一致：Solana 保留 base58 大小写。
+	address = addressnorm.NormalizeKey(chain, address)
 	q := "SELECT * FROM blockchain.address_activity FINAL WHERE chain=? AND address=? ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	rows, err := s.queryRows(ctx, "activity", q, chain, address, limit, offset)
 	if err != nil {
@@ -383,9 +383,8 @@ func (s *Service) Activity(ctx context.Context, chain, address string, limit, of
 // 语义与 FINAL 一致：每个 (chain, tx_hash, log_index, token_address) 保留版本最大的那一行
 // （重复行来自多 Provider 重复摄取：实测同一地址原始 34,189 行 ↔ 17,691 个键）。
 func (s *Service) FlowTokenTransfers(ctx context.Context, chain, subject string, limit int) ([]map[string]any, error) {
-	if chain != "tron" {
-		subject = strings.ToLower(subject)
-	}
+	// 查询键必须与写入侧一致：Solana 保留 base58 大小写（折叠后是另一个地址）。
+	subject = addressnorm.NormalizeKey(chain, subject)
 	if limit <= 0 || limit > 50000 {
 		limit = 50000
 	}
@@ -453,9 +452,8 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}
-	if chain != "tron" {
-		subject = strings.ToLower(subject)
-	}
+	// 查询键必须与写入侧一致：Solana 保留 base58 大小写（折叠后是另一个地址）。
+	subject = addressnorm.NormalizeKey(chain, subject)
 	var where string
 	var args []any
 	if subject != "" {
@@ -508,10 +506,9 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 	}
 	defer release()
 	ctx = clickhouse.ExportScanContext(ctx)
-	if chain != "tron" {
-		for i := range subjects {
-			subjects[i] = strings.ToLower(subjects[i])
-		}
+	for i := range subjects {
+		// 查询键必须与写入侧一致：Solana 保留 base58 大小写（折叠后是另一个地址）。
+		subjects[i] = addressnorm.NormalizeKey(chain, subjects[i])
 	}
 	var where string
 	switch dataset {
@@ -615,16 +612,16 @@ func (s *Service) hydrateActivityAmounts(ctx context.Context, chain string, rows
 	}
 	byHashToken := make(map[string][]map[string]any, len(candidates))
 	for _, candidate := range candidates {
-		key := fmt.Sprint(candidate["tx_hash"]) + "|" + strings.ToLower(fmt.Sprint(candidate["token_address"]))
+		key := fmt.Sprint(candidate["tx_hash"]) + "|" + addressnorm.NormalizeKey(chain, fmt.Sprint(candidate["token_address"]))
 		byHashToken[key] = append(byHashToken[key], candidate)
 	}
 	for _, row := range rows {
 		if fmt.Sprint(row["activity_type"]) != "transfer" || strings.TrimSpace(fmt.Sprint(row["amount_raw"])) != "" {
 			continue
 		}
-		key := fmt.Sprint(row["tx_hash"]) + "|" + strings.ToLower(fmt.Sprint(row["token_address"]))
+		key := fmt.Sprint(row["tx_hash"]) + "|" + addressnorm.NormalizeKey(chain, fmt.Sprint(row["token_address"]))
 		for _, candidate := range byHashToken[key] {
-			if !activityCandidateMatches(row, candidate) {
+			if !activityCandidateMatches(chain, row, candidate) {
 				continue
 			}
 			for _, field := range []string{"amount", "amount_raw", "token_decimals", "token_symbol", "log_index"} {
@@ -694,11 +691,12 @@ func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows
 	return nil
 }
 
-func activityCandidateMatches(activity, transfer map[string]any) bool {
-	address := strings.ToLower(fmt.Sprint(activity["address"]))
-	counterparty := strings.ToLower(fmt.Sprint(activity["counterparty"]))
-	from := strings.ToLower(fmt.Sprint(transfer["from_address"]))
-	to := strings.ToLower(fmt.Sprint(transfer["to_address"]))
+func activityCandidateMatches(chain string, activity, transfer map[string]any) bool {
+	// 按链归一化后再比较：Solana base58 大小写敏感，折叠会误判成另一个地址。
+	address := addressnorm.NormalizeKey(chain, fmt.Sprint(activity["address"]))
+	counterparty := addressnorm.NormalizeKey(chain, fmt.Sprint(activity["counterparty"]))
+	from := addressnorm.NormalizeKey(chain, fmt.Sprint(transfer["from_address"]))
+	to := addressnorm.NormalizeKey(chain, fmt.Sprint(transfer["to_address"]))
 	switch fmt.Sprint(activity["direction"]) {
 	case "out":
 		return from == address && to == counterparty

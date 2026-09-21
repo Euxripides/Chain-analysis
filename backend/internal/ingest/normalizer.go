@@ -116,6 +116,54 @@ func asBool(m map[string]any, key string) bool {
 	return false
 }
 
+// NoInnerInstruction 表示"不属于任何内层指令"，与 ClickHouse 列默认值一致（规范 §2.2）。
+const NoInnerInstruction int32 = -1
+
+// asInt32Field 读取可空的有符号整数：内层指令序号用 -1 表示"不是内层指令"，
+// 缺失/非法一律回落到该哨兵值，而不是伪装成第 0 条内层指令。
+func asInt32Field(m map[string]any, key string) int32 {
+	s := strings.TrimSpace(asString(m, key))
+	if s == "" {
+		return NoInnerInstruction
+	}
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return NoInnerInstruction
+	}
+	return int32(n)
+}
+
+// asStringSlice 读取字符串数组（Solana signers/accountKeys/programIds）。
+//
+// 元素原样保留：这些是 base58 地址/signature，折叠大小写等于换一个值。
+// 非字符串元素直接跳过，不编造；空数组与缺失同样是 nil。
+func asStringSlice(m map[string]any, key string) []string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
+	}
+	var out []string
+	switch t := v.(type) {
+	case []any:
+		for _, item := range t {
+			if s, ok := item.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+	case []string:
+		for _, s := range t {
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+	case string:
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 func fromUnixN(n float64) time.Time {
 	// 阈值 1e11：以上为毫秒，以下为秒
 	if n > 1e11 {
@@ -193,6 +241,17 @@ type TxRow struct {
 	RawType      string
 	RawStatus    string
 
+	// Solana dRPC 证据列（规范 §2.2/§3 行契约）：全部可选，缺失即零值，不报错。
+	// 地址数组原样保留，不做大小写折叠（base58 折叠等于换一个地址）。
+	FeeRaw           string
+	Signers          []string
+	AccountKeys      []string
+	ProgramIds       []string
+	SourceAPI        string
+	SourceMethod     string
+	SourceRequestID  string
+	ChainPayloadJSON string
+
 	// V1.3 Method 解析结果（§7）。原始 input 永远完整保留（§6/§62-2）。
 	MethodName       string
 	MethodSignature  string
@@ -255,6 +314,15 @@ func NormalizeTransaction(raw json.RawMessage, chain, provider string) (TxRow, e
 		TxType:      pickString(m, "type"),
 		Input:       pickString(m, "input", "inputData"),
 		Provider:    provider,
+		// Solana dRPC 扩展列：EVM/TRON 行没有这些键就保持零值，不伪造。
+		FeeRaw:           pickString(m, "feeRaw"),
+		Signers:          asStringSlice(m, "signers"),
+		AccountKeys:      asStringSlice(m, "accountKeys"),
+		ProgramIds:       asStringSlice(m, "programIds"),
+		SourceAPI:        pickString(m, "sourceApi"),
+		SourceMethod:     pickString(m, "sourceMethod"),
+		SourceRequestID:  pickString(m, "sourceRequestId"),
+		ChainPayloadJSON: pickString(m, "chainPayloadJson"),
 	}
 	if r.BlockNumber == 0 {
 		r.BlockNumber = asUint64(m, "blockHeight")
@@ -294,7 +362,13 @@ type TokenTransferRow struct {
 	// 代币账户（Solana ATA）；非 Solana 链为空串，不伪造（ADR-023 D10）。
 	FromTokenAccount string
 	ToTokenAccount   string
-	Provider         string
+	// 指令定位（Solana，规范 §8.1/§8.3）：log_index 只是本地稳定序号，
+	// 真实指令位置由这两列承载；inner = NoInnerInstruction 表示不在内层指令里。
+	InstructionIndex      uint32
+	InnerInstructionIndex int32
+	SourceAPI             string
+	SourceRequestID       string
+	Provider              string
 }
 
 // InternalTransferRow reuses blockchain.internal_calls for TRON internal
@@ -349,6 +423,8 @@ func NormalizeTokenTransfer(raw json.RawMessage, chain, provider string) (TokenT
 		AmountRaw: amountRaw, Amount: asBigIntValue(m, "valueRawInteger", "value"),
 		GrossAmountRaw: grossRaw, FeeAmountRaw: feeRaw,
 		FromTokenAccount: pickString(m, "fromTokenAccount"), ToTokenAccount: pickString(m, "toTokenAccount"),
+		InstructionIndex: asUint32(m, "instructionIndex"), InnerInstructionIndex: asInt32Field(m, "innerInstructionIndex"),
+		SourceAPI: pickString(m, "sourceApi"), SourceRequestID: pickString(m, "sourceRequestId"),
 		Provider: provider,
 	}, nil
 }
@@ -377,7 +453,12 @@ type NftTransferRow struct {
 	// TokenStandard：ERC721 / ERC1155 / Solana SPL。没有来源时留空，不猜。
 	TokenStandard string
 	AmountRaw     string
-	Provider      string
+	// 指令定位与来源证据（Solana，规范 §2.2/§8.3）。
+	InstructionIndex      uint32
+	InnerInstructionIndex int32
+	SourceAPI             string
+	SourceRequestID       string
+	Provider              string
 }
 
 func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTransferRow, error) {
@@ -395,6 +476,8 @@ func NormalizeNftTransfer(raw json.RawMessage, chain, provider string) (NftTrans
 		// Ankr 的 NFT 行把标准放在 type（实测 "ERC721"）；Solana 行用 tokenStandard。
 		TokenStandard: pickString(m, "tokenStandard", "tokenType", "type"),
 		AmountRaw:     pickString(m, "value"), Provider: provider,
+		InstructionIndex: asUint32(m, "instructionIndex"), InnerInstructionIndex: asInt32Field(m, "innerInstructionIndex"),
+		SourceAPI: pickString(m, "sourceApi"), SourceRequestID: pickString(m, "sourceRequestId"),
 	}, nil
 }
 

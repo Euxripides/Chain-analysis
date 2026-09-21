@@ -1,0 +1,114 @@
+# S7-DB-01 verification raw evidence (2026-09-12T16:35:53Z)
+
+## 1. schema_migrations
+                      name                       |          applied_at           
+-------------------------------------------------+-------------------------------
+ postgres/0056_s7_scope_backfill_constraints.sql | 2026-09-12 16:29:10.046067+00
+ postgres/0057_s7_indexes_partitions.sql         | 2026-09-12 16:29:10.089811+00
+(2 rows)
+
+
+## 2. scope audit (after 0056)
+        table_name        | rows | org_null | ws_null | ws_without_org 
+--------------------------+------+----------+---------+----------------
+ audit_events_v2          | 1086 |       55 |      61 |              0
+ feature_flag_evaluations |   33 |       33 |      33 |              0
+ login_events             | 2251 |      966 |    1058 |              0
+ roles                    |    9 |        9 |         |               
+(4 rows)
+
+
+## 3. new constraints
+             tbl              |                      conname                      | convalidated 
+------------------------------+---------------------------------------------------+--------------
+ export_tickets               | export_tickets_s7_scope_coherence_check           | t
+ login_events                 | login_events_s7_scope_coherence_check             | t
+ audit_events_v2              | audit_events_v2_s7_scope_coherence_check          | t
+ user_activity_events_hist    | user_activity_events_s7_scope_coherence_check     | t
+ report_download_tickets      | report_download_tickets_s7_scope_coherence_check  | t
+ notifications                | notifications_s7_scope_coherence_check            | t
+ feature_flags                | feature_flags_scope_org_id_fkey                   | t
+ feature_flags                | feature_flags_scope_target_check                  | t
+ feature_flags                | feature_flags_scope_type_check                    | t
+ feature_flags                | feature_flags_scope_type_not_null                 | t
+ feature_flags                | feature_flags_scope_user_id_fkey                  | t
+ feature_flags                | feature_flags_scope_workspace_id_fkey             | t
+ feature_flags                | feature_flags_ws_implies_org_check                | t
+ feature_flag_evaluations     | feature_flag_evaluations_s7_scope_coherence_check | t
+ user_activity_events         | user_activity_events_s7_scope_coherence_check     | t
+ user_activity_events_default | user_activity_events_s7_scope_coherence_check     | t
+ user_activity_events_202609  | user_activity_events_s7_scope_coherence_check     | t
+ user_activity_events_202610  | user_activity_events_s7_scope_coherence_check     | t
+ user_activity_events_202611  | user_activity_events_s7_scope_coherence_check     | t
+(19 rows)
+
+
+## 4. NOT NULL enforcement
+       table_name        |   column_name   | is_nullable 
+-------------------------+-----------------+-------------
+ export_tickets          | organization_id | NO
+ report_download_tickets | organization_id | NO
+(2 rows)
+
+
+## 5. partition inventory
+     parent_table     |        partition_name        |                                bound_expr                                | rows | size_bytes 
+----------------------+------------------------------+--------------------------------------------------------------------------+------+------------
+ user_activity_events | user_activity_events_202609  | FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00') |    0 |      40960
+ user_activity_events | user_activity_events_202610  | FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00') |    0 |      40960
+ user_activity_events | user_activity_events_202611  | FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00') |    0 |      40960
+ user_activity_events | user_activity_events_default | DEFAULT                                                                  |    0 |      40960
+ user_activity_events | user_activity_events_hist    | FOR VALUES FROM (MINVALUE) TO ('2026-09-01 00:00:00+00')                 |    0 |      40960
+(5 rows)
+
+
+## 6. partition readiness gate
+   table_name    | ready |                                                                                                                 blockers                                                                                                                 
+-----------------+-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ login_events    | f     | UNIQUE(chain,seq) 需要全局唯一，PostgreSQL 分区表不支持全局唯一索引 | organization_id 参与审计哈希链规范化，重写数据会破坏 AUDIT-004 链校验 | append-only 行触发器 audit_append_only_guard 属 Sprint 6 完整性边界（0054/0055），不得绕过
+ audit_events_v2 | f     | UNIQUE(chain,seq) 需要全局唯一，PostgreSQL 分区表不支持全局唯一索引 | organization_id 参与审计哈希链规范化，重写数据会破坏 AUDIT-004 链校验 | 包含 ADR-018 不可恢复缺口的封存边界行，任何重写都会造成 boundary_conflict
+(2 rows)
+
+
+## 7. index inventory (S7 indexes)
+           indexname            |                                                          indexdef                                                           
+--------------------------------+-----------------------------------------------------------------------------------------------------------------------------
+ idx_audit_v2_result_seq        | CREATE INDEX idx_audit_v2_result_seq ON public.audit_events_v2 USING btree (result, seq DESC)
+ idx_audit_v2_seq_desc          | CREATE INDEX idx_audit_v2_seq_desc ON public.audit_events_v2 USING btree (seq DESC)
+ idx_checkpoints_job            | CREATE INDEX idx_checkpoints_job ON public.checkpoints USING btree (job_id)
+ idx_download_pages_job_status  | CREATE INDEX idx_download_pages_job_status ON public.download_pages USING btree (job_id, status)
+ idx_exports_job_org_created    | CREATE INDEX idx_exports_job_org_created ON public.exports USING btree (job_id, organization_id, created_at DESC)
+ idx_investigations_case_status | CREATE INDEX idx_investigations_case_status ON public.investigations USING btree (case_id, status)
+ idx_login_events_org_seq       | CREATE INDEX idx_login_events_org_seq ON public.login_events USING btree (organization_id, seq DESC)
+ idx_login_events_seq_desc      | CREATE INDEX idx_login_events_seq_desc ON public.login_events USING btree (seq DESC)
+ idx_login_events_type_seq      | CREATE INDEX idx_login_events_type_seq ON public.login_events USING btree (event_type, seq DESC)
+ idx_sessions_org_last_seen     | CREATE INDEX idx_sessions_org_last_seen ON public.sessions USING btree (organization_id, last_seen_at DESC)
+ user_activity_identity_idx     | CREATE INDEX user_activity_identity_idx ON ONLY public.user_activity_events USING btree (identity_id, occurred_at DESC)
+ user_activity_org_time_idx     | CREATE INDEX user_activity_org_time_idx ON ONLY public.user_activity_events USING btree (organization_id, occurred_at DESC)
+ user_activity_time_idx         | CREATE INDEX user_activity_time_idx ON ONLY public.user_activity_events USING btree (occurred_at DESC)
+(13 rows)
+
+
+## 8. index counts
+377
+
+## 9. partition maintenance log
+      table_name      |      action      |       partition_name        |                          detail                          
+----------------------+------------------+-----------------------------+----------------------------------------------------------
+ user_activity_events | create_partition | user_activity_events_202609 | {"range_end": "2026-10-01", "range_start": "2026-09-01"}
+ user_activity_events | create_partition | user_activity_events_202610 | {"range_end": "2026-11-01", "range_start": "2026-10-01"}
+ user_activity_events | create_partition | user_activity_events_202611 | {"range_end": "2026-12-01", "range_start": "2026-11-01"}
+(3 rows)
+
+
+## 10. feature_flags scope columns
+           key           | scope_type | scope_org_id | scope_workspace_id | scope_user_id 
+-------------------------+------------+--------------+--------------------+---------------
+ admin.alert_center      | global     |              |                    | 
+ admin.backup_restore    | global     |              |                    | 
+ admin.control_plane_v2  | global     |              |                    | 
+ admin.provider_registry | global     |              |                    | 
+ user.explorer_v2        | global     |              |                    | 
+ user.gauge_rollout      | global     |              |                    | 
+(6 rows)
+

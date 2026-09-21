@@ -24,14 +24,19 @@ import {
 import type { HierarchicalNode, PipelineStage, TimelineEntry } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime } from "../../../sprint5/common";
 import type { JobEvent } from "../../../sprint5/common";
+import { modeReasonText, type ProviderRuntimeState } from "../../downloads/download.types";
 import { rollupState, type AddressLayer, type DatasetLayer, type JobDetailData, type JobExport, type JobProgress, type JobRecord, type ShardLayer } from "./types";
 
 /**
  * 技术详情（用户端重构规范 V4 §28.3 / §47）
  *
  * 这里**原样保留**了重构前 `/jobs/:jobId` 的全部诊断能力：
- *   Pipeline / 地址进度（分层 + 按地址核对表）/ Dataset / Shards / 结构化事件 /
- *   Exports / 证据链，外加"概览"里的模式与时间键值。
+ *   Pipeline / 地址进度（分层 + 按地址核对表）/ Dataset / Shards / Provider 运行 /
+ *   结构化事件 / Exports / 证据链，外加"概览"里的模式与时间键值。
+ *
+ * 「Provider 运行」（开发文档 §13.2）按 Provider × API 通道展示运行时档位：
+ * 请求/实际模式、Shard 并发、请求并发、RPM/RPS、CU/分钟、已用请求、已用 CU、估算成本与降级原因。
+ * **Data API 页数与 RPC 详情调用数是两个口径**，字段标签按通道区分，并在"计数口径"弹窗里说明。
  *
  * 唯一的变化是**信息层级**：它们不再占据首屏，而是收进一个默认关闭的 Drawer。
  * 规范 §64 #23 明确禁止在简化首屏时删除这些能力——排障人员仍然要能看到
@@ -94,6 +99,8 @@ export function JobTechnicalDetails({
   const addressLayers = detail.layers.addresses ?? [];
   const datasetLayers = detail.layers.datasets ?? [];
   const shardLayers = detail.layers.shards ?? [];
+  /* 每个 Provider 通道的运行时档位（开发文档 §6.2）：旧后端不返回时为 []，显示空态。 */
+  const runtimeStates = detail.provider_runtime_states ?? [];
 
   /** 成功游标：取所有地址层里最新的一个 checkpoint_at（服务端时间，不做推断）。 */
   const latestCursor = useMemo(() => {
@@ -217,6 +224,7 @@ export function JobTechnicalDetails({
     { key: "addresses", label: "地址进度", count: addressLayers.length },
     { key: "datasets", label: "Dataset", count: datasetLayers.length },
     { key: "shards", label: "Shards", count: shardLayers.length },
+    { key: "provider", label: "Provider 运行", count: runtimeStates.length },
     { key: "events", label: "结构化事件", count: events.length },
     { key: "exports", label: "Exports", count: detail.exports.length },
     { key: "evidence", label: "证据链" },
@@ -270,6 +278,7 @@ export function JobTechnicalDetails({
           addressLayers={addressLayers}
           datasetLayers={datasetLayers}
           shardLayers={shardLayers}
+          runtimeStates={runtimeStates}
           rowsBySubject={rowsBySubject}
           addressBySubject={addressBySubject}
         />
@@ -305,6 +314,7 @@ interface TechnicalTabsProps {
   addressLayers: AddressLayer[];
   datasetLayers: DatasetLayer[];
   shardLayers: ShardLayer[];
+  runtimeStates: ProviderRuntimeState[];
   rowsBySubject: Map<string, number>;
   addressBySubject: Map<string, AddressLayer>;
 }
@@ -334,6 +344,7 @@ function TechnicalTabs(props: TechnicalTabsProps) {
     addressLayers,
     datasetLayers,
     shardLayers,
+    runtimeStates,
     rowsBySubject,
     addressBySubject,
   } = props;
@@ -344,6 +355,22 @@ function TechnicalTabs(props: TechnicalTabsProps) {
   const addressOf = (subjectId: string): ReactNode => {
     const layer = addressBySubject.get(subjectId);
     return layer ? <HashValue value={layer.address} head={12} tail={8} label="地址" /> : "—";
+  };
+
+  /**
+   * 计数口径弹窗（提示性内容只走 Dialog，AGENTS.md）。
+   *
+   * 这张弹窗存在的唯一理由：Data API 的一次 HTTP 请求是"一页"（最多 100 条交易），
+   * JSON-RPC 的一次请求是"一个方法调用"；不写清楚，用户会把 100 条交易当成 100 次请求。
+   */
+  const openCountingNote = (state: ProviderRuntimeState) => {
+    dialog.notify("info", "计数口径", countingNote(state.api_channel), [
+      { label: "Provider", value: state.provider || "—" },
+      { label: "API 通道", value: state.api_channel || "—" },
+      { label: "操作类别", value: state.operation_class || "—" },
+      { label: usedRequestsLabel(state.api_channel), value: countText(state.used_requests) },
+      { label: "已用 CU", value: countText(state.used_cu) },
+    ]);
   };
 
   return (
@@ -539,6 +566,59 @@ function TechnicalTabs(props: TechnicalTabsProps) {
         </TabPanel>
       ) : null}
 
+      {tab === "provider" ? (
+        <TabPanel tabKey="provider">
+          {runtimeStates.length === 0 ? (
+            <PageSection title="Provider 运行">
+              <Card>
+                <EmptyState title="该任务暂无 Provider 运行状态" />
+              </Card>
+            </PageSection>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-5)", minWidth: 0 }}>
+              {runtimeStates.map((state, index) => (
+                <PageSection
+                  key={state.provider + "|" + state.api_channel + "|" + (state.operation_class || "") + "|" + index}
+                  title={state.provider + " · " + state.api_channel}
+                  count={state.operation_class || undefined}
+                  actions={
+                    <Button size="sm" onClick={() => openCountingNote(state)}>
+                      计数口径
+                    </Button>
+                  }
+                >
+                  <Card>
+                    {/*
+                     * 字段标签按通道区分计数单位（开发文档 §13.2）：Data API 的 used_requests 是
+                     * **页数**，JSON-RPC 的是**方法调用数**，两者不能混成"请求数"。
+                     */}
+                    <KeyValueList
+                      ariaLabel={state.provider + " " + state.api_channel + " 运行时档位"}
+                      items={[
+                        { label: "请求模式", value: state.requested_mode || "—" },
+                        { label: "实际模式", value: state.effective_mode || "—" },
+                        { label: "Shard 并发", value: countText(state.shard_concurrency) },
+                        { label: "请求并发", value: countText(state.request_concurrency) },
+                        { label: "RPM/RPS", value: countText(state.requests_per_minute) },
+                        { label: "CU/分钟", value: countText(state.cu_per_minute) },
+                        { label: usedRequestsLabel(state.api_channel), value: countText(state.used_requests) },
+                        { label: "已用 CU", value: countText(state.used_cu) },
+                        { label: "估算成本（USD）", value: state.estimated_cost_usd || "—" },
+                        {
+                          label: "降级原因",
+                          value: state.reason ? reasonText(state.reason) : "—",
+                          wide: true,
+                        },
+                      ]}
+                    />
+                  </Card>
+                </PageSection>
+              ))}
+            </div>
+          )}
+        </TabPanel>
+      ) : null}
+
       {tab === "events" ? (
         <TabPanel tabKey="events">
           <PageSection
@@ -688,6 +768,41 @@ function TechnicalTabs(props: TechnicalTabsProps) {
 }
 
 /* -- 内部小工具（保持原实现的纯函数语义，避免把业务判断散布到 JSX 里） -- */
+
+/** 数值字段：缺失或非法显示 —，不补 0、不做任何推算。 */
+function countText(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return formatRawAmount(String(value), 0);
+}
+
+/**
+ * "已用请求"的字段标签：单位随通道变化（开发文档 §13.2）。
+ *
+ * Data API 的 used_requests 是页数，JSON-RPC 的是方法调用数 —— 把一页 100 条交易
+ * 显示成 100 次请求，是这一层要避免的核心错误。
+ */
+function usedRequestsLabel(apiChannel: string): string {
+  if (apiChannel === "data_api") return "已用请求（Data API 页数）";
+  if (apiChannel === "solana_rpc") return "已用请求（RPC 详情调用数）";
+  return "已用请求（HTTP 请求数）";
+}
+
+/** 计数口径说明（只在 Dialog 的正文里出现）。 */
+function countingNote(apiChannel: string): string {
+  if (apiChannel === "data_api") {
+    return "Data API 按页计数：1 次 HTTP 请求 = 1 页，单页最多 100 条交易；页内交易数不重复计入请求数。";
+  }
+  if (apiChannel === "solana_rpc") {
+    return "JSON-RPC 按方法调用计数：1 次请求 = 1 个方法调用；首期 Batch=1，Batch 内的多个方法调用不合并计数。";
+  }
+  return "已用请求 = 该 Provider 通道实际发出的 HTTP 请求数；不按行数或交易数放大。";
+}
+
+/** 降档原因：中文可读文案 + 原始原因码（不认识的原因码原样显示，不编造）。 */
+function reasonText(code: string): string {
+  const text = modeReasonText(code);
+  return text === code ? code : text + "（原因码：" + code + "）";
+}
 
 function percent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";

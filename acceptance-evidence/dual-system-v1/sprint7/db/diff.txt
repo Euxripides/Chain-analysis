@@ -1,0 +1,10 @@
+Q1_download_pages_job_sum          before=120.801    after=0.205     
+Q2_checkpoints_job_max             before=15.948     after=0.426     
+Q3_exports_job_org                 before=11.885     after=0.245     
+Q4_audit_seq_desc                  before=43.086     after=0.117     
+Q5_audit_result_seq                before=0.565      after=0.061     
+Q6_login_seq_desc                  before=5.979      after=0.122     
+Q7_login_org_seq                   before=0.845      after=0.278     
+Q8_login_type_seq                  before=0.819      after=0.109     
+Q9_investigations_case_status      before=3.798      after=0.079     
+Q10_sessions_org                   before=14.182     after=0.950     

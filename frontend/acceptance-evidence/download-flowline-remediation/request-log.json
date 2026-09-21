@@ -1,0 +1,20 @@
+[
+  {
+    "url": "http://127.0.0.1:5431/api/v2/downloads/validate-addresses",
+    "reuse_policy": null,
+    "chain": "tron",
+    "idempotency_key": null
+  },
+  {
+    "url": "http://127.0.0.1:5431/api/v2/downloads/preview",
+    "reuse_policy": "prefer_local",
+    "chain": "tron",
+    "idempotency_key": null
+  },
+  {
+    "url": "http://127.0.0.1:5431/api/v2/downloads",
+    "reuse_policy": "prefer_local",
+    "chain": "tron",
+    "idempotency_key": "582ea152-ee60-5431-abe1-e243b10afa15"
+  }
+]

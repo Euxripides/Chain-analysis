@@ -14,7 +14,7 @@ import (
 //
 // TokenID 恒为空：Solana 没有 EVM 的 tokenId，NFT 的身份就是 mint 地址本身
 // （把 mint 塞进 tokenId 会与 EVM 的 (contract, tokenId) 语义冲突）。
-func NormalizeNftTransfer(raw json.RawMessage) (ingest.NftTransferRow, error) {
+func NormalizeNftTransfer(raw json.RawMessage, provider string) (ingest.NftTransferRow, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return ingest.NftTransferRow{}, err
@@ -51,6 +51,11 @@ func NormalizeNftTransfer(raw json.RawMessage) (ingest.NftTransferRow, error) {
 		// Solana 没有 ERC 标准；Provider 标注 SPL，缺失时留空而不是冒充 ERC721。
 		TokenStandard: strings.TrimSpace(stringField(m, "tokenStandard")),
 		AmountRaw:     strings.TrimSpace(stringField(m, "value")),
-		Provider:      "solana",
+		// 指令定位与来源证据：缺失即 -1/空，不猜（规范 §2.2/§8.3）。
+		InstructionIndex:      uint32(numberField(m, "instructionIndex")),
+		InnerInstructionIndex: innerInstructionField(m, "innerInstructionIndex"),
+		SourceAPI:             strings.TrimSpace(stringField(m, "sourceApi")),
+		SourceRequestID:       strings.TrimSpace(stringField(m, "sourceRequestId")),
+		Provider:              providerOrDefault(provider),
 	}, nil
 }

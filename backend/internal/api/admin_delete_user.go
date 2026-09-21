@@ -159,11 +159,11 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	respondOK(w, r, map[string]any{
-		"deleted":                    true,
-		"identity_id":                id,
-		"status":                     iam.StatusDeleted,
-		"anonymous_email":            anonymousEmail,
+		"deleted":                      true,
+		"identity_id":                  id,
+		"status":                       iam.StatusDeleted,
+		"anonymous_email":              anonymousEmail,
 		"archived_personal_workspaces": archivedWorkspaces,
-		"note":                       "身份行保留以维持审计可回溯；邮箱与显示名已匿名化，个人空间已归档为只读。",
+		"note":                         "身份行保留以维持审计可回溯；邮箱与显示名已匿名化，个人空间已归档为只读。",
 	})
 }

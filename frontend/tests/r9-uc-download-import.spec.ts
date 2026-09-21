@@ -66,12 +66,33 @@ async function login(page: Page) {
 async function openDownloadsNew(page: Page) {
   await page.goto("/app-v2/downloads/new", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#download-addresses"), "address textarea").toBeVisible({ timeout: 30_000 });
-  // 链与 Dataset 来自服务端 registry，等它们加载完成再操作。
-  await expect.poll(async () => page.locator("#download-chain option").count(), { timeout: 30_000 }).toBeGreaterThan(1);
+  // 链与 Dataset 来自服务端 registry；链选择器在第 ② 步（Ant Select）才渲染，
+  // 这里只等地址输入框就绪，展开下拉见 selectChain()。
 }
 
 async function importFile(page: Page, file: string) {
   await page.locator('input[aria-label="导入地址文件"]').setInputFiles(file);
+}
+
+/**
+ * 新建数据下载是**单页四区**版面（效果图）：
+ *   ① 地址与对象 ② 链与范围 ③ 数据类型 ④ 预览与创建 同屏可见；
+ * 正文一次只渲染当前步骤，底部操作栏固定在工作区底部（上一步 / 下一步 / 创建任务）。
+ */
+/** 范围类型是紧凑分段控件（Segmented），按可见名称点选即可。 */
+async function selectRangeSegment(page: Page, label: string) {
+  await page.locator("#download-range-type").getByText(label, { exact: true }).click();
+}
+
+/** 链选择器是第 ② 步的 Ant Design Select：点 .ant-select 根节点展开，再点可见选项。 */
+async function selectChain(page: Page, slug: string) {
+  await page.locator(".cs-chainselect").click();
+  await page.locator(".cs-select-dropdown-wizard .ant-select-item-option", { hasText: new RegExp(slug, "i") }).first().click();
+}
+
+/** 范围类型是紧凑分段控件（Segmented）：按可见名称点选。 */
+async function selectRange(page: Page, label: string) {
+  await page.locator("#download-range-type").getByText(label, { exact: true }).click();
 }
 
 const dialog = (page: Page) => page.locator('[role="dialog"]');
@@ -84,17 +105,20 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
     await importFile(page, path.join(FIX, "min.xlsx"));
 
     // 1) 浏览器解析摘要（本地）
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const localText = await localDialog.innerText();
+    const fileSummary = page.locator('[data-testid="file-parse-summary"]');
+    await expect(fileSummary).toBeVisible({ timeout: 30_000 });
+    const localText = await fileSummary.innerText();
     expect(localText, "本地摘要必须报出 chain 列与案件/标签列被识别").toContain("chain");
     expect(localText, "本地摘要必须报出 case 列").toContain("case");
     expect(localText, "本地摘要必须报出 tags 列").toContain("tags");
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
+    /* 规范 §8.4：本地解析数据以内联数据行呈现，不再弹摘要窗；
+       服务端校验在第 ② 步出口执行（validate-addresses 的入参含 chain）。 */
+    /* 单屏工作台：三块同屏，链/范围直接选，右栏主按钮一次串起 校验 → 预览 → 创建确认。 */
+    await selectChain(page, CHAIN);
+    await page.getByRole("button", { name: "预览并创建任务" }).click();
 
     // 2) 服务端再次验证
     const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
@@ -109,14 +133,12 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     await page.getByRole("button", { name: "使用服务端结果" }).click();
 
     // 3) 预览（真实服务端 Coverage）
-    await page.getByRole("button", { name: "Coverage 预览" }).click();
     const previewDialog = dialog(page).filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
     await expect(previewDialog).toBeVisible({ timeout: 60_000 });
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "02-preview.png"), fullPage: false });
     await previewDialog.getByRole("button", { name: "知道了" }).click();
 
-    // 4) 真实创建
-    await page.getByRole("button", { name: /创建下载任务|正在创建/ }).click();
+    // 4) 真实创建：预览弹窗关闭后，主按钮会继续带出创建确认弹窗
     const confirmDialog = dialog(page).filter({ hasText: "确认创建下载任务？" });
     await expect(confirmDialog).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "确认创建" }).click();
@@ -178,14 +200,17 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
     await importFile(page, path.join(FIX, "large.xlsx"));
 
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const localText = await localDialog.innerText();
+    const fileSummary = page.locator('[data-testid="file-parse-summary"]');
+    await expect(fileSummary).toBeVisible({ timeout: 30_000 });
+    const localText = await fileSummary.innerText();
     expect(localText, "本地摘要必须报出超上限行数").toContain("超出单次上限");
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
+    /* 规范 §8.4：本地解析数据以内联数据行呈现，不再弹摘要窗；
+       服务端校验在第 ② 步出口执行（validate-addresses 的入参含 chain）。 */
+    /* 单屏工作台：三块同屏，链/范围直接选，右栏主按钮一次串起 校验 → 预览 → 创建确认。 */
+    await selectChain(page, CHAIN);
+    await page.getByRole("button", { name: "预览并创建任务" }).click();
 
     const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
     await expect(serverDialog).toBeVisible({ timeout: 60_000 });
@@ -212,12 +237,15 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     startCapture(page, net);
     await login(page);
     await openDownloadsNew(page);
-    await page.locator("#download-chain").selectOption(CHAIN);
     await importFile(page, path.join(FIX, "mixed.xlsx"));
 
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
+    const fileSummary = page.locator('[data-testid="file-parse-summary"]');
+    await expect(fileSummary).toBeVisible({ timeout: 30_000 });
+    /* 规范 §8.4：本地解析数据以内联数据行呈现，不再弹摘要窗；
+       服务端校验在第 ② 步出口执行（validate-addresses 的入参含 chain）。 */
+    /* 单屏工作台：三块同屏，链/范围直接选，右栏主按钮一次串起 校验 → 预览 → 创建确认。 */
+    await selectChain(page, CHAIN);
+    await page.getByRole("button", { name: "预览并创建任务" }).click();
     const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
     await expect(serverDialog).toBeVisible({ timeout: 60_000 });
     const serverText = await serverDialog.innerText();
@@ -225,7 +253,6 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "06-mixed.png"), fullPage: false });
     await page.getByRole("button", { name: "使用服务端结果" }).click();
 
-    await page.getByRole("button", { name: "Coverage 预览" }).click();
     const previewDialog = dialog(page).filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
     await expect(previewDialog).toBeVisible({ timeout: 60_000 });
     await previewDialog.getByRole("button", { name: "知道了" }).click();
@@ -275,11 +302,15 @@ test.describe("R9 U-DL-01 CSV/XLSX import (app-v2)", () => {
     const vp = page.viewportSize();
     const overflow = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
     await importFile(page, path.join(FIX, "min.csv"));
-    const localDialog = dialog(page).filter({ hasText: "地址导入解析摘要（浏览器）" });
-    await expect(localDialog).toBeVisible({ timeout: 30_000 });
-    const box = await localDialog.boundingBox();
+    const fileSummary = page.locator('[data-testid="file-parse-summary"]');
+    await expect(fileSummary).toBeVisible({ timeout: 30_000 });
+    const box = await fileSummary.boundingBox();
     await page.screenshot({ path: path.join(OUT, testInfo.project.name, "07-mobile-import.png"), fullPage: true });
-    await page.getByRole("button", { name: "提交服务端校验" }).click();
+    /* 规范 §8.4：本地解析数据以内联数据行呈现，不再弹摘要窗；
+       服务端校验在第 ② 步出口执行（validate-addresses 的入参含 chain）。 */
+    /* 单屏工作台：三块同屏，链/范围直接选，右栏主按钮一次串起 校验 → 预览 → 创建确认。 */
+    await selectChain(page, CHAIN);
+    await page.getByRole("button", { name: "预览并创建任务" }).click();
     const serverDialog = dialog(page).filter({ hasText: "服务端地址校验结果" });
     await expect(serverDialog).toBeVisible({ timeout: 60_000 });
     const serverBox = await serverDialog.boundingBox();

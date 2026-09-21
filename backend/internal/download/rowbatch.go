@@ -17,11 +17,15 @@ type rowBatch struct {
 	transfers []ingest.TokenTransferRow
 	nfts      []ingest.NftTransferRow
 	logRows   []ingest.LogRow
-	bals      []ingest.BalanceRow
-	internals []ingest.InternalTransferRow
-	acts      []ingest.ActivityRow
-	minB      int64
-	maxB      int64
+	// solanaLogs 是 Solana 程序日志的原生扩展表行（blockchain.solana_program_logs）。
+	// 与 logRows 双写：通用读路径仍走 blockchain.logs，原生字段走扩展表，
+	// 避免为了一条链把查询层分叉成两个表（开发文档 §8.4 的落地取舍）。
+	solanaLogs []ingest.SolanaProgramLogRow
+	bals       []ingest.BalanceRow
+	internals  []ingest.InternalTransferRow
+	acts       []ingest.ActivityRow
+	minB       int64
+	maxB       int64
 }
 
 // buildRows 标准化一页 raw rows（§50 Parse Plane）：
@@ -87,11 +91,33 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 	if strings.EqualFold(chain, "solana") {
 		providerName := sc.sourceProviderForDataset(chain, dataset)
 		switch dataset {
+		case "transactions":
+			// Solana 的通用列表字段与原生扩展字段（fee_raw/signers/account_keys/program_ids/
+			// source_*）由 solana.NormalizeSolanaTransaction 一次填齐。
+			// 这里**不调用** resolveMethod：Solana 没有 EVM ABI，跑 4 字节选择器解析只会产出噪声。
+			b.txs = make([]ingest.TxRow, 0, len(rows))
+			b.acts = make([]ingest.ActivityRow, 0, len(rows))
+			for _, raw := range rows {
+				r, err := solana.NormalizeSolanaTransaction(raw, providerName)
+				if err != nil {
+					sc.log.Warn("Solana transaction normalization skipped", "err", err)
+					continue
+				}
+				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
+				b.txs = append(b.txs, r)
+				dir, cp := directionOf(address, r.From, r.To)
+				b.acts = append(b.acts, ingest.ActivityRow{
+					Chain: chain, Address: address, Counterparty: cp, Direction: dir,
+					ActivityType: "transaction", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
+					TxHash: r.TxHash, AmountRaw: r.ValueRaw, Dataset: "transactions", Provider: providerName,
+				})
+			}
+			return b, nil
 		case "token_transfers":
 			b.transfers = make([]ingest.TokenTransferRow, 0, len(rows))
 			b.acts = make([]ingest.ActivityRow, 0, len(rows))
 			for _, raw := range rows {
-				r, err := ingest.NormalizeTokenTransfer(raw, chain, providerName)
+				r, err := solana.NormalizeTokenTransferForChain(raw, chain, providerName)
 				if err != nil {
 					sc.log.Warn("Solana transfer normalization skipped", "err", err)
 					continue
@@ -118,7 +144,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 		case "nft_transfers":
 			// 经典 NFT：tokenId 留空，元数据没有来源就留空（ADR-024 D3）。
 			for _, raw := range rows {
-				r, err := solana.NormalizeNftTransfer(raw)
+				r, err := solana.NormalizeNftTransfer(raw, providerName)
 				if err != nil {
 					sc.log.Warn("Solana NFT normalization skipped", "err", err)
 					continue
@@ -130,7 +156,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 		case "balances":
 			// 快照行：snapshotBlock 来自 Provider 实测的 getSlot 槽位（ADR-024 D2）。
 			for _, raw := range rows {
-				r, err := solana.NormalizeBalance(raw)
+				r, err := solana.NormalizeBalance(raw, providerName)
 				if err != nil {
 					sc.log.Warn("Solana balance normalization skipped", "err", err)
 					continue
@@ -141,19 +167,25 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 		case "logs":
 			// 程序日志是排障证据而不是资金流：只落 logs，不写地址活动。
 			for _, raw := range rows {
-				r, err := solana.NormalizeProgramLog(raw)
+				r, err := solana.NormalizeProgramLog(raw, providerName)
 				if err != nil {
 					sc.log.Warn("Solana program log normalization skipped", "err", err)
 					continue
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.logRows = append(b.logRows, r)
+				// 原生扩展行失败不影响通用行：扩展表是证据增强，不是主键来源。
+				if native, nerr := solana.NormalizeSolanaProgramLog(raw, providerName); nerr == nil {
+					b.solanaLogs = append(b.solanaLogs, native)
+				} else {
+					sc.log.Warn("Solana native program log row skipped", "err", nerr)
+				}
 			}
 			return b, nil
 		case "internal_transactions":
 			// CPI 节点是程序调用：只落 internal_calls，不写地址活动（ADR-023 D11）。
 			for _, raw := range rows {
-				r, err := solana.NormalizeInternal(raw)
+				r, err := solana.NormalizeInternal(raw, providerName)
 				if err != nil {
 					sc.log.Warn("Solana CPI normalization skipped", "err", err)
 					continue

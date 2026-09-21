@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -42,27 +43,49 @@ func batched[T any](ctx context.Context, batchSize, n int, flush func(batch []T)
 	return nil
 }
 
+// transactionsInsertColumns 是 INSERT 的列清单：顺序即写入顺序，新列一律追加在末尾。
+// 与 txRowArgs 的实参顺序严格一一对应（单测断言两者长度一致，防止漏列/错位）。
+var transactionsInsertColumns = []string{
+	"chain", "block_number", "block_hash", "tx_hash", "timestamp", "from_address", "to_address",
+	"value_raw", "nonce", "gas", "gas_used", "gas_price", "tx_type", "status", "input", "method_id",
+	"source_provider", "method_name", "method_signature", "method_source", "method_verified",
+	"method_confidence", "method_type", "method_resolved_at", "native_symbol", "confirmation",
+	"raw_type", "raw_status",
+	// Solana dRPC 证据列（规范 §2.2）：非 Solana 链保持零值，不伪造。
+	"fee_raw", "signers", "account_keys", "program_ids", "source_api", "source_method",
+	"source_request_id", "chain_payload_json",
+}
+
+// txRowArgs 按 transactionsInsertColumns 的顺序组装一行实参。
+func txRowArgs(r TxRow) []any {
+	// method_source/method_confidence 的空值语义是 unknown，在写入点兜底。
+	source := r.MethodSource
+	if source == "" {
+		source = "unknown"
+	}
+	confidence := r.MethodConfidence
+	if confidence == "" {
+		confidence = "unknown"
+	}
+	return []any{
+		r.Chain, r.BlockNumber, r.BlockHash, r.TxHash, r.Timestamp, r.From, r.To,
+		r.ValueRaw, r.Nonce, r.Gas, r.GasUsed, r.GasPrice, r.TxType, r.Status, r.Input, r.MethodID, r.Provider,
+		r.MethodName, r.MethodSignature, source, r.MethodVerified, confidence, r.MethodType,
+		r.MethodResolvedAt, r.NativeSymbol, r.Confirmation, r.RawType, r.RawStatus,
+		r.FeeRaw, r.Signers, r.AccountKeys, r.ProgramIds, r.SourceAPI, r.SourceMethod,
+		r.SourceRequestID, r.ChainPayloadJSON,
+	}
+}
+
 func (w *Writer) WriteTransactions(ctx context.Context, rows []TxRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []TxRow) error {
-		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.transactions "+
-			"(chain, block_number, block_hash, tx_hash, timestamp, from_address, to_address, value_raw, nonce, gas, gas_used, gas_price, tx_type, status, input, method_id, source_provider, "+
-			"method_name, method_signature, method_source, method_verified, method_confidence, method_type, method_resolved_at, native_symbol, confirmation, raw_type, raw_status) VALUES")
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.transactions ("+
+			strings.Join(transactionsInsertColumns, ", ")+") VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
-			source := r.MethodSource
-			if source == "" {
-				source = "unknown"
-			}
-			confidence := r.MethodConfidence
-			if confidence == "" {
-				confidence = "unknown"
-			}
-			if err := stmt.Append(r.Chain, r.BlockNumber, r.BlockHash, r.TxHash, r.Timestamp, r.From, r.To,
-				r.ValueRaw, r.Nonce, r.Gas, r.GasUsed, r.GasPrice, r.TxType, r.Status, r.Input, r.MethodID, r.Provider,
-				r.MethodName, r.MethodSignature, source, r.MethodVerified, confidence, r.MethodType,
-				r.MethodResolvedAt, r.NativeSymbol, r.Confirmation, r.RawType, r.RawStatus); err != nil {
+			if err := stmt.Append(txRowArgs(r)...); err != nil {
 				return err
 			}
 		}
@@ -108,27 +131,44 @@ func (w *Writer) WriteInternalTransfers(ctx context.Context, rows []InternalTran
 	}, rows, "internal_calls")
 }
 
+var tokenTransferInsertColumns = []string{
+	"chain", "block_number", "timestamp", "tx_hash", "log_index", "token_address", "token_symbol",
+	"token_decimals", "from_address", "to_address", "amount_raw", "amount", "gross_amount_raw",
+	"fee_amount_raw", "from_token_account", "to_token_account", "source_provider",
+	// Solana 指令定位与来源证据（规范 §2.2）。
+	"instruction_index", "inner_instruction_index", "source_api", "source_request_id",
+}
+
+// tokenTransferRowArgs 按 tokenTransferInsertColumns 的顺序组装一行实参。
+func tokenTransferRowArgs(r TokenTransferRow) []any {
+	amt := decOrZero(r.Amount, r.TokenDecimals)
+	// 金额不变量（ADR-023 D6）在写入点兜底：任何调用方漏填 gross/fee 时也保证
+	// gross - fee = net（TRON 的 NormalizeTRC20 不经过通用归一化，正是这种调用方）。
+	gross, fee := r.GrossAmountRaw, r.FeeAmountRaw
+	if gross == "" {
+		gross = r.AmountRaw
+	}
+	if fee == "" {
+		fee = "0"
+	}
+	return []any{
+		r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.TokenAddress,
+		r.TokenSymbol, r.TokenDecimals, r.From, r.To, r.AmountRaw, amt, gross, fee,
+		r.FromTokenAccount, r.ToTokenAccount, r.Provider,
+		r.InstructionIndex, innerInstructionIndex(r.InnerInstructionIndex, r.InstructionIndex, r.SourceAPI),
+		r.SourceAPI, r.SourceRequestID,
+	}
+}
+
 func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []TokenTransferRow) error {
-		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.token_transfers "+
-			"(chain, block_number, timestamp, tx_hash, log_index, token_address, token_symbol, token_decimals, from_address, to_address, amount_raw, amount, gross_amount_raw, fee_amount_raw, from_token_account, to_token_account, source_provider) VALUES")
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.token_transfers ("+
+			strings.Join(tokenTransferInsertColumns, ", ")+") VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
-			amt := decOrZero(r.Amount, r.TokenDecimals)
-			// 金额不变量（ADR-023 D6）在写入点兜底：任何调用方漏填 gross/fee 时也保证
-			// gross - fee = net（TRON 的 NormalizeTRC20 不经过通用归一化，正是这种调用方）。
-			gross, fee := r.GrossAmountRaw, r.FeeAmountRaw
-			if gross == "" {
-				gross = r.AmountRaw
-			}
-			if fee == "" {
-				fee = "0"
-			}
-			if err := stmt.Append(r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.TokenAddress,
-				r.TokenSymbol, r.TokenDecimals, r.From, r.To, r.AmountRaw, amt, gross, fee,
-				r.FromTokenAccount, r.ToTokenAccount, r.Provider); err != nil {
+			if err := stmt.Append(tokenTransferRowArgs(r)...); err != nil {
 				return err
 			}
 		}
@@ -136,21 +176,49 @@ func (w *Writer) WriteTokenTransfers(ctx context.Context, rows []TokenTransferRo
 	}, rows, "token_transfers")
 }
 
+var nftTransferInsertColumns = []string{
+	"chain", "block_number", "timestamp", "tx_hash", "log_index", "contract_address", "token_id",
+	"from_address", "to_address", "token_name", "token_symbol", "token_standard", "amount_raw",
+	"source_provider",
+	// Solana 指令定位与来源证据（规范 §2.2）。
+	"instruction_index", "inner_instruction_index", "source_api", "source_request_id",
+}
+
+// nftTransferRowArgs 按 nftTransferInsertColumns 的顺序组装一行实参。
+func nftTransferRowArgs(r NftTransferRow) []any {
+	return []any{
+		r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.Contract, r.TokenID,
+		r.From, r.To, r.TokenName, r.TokenSymbol, r.TokenStandard, r.AmountRaw, r.Provider,
+		r.InstructionIndex, innerInstructionIndex(r.InnerInstructionIndex, r.InstructionIndex, r.SourceAPI),
+		r.SourceAPI, r.SourceRequestID,
+	}
+}
+
 func (w *Writer) WriteNftTransfers(ctx context.Context, rows []NftTransferRow) error {
 	return batched(ctx, w.batchSize, len(rows), func(batch []NftTransferRow) error {
-		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.nft_transfers "+
-			"(chain, block_number, timestamp, tx_hash, log_index, contract_address, token_id, from_address, to_address, token_name, token_symbol, token_standard, amount_raw, source_provider) VALUES")
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.nft_transfers ("+
+			strings.Join(nftTransferInsertColumns, ", ")+") VALUES")
 		if err != nil {
 			return err
 		}
 		for _, r := range batch {
-			if err := stmt.Append(r.Chain, r.BlockNumber, r.Timestamp, r.TxHash, r.LogIndex, r.Contract, r.TokenID,
-				r.From, r.To, r.TokenName, r.TokenSymbol, r.TokenStandard, r.AmountRaw, r.Provider); err != nil {
+			if err := stmt.Append(nftTransferRowArgs(r)...); err != nil {
 				return err
 			}
 		}
 		return stmt.Send()
 	}, rows, "nft_transfers")
+}
+
+// innerInstructionIndex 统一内层指令序号语义：NoInnerInstruction(-1) 表示"不属于内层指令"，
+// 与 ClickHouse 列默认值一致。未经 Solana 归一化的行（如 TRON 直构）零值 0 与"第 0 条内层
+// 指令"无法区分，且这类行没有指令上下文（instruction_index=0 且 source_api 为空），
+// 按 -1 落库；Solana 行由 Provider 填 source_api，因此真实的 0 能原样保留。
+func innerInstructionIndex(inner int32, instruction uint32, sourceAPI string) int32 {
+	if inner == 0 && instruction == 0 && sourceAPI == "" {
+		return NoInnerInstruction
+	}
+	return inner
 }
 
 func (w *Writer) WriteLogs(ctx context.Context, rows []LogRow) error {
@@ -174,6 +242,53 @@ func (w *Writer) WriteLogs(ctx context.Context, rows []LogRow) error {
 		}
 		return stmt.Send()
 	}, rows, "logs")
+}
+
+// SolanaProgramLogRow 对应 blockchain.solana_program_logs（规范 §8.4）。
+// source_ingested_at 不进 INSERT：交给 ClickHouse 的 DEFAULT now64(3)，避免各节点时钟各写各的。
+type SolanaProgramLogRow struct {
+	Chain           string
+	Slot            uint64
+	Timestamp       time.Time
+	Signature       string
+	LogIndex        uint32
+	ProgramID       string
+	Message         string
+	InvokeDepth     uint16
+	Success         uint8
+	SourceProvider  string
+	SourceAPI       string
+	SourceRequestID string
+}
+
+var solanaProgramLogInsertColumns = []string{
+	"chain", "slot", "timestamp", "signature", "log_index", "program_id", "message",
+	"invoke_depth", "success", "source_provider", "source_api", "source_request_id",
+}
+
+// solanaProgramLogRowArgs 按 solanaProgramLogInsertColumns 的顺序组装一行实参。
+func solanaProgramLogRowArgs(r SolanaProgramLogRow) []any {
+	return []any{
+		r.Chain, r.Slot, r.Timestamp, r.Signature, r.LogIndex, r.ProgramID, r.Message,
+		r.InvokeDepth, r.Success, r.SourceProvider, r.SourceAPI, r.SourceRequestID,
+	}
+}
+
+// WriteSolanaProgramLogs 写 Solana 原生程序日志（规范 §2.3 双写：同一份数据另写 blockchain.logs）。
+func (w *Writer) WriteSolanaProgramLogs(ctx context.Context, rows []SolanaProgramLogRow) error {
+	return batched(ctx, w.batchSize, len(rows), func(batch []SolanaProgramLogRow) error {
+		stmt, err := w.conn.DB().PrepareBatch(ctx, "INSERT INTO blockchain.solana_program_logs ("+
+			strings.Join(solanaProgramLogInsertColumns, ", ")+") VALUES")
+		if err != nil {
+			return err
+		}
+		for _, r := range batch {
+			if err := stmt.Append(solanaProgramLogRowArgs(r)...); err != nil {
+				return err
+			}
+		}
+		return stmt.Send()
+	}, rows, "solana_program_logs")
 }
 
 func (w *Writer) WriteBalances(ctx context.Context, rows []BalanceRow) error {

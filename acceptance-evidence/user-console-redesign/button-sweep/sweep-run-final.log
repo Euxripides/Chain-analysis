@@ -1,0 +1,10 @@
+
+Running 1 test using 1 worker
+
+UC-SWEEP 完成：routes=21 controls=484 clicked=381 dialogCancelled=14 failures=0 pageErrors=0
+  ✓  1 [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts:160:3 › UC-SWEEP 全量点击巡检 › 逐个点开每一个控件并记录结果 (13.2m)
+
+  Slow test file: [user-desktop] › tests/dual-system-uc-button-sweep.spec.ts (13.2m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 passed (13.2m)
+SWEEP_RC=0

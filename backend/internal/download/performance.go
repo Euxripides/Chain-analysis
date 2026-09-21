@@ -7,7 +7,6 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
-	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 )
 
 func nextEffectiveMode(current, requested model.PerformanceMode, pressure, recoveryReady bool) model.PerformanceMode {
@@ -62,7 +61,7 @@ func (sc *Scheduler) performanceModeLoop(ctx context.Context) {
 			pressure = true
 			reason = sc.bp.Reason()
 		}
-		if ac, ok := sc.prov.(*ankr.Client); ok {
+		if ac, ok := sc.ankrClient(); ok {
 			conn := ac.ConnectionLimitCount()
 			if conn > sc.lastConnLimit {
 				pressure = true

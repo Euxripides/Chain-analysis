@@ -1,0 +1,60 @@
+{
+  "drill": "restore-drill",
+  "ts": "20260916T154355Z",
+  "backup_dir": "/home/euripides/backups/blockchain-platform/20260916T150033Z",
+  "verdict": "FAIL",
+  "verdict_note": "PASS 仅当 FAIL=0 且 NOT_VERIFIED=0 且 PARTIAL=0；structural NV 同样不构成通过",
+  "failures": [
+    "auditverify 未通过（rc=2，见 /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/restore-drill-20260916T154355Z.logs/auditverify.out 与 .err）"
+  ],
+  "not_verified": [
+    "structural|版本历史 / 生命周期规则 / 对象元数据与 tag（mc mirror 只反映当前对象版本，无法冒充完整性）"
+  ],
+  "nv_class": {
+    "structural": [
+      "版本历史 / 生命周期规则 / 对象元数据与 tag（mc mirror 只反映当前对象版本，无法冒充完整性）"
+    ],
+    "check": []
+  },
+  "nv_counts": {
+    "total": 1,
+    "structural": 1,
+    "check": 0
+  },
+  "partial": [],
+  "partial_count": 0,
+  "targets": {
+    "postgres": {
+      "database": "blockchain_platform_dr_2f45fa9eee7c"
+    },
+    "clickhouse": {
+      "database": "blockchain_dr_2f45fa9eee7c"
+    },
+    "minio": {
+      "blockchain-audit": "blockchain-audit-drill-2f45fa9eee7c",
+      "blockchain-backups": "blockchain-backups-drill-2f45fa9eee7c",
+      "blockchain-exports": "blockchain-exports-drill-2f45fa9eee7c",
+      "blockchain-raw": "blockchain-raw-drill-2f45fa9eee7c",
+      "blockchain-reports": "blockchain-reports-drill-2f45fa9eee7c"
+    }
+  },
+  "pg_dsn_redacted": "postgres://blockchain:REDACTED@127.0.0.1:5433/blockchain_platform_dr_2f45fa9eee7c?sslmode=disable",
+  "restore_rc": {
+    "postgres": "0",
+    "clickhouse": "0"
+  },
+  "rto_seconds": {
+    "postgres": "58.83",
+    "clickhouse": "477.02",
+    "minio": {
+      "blockchain-audit": "0.27",
+      "blockchain-backups": "0.24",
+      "blockchain-exports": "29.04",
+      "blockchain-raw": "280.01",
+      "blockchain-reports": "0.38"
+    }
+  },
+  "logs_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/restore-drill-20260916T154355Z.logs",
+  "cleanup": "演练目标不自动清理；需人工确认后按报告 §5 的命令删除",
+  "retention_note": "本脚本不删除任何备份、不删除任何演练目标；失败的目标一律保留"
+}

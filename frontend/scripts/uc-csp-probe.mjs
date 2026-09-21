@@ -1,0 +1,18 @@
+import { chromium } from "@playwright/test";
+const BASE = process.env.E2E_BASE_URL ?? "https://127.0.0.1:8448";
+const browser = await chromium.launch({ executablePath: process.env.E2E_CHROMIUM_PATH || undefined });
+const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+const page = await ctx.newPage();
+const reqs = [];
+page.on("request", (r) => { if (r.resourceType() === "image") reqs.push(r.url()); });
+const consoleMsgs = [];
+page.on("console", (m) => { if (m.type() === "error") consoleMsgs.push(m.text().slice(0, 220)); });
+await page.goto(BASE + "/app-v2/login", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(3000);
+console.log("image requests:", JSON.stringify(reqs));
+console.log("console errors:", JSON.stringify(consoleMsgs, null, 1));
+const imgs = await page.evaluate(() => Array.from(document.querySelectorAll("img")).map((i) => ({ src: i.getAttribute("src"), outer: i.outerHTML.slice(0, 120) })));
+console.log("img elements:", JSON.stringify(imgs));
+const links = await page.evaluate(() => Array.from(document.querySelectorAll('link[rel*="icon"]')).map((l) => l.outerHTML.slice(0, 120)));
+console.log("icon links:", JSON.stringify(links));
+await browser.close();

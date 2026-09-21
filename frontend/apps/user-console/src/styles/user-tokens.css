@@ -35,7 +35,10 @@ html[data-app="user"] {
   --c-primary: var(--cs-primary);
 
   /* ==========================================================================
-   * 2. 表面与边框（§4.1）
+   * 2. 表面与边框（§4.1，2026-09-20 冷白四级明度修订）
+   *
+   * 四级关系：L1 画布（--bg-canvas）< L3 输入（--bg-field）< L2 内容（--bg-surface=纯白），
+   * L4 选中（--bg-selected）只用于当前项/当前步骤。组件优先引用 --cs-layer-*。
    * ========================================================================== */
   --c-surface: var(--cs-surface);
   --c-surface-muted: var(--cs-surface-blue);
@@ -47,14 +50,21 @@ html[data-app="user"] {
   --bg-surface: var(--cs-surface);
   --bg-surface-muted: var(--cs-surface-blue);
   --bg-surface-sunken: var(--cs-surface-sunken);
-  /* 侧栏从"近墨黑"改成"淡蓝白"（§6.1.1）——这是 V4 最直观的一处变化。 */
+  /* 输入层：卡片内的凹陷面（配合 --border-strong 的 2.23:1 描边）。 */
+  --bg-field: var(--cs-field);
+  /* 选中层：当前项/当前步骤专用，蓝色只在这里与交互态出现。 */
+  --bg-selected: var(--cs-primary-soft);
+  --border-selected: var(--cs-border-selected);
+  /* 侧栏是纯白实体面，靠 1px 灰边界与冷白画布分开（不再是"淡蓝白"）。 */
   --bg-rail: var(--cs-surface-rail);
   --bg-rail-raised: var(--cs-surface);
-  --bg-overlay: rgba(16, 33, 61, 0.34);
+  /* 遮罩：加深一档，让弹窗本体与页面底层拉出明确层高差。 */
+  --bg-overlay: rgba(16, 26, 43, 0.38);
 
   --border-subtle: var(--cs-border-subtle);
   --border-default: var(--cs-border);
   --border-strong: var(--cs-border-strong);
+  --border-field: var(--cs-border-field);
   --border-on-rail: var(--cs-border);
 
   /* ==========================================================================
@@ -75,7 +85,7 @@ html[data-app="user"] {
   --interactive: var(--cs-primary);
   --interactive-hover: var(--cs-primary-hover);
   --interactive-soft: var(--cs-primary-soft);
-  --interactive-ring: rgba(52, 120, 246, 0.18);
+  --interactive-ring: rgba(37, 99, 235, 0.20);
   --interactive-on-rail: var(--cs-primary);
 
   --c-danger: var(--cs-danger-text);

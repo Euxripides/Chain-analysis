@@ -6,24 +6,31 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
-	"github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
-	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
-
-var addrRe = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 // solanaRangeGuard：Solana 取数没有可用的时间→slot 索引，主网 slot 已达数亿，
 // full 区间既无法解析也不可安全全量下载，因此只接受显式 slot 区间（2026-09-20）。
 func solanaRangeGuard(chain, rangeType string) error {
-	if !strings.EqualFold(chain, "solana") || rangeType == "block" {
+	if !strings.EqualFold(chain, "solana") {
 		return nil
+	}
+	switch rangeType {
+	case "block":
+		return nil
+	case "time", "full", "":
+		// dRPC Data API 的 start/end 是毫秒时间戳，不需要"时间→slot 索引"，
+		// 因此时间范围由 Provider 原生支持；full 由任务创建时固化的目标 Slot 界定。
+		// 未启用 Data API 时仍是旧的 getSignaturesForAddress 路径：只能按 slot 翻页。
+		if model.SolanaDataAPIEnabled() {
+			return nil
+		}
 	}
 	return errors.New("Solana 目前只支持显式区块（slot）区间：请选择 block 范围")
 }
@@ -85,41 +92,25 @@ func (s *Service) validateTronFullRange(chain string, datasets []string, spec Ra
 	return nil
 }
 
-// NormalizeAndDedupeAddresses 校验 + 小写 + 去重（无效地址跳过，前端已做格式校验与计数展示）。
+// NormalizeAndDedupeAddresses 校验 + 按链规范化 + 去重（无效地址跳过，前端已做格式校验与计数展示）。
 func NormalizeAndDedupeAddresses(in []string) ([]string, error) {
 	return NormalizeAndDedupeAddressesForChain("", in)
 }
 
+// NormalizeAndDedupeAddressesForChain 是下载/导出主体地址的规范入口：
+// 逐地址委托 addressnorm（Solana 保留 base58 大小写），无效地址跳过而不是报错，
+// 全部无效才返回错误。去重保持首次出现顺序。
 func NormalizeAndDedupeAddressesForChain(chain string, in []string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	for _, a := range in {
-		a = strings.TrimSpace(a)
-		if a == "" {
+		normalized, err := addressnorm.Normalize(chain, a)
+		if err != nil {
 			continue
 		}
-		if strings.EqualFold(chain, "tron") {
-			var err error
-			a, err = tron.NormalizeTronAddress(a)
-			if err != nil {
-				continue
-			}
-		} else if strings.EqualFold(chain, "solana") {
-			// Solana 地址大小写敏感：只校验 32 字节 base58，绝不折叠大小写。
-			normalized, err := solana.NormalizeSolanaAddress(a)
-			if err != nil {
-				continue
-			}
-			a = normalized
-		} else {
-			a = strings.ToLower(a)
-			if !addrRe.MatchString(a) {
-				continue
-			}
-		}
-		if !seen[a] {
-			seen[a] = true
-			out = append(out, a)
+		if !seen[normalized] {
+			seen[normalized] = true
+			out = append(out, normalized)
 		}
 	}
 	if len(out) == 0 {

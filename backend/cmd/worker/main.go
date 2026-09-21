@@ -38,6 +38,10 @@ func main() {
 
 	writer := ingest.NewWriter(infra.CH, 5000)
 	sched := download.NewScheduler(cfg, infra.Store, infra.CH, infra.Prov, infra.Raw, writer, infra.Bus, log)
+	// Shard 取数按创建时固化的路由选 Provider/通道（开发文档 §9.1）。
+	if infra.Routes != nil {
+		sched.SetRoutes(infra.Routes)
+	}
 
 	// V1.2→V1.3：Count Oracle Provider Port（§2/§75/§84：Chainbase 只是 Adapter；
 	// MockParallel 只用于验收/测试环境，生产默认关闭）

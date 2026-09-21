@@ -1,0 +1,34 @@
+{
+  "spec": "udl01-worker-isolation-v5b.spec.ts",
+  "fixture": "udl01-small-ok.xlsx",
+  "dialogText": "提示 本地解析摘要 以下计数由浏览器本地解析得出；提交后由服务端再次验证，只有服务端 accepted 的地址会被采用。 解析结果 文件 udl01-small-ok.xlsx 类型 XLSX/Excel 扫描行数 1 待校验地址 1 空白行 0 表头 address 表头（列映射） 识别列 chain、tags 带案件/标签的行 1 链分布 bsc 1 取消 提交服务端校验",
+  "stableSemantics": {
+    "rowCount": "1",
+    "addressCount": "1",
+    "headerDetected": "true",
+    "submitEnabled": true
+  },
+  "metrics": {
+    "maxGap": 100,
+    "gapSamples": 18,
+    "maxLongTask": 84,
+    "longTasks": [
+      84,
+      65,
+      77
+    ]
+  },
+  "pageErrors": [],
+  "login": {
+    "attempts": 5,
+    "retriedNavigation": false
+  },
+  "serverCallsAfterCancel": {
+    "validate": 0,
+    "preview": 0,
+    "create": 0
+  },
+  "apiCalls": [
+    "GET https://127.0.0.1:8448/api/v2/meta/datasets?chain=arbitrum"
+  ]
+}

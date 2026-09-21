@@ -1,9 +1,13 @@
 /*
- * Shell：淡蓝统一工作台（用户端重构规范 V4 §6.1 / §7）
+ * Shell：冷白统一工作台（用户端重构规范 V4 §6.1 / §7；2026-09-20 清晰度修订）
  *
- * 从「左黑右白传统后台」改成**浅色侧栏 + 玻璃顶栏**：
- *   侧栏底色 #F8FBFF，右边框极淡蓝线，Logo 区 64px，
- *   当前项 = 淡蓝胶囊 + 左侧 3px 亮蓝指示 + 加重字重（形状/字重/颜色三通道，不只靠颜色）。
+ * 从「左黑右白传统后台」→「浅色侧栏 + 玻璃顶栏」→ 现在的**冷白实体工作台**：
+ *   侧栏 = 纯白实体面 + 1px 灰边界；顶栏 = 不透明纯白（玻璃拟态退役）；
+ *   当前项 = 选中层淡蓝胶囊 + 1px 蓝边界 + 左侧 3px 亮蓝指示 + 加重字重
+ *   （形状/字重/颜色/边界四通道，不只靠颜色）。
+ *
+ * 为什么去掉画布上的径向光晕：两条 7% / 6% 的蓝色 radial-gradient 铺满整个视口，
+ * 在冷白底上就是一层洗不掉的淡蓝雾，还会把卡片边界"吃"掉。页面底色现在是**单一纯色**。
  *
  * 几何：展开 248px / 收起 72px（规范 §6.1.1，原 264px），顶栏 60px。
  * 本文件只覆盖 .cs-shell__* 这些**用户端专属类**，后台端的 .shell__* 不受影响。
@@ -11,12 +15,9 @@
 
 html[data-app="user"] .cs-shell {
   grid-template-columns: var(--cs-rail-w) minmax(0, 1fr);
-  background: var(--cs-canvas);
-  /* 页面底色带一层极浅的径向光晕，让大面积淡蓝不发灰 */
-  background-image:
-    radial-gradient(60% 46% at 12% -6%, rgba(52, 120, 246, .07) 0%, transparent 62%),
-    radial-gradient(52% 42% at 96% 4%, rgba(29, 184, 232, .06) 0%, transparent 60%);
-  background-attachment: fixed;
+  /* L1 页面底层：单一冷白纯色，无渐变、无光晕。 */
+  background: var(--cs-layer-page);
+  background-image: none;
 }
 html[data-app="user"] .cs-shell[data-collapsed="true"] {
   grid-template-columns: var(--cs-rail-w-collapsed) minmax(0, 1fr);
@@ -93,10 +94,9 @@ html[data-app="user"] .cs-nav__link[aria-current="page"]::before {
   border-radius: 0 3px 3px 0;
   background: var(--cs-primary);
 }
-/* 当前图标轻微蓝色辉光（§6.1.1） */
+/* 当前图标用纯色蓝（不再加 drop-shadow 辉光：那会在浅色侧栏上产生一圈模糊）。 */
 html[data-app="user"] .cs-nav__link[aria-current="page"] .cs-nav__icon {
   color: var(--cs-primary);
-  filter: drop-shadow(0 0 6px rgba(52, 120, 246, .35));
 }
 
 html[data-app="user"] .cs-railfoot { border-top-color: var(--cs-border-subtle); }
@@ -107,19 +107,22 @@ html[data-app="user"] .cs-railfoot__collapse:hover {
   color: var(--cs-text-primary);
 }
 
-/* ---------------- 顶栏（§6.1.2）：60px + 玻璃 + 滚动后 0.86 透明度 ---------------- */
+/* ---------------- 顶栏（§6.1.2）：60px 不透明纯白实体面 ----------------
+ * 玻璃拟态退役：顶栏不再半透明、不再 backdrop-filter。
+ * 与内容的分层改由「1px 灰边界 + 滚动后的短半径阴影」承担，
+ * 这样滚动时标题不会被半透明背景糊住，也不会出现顶部一片发灰。
+ */
 html[data-app="user"] .cs-shell__topbar {
   height: var(--cs-topbar-h);
   padding: 0 var(--cs-gutter);
-  background: var(--cs-surface-glass);
+  background: var(--cs-layer-content);
   border-bottom: 1px solid var(--cs-border);
-  -webkit-backdrop-filter: var(--cs-glass-blur);
-  backdrop-filter: var(--cs-glass-blur);
-  transition: background var(--cs-dur-standard) var(--cs-ease-enter), box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+  transition: box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
 }
 html[data-app="user"] .cs-shell__topbar[data-scrolled="true"] {
-  background: rgba(255, 255, 255, .86);
-  box-shadow: 0 1px 0 rgba(45, 80, 130, .05), 0 8px 24px rgba(45, 80, 130, .06);
+  /* 滚动后加深边界并给一层短阴影，明确"内容已经从下面滚过去了"。 */
+  border-bottom-color: var(--cs-border-strong);
+  box-shadow: 0 2px 8px rgba(16, 26, 43, .06);
 }
 html[data-app="user"] .cs-shell__content {
   padding: var(--cs-gutter) var(--cs-gutter) 56px;

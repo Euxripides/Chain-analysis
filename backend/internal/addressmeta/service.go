@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
@@ -103,10 +104,9 @@ func (s *Service) SyncFromCoverage(ctx context.Context, orgID, wsID, chain, addr
 		return err
 	}
 	if s.CH != nil {
-		normalized := addr
-		if chain != "tron" {
-			normalized = strings.ToLower(addr)
-		}
+		// 查询键归一化：Solana 保留 base58 大小写。这里是后台统计路径，
+		// 历史上不做地址校验，沿用宽容归一化，避免畸形历史主体让 finalize 失败。
+		normalized := addressnorm.NormalizeKey(chain, addr)
 		counts, firstBlock, lastBlock, err := s.dataCounts(ctx, chain, normalized)
 		if err != nil {
 			return err

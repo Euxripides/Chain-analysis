@@ -48,15 +48,15 @@ func (s *Store) InsertUsage(ctx context.Context, u model.UsageRow) error {
 		" error_class, rpc_code, trace_id, page_size, returned_rows, response_bytes, retry_attempt, retry_reason, request_id, "+
 		" usage_type, tx_hash, cache_hit, decode_priority, decode_budget, "+
 		" api_type, chain, method_class, method_calls, batch_size, singleflight_hit, investigation_id, priority, "+
-		" ttfb_ms, body_ms, logical_calls, http_requests, logs_requests, matched_rows, fallback_rows, saved_calls, failure_reasons) "+
-		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49)",
+		" ttfb_ms, body_ms, logical_calls, http_requests, logs_requests, matched_rows, fallback_rows, saved_calls, failure_reasons, api_channel) "+
+		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50)",
 		uuid.NewString(), u.Provider, u.Method, u.Dataset, jobID, shardID, u.TenantID, u.RequestTime,
 		u.DurationMs, u.Status, u.HTTPStatus, u.APIError, u.Rows, u.Bytes, u.Credits, u.CostUSD,
 		u.WireBytes, u.DecodedBytes,
 		u.ErrorClass, u.RPCCode, u.TraceID, u.PageSize, u.ReturnedRows, u.ResponseBytes, u.RetryAttempt, u.RetryReason, u.RequestID,
 		usageType, u.TxHash, u.CacheHit, decodePriority, u.DecodeBudget,
 		apiType, u.Chain, u.MethodClass, methodCalls, u.BatchSize, u.SingleflightHit, investigationID, u.Priority,
-		u.TTFBMs, u.BodyMs, u.LogicalCalls, u.HTTPRequests, u.LogsRequests, u.MatchedRows, u.FallbackRows, u.SavedCalls, string(failureReasons))
+		u.TTFBMs, u.BodyMs, u.LogicalCalls, u.HTTPRequests, u.LogsRequests, u.MatchedRows, u.FallbackRows, u.SavedCalls, string(failureReasons), u.APIChannel)
 	return err
 }
 

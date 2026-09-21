@@ -439,7 +439,8 @@ func (s *Store) UpdateDatasetStatus(ctx context.Context, id, status string) erro
 const shardCols = "id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, " +
 	"page_size, page_state, status, priority, retries, max_retries, lease_owner, leased_until, downloaded_rows, downloaded_bytes, " +
 	"raw_object, error, fetched_at, ingested_at, validated_at, fetch_duration_ms, ingest_duration_ms, wire_bytes, decoded_bytes, " +
-	"page_count, page_gap_avg_ms, lease_epoch, work_score, tail_boost, created_at, updated_at"
+	"page_count, page_gap_avg_ms, lease_epoch, work_score, tail_boost, created_at, updated_at, " +
+	"provider_key, api_channel, operation_class, routing_policy_key, routing_policy_revision, profile_revision"
 
 func scanShard(rows pgx.Rows) (*model.Shard, error) {
 	var r model.Shard
@@ -450,7 +451,9 @@ func scanShard(rows pgx.Rows) (*model.Shard, error) {
 		&r.DownloadedRows, &r.DownloadedBytes, &r.RawObject, &r.Error, &fet, &igt, &vat,
 		&r.FetchDurationMs, &r.IngestDurationMs, &r.WireBytes, &r.DecodedBytes, &r.PageCount, &r.PageGapAvgMs,
 		&r.LeaseEpoch, &r.WorkScore, &r.TailBoost,
-		&r.CreatedAt, &r.UpdatedAt)
+		&r.CreatedAt, &r.UpdatedAt,
+		&r.ProviderKey, &r.APIChannel, &r.OperationClass,
+		&r.RoutingPolicyKey, &r.RoutingPolicyRevision, &r.ProfileRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -508,12 +511,15 @@ func (s *Store) CreateShards(ctx context.Context, shards []model.Shard) error {
 			pageState = []byte("{}")
 		}
 		_, err := tx.Exec(ctx, "INSERT INTO download_shards "+
-			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, page_size, page_state, status, priority, max_retries, work_score, tail_boost) "+
-			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)",
+			"(id, job_id, subject_id, dataset_id, dataset, from_block, to_block, from_timestamp, to_timestamp, page_token, page_no, page_size, page_state, status, priority, max_retries, work_score, tail_boost, "+
+			"provider_key, api_channel, operation_class, routing_policy_key, routing_policy_revision, profile_revision) "+
+			"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
 			shards[i].ID, shards[i].JobID, shards[i].SubjectID, shards[i].DatasetID, shards[i].Dataset,
 			shards[i].FromBlock, shards[i].ToBlock, shards[i].FromTimestamp, shards[i].ToTimestamp,
 			shards[i].PageToken, shards[i].PageNo, shards[i].PageSize, string(pageState), shards[i].Status,
-			shards[i].Priority, shards[i].MaxRetries, ws, shards[i].TailBoost)
+			shards[i].Priority, shards[i].MaxRetries, ws, shards[i].TailBoost,
+			shards[i].ProviderKey, shards[i].APIChannel, shards[i].OperationClass,
+			shards[i].RoutingPolicyKey, shards[i].RoutingPolicyRevision, shards[i].ProfileRevision)
 		if err != nil {
 			return fmt.Errorf("insert shard: %w", err)
 		}
@@ -562,7 +568,8 @@ func (s *Store) LeaseShardsOrdered(ctx context.Context, worker string, n int, le
 		"RETURNING s.id, s.job_id, s.subject_id, s.dataset_id, s.dataset, s.from_block, s.to_block, s.from_timestamp, s.to_timestamp, s.page_token, s.page_no, "+
 		"s.page_size, s.page_state, s.status, s.priority, s.retries, s.max_retries, s.lease_owner, s.leased_until, s.downloaded_rows, s.downloaded_bytes, "+
 		"s.raw_object, s.error, s.fetched_at, s.ingested_at, s.validated_at, s.fetch_duration_ms, s.ingest_duration_ms, s.wire_bytes, s.decoded_bytes, "+
-		"s.page_count, s.page_gap_avg_ms, s.lease_epoch, s.work_score, s.tail_boost, s.created_at, s.updated_at", n, worker, until)
+		"s.page_count, s.page_gap_avg_ms, s.lease_epoch, s.work_score, s.tail_boost, s.created_at, s.updated_at, "+
+		"s.provider_key, s.api_channel, s.operation_class, s.routing_policy_key, s.routing_policy_revision, s.profile_revision", n, worker, until)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,7 +1020,7 @@ func subjectStatusForTerminal(all, done, terminal int, anyFailed bool) string {
 }
 
 // progress 参与判定：部分地址虽然"有失败数据集"（例如某个 dataset 在当前链上
-// 不可用），但整体已经产出了数据时，任务是 PARTIAL_FAILED 而不是 FAILED —— 
+// 不可用），但整体已经产出了数据时，任务是 PARTIAL_FAILED 而不是 FAILED ——
 // DL-20260915-0007 完成了 75/100 个数据集，把整单报成 FAILED 会误导用户。
 func jobStatusForTerminal(all, done, terminal int, anyFailed bool, subjects int, progress float32) string {
 	switch {

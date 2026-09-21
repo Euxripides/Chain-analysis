@@ -25,20 +25,39 @@ const css = readFileSync(resolve(here, "../packages/design-tokens/tokens.css"), 
 const userCss = readFileSync(resolve(here, "../packages/user-ui/theme/css-vars.css"), "utf-8");
 
 /**
- * 只收集**直接写成十六进制**的令牌：语义角色层（--bg-* / --text-* 等）
- * 大量使用 var() 间接引用，交给浏览器解析后又绕回了同一组原始色阶，
- * 因此对比度守卫统一在色阶/原始色这一层校验（蓝图 §6.1 的那张表）。
+ * 收集令牌并解析 `var(--x)` 一跳/多跳引用。
+ *
+ * 2026-09-20 起，用户端色板开始用「四级明度」作为唯一真源：
+ *   --cs-canvas: var(--cs-layer-page);  --cs-primary-soft: var(--cs-layer-selected);
+ * 如果守卫只看"直接写成十六进制"的令牌，这些别名会全部被判成"令牌缺失"，
+ * 于是要么把值抄两遍（真源失效），要么守卫失效——两者都不能接受。
+ * 这里改为：先收集所有声明，再沿 var() 链解析到十六进制，最多 6 跳。
  */
 function parseTokens(text) {
-  const out = {};
-  for (const m of text.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) {
+  /* 先剥掉注释再扫声明：注释里会出现「--cs-glass-blur: none」这类伪声明片段，
+     不剥离的话 [^;]+ 会跨行吞掉紧随其后的真实令牌（实测吞掉过 cs-surface-blue）。 */
+  const source = text.replace(/\/\*[\s\S]*?\*\//g, "");
+  const raw = {};
+  for (const m of source.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
     if (
       m[1].startsWith("c-") ||
       m[1].startsWith("cs-") ||
-      /^(ink|graphite|slate|canvas|indigo|cyan|amber|green|red|chart|state|graph)-/.test(m[1])
+      /^(ink|graphite|slate|canvas|indigo|cyan|amber|green|red|chart|state|graph|layer)-/.test(m[1])
     ) {
-      out[m[1]] = m[2].toLowerCase();
+      raw[m[1]] = m[2].trim();
     }
+  }
+  const resolve = (value, depth = 0) => {
+    const hex = /^#[0-9a-fA-F]{6}$/.exec(value);
+    if (hex) return hex[0].toLowerCase();
+    const ref = /^var\(\s*--([a-z0-9-]+)\s*\)$/.exec(value);
+    if (ref && depth < 6 && raw[ref[1]] !== undefined) return resolve(raw[ref[1]], depth + 1);
+    return null;
+  };
+  const out = {};
+  for (const [name, value] of Object.entries(raw)) {
+    const hex = resolve(value);
+    if (hex) out[name] = hex;
   }
   return out;
 }
@@ -107,20 +126,36 @@ const USER_PAIRS = [
   ["cs-text-primary", "cs-surface", 4.5, "用户端卡片正文"],
   ["cs-text-primary", "cs-canvas", 4.5, "用户端画布正文"],
   ["cs-text-primary", "cs-primary-soft", 4.5, "选中项正文"],
+  ["cs-text-primary", "cs-layer-field", 4.5, "输入框正文"],
   ["cs-text-secondary", "cs-surface", 4.5, "用户端次级文字"],
   ["cs-text-secondary", "cs-canvas", 4.5, "用户端画布次级文字"],
   ["cs-text-secondary", "cs-surface-rail", 4.5, "浅色侧栏未选中项"],
+  ["cs-text-secondary", "cs-canvas-strong", 4.5, "悬停态次级文字"],
+  /* 弱化文字（占位符、表头小字、时间戳）：旧版 #8796AC 在画布上只有 2.9:1，
+     是"整页发灰"最直接的来源。这里把它钉在四个真实底色上。 */
+  ["cs-text-muted", "cs-surface", 4.5, "弱化文字（白底）"],
+  ["cs-text-muted", "cs-canvas", 4.5, "弱化文字（画布底）"],
+  ["cs-text-muted", "cs-layer-field", 4.5, "弱化文字（输入底）"],
+  ["cs-text-muted", "cs-surface-sunken", 4.5, "弱化文字（凹陷底）"],
+  ["cs-text-muted", "cs-primary-soft", 4.5, "弱化文字（选中底）"],
   ["cs-primary-text", "cs-surface", 4.5, "主操作/链接"],
-  ["cs-primary-text", "cs-primary-soft", 4.5, "当前导航项"],
+  ["cs-primary-text", "cs-primary-soft", 4.5, "当前导航项/当前步骤"],
   ["cs-primary-text", "cs-canvas", 4.5, "画布上的链接"],
+  ["cs-primary-text", "cs-surface-blue", 4.5, "表头上的链接"],
+  ["cs-primary-text", "cs-canvas-strong", 4.5, "分段控件选中项"],
   ["cs-cyan-text", "cs-cyan-soft", 4.5, "实时数据徽标"],
+  ["cs-cyan-text", "cs-canvas", 4.5, "画布上的实时数据"],
   ["cs-violet-text", "cs-violet-soft", 4.5, "图谱序列徽标"],
+  ["cs-violet-text", "cs-canvas", 4.5, "画布上的图谱序列"],
   ["cs-success-text", "cs-success-soft", 4.5, "已完成徽标"],
   ["cs-success-text", "cs-surface", 4.5, "成功文字"],
+  ["cs-success-text", "cs-canvas", 4.5, "画布上的成功文字"],
   ["cs-warning-text", "cs-warning-soft", 4.5, "待复核徽标"],
   ["cs-warning-text", "cs-surface", 4.5, "注意文字"],
+  ["cs-warning-text", "cs-canvas", 4.5, "画布上的注意文字"],
   ["cs-danger-text", "cs-danger-soft", 4.5, "失败徽标"],
   ["cs-danger-text", "cs-surface", 4.5, "危险文字"],
+  ["cs-danger-text", "cs-canvas", 4.5, "画布上的危险文字"],
   ["cs-text-primary", "cs-surface-rail", 4.5, "侧栏当前项文字"],
 ];
 

@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
@@ -99,10 +100,8 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chain := strings.ToLower(strings.TrimSpace(req.Chain))
-	subject := strings.TrimSpace(req.Subject)
-	if chain != "tron" {
-		subject = strings.ToLower(subject)
-	}
+	// 导出键归一化：Solana 保留 base58 大小写，EVM 折叠小写。
+	subject := addressnorm.NormalizeKey(chain, req.Subject)
 	go s.runExport(backgroundAuditCtx(r), exp, subject, chain)
 	writeJSON(w, http.StatusAccepted, exp)
 }
@@ -578,11 +577,7 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 		}
 		subjects = subjects[:0]
 		for _, item := range jobSubjects {
-			subject := strings.TrimSpace(item.Subject)
-			if chain != "tron" {
-				subject = strings.ToLower(subject)
-			}
-			subjects = append(subjects, subject)
+			subjects = append(subjects, addressnorm.NormalizeKey(chain, item.Subject))
 		}
 	}
 	var fromBlock, toBlock *int64

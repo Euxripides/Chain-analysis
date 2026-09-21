@@ -1,0 +1,5 @@
+== job_event_log 清理 20260920T030216Z（保留 24h，批大小 20000，dry-run=0）==
+清理前：总行数=77267 表大小=1086 MB 待删进度行=3072
+  已删除 3074 行
+清理后：总行数=74194 表大小=1086 MB（注意：DELETE 只标记死元组，空间要靠 VACUUM FULL/pg_repack 回收）
+本次删除 3074 行；日志：/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/ops/prune-job-event-log-20260920T030216Z.log

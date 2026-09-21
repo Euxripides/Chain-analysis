@@ -20,13 +20,30 @@ import {
   useAdminCommand,
   useAdminList,
 } from "../lib/adminApi";
+import {
+  channelStateText,
+  channelTone,
+  cuRemainingSummary,
+  cuUsageText,
+  fmtBalance,
+  managementSecretsConfigured,
+  quotaSyncedAtText,
+  runtimeKeyConfigured,
+  type ProviderQuota,
+  type ProviderSecretSummary,
+} from "./provider.types";
 
 /**
  * A-PROVIDER-01：Provider 账户总览（路由 /providers，权限 admin:provider:read）。
  *
- * 数据来源：GET /api/admin/v1/providers（provider_descriptors + provider_usage + provider_secrets 摘要）。
+ * 数据来源：GET /api/admin/v1/providers（provider_descriptors + provider_usage + provider_secrets 摘要 + quota）。
  * 「测试连接」走 POST /providers/{key}/commands/test（Provider.Health 探针）。
  * 所有提示只通过弹窗呈现；页面正文只有业务数据、字段标签与操作控件。
+ *
+ * dRPC 口径（开发文档 §11.2 / §14.1）：
+ *   - cu_day_limit 为空或 0 时显示「未设置日上限」，不得显示「剩余 0」；
+ *   - balance_unit 不是具体货币时只展示数值 + 单位文案，不硬编码 $；
+ *   - Statistics / Keys Token 缺失时单独标记「管理同步未配置」。
  */
 
 interface ProviderUsage {
@@ -47,18 +64,11 @@ interface RuntimeHealth {
   consecutive_failures?: number;
   recent_error_rate?: number;
   current_concurrency?: number;
+  channels?: { data_api?: string; solana_rpc?: string };
   source?: string;
 }
 
-interface ActiveSecret {
-  configured?: boolean;
-  secret_ref?: string;
-  prefix?: string;
-  fingerprint?: string;
-  rotated_at?: string;
-  last_used_at?: string;
-  plaintext_available?: boolean;
-}
+type ActiveSecret = ProviderSecretSummary;
 
 interface ProviderRow {
   key: string;
@@ -78,6 +88,9 @@ interface ProviderRow {
   runtime_health?: RuntimeHealth;
   usage?: ProviderUsage;
   active_secret?: ActiveSecret;
+  quota?: ProviderQuota | null;
+  secrets?: ProviderSecretSummary[];
+  management_sync_configured?: boolean;
   updated_at: string;
 }
 
@@ -125,8 +138,9 @@ export default function ProvidersPage() {
     const calls = items.reduce((total, row) => total + Number(row.usage?.calls_24h ?? 0), 0);
     const errors = items.reduce((total, row) => total + Number(row.usage?.errors_24h ?? 0), 0);
     const cost = sumUSD(items.map((row) => row.usage?.cost_usd_24h));
-    const errorsWithSecret = items.filter((row) => row.active_secret?.configured !== true).length;
-    return { connected, calls, errors, cost, errorsWithSecret };
+    const runtimeKeyMissing = items.filter((row) => !runtimeKeyConfigured(row)).length;
+    const managementMissing = items.filter((row) => managementSecretsConfigured(row) === false).length;
+    return { connected, calls, errors, cost, runtimeKeyMissing, managementMissing };
   }, [items]);
 
   const requirePermission = (permission: string): boolean => {
@@ -137,12 +151,16 @@ export default function ProvidersPage() {
 
   const showScope = () =>
     dialog.notify("info", "Provider 列表口径", null, [
-      { label: "数据来源", value: "postgres:provider_descriptors / provider_usage / provider_secrets" },
+      { label: "数据来源", value: "postgres:provider_descriptors / provider_usage / provider_secrets / provider_account_snapshots" },
       { label: "调用与错误率", value: "provider_usage 最近 24 小时；错误率 = 非 success 调用 / 调用总数" },
       { label: "P95", value: "provider_usage.duration_ms 的 95 分位（percentile_disc）" },
       { label: "成本", value: "provider_usage.estimated_cost_usd 累加，按十进制字符串展示" },
-      { label: "并发 / 优先级", value: "provider_descriptors 的声明值，非运行时实测值" },
-      { label: "运行时健康", value: "当前进程 provider.Health()，仅对已加载实现的 Provider 返回" },
+      { label: "配置状态 / 运行状态", value: "配置状态取 provider_descriptors.status；运行状态取当前进程 provider.Health()，仅对已加载实现的 Provider 返回" },
+      { label: "账户余额", value: "quota.balance 是 numeric(38,18) 字符串，界面裁掉末尾无意义的 0 后展示；只有 balance_unit 明确为货币（usd/usdt/usdc 等）时才使用货币符号，provider_unit 等未知单位只追加单位文案" },
+      { label: "当日 CU", value: "quota.cu_spent_today / cu_day_limit；日上限为空或 0 时显示「未设置日上限」，不参与剩余量计算" },
+      { label: "剩余 CU", value: "quota.cu_remaining_today / cu_day_limit，仅当日上限为正时计算；缺失时按上限减已用兜底" },
+      { label: "额度同步", value: "quota.synced_at 与 quota.stale；Statistics / Keys Token 缺失时标记「管理同步未配置」" },
+      { label: "当前并发", value: "runtime_health.current_concurrency；运行时缺失时回退 provider_descriptors 的声明并发" },
       { label: "密钥", value: "只保存引用名、前 6 位与 SHA-256 指纹，明文永不回显" },
       { label: "读取权限", value: "admin:provider:read" },
     ]);
@@ -179,13 +197,28 @@ export default function ProvidersPage() {
     navigate(`/providers/${encodeURIComponent(row.key)}`);
   };
 
+  /** 额度同步列：仅当能证明管理 Token 缺失时才标记「管理同步未配置」，否则展示真实同步时间。 */
+  const renderQuotaSync = (row: ProviderRow) => {
+    if (managementSecretsConfigured(row) === false) {
+      return <StatusBadge tone="warn">管理同步未配置</StatusBadge>;
+    }
+    const quota = row.quota;
+    if (!quota?.synced_at) return <span className="num">—</span>;
+    return (
+      <span className="num toolbar" style={{ justifyContent: "flex-start", gap: "var(--sp-2)" }}>
+        {quotaSyncedAtText(quota)}
+        {quota.stale === true ? <StatusBadge tone="warn">stale</StatusBadge> : null}
+      </span>
+    );
+  };
+
   return (
     <>
       <PageHeader
         title="Provider 账户"
         subtitle={
           <>
-            数据源 <span className="mono">provider_descriptors · provider_usage</span> · 24h 窗口
+            数据源 <span className="mono">provider_descriptors · provider_usage · provider_account_snapshots</span> · 24h 窗口
           </>
         }
         actions={
@@ -214,8 +247,15 @@ export default function ProvidersPage() {
         <Metric label="24h 成本" value={fmtUSD(summary.cost)} hint="provider_usage.estimated_cost_usd" />
         <Metric
           label="未配置密钥"
-          value={fmtNumber(summary.errorsWithSecret)}
-          tone={summary.errorsWithSecret > 0 ? "warn" : "neutral"}
+          value={fmtNumber(summary.runtimeKeyMissing)}
+          tone={summary.runtimeKeyMissing > 0 ? "warn" : "neutral"}
+          hint="runtime_api_key"
+        />
+        <Metric
+          label="管理同步未配置"
+          value={fmtNumber(summary.managementMissing)}
+          tone={summary.managementMissing > 0 ? "warn" : "neutral"}
+          hint="statistics / keys token"
         />
       </div>
 
@@ -247,9 +287,59 @@ export default function ProvidersPage() {
             },
             {
               key: "status",
-              header: "状态",
+              header: "配置状态",
               width: "130px",
               render: (row) => <StatusBadge tone={providerTone(row.status)}>{row.status}</StatusBadge>,
+            },
+            {
+              key: "runtime_state",
+              header: "运行状态",
+              width: "130px",
+              render: (row) => {
+                const state = row.runtime_health?.state;
+                const channels = row.runtime_health?.channels;
+                return (
+                  <span className="toolbar" style={{ justifyContent: "flex-start", gap: "var(--sp-2)" }}>
+                    {state ? <StatusBadge tone={channelTone(state)}>{state}</StatusBadge> : <span className="num">—</span>}
+                    {channels ? (
+                      <StatusBadge tone={channelTone(channels.data_api)}>
+                        {channelStateText(channels.data_api)}
+                      </StatusBadge>
+                    ) : null}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "balance",
+              header: "账户余额",
+              width: "150px",
+              align: "right",
+              render: (row) => (
+                <span className="num">
+                  {row.quota ? fmtBalance(row.quota.balance, row.quota.balance_unit) : "—"}
+                </span>
+              ),
+            },
+            {
+              key: "cu_today",
+              header: "当日 CU（已用/上限）",
+              width: "200px",
+              align: "right",
+              render: (row) => <span className="num">{row.quota ? cuUsageText(row.quota) : "—"}</span>,
+            },
+            {
+              key: "cu_remaining",
+              header: "剩余 CU",
+              width: "160px",
+              align: "right",
+              render: (row) => <span className="num">{row.quota ? cuRemainingSummary(row.quota) : "—"}</span>,
+            },
+            {
+              key: "quota_sync",
+              header: "额度同步",
+              width: "200px",
+              render: (row) => renderQuotaSync(row),
             },
             {
               key: "calls",
@@ -285,8 +375,8 @@ export default function ProvidersPage() {
             },
             {
               key: "concurrency",
-              header: "并发",
-              width: "80px",
+              header: "当前并发",
+              width: "100px",
               align: "right",
               render: (row) => (
                 <span className="num">

@@ -1,0 +1,200 @@
+### Q1_download_pages_job_sum
+SQL: SELECT COALESCE(SUM(rows_inserted),0) FROM download_pages WHERE job_id='7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11' AND status IN ('INGESTED','VALIDATED')
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=11746.45..11746.46 rows=1 width=8) (actual time=118.569..120.714 rows=1.00 loops=1)
+   Buffers: shared read=9712
+   ->  Gather  (cost=11746.23..11746.44 rows=2 width=8) (actual time=118.562..120.708 rows=3.00 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared read=9712
+         ->  Partial Aggregate  (cost=10746.23..10746.24 rows=1 width=8) (actual time=104.629..104.630 rows=1.00 loops=3)
+               Buffers: shared read=9712
+               ->  Parallel Seq Scan on download_pages  (cost=0.00..10746.22 rows=5 width=4) (actual time=65.363..104.621 rows=16.00 loops=3)
+                     Filter: ((status = ANY ('{INGESTED,VALIDATED}'::text[])) AND (job_id = '7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'::uuid))
+                     Rows Removed by Filter: 55142
+                     Buffers: shared read=9712
+ Planning:
+   Buffers: shared hit=187 read=39 dirtied=2
+ Planning Time: 1.762 ms
+ Execution Time: 120.801 ms
+(16 rows)
+
+
+### Q2_checkpoints_job_max
+SQL: SELECT max(last_success_at) FROM checkpoints WHERE job_id='7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=554.53..554.54 rows=1 width=8) (actual time=15.875..15.876 rows=1.00 loops=1)
+   Buffers: shared read=305
+   ->  Seq Scan on checkpoints  (cost=0.00..554.52 rows=4 width=8) (actual time=13.337..15.869 rows=1.00 loops=1)
+         Filter: (job_id = '7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'::uuid)
+         Rows Removed by Filter: 19961
+         Buffers: shared read=305
+ Planning:
+   Buffers: shared hit=112 read=12 dirtied=2
+ Planning Time: 0.826 ms
+ Execution Time: 15.948 ms
+(10 rows)
+
+
+### Q3_exports_job_org
+SQL: SELECT id,status FROM exports WHERE job_id='d1bb0624-4cdd-4b43-a0e7-be117637005f' AND organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY created_at DESC LIMIT 20
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=19.31..19.32 rows=3 width=33) (actual time=11.847..11.850 rows=8.00 loops=1)
+   Buffers: shared hit=3 read=16
+   ->  Sort  (cost=19.31..19.32 rows=3 width=33) (actual time=11.845..11.847 rows=8.00 loops=1)
+         Sort Key: created_at DESC
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=3 read=16
+         ->  Seq Scan on exports  (cost=0.00..19.29 rows=3 width=33) (actual time=5.887..11.806 rows=8.00 loops=1)
+               Filter: ((job_id = 'd1bb0624-4cdd-4b43-a0e7-be117637005f'::uuid) AND (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid))
+               Rows Removed by Filter: 211
+               Buffers: shared read=16
+ Planning:
+   Buffers: shared hit=114 read=5 dirtied=2
+ Planning Time: 0.529 ms
+ Execution Time: 11.885 ms
+(14 rows)
+
+
+### Q4_audit_seq_desc
+SQL: SELECT id,seq FROM audit_events_v2 ORDER BY seq DESC LIMIT 50
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=177.21..177.33 rows=50 width=24) (actual time=43.034..43.041 rows=50.00 loops=1)
+   Buffers: shared hit=3 read=132
+   ->  Sort  (cost=177.21..179.82 rows=1046 width=24) (actual time=43.032..43.035 rows=50.00 loops=1)
+         Sort Key: seq DESC
+         Sort Method: top-N heapsort  Memory: 32kB
+         Buffers: shared hit=3 read=132
+         ->  Seq Scan on audit_events_v2  (cost=0.00..142.46 rows=1046 width=24) (actual time=3.522..42.798 rows=1046.00 loops=1)
+               Buffers: shared read=132
+ Planning:
+   Buffers: shared hit=244 read=19 dirtied=1
+ Planning Time: 4.997 ms
+ Execution Time: 43.086 ms
+(12 rows)
+
+
+### Q5_audit_result_seq
+SQL: SELECT id,seq FROM audit_events_v2 WHERE result='allow' ORDER BY seq DESC LIMIT 50
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=145.08..145.09 rows=1 width=24) (actual time=0.528..0.529 rows=0.00 loops=1)
+   Buffers: shared hit=135
+   ->  Sort  (cost=145.08..145.09 rows=1 width=24) (actual time=0.527..0.527 rows=0.00 loops=1)
+         Sort Key: seq DESC
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=135
+         ->  Seq Scan on audit_events_v2  (cost=0.00..145.07 rows=1 width=24) (actual time=0.501..0.501 rows=0.00 loops=1)
+               Filter: (result = 'allow'::text)
+               Rows Removed by Filter: 1046
+               Buffers: shared hit=132
+ Planning:
+   Buffers: shared hit=264 read=2 dirtied=1
+ Planning Time: 0.796 ms
+ Execution Time: 0.565 ms
+(14 rows)
+
+
+### Q6_login_seq_desc
+SQL: SELECT id,seq FROM login_events ORDER BY seq DESC LIMIT 50
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=288.85..288.98 rows=50 width=24) (actual time=5.397..5.403 rows=50.00 loops=1)
+   Buffers: shared hit=3 read=192
+   ->  Sort  (cost=288.85..294.46 rows=2241 width=24) (actual time=5.395..5.398 rows=50.00 loops=1)
+         Sort Key: seq DESC
+         Sort Method: top-N heapsort  Memory: 32kB
+         Buffers: shared hit=3 read=192
+         ->  Seq Scan on login_events  (cost=0.00..214.41 rows=2241 width=24) (actual time=2.064..5.070 rows=2241.00 loops=1)
+               Buffers: shared read=192
+ Planning:
+   Buffers: shared hit=211 read=17 dirtied=1
+ Planning Time: 0.839 ms
+ Execution Time: 5.979 ms
+(12 rows)
+
+
+### Q7_login_org_seq
+SQL: SELECT id,seq FROM login_events WHERE organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY seq DESC LIMIT 50
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=237.75..237.88 rows=50 width=24) (actual time=0.819..0.824 rows=50.00 loops=1)
+   Buffers: shared hit=195
+   ->  Sort  (cost=237.75..239.09 rows=534 width=24) (actual time=0.818..0.820 rows=50.00 loops=1)
+         Sort Key: seq DESC
+         Sort Method: top-N heapsort  Memory: 29kB
+         Buffers: shared hit=195
+         ->  Seq Scan on login_events  (cost=0.00..220.01 rows=534 width=24) (actual time=0.006..0.697 rows=534.00 loops=1)
+               Filter: (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid)
+               Rows Removed by Filter: 1707
+               Buffers: shared hit=192
+ Planning:
+   Buffers: shared hit=231
+ Planning Time: 0.675 ms
+ Execution Time: 0.845 ms
+(14 rows)
+
+
+### Q8_login_type_seq
+SQL: SELECT id,seq FROM login_events WHERE event_type='auth.login.failure' ORDER BY seq DESC LIMIT 50
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=245.13..245.25 rows=50 width=24) (actual time=0.764..0.769 rows=50.00 loops=1)
+   Buffers: shared hit=195
+   ->  Sort  (cost=245.13..247.02 rows=756 width=24) (actual time=0.762..0.765 rows=50.00 loops=1)
+         Sort Key: seq DESC
+         Sort Method: top-N heapsort  Memory: 32kB
+         Buffers: shared hit=195
+         ->  Seq Scan on login_events  (cost=0.00..220.01 rows=756 width=24) (actual time=0.012..0.605 rows=756.00 loops=1)
+               Filter: (event_type = 'auth.login.failure'::text)
+               Rows Removed by Filter: 1485
+               Buffers: shared hit=192
+ Planning:
+   Buffers: shared hit=229 read=2
+ Planning Time: 6.036 ms
+ Execution Time: 0.819 ms
+(14 rows)
+
+
+### Q9_investigations_case_status
+SQL: SELECT count(*) FROM investigations WHERE case_id='9909a2f1-4bf1-44a8-88ab-72b352af2316' AND status NOT IN ('completed','cancelled','failed')
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=17.79..17.80 rows=1 width=8) (actual time=3.758..3.759 rows=1.00 loops=1)
+   Buffers: shared read=16
+   ->  Seq Scan on investigations  (cost=0.00..17.79 rows=1 width=0) (actual time=0.094..3.751 rows=1.00 loops=1)
+         Filter: ((case_id = '9909a2f1-4bf1-44a8-88ab-72b352af2316'::uuid) AND ((status)::text <> ALL ('{completed,cancelled,failed}'::text[])))
+         Rows Removed by Filter: 109
+         Buffers: shared read=16
+ Planning:
+   Buffers: shared hit=180 read=20 dirtied=1
+ Planning Time: 3.547 ms
+ Execution Time: 3.798 ms
+(10 rows)
+
+
+### Q10_sessions_org
+SQL: SELECT id,last_seen_at FROM sessions WHERE organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY last_seen_at DESC LIMIT 50
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=143.31..143.43 rows=50 width=24) (actual time=14.148..14.154 rows=50.00 loops=1)
+   Buffers: shared hit=3 read=112
+   ->  Sort  (cost=143.31..144.54 rows=492 width=24) (actual time=14.146..14.149 rows=50.00 loops=1)
+         Sort Key: last_seen_at DESC
+         Sort Method: top-N heapsort  Memory: 32kB
+         Buffers: shared hit=3 read=112
+         ->  Seq Scan on sessions  (cost=0.00..126.96 rows=492 width=24) (actual time=3.197..14.020 rows=492.00 loops=1)
+               Filter: (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid)
+               Rows Removed by Filter: 705
+               Buffers: shared read=112
+ Planning:
+   Buffers: shared hit=176 read=11 dirtied=2
+ Planning Time: 0.789 ms
+ Execution Time: 14.182 ms
+(14 rows)
+
+

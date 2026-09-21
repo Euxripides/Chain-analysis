@@ -21,6 +21,10 @@ func TestNormalizeNftTransferCarriesTokenStandard(t *testing.T) {
 	if row.TokenName != "BoredApeYachtClub" || row.TokenSymbol != "BAYC" {
 		t.Fatalf("collection must still ride on name/symbol: %+v", row)
 	}
+	// 没有指令模型的行按 0/-1 落库。
+	if row.InstructionIndex != 0 || row.InnerInstructionIndex != NoInnerInstruction {
+		t.Fatalf("non-solana instruction columns must stay 0/-1: %+v", row)
+	}
 
 	// Solana 行用 tokenStandard（SPL），不能被误认成 ERC721。
 	solanaRaw := json.RawMessage(`{"blockHeight":"1","transactionHash":"SIG","contractAddress":"Mint","value":"1","tokenStandard":"SPL","timestamp":1}`)
@@ -40,5 +44,20 @@ func TestNormalizeNftTransferCarriesTokenStandard(t *testing.T) {
 	}
 	if missingRow.TokenStandard != "" {
 		t.Fatalf("missing standard must stay empty, got %q", missingRow.TokenStandard)
+	}
+}
+
+// §2.2/§8.3：NFT 行同样要带上指令定位与来源证据。
+func TestNormalizeNftTransferReadsInstructionEvidence(t *testing.T) {
+	raw := json.RawMessage(`{"blockNumber":"448700000","transactionHash":"SIG","logIndex":768,"contractAddress":"Mint","fromAddress":"A","toAddress":"B","value":"1","timestamp":1,"instructionIndex":5,"innerInstructionIndex":2,"sourceApi":"data_api","sourceRequestId":"req-2"}`)
+	row, err := NormalizeNftTransfer(raw, "solana", "drpc")
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if row.InstructionIndex != 5 || row.InnerInstructionIndex != 2 {
+		t.Fatalf("instruction evidence = %d/%d", row.InstructionIndex, row.InnerInstructionIndex)
+	}
+	if row.SourceAPI != "data_api" || row.SourceRequestID != "req-2" {
+		t.Fatalf("source evidence = %q/%q", row.SourceAPI, row.SourceRequestID)
 	}
 }

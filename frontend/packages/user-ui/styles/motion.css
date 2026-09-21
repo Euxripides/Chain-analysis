@@ -47,9 +47,10 @@ html[data-app="user"] .cs-page-enter {
   from { opacity: 0; transform: translateY(-8px) scale(.965); }
   to { opacity: 1; transform: none; }
 }
+/* 命令面板遮罩：只做透明度（玻璃拟态退役，不再从 0 模糊到 5px）。 */
 @keyframes cs-command-backdrop-in {
-  from { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
-  to { opacity: 1; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes cs-drawer-in {
   from { opacity: 0; transform: translateX(24px); }
@@ -59,9 +60,10 @@ html[data-app="user"] .cs-page-enter {
   from { opacity: 0; transform: translateY(10px) scale(.96); }
   to { opacity: 1; transform: none; }
 }
+/* Dialog 遮罩：只做透明度（玻璃拟态退役，不再从 0 模糊到 6px）。 */
 @keyframes cs-dialog-backdrop-in {
-  from { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
-  to { opacity: 1; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes cs-bulkbar-in {
   from { opacity: 0; transform: translateY(-8px); }
@@ -94,21 +96,16 @@ html[data-app="user"] .cs-page-enter {
   opacity: 0;
   transition: opacity 160ms var(--cs-ease-exit);
 }
+/* 遮罩只做透明度过渡：玻璃拟态已整体退役（2026-09-20）。
+   模糊遮罩会把弹窗背后的整页结构糊掉，并让全屏看起来发灰。 */
 .cs-dialog-mask-appear,
 .cs-dialog-mask-enter {
   opacity: 0;
-  -webkit-backdrop-filter: blur(0);
-  backdrop-filter: blur(0);
 }
 .cs-dialog-mask-appear-active,
 .cs-dialog-mask-enter-active {
   opacity: 1;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  transition:
-    opacity 160ms var(--cs-ease-enter),
-    -webkit-backdrop-filter 160ms var(--cs-ease-enter),
-    backdrop-filter 160ms var(--cs-ease-enter);
+  transition: opacity 160ms var(--cs-ease-enter);
 }
 .cs-dialog-mask-leave-active { opacity: 0; transition: opacity 160ms var(--cs-ease-exit); }
 

@@ -1,0 +1,30 @@
+script_sha256=7ad9d65d529e7b6583bc0a3f61e1a403a481c07295334f488f2df129d9a50403
+crosscheck_sha256=0ab3ca50036888ac5038277931b527658ff42186492799ed8b173b1cf4b314bd
+fixture_generator=/home/euripides/projects/blockchain-platform/frontend/scripts/r9-make-fixtures-v5c.mjs
+fixture_generator_sha256=30ac6bd2c4080605ad5dfdda1aa9f79587a60a97be1f8498885a6d39c729b7eb
+evidence=/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v5b-20260920T193437Z
+started_utc=20260920T193437Z
+api_pid=4176378 sha=85749b37b26a5c6a457750440b0bc1212d116a0c3923465fedec933324da1707
+worker_pid=4176380 sha=4097eba4bd1b8e33646482ed468a82d3f0bb98c7bdfb10a90c0e9018bc1522b4
+config_testmatch_ok=1 exec_config=playwright.udl01v5b.config.ts spec=/home/euripides/projects/blockchain-platform/frontend/tests/udl01-worker-isolation-v5b.spec.ts
+ready_attempts=1 body={"checks":{"clickhouse":"ok","minio":"ok","nats":"ok","postgres":"ok"},"status":"ready"}
+web_entry_attempts=1 code=200
+{
+  "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+  "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+  "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+  "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+  "worker_chunk_http": "200",
+  "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+  "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+  "page_chunk_http": "200",
+  "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+  "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+  "page_chunk_references_worker": true,
+  "csp_headers": 1
+}fixtures_rc=0
+fixture_selfcheck_rc=0
+playwright_rc=0
+runtime_spec_identity_rc=0
+report_identity_rc=0
+crosscheck_rc=0

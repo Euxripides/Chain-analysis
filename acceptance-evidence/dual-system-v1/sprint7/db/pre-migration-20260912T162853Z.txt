@@ -1,0 +1,24 @@
+# S7-DB-01 杩佺Щ鍓嶅熀绾? 20260912T162853Z
+## bin sha
+753ba724335e4be4231d40ca65809f22403eb3323b79f144b1161f88a6f21c78  backend/bin/api
+ac98ce5de71bebb4fa75b9ba9860cda860fd8e1b30a28fe6f928e27e901bbd63  backend/bin/worker
+c149d62168f61e565c3b1003b080eed2c4649b1efc208fda12a3fedbeac7dad4  backend/bin/migrate
+## schema_migrations count
+55
+## scope audit
+       relname        | seq_scan | idx_scan | n_live_tup 
+----------------------+----------+----------+------------
+ audit_events_v2      |     1062 |     1075 |       1046
+ checkpoints          |      876 |   393524 |      19962
+ download_pages       |  4438266 |  1721450 |     165469
+ exports              |     1344 |     1376 |        219
+ investigations       |     9150 |     4108 |        110
+ login_events         |      598 |      136 |       2241
+ sessions             |      793 |    16124 |       1197
+ user_activity_events |        8 |        0 |          0
+(8 rows)
+
+## index counts
+345
+## partition state
+0

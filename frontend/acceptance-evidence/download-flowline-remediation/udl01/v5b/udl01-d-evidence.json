@@ -1,0 +1,182 @@
+{
+  "spec": "udl01-worker-isolation-v5b.spec.ts",
+  "cases": [
+    {
+      "file": "udl01-bomb.xlsx",
+      "expect": "/炸弹|上限|超过/",
+      "why": "压缩炸弹：声明解压总大小超上限",
+      "elapsedMs": 471,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-bomb.xlsx：声明解压后总大小 209715532 字节超过上限 67108864 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 150,
+        "gapSamples": 12,
+        "maxLongTask": 59,
+        "longTasks": [
+          59,
+          50
+        ]
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [
+        "GET https://127.0.0.1:8448/api/v2/meta/datasets?chain=arbitrum"
+      ],
+      "chunkRequests": [
+        "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+      ]
+    },
+    {
+      "file": "udl01-encrypted.xlsx",
+      "expect": "/加密/",
+      "why": "加密条目",
+      "elapsedMs": 200,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-encrypted.xlsx：ZIP 条目 xl/worksheets/sheet1.xml 已加密，导入不接受加密工作簿 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 50,
+        "gapSamples": 8,
+        "maxLongTask": 0,
+        "longTasks": []
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [],
+      "chunkRequests": []
+    },
+    {
+      "file": "udl01-stored-mismatch.xlsx",
+      "expect": "/不一致/",
+      "why": "stored 声明与实际不符",
+      "elapsedMs": 163,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-stored-mismatch.xlsx：stored 条目 xl/worksheets/sheet1.xml 声明 999 字节与实际存放 4 字节不一致 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 33,
+        "gapSamples": 7,
+        "maxLongTask": 0,
+        "longTasks": []
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [],
+      "chunkRequests": []
+    },
+    {
+      "file": "udl01-method-mismatch.xlsx",
+      "expect": "/压缩方法|本地头/",
+      "why": "本地头与中央目录方法不一致",
+      "elapsedMs": 176,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-method-mismatch.xlsx：条目 xl/worksheets/sheet1.xml 的本地头压缩方法与中央目录不一致（0 vs 8） 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 33,
+        "gapSamples": 10,
+        "maxLongTask": 0,
+        "longTasks": []
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [],
+      "chunkRequests": []
+    },
+    {
+      "file": "udl01-data-descriptor.xlsx",
+      "expect": "/data descriptor/",
+      "why": "data descriptor",
+      "elapsedMs": 119,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-data-descriptor.xlsx：ZIP 条目 xl/worksheets/sheet1.xml 使用 data descriptor，本导入不接受 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 17,
+        "gapSamples": 6,
+        "maxLongTask": 0,
+        "longTasks": []
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [],
+      "chunkRequests": []
+    },
+    {
+      "file": "udl01-zip64.xlsx",
+      "expect": "/ZIP64/",
+      "why": "ZIP64 布局（locator 位于 EOCD 之前）",
+      "elapsedMs": 150,
+      "noticeText": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
+      "matched": true,
+      "metrics": {
+        "maxGap": 33,
+        "gapSamples": 6,
+        "maxLongTask": 0,
+        "longTasks": []
+      },
+      "summaryVisible": false,
+      "serverCalls": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      },
+      "sheetjsChunkRequests": 0,
+      "apiCalls": [],
+      "chunkRequests": []
+    }
+  ],
+  "pageErrors": [],
+  "login": {
+    "attempts": 4,
+    "retriedNavigation": false
+  },
+  "zip64Layout": {
+    "bytes": 711,
+    "eocd_offset": 689,
+    "eocd_present": true,
+    "locator_offset": 669,
+    "locator_is_20_bytes_before_eocd": true,
+    "locator_signature": "0x07064b50",
+    "locator_signature_ok": true,
+    "zip64_eocd_offset": 613,
+    "zip64_eocd_signature": "0x06064b50",
+    "zip64_eocd_signature_ok": true,
+    "locator_declared_zip64_eocd_offset": 613,
+    "locator_points_at_zip64_eocd": true,
+    "layout": "ZIP64 EOCD -> ZIP64 locator -> classic EOCD"
+  },
+  "zip64Branch": {
+    "file": "udl01-zip64.xlsx",
+    "matched": true,
+    "reason": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
+    "sheetjsChunkRequests": 0,
+    "serverCalls": {
+      "validate": 0,
+      "preview": 0,
+      "create": 0
+    },
+    "taskCreated": false
+  }
+}

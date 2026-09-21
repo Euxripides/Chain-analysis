@@ -1,0 +1,15 @@
+==== Actions scope 负向 20260912T210736Z  base=http://127.0.0.1:8088 ====
+api_sha=e0a7c3bd1983cc18da85bd5e1a2e3712b9dde43bb67d48ee5e4722f53368abb7
+导出夹具：id=7286a67b-05cb-4fc1-a706-c2e3a83519d3 org=acme
+夹具 key：read id=4729a0af-8751-452f-9824-669dc0153c71 export id=6ae2c113-851a-4156-9654-c21cdcba7284
+  PASS  read key 调 read 范围端点 /api/v1/address/overview -> 200
+  PASS  read key 越 scope 调 export 端点 /api/v1/export/status -> 401
+  PASS  read key 访问后台 API /api/admin/v1/jobs -> 401
+  PASS  export key 读该导出 -> 404（该导出不属于 Actions 平台作用域，收窄生效、不泄露存在性）
+  PASS  export key 读不存在导出 UUID（不得因 UUID 合法而放行） -> 404
+  已 disable 测试 key read id=4729a0af-8751-452f-9824-669dc0153c71（保留记录，不删除）
+  已 disable 测试 key export id=6ae2c113-851a-4156-9654-c21cdcba7284（保留记录，不删除）
+
+==== 结果：PASS=5 FAIL=0 BLOCKED=0 （20260912T210736Z）====
+result: /home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/p0-legacy-v1/actions-scope-result-20260912T210736Z.json
+整体判定：PASS

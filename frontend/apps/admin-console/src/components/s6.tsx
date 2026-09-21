@@ -14,11 +14,20 @@ export interface TabItem {
   disabled?: boolean;
 }
 
-/** Tabs 使用原生 button + aria 语义，支持键盘左右切换与 URL 无关的本地状态。 */
-export function Tabs({ items, initialKey, ariaLabel }: { items: TabItem[]; initialKey?: string; ariaLabel: string }) {
+/**
+ * Tabs 使用原生 button + aria 语义，支持键盘左右切换与 URL 无关的本地状态。
+ *
+ * onChange 是可选回调：调用方用它按需延迟加载当前 Tab 的数据（例如 Provider 详情的新增 Tab
+ * 只在第一次打开时才请求对应接口），不传时行为与此前完全一致。
+ */
+export function Tabs({ items, initialKey, ariaLabel, onChange }: { items: TabItem[]; initialKey?: string; ariaLabel: string; onChange?: (key: string) => void }) {
   const [active, setActive] = useState(initialKey ?? items[0]?.key ?? "");
   const baseId = useId();
   const current = items.find((item) => item.key === active) ?? items[0];
+  const select = (key: string) => {
+    setActive(key);
+    onChange?.(key);
+  };
   return (
     <div>
       <div className="toolbar" role="tablist" aria-label={ariaLabel} style={{ flexWrap: "wrap" }}>
@@ -35,14 +44,14 @@ export function Tabs({ items, initialKey, ariaLabel }: { items: TabItem[]; initi
               tabIndex={selected ? 0 : -1}
               disabled={item.disabled}
               className={"btn btn--sm" + (selected ? " btn--primary" : "")}
-              onClick={() => setActive(item.key)}
+              onClick={() => select(item.key)}
               onKeyDown={(event) => {
                 if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
                 event.preventDefault();
                 const index = items.findIndex((candidate) => candidate.key === current?.key);
                 const delta = event.key === "ArrowRight" ? 1 : -1;
                 const next = items[(index + delta + items.length) % items.length];
-                if (next && !next.disabled) setActive(next.key);
+                if (next && !next.disabled) select(next.key);
               }}
             >
               {item.label}

@@ -35,14 +35,29 @@ func explorerModeForChainType(chainType string) string {
 	return "full"
 }
 
+// handleUserDatasets 返回该链逐 Dataset 的实际能力（开发文档 §5.2）。
+//
+// 关键约束：不再把 model.AllDatasets 原样当作每条链的能力。unsupported 项必须显式返回，
+// 前端据此禁用勾选；下载创建侧仍由 validateChainDatasetSupport 二次拦截。
 func (s *Server) handleUserDatasets(w http.ResponseWriter, r *http.Request) {
 	chain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("chain")))
-	datasets := model.ChainDatasets(chain)
-	items := make([]map[string]any, 0, len(datasets))
-	for _, ds := range datasets {
-		items = append(items, map[string]any{"id": ds, "label": datasetLabel(ds), "status": "available"})
+	caps := model.ChainDatasetCapabilities(chain)
+	items := make([]map[string]any, 0, len(caps))
+	for _, cap := range caps {
+		item := map[string]any{
+			"id": cap.ID, "label": datasetLabel(cap.ID), "status": cap.Status,
+			"supports_full": cap.SupportsFull, "supports_time_range": cap.SupportsTimeRange,
+			"supports_block_range": cap.SupportsBlockRange,
+		}
+		if cap.Provider != "" {
+			item["provider"] = cap.Provider
+		}
+		if cap.APIChannel != "" {
+			item["api_channel"] = cap.APIChannel
+		}
+		items = append(items, item)
 	}
-	source := "chain_datasets"
+	source := "capability_registry"
 	if chain == "" {
 		source = "model.AllDatasets"
 	}

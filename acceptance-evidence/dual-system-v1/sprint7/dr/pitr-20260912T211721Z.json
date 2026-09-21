@@ -1,0 +1,29 @@
+{
+  "drill": "pitr",
+  "ts": "20260912T211721Z",
+  "verdict": "FAIL",
+  "verdict_note": "PASS 仅当：pg_basebackup 成功、独立实例达到 recovery_target_time、业务标记一致、RPO≤900s、WAL 无缺段且缺段检查有效",
+  "archive_mode": "on",
+  "reached_target": false,
+  "rpo_seconds": null,
+  "rpo_limit_seconds": 900,
+  "target_time": "2026-09-12 21:17:28.144826",
+  "base_backup_start_lsn": null,
+  "target_lsn": "2/F9004D90",
+  "recovery_last_xact_replay": null,
+  "wal_continuity": {
+    "checked": 0,
+    "missing": 0
+  },
+  "markers": {
+    "t0_seq": "50925",
+    "t1_seq": "50925",
+    "restored_max_seq": null
+  },
+  "failures_count": 8,
+  "not_verified_count": 1,
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T211721Z.logs",
+  "base_backup_dir": "/data/blockchain-platform/postgres/pitr-base-20260912T211721Z",
+  "restore_container": "pitr-restore-20260912T211721Z",
+  "cleanup": "演练实例与基础备份不自动清理；需人工确认后删除"
+}

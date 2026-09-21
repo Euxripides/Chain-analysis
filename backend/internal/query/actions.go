@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 )
 
@@ -47,12 +48,10 @@ type ActionOverview struct {
 	UniqueOutCounterparties  uint64     `json:"unique_out_counterparties"`
 }
 
+// normalizeActionAddress 归一化 Actions 查询键：Solana 保留 base58 大小写，
+// 其余链沿用历史行为（EVM 小写、TRON 保留 Base58Check）。
 func normalizeActionAddress(chain, address string) string {
-	address = strings.TrimSpace(address)
-	if chain != "tron" {
-		return strings.ToLower(address)
-	}
-	return address
+	return addressnorm.NormalizeKey(chain, address)
 }
 
 func (s *Service) ActionOverview(ctx context.Context, chain, address string) (ActionOverview, error) {

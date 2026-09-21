@@ -1,0 +1,1091 @@
+{
+  "suite": "U-DL-01 isolated import parse (worker / bounded timeout / cancel / malicious ZIP) v6",
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/udl01-worker-isolation-v6-20260920T193526Z",
+  "checks_total": 86,
+  "checks_failed": 0,
+  "failed": [],
+  "checks": [
+    {
+      "check": "playwright-stats",
+      "ok": true,
+      "detail": {
+        "startTime": "2026-09-20T19:35:52.307Z",
+        "duration": 22957.458,
+        "expected": 5,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    },
+    {
+      "check": "fixtures-count",
+      "ok": true,
+      "detail": [
+        "udl01-big.xls",
+        "udl01-big.xlsx",
+        "udl01-bomb.xlsx",
+        "udl01-data-descriptor.xlsx",
+        "udl01-encrypted.xlsx",
+        "udl01-method-mismatch.xlsx",
+        "udl01-small-ok.xlsx",
+        "udl01-stored-mismatch.xlsx",
+        "udl01-zip64.xlsx"
+      ]
+    },
+    {
+      "check": "fixture-under-import-limit:udl01-big.xls",
+      "ok": true,
+      "detail": {
+        "name": "udl01-big.xls",
+        "bytes": 8657408,
+        "sha256": "774797ddcc5bc1d7e2c6dd1481ee435f9f68370a7a025962d85f1ee3041fedac",
+        "note": "真实 BIFF8 .xls（请求 200000 行 + 表头；BIFF8 上限 65535 个数据行；OLE/CFB 魔数）"
+      }
+    },
+    {
+      "check": "fixture-under-import-limit:udl01-big.xlsx",
+      "ok": true,
+      "detail": {
+        "name": "udl01-big.xlsx",
+        "bytes": 9931510,
+        "sha256": "adf3f75e64cc3283ec38da82e067ef293cf941b180d7be35eae6c0b8c2eb12e6",
+        "note": "真实 OOXML .xlsx（60000 行 + 表头；小于 16MB 上限，用于有界超时与取消）"
+      }
+    },
+    {
+      "check": "fixture-bytes-match-manifest:udl01-big.xls",
+      "ok": true,
+      "detail": {
+        "disk": "774797ddcc5bc1d7",
+        "manifest": "774797ddcc5bc1d7"
+      }
+    },
+    {
+      "check": "fixture-selfcheck-ok",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "check": "fixture-row-semantics",
+      "ok": true,
+      "detail": {
+        "requestedRows": 200000,
+        "actualFormatCapacity": {
+          "format": "BIFF8",
+          "maxRowsIncludingHeader": 65536,
+          "maxDataRows": 65535
+        },
+        "actualDataRowsOnDisk": 65535,
+        "withinFormatCapacity": true,
+        "satisfiesFormatCapacity": true,
+        "note": "BIFF8 .xls 单表最多 65536 行（含表头）；请求 200000 行时实际落盘 65535 个数据行"
+      }
+    },
+    {
+      "check": "fixture-zip64-layout-machine-checked",
+      "ok": true,
+      "detail": {
+        "bytes": 711,
+        "eocd_offset": 689,
+        "eocd_present": true,
+        "locator_offset": 669,
+        "locator_is_20_bytes_before_eocd": true,
+        "locator_signature": "0x07064b50",
+        "locator_signature_ok": true,
+        "zip64_eocd_offset": 613,
+        "zip64_eocd_signature": "0x06064b50",
+        "zip64_eocd_signature_ok": true,
+        "locator_declared_zip64_eocd_offset": 613,
+        "locator_points_at_zip64_eocd": true,
+        "layout": "ZIP64 EOCD -> ZIP64 locator -> classic EOCD"
+      }
+    },
+    {
+      "check": "playwright-matrix",
+      "ok": true,
+      "detail": {
+        "rows": 5,
+        "mismatch": []
+      }
+    },
+    {
+      "check": "a-elapsed-positive",
+      "ok": true,
+      "detail": {
+        "elapsedMs": 1899
+      }
+    },
+    {
+      "check": "a-dialog-scanned-biff8-max-rows",
+      "ok": true,
+      "detail": {
+        "dialogText": "提示 本地解析摘要 以下计数由浏览器本地解析得出；提交后由服务端再次验证，只有服务端 accepted 的地址会被采用。 解析结果 文件 udl01-big.xls 类型 XLSX/Excel 扫描行数 65535 待校验地址 65535 空白行 0 表头 address 表头（列映射） 识别列 chain、tags 带案件/标签的行 9363 链分布 bsc 65535 超出单次上限 65435"
+      }
+    },
+    {
+      "check": "a-row-count-matches-fixture-actual",
+      "ok": true,
+      "detail": {
+        "actualDataRowsOnDisk": 65535,
+        "rowCountReportedByPage": 65535
+      }
+    },
+    {
+      "check": "a-row-count-within-format-capacity",
+      "ok": true,
+      "detail": {
+        "reported": 65535,
+        "requestedRows": 200000,
+        "actualFormatCapacity": {
+          "format": "BIFF8",
+          "maxRowsIncludingHeader": 65536,
+          "maxDataRows": 65535
+        }
+      }
+    },
+    {
+      "check": "a-isolated-worker-used",
+      "ok": true,
+      "detail": {
+        "workerUrls": [
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+        ]
+      }
+    },
+    {
+      "check": "a-frame-gaps-sampled",
+      "ok": true,
+      "detail": {
+        "maxGap": 217,
+        "gapSamples": 87,
+        "maxLongTask": 218,
+        "longTasks": [
+          51,
+          218,
+          54
+        ]
+      }
+    },
+    {
+      "check": "a-no-second-long-longtask",
+      "ok": true,
+      "detail": {
+        "maxGap": 217,
+        "gapSamples": 87,
+        "maxLongTask": 218,
+        "longTasks": [
+          51,
+          218,
+          54
+        ]
+      }
+    },
+    {
+      "check": "a-no-second-frame-gap",
+      "ok": true,
+      "detail": {
+        "maxGap": 217,
+        "gapSamples": 87,
+        "maxLongTask": 218,
+        "longTasks": [
+          51,
+          218,
+          54
+        ]
+      }
+    },
+    {
+      "check": "a-fixture-sha-matches-manifest",
+      "ok": true,
+      "detail": {
+        "evidence_bytes": 8657408,
+        "manifest_bytes": 8657408
+      }
+    },
+    {
+      "check": "b-timeout-configured",
+      "ok": true,
+      "detail": {
+        "timeoutMs": 300
+      }
+    },
+    {
+      "check": "b-bounded-elapsed",
+      "ok": true,
+      "detail": {
+        "elapsedMs": 558
+      }
+    },
+    {
+      "check": "b-notice-says-terminated",
+      "ok": true,
+      "detail": {
+        "noticeText": "错误 解析超时已中止 udl01-big.xlsx 在 300 毫秒内没有完成，解析 Worker 已被终止（未导入任何地址）。请拆分文件或减少行数后重试。 知道了"
+      }
+    },
+    {
+      "check": "b-no-address-imported",
+      "ok": true,
+      "detail": {
+        "addressValueLength": 0
+      }
+    },
+    {
+      "check": "b-budget-no-zero-seconds",
+      "ok": true,
+      "detail": {
+        "noticeText": "错误 解析超时已中止 udl01-big.xlsx 在 300 毫秒内没有完成，解析 Worker 已被终止（未导入任何地址）。请拆分文件或减少行数后重试。 知道了"
+      }
+    },
+    {
+      "check": "b-budget-shows-milliseconds",
+      "ok": true,
+      "detail": {
+        "noticeText": "错误 解析超时已中止 udl01-big.xlsx 在 300 毫秒内没有完成，解析 Worker 已被终止（未导入任何地址）。请拆分文件或减少行数后重试。 知道了"
+      }
+    },
+    {
+      "check": "b-no-second-long-longtask",
+      "ok": true,
+      "detail": {
+        "maxGap": 133,
+        "gapSamples": 21,
+        "maxLongTask": 130,
+        "longTasks": [
+          67,
+          51,
+          65,
+          130
+        ]
+      }
+    },
+    {
+      "check": "c-cancel-bounded",
+      "ok": true,
+      "detail": {
+        "cancelMs": 548
+      }
+    },
+    {
+      "check": "c-cancel-notice",
+      "ok": true,
+      "detail": {
+        "cancelText": "注意 解析已取消 udl01-big.xlsx 的解析已终止（Worker 已停止），未导入任何地址。 知道了"
+      }
+    },
+    {
+      "check": "c-no-address-after-cancel",
+      "ok": true,
+      "detail": {
+        "len": 0
+      }
+    },
+    {
+      "check": "c-followup-parse-works",
+      "ok": true,
+      "detail": {
+        "text": "提示 本地解析摘要 以下计数由浏览器本地解析得出；提交后由服务端再次验证，只有服务端 accepted 的地址会被采用。 解析结果 文件 udl01-small-ok.xlsx 类型 XLSX/Excel 扫描行数 1 待校验地址 1 空白行 0 表头 address 表头（列映射） 识别列 chain、tags 带案件/标签的行 1 链分布 bsc 1 取消 提交服务端校验"
+      }
+    },
+    {
+      "check": "c-progress-shows-file",
+      "ok": true,
+      "detail": {
+        "progressText": "正在解析文件 udl01-big.xlsx 取消解析"
+      }
+    },
+    {
+      "check": "c-budget-shows-300ms",
+      "ok": true,
+      "detail": {
+        "input": "300",
+        "expected": "300 毫秒",
+        "actual": "300 毫秒",
+        "ok": true
+      }
+    },
+    {
+      "check": "c-budget-shows-180s",
+      "ok": true,
+      "detail": {
+        "input": "180000",
+        "expected": "180 秒",
+        "actual": "180 秒",
+        "ok": true
+      }
+    },
+    {
+      "check": "c-budget-no-zero-seconds",
+      "ok": true,
+      "detail": {
+        "chunk": "DownloadNewPage-B4IJfgn5.js",
+        "chunk_sha256": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "rows": [
+          {
+            "input": "300",
+            "expected": "300 毫秒",
+            "actual": "300 毫秒",
+            "ok": true
+          },
+          {
+            "input": "180000",
+            "expected": "180 秒",
+            "actual": "180 秒",
+            "ok": true
+          },
+          {
+            "input": "2000",
+            "expected": "2 秒",
+            "actual": "2 秒",
+            "ok": true
+          },
+          {
+            "input": "1500",
+            "expected": "1.5 秒",
+            "actual": "1.5 秒",
+            "ok": true
+          },
+          {
+            "input": "0",
+            "expected": "未知时长",
+            "actual": "未知时长",
+            "ok": true
+          }
+        ],
+        "no_zero_second_token": true
+      }
+    },
+    {
+      "check": "c-budget-probe-bound-to-served-chunk",
+      "ok": true,
+      "detail": {
+        "probe_sha": "10c2761593dd866a",
+        "served_sha": "10c2761593dd866a",
+        "chunk": "DownloadNewPage-B4IJfgn5.js"
+      }
+    },
+    {
+      "check": "d-six-cases",
+      "ok": true,
+      "detail": [
+        "udl01-bomb.xlsx",
+        "udl01-encrypted.xlsx",
+        "udl01-stored-mismatch.xlsx",
+        "udl01-method-mismatch.xlsx",
+        "udl01-data-descriptor.xlsx",
+        "udl01-zip64.xlsx"
+      ]
+    },
+    {
+      "check": "d-rejected:udl01-bomb.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/炸弹|上限|超过/",
+        "notice": "错误 文件解析失败 无法读取 udl01-bomb.xlsx：声明解压后总大小 209715532 字节超过上限 67108864 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-bomb.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 83,
+        "gapSamples": 13,
+        "maxLongTask": 71,
+        "longTasks": [
+          71,
+          51,
+          57
+        ]
+      }
+    },
+    {
+      "check": "d-rejected:udl01-encrypted.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/加密/",
+        "notice": "错误 文件解析失败 无法读取 udl01-encrypted.xlsx：ZIP 条目 xl/worksheets/sheet1.xml 已加密，导入不接受加密工作簿 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-encrypted.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 33,
+        "gapSamples": 7,
+        "maxLongTask": 0,
+        "longTasks": []
+      }
+    },
+    {
+      "check": "d-rejected:udl01-stored-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/不一致/",
+        "notice": "错误 文件解析失败 无法读取 udl01-stored-mismatch.xlsx：stored 条目 xl/worksheets/sheet1.xml 声明 999 字节与实际存放 4 字节不一致 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-stored-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 50,
+        "gapSamples": 6,
+        "maxLongTask": 0,
+        "longTasks": []
+      }
+    },
+    {
+      "check": "d-rejected:udl01-method-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/压缩方法|本地头/",
+        "notice": "错误 文件解析失败 无法读取 udl01-method-mismatch.xlsx：条目 xl/worksheets/sheet1.xml 的本地头压缩方法与中央目录不一致（0 vs 8） 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-method-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 100,
+        "gapSamples": 7,
+        "maxLongTask": 92,
+        "longTasks": [
+          92
+        ]
+      }
+    },
+    {
+      "check": "d-rejected:udl01-data-descriptor.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/data descriptor/",
+        "notice": "错误 文件解析失败 无法读取 udl01-data-descriptor.xlsx：ZIP 条目 xl/worksheets/sheet1.xml 使用 data descriptor，本导入不接受 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-data-descriptor.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 33,
+        "gapSamples": 5,
+        "maxLongTask": 0,
+        "longTasks": []
+      }
+    },
+    {
+      "check": "d-rejected:udl01-zip64.xlsx",
+      "ok": true,
+      "detail": {
+        "expect": "/ZIP64/",
+        "notice": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了"
+      }
+    },
+    {
+      "check": "d-not-blocking:udl01-zip64.xlsx",
+      "ok": true,
+      "detail": {
+        "maxGap": 33,
+        "gapSamples": 6,
+        "maxLongTask": 0,
+        "longTasks": []
+      }
+    },
+    {
+      "check": "d-no-pageerror",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-bomb.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": [
+          "https://127.0.0.1:8448/app-v2/assets/import-parse.worker-BTZW2XmC.js"
+        ]
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-bomb.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-bomb.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-encrypted.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": []
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-encrypted.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-encrypted.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-stored-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": []
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-stored-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-stored-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-method-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": []
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-method-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-method-mismatch.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-data-descriptor.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": []
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-data-descriptor.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-data-descriptor.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-no-sheetjs-chunk:udl01-zip64.xlsx",
+      "ok": true,
+      "detail": {
+        "sheetjsChunkRequests": 0,
+        "chunks": []
+      }
+    },
+    {
+      "check": "d-no-server-calls:udl01-zip64.xlsx",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-no-local-summary:udl01-zip64.xlsx",
+      "ok": true,
+      "detail": {
+        "summaryVisible": false
+      }
+    },
+    {
+      "check": "d-zip64-layout-machine-checked",
+      "ok": true,
+      "detail": {
+        "bytes": 711,
+        "eocd_offset": 689,
+        "eocd_present": true,
+        "locator_offset": 669,
+        "locator_is_20_bytes_before_eocd": true,
+        "locator_signature": "0x07064b50",
+        "locator_signature_ok": true,
+        "zip64_eocd_offset": 613,
+        "zip64_eocd_signature": "0x06064b50",
+        "zip64_eocd_signature_ok": true,
+        "locator_declared_zip64_eocd_offset": 613,
+        "locator_points_at_zip64_eocd": true,
+        "layout": "ZIP64 EOCD -> ZIP64 locator -> classic EOCD"
+      }
+    },
+    {
+      "check": "d-zip64-branch-hit",
+      "ok": true,
+      "detail": {
+        "reason": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了"
+      }
+    },
+    {
+      "check": "d-zip64-no-sheetjs",
+      "ok": true,
+      "detail": {
+        "file": "udl01-zip64.xlsx",
+        "matched": true,
+        "reason": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
+        "sheetjsChunkRequests": 0,
+        "serverCalls": {
+          "validate": 0,
+          "preview": 0,
+          "create": 0
+        },
+        "taskCreated": false
+      }
+    },
+    {
+      "check": "d-zip64-no-server-calls",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "d-zip64-no-task-created",
+      "ok": true,
+      "detail": {
+        "file": "udl01-zip64.xlsx",
+        "matched": true,
+        "reason": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
+        "sheetjsChunkRequests": 0,
+        "serverCalls": {
+          "validate": 0,
+          "preview": 0,
+          "create": 0
+        },
+        "taskCreated": false
+      }
+    },
+    {
+      "check": "e-header-recognized",
+      "ok": true,
+      "detail": {
+        "text": "提示 本地解析摘要 以下计数由浏览器本地解析得出；提交后由服务端再次验证，只有服务端 accepted 的地址会被采用。 解析结果 文件 udl01-small-ok.xlsx 类型 XLSX/Excel 扫描行数 1 待校验地址 1 空白行 0 表头 address 表头（列映射） 识别列 chain、tags 带案件/标签的行 1 链分布 bsc 1 取消 提交服务端校验"
+      }
+    },
+    {
+      "check": "e-stable-row-count-one",
+      "ok": true,
+      "detail": {
+        "rowCount": "1",
+        "addressCount": "1",
+        "headerDetected": "true",
+        "submitEnabled": true
+      }
+    },
+    {
+      "check": "e-stable-address-count-one",
+      "ok": true,
+      "detail": {
+        "rowCount": "1",
+        "addressCount": "1",
+        "headerDetected": "true",
+        "submitEnabled": true
+      }
+    },
+    {
+      "check": "e-stable-header-detected",
+      "ok": true,
+      "detail": {
+        "rowCount": "1",
+        "addressCount": "1",
+        "headerDetected": "true",
+        "submitEnabled": true
+      }
+    },
+    {
+      "check": "e-stable-submit-enabled",
+      "ok": true,
+      "detail": {
+        "rowCount": "1",
+        "addressCount": "1",
+        "headerDetected": "true",
+        "submitEnabled": true
+      }
+    },
+    {
+      "check": "e-no-server-call-after-cancel",
+      "ok": true,
+      "detail": {
+        "validate": 0,
+        "preview": 0,
+        "create": 0
+      }
+    },
+    {
+      "check": "bundle-index-served-matches-disk",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-worker-chunk-200",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-worker-chunk-bytes-match",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-page-chunk-references-worker",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-page-chunk-200",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-page-chunk-bytes-match",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-page-chunk-has-budget-unit",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-page-chunk-has-timeout-copy",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    },
+    {
+      "check": "bundle-csp-present",
+      "ok": true,
+      "detail": {
+        "served_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "disk_index_sha": "e1e495cb572076d12c0dee089234dd85043d05c2fac3243b926c0e2016548870",
+        "page_chunk": "DownloadNewPage-B4IJfgn5.js",
+        "worker_chunk": "import-parse.worker-BTZW2XmC.js",
+        "worker_chunk_http": "200",
+        "worker_chunk_disk_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "worker_chunk_served_sha": "191c7b093bca2fc3c09f4d96a94264c3f960bec4e8af5b2d78e3ee51c384b758",
+        "page_chunk_http": "200",
+        "page_chunk_disk_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_served_sha": "10c2761593dd866a2dc2ec0c16c0811246ccd3ee5107c0597f3010a2f3e8e26f",
+        "page_chunk_budget_ms_hits": 1,
+        "page_chunk_timeout_copy_hits": 1,
+        "page_chunk_references_worker": true,
+        "csp_headers": 1
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "project": "uc-desktop",
+      "test": "UDL01-A",
+      "observed": {
+        "title": "UDL01-A A1 真实 .xls 格式上限：请求 200000 行落盘 65535 行，由隔离 Worker 解析且主线程无秒级阻塞",
+        "status": "expected",
+        "expectedStatus": "passed",
+        "result_statuses": [
+          "passed"
+        ],
+        "result_durations": [
+          5241
+        ],
+        "result_error_counts": [
+          0
+        ],
+        "result_retries": [
+          0
+        ],
+        "result_start_times": [
+          "2026-09-20T19:35:52.890Z"
+        ]
+      },
+      "failures": [],
+      "evidence_file": "uc-desktop/udl01-a-evidence.json",
+      "evidence_bytes": 1382,
+      "ok": true
+    },
+    {
+      "project": "uc-desktop",
+      "test": "UDL01-B",
+      "observed": {
+        "title": "UDL01-B A2a 有界超时：60000 行 .xlsx（< 16MiB）在 300ms 预算内被终止，不导入任何地址",
+        "status": "expected",
+        "expectedStatus": "passed",
+        "result_statuses": [
+          "passed"
+        ],
+        "result_durations": [
+          3776
+        ],
+        "result_error_counts": [
+          0
+        ],
+        "result_retries": [
+          0
+        ],
+        "result_start_times": [
+          "2026-09-20T19:35:58.602Z"
+        ]
+      },
+      "failures": [],
+      "evidence_file": "uc-desktop/udl01-b-evidence.json",
+      "evidence_bytes": 749,
+      "ok": true
+    },
+    {
+      "project": "uc-desktop",
+      "test": "UDL01-C",
+      "observed": {
+        "title": "UDL01-C A2b 可取消：60000 行 .xlsx 解析中点取消真停止，Worker 重建后小文件仍可解析",
+        "status": "expected",
+        "expectedStatus": "passed",
+        "result_statuses": [
+          "passed"
+        ],
+        "result_durations": [
+          4478
+        ],
+        "result_error_counts": [
+          0
+        ],
+        "result_retries": [
+          0
+        ],
+        "result_start_times": [
+          "2026-09-20T19:36:02.392Z"
+        ]
+      },
+      "failures": [],
+      "evidence_file": "uc-desktop/udl01-c-evidence.json",
+      "evidence_bytes": 2036,
+      "ok": true
+    },
+    {
+      "project": "uc-desktop",
+      "test": "UDL01-D",
+      "observed": {
+        "title": "UDL01-D 恶意 ZIP 全部被格式防线拒绝（真实字节结构，逐条留证）",
+        "status": "expected",
+        "expectedStatus": "passed",
+        "result_statuses": [
+          "passed"
+        ],
+        "result_durations": [
+          4940
+        ],
+        "result_error_counts": [
+          0
+        ],
+        "result_retries": [
+          0
+        ],
+        "result_start_times": [
+          "2026-09-20T19:36:06.889Z"
+        ]
+      },
+      "failures": [],
+      "evidence_file": "uc-desktop/udl01-d-evidence.json",
+      "evidence_bytes": 5402,
+      "ok": true
+    },
+    {
+      "project": "uc-desktop",
+      "test": "UDL01-E",
+      "observed": {
+        "title": "UDL01-E 正向回归：小工作簿解析成功，稳定业务语义锚点正确且取消后无服务端请求",
+        "status": "expected",
+        "expectedStatus": "passed",
+        "result_statuses": [
+          "passed"
+        ],
+        "result_durations": [
+          3258
+        ],
+        "result_error_counts": [
+          0
+        ],
+        "result_retries": [
+          0
+        ],
+        "result_start_times": [
+          "2026-09-20T19:36:11.843Z"
+        ]
+      },
+      "failures": [],
+      "evidence_file": "uc-desktop/udl01-e-evidence.json",
+      "evidence_bytes": 1029,
+      "ok": true
+    }
+  ],
+  "verdict": "PASS"
+}

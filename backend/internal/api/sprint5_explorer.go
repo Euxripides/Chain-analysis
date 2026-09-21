@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
@@ -543,9 +544,10 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 		// NFT 行来自 nft_transfers：补出方向/对手方与统一的展示字段，
 		// 让前端可以在同一张表里渲染（金额、时间、双方地址、合集与 token_id）。
 		for _, row := range res.Rows {
-			from := strings.ToLower(fmt.Sprint(row["from_address"]))
-			to := strings.ToLower(fmt.Sprint(row["to_address"]))
-			subjectAddr := strings.ToLower(sub.Normalized)
+			// 展示用对手方必须是链上原文：Solana base58 折叠后就是另一个地址。
+			from := addressnorm.NormalizeKey(sub.Chain, fmt.Sprint(row["from_address"]))
+			to := addressnorm.NormalizeKey(sub.Chain, fmt.Sprint(row["to_address"]))
+			subjectAddr := addressnorm.NormalizeKey(sub.Chain, sub.Normalized)
 			direction, counterparty := "in", from
 			if from == subjectAddr {
 				direction, counterparty = "out", to

@@ -216,6 +216,29 @@ type Provider interface {
 	Health(ctx context.Context) HealthStatus
 }
 
+// ---- 请求模式传播（Provider 档位解析用）----
+//
+// FetchRequest 没有 mode 字段：模式是**任务级**意图，而 FetchRequest 是**页级**请求。
+// 把它塞进 FetchRequest 会让每一页都重复携带同一份任务属性；反过来，多 Provider 的实际
+// 档位必须按各自通道解析（开发文档 §6.3），所以 Provider 需要知道本任务请求的是哪一档。
+// 用 context 传递是二者的最小耦合：调度器写入一次，Provider 读取一次。
+
+type requestedModeKey struct{}
+
+// WithRequestedMode 由调度器在发起 Fetch 前写入任务请求模式（safe|fast|turbo）。
+func WithRequestedMode(ctx context.Context, mode string) context.Context {
+	if mode == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, requestedModeKey{}, mode)
+}
+
+// RequestedModeFrom 读取任务请求模式；未设置时返回空串（Provider 自行回退默认档）。
+func RequestedModeFrom(ctx context.Context) string {
+	mode, _ := ctx.Value(requestedModeKey{}).(string)
+	return mode
+}
+
 // TxDetailFetcher 单笔交易深度解码能力（V1.3 §23）。
 //
 // 可选能力：调用方类型断言获取。只允许交易详情 / 智能调查按需调用，

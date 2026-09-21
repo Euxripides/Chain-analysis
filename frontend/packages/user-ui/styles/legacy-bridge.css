@@ -117,7 +117,8 @@ html[data-app="user"] .btn {
 }
 html[data-app="user"] .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(45, 94, 180, .12);
+  /* 中性短阴影：hover 的"浮起"提示不再带蓝色柔光（那会在浅底上发雾）。 */
+  box-shadow: 0 2px 6px rgba(16, 26, 43, .10);
 }
 html[data-app="user"] .btn:active:not(:disabled) {
   transform: scale(.98);
@@ -135,7 +136,7 @@ html[data-app="user"] .btn--primary {
 }
 html[data-app="user"] .btn--primary:hover:not(:disabled) {
   background-position: 60% 50%;
-  box-shadow: 0 6px 18px rgba(52, 120, 246, .26);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .28);
 }
 html[data-app="user"] .btn--primary:active:not(:disabled) { box-shadow: none; }
 html[data-app="user"] .btn--danger {
@@ -169,14 +170,18 @@ html[data-app="user"] .btn__spinner {
 /* =========================================================================
  * 表单控件（§14）：focus 只改描边与 ring，**输入框不允许上下移动**（§14.3）
  * ========================================================================= */
+/* L3 输入层（2026-09-20）：卡片是纯白，输入框必须**看得出来是输入框**——
+ * 凹陷冷白底 + 2.23:1 的清晰灰描边 + 极浅内阴影，三者同时表达"这里可以输入"。
+ * 旧版输入框是白底 + 淡蓝描边（1.2:1），和白卡片糊在一起，是低对比度的主因之一。 */
 html[data-app="user"] .input,
 html[data-app="user"] .select,
 html[data-app="user"] .textarea {
   min-height: var(--control-h);
   padding: 8px 12px;
   border-radius: var(--cs-radius-control);
-  border: 1px solid var(--cs-border-strong);
-  background: var(--cs-surface);
+  border: 1px solid var(--cs-border-field);
+  background: var(--cs-field);
+  box-shadow: inset 0 1px 2px rgba(16, 26, 43, .05);
   color: var(--cs-text-primary);
   font-size: var(--fs-14);
   transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), box-shadow var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter);
@@ -193,7 +198,7 @@ html[data-app="user"] .textarea:focus {
 }
 html[data-app="user"] .input[aria-invalid="true"],
 html[data-app="user"] .textarea[aria-invalid="true"] { border-color: var(--cs-danger); }
-html[data-app="user"] .input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px rgba(216, 74, 74, .16); }
+html[data-app="user"] .input[aria-invalid="true"]:focus { box-shadow: var(--cs-shadow-ring); }
 html[data-app="user"] .field__label { font-size: var(--fs-13); font-weight: 600; color: var(--cs-text-primary); }
 html[data-app="user"] .field__hint { font-size: var(--fs-12); color: var(--cs-text-secondary); }
 html[data-app="user"] .field__hint--error { color: var(--cs-danger-text); }
@@ -227,10 +232,10 @@ html[data-app="user"] .table__th--frozen,
 html[data-app="user"] .table__td--frozen { background: var(--cs-surface); box-shadow: 1px 0 0 var(--cs-border); }
 html[data-app="user"] .table thead .table__th--frozen { background: var(--cs-surface-blue); }
 html[data-app="user"] .table tbody tr:hover .table__td--frozen { background: var(--cs-surface-blue); }
-html[data-app="user"] .table-scroll[data-overflow="start"] { box-shadow: inset -14px 0 12px -12px rgba(45, 80, 130, .16); }
-html[data-app="user"] .table-scroll[data-overflow="end"] { box-shadow: inset 14px 0 12px -12px rgba(45, 80, 130, .16); }
+html[data-app="user"] .table-scroll[data-overflow="start"] { box-shadow: inset -14px 0 12px -12px rgba(16, 26, 43, .18); }
+html[data-app="user"] .table-scroll[data-overflow="end"] { box-shadow: inset 14px 0 12px -12px rgba(16, 26, 43, .18); }
 html[data-app="user"] .table-scroll[data-overflow="both"] {
-  box-shadow: inset -14px 0 12px -12px rgba(45, 80, 130, .16), inset 14px 0 12px -12px rgba(45, 80, 130, .16);
+  box-shadow: inset -14px 0 12px -12px rgba(16, 26, 43, .18), inset 14px 0 12px -12px rgba(16, 26, 43, .18);
 }
 
 /* =========================================================================
@@ -242,7 +247,7 @@ html[data-app="user"] .badge {
   font-size: var(--fs-11);
   gap: 5px;
 }
-html[data-app="user"] .badge--info { background: var(--cs-primary-soft); border-color: #BFD8FB; color: var(--cs-primary-text); }
+html[data-app="user"] .badge--info { background: var(--cs-primary-soft); border-color: var(--cs-border-selected); color: var(--cs-primary-text); }
 html[data-app="user"] .badge--ok { background: var(--cs-success-soft); border-color: #B7E3CD; color: var(--cs-success-text); }
 html[data-app="user"] .badge--warn { background: var(--cs-warning-soft); border-color: #F1D9AE; color: var(--cs-warning-text); }
 html[data-app="user"] .badge--danger { background: var(--cs-danger-soft); border-color: #F4C9C9; color: var(--cs-danger-text); }
@@ -259,22 +264,24 @@ html[data-app="user"] .state__body { font-size: var(--fs-13); color: var(--cs-te
  * 骨架屏（§23.2）：1.3–1.6s 淡蓝灰，Reduced Motion 下静态
  * ========================================================================= */
 html[data-app="user"] .skeleton {
-  background: linear-gradient(90deg, #E9F0FB 25%, #DCE8F9 37%, #E9F0FB 63%);
+  /* 中性冷灰占位（旧版是淡蓝 #E9F0FB/#DCE8F9，在冷白底上会看成"内容"。 */
+  background: linear-gradient(90deg, #E4E8EE 25%, #D3D9E2 37%, #E4E8EE 63%);
   background-size: 400% 100%;
   animation: cs-shimmer 1.5s ease infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-app="user"] .skeleton { animation: none; background: #E9F0FB; }
+  html[data-app="user"] .skeleton { animation: none; background: #E4E8EE; }
 }
 
 /* =========================================================================
  * Dialog（§21.3）：API 与可访问行为完全不变，只换视觉
  * 动画所有权归 DialogHost（§9.6）——这里给的是入场 keyframes，不再叠加 Motion。
  * ========================================================================= */
+/* 遮罩只做"压暗 + 单色"，不再叠加 backdrop-filter：
+ * 模糊遮罩会把弹窗后面的整页结构糊掉，用户失去"我从哪来"的空间感，
+ * 而这层模糊本身也让全屏看起来发灰。 */
 html[data-app="user"] .dialog-backdrop {
-  background: rgba(16, 33, 61, .34);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: var(--bg-overlay);
   animation: cs-dialog-backdrop-in 160ms var(--cs-ease-enter) both;
 }
 html[data-app="user"] .dialog {
@@ -334,7 +341,7 @@ html[data-app="user"] .cs-segmented__item[aria-pressed="true"] {
   background: var(--cs-surface);
   color: var(--cs-primary-text);
   font-weight: 620;
-  box-shadow: 0 1px 2px rgba(45, 80, 130, .10);
+  box-shadow: 0 1px 2px rgba(16, 26, 43, .10);
 }
 
 html[data-app="user"] .cs-chip {
@@ -345,7 +352,7 @@ html[data-app="user"] .cs-chip {
   transition: border-color var(--cs-dur-fast) var(--cs-ease-enter), background var(--cs-dur-fast) var(--cs-ease-enter), color var(--cs-dur-fast) var(--cs-ease-enter), transform var(--cs-dur-fast) var(--cs-ease-enter);
 }
 html[data-app="user"] .cs-chip:hover { border-color: var(--cs-border-strong); color: var(--cs-text-primary); }
-html[data-app="user"] .cs-chip[aria-pressed="true"] { background: var(--cs-primary-soft); border-color: #BFD8FB; color: var(--cs-primary-text); font-weight: 620; }
+html[data-app="user"] .cs-chip[aria-pressed="true"] { background: var(--cs-primary-soft); border-color: var(--cs-border-selected); color: var(--cs-primary-text); font-weight: 620; }
 html[data-app="user"] .cs-chip:focus-visible { outline: none; box-shadow: var(--cs-shadow-ring); border-color: var(--cs-primary); }
 
 /* =========================================================================
@@ -362,9 +369,8 @@ html[data-app="user"] .cs-inspector__title { font-size: var(--fs-14); font-weigh
 html[data-app="user"] .cs-inspector__actions { border-top: 1px solid var(--cs-border-subtle); background: var(--cs-surface); }
 html[data-app="user"] .cs-stickybar {
   border-top: 1px solid var(--cs-border);
-  background: var(--cs-surface-glass);
-  -webkit-backdrop-filter: var(--cs-glass-blur);
-  backdrop-filter: var(--cs-glass-blur);
+  /* 不透明实体面：底部操作栏不再用玻璃。 */
+  background: var(--cs-surface);
 }
 /*
  * 窄屏：旧样式表把底部操作栏改成不透明贴底（要避开 iOS safe area，
@@ -377,8 +383,6 @@ html[data-app="user"] .cs-stickybar {
        新层必须显式表达"这一档用 ChainSight 的描边令牌"，而不是靠继承默认值。 */
     border-top: 1px solid var(--cs-border);
     background: var(--cs-surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 }
 html[data-app="user"] .cs-split__handle { background: var(--cs-border-subtle); }
@@ -389,9 +393,8 @@ html[data-app="user"] .cs-split__handle:focus-visible { background: var(--cs-pri
  * 命令面板 / Popover / 下拉（§12.3 / §18.2 / §19.2）
  * ========================================================================= */
 html[data-app="user"] .cs-command-backdrop {
-  background: rgba(16, 33, 61, .30);
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  /* 命令面板遮罩同样去掉毛玻璃：只保留压暗，保持背后的页面结构可辨。 */
+  background: var(--bg-overlay);
 }
 html[data-app="user"] .cs-command {
   width: min(720px, 100%);
@@ -449,12 +452,37 @@ html[data-app="user"] .cs-combo__trigger[aria-expanded="true"] { border-color: v
 /* =========================================================================
  * 步进器（§16）与工作台
  * ========================================================================= */
-html[data-app="user"] .cs-stepper__index { background: var(--cs-neutral-soft); color: var(--cs-text-secondary); }
+/*
+ * 步进器当前步骤（2026-09-20 对比度修订）
+ *
+ * 旧版当前步骤 = 淡蓝底 + 3.5:1 的亮蓝文字（--cs-primary 直接当正文色），
+ * 未到达步骤 = opacity .6 的白底淡字，整条步进器在淡蓝页面上几乎读不出"我在第几步"。
+ * 现在用**四通道**表达当前步骤，并且每一步都保持可读：
+ *   当前：L4 选中层淡蓝底 + 1.5px 蓝边界 + 深蓝文字（5.7:1）+ 加粗
+ *   已完成：绿底 + 绿边界 + 绿文字 + 勾号（形状通道）
+ *   未到达：白底 + 明确灰边界 + 弱化灰文字（4.8:1，不再靠 opacity 掉对比度）
+ */
+html[data-app="user"] .cs-stepper__index { background: var(--cs-surface-sunken); color: var(--cs-text-secondary); }
 html[data-app="user"] .cs-stepper__step[aria-current="step"] .cs-stepper__index { background: var(--cs-primary); color: var(--cs-text-inverse); }
 html[data-app="user"] .cs-stepper__step[data-state="done"] .cs-stepper__index { background: var(--cs-success); color: var(--cs-text-inverse); }
 html[data-app="user"] .cs-stepper__step[data-state="error"] .cs-stepper__index { background: var(--cs-danger); color: var(--cs-text-inverse); }
-html[data-app="user"] .cs-stepper__sep { background: var(--cs-border); }
-html[data-app="user"] .cs-stepper__step[aria-current="step"] { color: var(--cs-text-primary); font-weight: 620; }
+/* 分隔符是"可见的排版元素"而不是装饰描边：
+ * #A3AFBD 在画布底只有 1.9:1，等于看不见（实测值），必须用弱化文字色（4.96:1）。 */
+html[data-app="user"] .cs-stepper__sep { color: var(--cs-text-muted); background: none; }
+html[data-app="user"] .cs-stepper__step[aria-current="step"] {
+  color: var(--cs-primary-text);
+  font-weight: 650;
+  border-color: var(--cs-primary);
+  background: var(--cs-layer-selected);
+  box-shadow: inset 0 0 0 0.5px var(--cs-border-selected);
+}
+html[data-app="user"] .cs-stepper__step[data-state="done"] { border-color: #9FD3B9; }
+html[data-app="user"] .cs-stepper__step[data-state="todo"]:disabled {
+  opacity: 1;
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+  color: var(--cs-text-muted);
+}
 
 /* =========================================================================
  * 对象头 / 元信息 / 键值 / 时间线（§8.2 / §40）
@@ -541,7 +569,7 @@ html[data-app="user"] .cs-rowcard__title { color: var(--cs-text-primary); font-w
 /* 未读项淡蓝底；标记已读后 180ms 过渡回白（§19.3 / §52），不闪、不重排。 */
 html[data-app="user"] .cs-rowcard[data-unread="true"] {
   background: var(--cs-primary-soft);
-  border-color: #BFD8FB;
+  border-color: var(--cs-border-selected);
 }
 html[data-app="user"] .cs-rowcard[data-unread="false"] { background: var(--cs-surface); }
 html[data-app="user"] .cs-rowcard {

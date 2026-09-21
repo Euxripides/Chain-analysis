@@ -1,0 +1,537 @@
+{
+  "generator": "frontend/scripts/r9-make-fixtures-v4.mjs",
+  "generated_at": "2026-09-20T19:33:55.727Z",
+  "out_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260920T193353Z/fixtures",
+  "address": "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649",
+  "chain": "bsc",
+  "limits": {
+    "maxFileBytes": 16777216,
+    "maxUncompressedBytes": 67108864,
+    "maxCompressionRatio": 200
+  },
+  "required_ooxml_entries": [
+    "[Content_Types].xml",
+    "xl/workbook.xml"
+  ],
+  "malicious_entry": "xl/worksheets/sheet1.xml",
+  "ok": true,
+  "fixtures": [
+    {
+      "file": "min.xlsx",
+      "bytes": 16164,
+      "sha256": "ef9ac1f7b9413a719e6dd2b69f4cea93dc0eb8abb466d0868b39ab7a096fb7f8",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 16142,
+      "eocd_present": true,
+      "central_directory_offset": 15507,
+      "central_directory_size": 635,
+      "entry_count": 10,
+      "entries": [
+        {
+          "name": "xl/_rels/workbook.xml.rels",
+          "method": 0,
+          "compressed": 693,
+          "declared": 693,
+          "localOffset": 0,
+          "dataOffset": 56,
+          "realUncompressed": 693
+        },
+        {
+          "name": "xl/theme/theme1.xml",
+          "method": 0,
+          "compressed": 7646,
+          "declared": 7646,
+          "localOffset": 749,
+          "dataOffset": 798,
+          "realUncompressed": 7646
+        },
+        {
+          "name": "xl/styles.xml",
+          "method": 0,
+          "compressed": 1114,
+          "declared": 1114,
+          "localOffset": 8444,
+          "dataOffset": 8487,
+          "realUncompressed": 1114
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 0,
+          "compressed": 788,
+          "declared": 788,
+          "localOffset": 9601,
+          "dataOffset": 9655,
+          "realUncompressed": 788
+        },
+        {
+          "name": "xl/metadata.xml",
+          "method": 0,
+          "compressed": 904,
+          "declared": 904,
+          "localOffset": 10443,
+          "dataOffset": 10488,
+          "realUncompressed": 904
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 0,
+          "compressed": 322,
+          "declared": 322,
+          "localOffset": 11392,
+          "dataOffset": 11437,
+          "realUncompressed": 322
+        },
+        {
+          "name": "_rels/.rels",
+          "method": 0,
+          "compressed": 588,
+          "declared": 588,
+          "localOffset": 11759,
+          "dataOffset": 11800,
+          "realUncompressed": 588
+        },
+        {
+          "name": "docProps/app.xml",
+          "method": 0,
+          "compressed": 562,
+          "declared": 562,
+          "localOffset": 12388,
+          "dataOffset": 12434,
+          "realUncompressed": 562
+        },
+        {
+          "name": "docProps/core.xml",
+          "method": 0,
+          "compressed": 346,
+          "declared": 346,
+          "localOffset": 12996,
+          "dataOffset": 13043,
+          "realUncompressed": 346
+        },
+        {
+          "name": "[Content_Types].xml",
+          "method": 0,
+          "compressed": 2069,
+          "declared": 2069,
+          "localOffset": 13389,
+          "dataOffset": 13438,
+          "realUncompressed": 2069
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 15032,
+      "real_total": 15032,
+      "declared_ratio": 0.93
+    },
+    {
+      "file": "min.csv",
+      "bytes": 119,
+      "sha256": "9ba19ba8f7fc2890e1e326b18a11179e1d4754abaff1db8530a8061324949c5a",
+      "under_max_file_bytes": true
+    },
+    {
+      "file": "mixed.xlsx",
+      "bytes": 16447,
+      "sha256": "153673a6dc987dd599b3de4c4e0cf018897ccb902fd68932466cc2ba64e4609c",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 16425,
+      "eocd_present": true,
+      "central_directory_offset": 15790,
+      "central_directory_size": 635,
+      "entry_count": 10,
+      "entries": [
+        {
+          "name": "xl/_rels/workbook.xml.rels",
+          "method": 0,
+          "compressed": 693,
+          "declared": 693,
+          "localOffset": 0,
+          "dataOffset": 56,
+          "realUncompressed": 693
+        },
+        {
+          "name": "xl/theme/theme1.xml",
+          "method": 0,
+          "compressed": 7646,
+          "declared": 7646,
+          "localOffset": 749,
+          "dataOffset": 798,
+          "realUncompressed": 7646
+        },
+        {
+          "name": "xl/styles.xml",
+          "method": 0,
+          "compressed": 1114,
+          "declared": 1114,
+          "localOffset": 8444,
+          "dataOffset": 8487,
+          "realUncompressed": 1114
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 0,
+          "compressed": 1071,
+          "declared": 1071,
+          "localOffset": 9601,
+          "dataOffset": 9655,
+          "realUncompressed": 1071
+        },
+        {
+          "name": "xl/metadata.xml",
+          "method": 0,
+          "compressed": 904,
+          "declared": 904,
+          "localOffset": 10726,
+          "dataOffset": 10771,
+          "realUncompressed": 904
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 0,
+          "compressed": 322,
+          "declared": 322,
+          "localOffset": 11675,
+          "dataOffset": 11720,
+          "realUncompressed": 322
+        },
+        {
+          "name": "_rels/.rels",
+          "method": 0,
+          "compressed": 588,
+          "declared": 588,
+          "localOffset": 12042,
+          "dataOffset": 12083,
+          "realUncompressed": 588
+        },
+        {
+          "name": "docProps/app.xml",
+          "method": 0,
+          "compressed": 562,
+          "declared": 562,
+          "localOffset": 12671,
+          "dataOffset": 12717,
+          "realUncompressed": 562
+        },
+        {
+          "name": "docProps/core.xml",
+          "method": 0,
+          "compressed": 346,
+          "declared": 346,
+          "localOffset": 13279,
+          "dataOffset": 13326,
+          "realUncompressed": 346
+        },
+        {
+          "name": "[Content_Types].xml",
+          "method": 0,
+          "compressed": 2069,
+          "declared": 2069,
+          "localOffset": 13672,
+          "dataOffset": 13721,
+          "realUncompressed": 2069
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 15315,
+      "real_total": 15315,
+      "declared_ratio": 0.931
+    },
+    {
+      "file": "large.xlsx",
+      "bytes": 43613,
+      "sha256": "5a46ab583637eafeaedb8cb567d2e562f80fa94f6568cef2a78011762cb529a5",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 43591,
+      "eocd_present": true,
+      "central_directory_offset": 42956,
+      "central_directory_size": 635,
+      "entry_count": 10,
+      "entries": [
+        {
+          "name": "xl/_rels/workbook.xml.rels",
+          "method": 0,
+          "compressed": 693,
+          "declared": 693,
+          "localOffset": 0,
+          "dataOffset": 56,
+          "realUncompressed": 693
+        },
+        {
+          "name": "xl/theme/theme1.xml",
+          "method": 0,
+          "compressed": 7646,
+          "declared": 7646,
+          "localOffset": 749,
+          "dataOffset": 798,
+          "realUncompressed": 7646
+        },
+        {
+          "name": "xl/styles.xml",
+          "method": 0,
+          "compressed": 1114,
+          "declared": 1114,
+          "localOffset": 8444,
+          "dataOffset": 8487,
+          "realUncompressed": 1114
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 0,
+          "compressed": 28237,
+          "declared": 28237,
+          "localOffset": 9601,
+          "dataOffset": 9655,
+          "realUncompressed": 28237
+        },
+        {
+          "name": "xl/metadata.xml",
+          "method": 0,
+          "compressed": 904,
+          "declared": 904,
+          "localOffset": 37892,
+          "dataOffset": 37937,
+          "realUncompressed": 904
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 0,
+          "compressed": 322,
+          "declared": 322,
+          "localOffset": 38841,
+          "dataOffset": 38886,
+          "realUncompressed": 322
+        },
+        {
+          "name": "_rels/.rels",
+          "method": 0,
+          "compressed": 588,
+          "declared": 588,
+          "localOffset": 39208,
+          "dataOffset": 39249,
+          "realUncompressed": 588
+        },
+        {
+          "name": "docProps/app.xml",
+          "method": 0,
+          "compressed": 562,
+          "declared": 562,
+          "localOffset": 39837,
+          "dataOffset": 39883,
+          "realUncompressed": 562
+        },
+        {
+          "name": "docProps/core.xml",
+          "method": 0,
+          "compressed": 346,
+          "declared": 346,
+          "localOffset": 40445,
+          "dataOffset": 40492,
+          "realUncompressed": 346
+        },
+        {
+          "name": "[Content_Types].xml",
+          "method": 0,
+          "compressed": 2069,
+          "declared": 2069,
+          "localOffset": 40838,
+          "dataOffset": 40887,
+          "realUncompressed": 2069
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 42481,
+      "real_total": 42481,
+      "declared_ratio": 0.974
+    },
+    {
+      "file": "bad.xlsx",
+      "bytes": 45,
+      "sha256": "8818d344a814e4af784ffe440b8c0ae4abf2f8542da3b0deb40d04edc56d110f",
+      "under_max_file_bytes": true,
+      "is_zip": false
+    },
+    {
+      "file": "renamed.xlsx",
+      "bytes": 61,
+      "sha256": "f7fbf3e721f4ad12e8397dfa14323e71fac0d833ef7a770b6eb342ecac96133c",
+      "under_max_file_bytes": true,
+      "is_zip": false
+    },
+    {
+      "file": "bomb-size.xlsx",
+      "bytes": 939,
+      "sha256": "373e78242ffa00267ca210523f6fc839ef418955b6dc025f53e834e5a6ac4967",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 917,
+      "eocd_present": true,
+      "central_directory_offset": 721,
+      "central_directory_size": 196,
+      "entry_count": 3,
+      "entries": [
+        {
+          "name": "[Content_Types].xml",
+          "method": 8,
+          "compressed": 255,
+          "declared": 557,
+          "localOffset": 0,
+          "dataOffset": 49,
+          "realUncompressed": 557
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 8,
+          "compressed": 188,
+          "declared": 283,
+          "localOffset": 304,
+          "dataOffset": 349,
+          "realUncompressed": 283
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 8,
+          "compressed": 130,
+          "declared": 104857600,
+          "localOffset": 537,
+          "dataOffset": 591,
+          "realUncompressed": 156
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 104858440,
+      "real_total": 996,
+      "declared_ratio": 111670.33
+    },
+    {
+      "file": "bomb-ratio.xlsx",
+      "bytes": 939,
+      "sha256": "0c66f3bdeb72647af6a6d42b8ead2874a106a3c27c011ade2be7cc9c2b99ffe7",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 917,
+      "eocd_present": true,
+      "central_directory_offset": 721,
+      "central_directory_size": 196,
+      "entry_count": 3,
+      "entries": [
+        {
+          "name": "[Content_Types].xml",
+          "method": 8,
+          "compressed": 255,
+          "declared": 557,
+          "localOffset": 0,
+          "dataOffset": 49,
+          "realUncompressed": 557
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 8,
+          "compressed": 188,
+          "declared": 283,
+          "localOffset": 304,
+          "dataOffset": 349,
+          "realUncompressed": 283
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 8,
+          "compressed": 130,
+          "declared": 8388608,
+          "localOffset": 537,
+          "dataOffset": 591,
+          "realUncompressed": 156
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 8389448,
+      "real_total": 996,
+      "declared_ratio": 8934.449
+    },
+    {
+      "file": "bomb-lie.xlsx",
+      "bytes": 74196,
+      "sha256": "7d0b78fdf31cfe6f50cbfb6b239ecb495bffd40a2a553c21f19e45e59e388970",
+      "under_max_file_bytes": true,
+      "zip_magic": true,
+      "eocd_offset": 74174,
+      "eocd_present": true,
+      "central_directory_offset": 73978,
+      "central_directory_size": 196,
+      "entry_count": 3,
+      "entries": [
+        {
+          "name": "[Content_Types].xml",
+          "method": 8,
+          "compressed": 255,
+          "declared": 557,
+          "localOffset": 0,
+          "dataOffset": 49,
+          "realUncompressed": 557
+        },
+        {
+          "name": "xl/workbook.xml",
+          "method": 8,
+          "compressed": 188,
+          "declared": 283,
+          "localOffset": 304,
+          "dataOffset": 349,
+          "realUncompressed": 283
+        },
+        {
+          "name": "xl/worksheets/sheet1.xml",
+          "method": 8,
+          "compressed": 73387,
+          "declared": 1024,
+          "localOffset": 537,
+          "dataOffset": 591,
+          "realUncompressed": 75497472
+        }
+      ],
+      "required_ooxml_entries": true,
+      "declared_total": 1864,
+      "real_total": 75498312,
+      "declared_ratio": 0.025
+    }
+  ],
+  "bomb_intents": [
+    {
+      "file": "bomb-size.xlsx",
+      "intent": "声明解压后总大小超过 64MiB 上限（中央目录 declared total > 64MiB，文件 < 16MiB）",
+      "expected_branch": "声明解压后总大小 + 超过上限",
+      "structure_ok": true,
+      "intent_matches_central_directory": true,
+      "detail": {
+        "declared_total": 104858440,
+        "limit": 67108864
+      }
+    },
+    {
+      "file": "bomb-ratio.xlsx",
+      "intent": "声明压缩比超过 200（declaredTotal <= 64MiB 且 declaredTotal / file.size > 200）",
+      "expected_branch": "声明压缩比 + 超过上限",
+      "structure_ok": true,
+      "intent_matches_central_directory": true,
+      "detail": {
+        "declared_total": 8389448,
+        "declared_ratio": 8934.449,
+        "limit": 200
+      }
+    },
+    {
+      "file": "bomb-lie.xlsx",
+      "intent": "中央目录声明值不可信：真实 deflate 解压超过剩余 64MiB 预算（声明 1KiB，真实 72MiB）",
+      "expected_branch": "真实解压 + 声明值不可信",
+      "structure_ok": true,
+      "intent_matches_central_directory": true,
+      "detail": {
+        "declared_total": 1864,
+        "declared_ratio": 0.025,
+        "sheet_declared": 1024,
+        "sheet_real": 75497472
+      }
+    }
+  ]
+}

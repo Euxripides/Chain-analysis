@@ -1,0 +1,184 @@
+### Q1_download_pages_job_sum
+SQL: SELECT COALESCE(SUM(rows_inserted),0) FROM download_pages WHERE job_id='7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11' AND status IN ('INGESTED','VALIDATED')
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=272.69..272.70 rows=1 width=8) (actual time=0.152..0.153 rows=1.00 loops=1)
+   Buffers: shared read=10
+   ->  Index Scan using idx_download_pages_job_status on download_pages  (cost=0.42..272.50 rows=77 width=4) (actual time=0.064..0.137 rows=48.00 loops=1)
+         Index Cond: ((job_id = '7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'::uuid) AND (status = ANY ('{INGESTED,VALIDATED}'::text[])))
+         Index Searches: 1
+         Buffers: shared read=10
+ Planning:
+   Buffers: shared hit=215 read=32
+ Planning Time: 1.373 ms
+ Execution Time: 0.205 ms
+(10 rows)
+
+
+### Q2_checkpoints_job_max
+SQL: SELECT max(last_success_at) FROM checkpoints WHERE job_id='7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=19.00..19.01 rows=1 width=8) (actual time=0.362..0.363 rows=1.00 loops=1)
+   Buffers: shared read=3 written=1
+   ->  Bitmap Heap Scan on checkpoints  (cost=4.32..18.99 rows=4 width=8) (actual time=0.357..0.358 rows=1.00 loops=1)
+         Recheck Cond: (job_id = '7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'::uuid)
+         Heap Blocks: exact=1
+         Buffers: shared read=3 written=1
+         ->  Bitmap Index Scan on idx_checkpoints_job  (cost=0.00..4.32 rows=4 width=0) (actual time=0.043..0.043 rows=1.00 loops=1)
+               Index Cond: (job_id = '7f5b4d9a-41fd-4922-9bf0-ae4bec1c9c11'::uuid)
+               Index Searches: 1
+               Buffers: shared read=2 written=1
+ Planning:
+   Buffers: shared hit=133 read=12 dirtied=2 written=2
+ Planning Time: 0.814 ms
+ Execution Time: 0.426 ms
+(14 rows)
+
+
+### Q3_exports_job_org
+SQL: SELECT id,status FROM exports WHERE job_id='d1bb0624-4cdd-4b43-a0e7-be117637005f' AND organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY created_at DESC LIMIT 20
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=12.47..12.48 rows=3 width=33) (actual time=0.199..0.200 rows=8.00 loops=1)
+   Buffers: shared hit=3 read=3
+   ->  Sort  (cost=12.47..12.48 rows=3 width=33) (actual time=0.198..0.198 rows=8.00 loops=1)
+         Sort Key: created_at DESC
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=3 read=3
+         ->  Bitmap Heap Scan on exports  (cost=4.30..12.45 rows=3 width=33) (actual time=0.169..0.171 rows=8.00 loops=1)
+               Recheck Cond: ((job_id = 'd1bb0624-4cdd-4b43-a0e7-be117637005f'::uuid) AND (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid))
+               Heap Blocks: exact=1
+               Buffers: shared read=3
+               ->  Bitmap Index Scan on idx_exports_job_org_created  (cost=0.00..4.30 rows=3 width=0) (actual time=0.063..0.063 rows=8.00 loops=1)
+                     Index Cond: ((job_id = 'd1bb0624-4cdd-4b43-a0e7-be117637005f'::uuid) AND (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid))
+                     Index Searches: 1
+                     Buffers: shared read=2
+ Planning:
+   Buffers: shared hit=136 read=7 dirtied=2
+ Planning Time: 0.587 ms
+ Execution Time: 0.245 ms
+(18 rows)
+
+
+### Q4_audit_seq_desc
+SQL: SELECT id,seq FROM audit_events_v2 ORDER BY seq DESC LIMIT 50
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..8.52 rows=50 width=24) (actual time=0.031..0.069 rows=50.00 loops=1)
+   Buffers: shared hit=4 read=9
+   ->  Index Scan using idx_audit_v2_seq_desc on audit_events_v2  (cost=0.28..172.70 rows=1046 width=24) (actual time=0.030..0.064 rows=50.00 loops=1)
+         Index Searches: 1
+         Buffers: shared hit=4 read=9
+ Planning:
+   Buffers: shared hit=281 read=16 dirtied=1
+ Planning Time: 1.047 ms
+ Execution Time: 0.117 ms
+(9 rows)
+
+
+### Q5_audit_result_seq
+SQL: SELECT id,seq FROM audit_events_v2 WHERE result='allow' ORDER BY seq DESC LIMIT 50
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..6.94 rows=1 width=24) (actual time=0.036..0.037 rows=0.00 loops=1)
+   Buffers: shared read=2
+   ->  Index Scan using idx_audit_v2_result_seq on audit_events_v2  (cost=0.28..6.94 rows=1 width=24) (actual time=0.035..0.035 rows=0.00 loops=1)
+         Index Cond: (result = 'allow'::text)
+         Index Searches: 1
+         Buffers: shared read=2
+ Planning:
+   Buffers: shared hit=299 read=2 dirtied=1
+ Planning Time: 0.841 ms
+ Execution Time: 0.061 ms
+(10 rows)
+
+
+### Q6_login_seq_desc
+SQL: SELECT id,seq FROM login_events ORDER BY seq DESC LIMIT 50
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..7.99 rows=50 width=24) (actual time=0.044..0.085 rows=50.00 loops=1)
+   Buffers: shared read=6
+   ->  Index Scan using idx_login_events_seq_desc on login_events  (cost=0.28..345.88 rows=2241 width=24) (actual time=0.043..0.080 rows=50.00 loops=1)
+         Index Searches: 1
+         Buffers: shared read=6
+ Planning:
+   Buffers: shared hit=261 read=14
+ Planning Time: 0.989 ms
+ Execution Time: 0.122 ms
+(9 rows)
+
+
+### Q7_login_org_seq
+SQL: SELECT id,seq FROM login_events WHERE organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY seq DESC LIMIT 50
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..33.16 rows=50 width=24) (actual time=0.020..0.255 rows=50.00 loops=1)
+   Buffers: shared hit=12 read=18
+   ->  Index Scan using idx_login_events_seq_desc on login_events  (cost=0.28..351.49 rows=534 width=24) (actual time=0.019..0.250 rows=50.00 loops=1)
+         Filter: (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid)
+         Rows Removed by Filter: 178
+         Index Searches: 1
+         Buffers: shared hit=12 read=18
+ Planning:
+   Buffers: shared hit=281
+ Planning Time: 0.742 ms
+ Execution Time: 0.278 ms
+(11 rows)
+
+
+### Q8_login_type_seq
+SQL: SELECT id,seq FROM login_events WHERE event_type='auth.login.failure' ORDER BY seq DESC LIMIT 50
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..23.51 rows=50 width=24) (actual time=0.023..0.074 rows=50.00 loops=1)
+   Buffers: shared hit=17
+   ->  Index Scan using idx_login_events_seq_desc on login_events  (cost=0.28..351.49 rows=756 width=24) (actual time=0.022..0.070 rows=50.00 loops=1)
+         Filter: (event_type = 'auth.login.failure'::text)
+         Rows Removed by Filter: 93
+         Index Searches: 1
+         Buffers: shared hit=17
+ Planning:
+   Buffers: shared hit=281
+ Planning Time: 0.774 ms
+ Execution Time: 0.109 ms
+(11 rows)
+
+
+### Q9_investigations_case_status
+SQL: SELECT count(*) FROM investigations WHERE case_id='9909a2f1-4bf1-44a8-88ab-72b352af2316' AND status NOT IN ('completed','cancelled','failed')
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=8.17..8.18 rows=1 width=8) (actual time=0.043..0.043 rows=1.00 loops=1)
+   Buffers: shared read=2
+   ->  Index Only Scan using idx_investigations_case_status on investigations  (cost=0.14..8.16 rows=1 width=0) (actual time=0.040..0.041 rows=1.00 loops=1)
+         Index Cond: (case_id = '9909a2f1-4bf1-44a8-88ab-72b352af2316'::uuid)
+         Filter: ((status)::text <> ALL ('{completed,cancelled,failed}'::text[]))
+         Heap Fetches: 1
+         Index Searches: 1
+         Buffers: shared read=2
+ Planning:
+   Buffers: shared hit=216 read=8 dirtied=1
+ Planning Time: 0.909 ms
+ Execution Time: 0.079 ms
+(12 rows)
+
+
+### Q10_sessions_org
+SQL: SELECT id,last_seen_at FROM sessions WHERE organization_id='627c131a-3842-4e19-bade-d20ffb8aea8f' ORDER BY last_seen_at DESC LIMIT 50
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..32.72 rows=50 width=24) (actual time=0.048..0.925 rows=50.00 loops=1)
+   Buffers: shared hit=10 read=19
+   ->  Index Scan using idx_sessions_org_last_seen on sessions  (cost=0.28..319.51 rows=492 width=24) (actual time=0.046..0.918 rows=50.00 loops=1)
+         Index Cond: (organization_id = '627c131a-3842-4e19-bade-d20ffb8aea8f'::uuid)
+         Index Searches: 1
+         Buffers: shared hit=10 read=19
+ Planning:
+   Buffers: shared hit=200 read=13 dirtied=4
+ Planning Time: 0.911 ms
+ Execution Time: 0.950 ms
+(10 rows)
+
+

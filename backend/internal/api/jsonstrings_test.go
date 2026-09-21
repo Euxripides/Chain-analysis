@@ -14,10 +14,10 @@ import (
 func TestJSONStringsNeverEmitsNull(t *testing.T) {
 	var nilSlice []string
 	for name, in := range map[string][]string{
-		"nil":        nilSlice,
-		"empty":      {},
-		"one":        {"viewer"},
-		"two":        {"viewer", "analyst"},
+		"nil":   nilSlice,
+		"empty": {},
+		"one":   {"viewer"},
+		"two":   {"viewer", "analyst"},
 	} {
 		encoded, err := json.Marshal(jsonStrings(in))
 		if err != nil {

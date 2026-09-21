@@ -1,0 +1,65 @@
+# 调查报告
+
+- 调查目标：S4 E2E investigation
+- 主体：tron / TAkT2zbS81TbsNBLRvqv5fyAq4vCUWBk9m
+- 状态：waiting_review
+- 生成时间：2026-09-12T13:20:00Z
+- 报告算法：evidence-report-v1.0
+
+## 摘要
+
+共固化 5 条 Finding、104 组 Evidence、1 个 Graph Patch、0 个 Graph Snapshot。
+
+## Findings
+
+### 1. FAN_IN
+
+- 状态：candidate
+- 置信度：92%
+- 算法：analysis.advanced_patterns@advanced-investigation-v1.0
+
+检测到 85 个直接入账对手方
+
+### 2. FAN_OUT
+
+- 状态：candidate
+- 置信度：92%
+- 算法：analysis.advanced_patterns@advanced-investigation-v1.0
+
+检测到 75 个直接出账对手方
+
+### 3. 一跳资金关系已完成
+
+- 状态：confirmed
+- 置信度：100%
+- 算法：analysis.flow_stats@basic-flow-v1.0
+
+已聚合 2352 笔代币转账，识别 127 个直接对手方。
+
+### 4. 代币净流量已计算（非利润结论）
+
+- 状态：confirmed
+- 置信度：100%
+- 算法：analysis.advanced_patterns@advanced-investigation-v1.0
+
+已计算各资产流入、流出与净流量；缺少成本基础和历史价格时不生成获利金额。
+
+### 5. RAPID_FORWARD
+
+- 状态：confirmed
+- 置信度：78%
+- 算法：analysis.advanced_patterns@advanced-investigation-v1.0
+
+识别到 535 组 24 小时内同资产近额转移
+
+## Evidence Index
+
+- deterministic_pattern：3
+- evidence_revision：1
+- transaction_bundle：100
+
+## 证据边界
+
+- 候选与推断不等于已核实身份或共同控制。
+- 代币净流量不等于已实现利润；利润结论需要价格与成本基础。
+- 本报告只引用生成时已持久化的 Finding、Evidence、Graph Patch 与 Snapshot。

@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
@@ -35,7 +36,6 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
-	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
 
 type actionEnvelope struct {
@@ -682,19 +682,12 @@ func actionIdentity(r *http.Request) (string, string, error) {
 	if e != nil {
 		return "", "", e
 	}
-	a := strings.TrimSpace(r.URL.Query().Get("address"))
-	if c == "tron" {
-		normalized, err := tron.NormalizeTronAddress(a)
-		if err != nil {
-			return "", "", err
-		}
-		return c, normalized, nil
-	}
-	parsed, e := chain.ParseAddress(a)
+	// 按链归一化：Solana 保留 base58 大小写，EVM 折叠小写，TRON 归一到 Base58Check。
+	normalized, e := addressnorm.Normalize(c, r.URL.Query().Get("address"))
 	if e != nil {
 		return "", "", e
 	}
-	return c, parsed.String(), nil
+	return c, normalized, nil
 }
 func parseActionTime(v string) (*time.Time, error) {
 	if strings.TrimSpace(v) == "" {
@@ -1126,19 +1119,11 @@ func validateActionBatch(req actionBatchRequest) (string, []string, error) {
 	out := make([]string, 0, len(req.Addresses))
 	seen := map[string]bool{}
 	for _, a := range req.Addresses {
-		if c == "tron" {
-			normalized, e := tron.NormalizeTronAddress(a)
-			if e != nil {
-				return "", nil, e
-			}
-			a = normalized
-		} else {
-			p, e := chain.ParseAddress(a)
-			if e != nil {
-				return "", nil, e
-			}
-			a = p.String()
+		normalized, e := addressnorm.Normalize(c, a)
+		if e != nil {
+			return "", nil, e
 		}
+		a = normalized
 		if !seen[a] {
 			seen[a] = true
 			out = append(out, a)
@@ -1246,25 +1231,17 @@ func (s *Server) buildActionNetwork(ctx context.Context, req actionPathRequest) 
 	if req.MaxNodes > 2000 {
 		return nil, nil, fmt.Errorf("max_nodes cannot exceed 2000")
 	}
-	source := req.Source
-	if c == "tron" {
-		normalized, e := tron.NormalizeTronAddress(source)
-		if e != nil {
-			return nil, nil, e
-		}
-		source = normalized
-	} else {
-		a, e := chain.ParseAddress(source)
-		if e != nil {
-			return nil, nil, e
-		}
-		source = a.String()
+	// 按链归一化：Solana 保留 base58 大小写，EVM 折叠小写，TRON 归一到 Base58Check。
+	source, e := addressnorm.Normalize(c, req.Source)
+	if e != nil {
+		return nil, nil, e
 	}
+	// 图遍历的去重键同样按链归一化：Solana 地址折叠后会被误当成同一个节点。
 	blocked := map[string]bool{}
 	for _, a := range req.ExcludeAddresses {
-		blocked[strings.ToLower(a)] = true
+		blocked[addressnorm.NormalizeKey(c, a)] = true
 	}
-	seen := map[string]bool{strings.ToLower(source): true}
+	seen := map[string]bool{addressnorm.NormalizeKey(c, source): true}
 	frontier := []string{source}
 	nodes := []map[string]any{{"address": source, "depth": 0, "current_balance": nil, "balance_source": "unavailable", "is_current_balance": false, "balance_as_of_block": nil, "balance_as_of_time": nil}}
 	edges := []map[string]any{}
@@ -1275,11 +1252,11 @@ func (s *Server) buildActionNetwork(ctx context.Context, req actionPathRequest) 
 		}
 		next := []string{}
 		for _, x := range found {
-			if blocked[strings.ToLower(x.To)] {
+			if blocked[addressnorm.NormalizeKey(c, x.To)] {
 				continue
 			}
 			edges = append(edges, map[string]any{"from": x.From, "to": x.To, "token": x.Token, "token_symbol": x.Token, "token_contract": x.TokenContract, "amount": x.Amount, "tx_count": x.TxCount, "first_time": x.FirstTime, "last_time": x.LastTime, "depth": depth})
-			key := strings.ToLower(x.To)
+			key := addressnorm.NormalizeKey(c, x.To)
 			if !seen[key] && len(nodes) < req.MaxNodes {
 				seen[key] = true
 				next = append(next, x.To)
@@ -1318,17 +1295,17 @@ func (s *Server) handleActionPath(w http.ResponseWriter, r *http.Request) {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
 		return
 	}
-	pathByAddress := map[string][]string{strings.ToLower(req.Source): {req.Source}}
+	pathByAddress := map[string][]string{addressnorm.NormalizeKey(req.Chain, req.Source): {req.Source}}
 	paths := make([]map[string]any, 0, len(edges))
 	for _, edge := range edges {
 		from, to := fmt.Sprint(edge["from"]), fmt.Sprint(edge["to"])
-		base := append([]string(nil), pathByAddress[strings.ToLower(from)]...)
+		base := append([]string(nil), pathByAddress[addressnorm.NormalizeKey(req.Chain, from)]...)
 		if len(base) == 0 {
 			base = []string{from}
 		}
 		path := append(base, to)
-		if _, exists := pathByAddress[strings.ToLower(to)]; !exists {
-			pathByAddress[strings.ToLower(to)] = path
+		if _, exists := pathByAddress[addressnorm.NormalizeKey(req.Chain, to)]; !exists {
+			pathByAddress[addressnorm.NormalizeKey(req.Chain, to)] = path
 		}
 		paths = append(paths, map[string]any{"path_id": fmt.Sprintf("path-%d", len(paths)+1), "addresses": path, "hop_count": len(path) - 1, "total_amount": edge["amount"], "hops": []any{edge}, "hop": edge})
 	}
@@ -1372,7 +1349,7 @@ func (s *Server) handleActionNetwork(w http.ResponseWriter, r *http.Request) {
 	uniqueNodes := make([]map[string]any, 0, len(allNodes))
 	seenNodes := map[string]bool{}
 	for _, node := range allNodes {
-		key := strings.ToLower(fmt.Sprint(node["address"]))
+		key := addressnorm.NormalizeKey(raw.Chain, fmt.Sprint(node["address"]))
 		if !seenNodes[key] {
 			seenNodes[key] = true
 			uniqueNodes = append(uniqueNodes, node)
@@ -1381,7 +1358,7 @@ func (s *Server) handleActionNetwork(w http.ResponseWriter, r *http.Request) {
 	uniqueEdges := make([]map[string]any, 0, len(allEdges))
 	seenEdges := map[string]bool{}
 	for _, edge := range allEdges {
-		key := strings.ToLower(fmt.Sprint(edge["from"])) + "|" + strings.ToLower(fmt.Sprint(edge["to"])) + "|" + strings.ToUpper(fmt.Sprint(edge["token"]))
+		key := addressnorm.NormalizeKey(raw.Chain, fmt.Sprint(edge["from"])) + "|" + addressnorm.NormalizeKey(raw.Chain, fmt.Sprint(edge["to"])) + "|" + strings.ToUpper(fmt.Sprint(edge["token"]))
 		if !seenEdges[key] {
 			seenEdges[key] = true
 			uniqueEdges = append(uniqueEdges, edge)

@@ -1,0 +1,20 @@
+{
+  "drill": "rollback-drill",
+  "ts": "20260916T180650Z",
+  "verdict": "PASS",
+  "failures": 0,
+  "frozen_api_sha256": "7831bff0bc6127963840aba8f505b0c337243e2c69a871f2b4010e4dbec19e32",
+  "frozen_worker_sha256": "0d49fb75105eb5ba81a0b062fa557fc09893d2a43555989e6128451a2c1f2c78",
+  "frozen_migrate_sha256": "d48e58fec83bc2af83ed322cf3f47da2f84ed4fe7f3873c1887c5481d06bf062",
+  "previous_api_sha256": "cbb8d01b8067b6b2a1a6acc6272b68b7ba8e5808427cab6911a8690d528a66d7",
+  "previous_worker_sha256": "4379522a7eeaf92871e357227cb24378413baf71cd64958614fafc929b6fcd45",
+  "rto_seconds": {
+    "rollback_backend": "6.13",
+    "rollforward_backend": "6.12"
+  },
+  "after_rollforward": {
+    "api": "7831bff0bc6127963840aba8f505b0c337243e2c69a871f2b4010e4dbec19e32",
+    "worker": "0d49fb75105eb5ba81a0b062fa557fc09893d2a43555989e6128451a2c1f2c78"
+  },
+  "logs_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/release/rollback-drill-20260916T180650Z.logs"
+}

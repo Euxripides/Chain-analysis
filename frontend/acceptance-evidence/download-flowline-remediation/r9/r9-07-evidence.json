@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "file": "renamed.xlsx",
+      "why": "改名文件：扩展名与真实魔数不符",
+      "expect_all": [
+        "不是 ZIP/OOXML"
+      ],
+      "reason": "错误\n文件解析失败\n无法读取 renamed.xlsx：扩展名为 .xlsx 但内容不是 ZIP/OOXML 包（疑似损坏或被改名）\n知道了",
+      "all_matched": true,
+      "sha256": "f7fbf3e721f4ad12e8397dfa14323e71fac0d833ef7a770b6eb342ecac96133c",
+      "bytes": 61,
+      "summaryVisible": false,
+      "validateCalls": 0,
+      "previewCalls": 0,
+      "createCalls": 0,
+      "totalApiCalls": 8,
+      "pageErrors": []
+    },
+    {
+      "file": "bomb-size.xlsx",
+      "why": "声明解压总大小 > 64MiB 分支",
+      "expect_all": [
+        "声明解压后总大小",
+        "超过上限"
+      ],
+      "reason": "错误\n文件解析失败\n无法读取 bomb-size.xlsx：声明解压后总大小 104858440 字节超过上限 67108864\n知道了",
+      "all_matched": true,
+      "sha256": "373e78242ffa00267ca210523f6fc839ef418955b6dc025f53e834e5a6ac4967",
+      "bytes": 939,
+      "summaryVisible": false,
+      "validateCalls": 0,
+      "previewCalls": 0,
+      "createCalls": 0,
+      "totalApiCalls": 6,
+      "pageErrors": []
+    },
+    {
+      "file": "bomb-ratio.xlsx",
+      "why": "声明压缩比 > 200 分支",
+      "expect_all": [
+        "声明压缩比",
+        "超过上限"
+      ],
+      "reason": "错误\n文件解析失败\n无法读取 bomb-ratio.xlsx：声明压缩比 8934.4 超过上限 200（疑似压缩炸弹）\n知道了",
+      "all_matched": true,
+      "sha256": "0c66f3bdeb72647af6a6d42b8ead2874a106a3c27c011ade2be7cc9c2b99ffe7",
+      "bytes": 939,
+      "summaryVisible": false,
+      "validateCalls": 0,
+      "previewCalls": 0,
+      "createCalls": 0,
+      "totalApiCalls": 6,
+      "pageErrors": []
+    },
+    {
+      "file": "bomb-lie.xlsx",
+      "why": "真实 deflate 解压超出剩余预算分支",
+      "expect_all": [
+        "真实解压",
+        "声明值不可信"
+      ],
+      "reason": "错误\n文件解析失败\n无法读取 bomb-lie.xlsx：条目 xl/worksheets/sheet1.xml 真实解压后超过上限 67108864 字节（声明值不可信/疑似压缩炸弹）\n知道了",
+      "all_matched": true,
+      "sha256": "7d0b78fdf31cfe6f50cbfb6b239ecb495bffd40a2a553c21f19e45e59e388970",
+      "bytes": 74196,
+      "summaryVisible": false,
+      "validateCalls": 0,
+      "previewCalls": 0,
+      "createCalls": 0,
+      "totalApiCalls": 6,
+      "pageErrors": []
+    }
+  ],
+  "pageErrors": [],
+  "limits": {
+    "maxFileBytes": 16777216,
+    "maxZipEntries": 512,
+    "maxUncompressedBytes": 67108864,
+    "maxCompressionRatio": 200
+  },
+  "fixture_self_check": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/uc-download-import-20260913T021911Z/e2e-v4-20260920T193353Z/fixtures/r9-07-fixture-selfcheck.json"
+}

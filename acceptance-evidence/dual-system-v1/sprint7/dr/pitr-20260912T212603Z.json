@@ -1,0 +1,17 @@
+{
+  "drill": "pitr",
+  "ts": "20260912T212603Z",
+  "verdict": "FAIL",
+  "verdict_note": "基础备份阶段失败即终止（fail-fast），未启动任何恢复实例；不得据此判 PASS",
+  "archive_mode": "on",
+  "reached_target": false,
+  "rpo_seconds": null,
+  "rpo_limit_seconds": 900,
+  "stage_failed": "pg_basebackup",
+  "failures_count": 3,
+  "not_verified_count": 0,
+  "evidence_dir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T212603Z.logs",
+  "base_backup_dir": "/data/blockchain-platform/postgres/pitr-base-20260912T212603Z",
+  "report": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dr/pitr-20260912T212603Z.md",
+  "cleanup": "失败证据与目录一律保留，不自动清理"
+}

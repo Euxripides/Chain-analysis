@@ -41,10 +41,14 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/policy"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpc"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpcmgmt"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/report"
+	"github.com/blockchain-platform/blockchain-platform/internal/secret"
 	"github.com/blockchain-platform/blockchain-platform/internal/semantic"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"github.com/blockchain-platform/blockchain-platform/internal/subjectintel"
@@ -76,6 +80,13 @@ type Deps struct {
 	Capabilities   *capability.Registry
 	Investigations *investigation.Service
 	Canvases       *canvas.Service
+
+	// Solana dRPC 后台管理（工作流 E）：运行时路由注册表（探针取实现）、
+	// 分类密钥管理器（store:// 写入）、管理同步服务（额度）与 dRPC Provider（额度/探针）。
+	Routes         *route.Registry
+	Secrets        *secret.Manager
+	DRPCManagement *drpcmgmt.Service
+	DRPC           *drpc.Client
 }
 
 type Server struct {
@@ -227,6 +238,15 @@ func New(deps Deps) *Server {
 	s.svc = dataset.New(deps.Store, func(ctx context.Context, chain string) (int64, error) {
 		if chain == "tron" && deps.Cfg.Tron.Enabled {
 			return 0, nil
+		}
+		// Solana 的链头是当前 finalized slot（getSlot）。"全量历史"必须固化目标 Slot，
+		// 否则 Data API 不传 start/end 时无法界定"抓到哪一刻为止"（开发文档 §5.3）。
+		if strings.EqualFold(chain, "solana") && deps.DRPC != nil {
+			head, err := deps.DRPC.ChainHead(ctx)
+			if err != nil {
+				return 0, err
+			}
+			return int64(head), nil
 		}
 		if deps.Head != nil {
 			head, err := deps.Head.SafeHead(ctx, chain)

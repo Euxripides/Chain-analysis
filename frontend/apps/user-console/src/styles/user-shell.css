@@ -43,10 +43,10 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,.14) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 .cs-shell__rail::-webkit-scrollbar { width: 8px; }
-.cs-shell__rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
+.cs-shell__rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
 /* 收起态：图标保持水平居中，文字整块淡出而不是被裁切（蓝图 §7.2 侧栏展开/收起） */
 .cs-shell__rail[data-collapsed="true"] { padding-left: var(--sp-2); padding-right: var(--sp-2); align-items: stretch; }
@@ -105,8 +105,9 @@
   text-decoration: none;
   transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
-.cs-nav__link:hover { background: rgba(255,255,255,.06); color: #fff; text-decoration: none; }
-.cs-nav__link[aria-current="page"] { background: rgba(123,139,255,.14); color: #fff; font-weight: 600; }
+/* 浅色侧栏的超链接状态（用户端作用域里的 .cs-shell 规则会再覆盖一次，这里保持同一套取值）。 */
+.cs-nav__link:hover { background: var(--bg-surface-sunken); color: var(--text-primary); text-decoration: none; }
+.cs-nav__link[aria-current="page"] { background: var(--bg-selected); color: var(--cs-primary-text); font-weight: 600; }
 /*
  * "我在哪"必须不只靠颜色（蓝图 §5.1 / §14）：
  * 选中项同时具备 3px 左侧指示条 + 更亮的文字 + 加重字重，三通道冗余。
@@ -144,31 +145,32 @@
   width: 100%; min-height: 34px;
   padding: 7px var(--sp-3);
   border: 0; border-radius: var(--radius-sm);
-  background: transparent; color: var(--text-on-rail);
+  background: transparent; color: var(--cs-text-secondary, var(--text-on-rail));
   font: inherit; font-size: var(--fs-13);
   cursor: pointer; text-align: left;
   transition: background var(--motion-fast) var(--ease-out);
 }
-.cs-railfoot__collapse:hover { background: rgba(255,255,255,.06); color: #fff; }
+.cs-railfoot__collapse:hover { background: var(--bg-surface-sunken); color: var(--text-primary); }
 .cs-shell__rail[data-collapsed="true"] .cs-railfoot__collapse { justify-content: center; padding-left: 0; padding-right: 0; }
 
 /* ---------------- 主区 ---------------- */
 .cs-shell__main { grid-column: 2; display: flex; flex-direction: column; min-width: 0; }
 
+/* 顶栏 = L2 不透明纯白实体面 + 1px 灰边界（2026-09-20：玻璃拟态退役）。
+   旧值是 rgba(255,255,255,.88) + blur(14px)：滚动时标题从半透明层下面穿过，
+   整条顶栏在冷白底上永远是一块"发灰的雾"，也吃掉了与内容的层高差。 */
 .cs-shell__topbar {
   position: sticky; top: 0;
   z-index: var(--z-sticky);
   display: flex; align-items: center; gap: var(--sp-3);
   height: var(--topbar-h);
   padding: 0 var(--page-gutter);
-  background: rgba(255, 255, 255, 0.88);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-  backdrop-filter: saturate(180%) blur(14px);
+  background: var(--bg-surface);
   border-bottom: 1px solid var(--border-default);
-  transition: background var(--motion-standard) var(--ease-out), box-shadow var(--motion-standard) var(--ease-out);
+  transition: border-color var(--motion-standard) var(--ease-out), box-shadow var(--motion-standard) var(--ease-out);
 }
-/* 滚动后才出现轻阴影；不吸顶遮挡标题（蓝图 §5.1） */
-.cs-shell__topbar[data-scrolled="true"] { box-shadow: 0 1px 0 rgba(11,18,32,.04), 0 8px 24px rgba(11,18,32,.06); }
+/* 滚动后加深边界并给一层中性短阴影；不吸顶遮挡标题（蓝图 §5.1） */
+.cs-shell__topbar[data-scrolled="true"] { border-bottom-color: var(--border-strong); box-shadow: 0 2px 8px rgba(16,26,43,.06); }
 .cs-shell__topbar-title {
   display: none;
   font-size: var(--fs-14); font-weight: 600; color: var(--text-primary);

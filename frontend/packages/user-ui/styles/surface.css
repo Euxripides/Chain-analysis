@@ -16,7 +16,8 @@ html[data-app="user"] .cs-surface {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--cs-surface);
+  /* L2 内容层：纯白实体面，边界由 1px 灰描边（白底 1.51:1）表达，阴影只做"离地"提示。 */
+  background: var(--cs-layer-content);
   border: 1px solid var(--cs-border);
   border-radius: var(--cs-radius-card);
   box-shadow: var(--cs-shadow-surface);
@@ -36,8 +37,10 @@ html[data-app="user"] .cs-surface--panel {
   border-radius: var(--cs-radius-panel);
 }
 
+/* L4 选中层：淡蓝底 + 明确的蓝边界，而不是"整块变蓝"。 */
 html[data-app="user"] .cs-surface--selected {
   border-color: var(--cs-primary);
+  background: var(--cs-layer-selected);
   box-shadow: 0 0 0 1px var(--cs-primary), var(--cs-shadow-surface);
 }
 
@@ -201,38 +204,26 @@ html[data-app="user"] .cs-panelcard__extra { margin-left: auto; display: flex; a
 html[data-app="user"] .cs-panelcard__body { padding: 18px; }
 html[data-app="user"] .cs-panelcard__body--flush { padding: 0; }
 
-/* Hero 是唯一允许大面积光晕与玻璃的容器（§4.5 / §32.2）。 */
+/* Hero（§32.2；2026-09-20 清晰度修订）。
+ *
+ * 旧实现是"唯一允许大面积光晕与玻璃的容器"：三层 12–20% 的蓝/青/紫
+ * radial-gradient + filter: blur(2px) + 22s 漂浮动画，铺满首屏最大的一张卡。
+ * 它正是"整页看起来雾蒙蒙、卡片边界消失"的主要来源——首页第一眼看到的
+ * 不是内容层级，而是一块会动的淡蓝雾。
+ *
+ * 现在 Hero 与其它卡片同级：**纯白实体面 + 1px 灰边界 + 短半径阴影**。
+ * .cs-glasshero__aurora 节点仍由组件渲染（API 不变），但已无任何视觉输出，
+ * 因此不会有渐变、不会有 blur、也不会再持续动画。 */
 html[data-app="user"] .cs-glasshero {
   position: relative;
   overflow: hidden;
   border-radius: var(--cs-radius-hero);
   border: 1px solid var(--cs-border);
-  background: var(--cs-surface);
+  background: var(--cs-layer-content);
   box-shadow: var(--cs-shadow-surface);
-  isolation: isolate;
 }
-html[data-app="user"] .cs-glasshero__aurora {
-  position: absolute;
-  inset: -30% -10% auto -10%;
-  height: 120%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(38% 52% at 18% 22%, rgba(52, 120, 246, .20) 0%, transparent 68%),
-    radial-gradient(34% 46% at 78% 12%, rgba(29, 184, 232, .16) 0%, transparent 70%),
-    radial-gradient(30% 40% at 58% 78%, rgba(106, 99, 255, .12) 0%, transparent 72%);
-  filter: blur(2px);
-  animation: cs-aurora var(--cs-aurora-dur, 22s) var(--cs-ease-standard) infinite alternate;
-}
+html[data-app="user"] .cs-glasshero__aurora { display: none; }
 html[data-app="user"] .cs-glasshero__content { position: relative; z-index: 1; }
-@keyframes cs-aurora {
-  from { transform: translate3d(-2%, -1%, 0) scale(1); }
-  to { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-app="user"] .cs-glasshero__aurora { animation: none; }
-}
-html[data-page-visible="false"] .cs-glasshero__aurora { animation-play-state: paused; }
 
 /* =========================================================================
  * 5. PageHeader（§8）
@@ -314,9 +305,8 @@ html[data-app="user"] .cs-actionbar {
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--cs-border);
   border-radius: 0 0 var(--cs-radius-panel) var(--cs-radius-panel);
-  background: var(--cs-surface-glass);
-  -webkit-backdrop-filter: var(--cs-glass-blur);
-  backdrop-filter: var(--cs-glass-blur);
+  /* 不透明实体面：底部操作栏不再用玻璃（滚动内容不会透出来干扰按钮文字）。 */
+  background: var(--cs-layer-content);
   animation: cs-actionbar-in var(--cs-dur-standard) var(--cs-ease-enter) both;
 }
 @keyframes cs-actionbar-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

@@ -148,7 +148,9 @@ html[data-app="user"] .textarea {
   min-height: var(--control-h);
   padding: 8px var(--sp-3);
   border-radius: var(--radius-sm);
-  border-color: var(--border-strong);
+  /* L3 输入层：凹陷冷白底 + 清晰灰描边（见 legacy-bridge 的同一组规则）。 */
+  border-color: var(--border-field);
+  background: var(--bg-field);
   font-size: var(--fs-14);
   transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
 }
@@ -429,7 +431,7 @@ a.cs-tab:hover { text-decoration: none; }
   border-radius: 999px; background: var(--bg-surface-sunken);
   color: var(--text-secondary); font-size: 10px; font-weight: 650;
 }
-.cs-tab[aria-selected="true"] .cs-tab__count { background: var(--interactive-soft); color: var(--interactive); }
+.cs-tab[aria-selected="true"] .cs-tab__count { background: var(--interactive-soft); color: var(--cs-primary-text, var(--interactive)); }
 
 .cs-segmented {
   display: inline-flex; padding: 2px; gap: 2px;
@@ -459,7 +461,7 @@ a.cs-tab:hover { text-decoration: none; }
   transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
 .cs-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
-.cs-chip[aria-pressed="true"] { background: var(--interactive-soft); border-color: #C9CEFB; color: var(--interactive); font-weight: 600; }
+.cs-chip[aria-pressed="true"] { background: var(--interactive-soft); border-color: var(--border-selected, #C9CEFB); color: var(--cs-primary-text, var(--interactive)); font-weight: 600; }
 .cs-chip__x { display: inline-grid; place-items: center; opacity: .7; }
 
 /* ---- 进度组件（蓝图 §9） ---- */
@@ -618,7 +620,7 @@ a.cs-tab:hover { text-decoration: none; }
   z-index: var(--z-sticky);
   display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
   padding: var(--sp-3) 0 calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(180deg, rgba(245,246,248,0) 0%, var(--bg-canvas) 34%);
+  background: linear-gradient(180deg, rgba(233, 237, 243, 0) 0%, var(--bg-canvas) 34%);
 }
 .cs-stickybar__spacer { flex: 1; min-width: var(--sp-2); }
 
@@ -710,7 +712,7 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
   min-width: 0;
 }
 .cs-popover__item:hover { background: var(--bg-surface-muted); }
-.cs-popover__item[data-unread="true"] { background: #F7F8FF; }
+.cs-popover__item[data-unread="true"] { background: var(--bg-selected, #EEF3FE); }
 .cs-popover__main { flex: 1; min-width: 0; }
 .cs-popover__itemtitle { font-size: var(--fs-13); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-popover__itemsub { color: var(--text-secondary); font-size: var(--fs-11); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -727,9 +729,16 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
   font: inherit; font-size: var(--fs-12); cursor: pointer;
   transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
 }
-.cs-stepper__step:disabled { cursor: default; opacity: .6; }
-.cs-stepper__step[data-state="current"] { border-color: var(--interactive); background: var(--interactive-soft); color: var(--interactive); font-weight: 650; }
-.cs-stepper__step[data-state="done"] { border-color: #B7E0CC; background: var(--green-soft-2); color: var(--green-700); }
+/* 未到达步骤：靠"明确描边 + 弱化灰字"表达未激活，不再用 opacity .6 整体降对比度。 */
+.cs-stepper__step:disabled { cursor: default; }
+.cs-stepper__step[data-state="current"] {
+  border-color: var(--cs-primary);
+  background: var(--bg-selected);
+  color: var(--cs-primary-text);
+  font-weight: 650;
+}
+.cs-stepper__step[data-state="done"] { border-color: #9FD3B9; background: var(--green-soft-2); color: var(--green-700); }
+.cs-stepper__step[data-state="todo"]:disabled { color: var(--cs-text-muted); border-color: var(--cs-border); background: var(--cs-surface); }
 .cs-stepper__index {
   display: grid; place-items: center;
   width: 18px; height: 18px; border-radius: 50%;
@@ -780,7 +789,7 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
   background: var(--interactive-soft);
   animation: cs-slide-down var(--motion-fast) var(--ease-out);
 }
-.cs-bulkbar__count { font-size: var(--fs-12); font-weight: 650; color: var(--interactive); }
+.cs-bulkbar__count { font-size: var(--fs-12); font-weight: 650; color: var(--cs-primary-text, var(--interactive)); }
 
 /* 移动端卡片列表：宽表格在 <900px 换成卡片，不产生页面级横向滚动（蓝图 §13） */
 .cs-rowcards { display: flex; flex-direction: column; gap: var(--sp-3); }
@@ -915,7 +924,7 @@ mark.cs-mark { background: rgba(14,165,183,.18); color: inherit; border-radius: 
   font-size: var(--fs-12); cursor: pointer;
   transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
 }
-.cs-multiselect__item[data-checked="true"] { border-color: var(--interactive); background: var(--interactive-soft); color: var(--interactive); font-weight: 600; }
+.cs-multiselect__item[data-checked="true"] { border-color: var(--cs-primary, var(--interactive)); background: var(--interactive-soft); color: var(--cs-primary-text, var(--interactive)); font-weight: 600; }
 
 /* ---- 范围输入 ---- */
 .cs-range { display: flex; align-items: flex-end; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
@@ -1036,7 +1045,7 @@ button.cs-stattile:hover { border-color: var(--border-strong); }
 .cs-stattile[data-tone="ok"] .cs-stattile__value { color: var(--green-700); }
 .cs-stattile[data-tone="warn"] .cs-stattile__value { color: var(--amber-600); }
 .cs-stattile[data-tone="danger"] .cs-stattile__value { color: var(--red-700); }
-.cs-stattile[data-tone="info"] .cs-stattile__value { color: var(--interactive); }
+.cs-stattile[data-tone="info"] .cs-stattile__value { color: var(--cs-primary-text, var(--interactive)); }
 
 /* ---- 工具条 ---- */
 html[data-app="user"] .toolbar { gap: var(--sp-2); }

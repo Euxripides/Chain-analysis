@@ -22,6 +22,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/spool"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
@@ -35,6 +36,7 @@ type Scheduler struct {
 	cfg      *config.Config
 	store    *store.Store
 	prov     provider.Provider
+	routes   *route.Registry
 	raw      *rawstore.Store
 	writer   *ingest.Writer
 	planner  *Planner
@@ -77,6 +79,31 @@ type Scheduler struct {
 }
 
 func (sc *Scheduler) SetTokenMetadata(service *tokenmeta.Service) { sc.tokenMeta = service }
+
+// SetRoutes 注入运行时路由注册表：Shard 取数与 Provider 归属都以固化路由为准。
+func (sc *Scheduler) SetRoutes(reg *route.Registry) {
+	sc.routes = reg
+	sc.planner.SetRoutes(reg)
+}
+
+// ankrClient 返回底层 Ankr 实现。
+//
+// 引入 Runtime Route Registry 之后 sc.prov 是路由包装器，直接类型断言 *ankr.Client 永远失败，
+// 会让 Ankr 的连接数上限探测与自适应并发静默失效 —— 这类"静默降级"比编译错误更难发现，
+// 所以统一从这个入口取，并保留对未包装场景（单测直接注入 Ankr）的兼容。
+func (sc *Scheduler) ankrClient() (*ankr.Client, bool) {
+	if ac, ok := sc.prov.(*ankr.Client); ok {
+		return ac, true
+	}
+	if sc.routes != nil {
+		if p, ok := sc.routes.Get(route.ProviderAnkr); ok {
+			if ac, ok := p.(*ankr.Client); ok {
+				return ac, true
+			}
+		}
+	}
+	return nil, false
+}
 
 // SetCountOracle V1.2：注入 Count Oracle 平面（nil → Planner 完全保持 V1.1 行为）。
 func (sc *Scheduler) SetCountOracle(o countoracle.Oracle) {
@@ -301,7 +328,7 @@ func (sc *Scheduler) concurrencyLoop(ctx context.Context) {
 			active := atomic.LoadInt64(&sc.active)
 			cur := sc.currentConcurrency()
 
-			if ac, ok := sc.prov.(*ankr.Client); ok {
+			if ac, ok := sc.ankrClient(); ok {
 				conn := ac.ConnectionLimitCount()
 				if conn > sc.lastConnLimit {
 					cur = maxInt(1, cur/2)

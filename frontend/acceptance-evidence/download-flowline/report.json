@@ -1,0 +1,571 @@
+{
+  "route": "/app-v2/downloads/new",
+  "mode": "构建产物 + 浏览器侧服务端夹具（请求体为页面真实发出）",
+  "generated_at": "2026-09-20T19:50:37.698Z",
+  "reuse_policy_visible": false,
+  "preview_request_reuse_policy": "prefer_local",
+  "create_request_reuse_policy": "prefer_local",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "screenshot": "desktop-1440x900.png",
+      "step_order": [
+        "对象与地址",
+        "链与范围",
+        "Dataset",
+        "Coverage 预览",
+        "创建任务"
+      ],
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "dataset_semantics": {
+        "checkboxCount": 7
+      },
+      "dialog_style": {
+        "containerOpacity": "1",
+        "containerFilter": "none",
+        "containerBackdrop": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(72, 86, 107)",
+        "titleColor": "rgb(16, 26, 43)",
+        "transform": "none"
+      },
+      "dataset_limit": {
+        "checked": 6,
+        "dialog": true
+      },
+      "dataset_keyboard": {
+        "before": false,
+        "after": true,
+        "restored": false
+      }
+    },
+    "laptop": {
+      "width": 1024,
+      "height": 768,
+      "screenshot": "laptop-1024x768.png",
+      "step_order": [
+        "对象与地址",
+        "链与范围",
+        "Dataset",
+        "Coverage 预览",
+        "创建任务"
+      ],
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "dataset_semantics": {
+        "checkboxCount": 7
+      },
+      "dialog_style": {
+        "containerOpacity": "1",
+        "containerFilter": "none",
+        "containerBackdrop": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(72, 86, 107)",
+        "titleColor": "rgb(16, 26, 43)",
+        "transform": "none"
+      }
+    },
+    "tablet": {
+      "width": 768,
+      "height": 1024,
+      "screenshot": "tablet-768x1024.png",
+      "step_order": [
+        "对象",
+        "范围",
+        "Dataset",
+        "预览",
+        "创建"
+      ],
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "dataset_semantics": {
+        "checkboxCount": 7
+      },
+      "dialog_style": {
+        "containerOpacity": "1",
+        "containerFilter": "none",
+        "containerBackdrop": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(72, 86, 107)",
+        "titleColor": "rgb(16, 26, 43)",
+        "transform": "none"
+      }
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "screenshot": "mobile-390x844.png",
+      "step_order": [
+        "对象",
+        "范围",
+        "Dataset",
+        "预览",
+        "创建"
+      ],
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "dataset_semantics": {
+        "checkboxCount": 0
+      },
+      "dialog_style": {
+        "containerOpacity": "1",
+        "containerFilter": "none",
+        "containerBackdrop": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(72, 86, 107)",
+        "titleColor": "rgb(16, 26, 43)",
+        "transform": "none"
+      },
+      "mobile": {
+        "columns": 2,
+        "verticalRail": true,
+        "bar": {
+          "x": 0,
+          "y": 865,
+          "width": 433,
+          "height": 73
+        },
+        "paddingBottom": "96px",
+        "touchTargets": 5,
+        "smallTargets": []
+      }
+    }
+  },
+  "horizontal_overflow": {
+    "desktop": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "offenders": []
+    },
+    "laptop": {
+      "scrollWidth": 1024,
+      "clientWidth": 1024,
+      "bodyScrollWidth": 1024,
+      "offenders": []
+    },
+    "tablet": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "bodyScrollWidth": 768,
+      "offenders": [
+        {
+          "tag": "span",
+          "cls": "dl-dataset-card__desc",
+          "right": 777,
+          "width": 124,
+          "position": "static"
+        }
+      ]
+    },
+    "mobile": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": []
+    }
+  },
+  "contrast_checks": {
+    "desktop": {
+      "页面标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "24px",
+        "fontWeight": "700",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      },
+      "章节标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "字段标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "Dataset 标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 15.92,
+        "background": "rgb(248, 251, 255)"
+      },
+      "右侧指标标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "右侧指标数值": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "20px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "主按钮": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 5.17,
+        "background": "rgb(37, 99, 235)"
+      },
+      "轨道标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "13px",
+        "fontWeight": "650",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      }
+    },
+    "laptop": {
+      "页面标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "26px",
+        "fontWeight": "700",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      },
+      "章节标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "字段标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "Dataset 标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 15.92,
+        "background": "rgb(248, 251, 255)"
+      },
+      "右侧指标标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "右侧指标数值": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "22px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "主按钮": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 5.17,
+        "background": "rgb(37, 99, 235)"
+      },
+      "轨道标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      }
+    },
+    "tablet": {
+      "页面标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "26px",
+        "fontWeight": "700",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      },
+      "章节标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "字段标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "Dataset 标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 15.92,
+        "background": "rgb(248, 251, 255)"
+      },
+      "右侧指标标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "右侧指标数值": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "22px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "主按钮": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 5.17,
+        "background": "rgb(37, 99, 235)"
+      },
+      "轨道标签": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      }
+    },
+    "mobile": {
+      "页面标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "22px",
+        "fontWeight": "700",
+        "contrast": 14.06,
+        "background": "rgb(233, 237, 243)"
+      },
+      "章节标题": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      },
+      "字段标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "主按钮": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 5.17,
+        "background": "rgb(37, 99, 235)"
+      },
+      "右侧指标标签": {
+        "color": "rgb(82, 98, 122)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 6.2,
+        "background": "rgb(255, 255, 255)"
+      },
+      "右侧指标数值": {
+        "color": "rgb(11, 31, 58)",
+        "fontSize": "22px",
+        "fontWeight": "700",
+        "contrast": 16.52,
+        "background": "rgb(255, 255, 255)"
+      }
+    }
+  },
+  "text_clarity_checks": {},
+  "step_order": {},
+  "dataset_semantics": {},
+  "reuse_policy_probe": {
+    "desktop": {
+      "initial": {
+        "names": 81,
+        "hiddenControls": 14
+      },
+      "verdict_dialog": {
+        "names": 85,
+        "hiddenControls": 14
+      },
+      "preview_dialog": {
+        "names": 89,
+        "hiddenControls": 14
+      },
+      "create_dialog": {
+        "names": 89,
+        "hiddenControls": 14
+      }
+    },
+    "laptop": {
+      "initial": {
+        "names": 81,
+        "hiddenControls": 13
+      },
+      "verdict_dialog": {
+        "names": 85,
+        "hiddenControls": 13
+      },
+      "preview_dialog": {
+        "names": 89,
+        "hiddenControls": 26
+      },
+      "create_dialog": {
+        "names": 89,
+        "hiddenControls": 28
+      }
+    },
+    "tablet": {
+      "initial": {
+        "names": 81,
+        "hiddenControls": 15
+      },
+      "verdict_dialog": {
+        "names": 85,
+        "hiddenControls": 15
+      },
+      "preview_dialog": {
+        "names": 89,
+        "hiddenControls": 28
+      },
+      "create_dialog": {
+        "names": 89,
+        "hiddenControls": 30
+      }
+    },
+    "mobile": {
+      "initial": {
+        "names": 49,
+        "hiddenControls": 12
+      },
+      "verdict_dialog": {
+        "names": 53,
+        "hiddenControls": 2
+      },
+      "preview_dialog": {
+        "names": 51,
+        "hiddenControls": 9
+      },
+      "create_dialog": {
+        "names": 51,
+        "hiddenControls": 12
+      }
+    }
+  },
+  "dom_contract": {
+    "desktop": {
+      "missing": [],
+      "parse_summary_missing": []
+    },
+    "laptop": {
+      "missing": [],
+      "parse_summary_missing": []
+    },
+    "tablet": {
+      "missing": [],
+      "parse_summary_missing": []
+    },
+    "mobile": {
+      "missing": [],
+      "parse_summary_missing": []
+    }
+  },
+  "stale_preview": {
+    "desktop": {
+      "opacity": "1",
+      "borderTopColor": "rgb(166, 95, 0)",
+      "borderTopWidth": "1px"
+    },
+    "laptop": {
+      "opacity": "1",
+      "borderTopColor": "rgb(166, 95, 0)",
+      "borderTopWidth": "1px"
+    },
+    "tablet": {
+      "opacity": "1",
+      "borderTopColor": "rgb(166, 95, 0)",
+      "borderTopWidth": "1px"
+    },
+    "mobile": {
+      "opacity": "1",
+      "borderTopColor": "rgb(166, 95, 0)",
+      "borderTopWidth": "1px"
+    }
+  },
+  "reduced_motion": {
+    "moving_dots": 0,
+    "initial_dashoffset": "0px",
+    "final_dashoffset": "0px",
+    "dialog_style": null,
+    "preview_request_reuse_policy": "prefer_local",
+    "create_request_reuse_policy": "prefer_local",
+    "console_errors": [],
+    "page_errors": [],
+    "screenshot": "reduced-motion-1440x900.png"
+  },
+  "console_errors": [],
+  "page_errors": [],
+  "csp_violations": [],
+  "screenshots": [
+    "risk-dialog-1440x900.png",
+    "desktop-1440x900.png",
+    "create-result-desktop.png",
+    "laptop-1024x768.png",
+    "create-result-laptop.png",
+    "tablet-768x1024.png",
+    "create-result-tablet.png",
+    "risk-dialog-390x844.png",
+    "mobile-390x844.png",
+    "create-result-mobile.png",
+    "reduced-motion-1440x900.png",
+    "create-result-reduced-motion.png"
+  ],
+  "multi_chain": {
+    "preview_requests": 2,
+    "create_requests": 2,
+    "preview_chains": [
+      "bsc",
+      "tron"
+    ],
+    "create_chains": [
+      "bsc",
+      "tron"
+    ]
+  },
+  "reuse_policy_probe_notes": [
+    "desktop/initial 有 14 个 CSS 假隐藏控件",
+    "desktop/verdict_dialog 有 14 个 CSS 假隐藏控件",
+    "desktop/preview_dialog 有 14 个 CSS 假隐藏控件",
+    "desktop/create_dialog 有 14 个 CSS 假隐藏控件",
+    "laptop/initial 有 13 个 CSS 假隐藏控件",
+    "laptop/verdict_dialog 有 13 个 CSS 假隐藏控件",
+    "laptop/preview_dialog 有 26 个 CSS 假隐藏控件",
+    "laptop/create_dialog 有 28 个 CSS 假隐藏控件",
+    "tablet/initial 有 15 个 CSS 假隐藏控件",
+    "tablet/verdict_dialog 有 15 个 CSS 假隐藏控件",
+    "tablet/preview_dialog 有 28 个 CSS 假隐藏控件",
+    "tablet/create_dialog 有 30 个 CSS 假隐藏控件",
+    "mobile/initial 有 12 个 CSS 假隐藏控件",
+    "mobile/verdict_dialog 有 2 个 CSS 假隐藏控件",
+    "mobile/preview_dialog 有 9 个 CSS 假隐藏控件",
+    "mobile/create_dialog 有 12 个 CSS 假隐藏控件"
+  ],
+  "forbidden_text_hits": [],
+  "notes": [
+    "reduced-motion：激活轨道在预览前后 stroke-dashoffset 相同（pathLength 立即到最终值，没有过渡绘制）"
+  ],
+  "problems": [],
+  "ok": true
+}

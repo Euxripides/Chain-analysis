@@ -9,7 +9,12 @@ StartLimitIntervalSec=0
 Type=simple
 Environment=PATH=/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=/home/euripides/projects/blockchain-platform/frontend
-ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js --host 0.0.0.0
+# 绑定回环，不监听 0.0.0.0。
+# 依据：docs/multiuser-login-and-isolation-plan.md 决策 D3 / R3「老控制台只留内网回环，
+# 内网排障经 SSH 隧道访问」。老控制台自身没有登录页，且入口层曾为无会话请求注入共享服务
+# 凭据（实测未登录即可读到真实业务数据、审计无法归到人），因此不允许它回到局域网可达状态。
+# 注意：命令行 --host 会覆盖 vite.config.ts 里的 server.host，两处必须同为回环。
+ExecStart=/home/euripides/.nvm/versions/node/v24.20.0/bin/node /home/euripides/projects/blockchain-platform/frontend/node_modules/vite/bin/vite.js --host 127.0.0.1
 Restart=on-failure
 RestartSec=5s
 StandardOutput=append:/tmp/vite.log

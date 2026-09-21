@@ -1,0 +1,7 @@
+{
+  "case_org_default": "129ee936-1e32-4ce8-bd89-272f18e1b421",
+  "case_org_acme": "5b72f710-a004-4a82-a4ba-47fbfbb87d2d",
+  "investigation_org_acme": "3ef0d585-b38a-4cee-bd7f-3d72d20b86b1",
+  "evidence_org_acme": "7b896f80-58a3-4959-bf63-46b15f23d927",
+  "note": "均为库中真实存在且带 organization_id 的对象；用于证明跨组织隔离而不是'不存在 ID 404'"
+}

@@ -17,7 +17,7 @@ import (
 //   - EventSignature 为空、EventVerified=0（没有 EVM 签名，也没有 ABI 可校验）；
 //   - EventSource 标注真实来源（solana_program_log / solana_program_data），
 //     供下游按 event_source 排除 EVM 式解码。
-func NormalizeProgramLog(raw json.RawMessage) (ingest.LogRow, error) {
+func NormalizeProgramLog(raw json.RawMessage, provider string) (ingest.LogRow, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return ingest.LogRow{}, err
@@ -50,11 +50,53 @@ func NormalizeProgramLog(raw json.RawMessage) (ingest.LogRow, error) {
 		Data:      stringField(m, "data"),
 		Removed:   removed,
 		Timestamp: time.Unix(timestamp, 0).UTC(),
-		Provider:  "solana",
+		Provider:  providerOrDefault(provider),
 		EventName: strings.TrimSpace(stringField(m, "eventName")),
 		// 没有 EVM 签名与 ABI 校验：留空/0，而不是编一个签名出来。
 		EventSignature: "",
 		EventSource:    source,
 		EventVerified:  0,
+	}, nil
+}
+
+// NormalizeSolanaProgramLog 把同一份程序日志行转成 solana_program_logs 行（规范 §8.4）。
+//
+// 与 NormalizeProgramLog 是双写关系（规范 §2.3）：blockchain.logs 供跨链事件面查询，
+// solana_program_logs 保留 Solana 原生列（slot/signature/program_id/message/invoke_depth）。
+// success 缺省为 1：Provider 没有给出失败证据就不判失败，显式 false 才记 0。
+func NormalizeSolanaProgramLog(raw json.RawMessage, provider string) (ingest.SolanaProgramLogRow, error) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return ingest.SolanaProgramLogRow{}, err
+	}
+	signature := strings.TrimSpace(stringField(m, "transactionHash"))
+	if signature == "" {
+		return ingest.SolanaProgramLogRow{}, errors.New("solana program log row missing transactionHash")
+	}
+	slot, err := strconv.ParseUint(strings.TrimSpace(stringField(m, "blockNumber")), 10, 64)
+	if err != nil {
+		return ingest.SolanaProgramLogRow{}, errors.New("solana program log row has invalid block number")
+	}
+	timestamp := numberField(m, "timestamp")
+	if timestamp <= 0 {
+		timestamp = time.Now().Unix()
+	}
+	// §3 行契约把 programId 放在 address 上（programId 字段留空），两个键都认。
+	programID := strings.TrimSpace(stringField(m, "programId"))
+	if programID == "" {
+		programID = strings.TrimSpace(stringField(m, "address"))
+	}
+	success := uint8(1)
+	if _, ok := m["success"]; ok && !boolField(m, "success") {
+		success = 0
+	}
+	return ingest.SolanaProgramLogRow{
+		Chain: "solana", Slot: slot, Timestamp: time.Unix(timestamp, 0).UTC(),
+		Signature: signature, LogIndex: uint32(numberField(m, "logIndex")),
+		ProgramID: programID, Message: stringField(m, "data"),
+		InvokeDepth: uint16(numberField(m, "invokeDepth")), Success: success,
+		SourceProvider:  providerOrDefault(provider),
+		SourceAPI:       strings.TrimSpace(stringField(m, "sourceApi")),
+		SourceRequestID: strings.TrimSpace(stringField(m, "sourceRequestId")),
 	}, nil
 }

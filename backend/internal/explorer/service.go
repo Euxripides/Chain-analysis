@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
@@ -132,24 +133,14 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 		return nil, err
 	}
 	for i := range req.Addresses {
-		// Solana 地址大小写敏感（ADR-023）：只校验 base58，绝不折叠；
+		// Solana 地址大小写敏感（ADR-023）：规范化只保留 base58 原文，绝不折叠；
 		// 折叠后查询条件会变成另一个地址，表现为"明明有数据却查不到"。
-		switch req.Chain {
-		case "tron":
-			normalized, err := tron.NormalizeTronAddress(req.Addresses[i])
-			if err != nil {
-				return nil, err
-			}
-			req.Addresses[i] = normalized
-		case "solana":
-			normalized, err := soladdr.NormalizeSolanaAddress(req.Addresses[i])
-			if err != nil {
-				return nil, err
-			}
-			req.Addresses[i] = normalized
-		default:
-			req.Addresses[i] = strings.ToLower(req.Addresses[i])
+		normalized, err := addressnorm.Normalize(req.Chain, req.Addresses[i])
+		if err != nil {
+			// 归一到 ErrInvalidFilter：HTTP 层据此返回 400 而不是 500。
+			return nil, fmt.Errorf("%w: %v", ErrInvalidFilter, err)
 		}
+		req.Addresses[i] = normalized
 	}
 	rows, err := s.queryDataset(ctx, req)
 	if err != nil {
@@ -290,12 +281,12 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		}
 	case "activity":
 		if f.FromAddress != "" {
-			from := strings.ToLower(f.FromAddress)
+			from := addressnorm.NormalizeKey(req.Chain, f.FromAddress)
 			conds = append(conds, "((direction IN ('out','self') AND address = ?) OR (direction = 'in' AND counterparty = ?))")
 			args = append(args, from, from)
 		}
 		if f.ToAddress != "" {
-			to := strings.ToLower(f.ToAddress)
+			to := addressnorm.NormalizeKey(req.Chain, f.ToAddress)
 			conds = append(conds, "((direction IN ('in','self') AND address = ?) OR (direction = 'out' AND counterparty = ?))")
 			args = append(args, to, to)
 		}
@@ -333,16 +324,9 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 }
 
 func appendPartyFilters(conds *[]string, args *[]any, chain string, f Filter) {
-	normalize := func(v string) string {
-		if chain == "tron" {
-			n, err := tron.NormalizeTronAddress(v)
-			if err == nil {
-				return n
-			}
-			return v
-		}
-		return strings.ToLower(v)
-	}
+	// 查询键归一化必须与写入侧同源：合法地址结果一致，非法输入按原样绑定
+	// （历史 tron 分支同样在规范化失败时回退原值）。
+	normalize := func(v string) string { return addressnorm.NormalizeKey(chain, v) }
 	if f.FromAddress != "" {
 		*conds = append(*conds, "from_address = ?")
 		*args = append(*args, normalize(f.FromAddress))
@@ -694,11 +678,7 @@ func (s *Service) resolveAddressTypes(ctx context.Context, chain string, rows []
 }
 
 func addressTypeKey(chain, address string) string {
-	address = strings.TrimSpace(address)
-	if chain == "tron" {
-		return address
-	}
-	return strings.ToLower(address)
+	return addressnorm.NormalizeKey(chain, address)
 }
 
 func dedupe(in []string) []string {

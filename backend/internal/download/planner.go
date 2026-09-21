@@ -16,6 +16,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 	"golang.org/x/sync/errgroup"
 )
@@ -56,7 +57,8 @@ type Planner struct {
 	lpt               bool
 	planningDeadline  time.Duration
 	prov              provider.Provider
-	zeroSkipped       sync.Map // itemID → bool（Ankr verify 确认空，跳过该 dataset）
+	routes            *route.Registry // 路由固化来源（nil = 不写路由列，保持旧行为）
+	zeroSkipped       sync.Map        // itemID → bool（Ankr verify 确认空，跳过该 dataset）
 	slotMu            sync.Mutex
 	slotCacheAt       time.Time
 	slotCache         *model.SchedulerState
@@ -64,6 +66,39 @@ type Planner struct {
 	// V1.2 Planning 软预算（§16）：只限制"等 Count"的时间，绝不卡死规划流程
 	planBudgetSet bool
 	planBudgetAt  time.Time
+}
+
+// SetRoutes 注入运行时路由注册表：Shard 创建时把路由固化进列（开发文档 §9.1）。
+//
+// 后台改路由只影响新 Shard；恢复旧 Shard 时读取列里的固化值，缺失才回落到链级默认。
+func (p *Planner) SetRoutes(reg *route.Registry) { p.routes = reg }
+
+// createShards 是 Planner 内部唯一的落库入口：先固化路由，再写库。
+func (p *Planner) createShards(ctx context.Context, chain string, shards []model.Shard) error {
+	p.applyRoutes(chain, shards)
+	return p.store.CreateShards(ctx, shards)
+}
+
+// applyRoutes 为还没有路由的 Shard 填上当前解析结果。
+// 解析不到（例如 Solana 未启用 dRPC）时保持空串，运行期按链级默认回退。
+func (p *Planner) applyRoutes(chain string, shards []model.Shard) {
+	if p.routes == nil {
+		return
+	}
+	for i := range shards {
+		if shards[i].ProviderKey != "" {
+			continue
+		}
+		r, ok := p.routes.Resolve(chain, shards[i].Dataset)
+		if !ok {
+			continue
+		}
+		shards[i].ProviderKey = r.ProviderKey
+		shards[i].APIChannel = r.APIChannel
+		shards[i].OperationClass = r.OperationClass
+		shards[i].RoutingPolicyKey = r.PolicyKey
+		shards[i].RoutingPolicyRevision = r.PolicyRevision
+	}
 }
 
 // beginPlanBudget 开启本 job 的 Planning 预算（Count 不能拖慢下载，§16）。
@@ -233,7 +268,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 			return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
 		}
 		sh := p.baseShard(job, subj, item)
-		return p.store.CreateShards(ctx, []model.Shard{sh})
+		return p.createShards(ctx, job.Chain, []model.Shard{sh})
 	}
 
 	var gaps []store.BlockInterval
@@ -259,7 +294,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 			p.estimateFor(ctx, job, subj, item, ds)
 		}
 		sh := p.baseShard(job, subj, item)
-		return p.store.CreateShards(ctx, []model.Shard{sh})
+		return p.createShards(ctx, job.Chain, []model.Shard{sh})
 	}
 	var intervals []store.BlockInterval
 	for _, c := range covered {
@@ -299,7 +334,7 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 		"UPDATE download_datasets SET stats = COALESCE(stats,'{}'::jsonb) || $2::jsonb WHERE id=$1", item.ID, stats); err != nil {
 		return err
 	}
-	return p.store.CreateShards(ctx, []model.Shard{sh})
+	return p.createShards(ctx, job.Chain, []model.Shard{sh})
 }
 
 func tronTimeShardCount(job *model.DownloadJob) int {
@@ -491,7 +526,7 @@ func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJ
 	}
 	intervals := p.tronDataAwareTimeIntervals(ctx, planningJob, subj.Subject, item.Dataset, time.Now())
 	if len(intervals) == 0 {
-		return p.store.CreateShards(ctx, []model.Shard{p.baseShard(job, subj, item)})
+		return p.createShards(ctx, job.Chain, []model.Shard{p.baseShard(job, subj, item)})
 	}
 	shards := make([]model.Shard, 0, len(intervals))
 	for i, interval := range intervals {
@@ -504,7 +539,7 @@ func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJ
 		})
 	}
 	p.log.Info("TRON fingerprint stream split into bounded time shards", "job_id", job.ID, "dataset", item.Dataset, "address", subj.Subject, "shards", len(shards))
-	return p.store.CreateShards(ctx, shards)
+	return p.createShards(ctx, job.Chain, shards)
 }
 
 func tronIncrementalPlanningJob(job *model.DownloadJob, state *store.AddressDatasetSyncState, now time.Time) (*model.DownloadJob, bool) {
@@ -714,7 +749,7 @@ func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob,
 			})
 		}
 		p.log.Info("multi-range plan (quantile)", "dataset", item.Dataset, "ranges", len(shards), "job_mode", job.Mode)
-		return p.store.CreateShards(ctx, shards)
+		return p.createShards(ctx, job.Chain, shards)
 	}
 	// 数据段：共享 n 个 Range
 	gaps = dataGaps
@@ -728,7 +763,7 @@ func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob,
 		if len(shards) == 0 {
 			return nil
 		}
-		return p.store.CreateShards(ctx, shards)
+		return p.createShards(ctx, job.Chain, shards)
 	}
 	for _, g := range gaps {
 		span := g.To - g.From + 1
@@ -771,7 +806,7 @@ func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob,
 		return nil
 	}
 	p.log.Info("multi-range plan", "dataset", item.Dataset, "ranges", len(shards), "job_mode", job.Mode)
-	return p.store.CreateShards(ctx, shards)
+	return p.createShards(ctx, job.Chain, shards)
 }
 
 // shardCountFor V1.1 §24/§41-§44：Profile HIT → preferred_shard_count；MISS → 模式默认；
@@ -870,6 +905,11 @@ func (p *Planner) ContinueShards(ctx context.Context, sh model.Shard) error {
 			FromTimestamp: sh.FromTimestamp, ToTimestamp: sh.ToTimestamp,
 			Status: model.ShardPending, Priority: sh.Priority, MaxRetries: defaultMaxRetries,
 			PageState: sh.PageState,
+			// 自适应拆分的子 Shard 必须沿用父 Shard 的路由固化值：
+			// 中途重新解析路由会让同一个 Shard 家族跨 Provider 换源。
+			ProviderKey: sh.ProviderKey, APIChannel: sh.APIChannel, OperationClass: sh.OperationClass,
+			RoutingPolicyKey: sh.RoutingPolicyKey, RoutingPolicyRevision: sh.RoutingPolicyRevision,
+			ProfileRevision: sh.ProfileRevision,
 		}
 		newShards = append(newShards, ns)
 	}

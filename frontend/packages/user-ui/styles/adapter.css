@@ -119,11 +119,21 @@ html[data-app="user"] .ant-tabs-top > .ant-tabs-nav::before { border-bottom-colo
 html[data-app="user"] .ant-tabs-tab { transition: color var(--cs-dur-fast) var(--cs-ease-enter); }
 
 html[data-app="user"] .ant-form-item-label > label { color: var(--cs-text-primary); }
+/* L3 输入层（2026-09-20）：Ant 的输入类控件与 .input 共用同一套"凹陷冷白面 + 清晰灰边界"。
+ * 背景色不在 token 层可控（Ant Input 直接吃 colorBgContainer），因此在这里统一声明。 */
 html[data-app="user"] .ant-input,
 html[data-app="user"] .ant-input-affix-wrapper,
 html[data-app="user"] .ant-select-selector,
-html[data-app="user"] .ant-picker {
-  border-color: var(--cs-border-strong);
+html[data-app="user"] .ant-picker,
+html[data-app="user"] .ant-input-number {
+  border-color: var(--cs-border-field);
+  background: var(--cs-field);
+  box-shadow: inset 0 1px 2px rgba(16, 26, 43, .05);
+}
+/* 下拉/日期面板本身是浮层（L2 纯白），不跟着输入面一起变灰。 */
+html[data-app="user"] .ant-select-dropdown,
+html[data-app="user"] .ant-picker-dropdown .ant-picker-panel-container {
+  background: var(--cs-surface);
 }
 html[data-app="user"] .ant-input:hover,
 html[data-app="user"] .ant-input-affix-wrapper:hover,
@@ -144,6 +154,204 @@ html[data-app="user"] .ant-typography code,
 html[data-app="user"] .ant-typography kbd {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* Scroll Container 规则（§22.5）：Ant Drawer / Modal 内部独立滚动，不带动页面 */
+html[data-app="user"] .ant-drawer-body,
+html[data-app="user"] .ant-modal-body {
+
+/* =========================================================================
+ * 新建数据下载（《ChainSight「新建数据下载」页面视觉修订规范》§4 / §8 / §10 / §13 / §16）
+ *
+ * 为什么放在这里而不是页面里：仓库 §1.3 规定"禁止在业务页面里覆写 .ant-*"，
+ * Ant 的结构性调整只能进组件 token 或本适配层。除下拉浮层外全部挂在
+ * `.cs-downloadwizard` 之下；下拉是 Portal，靠 `classNames.popup.root` 带来的
+ * `.cs-select-dropdown-wizard` 定位（两个 Select 共用同一个 popup 类名 = 统一容器）。
+ * 取值一律引用页面视觉令牌（--dl-*，定义在 apps/user-console/src/pages/downloads/download-new.css）。
+ * ========================================================================= */
+
+/* ---------------- Stepper（§8：页面第二视觉焦点） ---------------- */
+html[data-app="user"] .cs-downloadwizard .ant-steps { margin-bottom: 2px; }
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-icon {
+  width: 30px;
+  height: 30px;
+  margin-inline-start: 0;
+  font-size: var(--dl-fs-label);
+  line-height: 28px;
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-title {
+  font-size: var(--dl-fs-body);
+  font-weight: 600;
+  color: var(--dl-ink-title);
+  line-height: 1.35;
+  padding-inline-end: 12px;
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-description {
+  font-size: var(--dl-fs-help);
+  color: var(--dl-ink-key) !important;
+  padding-bottom: 0;
+}
+/* 当前步骤：主蓝实心圆 + 白字 + 深蓝标题 + 蓝色连接线 */
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-process .ant-steps-item-icon {
+  background: var(--dl-blue);
+  border-color: var(--dl-blue);
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-process .ant-steps-item-icon > .ant-steps-icon {
+  color: #FFFFFF;
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-process .ant-steps-item-title { color: var(--dl-blue); }
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-process > .ant-steps-item-container > .ant-steps-item-tail::after {
+  background: var(--dl-card-border);
+}
+/* 已完成：浅蓝底 + 蓝勾 + 蓝色连接线，不灰掉 */
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-finish .ant-steps-item-icon {
+  background: var(--dl-blue-selected);
+  border-color: var(--dl-blue);
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-finish .ant-steps-item-icon > .ant-steps-icon {
+  color: var(--dl-blue);
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-finish .ant-steps-item-title { color: var(--dl-ink-title); }
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-finish > .ant-steps-item-container > .ant-steps-item-tail::after {
+  background: var(--dl-blue);
+}
+/* 未完成：白底灰边 + 灰标题，**不做 disabled 灰化** */
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-wait .ant-steps-item-icon {
+  background: var(--dl-card-bg);
+  border-color: var(--dl-field-border);
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-wait .ant-steps-item-icon > .ant-steps-icon {
+  color: var(--dl-ink-muted);
+}
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-wait .ant-steps-item-title { color: var(--dl-ink-muted); }
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-wait .ant-steps-item-title::after { background: var(--dl-card-border) !important; }
+html[data-app="user"] .cs-downloadwizard .ant-steps .ant-steps-item-container[role="button"] { cursor: pointer; }
+
+/* ---------------- Select（§13：44px / 10px 圆角） ---------------- */
+html[data-app="user"] .cs-downloadwizard .ant-select .ant-select-selector {
+  height: 44px;
+  border-radius: var(--dl-radius-control);
+  border-color: var(--dl-field-border);
+  background: var(--dl-field-bg);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, .03);
+}
+html[data-app="user"] .cs-downloadwizard .ant-select .ant-select-selection-item,
+html[data-app="user"] .cs-downloadwizard .ant-select .ant-select-selection-placeholder {
+  display: flex;
+  align-items: center;
+  line-height: 42px;
+}
+html[data-app="user"] .cs-downloadwizard .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  border-color: var(--dl-field-border-hover);
+  background: var(--dl-card-bg);
+}
+html[data-app="user"] .cs-downloadwizard .ant-select-focused .ant-select-selector {
+  border-color: var(--dl-blue);
+  background: var(--dl-card-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+}
+html[data-app="user"] .cs-downloadwizard .ant-select-status-error .ant-select-selector { border-color: var(--cs-danger); }
+/* 下拉：圆角 12px + 浮层阴影（§23 L2）；选项 42px / 8px 圆角 */
+html[data-app="user"] .cs-select-dropdown-wizard {
+  padding: 6px;
+  border: 1px solid var(--dl-card-border);
+  border-radius: var(--dl-radius-sub);
+  box-shadow: var(--dl-shadow-2);
+}
+html[data-app="user"] .cs-select-dropdown-wizard .ant-select-item {
+  min-height: 42px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+}
+html[data-app="user"] .cs-select-dropdown-wizard .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background: #F3F7FF;
+}
+html[data-app="user"] .cs-select-dropdown-wizard .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--dl-blue-selected);
+  color: var(--dl-ink-title);
+  font-weight: 600;
+}
+
+/* ---------------- Segmented（§16：性能模式降级为次级设置） ---------------- */
+html[data-app="user"] .cs-downloadwizard .ant-segmented {
+  padding: 3px;
+  border: 1px solid var(--dl-card-border);
+  border-radius: var(--dl-radius-control);
+  background: #F2F4F7;
+}
+html[data-app="user"] .cs-downloadwizard .ant-segmented .ant-segmented-item {
+  border-radius: 7px;
+  color: var(--dl-ink-muted);
+  font-size: var(--dl-fs-help);
+}
+html[data-app="user"] .cs-downloadwizard .ant-segmented .ant-segmented-item-selected {
+  background: var(--dl-card-bg);
+  color: var(--dl-blue);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+}
+
+/* ---------------- Tabs（§10.1） ---------------- */
+html[data-app="user"] .cs-downloadwizard .ant-tabs-nav { margin-bottom: 16px; }
+html[data-app="user"] .cs-downloadwizard .ant-tabs-tab {
+  color: var(--dl-ink-body);
+  font-size: var(--dl-fs-body);
+  padding: 10px 0;
+}
+html[data-app="user"] .cs-downloadwizard .ant-tabs-tab + .ant-tabs-tab { margin-left: 24px; }
+html[data-app="user"] .cs-downloadwizard .ant-tabs-tab-active .ant-tabs-tab-btn { color: var(--dl-blue); font-weight: 600; }
+html[data-app="user"] .cs-downloadwizard .ant-tabs-top > .ant-tabs-nav::before { border-bottom-color: var(--dl-card-border); }
+html[data-app="user"] .cs-downloadwizard .ant-tabs-ink-bar { background: var(--dl-blue); height: 2px; }
+
+/* ---------------- Upload.Dragger（§10.2） ---------------- */
+html[data-app="user"] .cs-downloadwizard .ant-upload-wrapper .ant-upload-drag {
+  border: 1.5px dashed var(--dl-field-border);
+  border-radius: var(--dl-radius-sub);
+  background: var(--dl-field-bg);
+  transition: border-color 150ms var(--cs-ease-enter), background 150ms var(--cs-ease-enter);
+}
+html[data-app="user"] .cs-downloadwizard .ant-upload-wrapper .ant-upload-drag:hover,
+html[data-app="user"] .cs-downloadwizard .ant-upload-wrapper .ant-upload-drag-hover {
+  border-color: var(--dl-blue);
+  background: var(--dl-blue-tint);
+}
+html[data-app="user"] .cs-downloadwizard .ant-upload-wrapper .ant-upload-drag .ant-upload { padding: 24px 16px; }
+
+/* ---------------- Input / TextArea（§4.3 / §10.2） ---------------- */
+html[data-app="user"] .cs-downloadwizard input.ant-input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-color: var(--dl-field-border);
+  border-radius: var(--dl-radius-control);
+  background: var(--dl-field-bg);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, .03);
+}
+html[data-app="user"] .cs-downloadwizard input.ant-input:hover { border-color: var(--dl-field-border-hover); background: var(--dl-card-bg); }
+html[data-app="user"] .cs-downloadwizard input.ant-input:focus,
+html[data-app="user"] .cs-downloadwizard input.ant-input-focused {
+  border-color: var(--dl-blue);
+  background: var(--dl-card-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+}
+html[data-app="user"] .cs-downloadwizard textarea.ant-input {
+  border-color: var(--dl-field-border);
+  border-radius: var(--dl-radius-control);
+  background: var(--dl-field-bg);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, .03);
+  font-family: var(--font-mono);
+  font-size: var(--dl-fs-label);
+  line-height: 1.6;
+  color: var(--dl-ink-body);
+}
+html[data-app="user"] .cs-downloadwizard textarea.ant-input::placeholder { color: var(--dl-ink-key); }
+html[data-app="user"] .cs-downloadwizard textarea.ant-input:hover { border-color: var(--dl-field-border-hover); }
+html[data-app="user"] .cs-downloadwizard textarea.ant-input:focus,
+html[data-app="user"] .cs-downloadwizard textarea.ant-input-focused {
+  border-color: var(--dl-blue);
+  background: var(--dl-card-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
 }
 
 /* Scroll Container 规则（§22.5）：Ant Drawer / Modal 内部独立滚动，不带动页面 */

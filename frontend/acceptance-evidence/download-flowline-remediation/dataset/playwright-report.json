@@ -1,0 +1,200 @@
+{
+  "config": {
+    "argv": [
+      "/home/euripides/.nvm/versions/node/v24.20.0/bin/node",
+      "/home/euripides/projects/blockchain-platform/frontend/node_modules/@playwright/test/cli.js",
+      "test",
+      "tests/download-flowline-remediation.spec.ts",
+      "--config",
+      "tests/playwright.dlflow-remediation.config.ts",
+      "--project=uc-desktop"
+    ],
+    "configFile": "/home/euripides/projects/blockchain-platform/frontend/tests/playwright.dlflow-remediation.config.ts",
+    "rootDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "uc-desktop",
+        "name": "uc-desktop",
+        "testDir": "/home/euripides/projects/blockchain-platform/frontend/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/download-flowline-remediation\\.spec\\.ts/"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/home/euripides/projects/blockchain-platform/acceptance-evidence/dual-system-v1/sprint7/dlflow-remediation-20260920T194646Z/playwright-report.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "download-flowline-remediation.spec.ts",
+      "file": "download-flowline-remediation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "DL-FLOW-REM Dataset 上限三层验证（§16 / REM-015 / REM-E2E-013）",
+          "file": "download-flowline-remediation.spec.ts",
+          "line": 135,
+          "column": 6,
+          "specs": [
+            {
+              "title": "DL-FLOW-REM-001 组件确定性：注入 7 项 Dataset 夹具，前 6 项可选、第 7 项进不了 selected、上限说明走 Dialog、键盘与鼠标一致、已选可取消",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5488,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:46:48.143Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "59d894994c3d65308fe5-8fc1ccbc9f2b0772f5f1",
+              "file": "download-flowline-remediation.spec.ts",
+              "line": 136,
+              "column": 3
+            },
+            {
+              "title": "DL-FLOW-REM-002 真实接口层：真实链白名单项全部可选择（EVM 链 <=5），preview 只发送真实支持的 Dataset",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4697,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:46:54.092Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "59d894994c3d65308fe5-1c02c7714296f2ce1715",
+              "file": "download-flowline-remediation.spec.ts",
+              "line": 231,
+              "column": 3
+            },
+            {
+              "title": "DL-FLOW-REM-003 服务端约束层：提交 7 个 Dataset 必须被明确拒绝且不创建任务",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "uc-desktop",
+                  "projectName": "uc-desktop",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1714,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-20T19:46:58.808Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "59d894994c3d65308fe5-bcb9e6c25ebe3284ba07",
+              "file": "download-flowline-remediation.spec.ts",
+              "line": 339,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-20T19:46:47.607Z",
+    "duration": 13140.464,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

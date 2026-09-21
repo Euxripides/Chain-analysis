@@ -45,6 +45,10 @@ interface RoutingPolicy {
   circuit_cooldown_seconds: number;
   rollout_percent: number;
   revision: number;
+  /** 0075 起：api_channel / operation_class 显式保存在 policy config 里（只增不改）。 */
+  config?: Record<string, unknown>;
+  api_channel?: string;
+  operation_class?: string;
   updated_at: string;
 }
 
@@ -87,6 +91,24 @@ function text(value: unknown): string {
   return String(value);
 }
 
+/**
+ * 通道与操作类的唯一口径是 policy config（0075 迁移显式写入），
+ * 运行时不按 policy_key 命名约定推断；旧行两者都缺时展示「—」。
+ */
+function policyChannel(row: RoutingPolicy): string {
+  const direct = row.api_channel;
+  if (typeof direct === "string" && direct !== "") return direct;
+  const fromConfig = row.config?.api_channel;
+  return typeof fromConfig === "string" && fromConfig !== "" ? fromConfig : "";
+}
+
+function policyOperationClass(row: RoutingPolicy): string {
+  const direct = row.operation_class;
+  if (typeof direct === "string" && direct !== "") return direct;
+  const fromConfig = row.config?.operation_class;
+  return typeof fromConfig === "string" && fromConfig !== "" ? fromConfig : "";
+}
+
 function apiErrorDetails(error: unknown): Array<{ label: string; value: ReactNode }> {
   if (!(error instanceof ApiError)) return [];
   const details: Array<{ label: string; value: ReactNode }> = [];
@@ -106,15 +128,22 @@ export default function RoutingPage() {
   const list = useAdminList<RoutingPolicy>("/api/admin/v1/routing-policies", {}, 50);
   const patch = useAdminPatch();
   const [historyKey, setHistoryKey] = useState<string | null>(null);
+  const [chainFilter, setChainFilter] = useState<string>("all");
 
-  const rows = list.items;
+  const allRows = list.items;
+  const chainOptions = useMemo(
+    () => Array.from(new Set(allRows.map((row) => row.chain).filter((chain) => chain !== ""))),
+    [allRows],
+  );
+  const rows = chainFilter === "all" ? allRows : allRows.filter((row) => row.chain === chainFilter);
 
   const summary = useMemo(() => {
     const enabled = rows.filter((row) => row.enabled).length;
     const canary = rows.filter((row) => row.rollout_percent > 0 && row.rollout_percent < 100).length;
     const noFallback = rows.filter((row) => (row.fallback_providers ?? []).length === 0).length;
-    return { enabled, canary, noFallback };
-  }, [rows]);
+    const solana = allRows.filter((row) => row.chain === "solana").length;
+    return { enabled, canary, noFallback, solana };
+  }, [allRows, rows]);
 
   const requirePermission = (permission: string): boolean => {
     if (can(permission)) return true;
@@ -136,6 +165,8 @@ export default function RoutingPage() {
       { label: "熔断错误率", value: "0-1 比例；达到阈值后按熔断 P95 与冷却秒判定摘除" },
       { label: "灰度 rollout_percent", value: "0-100，表示新请求切到主 Provider 的百分比" },
       { label: "Fallback", value: "主 Provider 熔断或限流时按顺序尝试" },
+      { label: "通道 / 操作类", value: "routing_policies.config 的 api_channel 与 operation_class（0075 起显式保存），运行时不按 policy_key 命名约定推断" },
+      { label: "Solana Fallback", value: "本期 Solana 不设置跨 Provider 自动 fallback；失败时暂停并保留 Checkpoint，不在同一 Shard 静默换源" },
       { label: "读取权限", value: "admin:routing:read" },
       { label: "更新权限", value: "admin:routing:update（提交需携带 If-Match 版本）" },
     ]);
@@ -326,7 +357,9 @@ export default function RoutingPage() {
       title: `编辑路由策略 · ${row.policy_key}`,
       body: "选择要修改的字段分组，随后逐个字段录入；提交时自动携带 If-Match 版本。",
       details: [
-        { label: "链 / Dataset", value: `${row.chain} / ${row.dataset}` },
+        { label: "链 / Dataset", value: row.chain + " / " + row.dataset },
+        { label: "通道 api_channel", value: policyChannel(row) || "—" },
+        { label: "操作类 operation_class", value: policyOperationClass(row) || "—" },
         { label: "启用", value: row.enabled ? "true" : "false" },
         { label: "主 Provider", value: row.primary_provider || "—" },
         { label: "Fallback", value: (row.fallback_providers ?? []).join("、") || "无" },
@@ -423,6 +456,20 @@ export default function RoutingPage() {
             <button type="button" className="btn btn--sm" disabled={!list.nextCursor} onClick={list.goNext}>
               下一页
             </button>
+            <select
+              className="select"
+              aria-label="按链筛选"
+              style={{ width: "140px" }}
+              value={chainFilter}
+              onChange={(event) => setChainFilter(event.target.value)}
+            >
+              <option value="all">全部链</option>
+              {chainOptions.map((chain) => (
+                <option key={chain} value={chain}>
+                  {chain}
+                </option>
+              ))}
+            </select>
             <button type="button" className="btn btn--sm" onClick={showScope}>
               口径
             </button>
@@ -431,7 +478,8 @@ export default function RoutingPage() {
       />
 
       <div className="metric-grid">
-        <Metric label="路由策略" value={fmtNumber(rows.length)} />
+        <Metric label="路由策略" value={fmtNumber(rows.length)} hint={chainFilter === "all" ? "全部链" : chainFilter} />
+        <Metric label="Solana 策略" value={fmtNumber(summary.solana)} hint="chain=solana" />
         <Metric label="已启用" value={fmtNumber(summary.enabled)} tone="ok" />
         <Metric label="灰度中" value={fmtNumber(summary.canary)} tone={summary.canary > 0 ? "warn" : "neutral"} />
         <Metric label="无 Fallback" value={fmtNumber(summary.noFallback)} tone={summary.noFallback > 0 ? "warn" : "ok"} />
@@ -457,6 +505,23 @@ export default function RoutingPage() {
             },
             { key: "chain", header: "链", width: "110px", render: (row) => row.chain || "—" },
             { key: "dataset", header: "Dataset", width: "130px", render: (row) => <span className="mono">{row.dataset || "—"}</span> },
+            {
+              key: "channel",
+              header: "通道",
+              width: "120px",
+              render: (row) =>
+                policyChannel(row) !== "" ? (
+                  <StatusBadge tone="info">{policyChannel(row)}</StatusBadge>
+                ) : (
+                  <span className="num">—</span>
+                ),
+            },
+            {
+              key: "operation_class",
+              header: "操作类",
+              width: "150px",
+              render: (row) => <span className="mono">{policyOperationClass(row) || "—"}</span>,
+            },
             {
               key: "enabled",
               header: "启用",
