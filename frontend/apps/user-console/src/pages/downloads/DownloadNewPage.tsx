@@ -6,7 +6,7 @@ import { ApiError } from "@chain/api-client";
 import { useDialog } from "@chain/ui";
 import { CsPageHeader } from "@chain/user-ui";
 import { formatRawAmount, useApi, useS5Action } from "../../sprint5/common";
-import { IMPORT_FILE_EXTENSIONS, IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../../import/parse-core";
+import { IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../../import/parse-core";
 import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddressFileInWorker } from "../../import/parse-client";
 import { DownloadFlowRail } from "./DownloadFlowRail";
 import { DownloadAddressPanel } from "./DownloadAddressPanel";
@@ -1118,21 +1118,10 @@ export default function DownloadNewPage() {
         }
       }}
       onParse={() => void commitAddresses()}
+      onFileChange={(file) => void importAddressesFromFile(file)}
       onFileCancel={() => importAbort.current?.abort()}
       onReset={resetAddresses}
-      fileInput={
-        <input
-          ref={fileInputRef}
-          type="file"
-          aria-label="导入地址文件"
-          accept={IMPORT_FILE_EXTENSIONS.join(",")}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void importAddressesFromFile(file);
-          }}
-        />
-      }
+      fileInputRef={fileInputRef}
     />
   );
 

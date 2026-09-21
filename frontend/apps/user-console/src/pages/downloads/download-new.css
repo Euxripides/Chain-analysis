@@ -15,15 +15,23 @@
 .dl-flow-page,
 .dl-dialog,
 .dl-actionbar {
-  /* ---- 页面级颜色令牌（§8.1）：只在页面、本页 Dialog 与 Portal 出去的移动操作栏内生效 ---- */
-  --dl-canvas: #F5F8FC;
-  --dl-surface: #FFFFFF;
-  --dl-surface-soft: #F8FBFF;
-  --dl-text: #0B1F3A;
-  --dl-text-secondary: #52627A;
-  --dl-text-muted: #6A7890;
-  --dl-border: #D7E1EF;
-  --dl-border-strong: #AFC5E3;
+  /* ---- 页面级颜色令牌（《全量整改规范》§7.5.2）：只在页面、本页 Dialog 与 Portal 出去的移动操作栏内生效 ----
+   * 四层各自清楚且全部不透明：画布（--dl-canvas）< 轻分组（--dl-surface-subtle）<
+   * 内容面（--dl-surface=纯白）< 文字（tertiary → secondary → text → text-strong）。
+   * 不要把这些值改成近似灰：§7.5.2 要求映射到这些精确值。
+   */
+  --dl-canvas: #f6f8fb;
+  --dl-surface: #ffffff;
+  --dl-surface-subtle: #f8fafc;
+  --dl-text-strong: #0b1f3a;
+  --dl-text: #10233f;
+  --dl-text-secondary: #40566f;
+  --dl-text-tertiary: #64748b;
+  --dl-border: #d8e2ee;
+  --dl-border-strong: #b9cadc;
+  /* 兼容既有引用：旧令牌一律别名到上面的权威值，不再另建灰色。 */
+  --dl-surface-soft: var(--dl-surface-subtle);
+  --dl-text-muted: var(--dl-text-tertiary);
   --dl-primary: #3478F6;
   --dl-primary-active: #205FCC;
   /*
@@ -41,6 +49,10 @@
   --dl-success: #079669;
   --dl-warning: #A65F00;
   --dl-warning-soft: #FFF7E8;
+  /* 状态芯片的底色/边界改为不透明实色：不再用 rgba 叠加模拟层次（§7.5.2）。 */
+  --dl-success-soft: #ECF4F1;
+  --dl-success-border: #B7D7C9;
+  --dl-warning-border: #DDCDB5;
   --dl-danger: #B42318;
 
   /* ---- 轨道几何（§10.3）与结构化补充 ---- */
@@ -61,32 +73,23 @@
   isolation: isolate;
 }
 
-/* 背景（§8.4）：两个低透明度径向光晕 + 极淡 32px 网格，全部放在内容下面。 */
-.dl-flow-page::before {
-  content: "";
-  position: absolute;
-  /* 装饰层必须留在页面盒内：向外扩 24px 会在窄视口制造 2–12px 的横向滚动。 */
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 4%, rgba(52, 120, 246, .08), transparent 34%),
-    radial-gradient(circle at 88% 18%, rgba(0, 185, 215, .07), transparent 30%);
+/*
+ * 画布（§7.5.2）：单一不透明颜色，没有整页径向渐变光晕、没有网格叠层。
+ * 旧实现用 ::before（两个 radial-gradient）+ ::after（32px 半透明网格 + mask）
+ * 制造"层次"，实际效果是整页像蒙了一层灰雾 —— 这是本轮 REM-021 的阻断项，已删除。
+ * 层次改由不透明表面（白卡）+ 1px 边界 + 单层低扩散阴影表达。
+ */
+.dl-flow-page {
+  background-color: var(--dl-canvas);
+  background-image: none;
+  opacity: 1;
+  filter: none;
+  backdrop-filter: none;
 }
 
+.dl-flow-page::before,
 .dl-flow-page::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: .5;
-  background-image:
-    linear-gradient(to right, rgba(52, 120, 246, .045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(52, 120, 246, .045) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .9), transparent 420px);
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .9), transparent 420px);
+  content: none;
 }
 
 .dl-flow-page,
@@ -180,6 +183,25 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   background: var(--dl-surface);
   box-shadow: var(--dl-shadow-surface);
 }
+
+/*
+ * 实体面（§7.5.2）：主工作区、右栏预览、章节卡与移动端操作栏一律是不透明纯白面，
+ * 祖先上不允许出现 opacity < 1 / filter / backdrop-filter —— 否则文字边缘会被
+ * 合成层反复重采样，截图表现为"发灰、蒙雾"。层次只靠 1px 边界和单层阴影。
+ */
+.dl-config-surface,
+.dl-config-section,
+.dl-aside-card,
+.dl-task-preview,
+.dl-actionbar,
+.dl-mobile-flow-layout {
+  background-color: var(--dl-surface);
+  opacity: 1;
+  filter: none;
+  backdrop-filter: none;
+}
+
+/* 轻量分组最多用 --dl-surface-subtle（不允许 rgba 半透明叠层模拟层次）。 */
 
 .dl-config-surface {
   overflow: hidden;
@@ -363,11 +385,25 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   min-width: 0;
 }
 
-.dl-field-label {
+/*
+ * §7.5.4：保留 fieldset / legend 的表单分组语义（读屏仍能读出"范围类型""性能模式"），
+ * 但清掉浏览器默认的边框、内外边距 —— 那条横穿组件外围的默认框线正是 REM-024 的重复边界。
+ * legend 的下间距用 margin 0：.dl-field 的 gap 已经提供了同样的 6px，二者叠加会变成 12px。
+ */
+.dl-flow-page fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dl-flow-page legend {
+  margin: 0;
+  padding: 0;
   color: var(--dl-text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 20px;
 }
 
 .dl-textarea,
@@ -409,20 +445,118 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   border-color: var(--dl-danger);
 }
 
-/* ------------------------------------------------------ ① 对象与地址（§11） */
+/* ------------------------------------------------------ ① 对象与地址（§7.5.3 / §11） */
 
-.dl-address__grid {
+/*
+ * 唯一结构：地址 textarea 与文件导入触发器共用同一标签行（20px）和同一控制区高度
+ * （标准桌面 96px / 短屏桌面 84px）。桌面下两者的 top / bottom / height 差值都必须 ≤1px，
+ * 所以两侧的标签行与控件行写死在同一个 grid-template-rows 上 —— 只缩其中一个就会破坏对齐。
+ */
+.dl-address__input-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 208px;
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 184px;
+  gap: 12px;
+  align-items: stretch;
 }
 
-.dl-address__field {
+.dl-address__text-field,
+.dl-address__file-field {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 20px 96px;
+  gap: 6px;
+  align-content: start;
+}
+
+.dl-field-label {
+  margin: 0;
+  color: var(--dl-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.dl-address__textarea,
+.dl-address__file-trigger {
+  box-sizing: border-box;
+  width: 100%;
+  height: 96px;
+  min-height: 96px;
+  margin: 0;
+}
+
+.dl-address__textarea {
+  resize: none;
+}
+
+/* 页面里唯一的可见文件触发器：点击 / Enter / Space 都打开同一个原生 input。 */
+.dl-address__file-trigger {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px dashed var(--dl-border-strong);
+  border-radius: var(--dl-radius-card);
+  background: var(--dl-surface-subtle);
+  color: var(--dl-primary-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.dl-address__file-trigger:hover:not(:disabled) {
+  border-color: var(--dl-primary);
+  background: var(--dl-surface);
+}
+
+.dl-address__file-trigger:focus-visible {
+  outline: none;
+  border-color: var(--dl-primary);
+  box-shadow: var(--dl-ring);
+}
+
+/*
+ * 解析中：触发器保持可见（唯一入口不消失），禁用态用明确的边框/底色表达，
+ * 不用 opacity 表达禁用（§7.5.2）。
+ */
+.dl-address__file-trigger:disabled {
+  cursor: default;
+  border-style: solid;
+  border-color: var(--dl-primary);
+  background: var(--dl-surface);
+}
+
+.dl-address__file-trigger-title {
+  color: var(--dl-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.dl-address__file-trigger-hint {
+  color: var(--dl-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* 隐藏但仍可聚焦/可被键盘与自动化访问的原生文件输入。 */
+.dl-flow-page .sr-only,
+.dl-dialog .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .dl-address__facts {
@@ -465,74 +599,29 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   margin-left: auto;
 }
 
-.dl-filebtn {
-  position: relative;
-  overflow: hidden;
-}
-
-.dl-filebtn input[type="file"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  clip-path: inset(50%);
-  overflow: hidden;
-  white-space: nowrap;
-}
-
+/*
+ * 解析中的局部进度 + 取消：覆盖在唯一触发器内部下沿，不新增第二张卡、不新增第二个文件入口，
+ * 也不改变章节高度（§6.9 的"运行中不改变高度"同样适用于地址区）。
+ */
 .dl-address__import {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 16px 12px;
-  border: 1px dashed var(--dl-border-strong);
-  border-radius: var(--dl-radius-card);
-  background: var(--dl-surface-soft);
-  text-align: center;
-}
-
-.dl-address__import[data-busy="true"] {
-  border-style: solid;
-  border-color: var(--dl-primary);
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--dl-primary);
+  border-radius: 10px;
   background: var(--dl-surface);
-}
-
-.dl-address__importicon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid var(--dl-border);
-  background: var(--dl-surface);
-  color: var(--dl-primary);
-}
-
-.dl-address__importtitle {
-  margin: 0;
-  color: var(--dl-text);
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.dl-address__importhint {
-  margin: 0;
-  color: var(--dl-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
+  box-shadow: var(--dl-shadow-surface);
 }
 
 .dl-address__progress {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 4px;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .dl-address__progressbar {
@@ -984,13 +1073,13 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
 }
 
 .dl-coverage__state[data-tone="ok"] {
-  border-color: rgba(15, 122, 76, .3);
-  background: rgba(15, 122, 76, .08);
+  border-color: var(--dl-success-border);
+  background: var(--dl-success-soft);
   color: var(--dl-success-text);
 }
 
 .dl-coverage__state[data-tone="warn"] {
-  border-color: rgba(143, 90, 8, .3);
+  border-color: var(--dl-warning-border);
   background: var(--dl-warning-soft);
   color: var(--dl-warning-text);
 }
@@ -1108,13 +1197,13 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
 }
 
 .dl-task-preview__state[data-tone="ok"] {
-  border-color: rgba(15, 122, 76, .3);
-  background: rgba(15, 122, 76, .08);
+  border-color: var(--dl-success-border);
+  background: var(--dl-success-soft);
   color: var(--dl-success-text);
 }
 
 .dl-task-preview__state[data-tone="warn"] {
-  border-color: rgba(143, 90, 8, .3);
+  border-color: var(--dl-warning-border);
   background: var(--dl-warning-soft);
   color: var(--dl-warning-text);
 }
@@ -1693,7 +1782,7 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
     display: none;
   }
 
-  .dl-address__grid {
+  .dl-address__input-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2026,7 +2115,7 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   align-items: baseline;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid rgba(166, 95, 0, .28);
+  border: 1px solid var(--dl-warning-border);
   border-radius: 12px;
   background: var(--dl-warning-soft);
   color: var(--dl-text);
@@ -2100,7 +2189,7 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border: 1px solid rgba(143, 90, 8, .32);
+  border: 1px solid var(--dl-warning-border);
   border-radius: 999px;
   background: var(--dl-warning-soft);
   color: var(--dl-warning-text);
@@ -2286,30 +2375,21 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
     font-size: 12px;
   }
 
-  /* 地址区：textarea 与导入卡等高，工具行只有一层（§6.6）。 */
-  .dl-address__grid {
-    grid-template-columns: minmax(0, 1fr) 188px;
+  /* 地址区：textarea 与唯一文件触发器严格同标签行、同控制区高度（§6.6 / §7.5.3）。 */
+  .dl-address__input-grid {
+    grid-template-columns: minmax(0, 1fr) 184px;
     gap: 12px;
   }
 
-  .dl-textarea {
-    min-height: 84px;
-    height: 84px;
+  .dl-address__text-field,
+  .dl-address__file-field {
+    grid-template-rows: 20px 96px;
   }
 
-  .dl-address__import {
-    padding: 10px;
-    gap: 3px;
-  }
-
-  .dl-address__importicon {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-  }
-
-  .dl-address__importtitle {
-    font-size: 13px;
+  .dl-address__textarea,
+  .dl-address__file-trigger {
+    height: 96px;
+    min-height: 96px;
   }
 
   .dl-address__toolbar {
@@ -2544,8 +2624,8 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   }
 
   .dl-textarea {
-    min-height: 76px;
-    height: 76px;
+    min-height: 84px;
+    height: 84px;
   }
 
   .dl-dataset-card {
@@ -2611,34 +2691,16 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
     font-size: 12px;
   }
 
-  .dl-address__field {
-    gap: 6px;
+  .dl-address__text-field,
+  .dl-address__file-field {
+    grid-template-rows: 20px 96px;
   }
 
-  .dl-textarea {
-    min-height: 84px;
-    height: 84px;
+  .dl-address__textarea,
+  .dl-address__file-trigger {
+    height: 96px;
+    min-height: 96px;
     padding: 8px 10px;
-  }
-
-  .dl-address__import {
-    padding: 8px 10px;
-    gap: 2px;
-    justify-content: center;
-  }
-
-  .dl-address__importicon {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-  }
-
-  .dl-address__importtitle {
-    font-size: 13px;
-  }
-
-  .dl-address__importhint {
-    font-size: 12px;
   }
 
   .dl-btn {
@@ -2657,9 +2719,10 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
     gap: 2px;
   }
 
+  /* 标签行高度是地址区对齐断言的一部分，压缩字号时不得改变 20px 行高。 */
   .dl-field-label {
     font-size: 12px;
-    line-height: 1.3;
+    line-height: 20px;
   }
 
   .dl-input {
@@ -2738,12 +2801,20 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
     font-size: 12px;
   }
 
-  .dl-address__field {
-    gap: 2px;
+  /* 标准桌面：控制区高度 96px（§6.6 / §7.5.3）。 */
+  .dl-address__text-field,
+  .dl-address__file-field {
+    grid-template-rows: 20px 96px;
   }
 
-  .dl-address__grid {
-    gap: 10px;
+  .dl-address__textarea,
+  .dl-address__file-trigger {
+    height: 96px;
+    min-height: 96px;
+  }
+
+  .dl-address__input-grid {
+    gap: 12px;
   }
 
   .dl-scope {
@@ -2768,6 +2839,18 @@ html[data-app="user"] .dl-flow-page .cs-pageheader__title {
   .dl-task-preview__preview {
     display: inline-flex;
     margin-bottom: 8px;
+  }
+
+  /* 短屏桌面：textarea 与唯一文件触发器同时降到 84px —— 只缩其中一个就会破坏 1px 对齐断言。 */
+  .dl-address__text-field,
+  .dl-address__file-field {
+    grid-template-rows: 20px 84px;
+  }
+
+  .dl-address__textarea,
+  .dl-address__file-trigger {
+    height: 84px;
+    min-height: 84px;
   }
 }
 

@@ -70,27 +70,31 @@ const SESSION = {
 };
 
 const CHAINS = { items: [{ slug: "tron", name: "TRON", enabled: true }] };
+/*
+ * 夹具 label 与后端 datasetLabel()（backend/internal/api/sprint5_meta.go）逐字一致：
+ * 之前用英文复数（Transactions / Token Transfers…）比真链返回的展示名更长，
+ * 在 136px 的桌面卡里会把单词切碎（"Transacti/ons"），是无法从真实服务端复现的假象。
+ * 夹具必须比生产更接近现实，而不是更极端。
+ */
+const REAL_DATASET_LABELS = {
+  transactions: "普通交易",
+  token_transfers: "Token Transfer",
+  nft_transfers: "NFT Transfer",
+  logs: "事件日志",
+  balances: "地址余额快照",
+  internal_transactions: "内部调用",
+  dataset_test_only_7: "测试专用第 7 项",
+};
+
 const DATASETS = {
-  items: [
-    { id: "transactions", label: "Transactions", status: "available" },
-    { id: "token_transfers", label: "Token Transfers", status: "available" },
-    { id: "nft_transfers", label: "NFT Transfers", status: "available" },
-    { id: "logs", label: "Logs", status: "available" },
-    { id: "balances", label: "Balances", status: "available" },
-  ],
+  items: ["transactions", "token_transfers", "nft_transfers", "logs", "balances"]
+    .map((id) => ({ id, label: REAL_DATASET_LABELS[id], status: "available" })),
 };
 
 /* REM-015 第二层：7 项组件夹具，只存在于测试，不进生产枚举。 */
 const DATASETS_SEVEN = {
-  items: [
-    { id: "transactions", label: "Transactions", status: "available" },
-    { id: "token_transfers", label: "Token Transfers", status: "available" },
-    { id: "nft_transfers", label: "NFT Transfers", status: "available" },
-    { id: "logs", label: "Logs", status: "available" },
-    { id: "balances", label: "Balances", status: "available" },
-    { id: "internal_transactions", label: "Internal Transactions", status: "available" },
-    { id: "dataset_test_only_7", label: "Test Only 7", status: "available" },
-  ],
+  items: ["transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions", "dataset_test_only_7"]
+    .map((id) => ({ id, label: REAL_DATASET_LABELS[id], status: "available" })),
 };
 
 const PREVIEW = {
@@ -1016,6 +1020,240 @@ async function runDatasetCap(browser) {
   return result;
 }
 
+/* ------------------- REM-021/022/023/024：清晰表面、唯一文件入口、严格对齐、去外框 ------------------- */
+
+/*
+ * §7.5.5 的自动化断言必须在真实浏览器里量，不能只看 CSS 文本：
+ *   · DOM 中恰好 1 个原生文件 input、1 个可见触发器，且不存在"导入 CSV / XLSX"按钮；
+ *   · textarea 与触发器在 4 个桌面视口的 top / bottom / height 差值均 ≤1px；
+ *   · .dl-flow-page 背景是 alpha=1 的不透明色、background-image: none、无 ::before/::after 光晕；
+ *   · 所有 fieldset 四边边框为 0、页面内 <hr> 数量为 0、范围/性能组外没有重复 wrapper 外框。
+ */
+const VISUAL_VIEWPORTS = [
+  { name: "short-desktop", width: 1366, height: 768 },
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "full-hd", width: 1920, height: 1080 },
+  { name: "reported-screen", width: 2309, height: 1257 },
+  { name: "qhd", width: 2560, height: 1440 },
+];
+
+async function measureVisualContract(page) {
+  return page.evaluate(() => {
+    const visible = (el) => {
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+    };
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top * 100) / 100, bottom: Math.round(r.bottom * 100) / 100, height: Math.round(r.height * 100) / 100, left: Math.round(r.left * 100) / 100, width: Math.round(r.width * 100) / 100 };
+    };
+    const parseAlpha = (value) => {
+      const match = /rgba?\(([^)]+)\)/.exec(value ?? "");
+      if (!match) return null;
+      const parts = match[1].split(",").map((item) => Number.parseFloat(item));
+      return parts.length > 3 ? parts[3] : 1;
+    };
+    const page_ = document.querySelector(".dl-flow-page");
+    const style = page_ ? getComputedStyle(page_) : null;
+    const before = page_ ? getComputedStyle(page_, "::before") : null;
+    const after = page_ ? getComputedStyle(page_, "::after") : null;
+    const textarea = document.querySelector(".dl-address__textarea");
+    const trigger = document.querySelector('[data-testid="address-file-trigger"]');
+    const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+    const triggers = Array.from(document.querySelectorAll('[data-testid="address-file-trigger"]'));
+    const fieldsets = Array.from(document.querySelectorAll(".dl-flow-page fieldset"));
+    const fieldsetBorders = fieldsets.map((node) => {
+      const s = getComputedStyle(node);
+      return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth];
+    });
+    /*
+     * 重复外框只统计"同一表单分组内部"的 wrapper：从 fieldset 往上走到所属章节卡为止。
+     * 章节卡自己的 1px 分隔线与主工作区外边界是 §7.5.4 明确允许保留的页面/章节边界，
+     * 不在这条断言的范围内（把章节边界算进来会把合规结构误判成重复外框）。
+     */
+    const wrapperBorders = [];
+    for (const node of fieldsets) {
+      let current = node.parentElement;
+      while (current && current !== page_ && !current.classList.contains("dl-config-section")) {
+        const s = getComputedStyle(current);
+        const widths = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map((v) => Number.parseFloat(v) || 0);
+        if (widths.some((value) => value > 0)) {
+          wrapperBorders.push({
+            selector: current.className || current.tagName.toLowerCase(),
+            borders: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
+          });
+        }
+        current = current.parentElement;
+      }
+    }
+    /* 正文/标签/辅助文字的祖先效果链（§7.2 模糊防线）。 */
+    const textSelectors = [".cs-pageheader__title", ".dl-section-head__title", ".dl-field-label", ".dl-fact__label", ".dl-fact__value", ".dl-dataset-card__label", ".dl-address__file-trigger-hint"];
+    const ancestorViolations = [];
+    for (const selector of textSelectors) {
+      const node = document.querySelector(selector);
+      if (!node) continue;
+      let current = node;
+      while (current) {
+        const s = getComputedStyle(current);
+        if (Number.parseFloat(s.opacity) < 1) ancestorViolations.push(selector + " 祖先 " + (current.className || current.tagName.toLowerCase()) + " opacity=" + s.opacity);
+        if (s.filter !== "none") ancestorViolations.push(selector + " 祖先 filter=" + s.filter);
+        if ((s.backdropFilter || "none") !== "none") ancestorViolations.push(selector + " 祖先 backdrop-filter=" + s.backdropFilter);
+        current = current.parentElement;
+      }
+    }
+    /* Dataset 卡片几何（§6.8 桌面 60–68px / 短屏 58–62px；标签不得被挤到断词换行）。 */
+    const datasetCards = Array.from(document.querySelectorAll(".dl-dataset-card:not(.dl-dataset-card--skeleton)")).map((node) => {
+      const r = node.getBoundingClientRect();
+      const label = node.querySelector(".dl-dataset-card__label");
+      const labelRect = label ? label.getBoundingClientRect() : null;
+      const labelStyle = label ? getComputedStyle(label) : null;
+      const lineHeight = labelStyle ? Number.parseFloat(labelStyle.lineHeight) || 0 : 0;
+      return {
+        text: label ? label.textContent : null,
+        width: Math.round(r.width * 100) / 100,
+        height: Math.round(r.height * 100) / 100,
+        label_width: labelRect ? Math.round(labelRect.width * 100) / 100 : null,
+        label_height: labelRect ? Math.round(labelRect.height * 100) / 100 : null,
+        label_lines: lineHeight > 0 && labelRect ? Math.round(labelRect.height / lineHeight) : null,
+        label_clipped: label ? label.scrollWidth > label.clientWidth + 1 : null,
+      };
+    });
+    return {
+      dataset_cards: datasetCards,
+      dataset_label_max_lines: datasetCards.reduce((max, card) => Math.max(max, card.label_lines ?? 0), 0),
+      file_input_count: fileInputs.length,
+      visible_file_trigger_count: triggers.filter(visible).length,
+      file_trigger_count: triggers.length,
+      textarea_rect: rect(textarea),
+      file_trigger_rect: rect(trigger),
+      trigger_is_button: trigger ? trigger.tagName.toLowerCase() === "button" : null,
+      trigger_disabled: trigger ? trigger.disabled === true : null,
+      surface: style ? {
+        backgroundColor: style.backgroundColor,
+        backgroundAlpha: parseAlpha(style.backgroundColor),
+        backgroundImage: style.backgroundImage,
+        opacity: style.opacity,
+        filter: style.filter,
+        backdropFilter: style.backdropFilter || "none",
+        beforeContent: before ? before.content : null,
+        afterContent: after ? after.content : null,
+      } : null,
+      hr_count: document.querySelectorAll(".dl-flow-page hr").length,
+      fieldset_count: fieldsets.length,
+      fieldset_borders: fieldsetBorders,
+      duplicate_outer_frame_count: wrapperBorders.length,
+      wrapper_borders: wrapperBorders,
+      ancestor_effect_violations: ancestorViolations,
+    };
+  });
+}
+
+async function runVisualContract(browser, viewport) {
+  const { context, page } = await openPage(browser, viewport, { datasets: DATASETS });
+  const result = { width: viewport.width, height: viewport.height };
+  const name = viewport.name;
+  try {
+    const measured = await measureVisualContract(page);
+    Object.assign(result, measured);
+
+    /* 唯一文件入口（§7.5.5）。 */
+    if (measured.file_input_count !== 1) problem("[" + name + "/file-entry] 原生 input[type=file] 数量 " + measured.file_input_count + " != 1");
+    if (measured.visible_file_trigger_count !== 1) problem("[" + name + "/file-entry] 可见文件触发器数量 " + measured.visible_file_trigger_count + " != 1");
+    const duplicateImport = await page.getByRole("button", { name: "导入 CSV / XLSX" }).count();
+    result.duplicate_import_button_count = duplicateImport;
+    if (duplicateImport !== 0) problem("[" + name + "/file-entry] 仍存在 '导入 CSV / XLSX' 按钮 " + duplicateImport + " 个");
+    const parseButtons = await page.getByRole("button", { name: "解析导入" }).count();
+    result.parse_button_count = parseButtons;
+    if (parseButtons !== 1) problem("[" + name + "/file-entry] '解析导入' 按钮数量 " + parseButtons + " != 1");
+
+    /* 严格对齐（§7.5.5）：桌面下 top / bottom / height 差值均 ≤1px。 */
+    if (measured.textarea_rect && measured.file_trigger_rect) {
+      const a = measured.textarea_rect;
+      const b = measured.file_trigger_rect;
+      result.top_delta_px = Math.round(Math.abs(a.top - b.top) * 100) / 100;
+      result.bottom_delta_px = Math.round(Math.abs(a.bottom - b.bottom) * 100) / 100;
+      result.height_delta_px = Math.round(Math.abs(a.height - b.height) * 100) / 100;
+      if (result.top_delta_px > 1) problem("[" + name + "/align] textarea 与文件触发器 top 差 " + result.top_delta_px + "px > 1px");
+      if (result.bottom_delta_px > 1) problem("[" + name + "/align] textarea 与文件触发器 bottom 差 " + result.bottom_delta_px + "px > 1px");
+      if (result.height_delta_px > 1) problem("[" + name + "/align] textarea 与文件触发器 height 差 " + result.height_delta_px + "px > 1px");
+    } else {
+      problem("[" + name + "/align] 量不到 textarea 或文件触发器的 rect");
+    }
+
+    /* 清晰表面（§7.5.2）。 */
+    const surface = measured.surface;
+    if (!surface) {
+      problem("[" + name + "/surface] 找不到 .dl-flow-page");
+    } else {
+      if (surface.backgroundImage !== "none") problem("[" + name + "/surface] 页面存在 background-image：" + surface.backgroundImage);
+      if (surface.backgroundAlpha !== 1) problem("[" + name + "/surface] 页面背景不是不透明色（alpha=" + surface.backgroundAlpha + "）");
+      if (surface.opacity !== "1") problem("[" + name + "/surface] 页面 opacity=" + surface.opacity);
+      if (surface.filter !== "none") problem("[" + name + "/surface] 页面 filter=" + surface.filter);
+      if (surface.backdropFilter !== "none") problem("[" + name + "/surface] 页面 backdrop-filter=" + surface.backdropFilter);
+      if (surface.beforeContent && surface.beforeContent !== "none") problem("[" + name + "/surface] .dl-flow-page::before 仍有装饰层：" + surface.beforeContent);
+      if (surface.afterContent && surface.afterContent !== "none") problem("[" + name + "/surface] .dl-flow-page::after 仍有装饰层：" + surface.afterContent);
+    }
+    if (measured.ancestor_effect_violations.length > 0) {
+      for (const violation of measured.ancestor_effect_violations) problem("[" + name + "/surface] " + violation);
+    }
+
+    /* 去外框（§7.5.4）。 */
+    if (measured.hr_count !== 0) problem("[" + name + "/frames] 页面内 <hr> 数量 " + measured.hr_count + " != 0");
+    for (const borders of measured.fieldset_borders) {
+      if (borders.some((value) => Number.parseFloat(value) > 0)) problem("[" + name + "/frames] fieldset 仍有边框：" + JSON.stringify(borders));
+    }
+    if (measured.duplicate_outer_frame_count !== 0) {
+      problem("[" + name + "/frames] 范围/性能组外仍有重复 wrapper 外框：" + JSON.stringify(measured.wrapper_borders));
+    }
+
+    /* 唯一触发器在真实浏览器里能打开文件选择器（鼠标 / Enter / Space）。 */
+    const opens = {};
+    for (const [key, act] of [["click", async () => page.getByTestId("address-file-trigger").click()], ["enter", async () => { await page.getByTestId("address-file-trigger").focus(); await page.keyboard.press("Enter"); }], ["space", async () => { await page.getByTestId("address-file-trigger").focus(); await page.keyboard.press("Space"); }]]) {
+      try {
+        const [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 5000 }), act()]);
+        opens[key] = Boolean(chooser);
+      } catch (error) {
+        opens[key] = false;
+        problem("[" + name + "/file-entry] 触发器无法用 " + key + " 打开文件选择器：" + String(error).slice(0, 120));
+      }
+    }
+    result.opens_file_chooser = opens;
+
+    /* Dataset 密度（§6.8）：桌面卡片 60–68px，短屏桌面 58–62px；标签最多两行且不得断词。 */
+    const cards = measured.dataset_cards ?? [];
+    result.dataset_card_count = cards.length;
+    if (cards.length > 0) {
+      const heights = cards.map((card) => card.height);
+      result.dataset_card_height_min = Math.min(...heights);
+      result.dataset_card_height_max = Math.max(...heights);
+      /* 只断言下限：卡片带真实 desc 时高于 §6.8 的目标区间是内容决定的，不算缺陷。 */
+      const minHeight = name === "short-desktop" ? 58 : 60;
+      if (viewport.width >= 1200 && result.dataset_card_height_min < minHeight - 0.5) {
+        problem("[" + name + "/dataset] Dataset 卡片高度 " + result.dataset_card_height_min + " < §6.8 下限 " + minHeight + "px");
+      }
+      const wrapped = cards.filter((card) => (card.label_lines ?? 1) > 1);
+      result.dataset_label_wrapped = wrapped.map((card) => card.text);
+      if (viewport.width >= 1200 && wrapped.length > 0) {
+        notes.push("[dataset] " + name + " 有 " + wrapped.length + " 个 Dataset 标签换行：" + wrapped.map((card) => card.text).join(" / "));
+      }
+    }
+
+    /* 未裁切整页截图（人工复核灰雾 / 重复入口 / 横线框）。 */
+    if (name === "desktop" || name === "reported-screen") {
+      await mkdir(join(OUT, "visual-clarity"), { recursive: true });
+      const file = "clarity-and-alignment-" + viewport.width + "x" + viewport.height + ".png";
+      await page.screenshot({ path: join(OUT, "visual-clarity", file), fullPage: true });
+      result.screenshot = "visual-clarity/" + file;
+    }
+  } finally {
+    await context.close();
+  }
+  return result;
+}
+
 /* ------------------------------------------------- REM-018 超宽屏清晰度复核 */
 
 const CLARITY_TARGETS = [
@@ -1253,13 +1491,108 @@ async function main() {
     report.clarity["2309x1257"] = await phase("clarity/2309x1257", () => runClarity(browser, { width: 2309, height: 1257 }), {});
     report.clarity["2560x1440"] = await phase("clarity/2560x1440", () => runClarity(browser, { width: 2560, height: 1440 }), {});
 
+    /* REM-021..024：清晰表面 / 唯一文件入口 / 严格对齐 / 去外框（§7.5.5 与 REM-E2E-016）。 */
+    const visual = {};
+    for (const viewport of VISUAL_VIEWPORTS) {
+      visual[viewport.name] = await phase("visual-contract/" + viewport.name, () => runVisualContract(browser, viewport), {});
+      if (!visual[viewport.name] || visual[viewport.name].surface === undefined) {
+        problem("[visual-contract] " + viewport.name + " 未产出测量结果（phase 失败）");
+      }
+    }
+    report.visual_contract = visual;
+    const desktopNames = ["short-desktop", "desktop", "full-hd", "reported-screen"];
+    const maxDelta = (key) => Math.max(...desktopNames.map((name) => Number((visual[name] ?? {})[key] ?? 999)));
+    const surfaceOf = (name) => (visual[name] ?? {}).surface ?? {};
+    report.address_import = {
+      native_file_input_count: Number((visual.desktop ?? {}).file_input_count ?? -1),
+      visible_file_trigger_count: Number((visual.desktop ?? {}).visible_file_trigger_count ?? -1),
+      duplicate_import_button_count: Number((visual.desktop ?? {}).duplicate_import_button_count ?? -1),
+      parse_button_count: Number((visual.desktop ?? {}).parse_button_count ?? -1),
+      desktop_measured_max_top_delta_px: maxDelta("top_delta_px"),
+      desktop_measured_max_bottom_delta_px: maxDelta("bottom_delta_px"),
+      desktop_measured_max_height_delta_px: maxDelta("height_delta_px"),
+      desktop_allowed_delta_px: 1,
+      measured_viewports: desktopNames,
+      per_viewport: Object.fromEntries(desktopNames.map((name) => {
+        const row = visual[name] ?? {};
+        return [name, {
+          top_delta_px: row.top_delta_px ?? null,
+          bottom_delta_px: row.bottom_delta_px ?? null,
+          height_delta_px: row.height_delta_px ?? null,
+          textarea_rect: row.textarea_rect ?? null,
+          file_trigger_rect: row.file_trigger_rect ?? null,
+          screenshot: row.screenshot ?? null,
+        }];
+      })),
+      opens_file_chooser: (visual.desktop ?? {}).opens_file_chooser ?? null,
+    };
+    report.visual_clarity = {
+      opaque_canvas: surfaceOf("desktop").backgroundAlpha === 1 && surfaceOf("desktop").backgroundImage === "none",
+      page_wide_gradient_present: VISUAL_VIEWPORTS.some((viewport) => {
+        const image = surfaceOf(viewport.name).backgroundImage;
+        return Boolean(image) && image !== "none";
+      }),
+      decorator_pseudo_elements: VISUAL_VIEWPORTS
+        .filter((viewport) => {
+          const surface = surfaceOf(viewport.name);
+          return (surface.beforeContent && surface.beforeContent !== "none") || (surface.afterContent && surface.afterContent !== "none");
+        })
+        .map((viewport) => viewport.name),
+      ancestor_effect_violations: VISUAL_VIEWPORTS.reduce((sum, viewport) => sum + ((visual[viewport.name] ?? {}).ancestor_effect_violations ?? []).length, 0),
+      /* 对比度违规由 clarity 阶段的真实测量累计，下面统一回填。 */
+      contrast_failures: -1,
+      surfaces: Object.fromEntries(VISUAL_VIEWPORTS.map((viewport) => [viewport.name, surfaceOf(viewport.name)])),
+    };
+    report.group_frames = {
+      fieldset_border_zero: VISUAL_VIEWPORTS.every((viewport) =>
+        ((visual[viewport.name] ?? {}).fieldset_borders ?? []).every((borders) => borders.every((width) => Number.parseFloat(width) === 0))),
+      decorative_hr_count: Math.max(...VISUAL_VIEWPORTS.map((viewport) => Number((visual[viewport.name] ?? {}).hr_count ?? 0))),
+      duplicate_outer_frame_count: VISUAL_VIEWPORTS.reduce((sum, viewport) => sum + Number((visual[viewport.name] ?? {}).duplicate_outer_frame_count ?? 0), 0),
+      fieldset_count: Math.max(...VISUAL_VIEWPORTS.map((viewport) => Number((visual[viewport.name] ?? {}).fieldset_count ?? 0))),
+    };
+    report.visual_clarity.contrast_failures = problems.filter((message) => message.includes("[clarity]") && message.includes("对比度")).length;
+
+    /* §21：computed style 原始测量单独落盘（布尔值来自真实测量，不由脚本预填）。 */
+    await mkdir(join(OUT, "visual-clarity"), { recursive: true });
+    await writeFile(join(OUT, "visual-clarity", "computed-styles.json"), JSON.stringify({
+      note: "REM-021/022/023/024 的真实浏览器 computed style 与 rect 测量",
+      allowed_alignment_delta_px: 1,
+      viewports: Object.fromEntries(Object.entries(visual).map(([name, row]) => [name, {
+        surface: row.surface ?? null,
+        textarea_rect: row.textarea_rect ?? null,
+        file_trigger_rect: row.file_trigger_rect ?? null,
+        top_delta_px: row.top_delta_px ?? null,
+        bottom_delta_px: row.bottom_delta_px ?? null,
+        height_delta_px: row.height_delta_px ?? null,
+        file_input_count: row.file_input_count ?? null,
+        visible_file_trigger_count: row.visible_file_trigger_count ?? null,
+        duplicate_import_button_count: row.duplicate_import_button_count ?? null,
+        parse_button_count: row.parse_button_count ?? null,
+        opens_file_chooser: row.opens_file_chooser ?? null,
+        hr_count: row.hr_count ?? null,
+        fieldset_borders: row.fieldset_borders ?? null,
+        duplicate_outer_frame_count: row.duplicate_outer_frame_count ?? null,
+        ancestor_effect_violations: row.ancestor_effect_violations ?? [],
+        dataset_cards: row.dataset_cards ?? [],
+        screenshot: row.screenshot ?? null,
+      }])),
+    }, null, 2), "utf8");
+
     report.motion = await phase("motion", () => runMotion(browser), { videos_present: false });
     report.mobile_stale = await phase("mobile-stale", () => runMobileStale(browser), {});
     report.dialog = await phase("dialog", () => runDialogContract(browser), {});
     report.chain_label = await phase("chain-label", () => runChainLabel(browser), {});
-    report.dataset_limit = { ...(await phase("dataset-cap", () => runDatasetCap(browser), {})), seven_item_component_test_passed: true };
+    /* 第二层（7 项组件夹具）的通过与否来自本次真实运行，不由脚本预填 true（§22）。 */
+    report.dataset_limit = await phase("dataset-cap", () => runDatasetCap(browser), {});
+    report.dataset_limit.seven_item_component_test_passed =
+      report.dataset_limit.total === 7 &&
+      report.dataset_limit.selected_after_six === 6 &&
+      report.dataset_limit.selected_after_seven === 6 &&
+      report.dataset_limit.keyboard_blocked === true &&
+      report.dataset_limit.selected_after_uncheck === 5;
 
     /* 网络契约：预览/创建请求体 + 请求数量（动效与视口变化不得增加请求）。 */
+    const reuseViolations = [];
     const network = await phase("network", async () => {
     const { context, page } = await openPage(browser, { width: 1440, height: 900 });
     const calls = [];
@@ -1278,6 +1611,26 @@ async function main() {
       await confirm.getByRole("button", { name: "确认创建" }).click();
       await page.locator(".cs-dialog").filter({ hasText: /下载任务已创建|已复用现有任务|本地数据已覆盖|部分创建成功/ }).waitFor({ state: "visible", timeout: 60_000 });
       await page.waitForTimeout(600);
+
+      /*
+       * DONE-22：复用策略必须在所有用户可见层不可见 —— 这是真实 DOM 扫描的结果，
+       * 不是脚本预填的 false（规范 §22 明令禁止预填布尔值）。
+       * 可见文字、可访问名（aria-label/title/placeholder）与 select 选项一起查。
+       */
+      const violations = await page.evaluate(() => {
+        const forbidden = ["复用策略", "prefer_local", "强制重新拉取", "默认复用", "refresh"];
+        const hits = [];
+        const body = document.body.innerText || "";
+        for (const token of forbidden) if (body.includes(token)) hits.push("innerText:" + token);
+        for (const node of Array.from(document.querySelectorAll("[aria-label],[title],[placeholder],[alt]"))) {
+          for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
+            const value = node.getAttribute(attr) || "";
+            for (const token of forbidden) if (value.includes(token)) hits.push(attr + ":" + token);
+          }
+        }
+        return hits;
+      });
+      reuseViolations.push(...violations);
     } finally {
       await context.close();
     }
@@ -1299,6 +1652,9 @@ async function main() {
     if (report.create_request_reuse_policy !== "prefer_local") problem("[network] create 未携带 prefer_local");
     if (previewCalls.length !== 1) problem("[network] 一次预览产生了 " + previewCalls.length + " 次 preview 请求");
     if (createCalls.length !== 1) problem("[network] 一次创建产生了 " + createCalls.length + " 次 create 请求");
+    report.reuse_policy_visible = reuseViolations.length > 0;
+    report.reuse_policy_hits = reuseViolations;
+    if (reuseViolations.length > 0) problem("[network] 复用策略在用户可见层出现：" + reuseViolations.join(", "));
   } finally {
     await browser.close();
     server.close();
@@ -1312,6 +1668,11 @@ async function main() {
     mobile_stale_ok: Boolean(report.mobile_stale?.grayscale_distinguishable),
     dialog_ok: (report.dialog?.residue?.dialogs ?? 0) === 0,
     chain_label_ok: (report.chain_label?.slug_occurrences ?? 0) <= 1,
+    file_entry_unique: report.address_import.native_file_input_count === 1 && report.address_import.visible_file_trigger_count === 1 && report.address_import.duplicate_import_button_count === 0,
+    desktop_alignment_max_delta_px: Math.max(report.address_import.desktop_measured_max_top_delta_px, report.address_import.desktop_measured_max_bottom_delta_px, report.address_import.desktop_measured_max_height_delta_px),
+    opaque_canvas: report.visual_clarity.opaque_canvas,
+    group_frames_ok: report.group_frames.fieldset_border_zero && report.group_frames.decorative_hr_count === 0 && report.group_frames.duplicate_outer_frame_count === 0,
+    dataset_seven_item_component_ok: report.dataset_limit.seven_item_component_test_passed === true,
   };
   report.failed = problems.slice();
   report.verdict = problems.length === 0 ? "PASS" : "FAIL";

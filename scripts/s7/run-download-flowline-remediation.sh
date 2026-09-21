@@ -243,11 +243,29 @@ base["udl01"] = {
 }
 if not base["udl01"]["zip64_branch_hit"]:
     problems.append("ZIP64 分支未命中或布局自检不通过")
+# 三层结论全部从本次真实运行的逐项 check 推导，不由上游脚本预填（规范 §22）。
+dataset_checks = {c.get("check"): c for c in ((dataset or {}).get("checks") or [])}
+def all_ok(names):
+    return bool(names) and all(bool(dataset_checks.get(name, {}).get("ok")) for name in names)
+component_ok = all_ok([
+    "component-seven-item-fixture", "component-ui-max-six", "component-selected-first-six",
+    "component-limit-dialog", "component-blocked-seventh-not-sent", "component-final-selected-six",
+])
+real_ok = all_ok([
+    "real-page-chain-lte-ui-cap", "real-available-lte-five", "real-evm-chain-lte-five",
+    "real-whitelist-all-selected", "real-preview-only-real-datasets", "real-preview-prefer-local",
+])
+server_ok = all_ok([
+    "server-preview-400", "server-error-code", "server-field-error-datasets",
+    "server-create-400", "server-create-no-job-id", "server-no-new-job",
+])
 base["dataset_limit"] = {
-    "real_e2e_passed": bool((dataset or {}).get("verdict") == "PASS"),
-    "seven_item_component_test_passed": bool((base.get("dataset_limit") or {}).get("seven_item_component_test_passed")),
-    "server_limit_passed": bool((dataset or {}).get("verdict") == "PASS"),
+    "real_e2e_passed": real_ok,
+    "seven_item_component_test_passed": component_ok,
+    "server_limit_passed": server_ok,
 }
+if not (real_ok and component_ok and server_ok):
+    problems.append("Dataset 三层验证未全部通过：component=%s real=%s server=%s" % (component_ok, real_ok, server_ok))
 if verdict_of(dataset) != "PASS":
     problems.append("dataset 三层验证未通过：" + str((dataset or {}).get("failed")))
 if verdict_of(v5b) != "PASS":

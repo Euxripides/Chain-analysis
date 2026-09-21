@@ -36,7 +36,8 @@ export interface LocalParseSummary {
   truncated: number;
 }
 
-export const IMPORT_FILE_EXTENSIONS = [".csv", ".xlsx", ".xls"];
+/* 顺序即 accept 属性顺序（规范 §7.5.3）：.txt 与 .csv 同走分隔文本解析。 */
+export const IMPORT_FILE_EXTENSIONS = [".txt", ".csv", ".xls", ".xlsx"];
 export const IMPORT_MAX_ADDRESSES = 100;
 
 /* ---- §23.7 导入文件格式与压缩炸弹防线（frontend-design plan 1852：大小/条目/压缩比限制、隔离解析）----
@@ -206,9 +207,9 @@ export async function inspectImportFile(file: File): Promise<FileFormatVerdict> 
     if (!isOle) return { ok: false, reason: "扩展名为 .xls 但内容不是 OLE/CFB 复合文档（疑似损坏或被改名）" };
     return { ok: true, kind: "xls" };
   }
-  if (ext !== ".csv") return { ok: false, reason: "不支持的文件扩展名（仅接受 .csv / .xlsx / .xls）" };
+  if (ext !== ".csv" && ext !== ".txt") return { ok: false, reason: "不支持的文件扩展名（仅接受 .txt / .csv / .xlsx / .xls）" };
   const sample = new Uint8Array(await file.slice(0, IMPORT_LIMITS.maxCsvSampleBytes).arrayBuffer());
-  for (const byte of sample) if (byte === 0) return { ok: false, reason: "CSV 内容包含 NUL 字节，疑似二进制文件" };
+  for (const byte of sample) if (byte === 0) return { ok: false, reason: "文本文件内容包含 NUL 字节，疑似二进制文件" };
   return { ok: true, kind: "csv" };
 }
 
@@ -247,7 +248,8 @@ async function parseWorkbookChecked(file: File, defaultChain: string): Promise<{
   };
   const rows: ImportedAddress[] = [];
   const XLSX = await import("xlsx");
-  const isCsv = lowerName.endsWith(".csv");
+  /* .txt 与 .csv 都是分隔文本：同一解析路径，不额外分支。 */
+  const isCsv = lowerName.endsWith(".csv") || lowerName.endsWith(".txt");
   const buffer = isCsv ? await file.text() : await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: isCsv ? "string" : "array" });
   const sheetName = wb.SheetNames[0];

@@ -142,8 +142,11 @@ async function openImportPage(page: Page) {
 const summary = (page: Page) => page.getByTestId("file-parse-summary");
 const summaryDialog = (page: Page) => page.locator('[role="dialog"]').filter({ hasText: "本地解析摘要" });
 const noticeDialog = (page: Page) => page.locator('[role="dialog"]');
-/** 文件导入面板：局部进度 + 正在解析的文件名 + 取消入口都在这里（.dl-address__import）。 */
-const progressBox = (page: Page) => page.locator(".dl-address__import");
+/**
+ * 文件导入字段：唯一触发器（含正在解析的文件名）+ 局部进度 + 取消入口都在同一个
+ * .dl-address__file-field 里 —— 页面只有 1 个原生 input 和 1 个可见触发器（规范 §7.5.3）。
+ */
+const progressBox = (page: Page) => page.locator(".dl-address__file-field");
 
 async function importFile(page: Page, name: string) {
   await page.locator('input[aria-label="导入地址文件"]').setInputFiles(fixture(name));
