@@ -103,6 +103,14 @@ func (s *Store) FailPageFinal(ctx context.Context, pageID, errMsg string) error 
 	return err
 }
 
+// PageStatus 返回单页当前状态。spool 文件缺失时用来区分"真的丢了原始对象"和
+// "页面其实已经入库、文件只是被正常清理"（DL-20260921-0041 的良性竞态）。
+func (s *Store) PageStatus(ctx context.Context, pageID string) (string, error) {
+	var status string
+	err := s.Pool.QueryRow(ctx, "SELECT status FROM download_pages WHERE id=$1", pageID).Scan(&status)
+	return status, err
+}
+
 // PageIngestSummary 汇总一个 Shard 的页面终态：
 //   ingested  = INGESTED/VALIDATED
 //   pending   = 仍可被重放的页（DURABLE 或 30 秒前的 FAILED）

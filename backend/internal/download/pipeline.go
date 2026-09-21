@@ -16,6 +16,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/ingest"
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/observability"
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/spool"
@@ -157,6 +158,20 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 		// 每 30 秒重放一次同样的错误，Shard 永远停在 FETCHED，任务既不能
 		// 完成也不能暂停收敛（现场 DL-20260909-0001，2026-09-08 起）。
 		if errors.Is(err, fs.ErrNotExist) {
+			// 但"文件不存在"也可能是良性竞态：finalizer 每 5 秒的补页查询取到
+			// DURABLE 快照后，页面自己完成了入库并清掉 spool 文件，重放才轮到
+			// 执行。此时行已经在 ClickHouse 里，把它标成 FAILED_FINAL 会让整个
+			// Shard/Dataset/Job 变成 partial_failed（现场 DL-20260921-0041：
+			// 815/816 分片，唯一失败的就是这种误判）。只有确认页面未曾入库才
+			// 按不可恢复处理。
+			if status, serr := p.store.PageStatus(ctx, pr.pageID); serr == nil &&
+				(status == model.PageIngested || status == model.PageValidated) {
+				p.log.Info("replayed page already ingested, spool copy is gone",
+					"shard_id", pr.shardID, "page_no", pr.pageNo, "status", status)
+				p.ingested.Store(pr.pageID, true)
+				p.scheduled.Delete(pr.pageID)
+				return
+			}
 			p.failPagePermanent(ctx, pr, "spool load: "+err.Error())
 			return
 		}

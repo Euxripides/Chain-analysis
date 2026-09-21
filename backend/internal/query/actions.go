@@ -298,6 +298,17 @@ func (s *Service) ActionAssets(ctx context.Context, chain, address string) ([]ma
 }
 
 func (s *Service) ActionRows(ctx context.Context, dataset string, f ActionFilter) (ActionPage, error) {
+	direction := "DESC"
+	if strings.EqualFold(f.Sort, "asc") {
+		direction = "ASC"
+	}
+	return s.actionRows(ctx, dataset, f, "timestamp "+direction, true)
+}
+
+// actionRows 是逐笔明细查询的唯一实现。orderBy 与 withTotal 让"最大单笔"排行
+// （getTopFlows group_by=transaction）复用同一套过滤、方向判定与状态回填，只替换
+// 排序键并跳过不需要的 count 扫描。
+func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter, orderBy string, withTotal bool) (ActionPage, error) {
 	if f.Page <= 0 {
 		f.Page = 1
 	}
@@ -372,15 +383,13 @@ func (s *Service) ActionRows(ctx context.Context, dataset string, f ActionFilter
 	table := tableName(dataset)
 	base := " FROM blockchain." + table + " FINAL WHERE " + strings.Join(where, " AND ")
 	var total uint64
-	if err := s.CH.DB().QueryRow(ctx, "SELECT count()"+base, args...).Scan(&total); err != nil {
-		return ActionPage{}, err
-	}
-	direction := "DESC"
-	if strings.EqualFold(f.Sort, "asc") {
-		direction = "ASC"
+	if withTotal {
+		if err := s.CH.DB().QueryRow(ctx, "SELECT count()"+base, args...).Scan(&total); err != nil {
+			return ActionPage{}, err
+		}
 	}
 	offset := (f.Page - 1) * f.PageSize
-	rows, err := s.queryRows(ctx, dataset, "SELECT *"+base+" ORDER BY timestamp "+direction+" LIMIT ? OFFSET ?", append(args, f.PageSize, offset)...)
+	rows, err := s.queryRows(ctx, dataset, "SELECT *"+base+" ORDER BY "+orderBy+" LIMIT ? OFFSET ?", append(args, f.PageSize, offset)...)
 	if err != nil {
 		return ActionPage{}, err
 	}
@@ -567,11 +576,20 @@ func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minT
 }
 
 func (s *Service) ActionTopFlows(ctx context.Context, f ActionFilter, groupBy string, limit int) ([]map[string]any, error) {
-	if groupBy == "transaction" {
-		if limit > 0 {
-			f.PageSize = limit
+	if strings.EqualFold(strings.TrimSpace(groupBy), "transaction") {
+		// group_by=transaction 的契约是"最大单笔转账"（OpenAPI/MCP 工具描述均为
+		// largest transfers）。此前直接复用默认 timestamp DESC 的明细页，返回的是
+		// 最新几笔而非最大几笔；这里保留全部过滤/方向/状态回填，只把排序换成金额倒序。
+		if limit <= 0 {
+			limit = 20
 		}
-		p, err := s.ActionRows(ctx, "token_transfers", f)
+		// OpenAPI/MCP 对 limit 的上限即 200；与文档保持一致，不再放宽到明细页上限。
+		if limit > 200 {
+			limit = 200
+		}
+		f.Page = 1
+		f.PageSize = limit
+		p, err := s.actionRows(ctx, "token_transfers", f, "amount DESC, timestamp DESC", false)
 		return p.Items, err
 	}
 	return s.ActionCounterparties(ctx, f, "", 0, limit, "total_amount")

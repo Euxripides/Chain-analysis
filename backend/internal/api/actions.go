@@ -891,6 +891,11 @@ func (s *Server) handleActionRows(w http.ResponseWriter, r *http.Request, datase
 	}
 	p, e := s.query.ActionRows(r.Context(), dataset, f)
 	if e != nil {
+		// The blanket 500 used to swallow the cause, so a strict ScanStruct
+		// mismatch and a real server refusal looked identical in the log.
+		if s.deps.Log != nil {
+			s.deps.Log.Error("action rows query failed", "dataset", dataset, "chain", f.Chain, "address", f.Address, "err", e)
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query records")
 		return
 	}
@@ -910,6 +915,9 @@ func (s *Server) handleActionCounterparties(w http.ResponseWriter, r *http.Reque
 	minCount, _ := strconv.Atoi(r.URL.Query().Get("min_tx_count"))
 	rows, e := s.query.ActionCounterparties(r.Context(), f, r.URL.Query().Get("min_total_amount"), minCount, limit, r.URL.Query().Get("sort_by"))
 	if e != nil {
+		if s.deps.Log != nil {
+			s.deps.Log.Error("action counterparties query failed", "chain", f.Chain, "address", f.Address, "err", e)
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to aggregate counterparties")
 		return
 	}
@@ -959,8 +967,12 @@ func (s *Server) handleActionTopFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	rows, e := s.query.ActionTopFlows(r.Context(), f, r.URL.Query().Get("group_by"), limit)
+	groupBy := r.URL.Query().Get("group_by")
+	rows, e := s.query.ActionTopFlows(r.Context(), f, groupBy, limit)
 	if e != nil {
+		if s.deps.Log != nil {
+			s.deps.Log.Error("action top flows query failed", "chain", f.Chain, "address", f.Address, "group_by", groupBy, "err", e)
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query top flows")
 		return
 	}

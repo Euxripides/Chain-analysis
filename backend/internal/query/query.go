@@ -74,6 +74,17 @@ type txRow struct {
 	Confirmation     string     `ch:"confirmation" json:"confirmation"`
 	RawType          string     `ch:"raw_type" json:"raw_type"`
 	RawStatus        string     `ch:"raw_status" json:"raw_status"`
+
+	// 0010 迁移新增的 Solana 交易证据列。SELECT * 会把它们带出来，
+	// 结构体缺一列 ScanStruct 就整条查询失败（表现为 getTransactions 500）。
+	FeeRaw           string   `ch:"fee_raw" json:"fee_raw"`
+	Signers          []string `ch:"signers" json:"signers"`
+	AccountKeys      []string `ch:"account_keys" json:"account_keys"`
+	ProgramIDs       []string `ch:"program_ids" json:"program_ids"`
+	SourceAPI        string   `ch:"source_api" json:"source_api"`
+	SourceMethod     string   `ch:"source_method" json:"source_method"`
+	SourceRequestID  string   `ch:"source_request_id" json:"source_request_id"`
+	ChainPayloadJSON string   `ch:"chain_payload_json" json:"chain_payload_json"`
 }
 
 type internalTransferRow struct {
@@ -119,6 +130,11 @@ type tokenTransferRow struct {
 	FeeAmountRaw     string `ch:"fee_amount_raw" json:"fee_amount_raw"`
 	FromTokenAccount string `ch:"from_token_account" json:"from_token_account"`
 	ToTokenAccount   string `ch:"to_token_account" json:"to_token_account"`
+	// 0010 迁移新增的 Solana 指令证据列（指令下标对齐 EVM 的 log_index 语义）。
+	InstructionIndex      uint32 `ch:"instruction_index" json:"instruction_index"`
+	InnerInstructionIndex int32  `ch:"inner_instruction_index" json:"inner_instruction_index"`
+	SourceAPI             string `ch:"source_api" json:"source_api"`
+	SourceRequestID       string `ch:"source_request_id" json:"source_request_id"`
 }
 
 type nftTransferRow struct {
@@ -138,6 +154,11 @@ type nftTransferRow struct {
 	AmountRaw      string    `ch:"amount_raw" json:"amount_raw"`
 	SourceProvider string    `ch:"source_provider" json:"source_provider"`
 	SourceIngested time.Time `ch:"source_ingested_at" json:"source_ingested_at"`
+	// 0010 迁移新增列同样随 SELECT * 返回（NFT 浏览/导出路径）。
+	InstructionIndex      uint32 `ch:"instruction_index" json:"instruction_index"`
+	InnerInstructionIndex int32  `ch:"inner_instruction_index" json:"inner_instruction_index"`
+	SourceAPI             string `ch:"source_api" json:"source_api"`
+	SourceRequestID       string `ch:"source_request_id" json:"source_request_id"`
 }
 
 type logRow struct {
