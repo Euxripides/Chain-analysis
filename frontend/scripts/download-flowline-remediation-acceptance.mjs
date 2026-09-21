@@ -1662,7 +1662,13 @@ async function main() {
 
   report.summary = {
     viewports_checked: Object.keys(report.viewports).length,
-    ctas_visible: Object.values(report.viewports).every((item) => !item.cta_create || item.cta_create.bottom <= (item.root_client_height ?? 0) + 8),
+    /*
+     * 只有"桌面受控工作台"（w >= 1200）要求创建 CTA 在首屏内；
+     * 中等宽度以下是自然滚动页面，CTA 在文档后段是正确行为，不能算失败。
+     */
+    ctas_visible: Object.values(report.viewports)
+      .filter((item) => item.width >= 1200)
+      .every((item) => Boolean(item.cta_create) && item.cta_create.bottom <= (item.root_client_height ?? 0) - 8),
     videos: (report.motion.videos ?? []).map((item) => item.file),
     reduced_motion: report.motion.reduced_motion ?? {},
     mobile_stale_ok: Boolean(report.mobile_stale?.grayscale_distinguishable),
