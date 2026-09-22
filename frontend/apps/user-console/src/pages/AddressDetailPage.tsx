@@ -15,8 +15,6 @@ import {
   DataTable,
   EmptyState,
   ErrorState,
-  FilterBar,
-  FilterChip,
   HashValue,
   InspectorDrawer,
   KeyValueList,
@@ -27,6 +25,7 @@ import {
   SkeletonRows,
   SplitPane,
   StatusBadge,
+  Switch,
   statusToneFor,
   useDialog,
 } from "@chain/ui";
@@ -34,6 +33,7 @@ import { CsPageHeader } from "@chain/user-ui";
 import type { KeyValueEntry } from "@chain/ui";
 import { useAuth } from "@chain/api-client";
 import { formatRawAmount, formatTime, shortValue, useApi } from "../sprint5/common";
+import "./detail-polish.css";
 
 /**
  * U-EXP-02 地址详情。
@@ -44,7 +44,7 @@ import { formatRawAmount, formatTime, shortValue, useApi } from "../sprint5/comm
  *
  * 2026-09 表现层重构（蓝图 §12.15）：
  *   Header（链 / 完整地址 / 复制 / 数据时间）→ Overview（指标 + 当前余额 + 历史净流量）
- *   → Activity（原 tab + FilterBar）→ Fund Flow（对手方 / 资金流边）→ Analysis（flow-profile）
+ *   → Activity（tab + 参考站点式胶囊工具栏）→ Fund Flow（对手方 / 资金流边）→ Analysis（flow-profile）
  *   → Side Inspector（选中活动行或对手方行的详情；未选中时显示数据来源与口径）。
  *   接口路径、请求参数、分页与错误语义一律未改；本文件只重组信息架构。
  */
@@ -52,7 +52,6 @@ import { formatRawAmount, formatTime, shortValue, useApi } from "../sprint5/comm
 /* 类型与纯函数已抽到 ./address-detail/address-detail.types.ts（规范 §43 的目标文件之一）。
    本次只做位移：字段名、口径与派生规则一字未改，9 个业务 Tab 的 key 与顺序也保持不变。 */
 import {
-  DIRECTION_LABEL,
   TABS,
   addressPath,
   amountDirection,
@@ -88,7 +87,7 @@ import type {
  * 这里复用设计系统同一组类（.cs-hash / .cs-hash__text）与同一个 CopyButton：
  * 视觉省略规则、完整 title、完整复制值与 HashValue 完全一致，只把链接换成 router Link。
  */
-import { TokenPicker } from "./address-detail/TokenPicker";
+import { TransferToolbar } from "./address-detail/TransferToolbar";
 import { EntityHash, CurrentBalanceTable, NetFlowTable, ActivityTable, NftTransferTable, CounterpartyTable, SemanticTable, AnalysisView, CoverageTable } from "./address-detail/tabs/AddressTables";
 
 export default function AddressDetailPage() {
@@ -126,9 +125,6 @@ export default function AddressDetailPage() {
   const fromDate = searchParams.get("from_date") ?? "";
   const toDate = searchParams.get("to_date") ?? "";
   const hideZero = searchParams.get("hide_zero") === "1";
-  /** 草稿只在点「查询」时写 URL；避免每敲一个字符就发一次请求。 */
-  const [partyDraft, setPartyDraft] = useState({ from: fromAddress, to: toAddress });
-  const [amountDraft, setAmountDraft] = useState({ min: minAmount, max: maxAmount });
   const [refreshNonce, setRefreshNonce] = useState(0);
   const notifiedErrorsRef = useRef<Set<string>>(new Set());
 
@@ -256,8 +252,8 @@ export default function AddressDetailPage() {
   const explainInternal = () => {
     dialog.notify(
       "info",
-      "Internal 数据说明",
-      "Internal 行来自本地 address_activity 中 activity_type=internal_transfer 的真实记录；是否可用取决于该链 internal_transactions 数据集是否已同步。空列表表示本地索引没有记录，不代表链上不存在。",
+      "内部交易数据说明",
+      "内部交易行来自本地 address_activity 中 activity_type=internal_transfer 的真实记录；是否可用取决于该链 internal_transactions 数据集是否已同步。空列表表示本地索引没有记录，不代表链上不存在。",
     );
   };
 
@@ -272,6 +268,18 @@ export default function AddressDetailPage() {
 
   const subject = overview.data?.subject;
   const summary = overview.data?.summary;
+  /**
+   * 日期胶囊的展示值：没显式选日期时，把当前时间窗真正覆盖到的起止日填进胶囊
+   * （参考站点的胶囊始终显示一个区间）。"全部时间"用该地址首末活动时间兜底，
+   * 仍然是服务端真实字段，不是编出来的筛选条件；写 URL 只写用户真正选过的日期。
+   */
+  const windowRange = useMemo(() => {
+    const from = activityFromTime
+      ? activityFromTime.slice(0, 10)
+      : (summary?.first_seen ?? "").slice(0, 10);
+    const to = activityToTime ? activityToTime.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    return { from, to };
+  }, [activityFromTime, activityToTime, summary?.first_seen]);
   const currentBlock = summary?.current_balance;
   const flowBlock = summary?.historical_net_flow;
   const coverageItems = overview.data?.coverage?.items ?? [];
@@ -380,7 +388,7 @@ export default function AddressDetailPage() {
               sourceNote="来自服务端地址概览接口的 summary.transaction_count：该地址作为参与方的普通交易计数，范围受当前链与本地索引覆盖限制。"
             />
             <MetricCard
-              label="Token Transfer"
+              label="代币转账"
               value={summary?.token_transfer_count ?? "—"}
               source="summary.token_transfer_count"
               sourceNote="来自 summary.token_transfer_count：token 转账事件计数（activity_type=transfer 的真实行）。"
@@ -466,7 +474,7 @@ export default function AddressDetailPage() {
     );
   };
 
-  const activityTitle = tab === "transfers" ? "Token Transfer" : tab === "internal" ? "Internal" : "普通交易";
+  const activityTitle = tab === "transfers" ? "代币转账" : tab === "internal" ? "内部交易" : "普通交易";
 
   const renderActivity = () => {
     if (activity.loading && !activity.data) {
@@ -511,243 +519,96 @@ export default function AddressDetailPage() {
           return text ? !/^[-+]?0(\.0+)?$/.test(text) : false;
         })
       : filtered;
-    /** 工具栏「查询」：草稿一次性写入 URL（写 URL 即取数），并重置游标。 */
-    const applyToolbar = () => {
-      updateParams({
-        from_address: partyDraft.from.trim() || null,
-        to_address: partyDraft.to.trim() || null,
-        min_amount: assetType === "token" ? amountDraft.min.trim() || null : null,
-        max_amount: assetType === "token" ? amountDraft.max.trim() || null : null,
-        cursor: null,
-      });
-    };
-    const tokenFilterActive = tab === "transfers" && Boolean(token);
+    /** 筛选是否生效：生效后服务端 summary 的总量不再是当前口径，计数行只报"已加载多少行"。 */
+    const filtersActive = Boolean(
+      direction || token || fromAddress || toAddress || minAmount || maxAmount || fromDate || toDate,
+    );
+    /*
+     * 只有代币转账 Tab 能用服务端 summary 的总量：`token_transfer_count` 与这一页的行
+     * （activity_type=transfer）是同一个口径。普通交易/内部交易/NFT 的 summary 字段
+     * 与表格实际过滤出来的行不是一回事，宁可只报"已加载多少行"，也不编一个总数。
+     */
+    const serverTotal = tab === "transfers" && assetType === "token" ? summary?.token_transfer_count : undefined;
+    const countText =
+      !filtersActive && typeof serverTotal === "number"
+        ? "共计 " + serverTotal.toLocaleString("zh-CN") + " 条交易记录（最多加载 1 万行）"
+        : "已加载 " + visible.length.toLocaleString("zh-CN") + " 行" + (filtersActive ? "（筛选结果，最多 1 万行）" : "");
     return (
       <PageSection title={activityTitle} count={visible.length + " 行"}>
-        {/* 筛选条件与请求参数一一对应，并且全部写进 URL（direction / token / 时间窗）。 */}
-        <FilterBar
-          ariaLabel="活动筛选"
-          showClear
-          clearLabel="重置"
-          onClear={() =>
-            updateParams({
-              direction: null,
-              token: null,
-              from_address: null,
-              to_address: null,
-              min_amount: null,
-              max_amount: null,
-              from_date: null,
-              to_date: null,
-              hide_zero: null,
-              cursor: null,
-            })
-          }
-        >
-          <select
-            className="select"
-            style={{ flex: "0 1 170px", minWidth: 0 }}
-            aria-label="方向筛选"
-            value={direction}
-            onChange={(event) => updateParams({ direction: event.target.value || null, cursor: null })}
-          >
-            <option value="">全部方向</option>
-            <option value="in">流入 in</option>
-            <option value="out">流出 out</option>
-            <option value="self">自转 self</option>
-          </select>
-          <select
-            className="select"
-            style={{ flex: "0 1 150px", minWidth: 0 }}
-            aria-label="时间窗筛选"
-            value={String(windowDays)}
-            onChange={(event) => {
-              setWindowDays(Number(event.target.value));
+        {/*
+          工具栏与计数行按参考站点重排：一行胶囊控件（代币 / 数量 / 日期区间 / 方向 / 发送方·接收方 + 刷新）
+          + 「共计 N 条交易记录」与「隐藏数量为 0 的转账」开关同一行。所有筛选能力一个都没少，
+          每个变化都写 URL 并重置 cursor（与旧 FilterBar 完全同一套取数口径）。
+        */}
+        <div className="cs-oktoolbar">
+          <TransferToolbar
+            rows={rows}
+            showToken={tab === "transfers"}
+            showAmount={tab === "transfers" && assetType === "token"}
+            assetType={assetType}
+            onAssetType={(next) => {
+              setAssetType(next);
               updateParams({ cursor: null });
             }}
-          >
-            <option value="7">最近 7 天</option>
-            <option value="30">最近 30 天</option>
-            <option value="90">最近 90 天</option>
-            <option value="0">全部时间（较慢）</option>
-          </select>
-          {tab === "transfers" ? (
-            <>
-              <div role="group" aria-label="资产类别" style={{ display: "flex", gap: 4 }}>
-                <Button
-                  size="sm"
-                  variant={assetType === "token" ? "primary" : "ghost"}
-                  onClick={() => {
-                    setAssetType("token");
-                    updateParams({ cursor: null });
-                  }}
-                >
-                  代币
-                </Button>
-                <Button
-                  size="sm"
-                  variant={assetType === "nft" ? "primary" : "ghost"}
-                  onClick={() => {
-                    setAssetType("nft");
-                    updateParams({ cursor: null });
-                  }}
-                >
-                  NFT
-                </Button>
-              </div>
-              {assetType === "token" ? (
-                <TokenPicker
-                  rows={rows}
-                  value={token}
-                  onConfirm={(next) => updateParams({ token: next || null, cursor: null })}
-                  onReset={() => updateParams({ token: null, cursor: null })}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {tab === "transfers" ? (
-            <>
-              <input
-                type="date"
-                className="input"
-                style={{ flex: "0 1 148px", minWidth: 0 }}
-                aria-label="开始日期"
-                value={fromDate}
-                onChange={(event) => updateParams({ from_date: event.target.value || null, cursor: null })}
-              />
-              <input
-                type="date"
-                className="input"
-                style={{ flex: "0 1 148px", minWidth: 0 }}
-                aria-label="结束日期"
-                value={toDate}
-                onChange={(event) => updateParams({ to_date: event.target.value || null, cursor: null })}
-              />
-              <input
-                className="input"
-                style={{ flex: "0 1 190px", minWidth: 0 }}
-                aria-label="发送方地址"
-                placeholder="发送方地址"
-                value={partyDraft.from}
-                onChange={(event) => setPartyDraft((prev) => ({ ...prev, from: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    applyToolbar();
-                  }
-                }}
-              />
-              <input
-                className="input"
-                style={{ flex: "0 1 190px", minWidth: 0 }}
-                aria-label="接收方地址"
-                placeholder="接收方地址"
-                value={partyDraft.to}
-                onChange={(event) => setPartyDraft((prev) => ({ ...prev, to: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    applyToolbar();
-                  }
-                }}
-              />
-              {assetType === "token" ? (
-                <>
-                  <input
-                    className="input"
-                    style={{ flex: "0 1 120px", minWidth: 0 }}
-                    aria-label="最小数量"
-                    placeholder="最小数量"
-                    value={amountDraft.min}
-                    onChange={(event) => setAmountDraft((prev) => ({ ...prev, min: event.target.value }))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        applyToolbar();
-                      }
-                    }}
-                  />
-                  <input
-                    className="input"
-                    style={{ flex: "0 1 120px", minWidth: 0 }}
-                    aria-label="最大数量"
-                    placeholder="最大数量"
-                    value={amountDraft.max}
-                    onChange={(event) => setAmountDraft((prev) => ({ ...prev, max: event.target.value }))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        applyToolbar();
-                      }
-                    }}
-                  />
-                </>
-              ) : null}
-              <Button size="sm" variant="primary" onClick={applyToolbar}>
-                查询
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setRefreshNonce((value) => value + 1)}>
-                刷新
-              </Button>
-              <label className="s4-list__sub" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <input
-                  type="checkbox"
-                  checked={hideZero}
-                  onChange={(event) => updateParams({ hide_zero: event.target.checked ? "1" : null, cursor: null })}
-                />
-                隐藏数量为 0
-              </label>
-            </>
-          ) : null}
-          {tab === "internal" ? (
-            <Button size="sm" variant="ghost" onClick={explainInternal}>
-              说明
-            </Button>
-          ) : null}
-          {direction ? (
-            <FilterChip removeLabel="移除方向筛选" onRemove={() => updateParams({ direction: null, cursor: null })}>
-              {"方向：" + (DIRECTION_LABEL[direction] ?? direction)}
-            </FilterChip>
-          ) : null}
-          {tokenFilterActive ? (
-            <FilterChip removeLabel="移除 Token 筛选" onRemove={() => updateParams({ token: null, cursor: null })}>
-              {"Token：" + token}
-            </FilterChip>
-          ) : null}
-          {fromAddress || toAddress ? (
-            <FilterChip
-              removeLabel="移除发送方/接收方筛选"
-              onRemove={() => {
-                setPartyDraft({ from: "", to: "" });
-                updateParams({ from_address: null, to_address: null, cursor: null });
-              }}
-            >
-              {"对手方：" +
-                (fromAddress ? "发送 " + fromAddress.slice(0, 10) + "…" : "") +
-                (toAddress ? " 接收 " + toAddress.slice(0, 10) + "…" : "")}
-            </FilterChip>
-          ) : null}
-          {minAmount || maxAmount ? (
-            <FilterChip
-              removeLabel="移除数量区间"
-              onRemove={() => {
-                setAmountDraft({ min: "", max: "" });
-                updateParams({ min_amount: null, max_amount: null, cursor: null });
-              }}
-            >
-              {"数量：" + (minAmount || "0") + " ~ " + (maxAmount || "∞")}
-            </FilterChip>
-          ) : null}
-          {fromDate || toDate ? (
-            <FilterChip
-              removeLabel="移除日期区间"
-              onRemove={() => updateParams({ from_date: null, to_date: null, cursor: null })}
-            >
-              {"日期：" + (fromDate || "最早") + " ~ " + (toDate || "今天")}
-            </FilterChip>
-          ) : null}
-        </FilterBar>
+            token={token}
+            onToken={(next) => updateParams({ token: next || null, cursor: null })}
+            windowDays={windowDays}
+            onWindowDays={(next) => {
+              setWindowDays(next);
+              updateParams({ cursor: null });
+            }}
+            fromDate={fromDate}
+            toDate={toDate}
+            windowFrom={windowRange.from}
+            windowTo={windowRange.to}
+            onDates={(next) => updateParams({ from_date: next.from, to_date: next.to, cursor: null })}
+            direction={direction}
+            onDirection={(next) => updateParams({ direction: next || null, cursor: null })}
+            fromAddress={fromAddress}
+            toAddress={toAddress}
+            onParty={(next) => updateParams({ from_address: next.from, to_address: next.to, cursor: null })}
+            minAmount={minAmount}
+            maxAmount={maxAmount}
+            onAmount={(next) =>
+              updateParams({
+                min_amount: assetType === "token" ? next.min : null,
+                max_amount: assetType === "token" ? next.max : null,
+                cursor: null,
+              })
+            }
+            onRefresh={() => setRefreshNonce((value) => value + 1)}
+            onResetAll={() => {
+              setAssetType("token");
+              setWindowDays(30);
+              updateParams({
+                direction: null,
+                token: null,
+                from_address: null,
+                to_address: null,
+                min_amount: null,
+                max_amount: null,
+                from_date: null,
+                to_date: null,
+                hide_zero: null,
+                cursor: null,
+              });
+            }}
+          />
+        </div>
         <Card flush>
+          <div className="cs-okcount">
+            <span className="cs-okcount__text">{countText}</span>
+            <span className="cs-okcount__toggle">
+              <Switch
+                checked={hideZero}
+                onChange={(next) => updateParams({ hide_zero: next ? "1" : null, cursor: null })}
+                label="隐藏数量为 0 的转账"
+              />
+              隐藏数量为 0 的转账
+            </span>
+          </div>
+          {/* 参考站点的行形状：14px 正文、48px 表头、固定列宽（表格不横向溢出）。 */}
+          <div className="cs-oklist">
           {bulkLoading ? (
             <div style={{ padding: "var(--sp-3) var(--sp-4)" }}>
               {/* 服务端不给总量：进度条保持 indeterminate，只显示已经真实拿到的行数。 */}
@@ -765,48 +626,45 @@ export default function AddressDetailPage() {
               chain={chain}
               loading={activity.loading || bulkLoading}
               onSelectActivity={setSelectedActivity}
+              hidePager
             />
           ) : (
             <ActivityTable
               rows={bulkRows ?? visible}
               chain={chain}
               loading={activity.loading || bulkLoading}
-              emptyTitle={"没有 " + activityTitle + " 记录"}
+              emptyTitle={"没有" + activityTitle + "记录"}
               onSelectActivity={setSelectedActivity}
+              hidePager
             />
           )}
-          {activity.data ? (
-            <div
-              className="toolbar"
-              style={{
-                justifyContent: "flex-end",
-                padding: "var(--sp-3) var(--sp-4)",
-                borderTop: "1px solid var(--border-default)",
-                flexWrap: "wrap",
-              }}
-            >
-              {bulkRows ? (
-                <Button size="sm" onClick={() => setBulkRows(null)}>
-                  {"退出全量视图（" + bulkRows.length + " 行）"}
+          </div>
+          <div className="cs-okfooter">
+            {bulkRows ? (
+              <Button size="sm" onClick={() => setBulkRows(null)}>
+                {"退出全量视图（" + bulkRows.length + " 行）"}
+              </Button>
+            ) : (
+              <>
+                {cursor ? (
+                  <Button size="sm" onClick={() => updateParams({ cursor: null })}>
+                    回到最新
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={!nextCursor}
+                  onClick={() => updateParams({ cursor: nextCursor })}
+                >
+                  加载更多
                 </Button>
-              ) : (
-                <>
-                  {cursor ? (
-                    <Button size="sm" onClick={() => updateParams({ cursor: null })}>
-                      回到最新
-                    </Button>
-                  ) : null}
-                  <span className="cs-section__count">本页 {visible.length} 行</span>
-                  <Button size="sm" busy={bulkLoading} busyLabel="加载中…" onClick={() => void loadAllActivity()}>
-                    加载全量（最多 10,000 行）
-                  </Button>
-                  <Button size="sm" disabled={!nextCursor} onClick={() => updateParams({ cursor: nextCursor })}>
-                    加载下一页
-                  </Button>
-                </>
-              )}
-            </div>
-          ) : null}
+                <Button size="sm" busy={bulkLoading} busyLabel="加载中…" onClick={() => void loadAllActivity()}>
+                  加载全部（最多 10,000 行）
+                </Button>
+              </>
+            )}
+          </div>
         </Card>
       </PageSection>
     );
@@ -1113,6 +971,7 @@ export default function AddressDetailPage() {
     <>
       <BackLink to="/explorer" label="返回地址与交易查询" />
       <CsPageHeader
+        className="cs-detail-header"
         breadcrumb={[{ label: "地址与交易查询", to: "/explorer" }, { label: "地址详情" }]}
         title="地址详情"
         status={<StatusBadge tone="info">{subject?.type || "address"}</StatusBadge>}
@@ -1151,7 +1010,7 @@ export default function AddressDetailPage() {
         role=link 定位。选中态由 .cs-tab[aria-current="page"] 表达（与按钮版
         .cs-tab[aria-selected="true"] 同一套视觉），不引入第二套样式。
       */}
-      <nav className="cs-tabs" aria-label="地址详情分区">
+      <nav className="cs-tabs cs-detail-tabs" aria-label="地址详情分区">
         {TABS.map((item) => {
           const params = new URLSearchParams(searchParams);
           params.set("tab", item.key);
@@ -1181,6 +1040,7 @@ export default function AddressDetailPage() {
         })}
       </nav>
       <SplitPane
+        className="cs-detail-split"
         storageKey="cs-address-inspector-width"
         asideLabel="检查器"
         defaultAsideWidth={360}
@@ -1192,7 +1052,7 @@ export default function AddressDetailPage() {
          * 其他 Tab 维持原行为：检查器常驻显示数据来源与口径。
          */
         aside={activityActive && !selectedActivity && !selectedCounterparty ? undefined : inspector}
-        main={<div className="cs-bento-stack">{content}</div>}
+        main={<div className="cs-bento-stack cs-detail-content">{content}</div>}
       />
     </>
   );

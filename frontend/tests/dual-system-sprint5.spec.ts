@@ -158,7 +158,7 @@ test.describe("S5-FE-01 搜索 / Explorer / 地址 / 交易", () => {
     await page.getByRole("link", { name: "资产" }).click();
     await page.waitForResponse((r) => r.url().includes(`/assets`) && r.status() === 200, { timeout: 20_000 });
     await expect(page).toHaveURL(/tab=assets/);
-    await page.getByRole("link", { name: "Token Transfer" }).click();
+    await page.getByRole("link", { name: "代币转账" }).click();
     await page.waitForResponse((r) => r.url().includes(`/activity`) && r.status() === 200, { timeout: 20_000 });
     await expect(page).toHaveURL(/tab=transfers/);
     await expectNoHorizontalOverflow(page);

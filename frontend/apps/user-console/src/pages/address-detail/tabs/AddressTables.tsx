@@ -92,11 +92,35 @@ function amountText(raw?: string, decimals?: number): string {
   return groupDigits(integer) + (fraction ? "." + fraction : "");
 }
 
-/** 金额前缀：流入 +、流出 −（与 OKLink 一致），自转不带符号。 */
+/** 金额前缀：流入 +、流出 -（与参考站点一致，用 ASCII 连字符），自转不带符号。 */
 function amountSign(direction?: string): string {
   if (direction === "in") return "+";
-  if (direction === "out") return "−";
+  if (direction === "out") return "-";
   return "";
+}
+
+/**
+ * 参考站点的哈希缩略：0x + 前 14 位 + "..."（完整值放 title）。
+ * 非 0x 开头的链（Solana 签名 / base58）按"前 16 字符 + ..."处理。
+ */
+function okHashText(value: string): string {
+  return value.length <= 20 ? value : value.slice(0, 16) + "...";
+}
+
+/** 地址缩略：0x + 前 4 位 + "..." + 后 10 位（参考站点的交易对方列）。 */
+function okAddressText(value: string): string {
+  return value.length <= 20 ? value : value.slice(0, 6) + "..." + value.slice(-10);
+}
+
+/** 法币小字：参考站点的 "< $0.01" / "$1,234.56" 两种形态；没有估值就不显示。 */
+function fiatLabel(amountUsd?: string): string {
+  const text = (amountUsd ?? "").trim();
+  if (!text) return "";
+  const value = Number(text);
+  if (!Number.isFinite(value)) return "$" + text;
+  if (value === 0) return "$0";
+  if (Math.abs(value) < 0.01) return "< $0.01";
+  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** 转账双方：NFT 行直接带 from/to，活动行需要按方向推导。 */
@@ -112,7 +136,7 @@ function transferParties(row: ActivityRow): { from?: string; to?: string } {
 }
 
 /** 代币图标：只认同源自托管路径（CSP img-src 不允许外链图），否则退回首字母。 */
-function TokenLogo({ logo, symbol, size = 20 }: { logo?: string; symbol?: string; size?: number }) {
+function TokenLogo({ logo, symbol, size = 32 }: { logo?: string; symbol?: string; size?: number }) {
   const [broken, setBroken] = useState(false);
   const src = logo && logo.startsWith("/") ? logo : "";
   if (src && !broken) {
@@ -156,53 +180,63 @@ function SideTag({ direction, side }: { direction?: string; side: "from" | "to" 
   if (direction !== "in" && direction !== "out" && direction !== "self") return null;
   const subjectSide = direction === "self" || (direction === "out" && side === "from") || (direction === "in" && side === "to");
   if (!subjectSide) return null;
-  const tone = direction === "in" ? "var(--success, #16a34a)" : direction === "out" ? "var(--danger, #dc2626)" : "var(--text-secondary, #64748b)";
+  const tone = direction === "in" ? "in" : direction === "out" ? "out" : "self";
   const label = direction === "in" ? "In" : direction === "out" ? "Out" : "Self";
   return (
-    <span
-      style={{
-        marginLeft: 4,
-        padding: "0 4px",
-        fontSize: 10,
-        lineHeight: "14px",
-        borderRadius: 3,
-        border: "1px solid " + tone,
-        color: tone,
-        flex: "0 0 auto",
-      }}
-    >
+    <span className="cs-okside" data-tone={tone}>
       {label}
     </span>
   );
 }
 
-/** 发送方 / 接收方单元格：地址 + 复制 + 主体侧方向标签。 */
+/**
+ * 发送方 / 接收方单元格：方向标签 + 地址（+ 复制）。
+ *
+ * 参考站点的画法：**主体侧地址不是链接**（当前就在这个地址页上），用正文色；
+ * 对手方地址是链接色，可点进对方地址页。两侧都保留复制。
+ */
 function PartyCell({
   value,
   chain,
   side,
   direction,
+  subject,
 }: {
   value?: string;
   chain: string;
   side: "from" | "to";
   direction?: string;
+  subject?: boolean;
 }) {
   if (!value) return <span>—</span>;
+  const label = side === "from" ? "发送方地址" : "接收方地址";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", minWidth: 0 }}>
-      <EntityHash
-        value={value}
-        to={addressPath(chain, value)}
-        label={side === "from" ? "发送方地址" : "接收方地址"}
-        /*
-         * 缩略到 6+4：七列要在一屏内放下（参考站点同样只留头尾几位）。
-         * 完整值与复制仍然走 EntityHash 的 title / CopyButton（§2.5）。
-         */
-        head={6}
-        tail={4}
-      />
+    <span className="cs-okparty">
       <SideTag direction={direction} side={side} />
+      {subject ? (
+        <span className="cs-okparty__self" title={value}>
+          {okAddressText(value)}
+        </span>
+      ) : (
+        <Link className="cs-okparty__link" to={addressPath(chain, value)} title={value} onClick={(event) => event.stopPropagation()}>
+          {okAddressText(value)}
+        </Link>
+      )}
+      <span onClick={(event) => event.stopPropagation()}>
+        <CopyButton value={value} label={label} />
+      </span>
+    </span>
+  );
+}
+
+/** 方法名：参考站点是灰底圆角标签，展示交易方法原文（不首字母大写）。 */
+function MethodChip({ row, nft }: { row: ActivityRow; nft: boolean }) {
+  const raw = (row.method_name ?? "").trim();
+  const fallback = nft || row.activity_type !== "internal_transfer" ? "transfer" : "internal";
+  const method = raw || fallback;
+  return (
+    <span className="cs-okmethod" title={raw ? method : "本地索引没有这笔交易的方法名，按活动类型显示"}>
+      {method}
     </span>
   );
 }
@@ -270,33 +304,15 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const suspicion = tokenSuspicion(row);
   const unverified = Boolean(suspicion);
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        minWidth: 0,
-        maxWidth: 150,
-        ...(unverified
-          ? {
-              border: "1px dashed #f59e0b",
-              borderRadius: 4,
-              padding: "2px 6px",
-              background: "rgba(245, 158, 11, 0.06)",
-            }
-          : {}),
-      }}
-    >
+    <span className="cs-oktoken" data-suspicious={unverified ? "true" : undefined}>
       <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
-      <span style={{ display: "flex", flexDirection: "column", minWidth: 0, maxWidth: 122 }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+      <span className="cs-oktoken__text">
+        <span className="cs-oktoken__symbol">
           <UnverifiedMark reason={suspicion} symbol={row.token_symbol || primary} />
-          <span title={primary} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {primary}
-          </span>
+          <span title={primary}>{primary}</span>
         </span>
         {secondary ? (
-          <span className="s4-list__sub" title={secondary}>
+          <span className="cs-oktoken__name" title={secondary}>
             {secondary}
           </span>
         ) : null}
@@ -305,19 +321,23 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   );
 }
 
-/** 数量单元格：符号 + 千分位 + 法币估值。 */
+/**
+ * 数量单元格：符号 + 千分位 + 法币小字。
+ *
+ * 与参考站点一致：数值本身用正文色（进出方向由 In/Out 标签表达），法币估值放在下一行小字，
+ * 金额不足一分钱时显示 "< $0.01"。
+ */
 function AmountCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const raw = nft ? row.amount_raw || "1" : row.amount_raw ?? row.amount;
   const text = amountText(raw, nft ? 0 : row.token_decimals);
   const sign = amountSign(row.direction);
-  const fiat = fiatText(row.amount_usd);
-  const color = row.direction === "in" ? "var(--success, #16a34a)" : row.direction === "out" ? "var(--danger, #dc2626)" : undefined;
+  const fiat = fiatLabel(row.amount_usd);
   return (
-    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 0, maxWidth: 150 }}>
-      <span className="mono" title={raw ?? ""} style={{ color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+    <span className="cs-okamount">
+      <span className="cs-okamount__value" title={raw ?? ""}>
         {text ? sign + text : "—"}
       </span>
-      {fiat ? <span className="s4-list__sub">{fiat}</span> : null}
+      {fiat ? <span className="cs-okamount__fiat">{fiat}</span> : null}
     </span>
   );
 }
@@ -470,6 +490,13 @@ interface TransferTableProps {
   emptyTitle?: string;
   /** 行激活只负责"选中到检查器"；跳转仍由行内明确链接承担（蓝图 §8.4）。 */
   onSelectActivity?: (row: ActivityRow) => void;
+  /**
+   * 隐藏共享 DataTable 的"共 N 行 / 第 x/y 页 / DOM n 行（虚拟滚动）"页脚。
+   *
+   * 转账列表的分页由服务端 cursor 决定（页面右下角是"加载更多 / 加载全部"），
+   * 窗口分页的摘要对用户没有意义——参考站点也没有这一行。
+   */
+  hidePager?: boolean;
 }
 
 /**
@@ -478,11 +505,20 @@ interface TransferTableProps {
  * 列顺序对齐参考站点：交易哈希 / 方法 / 时间 / 发送方 / 接收方 / 数量 / 代币。
  * 纯展示：不发请求、不改状态；来源与原始量在行检查器里查看。
  */
-function TransferTable({ rows, chain, loading, emptyTitle = "没有活动记录", onSelectActivity, nft }: TransferTableProps & { nft: boolean }) {
+function TransferTable({
+  rows,
+  chain,
+  loading,
+  emptyTitle = "没有活动记录",
+  onSelectActivity,
+  hidePager,
+  nft,
+}: TransferTableProps & { nft: boolean }) {
   return (
     <DataTable<ActivityRow>
       rows={rows}
       loading={loading}
+      hidePager={hidePager}
       rowKey={(row, index) =>
         (row.tx_hash ?? "tx") +
         "-" +
@@ -505,54 +541,65 @@ function TransferTable({ rows, chain, loading, emptyTitle = "没有活动记录"
         {
           key: "tx",
           header: "交易哈希",
-          width: "150px",
+          width: "13.5%",
           render: (row) =>
             row.tx_hash ? (
-              <EntityHash value={row.tx_hash} to={transactionPath(chain, row.tx_hash)} label="交易哈希" head={6} tail={4} />
+              /* 参考站点这一列只有链接（完整值在 title 里，复制走行检查器），缩略 0x + 14 位 + "..."。 */
+              <Link
+                className="cs-okhash"
+                to={transactionPath(chain, row.tx_hash)}
+                title={row.tx_hash}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {okHashText(row.tx_hash)}
+              </Link>
             ) : (
               <span>—</span>
             ),
         },
+        { key: "method", header: "方法", width: "9%", render: (row) => <MethodChip row={row} nft={nft} /> },
         {
-          key: "method",
-          header: "方法",
-          width: "92px",
-          render: (row) => (
-            <span title={row.method_name || "Transfer"}>{row.method_name || (nft ? "Transfer" : "Transfer")}</span>
-          ),
+          key: "time",
+          header: <span className="cs-okhead--sorted" title="默认按时间倒序（本地索引 cursor 顺序）">时间</span>,
+          width: "15.5%",
+          render: (row) => <span className="cs-oktime">{okTime(row.timestamp)}</span>,
         },
-        { key: "time", header: "时间", width: "148px", render: (row) => <span>{okTime(row.timestamp)}</span> },
         {
           key: "from",
           header: "发送方",
-          width: "158px",
+          width: "16%",
           render: (row) => {
             const parties = transferParties(row);
-            return <PartyCell value={parties.from} chain={chain} side="from" direction={row.direction} />;
+            return (
+              <PartyCell
+                value={parties.from}
+                chain={chain}
+                side="from"
+                direction={row.direction}
+                subject={row.direction === "out" || row.direction === "self"}
+              />
+            );
           },
         },
         {
           key: "to",
           header: "接收方",
-          width: "158px",
+          width: "16%",
           render: (row) => {
             const parties = transferParties(row);
-            return <PartyCell value={parties.to} chain={chain} side="to" direction={row.direction} />;
+            return (
+              <PartyCell
+                value={parties.to}
+                chain={chain}
+                side="to"
+                direction={row.direction}
+                subject={row.direction === "in" || row.direction === "self"}
+              />
+            );
           },
         },
-        {
-          key: "amount",
-          header: "数量",
-          align: "right",
-          width: "132px",
-          render: (row) => <AmountCell row={row} nft={nft} />,
-        },
-        {
-          key: "token",
-          header: "代币",
-          width: "190px",
-          render: (row) => <TokenCell row={row} nft={nft} />,
-        },
+        { key: "amount", header: "数量", width: "15%", render: (row) => <AmountCell row={row} nft={nft} /> },
+        { key: "token", header: "代币", width: "15%", render: (row) => <TokenCell row={row} nft={nft} /> },
       ]}
     />
   );

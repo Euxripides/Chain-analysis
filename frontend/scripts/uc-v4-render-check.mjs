@@ -22,10 +22,10 @@ import { extname, join, resolve, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const DIST = resolve(here, "apps/user-console/dist");
+const DIST = resolve(here, process.env.UC_CHECK_DIST ?? "apps/user-console/dist");
 /* 后台端产物：仅用于验证"共享 Dialog 重构没有改变后台端行为"（规范 §1.3 / §63.1）。 */
 const ADMIN_DIST = resolve(here, "apps/admin-console/dist");
-const OUT = resolve(here, "acceptance-evidence/v4-render-check");
+const OUT = resolve(here, process.env.UC_CHECK_OUT ?? "acceptance-evidence/v4-render-check");
 const PORT = Number(process.env.UC_CHECK_PORT ?? 5399);
 
 const MIME = {
@@ -1584,10 +1584,12 @@ async function main() {
         await page.waitForSelector(".cs-tab", { timeout: 20_000 });
         const tabLabels = (await page.locator(".cs-tab").allInnerTexts()).map((text) => text.trim());
         /*
-         * 这是本次重构**最硬的一条契约**：9 个 Tab 的 key 与中文标签都不得改动
+         * 这是本次重构**最硬的一条契约**：9 个 Tab 的 key 不得增删改
          * （规范 §0.4.3 与 §64 #17）。数量也一并校验——重排视觉可以，改信息架构不行。
+         * 2026-09-22：界面文案按用户要求中文化（Token Transfer → 代币转账、Internal → 内部交易），
+         * key 与顺序一字未动。
          */
-        const EXPECTED_TABS = ["概览", "资产", "普通交易", "Token Transfer", "Internal", "对手方", "语义事件", "分析", "Coverage"];
+        const EXPECTED_TABS = ["概览", "资产", "普通交易", "代币转账", "内部交易", "对手方", "语义事件", "分析", "Coverage"];
         for (const label of EXPECTED_TABS) {
           if (!tabLabels.some((text) => text === label || text.startsWith(label))) {
             problems.push(`[${vp.name}] 地址详情缺少 Tab「${label}」（实际 ${JSON.stringify(tabLabels)}）`);

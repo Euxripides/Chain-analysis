@@ -676,6 +676,7 @@ export function DataTable<T>({
   caption,
   emptyAction,
   keepPreviousData = false,
+  hidePager = false,
 }: {
   columns: Array<DataTableColumn<T>>;
   rows: T[];
@@ -709,6 +710,14 @@ export function DataTable<T>({
   caption?: string;
   /** 空结果时提供的可执行动作（§11.4"提供清除筛选"）。 */
   emptyAction?: React.ReactNode;
+  /**
+   * 隐藏表格底部的"共 N 行 / 第 x / y 页 / DOM n 行（虚拟滚动）"摘要与上一页/下一页。
+   *
+   * 默认 false：共享组件对既有调用方（后台端与用户端其他长表）**逐字不变**。
+   * 只有自己带游标式"加载更多"的页面（地址详情转账列表）才传 true——
+   * 那些页面的分页由服务端 cursor 决定，窗口分页对用户没有意义。
+   */
+  hidePager?: boolean;
 }) {
   /* 首次加载（或未开启保留策略）才用骨架屏；刷新已有数据不清屏。 */
   const firstLoad = Boolean(loading) && (!keepPreviousData || rows.length === 0);
@@ -744,6 +753,7 @@ export function DataTable<T>({
       onSelectedChange={onSelectedChange}
       rowTestId={rowTestId}
       caption={caption}
+      hidePager={hidePager}
     />
   );
 
@@ -776,6 +786,7 @@ function PagedTable<T>({
   onSelectedChange,
   rowTestId,
   caption,
+  hidePager,
 }: {
   columns: Array<DataTableColumn<T>>;
   rows: T[];
@@ -787,6 +798,7 @@ function PagedTable<T>({
   onSelectedChange?: (next: string[]) => void;
   rowTestId?: (row: T) => string;
   caption?: string;
+  hidePager?: boolean;
 }) {
   /**
    * §30.1 / UX-004：分页窗口 + 视口虚拟滚动。
@@ -966,6 +978,7 @@ function PagedTable<T>({
           </tbody>
         </table>
       </div>
+      {hidePager ? null : (
       <div className="toolbar" style={{ padding: "var(--sp-3) var(--sp-4)", justifyContent: "space-between" }}>
         <span style={{ color: "var(--c-slate)", fontSize: "var(--fs-12)" }} data-testid="table-summary">
           共 {rows.length} 行 · 第 {current + 1} / {pageCount} 页 · DOM {visible.length} 行（虚拟滚动）
@@ -995,6 +1008,7 @@ function PagedTable<T>({
           </button>
         </span>
       </div>
+      )}
     </>
   );
 }

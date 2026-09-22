@@ -1,0 +1,433 @@
+/* 地址 / 交易详情：保留 OKLink 式对象头、横向 Tab 与内容顺序，只提升组件清晰度。 */
+html[data-app="user"] .cs-detail-header {
+  margin-bottom: 16px;
+}
+html[data-app="user"] .cs-detail-header .page-head__title {
+  color: var(--cs-text-primary);
+  letter-spacing: -.025em;
+}
+html[data-app="user"] .cs-detail-header .cs-objecthead {
+  gap: 11px;
+  padding-bottom: 16px;
+  border-bottom-color: var(--cs-border);
+}
+html[data-app="user"] .cs-detail-header .cs-objecthead__top {
+  gap: 10px;
+}
+html[data-app="user"] .cs-detail-header .cs-objecthead__kind {
+  padding: 4px 9px;
+  border: 1px solid var(--cs-border-selected);
+  border-radius: 7px;
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+  letter-spacing: .035em;
+}
+html[data-app="user"] .cs-detail-header .cs-objecthead__value {
+  color: var(--cs-text-primary);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-ligatures: none;
+}
+html[data-app="user"] .cs-detail-header .cs-meta {
+  gap: 7px 18px;
+  color: var(--cs-text-secondary);
+  line-height: 1.5;
+}
+html[data-app="user"] .cs-detail-header .cs-meta__item b {
+  color: var(--cs-text-primary);
+}
+
+/* Tabs 仍按原顺序横向排列，选中态继续写入 URL；仅换成清楚的白色轨道。 */
+html[data-app="user"] .cs-detail-tabs {
+  gap: 2px;
+  margin: 0 0 20px;
+  padding: 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  background: var(--cs-surface);
+  box-shadow: 0 4px 16px rgba(16, 38, 78, .035);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cs-border-strong) transparent;
+}
+html[data-app="user"] .cs-detail-tabs .cs-tab {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 11px 14px 10px;
+  border-bottom: 0;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+html[data-app="user"] .cs-detail-tabs .cs-tab::after {
+  position: absolute;
+  right: 14px;
+  bottom: 4px;
+  left: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transform: scaleX(.45);
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+html[data-app="user"] .cs-detail-tabs .cs-tab:hover {
+  background: var(--cs-surface-blue);
+}
+html[data-app="user"] .cs-detail-tabs .cs-tab[aria-current="page"] {
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+}
+html[data-app="user"] .cs-detail-tabs .cs-tab[aria-current="page"]::after {
+  background: var(--cs-primary);
+  transform: scaleX(1);
+}
+
+html[data-app="user"] .cs-detail-content {
+  gap: 22px;
+}
+html[data-app="user"] .cs-detail-content .cs-section {
+  gap: 12px;
+}
+html[data-app="user"] .cs-detail-content .cs-section__title {
+  color: var(--cs-text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+html[data-app="user"] .cs-detail-content .cs-section__count {
+  color: var(--cs-text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+html[data-app="user"] .cs-detail-content .metric-grid {
+  gap: 14px;
+}
+html[data-app="user"] .cs-detail-content .metric {
+  position: relative;
+  overflow: hidden;
+  min-height: 96px;
+  padding: 18px;
+  border-color: var(--cs-border);
+  border-radius: 14px;
+  background: var(--cs-surface);
+  box-shadow: 0 5px 16px rgba(16, 38, 78, .045);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+html[data-app="user"] .cs-detail-content .metric::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cs-primary), #22b8d2 72%, transparent);
+  content: "";
+  opacity: .48;
+}
+html[data-app="user"] .cs-detail-content .metric:hover {
+  transform: translateY(-1px);
+  border-color: var(--cs-border-selected);
+  box-shadow: 0 9px 22px rgba(16, 38, 78, .075);
+}
+html[data-app="user"] .cs-detail-content .metric__label {
+  color: var(--cs-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+html[data-app="user"] .cs-detail-content .metric__value {
+  color: var(--cs-text-primary);
+  font-size: 28px;
+  font-weight: 700;
+}
+html[data-app="user"] .cs-detail-content .card,
+html[data-app="user"] .cs-detail-split .cs-inspector {
+  border-color: var(--cs-border);
+  border-radius: 16px;
+  background: var(--cs-surface);
+  box-shadow: 0 7px 22px rgba(16, 38, 78, .05);
+}
+html[data-app="user"] .cs-detail-content .card:hover {
+  transform: none;
+  border-color: var(--cs-border);
+  box-shadow: 0 7px 22px rgba(16, 38, 78, .05);
+}
+html[data-app="user"] .cs-detail-content .state {
+  min-height: 132px;
+  padding: 32px 24px;
+}
+html[data-app="user"] .cs-detail-split .cs-inspector__head {
+  padding: 14px 16px;
+  border-bottom-color: var(--cs-border);
+  background: var(--cs-surface);
+}
+html[data-app="user"] .cs-detail-split .cs-inspector__title {
+  color: var(--cs-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+html[data-app="user"] .cs-detail-split .cs-inspector__body {
+  padding: 16px;
+}
+
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-detail-header { margin-bottom: 14px; }
+  html[data-app="user"] .cs-detail-header .cs-objecthead__value { font-size: 13px; }
+  html[data-app="user"] .cs-detail-tabs {
+    margin-inline: 0;
+    margin-bottom: 18px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+  html[data-app="user"] .cs-detail-tabs .cs-tab { min-height: 46px; padding-inline: 13px; }
+  html[data-app="user"] .cs-detail-content { gap: 18px; }
+  html[data-app="user"] .cs-detail-content .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  html[data-app="user"] .cs-detail-content .metric {
+    min-height: 104px;
+    padding: 15px;
+  }
+  html[data-app="user"] .cs-detail-content .metric__value { font-size: 25px; }
+  html[data-app="user"] .cs-detail-content .state { min-height: 120px; padding: 28px 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-detail-tabs .cs-tab::after,
+  html[data-app="user"] .cs-detail-content .metric {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+ * 转账列表（代币转账 / 内部交易 / 普通交易）：对齐参考站点（OKLink）的列表区。
+ *
+ * 为什么要单独一段：参考站点的列表区是"单行胶囊工具栏 + 计数行 + 宽行表格"，
+ * 与共享组件默认的"FilterBar 两行控件 + 11px 灰色表头 + 分页页脚"不同。
+ * 这里只作用于 `.cs-oktoolbar / .cs-oklist / .cs-okcount / .cs-okfooter` 包住的范围，
+ * 其他页面（后台端与用户端其他长表）照旧。
+ * ========================================================================== */
+
+/* ---- 工具栏：一行圆角胶囊 ---- */
+.cs-oktoolbar { margin-bottom: var(--sp-3); }
+.cs-okbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.cs-okpillwrap { position: relative; }
+.cs-okpillwrap > summary { list-style: none; }
+.cs-okpillwrap > summary::-webkit-details-marker { display: none; }
+
+.cs-okpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-pill);
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  font-size: var(--fs-13);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cs-okpill:hover { border-color: var(--cs-border-selected); }
+.cs-okpill:focus-within { border-color: var(--cs-primary); box-shadow: 0 0 0 3px var(--interactive-ring); }
+.cs-okpill__label { color: var(--cs-text-secondary); }
+.cs-okpill__value { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.cs-okpill__chevron { color: var(--cs-text-muted); flex: 0 0 auto; }
+.cs-okpill__logo { border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.cs-okpill--date { gap: 8px; padding-inline: 14px; }
+.cs-okpill--icon { padding: 0 10px; }
+.cs-okpill__select {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  max-width: 150px;
+  cursor: pointer;
+}
+.cs-okpill__date {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  width: 122px;
+  cursor: pointer;
+}
+.cs-okpill__date::-webkit-calendar-picker-indicator { opacity: .55; cursor: pointer; }
+.cs-okpill__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cs-neutral-soft);
+  color: var(--cs-text-secondary);
+  cursor: pointer;
+}
+.cs-okpill__clear:hover { background: var(--cs-border); color: var(--cs-text-primary); }
+.cs-okpill__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 340px;
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.cs-okreset {
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-13);
+  cursor: pointer;
+}
+.cs-okreset:hover { color: var(--cs-primary-text); text-decoration: underline; }
+
+/* ---- 计数行：左"共计 N 条交易记录"，右"隐藏数量为 0 的转账" ---- */
+.cs-okcount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+.cs-okcount__text { color: var(--cs-text-secondary); font-size: var(--fs-13); }
+.cs-okcount__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--cs-text-secondary);
+  font-size: var(--fs-13);
+}
+
+/* ---- 表格：参考站点的字号与行高，列宽按百分比固定（不横向溢出） ---- */
+html[data-app="user"] .cs-oklist .table { table-layout: fixed; width: 100%; font-size: var(--fs-14); }
+html[data-app="user"] .cs-oklist .table th {
+  height: 48px;
+  padding: 0 var(--sp-3);
+  background: var(--cs-surface);
+  color: var(--cs-text-primary);
+  font-size: var(--fs-14);
+  font-weight: 600;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--cs-border);
+}
+html[data-app="user"] .cs-oklist .table td {
+  padding: 10px var(--sp-3);
+  border-bottom: 1px solid var(--cs-border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+html[data-app="user"] .cs-oklist .table tbody tr { height: 64px; }
+.cs-okhead--sorted { color: var(--cs-primary-text); }
+
+/* ---- 行内元素 ---- */
+.cs-okhash,
+.cs-okparty__link {
+  color: var(--cs-primary-text);
+  font-size: var(--fs-14);
+  text-decoration: none;
+}
+.cs-okhash:hover,
+.cs-okparty__link:hover { text-decoration: underline; }
+.cs-okmethod {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--cs-neutral-soft);
+  color: var(--cs-text-primary);
+  font-size: var(--fs-12);
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.cs-oktime { color: var(--cs-text-primary); font-size: var(--fs-14); white-space: nowrap; }
+.cs-okparty { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.cs-okparty__self { color: var(--cs-text-primary); font-size: var(--fs-14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-okside {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-12);
+  line-height: 18px;
+}
+.cs-okside[data-tone="in"] { color: var(--cs-success-text); background: var(--cs-success-soft); }
+.cs-okside[data-tone="out"] { color: var(--cs-warning-text); background: var(--cs-warning-soft); }
+.cs-okside[data-tone="self"] { color: var(--cs-text-secondary); background: var(--cs-neutral-soft); }
+.cs-okamount { display: flex; flex-direction: column; min-width: 0; }
+.cs-okamount__value {
+  color: var(--cs-text-primary);
+  font-size: var(--fs-14);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-okamount__fiat { color: var(--cs-text-secondary); font-size: var(--fs-12); white-space: nowrap; }
+.cs-oktoken { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+.cs-oktoken[data-suspicious="true"] {
+  padding: 2px 6px;
+  border: 1px dashed var(--cs-warning);
+  border-radius: var(--radius-xs);
+  background: var(--cs-warning-soft);
+}
+.cs-oktoken__text { display: flex; flex-direction: column; min-width: 0; }
+.cs-oktoken__symbol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--cs-primary-text);
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.cs-oktoken__symbol > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-oktoken__name { color: var(--cs-text-secondary); font-size: var(--fs-12); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- 页脚：游标式"加载更多"，没有页码摘要 ---- */
+.cs-okfooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--cs-border-subtle);
+}
+
+/*
+ * 窄屏：胶囊换行、日期胶囊允许内部换行（它是工具栏里最宽的），浮层宽度跟视口走。
+ * 390px 实测过：不加这段，445px 的日期胶囊会把文档撑到 457px，产生页面级横向滚动。
+ */
+@media (max-width: 599px) {
+  .cs-okbar { gap: 6px; }
+  .cs-okpill { height: 32px; padding: 0 10px; font-size: var(--fs-12); }
+  .cs-okpill__value { max-width: 132px; }
+  .cs-okpill--date {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 32px;
+    padding-block: 5px;
+    row-gap: 4px;
+  }
+  .cs-okpill__date { width: 104px; }
+  .cs-okpill__panel { width: min(calc(100vw - 32px), 340px); }
+  .cs-okcount { flex-wrap: wrap; gap: var(--sp-2); }
+  .cs-okfooter { flex-wrap: wrap; }
+}

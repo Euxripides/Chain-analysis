@@ -184,15 +184,15 @@ export interface AnalysisData {
 /**
  * 9 个业务 Tab 的**真实契约**（规范 §0.4.3 / §43）。
  *
- * key 是深链接的一部分，中文标签是界面文案——两者都不得改动。
- * 本轮重构只允许重排视觉、拆模块、优化密度，不允许新增/删除/改名任何一个 key。
+ * key 是深链接的一部分，**9 个 key 一个都不许增删改**；界面文案按参考站点改成中文
+ * （Token Transfer → 代币转账、Internal → 内部交易，2026-09-22 对齐参考站点截图）。
  */
 export const TABS = [
   { key: "overview", label: "概览" },
   { key: "assets", label: "资产" },
   { key: "transactions", label: "普通交易" },
-  { key: "transfers", label: "Token Transfer" },
-  { key: "internal", label: "Internal" },
+  { key: "transfers", label: "代币转账" },
+  { key: "internal", label: "内部交易" },
   { key: "counterparties", label: "对手方" },
   { key: "semantic", label: "语义事件" },
   { key: "analysis", label: "分析" },
