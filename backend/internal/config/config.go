@@ -288,6 +288,11 @@ type TokenMetadataConfig struct {
 	LogoMaxBytes      int64
 	LogoMaxWidth      int
 	LogoMaxHeight     int
+	// LogoMirrorBase / LogoMirrorHosts：某些图床（实测 assets.coingecko.com）在这台机器上
+	// 出网被切断，直接抓会连超时；配置一个公网图片代理后，命中 MirrorHosts 的源站改走代理抓取。
+	// logo_url 本身仍保存**原始事实 URL**，代理只是抓取通道（可随时关掉）。
+	LogoMirrorBase  string
+	LogoMirrorHosts []string
 }
 
 // RPCConfig V1.5 统一链 RPC 基础设施（§188/§189）。
@@ -1524,6 +1529,8 @@ func Load() *Config {
 			LogoMaxBytes:      int64(envInt("TOKEN_LOGO_MAX_BYTES", 2097152)),
 			LogoMaxWidth:      envInt("TOKEN_LOGO_MAX_WIDTH", 4096),
 			LogoMaxHeight:     envInt("TOKEN_LOGO_MAX_HEIGHT", 4096),
+			LogoMirrorBase:    env("TOKEN_LOGO_MIRROR_BASE", ""),
+			LogoMirrorHosts:   splitList(env("TOKEN_LOGO_MIRROR_HOSTS", "")),
 		},
 	}
 }

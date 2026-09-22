@@ -24,6 +24,28 @@ type LogoConfig struct {
 	Enabled             bool
 	MaxBytes            int64
 	MaxWidth, MaxHeight int
+	// MirrorBase/MirrorHosts：源站抓不动时改走公网图片代理（见 config.go 的注释）。
+	// MirrorBase 形如 "https://images.weserv.nl/?url="；MirrorHosts 命中才改写。
+	MirrorBase  string
+	MirrorHosts []string
+}
+
+// fetchURL 返回真正用于抓取的 URL：命中 MirrorHosts 时改写成图片代理形态，
+// 否则原样返回。logo_url 列保存的始终是原始事实 URL。
+func (c LogoConfig) fetchURL(raw string) string {
+	if c.MirrorBase == "" || len(c.MirrorHosts) == 0 {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	for _, host := range c.MirrorHosts {
+		if strings.EqualFold(host, u.Hostname()) {
+			return c.MirrorBase + url.QueryEscape(strings.TrimPrefix(strings.TrimPrefix(raw, "https://"), "http://"))
+		}
+	}
+	return raw
 }
 
 func ValidatePublicHTTPS(ctx context.Context, rawURL string, resolver *net.Resolver) error {
@@ -176,7 +198,8 @@ func (s *Service) queueLogo(ctx context.Context, chain, contract string) {
 
 func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 	resolver := net.DefaultResolver
-	if err := ValidatePublicHTTPS(ctx, meta.LogoURL, resolver); err != nil {
+	sourceURL := s.Logo.fetchURL(meta.LogoURL)
+	if err := ValidatePublicHTTPS(ctx, sourceURL, resolver); err != nil {
 		return err
 	}
 	dialer := &net.Dialer{Timeout: 8 * time.Second}
@@ -197,7 +220,23 @@ func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 		if len(ips) == 0 {
 			return nil, fmt.Errorf("no public address")
 		}
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+		/*
+		 * 逐个尝试所有解析到的公网 IP，而不是只拨 ips[0]。
+		 *
+		 * 2026-09-23 实测：raw.githubusercontent.com 在这台机器上同时解析出 IPv6 与 IPv4，
+		 * 而 IPv6 那条路会间歇性被 reset（同一进程里 9 次有 1 次失败），只拨 ips[0] 时
+		 * 整张图标就白抓一轮（要等下一个 5 分钟扫描）。逐个 fallback 后成功率与耗时都稳定。
+		 * 私网/特殊地址仍然在尝试之前就整体拒绝（SSRF 约束不放宽）。
+		 */
+		var lastErr error
+		for _, item := range ips {
+			conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(item.IP.String(), port))
+			if dialErr == nil {
+				return conn, nil
+			}
+			lastErr = dialErr
+		}
+		return nil, lastErr
 	}}
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) > 5 {
@@ -205,7 +244,7 @@ func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 		}
 		return ValidatePublicHTTPS(req.Context(), req.URL.String(), resolver)
 	}}
-	res, err := client.Get(meta.LogoURL)
+	res, err := client.Get(sourceURL)
 	if err != nil {
 		return err
 	}

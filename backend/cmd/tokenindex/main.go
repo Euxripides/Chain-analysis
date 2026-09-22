@@ -680,18 +680,43 @@ func repairLogos(ctx context.Context, st *store.Store) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
-// resolveLogos 把 Trust Wallet 目录里的 logo_url 回填给缺图标的代币。
+// evmChainSlugs：这些链的合约地址按小写归一（与本文件导入目录时的口径一致）。
+var evmChainSlugs = []string{"eth", "bsc", "polygon", "arbitrum", "base", "optimism", "avalanche"}
+
+// resolveLogos 把代币目录里的 logo_url 回填给缺图标的代币。
+//
 // 只补空值：已有 logo_url 或已经有自托管对象（logo_object_key）的行一律不动。
+//
+// 2026-09-23 修正两处（清退合成数据、重建图标时发现）：
+//  1. 原实现只认 source='trustwallet'，把 coingecko-tokenlist 目录里那 1 万多个 logo_url
+//     全部丢掉；现在两个来源都纳入，并**按优先级取一个**（trustwallet 优先）。
+//  2. EVM 链的地址必须**大小写不敏感**匹配：目录里有 1,550 行是 EIP-55 校验和形态，
+//     而 token_metadata.normalized_address 是小写，原来的等值比较会漏掉这些行。
+//     非 EVM（TRON base58 / Solana）**不能**小写化，否则一行都匹配不上。
 func resolveLogos(ctx context.Context, st *store.Store) (int64, error) {
-	tag, err := st.Pool.Exec(ctx, `UPDATE token_metadata AS m
-        SET logo_url = a.logo_url, metadata_source = COALESCE(NULLIF(m.metadata_source, ''), 'trustwallet-assets')
-        FROM token_logo_assets AS a
-        WHERE a.source = 'trustwallet'
-          AND a.chain = m.chain
-          AND a.normalized_address = m.normalized_address
-          AND COALESCE(a.logo_url, '') <> ''
+	tag, err := st.Pool.Exec(ctx, `
+        WITH candidates AS (
+            SELECT a.chain,
+                   CASE WHEN a.chain = ANY($1::text[]) THEN lower(a.normalized_address) ELSE a.normalized_address END AS addr,
+                   a.logo_url,
+                   a.source,
+                   CASE a.source WHEN 'trustwallet' THEN 1 ELSE 2 END AS prio
+            FROM token_logo_assets AS a
+            WHERE COALESCE(a.logo_url, '') <> ''
+        ), picked AS (
+            SELECT DISTINCT ON (chain, addr) chain, addr, logo_url, source
+            FROM candidates
+            ORDER BY chain, addr, prio
+        )
+        UPDATE token_metadata AS m
+        SET logo_url = picked.logo_url,
+            metadata_source = COALESCE(NULLIF(m.metadata_source, ''), picked.source),
+            updated_at = now()
+        FROM picked
+        WHERE picked.chain = m.chain
+          AND picked.addr = CASE WHEN m.chain = ANY($1::text[]) THEN lower(m.normalized_address) ELSE m.normalized_address END
           AND COALESCE(m.logo_url, '') = ''
-          AND COALESCE(m.logo_object_key, '') = ''`)
+          AND COALESCE(m.logo_object_key, '') = ''`, evmChainSlugs)
 	if err != nil {
 		return 0, err
 	}

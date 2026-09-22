@@ -410,7 +410,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			log.Warn("token metadata rpc resolver disabled: rpc infrastructure is not available")
 		}
 		infra.TokenMeta = tokenmeta.New(st, ch, resolver, log)
-		infra.TokenMeta.ConfigureLogo(raw, tokenmeta.LogoConfig{Enabled: cfg.TokenMetadata.LogoEnabled, MaxBytes: cfg.TokenMetadata.LogoMaxBytes, MaxWidth: cfg.TokenMetadata.LogoMaxWidth, MaxHeight: cfg.TokenMetadata.LogoMaxHeight})
+		infra.TokenMeta.ConfigureLogo(raw, tokenmeta.LogoConfig{Enabled: cfg.TokenMetadata.LogoEnabled, MaxBytes: cfg.TokenMetadata.LogoMaxBytes, MaxWidth: cfg.TokenMetadata.LogoMaxWidth, MaxHeight: cfg.TokenMetadata.LogoMaxHeight, MirrorBase: cfg.TokenMetadata.LogoMirrorBase, MirrorHosts: cfg.TokenMetadata.LogoMirrorHosts})
 		if err := infra.TokenMeta.EnsureVerifiedRegistry(ctx); err != nil {
 			log.Warn("verified token registry seed failed", "err", err)
 		}
