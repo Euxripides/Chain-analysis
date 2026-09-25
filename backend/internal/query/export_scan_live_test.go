@@ -209,3 +209,69 @@ func TestForEachExportChunkMatchesSingleFetch(t *testing.T) {
 	assertNonIncreasing("chunked", chunked)
 	t.Logf("chunked == single over %d rows / %d chunks", len(single), chunks)
 }
+
+// TestBoundedFetchMatchesUnbounded 锁定两阶段形状（先定时间下界再带界取数）
+// 与无界形状返回**同一个行集合**。
+//
+// 这是两阶段形状最危险的失效模式：下界定窄了会静默少给行，而定界用的是原始行数
+// 聚合、目标是"不同转账键"的条数，两者之间隔着一个去重率（bsc 实测 31.4%）。
+func TestBoundedFetchMatchesUnbounded(t *testing.T) {
+	dsn := os.Getenv("CLICKHOUSE_URL")
+	subject := os.Getenv("EXPORT_EQUIV_SUBJECT")
+	if dsn == "" || subject == "" {
+		t.Skip("CLICKHOUSE_URL / EXPORT_EQUIV_SUBJECT not set")
+	}
+	chain := os.Getenv("EXPORT_EQUIV_CHAIN")
+	if chain == "" {
+		chain = "bsc"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	conn, err := clickhouse.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("clickhouse unreachable: %v", err)
+	}
+	defer conn.Close()
+	svc := New(conn)
+
+	const limit = 30000
+	// 走两阶段路径的生产入口。
+	bounded, err := svc.RowsForExportRange(ctx, "token_transfers", chain, subject, limit, 0, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("bounded fetch: %v", err)
+	}
+	if len(bounded) != limit {
+		t.Fatalf("bounded fetch returned %d rows, want %d", len(bounded), limit)
+	}
+
+	// 无界形状（与批量路径同一 SQL），再按同一去重键收敛。
+	unbounded, err := slowExportRows(ctx, svc, "token_transfers", chain, subject, limit*2)
+	if err != nil {
+		t.Fatalf("unbounded fetch: %v", err)
+	}
+	unbounded = dedupeExportRows("token_transfers", unbounded, limit)
+	if len(unbounded) != limit {
+		t.Fatalf("unbounded fetch produced %d distinct rows, want %d", len(unbounded), limit)
+	}
+
+	keyOf := func(r map[string]any) string {
+		return fmt.Sprintf("%v|%v|%v", r["tx_hash"], r["log_index"], r["token_address"])
+	}
+	want := make(map[string]struct{}, len(unbounded))
+	for _, r := range unbounded {
+		want[keyOf(r)] = struct{}{}
+	}
+	got := make(map[string]struct{}, len(bounded))
+	for _, r := range bounded {
+		got[keyOf(r)] = struct{}{}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("distinct key count differs: bounded=%d unbounded=%d", len(got), len(want))
+	}
+	for k := range want {
+		if _, ok := got[k]; !ok {
+			t.Fatalf("key %s present in unbounded but missing from bounded", k)
+		}
+	}
+	t.Logf("bounded == unbounded over %d distinct keys", len(got))
+}

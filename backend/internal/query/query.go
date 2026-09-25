@@ -578,6 +578,14 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 		where += " AND timestamp<=?"
 		args = append(args, *toTime)
 	}
+	// 两阶段形状（见 export_bounded.go 的实测说明）：先用只读 timestamp 一列的按天聚合
+	// 求出时间下界，再用它把候选行数压到目标量级后取全列。实测同一请求
+	// 3.68 s → 约 0.75 s，因为成本主要在"物化 22 列宽行"而不是扫描或排序。
+	if subject != "" {
+		if rows, ok, err := s.rowsForExportBounded(ctx, dataset, chain, subject, limit, offset); ok || err != nil {
+			return rows, err
+		}
+	}
 	// 无 FINAL 形状（见 export_dedupe.go 的实测说明）：列集/过滤/排序与现网完全一致，
 	// 只把"选版本"交给 Go 侧去重。FINAL 会先按排序键合并整条链，导致
 	// from_address/to_address 上的 bloom_filter 完全用不上

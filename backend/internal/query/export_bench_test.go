@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"testing"
@@ -64,7 +65,8 @@ func BenchmarkExportFetch(b *testing.B) {
 		b.Skipf("clickhouse unreachable: %v", err)
 	}
 	defer conn.Close()
-	svc := New(conn)
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	svc := NewWithLog(conn, log)
 
 	// EXPORT_BENCH_MODE=floor 时只扫描不物化 map，用来量"流式直写"能到的最低下限：
 	// 查询 + 驱动解码 + 去重判定，不含 map 与序列化。
@@ -107,5 +109,58 @@ func BenchmarkExportFetch(b *testing.B) {
 		}
 		b.ReportMetric(float64(time.Since(start).Milliseconds()), "ms/export")
 		b.ReportMetric(float64(len(rows)), "rows")
+	}
+}
+
+// BenchmarkExportBoundedStages 把两阶段形状的两步分开计时，用来判断
+// "定界"与"带界取数"各占多少（整条 BenchmarkExportFetch 的耗时差说明有一段没算清）。
+func BenchmarkExportBoundedStages(b *testing.B) {
+	dsn := os.Getenv("CLICKHOUSE_URL")
+	subject := os.Getenv("EXPORT_BENCH_SUBJECT")
+	if dsn == "" || subject == "" {
+		b.Skip("CLICKHOUSE_URL / EXPORT_BENCH_SUBJECT not set")
+	}
+	chain := os.Getenv("EXPORT_BENCH_CHAIN")
+	if chain == "" {
+		chain = "bsc"
+	}
+	limit := 200000
+	fmt.Sscanf(os.Getenv("EXPORT_BENCH_LIMIT"), "%d", &limit)
+	ctx := context.Background()
+	conn, err := clickhouse.New(ctx, dsn)
+	if err != nil {
+		b.Skipf("clickhouse unreachable: %v", err)
+	}
+	defer conn.Close()
+	svc := New(conn)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		t := time.Now()
+		bound, available, ok := svc.exportTimeBoundary(ctx, "token_transfers", chain, subject, nil, nil, nil, nil, limit, 0, exportBoundaryGrowthInit)
+		boundaryDur := time.Since(t)
+		if !ok {
+			b.Fatal("no boundary")
+		}
+		where, args := exportBoundedWhere("token_transfers", chain, subject, bound)
+		sel, _ := exportSelectNoFinal("token_transfers", where)
+		fetch := int(float64(limit) * dedupeExportRetryFactor)
+		if uint64(fetch) > available {
+			fetch = int(available)
+		}
+		t = time.Now()
+		raw, err := svc.queryRowsExport(ctx, "token_transfers", sel, limit, append(append([]any{}, args...), fetch, 0)...)
+		if err != nil {
+			b.Fatal(err)
+		}
+		fetchDur := time.Since(t)
+		t = time.Now()
+		distinct := dedupeExportRows("token_transfers", raw, limit)
+		dedupeDur := time.Since(t)
+		b.ReportMetric(float64(boundaryDur.Milliseconds()), "boundary_ms")
+		b.ReportMetric(float64(fetchDur.Milliseconds()), "fetch_ms")
+		b.ReportMetric(float64(dedupeDur.Milliseconds()), "dedupe_ms")
+		b.ReportMetric(float64(len(raw)), "raw")
+		b.ReportMetric(float64(len(distinct)), "distinct")
 	}
 }

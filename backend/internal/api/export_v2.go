@@ -301,14 +301,20 @@ func (s *Server) writeSingleExportStream(ctx context.Context, exportID string, k
 		}
 		var total int
 		if writer != nil {
-			// 第 4 个参数是"扫描多少原始行"：流式路径不能像批量路径那样取不满再重试，
-			// 所以取数前就按重复率系数放大（见 exportStreamRawLimit）。
+			// 优先走两阶段形状（先按天聚合定时间下界，再带界取数）：实测同一导出
+			// 请求的服务端耗时从 3.68 s 降到 0.75 s 量级，因为成本主要在"物化 22 列
+			// 宽行"而不是扫描或排序。定界不适用时回退无界形状。
+			sql := exportStreamSQL(dataset, chain, addr)
+			sqlArgs := exportStreamArgs(chain, addr)
+			rawLimit := exportStreamRawLimit(maxExportRows)
+			if sel, selArgs, fetch, ok := s.query.BoundedExportSelect(ctx, dataset, chain, addr, maxExportRows); ok {
+				sql, sqlArgs, rawLimit = sel, selArgs, fetch
+			}
 			total, werr = s.query.ForEachExportChunk(ctx, dataset,
-				exportStreamSQL(dataset, chain, addr),
-				exportStreamRawLimit(maxExportRows), exportStreamChunk, func(chunk []map[string]any) error {
+				sql, rawLimit, exportStreamChunk, func(chunk []map[string]any) error {
 					enrich.enrich(ctx, addr, chunk)
 					return writer.write(chunk)
-				}, exportStreamArgs(chain, addr)...)
+				}, sqlArgs...)
 			if werr == nil {
 				werr = writer.close()
 			}
