@@ -1,8 +1,10 @@
 package query
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"runtime/debug"
@@ -172,5 +174,99 @@ func BenchmarkExportBoundedStages(b *testing.B) {
 		b.ReportMetric(float64(dedupeDur.Milliseconds()), "dedupe_ms")
 		b.ReportMetric(float64(len(raw)), "raw")
 		b.ReportMetric(float64(len(distinct)), "distinct")
+	}
+}
+
+// appendAny 是 CSV 的最小取值写法（本基准只关心"不建 map"省下多少，
+// 不追求与 api 包 appendCSVValue 逐字节一致；引号规则对耗时无影响）。
+func appendAny(dst []byte, v any) []byte {
+	switch x := v.(type) {
+	case nil:
+		return dst
+	case string:
+		return append(dst, x...)
+	default:
+		return append(dst, fmt.Sprint(x)...)
+	}
+}
+
+// BenchmarkExportDirectWriteFloor 量"完全不做 map 物化"的物理下限：
+// 直接把列持有变量写成 CSV 行，不建 map、不做去重。
+//
+// 这不是可交付的实现（导出契约要求 API 层拿到 []map[string]any 做富化），
+// 而是用来回答一个决策问题：现有行表示到底吃掉了多少时间。
+//
+// 实测（canonical 地址，bsc，全量历史，生产 GC 配置）：
+//
+//	20 万行   下限 1.11-1.18 s   生产完整链路 5.50-5.90 s（中位）
+//	100 万行  下限 4.28 s        生产完整链路 23.9-26.9 s
+//
+// 即现状是下限的 4.3-5.2 倍，差额全部来自 map[string]any 行表示
+// （每行 30 个键 / 30 个装箱值，20 万行实测分配 1524 MiB，GC 标记是主要 CPU 消耗）
+// 以及它对地图化富化的强制要求。这个下限说明：继续在 Go 侧做边际优化
+// （换哈希、调块大小、并行分片都已实测无效或负收益）无法弥合 100 万行的差距。
+func BenchmarkExportDirectWriteFloor(b *testing.B) {
+	dsn := os.Getenv("CLICKHOUSE_URL")
+	subject := os.Getenv("EXPORT_BENCH_SUBJECT")
+	if dsn == "" || subject == "" {
+		b.Skip("CLICKHOUSE_URL / EXPORT_BENCH_SUBJECT not set")
+	}
+	chain := os.Getenv("EXPORT_BENCH_CHAIN")
+	if chain == "" {
+		chain = "bsc"
+	}
+	limit := 200000
+	fmt.Sscanf(os.Getenv("EXPORT_BENCH_LIMIT"), "%d", &limit)
+	tuneExportGC()
+	ctx := context.Background()
+	conn, err := clickhouse.New(ctx, dsn)
+	if err != nil {
+		b.Skipf("clickhouse unreachable: %v", err)
+	}
+	defer conn.Close()
+	svc := New(conn)
+
+	// 用与生产相同的两阶段形状，确保比较的是同一批行。
+	sql := "SELECT * FROM blockchain.token_transfers WHERE chain=? AND (from_address=? OR to_address=?)" +
+		" ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	args := []any{chain, subject, subject, limit, 0}
+	if sel, selArgs, _, ok := svc.BoundedExportSelect(ctx, "token_transfers", chain, subject, limit); ok {
+		sql, args = sel, selArgs
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := conn.DB().Query(clickhouse.ExportScanContext(ctx), sql, args...)
+		if err != nil {
+			b.Fatal(err)
+		}
+		names, holders := fastColumnHolders(rows.ColumnTypes())
+		scanner, ok := rows.(interface{ Scan(dest ...any) error })
+		if !ok {
+			b.Fatal("driver rows do not support Scan")
+		}
+		bw := bufio.NewWriterSize(io.Discard, 1<<20)
+		buf := make([]byte, 0, 4096)
+		n := 0
+		for rows.Next() {
+			if err := scanner.Scan(holders...); err != nil {
+				b.Fatal(err)
+			}
+			buf = buf[:0]
+			for i := range names {
+				if i > 0 {
+					buf = append(buf, ',')
+				}
+				buf = appendAny(buf, exportValue(holders[i]))
+			}
+			buf = append(buf, '\n')
+			if _, err := bw.Write(buf); err != nil {
+				b.Fatal(err)
+			}
+			n++
+		}
+		rows.Close()
+		bw.Flush()
+		b.ReportMetric(float64(n), "rows")
 	}
 }
