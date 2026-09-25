@@ -113,3 +113,99 @@ func slowExportRows(ctx context.Context, svc *Service, dataset, chain, subject s
 		" ORDER BY timestamp DESC LIMIT ?"
 	return svc.queryRows(clickhouse.ExportScanContext(ctx), dataset, q, args...)
 }
+
+// TestForEachExportChunkMatchesSingleFetch 锁定流式分块与一次性取数的等价性。
+//
+// 流式导出（边取边写 MinIO）与批量导出必须产出同一批行、同一顺序：分块只应改变
+// "什么时候拿到行"，不应改变"拿到哪些行"。跨块的重复键由同一个 seen 集合收敛，
+// 因此这条不变式必须在真实数据上验一遍。
+func TestForEachExportChunkMatchesSingleFetch(t *testing.T) {
+	dsn := os.Getenv("CLICKHOUSE_URL")
+	subject := os.Getenv("EXPORT_EQUIV_SUBJECT")
+	if dsn == "" || subject == "" {
+		t.Skip("CLICKHOUSE_URL / EXPORT_EQUIV_SUBJECT not set")
+	}
+	chain := os.Getenv("EXPORT_EQUIV_CHAIN")
+	if chain == "" {
+		chain = "bsc"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	conn, err := clickhouse.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("clickhouse unreachable: %v", err)
+	}
+	defer conn.Close()
+	svc := New(conn)
+
+	const limit = 20000
+	single, err := svc.RowsForExportRange(ctx, "token_transfers", chain, subject, limit, 0, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("single fetch: %v", err)
+	}
+	if len(single) == 0 {
+		t.Skip("no rows for the configured subject")
+	}
+
+	sql := "SELECT * FROM blockchain.token_transfers WHERE chain=? AND (from_address=? OR to_address=?)" +
+		" ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	var chunked []map[string]any
+	chunks := 0
+	total, err := svc.ForEachExportChunk(ctx, "token_transfers", sql, limit, 512,
+		func(rows []map[string]any) error {
+			chunks++
+			chunked = append(chunked, rows...)
+			return nil
+		}, chain, subject, subject, limit, 0)
+	if err != nil {
+		t.Fatalf("chunked fetch: %v", err)
+	}
+	if total != len(chunked) {
+		t.Fatalf("reported %d rows but callback saw %d", total, len(chunked))
+	}
+	if len(chunked) != len(single) {
+		t.Fatalf("chunked=%d single=%d", len(chunked), len(single))
+	}
+	if chunks < 2 {
+		t.Fatalf("expected the result to span multiple chunks, got %d", chunks)
+	}
+	// 断言两条路径产出**同一集合**，且都按 timestamp 非增序。
+	//
+	// 不逐行比顺序：同一 timestamp 上的行没有稳定次序（实测同一查询两次执行，
+	// 并列行的相对次序不同——集合差异为 0，仅次序互换）。这是 ORDER BY timestamp DESC
+	// 本身的性质，不是流式改动引入的；导出契约里同秒行的次序本来就未定义。
+	keyOf := func(r map[string]any) string {
+		return fmt.Sprintf("%v|%v|%v", r["tx_hash"], r["log_index"], r["token_address"])
+	}
+	singleSet := make(map[string]struct{}, len(single))
+	for _, r := range single {
+		singleSet[keyOf(r)] = struct{}{}
+	}
+	chunkedSet := make(map[string]struct{}, len(chunked))
+	for _, r := range chunked {
+		chunkedSet[keyOf(r)] = struct{}{}
+	}
+	if len(singleSet) != len(chunkedSet) {
+		t.Fatalf("distinct keys differ: single=%d chunked=%d", len(singleSet), len(chunkedSet))
+	}
+	for k := range singleSet {
+		if _, ok := chunkedSet[k]; !ok {
+			t.Fatalf("key %s present in single but missing from chunked", k)
+		}
+	}
+	assertNonIncreasing := func(name string, rows []map[string]any) {
+		for i := 1; i < len(rows); i++ {
+			prev, err1 := time.Parse(time.RFC3339Nano, fmt.Sprint(rows[i-1]["timestamp"]))
+			cur, err2 := time.Parse(time.RFC3339Nano, fmt.Sprint(rows[i]["timestamp"]))
+			if err1 != nil || err2 != nil {
+				t.Fatalf("%s: unparsable timestamp at %d: %v / %v", name, i, err1, err2)
+			}
+			if cur.After(prev) {
+				t.Fatalf("%s: timestamp increased at row %d (%s -> %s)", name, i, prev, cur)
+			}
+		}
+	}
+	assertNonIncreasing("single", single)
+	assertNonIncreasing("chunked", chunked)
+	t.Logf("chunked == single over %d rows / %d chunks", len(single), chunks)
+}

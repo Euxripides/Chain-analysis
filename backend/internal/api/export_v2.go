@@ -6,9 +6,9 @@ import (
 	"compress/flate"
 	"context"
 	"crypto/sha256"
-
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -243,7 +243,135 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *mod
 }
 
 // writeSingleExport 单地址单数据集：流式写一个对象。
+// canStreamSingleExport 判断该请求能否走"边取边写"的流式路径。
+//
+// 条件刻意保守：
+//   - 只支持 csv/jsonl。xlsx 与 parquet 的写入器需要随机访问（工作表索引、行组），
+//     无法增量产出；强行流式会改变输出结构。
+//   - 不开 include_decoded_input。该列要先按整批 tx_hash 查一次解码表，
+//     流式下只能按块查，会让同一批哈希被查多次且引入跨块顺序差异。
+//   - 不带 GPT Actions 的 token 过滤。过滤发生在取数之后，流式下无法"
+//     取一批滤一批"地保证与批量路径相同的行数上限语义。
+//
+// 不满足时回退到原批量路径，行为与改动前完全一致。
+func canStreamSingleExport(format string, includeDecodedInput bool, job *model.DownloadJob) bool {
+	if includeDecodedInput || job != nil {
+		return false
+	}
+	switch format {
+	case "csv", "jsonl":
+		return true
+	default:
+		return false
+	}
+}
+
+// writeSingleExportStream 是 writeSingleExport 的流式版本：查询结果按块取回、
+// 按块富化、按块序列化，直接推进 io.Pipe → MinIO，不再把全部行攒在内存里。
+//
+// 实测（EXPORT_STREAM=1 时由 export_flowcost_test 记录）与批量路径的内存差异见
+// export_stream.go 文件头。
+func (s *Server) writeSingleExportStream(ctx context.Context, exportID string, key, chain, wsID, addr, dataset, format string,
+	includeMeta bool) (int64, string, exportLocation, error) {
+	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, nil)
+	if fromBlock != nil || toBlock != nil || fromTime != nil || toTime != nil {
+		// 带范围的导出走批量路径：范围条件会改变取数形状，暂不在流式路径上重复实现。
+		return 0, "", exportLocation{Key: key}, errStreamUnsupported
+	}
+
+	pr, pw := io.Pipe()
+	type streamResult struct {
+		rows int64
+		err  error
+	}
+	done := make(chan streamResult, 1)
+	enrich := newStreamEnrichment(s, chain, wsID, includeMeta)
+
+	go func() {
+		var werr error
+		var writer interface {
+			write([]map[string]any) error
+			close() error
+		}
+		switch format {
+		case "csv":
+			writer = newStreamCSVWriter(pw)
+		case "jsonl":
+			writer = newStreamJSONLWriter(pw)
+		}
+		var total int
+		if writer != nil {
+			// 第 4 个参数是"扫描多少原始行"：流式路径不能像批量路径那样取不满再重试，
+			// 所以取数前就按重复率系数放大（见 exportStreamRawLimit）。
+			total, werr = s.query.ForEachExportChunk(ctx, dataset,
+				exportStreamSQL(dataset, chain, addr),
+				exportStreamRawLimit(maxExportRows), exportStreamChunk, func(chunk []map[string]any) error {
+					enrich.enrich(ctx, addr, chunk)
+					return writer.write(chunk)
+				}, exportStreamArgs(chain, addr)...)
+			if werr == nil {
+				werr = writer.close()
+			}
+		}
+		_ = pw.CloseWithError(werr)
+		done <- streamResult{rows: int64(total), err: werr}
+	}()
+
+	_, loc, err := s.putExportStream(ctx, exportID, key, pr, -1, contentType(format))
+	_ = pr.CloseWithError(err)
+	res := <-done
+	if err != nil {
+		return 0, "", loc, err
+	}
+	if res.err != nil {
+		return 0, "", loc, res.err
+	}
+	sha, err := s.objectSHA256(ctx, key)
+	return res.rows, sha, loc, err
+}
+
+// errStreamUnsupported 表示该请求不满足流式导出的前提，调用方应回退批量路径。
+var errStreamUnsupported = errors.New("streaming export unsupported for this request")
+
+// exportStreamChunk 是流式导出的块大小（行）。3.2 万行时元数据批量查询约 1 ms，
+// 同时把单块内存控制在几十 MiB。
+const exportStreamChunk = 32 * 1024
+
+// exportStreamSQL 与 RowsForExportRange 的无 FINAL 形状保持一致：
+// 列集、过滤、排序完全相同，只是由调用方按块消费。
+func exportStreamSQL(dataset, chain, subject string) string {
+	where, _ := exportStreamWhere(dataset)
+	return "SELECT * FROM blockchain." + exportStreamTable(dataset) + " WHERE " + where +
+		" ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+}
+
+func exportStreamArgs(chain, subject string) []any {
+	return []any{chain, subject, subject}
+}
+
+func exportStreamWhere(dataset string) (string, []any) {
+	switch dataset {
+	case "logs", "balances":
+		return "chain=? AND address=?", nil
+	default:
+		return "chain=? AND (from_address=? OR to_address=?)", nil
+	}
+}
+
+func exportStreamTable(dataset string) string {
+	if dataset == "internal_transactions" {
+		return "internal_calls"
+	}
+	return dataset
+}
+
 func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *model.DownloadJob, key, chain, wsID, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
+	if exportStreamEnabled() && canStreamSingleExport(format, includeDecodedInput, job) {
+		rows, sha, loc, err := s.writeSingleExportStream(ctx, exportID, key, chain, wsID, addr, dataset, format, includeMeta)
+		if !errors.Is(err, errStreamUnsupported) {
+			return rows, sha, loc, err
+		}
+	}
 	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, job)
 	rows, err := s.query.RowsForExportRange(ctx, dataset, chain, addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
 	if err != nil {

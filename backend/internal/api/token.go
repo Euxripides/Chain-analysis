@@ -240,6 +240,15 @@ func nullableTime(value sql.NullTime) any {
 	return nil
 }
 
+// amountKey 是 formatted_amount 记忆化表的键：(合约, raw 金额)。
+type amountKey struct {
+	contract string
+	raw      string
+}
+
+// amountCacheLimit 是记忆化表的硬上限，防止高基数据把内存拉爆。
+const amountCacheLimit = 1 << 19
+
 // tokenMetaPlan 是一个代币合约在当前链上的导出派生值。
 //
 // divisor 预先是**除数**而不是每行现算的结果：raw 有 76 位精度，逐行
@@ -318,61 +327,64 @@ func (s *Server) attachTokenMetadata(ctx context.Context, chain string, rows []m
 	// 单次 4.1 µs（20 万行 × 1 次 = 0.9 s），瓶颈是 76 位 big.Int 除法；而同一批
 	// 导出里 (合约, 金额) 组合远少于行数，记忆化把这一列从 O(行数) 次除法降到
 	// O(不同金额数) 次。表有硬上限，防止高基数据把内存拉爆。
-	type amountKey struct {
-		contract string
-		raw      string
-	}
 	amountCache := make(map[amountKey]string, 1024)
-	const amountCacheLimit = 1 << 19
 
 	for i, row := range rows {
 		contract := rowContracts[i]
 		if contract == "" {
 			continue
 		}
-		row["token_contract"] = contract
-		row["raw_value"] = row["amount_raw"]
-
-		plan, ok := plans[contract]
-		if !ok {
-			row["formatted_amount"] = nil
-			continue
-		}
-		if plan.name != "" {
-			row["token_name"] = plan.name
-		}
-		if plan.symbol != "" {
-			row["token_symbol"] = plan.symbol
-		}
-		// BUG-001 修复：Decimals 是指针，直接存入 row 会让 CSV/XLSX 以 fmt 输出
-		// 非确定性指针地址（如 0x3dffac709738）。必须解引用后再写入；未知时明确置空，
-		// 不伪造 18。formatted_amount 分支随后处理 nil。
-		if plan.decimalsKnown {
-			row["token_decimals"] = plan.decimals
-		} else {
-			row["token_decimals"] = nil
-		}
-		row["token_type"] = plan.tokenType
-		row["token_metadata_status"] = plan.status
-		row["token_metadata_source"] = plan.source
-		row["token_metadata_confidence"] = plan.confidence
-
-		cacheKey := amountKey{contract: contract, raw: rowRawText[i]}
-		formatted, cached := amountCache[cacheKey]
-		if !cached {
-			if value, ok := formatTokenAmount(rowRawText[i], plan).(string); ok {
-				formatted = value
-				if len(amountCache) < amountCacheLimit {
-					amountCache[cacheKey] = formatted
-				}
-			} else {
-				// 精度未知/无法解析：保持 nil，不缓存（避免与"空值"混淆）。
-				row["formatted_amount"] = nil
-				continue
-			}
-		}
-		row["formatted_amount"] = formatted
+		applyTokenMeta(row, contract, plans, amountCache, amountCacheLimit)
 	}
+}
+
+// applyTokenMeta 把单个合约的派生值套用到一行上。抽出来是为了让流式导出
+// （逐块写 MinIO）复用同一段逻辑——批量与流式两条路径必须产出相同的行。
+func applyTokenMeta(row map[string]any, contract string, plans map[string]tokenMetaPlan,
+	amountCache map[amountKey]string, amountCacheLimit int) {
+	row["token_contract"] = contract
+	row["raw_value"] = row["amount_raw"]
+
+	plan, ok := plans[contract]
+	if !ok {
+		row["formatted_amount"] = nil
+		return
+	}
+	if plan.name != "" {
+		row["token_name"] = plan.name
+	}
+	if plan.symbol != "" {
+		row["token_symbol"] = plan.symbol
+	}
+	// BUG-001 修复：Decimals 是指针，直接存入 row 会让 CSV/XLSX 以 fmt 输出
+	// 非确定性指针地址（如 0x3dffac709738）。必须解引用后再写入；未知时明确置空，
+	// 不伪造 18。formatted_amount 分支随后处理 nil。
+	if plan.decimalsKnown {
+		row["token_decimals"] = plan.decimals
+	} else {
+		row["token_decimals"] = nil
+	}
+	row["token_type"] = plan.tokenType
+	row["token_metadata_status"] = plan.status
+	row["token_metadata_source"] = plan.source
+	row["token_metadata_confidence"] = plan.confidence
+
+	rawText := asString(row["amount_raw"])
+	cacheKey := amountKey{contract: contract, raw: rawText}
+	formatted, cached := amountCache[cacheKey]
+	if !cached {
+		value, ok := formatTokenAmount(rawText, plan).(string)
+		if !ok {
+			// 精度未知/无法解析：保持 nil，不缓存（避免与"空值"混淆）。
+			row["formatted_amount"] = nil
+			return
+		}
+		formatted = value
+		if len(amountCache) < amountCacheLimit {
+			amountCache[cacheKey] = formatted
+		}
+	}
+	row["formatted_amount"] = formatted
 }
 
 // asString 是不分配的类型化取值：string 直接用，其余回退 fmt.Sprint。

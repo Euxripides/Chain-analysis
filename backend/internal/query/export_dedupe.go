@@ -60,6 +60,13 @@ const (
 	dedupeExportExtraRows   = 300_000
 )
 
+// DedupeExportRetryFactor / DedupeExportMaxFetch 暴露给 API 层的流式路径使用：
+// 后者无法在 io.Pipe 上回退重试，必须取数前就把重复率系数算进 LIMIT。
+const (
+	DedupeExportRetryFactor = dedupeExportRetryFactor
+	DedupeExportMaxFetch    = 4_000_000
+)
+
 // NewWithLog 返回带日志的查询服务；不传日志时退化为无日志。
 func NewWithLog(ch *clickhouse.Conn, log *slog.Logger) *Service {
 	return &Service{CH: ch, Log: log}

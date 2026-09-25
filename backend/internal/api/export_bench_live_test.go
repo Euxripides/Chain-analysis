@@ -117,3 +117,29 @@ func BenchmarkFormatTokenAmount(b *testing.B) {
 }
 
 var _ = fmt.Sprint
+
+// BenchmarkExportStreamPipeline 量"边取边写"整条链：分块取数 + 逐块富化 + 逐块 CSV。
+//
+// 与 BenchmarkExportQuery + BenchmarkExportAttachTokenMetadata + BenchmarkExportStreamCSV
+// 三个批量段之和对比，就是流式省下来的内存搬运与合并开销。
+func BenchmarkExportStreamPipeline(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	sql := exportStreamSQL("token_transfers", "bsc", subject)
+	raw := exportStreamRawLimit(limit)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		enrich := newStreamEnrichment(srv, "bsc", "", false)
+		writer := newStreamCSVWriter(io.Discard)
+		if _, err := srv.query.ForEachExportChunk(ctx, "token_transfers", sql, raw, exportStreamChunk,
+			func(chunk []map[string]any) error {
+				enrich.enrich(ctx, subject, chunk)
+				return writer.write(chunk)
+			}, "bsc", subject, subject, raw, 0); err != nil {
+			b.Fatalf("stream: %v", err)
+		}
+		if err := writer.close(); err != nil {
+			b.Fatalf("close: %v", err)
+		}
+	}
+}
