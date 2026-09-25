@@ -6,8 +6,7 @@ import type { JobExport } from "./types";
 /**
  * 完成态主卡（用户端重构规范 V4 §28.9）
  *
- * 完成后主卡只回答"拿到了什么、放在哪"：
- *   总耗时 / 文件大小 / 完成时间 + 下载文件入口。
+ * 完成后主卡展示总耗时、下载量、完成时间与导出文件；可在此创建导出。
  *
  * 多个导出时**不把完整 Export 表格铺在首屏**（§28.9 最后一段）：
  * 主区只显示"可下载文件 N 个"，点开后在技术详情的 Exports 面板里逐条选择。
@@ -20,7 +19,10 @@ export interface JobCompletionPanelProps {
   resolvedAt: string | null;
   exports: JobExport[];
   busy: boolean;
+  canCreateExport: boolean;
+  onCreateExport: () => void;
   onDownload: (item: JobExport) => void;
+  onShowExportError: (item: JobExport) => void;
   onOpenExports: () => void;
 }
 
@@ -30,7 +32,10 @@ export function JobCompletionPanel({
   resolvedAt,
   exports,
   busy,
+  canCreateExport,
+  onCreateExport,
   onDownload,
+  onShowExportError,
   onOpenExports,
 }: JobCompletionPanelProps) {
   /* 可下载 = 已完成且未过期。判据与原来的表格按钮完全一致，没有放宽。 */
@@ -38,6 +43,8 @@ export function JobCompletionPanel({
     (item) => item.status === "COMPLETED" && (!item.expires_at || Date.parse(item.expires_at) > Date.now()),
   );
   const first = available[0];
+  const pending = exports.filter((item) => item.status === "PENDING" || item.status === "RUNNING");
+  const failed = exports.filter((item) => item.status === "FAILED");
 
   return (
     <section className="cs-surface cs-jobprogress" data-state="completed" data-testid="job-completion-panel">
@@ -62,16 +69,32 @@ export function JobCompletionPanel({
           <span className="cs-jobprogress__factlabel">可下载文件</span>
           <span className="cs-jobprogress__factvalue">{available.length} 个</span>
         </div>
+        {pending.length > 0 ? (
+          <div className="cs-jobprogress__fact" role="status">
+            <span className="cs-jobprogress__factlabel">导出状态</span>
+            <span className="cs-jobprogress__factvalue">正在生成 {pending.length} 个文件</span>
+          </div>
+        ) : null}
+        {failed.length > 0 ? (
+          <div className="cs-jobprogress__fact">
+            <span className="cs-jobprogress__factlabel">导出失败</span>
+            <span className="cs-jobprogress__factvalue">{failed.length} 个</span>
+          </div>
+        ) : null}
       </div>
       <div className="toolbar" style={{ flexWrap: "wrap", gap: "var(--sp-2)" }}>
-        {first ? (
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => onDownload(first)}>
-            下载文件
+        {canCreateExport ? (
+          <Button size="sm" variant="primary" disabled={busy || pending.length > 0} onClick={onCreateExport}>
+            {pending.length > 0 ? "文件生成中" : "导出文件"}
           </Button>
         ) : null}
-        <Button size="sm" onClick={onOpenExports} disabled={exports.length === 0}>
-          查看导出详情
-        </Button>
+        {first ? (
+          <Button size="sm" disabled={busy} onClick={() => onDownload(first)}>
+            下载文件（{first.format.toUpperCase()}{first.zip ? " ZIP" : ""}）
+          </Button>
+        ) : null}
+        {failed[0] ? <Button size="sm" onClick={() => onShowExportError(failed[0])}>查看失败原因</Button> : null}
+        {exports.length > 1 ? <Button size="sm" onClick={onOpenExports}>查看其他文件</Button> : null}
       </div>
     </section>
   );

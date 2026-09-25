@@ -46,6 +46,9 @@ export interface DownloadTaskPreviewProps {
   datasetLabels: string[];
   rangeLabel: string;
   performanceMode: string;
+  caseName: string;
+  defaultTagCount: number;
+  individuallyTaggedCount: number;
 }
 
 /*
@@ -137,6 +140,9 @@ export function DownloadTaskPreview({
   datasetLabels,
   rangeLabel,
   performanceMode,
+  caseName,
+  defaultTagCount,
+  individuallyTaggedCount,
 }: DownloadTaskPreviewProps) {
   const reducedMotion = Boolean(useReducedMotion());
   const shown = preview ?? lastPreview;
@@ -257,6 +263,13 @@ export function DownloadTaskPreview({
             <span className="dl-configline__label">性能模式</span>
             {performanceMode}
           </span>
+          {caseName ? <span className="dl-configline__item"><span className="dl-configline__label">案件</span>{caseName}</span> : null}
+          {defaultTagCount > 0 || individuallyTaggedCount > 0 ? (
+            <span className="dl-configline__item">
+              <span className="dl-configline__label">标签</span>
+              默认 {defaultTagCount} 个{individuallyTaggedCount > 0 ? ` · 单独设置 ${individuallyTaggedCount} 个地址` : ""}
+            </span>
+          ) : null}
         </div>
 
         {shown ? (

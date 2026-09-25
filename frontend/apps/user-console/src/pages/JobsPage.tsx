@@ -29,6 +29,7 @@ import {
 import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
 import { CsProTable } from "@chain/user-ui/pro-table";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
+import "./workspaces.css";
 
 /* ============================================================================
  * U-JOB-01 /jobs：默认“我的活动任务”，服务端 cursor 分页 + 真实筛选。
@@ -525,7 +526,7 @@ export default function JobsPage() {
                 {row.job_no || "（无编号）"}
               </Link>
               <HashValue value={row.id} head={8} tail={6} label="任务 ID" />
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>{row.source || "—"}</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>{row.source || "—"}</span>
             </div>
           ),
         },
@@ -536,10 +537,10 @@ export default function JobsPage() {
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <span className="mono">{row.chain}</span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 {rangeText(row)} · {row.reuse_policy}
               </span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 {row.requested_mode} → {row.effective_mode}
               </span>
             </div>
@@ -597,7 +598,7 @@ export default function JobsPage() {
               >
                 {row.datasets.join("、") || "—"}
               </span>
-              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 Dataset {row.datasets_progress.total} · 分片 {row.shards.completed}/{row.shards.total}
                 {row.shards.failed > 0 ? ` · 失败 ${row.shards.failed}` : ""}
               </span>
@@ -616,12 +617,12 @@ export default function JobsPage() {
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <span className="mono">{formatRawAmount(String(row.downloaded_rows), 0)} 行</span>
-              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 {formatBytes(row.downloaded_bytes)}
               </span>
               <span
                 className="mono"
-                style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}
+                style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}
                 title="列表契约 /api/v2/jobs 不返回耗时与速率字段，页面不做推算"
               >
                 rows/s —
@@ -635,13 +636,13 @@ export default function JobsPage() {
           width: "170px",
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span className="mono" style={{ fontSize: "var(--fs-11)" }}>
+              <span className="mono" style={{ fontSize: "var(--fs-12)" }}>
                 {formatTime(row.created_at)}
               </span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 <RelativeTime value={row.updated_at} />
               </span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 成功 {formatTime(row.last_success_at)}
               </span>
             </div>
@@ -787,7 +788,7 @@ export default function JobsPage() {
     ) : undefined;
 
   return (
-    <>
+    <div className="cs-workspace-focus cs-workspace-focus--jobs">
       <CsPageHeader
         title="任务中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "任务中心" }]}
@@ -824,7 +825,7 @@ export default function JobsPage() {
                 Trace
               </button>
             ) : null}
-            <button type="button" className="btn btn--sm btn--ghost" onClick={explainCaliber}>
+            <button type="button" className="btn btn--sm" onClick={explainCaliber}>
               口径说明
             </button>
           </span>
@@ -839,17 +840,18 @@ export default function JobsPage() {
       />
 
       <PageSection title="当前状态" count={`本次响应已加载 ${allRows.length} 条`}>
-        <div className="metric-grid cs-stagger">
+        <div className="metric-grid cs-stagger cs-jobs-status">
           {STAT_DEFS.map((def) => (
-            <MetricCard
-              key={def.key}
-              label={def.label}
-              value={stats[def.status] ?? 0}
-              unit="个任务"
-              hint={def.status}
-              tone={(stats[def.status] ?? 0) > 0 ? def.tone : "neutral"}
-              onActivate={() => setView(def.status)}
-            />
+            <div className="cs-jobs-status__item" data-active={view === def.status} key={def.key}>
+              <MetricCard
+                label={def.label}
+                value={stats[def.status] ?? 0}
+                unit="个任务"
+                hint={def.status}
+                tone={(stats[def.status] ?? 0) > 0 ? def.tone : "neutral"}
+                onActivate={() => setView(def.status)}
+              />
+            </div>
           ))}
         </div>
       </PageSection>
@@ -906,9 +908,9 @@ export default function JobsPage() {
               </select>
               <input
                 className="input"
-                style={{ width: 150 }}
+                style={{ width: 190 }}
                 aria-label="来源筛选"
-                placeholder="来源，如 user_download"
+                placeholder="来源 / user_download"
                 value={sourceInput}
                 onChange={(event) => setSourceInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -946,6 +948,6 @@ export default function JobsPage() {
         defaultAsideWidth={380}
         asideLabel="任务快速预览"
       />
-    </>
+    </div>
   );
 }

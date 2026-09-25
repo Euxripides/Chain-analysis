@@ -2,14 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import { MotionConfig, motion, useReducedMotion } from "motion/react";
 import { TriangleAlert } from "lucide-react";
-import { ApiError } from "@chain/api-client";
-import { useDialog } from "@chain/ui";
+import { ApiError, useAuth } from "@chain/api-client";
+import { dialogInputValue, useDialog } from "@chain/ui";
 import { CsPageHeader } from "@chain/user-ui";
 import { formatRawAmount, useApi, useS5Action } from "../../sprint5/common";
 import { IMPORT_MAX_ADDRESSES, type ImportedAddress, type LocalParseSummary } from "../../import/parse-core";
+import { addressChainFamily, chainFamilyOf, chainForFamily, unanimousAddressFamily } from "../../app/chain-address";
 import { ImportParseError, formatParseBudget, importParseTimeoutMs, parseAddressFileInWorker } from "../../import/parse-client";
 import { DownloadFlowRail } from "./DownloadFlowRail";
 import { DownloadAddressPanel } from "./DownloadAddressPanel";
+import { DownloadMetadataPanel, type DownloadMetadataOption } from "./DownloadMetadataPanel";
+import { createDownloadCase, createDownloadTag, listDownloadCases, listDownloadTags } from "./download.metadata-api";
 import { DownloadScopePanel } from "./DownloadScopePanel";
 import { DownloadDatasetGrid } from "./DownloadDatasetGrid";
 import { DownloadCoveragePanel } from "./DownloadCoveragePanel";
@@ -53,6 +56,7 @@ import type {
   ServerValidateResult,
 } from "./download.types";
 import "./download-new.css";
+import "./download-metadata.css";
 
 /* ============================================================================
  * U-DL-01 /downloads/new —— Flowline 数据轨道
@@ -96,6 +100,8 @@ export default function DownloadNewPage() {
   const dialog = useDialog();
   const navigate = useNavigate();
   const { busy, run, client } = useS5Action();
+  const { busy: metadataBusy, run: runMetadata } = useS5Action();
+  const { can, session } = useAuth();
   const reducedMotion = Boolean(useReducedMotion());
   /* reduced motion 下不播放进入动效，直接以最终状态渲染（§18.6）。 */
   const enterInitial = reducedMotion ? false : "hidden";
@@ -124,6 +130,20 @@ export default function DownloadNewPage() {
   const [toTime, setToTime] = useState("");
   const [datasets, setDatasets] = useState<string[]>([]);
   const [performanceMode, setPerformanceMode] = useState<PerformanceMode>("safe");
+
+  /* ---------------------------------------------------------- 案件 / 标签状态 */
+  const [caseName, setCaseName] = useState("");
+  const [defaultTags, setDefaultTags] = useState<string[]>([]);
+  const [caseOptions, setCaseOptions] = useState<DownloadMetadataOption[]>([]);
+  const [tagOptions, setTagOptions] = useState<DownloadMetadataOption[]>([]);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [casesError, setCasesError] = useState<string | null>(null);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [metadataOpened, setMetadataOpened] = useState(false);
+  const metadataScope = `${session?.organization_id ?? ""}:${session?.workspace_id ?? ""}`;
+  const metadataScopeRef = useRef(metadataScope);
+  metadataScopeRef.current = metadataScope;
 
   /* ---------------------------------------------------------------- 预览状态 */
   const [preview, setPreview] = useState<DownloadPreviewData | null>(null);
@@ -191,6 +211,15 @@ export default function DownloadNewPage() {
     if (first) setChain(first.slug);
   }, [chain, chainItems]);
 
+  /* TRON/Solana 地址可从形状确定链；EVM 多链地址仍由用户选择。 */
+  useEffect(() => {
+    const parsed = parseAddressInput(addressText);
+    const family = unanimousAddressFamily(parsed.list);
+    if (family === "" || chainFamilyOf(chain) === family) return;
+    const matched = chainForFamily(chainItems, family);
+    if (matched && matched !== chain) setChain(matched);
+  }, [addressText, chain, chainItems]);
+
   useEffect(() => {
     if (datasetsTouched.current) return;
     const available = datasetItems.map((item) => item.id);
@@ -228,7 +257,13 @@ export default function DownloadNewPage() {
       }
       const subjectMeta: Record<string, { case_name: string; tags: string[] }> = {};
       for (const item of groupItems) {
-        if (item.caseName || item.tags.length > 0) subjectMeta[item.normalized] = { case_name: item.caseName, tags: item.tags };
+        if (item.caseName || item.tags.length > 0) {
+          // subject_meta 覆盖的是整组元数据；只改标签时必须显式保留任务默认案件，反之亦然。
+          subjectMeta[item.normalized] = {
+            case_name: item.caseName || caseName,
+            tags: item.tags.length > 0 ? item.tags : defaultTags,
+          };
+        }
       }
       const body: DownloadBody = {
         chain: groupChain,
@@ -237,11 +272,14 @@ export default function DownloadNewPage() {
         range,
         reuse_policy: DEFAULT_REUSE_POLICY,
         performance_mode: performanceMode,
+        create_missing_meta: false,
       };
+      if (caseName) body.case_name = caseName;
+      if (defaultTags.length > 0) body.tags = defaultTags;
       if (Object.keys(subjectMeta).length > 0) body.subject_meta = subjectMeta;
       return body;
     },
-    [datasets, fromBlock, fromTime, performanceMode, rangeType, toBlock, toTime],
+    [caseName, datasets, defaultTags, fromBlock, fromTime, performanceMode, rangeType, toBlock, toTime],
   );
 
   const importedAddressText = parsedFrom !== "" && parsedFrom === addressText.trim();
@@ -251,6 +289,87 @@ export default function DownloadNewPage() {
     setPreviewFingerprint(null);
     setPreviewState("idle");
   }, []);
+
+  /* v1 案件/标签目录为原始 JSON；仅展开高级设置时并发读取，避免增加主流程请求。 */
+  const loadCases = useCallback(async () => {
+    const requestedScope = metadataScope;
+    setCasesLoading(true);
+    setCasesError(null);
+    try {
+      const rows = await listDownloadCases(client);
+      if (metadataScopeRef.current === requestedScope) setCaseOptions(rows);
+    } catch (error) {
+      if (metadataScopeRef.current === requestedScope) setCasesError(error instanceof Error ? error.message : "案件列表加载失败");
+    } finally {
+      if (metadataScopeRef.current === requestedScope) setCasesLoading(false);
+    }
+  }, [client, metadataScope]);
+
+  const loadTags = useCallback(async () => {
+    const requestedScope = metadataScope;
+    setTagsLoading(true);
+    setTagsError(null);
+    try {
+      const rows = await listDownloadTags(client);
+      if (metadataScopeRef.current === requestedScope) setTagOptions(rows);
+    } catch (error) {
+      if (metadataScopeRef.current === requestedScope) setTagsError(error instanceof Error ? error.message : "标签列表加载失败");
+    } finally {
+      if (metadataScopeRef.current === requestedScope) setTagsLoading(false);
+    }
+  }, [client, metadataScope]);
+
+  useEffect(() => {
+    setCaseName("");
+    setDefaultTags([]);
+    setCaseOptions([]);
+    setTagOptions([]);
+    setMetadataOpened(false);
+    invalidatePreview();
+  }, [invalidatePreview, metadataScope]);
+
+  const openMetadata = useCallback(() => {
+    if (metadataOpened) return;
+    setMetadataOpened(true);
+    void Promise.all([loadCases(), loadTags()]);
+  }, [loadCases, loadTags, metadataOpened]);
+
+  const createCase = useCallback(async () => {
+    if (!can("case:create")) return;
+    const name = dialogInputValue(await dialog.prompt({
+      title: "新建案件",
+      input: { label: "案件名称", pattern: /^.{1,200}$/, patternHint: "1–200 个字符" },
+      submitLabel: "创建案件",
+    }))?.trim();
+    if (!name) return;
+    const created = await runMetadata(() => createDownloadCase(client, name));
+    if (!created) return;
+    setCaseOptions((current) => [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name, "zh-CN")));
+    setCaseName(created.name);
+    invalidatePreview();
+  }, [can, client, dialog, invalidatePreview, runMetadata]);
+
+  const createTag = useCallback(async () => {
+    if (!can("case:update")) return;
+    const name = dialogInputValue(await dialog.prompt({
+      title: "新建标签",
+      input: { label: "标签名称", pattern: /^.{1,120}$/, patternHint: "1–120 个字符" },
+      submitLabel: "创建标签",
+    }))?.trim();
+    if (!name) return;
+    const created = await runMetadata(() => createDownloadTag(client, name));
+    if (!created) return;
+    setTagOptions((current) => [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name, "zh-CN")));
+    setDefaultTags((current) => [...new Set([...current, created.name])]);
+    invalidatePreview();
+  }, [can, client, dialog, invalidatePreview, runMetadata]);
+
+  const changeAddressTags = useCallback((rowChain: string, address: string, values: string[]) => {
+    setImported((current) => current.map((item) =>
+      (item.chain || chain) === rowChain && item.normalized === address ? { ...item, tags: values } : item,
+    ));
+    invalidatePreview();
+  }, [chain, invalidatePreview]);
 
   /* ------------------------------------------------------------ 当前步骤（§6.2） */
 
@@ -285,12 +404,21 @@ export default function DownloadNewPage() {
 
   /* ------------------------------------------------------------ 服务端校验 */
 
+  const inferredChainForToken = useCallback(
+    (token: string): string => {
+      const family = addressChainFamily(token);
+      if (family !== "tron" && family !== "solana") return "";
+      return chainForFamily(chainItems, family);
+    },
+    [chainItems],
+  );
+
   const revalidateOnServer = useCallback(async (rows: ImportedAddress[]): Promise<ServerValidateResult | null> => {
     const response = await run(async () => {
       try {
         return await client.post<ServerValidateResult>("/api/v2/downloads/validate-addresses", {
           chain,
-          items: rows.map((row) => ({ address: row.input, chain: row.chain, case: row.caseName, tags: row.tags })),
+          items: rows.map((row) => ({ address: row.input, chain: row.chain || inferredChainForToken(row.input), case: row.caseName, tags: row.tags })),
           create_missing_meta: false,
         });
       } catch (error) {
@@ -299,7 +427,7 @@ export default function DownloadNewPage() {
       }
     });
     return response ? response.data : null;
-  }, [chain, client, run]);
+  }, [chain, client, inferredChainForToken, run]);
 
   const applyServerVerdict = useCallback(async (verdict: ServerValidateResult): Promise<ImportedAddress[] | null> => {
     const caseStatus = new Map(verdict.meta.cases.map((item) => [item.name, item.status]));
@@ -506,6 +634,42 @@ export default function DownloadNewPage() {
     return commitAddresses();
   }, [applyServerVerdict, commitAddresses, imported, importedAddressText, pendingFileRows, revalidateOnServer, addressText, serverVerdict]);
 
+  /** 案件/标签必须仍存在于当前工作区；不允许预览成功但创建时静默丢弃绑定。 */
+  const validateMetadata = useCallback(async (rows: ImportedAddress[]): Promise<boolean> => {
+    if (!caseName && defaultTags.length === 0 && !rows.some((row) => row.caseName || row.tags.length > 0)) return true;
+    const verdict = await run(async () => {
+      try {
+        return await client.post<ServerValidateResult>("/api/v2/downloads/validate-addresses", {
+          chain,
+          case_name: caseName,
+          tags: defaultTags,
+          items: rows.map((row) => ({ address: row.normalized, chain: row.chain, case: row.caseName, tags: row.tags })),
+          create_missing_meta: false,
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
+        throw error;
+      }
+    });
+    if (!verdict) return false;
+    const result = verdict.data;
+    const unresolved = [...result.meta.cases, ...result.meta.tags].filter((item) => item.status !== "resolved");
+    if (result.rejected.length === 0 && result.field_rejections.length === 0 &&
+        result.accepted.length === rows.length && unresolved.length === 0) return true;
+    await dialog.open({
+      kind: "error",
+      title: "案件或标签无法使用",
+      body: "当前工作区中的案件、标签或地址校验未通过，请修正高级设置后重新预览。",
+      details: [
+        ...unresolved.map((item) => ({ label: item.name, value: item.status })),
+        ...result.rejected.slice(0, 10).map((item) => ({ label: "地址第 " + item.row + " 行", value: item.code })),
+        ...result.field_rejections.slice(0, 10).map((item) => ({ label: "字段第 " + item.row + " 行", value: item.message })),
+      ],
+      actions: [{ label: "知道了", result: "ok", variant: "primary" }],
+    });
+    return false;
+  }, [caseName, chain, client, defaultTags, dialog, run]);
+
   /* ---------------------------------------------------------------- 校验 */
 
   const validateAll = useCallback((addrs: string[]): { title: string; message: string } | null => {
@@ -691,6 +855,7 @@ export default function DownloadNewPage() {
       reportIssue(issue);
       return null;
     }
+    if (!await validateMetadata(importedRows)) return null;
     const groups = groupAddressesByChain(importedRows, chain);
     if (groups.length === 0) {
       reportIssue({ title: "缺少链", message: "每个地址都需要确定一条链后才能预览。" });
@@ -719,7 +884,7 @@ export default function DownloadNewPage() {
     setPreviewState("idle");
     for (const item of items) await showPreviewDialog(item.data, item.chain);
     return { items, fingerprint };
-  }, [buildPayload, chain, client, ensureAddresses, reportIssue, run, showPreviewDialog, validateAll]);
+  }, [buildPayload, chain, client, ensureAddresses, reportIssue, run, showPreviewDialog, validateAll, validateMetadata]);
 
   /** 创建任务：必须先有与当前参数指纹一致的真实预览（§16.3）。 */
   const handleCreate = useCallback(async () => {
@@ -738,16 +903,18 @@ export default function DownloadNewPage() {
     const payloads = groups.map((group) => buildPayload(group.items.map((item) => item.normalized), group.chain, group.items));
     const payload = payloads[0];
     const fingerprint = JSON.stringify(payloads);
+    let effectivePreviews = previews;
     if (!preview || previewFingerprint !== fingerprint) {
       const result = await handlePreview(importedRows);
       if (!result) return;
+      effectivePreviews = result.items;
     }
     /*
      * 低档位提示（开发文档 §6.4 / §13.1 第 7 条）：
      * 服务端在预览里回 effective_mode 低于请求模式，或给出钳制原因码时，
      * 确认弹窗必须同时显示"请求模式 / 预计实际模式 / 原因"，用户确认后才提交。
      */
-    const clamps = previews
+    const clamps = effectivePreviews
       .map((item) => ({ chain: item.chain, clamp: previewModeClamp(item.data, payload.performance_mode) }))
       .filter((item): item is { chain: string; clamp: NonNullable<ReturnType<typeof previewModeClamp>> } => item.clamp !== null);
     const clampDetails = clamps.length === 0
@@ -757,7 +924,7 @@ export default function DownloadNewPage() {
           {
             label: "预计实际模式",
             value: clamps
-              .map((item) => (previews.length > 1 ? item.chain + "：" : "") + (item.clamp.effectiveMode || "服务端未返回"))
+              .map((item) => (effectivePreviews.length > 1 ? item.chain + "：" : "") + (item.clamp.effectiveMode || "服务端未返回"))
               .join("、"),
           },
           {
@@ -781,13 +948,13 @@ export default function DownloadNewPage() {
         { label: "范围", value: rangeText(payload) },
         /* 被钳制时上面已经有"请求模式"这一行，这里不再重复同一个值。 */
         ...(clamps.length > 0 ? [] : [{ label: "性能模式", value: payload.performance_mode }]),
-        { label: "预览结论", value: previews.some((item) => item.data.provider_work_required) ? "需要新增 Provider 工作" : "将复用本地数据/已有任务" },
-        { label: "各组结论", value: previews.map((item) => item.chain + ":" + (item.data.provider_work_required ? "需 Provider" : "复用本地")).join("、") || "—" },
+        { label: "预览结论", value: effectivePreviews.some((item) => item.data.provider_work_required) ? "需要新增 Provider 工作" : "将复用本地数据/已有任务" },
+        { label: "各组结论", value: effectivePreviews.map((item) => item.chain + ":" + (item.data.provider_work_required ? "需 Provider" : "复用本地")).join("、") || "—" },
         {
           label: "预估缺口 / 成本",
           value:
-            formatRawAmount(String(previews.reduce((sum, item) => sum + item.data.missing_blocks, 0)), 0) + " 区块 / " +
-            previews.map((item) => previewEstimatedCost(item.data) ?? "—").join(" + ") + " USD",
+            formatRawAmount(String(effectivePreviews.reduce((sum, item) => sum + item.data.missing_blocks, 0)), 0) + " 区块 / " +
+            effectivePreviews.map((item) => previewEstimatedCost(item.data) ?? "—").join(" + ") + " USD",
         },
       ],
       actions: [
@@ -1012,7 +1179,7 @@ export default function DownloadNewPage() {
   /* ---------------------------------------------------------------- 派生视图 */
 
   const chainOptions: ChainOption[] = useMemo(
-    () => chainItems.map((item) => ({ value: item.slug, name: item.name, enabled: item.enabled })),
+    () => chainItems.map((item) => ({ value: item.slug, name: item.slug === "polygon" ? "Polygon 马蹄链" : item.name, enabled: item.enabled })),
     [chainItems],
   );
   const currentChain = chainItems.find((item) => item.slug === chain) ?? null;
@@ -1098,6 +1265,7 @@ export default function DownloadNewPage() {
   const collapsedFor = (key: DownloadStepKey) => isMobile && stepState(key) !== "current" && focusStep !== key;
 
   const addressBody = (
+    <>
     <DownloadAddressPanel
       addressText={addressText}
       importedCount={addresses.length}
@@ -1123,6 +1291,32 @@ export default function DownloadNewPage() {
       onReset={resetAddresses}
       fileInputRef={fileInputRef}
     />
+    <DownloadMetadataPanel
+      key={metadataScope}
+      addresses={importedAddressText ? imported : []}
+      defaultChain={chain}
+      cases={caseOptions}
+      tags={tagOptions}
+      caseName={caseName}
+      defaultTags={defaultTags}
+      loadingCases={casesLoading}
+      loadingTags={tagsLoading}
+      casesError={casesError}
+      tagsError={tagsError}
+      busy={metadataBusy}
+      canCreateCase={can("case:create")}
+      canCreateTag={can("case:update")}
+      onCaseNameChange={(value) => { setCaseName(value); invalidatePreview(); }}
+      onDefaultTagsChange={(values) => { setDefaultTags(values); invalidatePreview(); }}
+      onAddressTagsChange={changeAddressTags}
+      onOpen={openMetadata}
+      onCreateCase={() => void createCase()}
+      onCreateTag={() => void createTag()}
+      onReloadCases={() => void loadCases()}
+      onReloadTags={() => void loadTags()}
+      onTagLimitReached={() => dialog.notify("warning", "标签数量超出上限", "每个地址最多设置 20 个标签。")}
+    />
+    </>
   );
 
   const scopeBody = (
@@ -1191,11 +1385,14 @@ export default function DownloadNewPage() {
       onPreview={() => void handlePreview()}
       createdToken={createdPulse}
       addressCount={addressCount}
-      chainName={currentChain?.name ?? null}
+      chainName={chainOptions.find((item) => item.value === chain)?.name ?? null}
       chainSlug={chain || null}
       datasetLabels={datasetLabels}
       rangeLabel={rangeLabel}
       performanceMode={performanceMode}
+      caseName={caseName}
+      defaultTagCount={defaultTags.length}
+      individuallyTaggedCount={imported.filter((item) => item.tags.length > 0).length}
     />
   );
 
@@ -1212,7 +1409,7 @@ export default function DownloadNewPage() {
         />
         {collapsedFor("objects") ? (
           <div className="dl-step-summary">
-            <span className="dl-step-summary__item"><span>链</span>{currentChain ? currentChain.name : "—"}</span>
+            <span className="dl-step-summary__item"><span>链</span>{chainOptions.find((item) => item.value === chain)?.name ?? "—"}</span>
             <span className="dl-step-summary__item"><span>已导入</span>{addresses.length} 个地址</span>
           </div>
         ) : (

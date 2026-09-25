@@ -6,13 +6,14 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  Field,
   PageSkeleton,
   useDialog,
   useThrottledValue,
 } from "@chain/ui";
 import { CsError, CsPageHeader } from "@chain/user-ui";
-import { ApiError, canUseDirectDownload, directTicketUrl } from "@chain/api-client";
-import { formatRawAmount, shortValue, useApi, useJobStream, useS5Action } from "../sprint5/common";
+import { ApiError, canUseDirectDownload, directTicketUrl, useAuth } from "@chain/api-client";
+import { shortValue, useApi, useJobStream, useS5Action } from "../sprint5/common";
 import type { JobEvent } from "../sprint5/common";
 import {
   TERMINAL_STATUSES,
@@ -33,17 +34,18 @@ import { JobTechnicalDetails } from "./jobs/detail/JobTechnicalDetails";
  * 表现层按用户端重构规范 V4 §28 / §47 重构为「主状态摘要 + 技术详情」两层：
  *
  *   首屏（普通下载用户）：状态、总进度、当前速度、预计剩余/预计完成、
- *   当前阶段、暂停/继续/取消/重试，以及完成后的下载入口。
+ *   当前阶段、暂停/继续/取消/重试，以及完成后的导出与下载入口。
  *
  *   二级入口（支持人员）：Pipeline / 地址进度 / Dataset / Shards / 结构化事件 /
  *   Exports / 证据链 —— 一个都没删，全部收进默认关闭的 JobTechnicalDetails。
  *
- * **业务逻辑一行未改**：请求、SSE 订阅与作用域隔离、节流显示、命令与审计原因、
- * 导出票据与直连通道回退、错误 safe message 全部保留原实现。
+ * 保留 SSE 订阅与作用域隔离、节流显示、命令与审计原因、导出票据和直连回退；
+ * 完成态可直接调用现有按任务导出接口。
  * ==========================================================================*/
 
 export default function JobDetailPage() {
   const dialog = useDialog();
+  const { can } = useAuth();
   const { jobId = "" } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { busy, run, client } = useS5Action();
@@ -124,6 +126,13 @@ export default function JobDetailPage() {
   const job = detail?.job;
   const progress = detail?.progress;
   const status = job?.status ?? "";
+  const hasPendingExport = detail?.exports.some((item) => item.status === "PENDING" || item.status === "RUNNING") ?? false;
+
+  useEffect(() => {
+    if (!hasPendingExport) return;
+    const timer = window.setInterval(() => void reload(), 3000);
+    return () => window.clearInterval(timer);
+  }, [hasPendingExport, reload]);
 
   /**
    * 高频数值展示节流（蓝图 §9.3）：SSE 重连或高频 update 期间数值不抖动，
@@ -202,21 +211,6 @@ export default function JobDetailPage() {
 
   const downloadExport = useCallback(
     async (item: JobExport) => {
-      const answer = await dialog.open({
-        kind: "confirm",
-        title: "创建下载票据？",
-        body: "下载票据 60 秒内有效且仅可使用一次；过期或重复使用会返回 410，需要重新创建票据。",
-        details: [
-          { label: "export_id", value: item.id },
-          { label: "格式", value: `${item.format}${item.zip ? " · zip" : ""}` },
-          { label: "行数", value: formatRawAmount(String(item.rows), 0) },
-        ],
-        actions: [
-          { label: "取消", result: "", variant: "default" },
-          { label: "创建并下载", result: "download", variant: "primary" },
-        ],
-      });
-      if (answer !== "download") return;
       const response = await run(async () => {
         try {
           return await client.post<{ ticket_id: string; url: string; expires_in_seconds: number; single_use: boolean }>(
@@ -235,8 +229,46 @@ export default function JobDetailPage() {
         response.data.ticket_id && (await canUseDirectDownload()) ? directTicketUrl(response.data.ticket_id) : "";
       window.location.assign(directUrl || response.data.url);
     },
-    [client, dialog, run],
+    [client, run],
   );
+
+  const createExport = useCallback(async () => {
+    if (!jobId || status !== "COMPLETED" || !can("export:create")) return;
+    let format = "csv";
+    const answer = await dialog.open({
+      kind: "confirm",
+      title: "选择导出格式",
+      body: (
+        <Field label="文件格式" htmlFor="job-export-format">
+          <select id="job-export-format" className="select" defaultValue="csv" onChange={(event) => { format = event.currentTarget.value; }}>
+            <option value="csv">CSV</option>
+            <option value="xlsx">XLSX</option>
+            <option value="jsonl">JSONL</option>
+            <option value="parquet">Parquet</option>
+          </select>
+        </Field>
+      ),
+      actions: [
+        { label: "取消", result: "", variant: "default" },
+        { label: "开始生成", result: "create", variant: "primary" },
+      ],
+    });
+    if (answer !== "create") return;
+    const response = await run(async () => {
+      try {
+        return await client.post<{ id: string; status: string; format: string }>(
+          "/api/v2/exports",
+          { job_id: jobId, format },
+          { idempotencyKey: crypto.randomUUID() },
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.traceId) setLastTrace(error.traceId);
+        throw error;
+      }
+    });
+    if (!response) return;
+    await reload();
+  }, [can, client, dialog, jobId, reload, run, status]);
 
   if (!jobId) {
     return (
@@ -359,7 +391,12 @@ export default function JobDetailPage() {
           resolvedAt={job.resolved_at}
           exports={detail.exports}
           busy={busy}
+          canCreateExport={can("export:create")}
+          onCreateExport={() => void createExport()}
           onDownload={(item) => void downloadExport(item)}
+          onShowExportError={(item) => dialog.notify("error", "导出失败", item.error_safe || "文件生成失败，请重试。", [
+            { label: "导出 ID", value: item.id },
+          ])}
           onOpenExports={() => {
             setTechnicalTab("exports");
             setTechnicalOpen(true);
@@ -393,21 +430,6 @@ export default function JobDetailPage() {
           setTechnicalTab("pipeline");
           setTechnicalOpen(true);
         }}
-        downloadAction={
-          isCompleted && detail.exports.length > 0 ? (
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={busy}
-              onClick={() => {
-                setTechnicalTab("exports");
-                setTechnicalOpen(true);
-              }}
-            >
-              下载结果（{detail.exports.length}）
-            </Button>
-          ) : undefined
-        }
       />
 
       <JobTechnicalDetails

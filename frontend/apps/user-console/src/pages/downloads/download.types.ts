@@ -64,6 +64,11 @@ export interface DownloadBody {
   range: RangeBody;
   reuse_policy: ReusePolicy;
   performance_mode: PerformanceMode;
+  /** 任务级案件与标签：应用到没有 per-address override 的地址。 */
+  case_name?: string;
+  tags?: string[];
+  /** 新建下载页只提交已经通过独立 API 创建/读取到的元数据，不隐式创建。 */
+  create_missing_meta: false;
   /** §23 per-address 案件/标签覆盖；键为服务端 normalized 地址。 */
   subject_meta?: Record<string, { case_name: string; tags: string[] }>;
 }
@@ -491,4 +496,3 @@ export function downloadStepState(key: string, current: string): DownloadStepSta
   if (index === currentIndex) return "current";
   return "todo";
 }
-

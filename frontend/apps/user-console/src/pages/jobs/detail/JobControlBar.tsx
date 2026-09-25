@@ -22,8 +22,6 @@ export interface JobControlBarProps {
   onCommand: (command: "pause" | "resume" | "cancel" | "retry") => void;
   /** 打开技术详情（Drawer），默认关闭。 */
   onOpenTechnical: () => void;
-  /** 完成后的下载入口；没有可下载导出时为 undefined。 */
-  downloadAction?: React.ReactNode;
 }
 
 export function JobControlBar({
@@ -34,24 +32,27 @@ export function JobControlBar({
   busy,
   onCommand,
   onOpenTechnical,
-  downloadAction,
 }: JobControlBarProps) {
+  const showCommands = canPause || canResume || canRetry || canCancel;
   return (
     <div className="toolbar" data-testid="job-control-bar" style={{ flexWrap: "wrap", gap: "var(--sp-2)" }}>
-      <Button size="sm" disabled={!canPause || busy} onClick={() => onCommand("pause")}>
-        暂停
-      </Button>
-      <Button size="sm" disabled={!canResume || busy} onClick={() => onCommand("resume")}>
-        继续
-      </Button>
-      <Button size="sm" disabled={!canRetry || busy} onClick={() => onCommand("retry")}>
-        重试失败分片
-      </Button>
-      <Button size="sm" variant="danger" disabled={!canCancel || busy} onClick={() => onCommand("cancel")}>
-        取消任务
-      </Button>
+      {showCommands ? (
+        <>
+          <Button size="sm" disabled={!canPause || busy} onClick={() => onCommand("pause")}>
+            暂停
+          </Button>
+          <Button size="sm" disabled={!canResume || busy} onClick={() => onCommand("resume")}>
+            继续
+          </Button>
+          <Button size="sm" disabled={!canRetry || busy} onClick={() => onCommand("retry")}>
+            重试失败分片
+          </Button>
+          <Button size="sm" variant="danger" disabled={!canCancel || busy} onClick={() => onCommand("cancel")}>
+            取消任务
+          </Button>
+        </>
+      ) : null}
       <span style={{ flex: 1, minWidth: 8 }} />
-      {downloadAction}
       <Button size="sm" variant="ghost" onClick={onOpenTechnical}>
         查看技术详情
         <ChevronRight size={14} aria-hidden="true" />

@@ -21,38 +21,28 @@ export interface ChainOption {
 }
 
 /**
- * 单行链选项：图标在文字前，slug 作为弱化辅助文字（§10.1 / §10.2）。
+ * 单行链选项：固定图标槽位 + 唯一可见名称。
  *
- * 整改规范 REM-019：链名只能出现一次。当链名本身已经包含 slug（TRON/tron、
- * Ethereum/eth、BSC/bsc …）时不再重复渲染 slug —— 否则选中值会显示成 "TRONtron"。
- * 提交值（option.value）始终是 slug，不受显示层影响。
+ * slug 只用于提交和搜索，永远不进入可见标签。服务端的 name 已经是面向用户的完整名称，
+ * 再拼 slug 会产生 "BNB Smart Chainbsc"、"OP Mainnetoptimism" 等错误结果。
  */
-function slugIsRedundant(name: string, slug: string): boolean {
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const key = normalize(slug);
-  if (key === "") return true;
-  return normalize(name).includes(key);
-}
 export function ChainOptionRow({
   chain,
   name,
-  slug,
   enabled = true,
   size = 24,
 }: {
   chain: string;
   name: string;
-  slug: string;
   enabled?: boolean;
   size?: number;
 }) {
   return (
-    <span className="cs-chainoption" data-disabled={enabled ? undefined : "true"}>
+    <span className="cs-chainoption" data-chain={chain} data-disabled={enabled ? undefined : "true"}>
       <ChainIcon chain={chain} size={size} />
       <span className="cs-chainoption__text">
         <span className="cs-chainoption__name">{name}</span>
       </span>
-      {slugIsRedundant(name, slug) ? null : <span className="cs-chainoption__slug mono">{slug}</span>}
       {enabled ? null : <span className="cs-chainoption__off">不可用</span>}
     </span>
   );
@@ -68,6 +58,8 @@ export interface ChainSelectProps {
   ariaLabel?: string;
   /** 字段级错误（校验失败时由父级传入）。 */
   invalid?: boolean;
+  /** 默认 360px；窄屏页面可传 true，使弹层跟随触发器宽度。 */
+  popupMatchSelectWidth?: boolean | number;
 }
 
 export function ChainSelect({
@@ -79,6 +71,7 @@ export function ChainSelect({
   disabled = false,
   ariaLabel = "网络",
   invalid = false,
+  popupMatchSelectWidth = 360,
 }: ChainSelectProps) {
   const items = options.map((item) => ({
     value: item.value,
@@ -103,7 +96,7 @@ export function ChainSelect({
       placeholder="选择网络"
       /* 统一 popup 容器：下拉是 Portal，用同一个类名统一外观（规范 §10）。 */
       classNames={{ popup: { root: "cs-select-dropdown-wizard" } }}
-      popupMatchSelectWidth={360}
+      popupMatchSelectWidth={popupMatchSelectWidth}
       listHeight={320}
       /* 搜索同时匹配链名与 slug（服务端 slug 是提交值，用户可能直接敲 tron）。 */
       filterOption={(input, option) => {
@@ -117,13 +110,13 @@ export function ChainSelect({
       }}
       optionRender={(option) => {
         const data = option.data as { value: string; name: string; enabled: boolean };
-        return <ChainOptionRow chain={data.value} name={data.name} slug={data.value} enabled={data.enabled} />;
+        return <ChainOptionRow chain={data.value} name={data.name} enabled={data.enabled} />;
       }}
       labelRender={(props) => {
         const slug = String(props.value ?? "");
         const matched = options.find((item) => item.value === slug);
         if (!matched) return <span className="cs-chainoption__name">{props.label}</span>;
-        return <ChainOptionRow chain={matched.value} name={matched.name} slug={matched.value} size={22} />;
+        return <ChainOptionRow chain={matched.value} name={matched.name} size={20} />;
       }}
       notFoundContent={
         <span className="cs-chainselect__empty">{loading ? "正在加载网络…" : "没有匹配的网络"}</span>

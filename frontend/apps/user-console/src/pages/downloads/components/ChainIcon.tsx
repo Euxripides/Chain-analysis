@@ -20,16 +20,26 @@ import tronLogo from "../../../assets/chains/tron.png";
  * 未登记的链**不猜图标**：回落为"圆形底色 + 链名称首字母"（规范 §11 的兜底规则）。
  */
 
-/** 键 = 服务端 chain slug（/api/v2/meta/chains）。 */
+/**
+ * 服务端 slug 与品牌资源的映射。别名必须在这里归一，不能让未知别名退化为首字母图标。
+ */
 const CHAIN_LOGOS: Record<string, string> = {
+  eth: ethereumLogo,
   ethereum: ethereumLogo,
   bsc: bscLogo,
+  bnb: bscLogo,
+  arb: arbitrumLogo,
   arbitrum: arbitrumLogo,
+  op: optimismLogo,
   optimism: optimismLogo,
   base: baseLogo,
+  matic: polygonLogo,
   polygon: polygonLogo,
+  sol: solanaLogo,
   solana: solanaLogo,
+  avax: avalancheLogo,
   avalanche: avalancheLogo,
+  trx: tronLogo,
   tron: tronLogo,
 };
 
@@ -50,26 +60,33 @@ export interface ChainIconProps {
  */
 export function ChainIcon({ chain, size = 22, className }: ChainIconProps) {
   const classes = className ? `cs-chainicon ${className}` : "cs-chainicon";
-  const src = CHAIN_LOGOS[chain];
+  const normalized = chain.trim().toLowerCase();
+  const src = CHAIN_LOGOS[normalized];
   if (src) {
     return (
-      <img
+      <span
         className={`${classes} cs-chainicon--logo`}
-        src={src}
-        alt=""
+        data-chain={normalized}
         aria-hidden="true"
-        width={size}
-        height={size}
         style={{ width: size, height: size }}
-        loading="lazy"
-        decoding="async"
-      />
+      >
+        <img
+          className="cs-chainicon__image"
+          src={src}
+          alt=""
+          width={size}
+          height={size}
+          loading="eager"
+          decoding="async"
+        />
+      </span>
     );
   }
-  const initial = (/[a-z0-9]/i.exec(chain)?.[0] ?? "?").toUpperCase();
+  const initial = (/[a-z0-9]/i.exec(normalized)?.[0] ?? "?").toUpperCase();
   return (
     <span
       className={`${classes} cs-chainicon--fallback`}
+      data-chain={normalized}
       aria-hidden="true"
       style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.46)) }}
     >
