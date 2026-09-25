@@ -251,3 +251,51 @@ func BenchmarkExportColumnarPipeline(b *testing.B) {
 		b.ReportMetric(float64(written), "rows")
 	}
 }
+
+// BenchmarkExportColumnarPipelineFull 是列式路径的完整"点击到可下载"：
+// 分块取数 + 逐块富化 + 直写 CSV → io.Pipe → MinIO → SHA 回读。
+func BenchmarkExportColumnarPipelineFull(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	bucket := os.Getenv("EXPORT_BENCH_BUCKET")
+	if bucket == "" {
+		b.Skip("EXPORT_BENCH_BUCKET not set")
+	}
+	client := srv.deps.Raw.Client()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pr, pw := io.Pipe()
+		type res struct {
+			rows int64
+			err  error
+		}
+		done := make(chan res, 1)
+		go func() {
+			written, ok, err := srv.exportColumnarStream(ctx, "token_transfers", "bsc", subject, pw, limit)
+			if err == nil && !ok {
+				err = errColumnarUnsupported
+			}
+			_ = pw.CloseWithError(err)
+			done <- res{rows: written, err: err}
+		}()
+		key := fmt.Sprintf("bench/col-%d.csv", time.Now().UnixNano())
+		if _, err := client.PutObject(ctx, bucket, key, pr, -1, minio.PutObjectOptions{ContentType: "text/csv"}); err != nil {
+			b.Fatalf("put: %v", err)
+		}
+		r := <-done
+		if r.err != nil {
+			b.Fatalf("columnar: %v", r.err)
+		}
+		obj, err := client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+		if err != nil {
+			b.Fatalf("get: %v", err)
+		}
+		h := sha256.New()
+		if _, err := io.Copy(h, obj); err != nil {
+			b.Fatalf("sha: %v", err)
+		}
+		obj.Close()
+		client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
+		b.ReportMetric(float64(r.rows), "rows")
+	}
+}
