@@ -67,7 +67,7 @@ async function openPage(page: Page) {
 async function selectChain(page: Page, slug: string) {
   await ensureSectionExpanded(page, "range");
   await page.locator(".cs-chainselect").click();
-  await page.locator(".cs-select-dropdown-wizard .ant-select-item-option", { hasText: new RegExp(slug, "i") }).first().click();
+  await page.locator(`.cs-select-dropdown-wizard .cs-chainoption[data-chain="${slug}"]`).click();
   await page.keyboard.press("Escape");
 }
 
@@ -494,6 +494,76 @@ test.describe("DL-FLOW 新建数据下载 Flowline", () => {
       });
       expect(contrast, target.name + " 的对比度必须达到 4.5:1（实际 " + contrast.toFixed(2) + "）").toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  test("DL-FLOW-011 桌面布局舒展、地址导入对齐且链下拉不拼接内部标识", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+
+    const layout = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect();
+        return box ? { top: box.top, bottom: box.bottom, height: box.height } : null;
+      };
+      const style = (selector: string) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const computed = getComputedStyle(node);
+        return {
+          borderTopWidth: computed.borderTopWidth,
+          overflow: computed.overflow,
+          maxHeight: computed.maxHeight,
+        };
+      };
+      const sections = Array.from(document.querySelectorAll(".dl-config-section")).map((node) => node.getBoundingClientRect());
+      return {
+        page: style(".dl-flow-page"),
+        surface: style(".dl-config-surface"),
+        rangeFieldset: style(".dl-field--range"),
+        modeFieldset: style(".dl-field--mode"),
+        textarea: rect(".dl-address__textarea"),
+        fileTrigger: rect(".dl-address__file-trigger"),
+        sectionGap: sections.length > 1 ? sections[1].top - sections[0].bottom : 0,
+      };
+    });
+
+    expect(layout.page?.overflow, "桌面页应由浏览器自然滚动，不应固定裁切").toBe("visible");
+    expect(layout.page?.maxHeight, "桌面页不应锁死为一屏高度").toBe("none");
+    expect(layout.surface?.borderTopWidth, "左栏不应再是一整块拉满高度的边框").toBe("0px");
+    expect(layout.rangeFieldset?.borderTopWidth, "范围 fieldset 不应出现浏览器默认横线框").toBe("0px");
+    expect(layout.modeFieldset?.borderTopWidth, "性能模式 fieldset 不应出现浏览器默认横线框").toBe("0px");
+    expect(layout.sectionGap, "四个配置卡之间应留出明确间距").toBeGreaterThanOrEqual(12);
+    expect(Math.abs((layout.textarea?.top ?? 0) - (layout.fileTrigger?.top ?? 0)), "地址框与文件入口顶部必须对齐").toBeLessThanOrEqual(1);
+    expect(Math.abs((layout.textarea?.height ?? 0) - (layout.fileTrigger?.height ?? 0)), "地址框与文件入口高度必须一致").toBeLessThanOrEqual(1);
+    expect(Math.abs((layout.textarea?.bottom ?? 0) - (layout.fileTrigger?.bottom ?? 0)), "地址框与文件入口底部必须对齐").toBeLessThanOrEqual(1);
+
+    await page.locator(".cs-chainselect").click();
+    const options = page.locator(".cs-select-dropdown-wizard .cs-chainoption");
+    await expect(options.first()).toBeVisible();
+    expect(await options.count(), "链下拉应渲染真实服务端选项").toBeGreaterThan(3);
+    expect(await page.locator(".cs-select-dropdown-wizard .cs-chainoption__slug").count(), "可见名称后不得拼接内部 slug").toBe(0);
+
+    const optionGeometry = await options.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const icon = node.querySelector(".cs-chainicon")?.getBoundingClientRect();
+        const name = node.querySelector(".cs-chainoption__name")?.getBoundingClientRect();
+        return {
+          iconWidth: icon?.width ?? 0,
+          iconHeight: icon?.height ?? 0,
+          iconLeft: icon?.left ?? 0,
+          centerDelta: icon && name ? Math.abs(icon.top + icon.height / 2 - (name.top + name.height / 2)) : 99,
+        };
+      }),
+    );
+    const firstLeft = optionGeometry[0].iconLeft;
+    for (const geometry of optionGeometry) {
+      expect(geometry.iconWidth, "下拉图标槽位宽度必须统一").toBe(24);
+      expect(geometry.iconHeight, "下拉图标槽位高度必须统一").toBe(24);
+      expect(Math.abs(geometry.iconLeft - firstLeft), "所有下拉图标必须左对齐").toBeLessThanOrEqual(1);
+      expect(geometry.centerDelta, "下拉图标与名称必须垂直居中").toBeLessThanOrEqual(1);
+    }
+    await page.keyboard.press("Escape");
   });
 
   test("DL-FLOW-008 四视口：无横向滚动、无遮挡、结构正确", async ({ page }) => {

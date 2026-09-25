@@ -43,6 +43,11 @@ const TRACKED = [
   "apps/user-console/src/sprint5",
 ];
 
+/* 新建下载恢复高级设置时，显式接入已上线且受工作区/RBAC 保护的 v1 案件、标签目录。
+ * 案件 GET/POST 分别要求 case:list/case:create；标签 GET/POST 分别要求
+ * case:read/case:update。仅允许这两条新增字面量，其他接口仍逐字冻结。 */
+const APPROVED_API_ADDITIONS = ["/api/v1/cases", "/api/v1/tags"];
+
 /**
  * 案件详情 Tab 的权限契约（**钉死在本脚本里**，不与基准提交比对）。
  *
@@ -315,7 +320,7 @@ function main() {
   const problems = [
     ...diff("路由路径", routePaths(headFiles), routePaths(workFiles)),
     ...diff("路由→权限映射", routePermissions(headFiles), routePermissions(workFiles)),
-    ...diff("/api 字面量", apiLiterals(headFiles), apiLiterals(workFiles)),
+    ...diff("/api 字面量（含批准的案件/标签目录）", [...new Set([...apiLiterals(headFiles), ...APPROVED_API_ADDITIONS])].sort(), apiLiterals(workFiles)),
     /*
      * Tab 权限契约不与基准比对（基准里没有这个文件），而是与脚本里钉死的表比对。
      * 放在最后：上面三项一旦红了就没必要再看它。
@@ -328,7 +333,7 @@ function main() {
     for (const problem of problems) console.error("  - " + problem);
     process.exit(1);
   }
-  console.log(`\n契约冻结通过：路由、权限与 API 字面量均与基准 ${BASELINE} 一致。`);
+  console.log(`\n契约冻结通过：路由和权限与基准 ${BASELINE} 一致；API 字面量仅增加经批准的案件/标签目录。`);
 }
 
 main();

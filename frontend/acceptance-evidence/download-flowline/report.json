@@ -1,11 +1,37 @@
 {
   "route": "/app-v2/downloads/new",
   "mode": "构建产物 + 浏览器侧服务端夹具（请求体为页面真实发出）",
-  "generated_at": "2026-09-20T19:50:37.698Z",
+  "generated_at": "2026-09-22T11:26:13.384Z",
   "reuse_policy_visible": false,
   "preview_request_reuse_policy": "prefer_local",
   "create_request_reuse_policy": "prefer_local",
   "viewports": {
+    "wide": {
+      "width": 1920,
+      "height": 1080,
+      "screenshot": "wide-1920x1080.png",
+      "step_order": [
+        "对象与地址",
+        "链与范围",
+        "Dataset",
+        "Coverage 预览",
+        "创建任务"
+      ],
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "dataset_semantics": {
+        "checkboxCount": 7
+      },
+      "dialog_style": {
+        "containerOpacity": "1",
+        "containerFilter": "none",
+        "containerBackdrop": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(72, 86, 107)",
+        "titleColor": "rgb(16, 26, 43)",
+        "transform": "none"
+      }
+    },
     "desktop": {
       "width": 1440,
       "height": 900,
@@ -17,8 +43,8 @@
         "Coverage 预览",
         "创建任务"
       ],
-      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
-      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
       "dataset_semantics": {
         "checkboxCount": 7
       },
@@ -52,8 +78,8 @@
         "Coverage 预览",
         "创建任务"
       ],
-      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
-      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
       "dataset_semantics": {
         "checkboxCount": 7
       },
@@ -78,8 +104,8 @@
         "预览",
         "创建"
       ],
-      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
-      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
       "dataset_semantics": {
         "checkboxCount": 7
       },
@@ -104,8 +130,8 @@
         "预览",
         "创建"
       ],
-      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
-      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\"}",
+      "preview_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
+      "create_request": "{\"chain\":\"tron\",\"addresses\":[\"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"],\"datasets\":[\"transactions\",\"token_transfers\"],\"range\":{\"type\":\"full\"},\"reuse_policy\":\"prefer_local\",\"performance_mode\":\"safe\",\"create_missing_meta\":false}",
       "dataset_semantics": {
         "checkboxCount": 0
       },
@@ -134,6 +160,12 @@
     }
   },
   "horizontal_overflow": {
+    "wide": {
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "bodyScrollWidth": 1920,
+      "offenders": []
+    },
     "desktop": {
       "scrollWidth": 1440,
       "clientWidth": 1440,
@@ -168,47 +200,47 @@
     }
   },
   "contrast_checks": {
-    "desktop": {
+    "wide": {
       "页面标题": {
-        "color": "rgb(11, 31, 58)",
-        "fontSize": "24px",
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "26.88px",
         "fontWeight": "700",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       },
       "章节标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "16px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "字段标签": {
-        "color": "rgb(82, 98, 122)",
+        "color": "rgb(64, 86, 111)",
         "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "Dataset 标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "14px",
         "fontWeight": "650",
-        "contrast": 15.92,
-        "background": "rgb(248, 251, 255)"
+        "contrast": 15.04,
+        "background": "rgb(248, 250, 252)"
       },
       "右侧指标标签": {
-        "color": "rgb(82, 98, 122)",
+        "color": "rgb(64, 86, 111)",
         "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "右侧指标数值": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "20px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "主按钮": {
@@ -219,54 +251,112 @@
         "background": "rgb(37, 99, 235)"
       },
       "轨道标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "13px",
         "fontWeight": "650",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
+      }
+    },
+    "desktop": {
+      "页面标题": {
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "24px",
+        "fontWeight": "700",
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
+      },
+      "章节标题": {
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "16px",
+        "fontWeight": "700",
+        "contrast": 15.74,
+        "background": "rgb(255, 255, 255)"
+      },
+      "字段标签": {
+        "color": "rgb(64, 86, 111)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 7.56,
+        "background": "rgb(255, 255, 255)"
+      },
+      "Dataset 标签": {
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "14px",
+        "fontWeight": "650",
+        "contrast": 15.04,
+        "background": "rgb(248, 250, 252)"
+      },
+      "右侧指标标签": {
+        "color": "rgb(64, 86, 111)",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "contrast": 7.56,
+        "background": "rgb(255, 255, 255)"
+      },
+      "右侧指标数值": {
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "20px",
+        "fontWeight": "700",
+        "contrast": 15.74,
+        "background": "rgb(255, 255, 255)"
+      },
+      "主按钮": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 5.17,
+        "background": "rgb(37, 99, 235)"
+      },
+      "轨道标签": {
+        "color": "rgb(16, 35, 63)",
+        "fontSize": "13px",
+        "fontWeight": "650",
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       }
     },
     "laptop": {
       "页面标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "26px",
         "fontWeight": "700",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       },
       "章节标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "16px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "字段标签": {
-        "color": "rgb(82, 98, 122)",
-        "fontSize": "13px",
+        "color": "rgb(64, 86, 111)",
+        "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "Dataset 标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "14px",
         "fontWeight": "650",
-        "contrast": 15.92,
-        "background": "rgb(248, 251, 255)"
+        "contrast": 15.04,
+        "background": "rgb(248, 250, 252)"
       },
       "右侧指标标签": {
-        "color": "rgb(82, 98, 122)",
+        "color": "rgb(64, 86, 111)",
         "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "右侧指标数值": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "22px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "主按钮": {
@@ -277,54 +367,54 @@
         "background": "rgb(37, 99, 235)"
       },
       "轨道标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "14px",
         "fontWeight": "650",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       }
     },
     "tablet": {
       "页面标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "26px",
         "fontWeight": "700",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       },
       "章节标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "16px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "字段标签": {
-        "color": "rgb(82, 98, 122)",
-        "fontSize": "13px",
+        "color": "rgb(64, 86, 111)",
+        "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "Dataset 标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "14px",
         "fontWeight": "650",
-        "contrast": 15.92,
-        "background": "rgb(248, 251, 255)"
+        "contrast": 15.04,
+        "background": "rgb(248, 250, 252)"
       },
       "右侧指标标签": {
-        "color": "rgb(82, 98, 122)",
+        "color": "rgb(64, 86, 111)",
         "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "右侧指标数值": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "22px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "主按钮": {
@@ -335,33 +425,33 @@
         "background": "rgb(37, 99, 235)"
       },
       "轨道标签": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "14px",
         "fontWeight": "650",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       }
     },
     "mobile": {
       "页面标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "22px",
         "fontWeight": "700",
-        "contrast": 14.06,
-        "background": "rgb(233, 237, 243)"
+        "contrast": 14.79,
+        "background": "rgb(246, 248, 251)"
       },
       "章节标题": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "16px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       },
       "字段标签": {
-        "color": "rgb(82, 98, 122)",
-        "fontSize": "13px",
+        "color": "rgb(64, 86, 111)",
+        "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "主按钮": {
@@ -372,17 +462,17 @@
         "background": "rgb(37, 99, 235)"
       },
       "右侧指标标签": {
-        "color": "rgb(82, 98, 122)",
+        "color": "rgb(64, 86, 111)",
         "fontSize": "12px",
         "fontWeight": "600",
-        "contrast": 6.2,
+        "contrast": 7.56,
         "background": "rgb(255, 255, 255)"
       },
       "右侧指标数值": {
-        "color": "rgb(11, 31, 58)",
+        "color": "rgb(16, 35, 63)",
         "fontSize": "22px",
         "fontWeight": "700",
-        "contrast": 16.52,
+        "contrast": 15.74,
         "background": "rgb(255, 255, 255)"
       }
     }
@@ -391,67 +481,85 @@
   "step_order": {},
   "dataset_semantics": {},
   "reuse_policy_probe": {
-    "desktop": {
+    "wide": {
       "initial": {
-        "names": 81,
+        "names": 82,
         "hiddenControls": 14
       },
       "verdict_dialog": {
-        "names": 85,
+        "names": 86,
         "hiddenControls": 14
       },
       "preview_dialog": {
-        "names": 89,
+        "names": 90,
         "hiddenControls": 14
       },
       "create_dialog": {
-        "names": 89,
+        "names": 90,
+        "hiddenControls": 14
+      }
+    },
+    "desktop": {
+      "initial": {
+        "names": 82,
+        "hiddenControls": 14
+      },
+      "verdict_dialog": {
+        "names": 97,
+        "hiddenControls": 14
+      },
+      "preview_dialog": {
+        "names": 101,
+        "hiddenControls": 14
+      },
+      "create_dialog": {
+        "names": 101,
         "hiddenControls": 14
       }
     },
     "laptop": {
       "initial": {
-        "names": 81,
+        "names": 82,
         "hiddenControls": 13
       },
       "verdict_dialog": {
-        "names": 85,
+        "names": 86,
         "hiddenControls": 13
       },
       "preview_dialog": {
-        "names": 89,
-        "hiddenControls": 26
+        "names": 90,
+        "hiddenControls": 28
       },
       "create_dialog": {
-        "names": 89,
-        "hiddenControls": 28
+        "names": 90,
+        "hiddenControls": 30
       }
     },
     "tablet": {
       "initial": {
-        "names": 81,
+        "names": 82,
         "hiddenControls": 15
       },
       "verdict_dialog": {
-        "names": 85,
+        "names": 86,
         "hiddenControls": 15
       },
       "preview_dialog": {
-        "names": 89,
-        "hiddenControls": 28
+        "names": 90,
+        "hiddenControls": 30
       },
       "create_dialog": {
-        "names": 89,
-        "hiddenControls": 30
+        "names": 90,
+        "hiddenControls": 32
       }
     },
     "mobile": {
       "initial": {
-        "names": 49,
-        "hiddenControls": 12
+        "names": 50,
+        "hiddenControls": 14
       },
       "verdict_dialog": {
-        "names": 53,
+        "names": 54,
         "hiddenControls": 2
       },
       "preview_dialog": {
@@ -465,6 +573,10 @@
     }
   },
   "dom_contract": {
+    "wide": {
+      "missing": [],
+      "parse_summary_missing": []
+    },
     "desktop": {
       "missing": [],
       "parse_summary_missing": []
@@ -483,6 +595,11 @@
     }
   },
   "stale_preview": {
+    "wide": {
+      "opacity": "1",
+      "borderTopColor": "rgb(166, 95, 0)",
+      "borderTopWidth": "1px"
+    },
     "desktop": {
       "opacity": "1",
       "borderTopColor": "rgb(166, 95, 0)",
@@ -519,6 +636,9 @@
   "page_errors": [],
   "csp_violations": [],
   "screenshots": [
+    "wide-1920x1080.png",
+    "create-result-wide.png",
+    "chain-dropdown-1440x900.png",
     "risk-dialog-1440x900.png",
     "desktop-1440x900.png",
     "create-result-desktop.png",
@@ -529,6 +649,8 @@
     "risk-dialog-390x844.png",
     "mobile-390x844.png",
     "create-result-mobile.png",
+    "metadata-desktop-1440x900.png",
+    "metadata-mobile-390x844.png",
     "reduced-motion-1440x900.png",
     "create-result-reduced-motion.png"
   ],
@@ -544,20 +666,86 @@
       "tron"
     ]
   },
+  "metadata": {
+    "preview_requests": 1,
+    "create_requests": 1,
+    "preview": {
+      "chain": "polygon",
+      "addresses": [
+        "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649",
+        "0x84ce9959559f755d75645551e5112544a4555555"
+      ],
+      "datasets": [
+        "transactions",
+        "token_transfers"
+      ],
+      "range": {
+        "type": "full"
+      },
+      "reuse_policy": "prefer_local",
+      "performance_mode": "safe",
+      "create_missing_meta": false,
+      "case_name": "案件甲",
+      "tags": [
+        "默认标签"
+      ],
+      "subject_meta": {
+        "0x84ce9959559f755d75645551e5112544a4555555": {
+          "case_name": "案件甲",
+          "tags": [
+            "地址乙标签"
+          ]
+        }
+      }
+    },
+    "create": {
+      "chain": "polygon",
+      "addresses": [
+        "0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649",
+        "0x84ce9959559f755d75645551e5112544a4555555"
+      ],
+      "datasets": [
+        "transactions",
+        "token_transfers"
+      ],
+      "range": {
+        "type": "full"
+      },
+      "reuse_policy": "prefer_local",
+      "performance_mode": "safe",
+      "create_missing_meta": false,
+      "case_name": "案件甲",
+      "tags": [
+        "默认标签"
+      ],
+      "subject_meta": {
+        "0x84ce9959559f755d75645551e5112544a4555555": {
+          "case_name": "案件甲",
+          "tags": [
+            "地址乙标签"
+          ]
+        }
+      }
+    }
+  },
   "reuse_policy_probe_notes": [
+    "wide/initial 有 14 个 CSS 假隐藏控件",
+    "wide/verdict_dialog 有 14 个 CSS 假隐藏控件",
+    "wide/preview_dialog 有 14 个 CSS 假隐藏控件",
+    "wide/create_dialog 有 14 个 CSS 假隐藏控件",
     "desktop/initial 有 14 个 CSS 假隐藏控件",
     "desktop/verdict_dialog 有 14 个 CSS 假隐藏控件",
     "desktop/preview_dialog 有 14 个 CSS 假隐藏控件",
     "desktop/create_dialog 有 14 个 CSS 假隐藏控件",
     "laptop/initial 有 13 个 CSS 假隐藏控件",
     "laptop/verdict_dialog 有 13 个 CSS 假隐藏控件",
-    "laptop/preview_dialog 有 26 个 CSS 假隐藏控件",
-    "laptop/create_dialog 有 28 个 CSS 假隐藏控件",
+    "laptop/preview_dialog 有 28 个 CSS 假隐藏控件",
+    "laptop/create_dialog 有 30 个 CSS 假隐藏控件",
     "tablet/initial 有 15 个 CSS 假隐藏控件",
     "tablet/verdict_dialog 有 15 个 CSS 假隐藏控件",
-    "tablet/preview_dialog 有 28 个 CSS 假隐藏控件",
-    "tablet/create_dialog 有 30 个 CSS 假隐藏控件",
-    "mobile/initial 有 12 个 CSS 假隐藏控件",
+    "tablet/preview_dialog 有 30 个 CSS 假隐藏控件",
+    "tablet/create_dialog 有 32 个 CSS 假隐藏控件",
+    "mobile/initial 有 14 个 CSS 假隐藏控件",
     "mobile/verdict_dialog 有 2 个 CSS 假隐藏控件",
     "mobile/preview_dialog 有 9 个 CSS 假隐藏控件",
     "mobile/create_dialog 有 12 个 CSS 假隐藏控件"

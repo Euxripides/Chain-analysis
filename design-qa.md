@@ -64,3 +64,73 @@
 - [x] Verify desktop and mobile with real API data.
 
 final result: passed
+
+---
+
+# Explorer Ant Design Pro Design QA
+
+**Source visual truth**
+
+- Query reference: `C:\Users\Euripides\.codex\generated_images\01a0bf8c-3f09-77d3-8c7f-4088d7db0cb8\exec-d42ee4e9-e523-4d03-a86e-8e6288dd49e9.png`
+- Address result reference: `C:\Users\Euripides\.codex\generated_images\01a0bf8c-3f09-77d3-8c7f-4088d7db0cb8\exec-b8fca98d-c987-4528-99db-b60028c3e2b2.png`
+- The two accepted mockups are the visual target. All values in production continue to come from the real Explorer APIs; fixture values exist only in visual acceptance scripts.
+
+**Rendered implementation**
+
+- Query desktop: `E:\Code\远程虚拟机\.codex-pro-redesign-20260923\screens\query-desktop-final.png`
+- Query mobile: `E:\Code\远程虚拟机\.codex-pro-redesign-20260923\screens\query-mobile.png`
+- Address desktop: `E:\Code\远程虚拟机\.codex-pro-redesign-20260923\screens\address-desktop-final.png`
+- Address mobile: `E:\Code\远程虚拟机\.codex-pro-redesign-20260923\screens\address-mobile-v2.png`
+- Viewports checked: 1440×900, 768×1024, 390×844, and 320×800 at device scale factor 1.
+
+**Full-view comparison evidence**
+
+- Background and clarity: the Explorer content canvas is true white, typography uses the existing crisp ChainSight font tokens, and no gray wash or translucent glass effect remains.
+- Query hierarchy: title/meta remain in the existing shell; query controls are grouped into one outlined surface with a short blue top indicator, matching the accepted composition.
+- Recent list: rows share one bordered list surface with hairline separators, chain icons, compact metadata, and right-aligned actions rather than independent floating cards.
+- Address hierarchy: object header, metadata, nine-tab navigation, overview/main column, and source inspector keep the accepted left-main/right-inspector layout.
+- Metrics: five values render in one StatisticCard.Group-like surface with internal hairlines, blue line icons, and no floating-card shadows.
+- Balance table: columns are aligned to the accepted table — 资产, 余额, 价格 USD, 估值 USD, 更新时间 — while retaining full real values and timestamps.
+- Tabs: address and transaction detail pages use Ant Tabs ink-bar behavior; all labels remain anchor deep links and keep their original URL keys.
+
+**Focused region comparison evidence**
+
+- The chain Select, address Input, and query Button all measure 48px high and have identical vertical coordinates on desktop and tablet.
+- The Select arrow remains centered at the right edge; the selected chain uses a fixed icon slot and a single untruncated display name.
+- The address detail metric group measures five equal 159px columns at 1440px; mobile reflows to two columns without page overflow.
+- The source inspector remains a distinct white outlined surface; its resizer is a one-pixel neutral line with a blue hover/focus state.
+- Mobile Tabs stay horizontally scrollable and preserve all nine address destinations rather than collapsing or deleting items.
+
+**Copy/content differences**
+
+- The implementation retains the repository's real Chinese product terms: “代币转账” and “内部交易” instead of the mockup's English labels where the existing contract already uses Chinese.
+- The reference mock's sample addresses, counts, balances, providers, and timestamps were not copied into production code.
+- Real empty states continue to display `—` or the existing empty-state component instead of invented values.
+
+**Intentional deviations**
+
+- `@ant-design/pro-components` remains at current latest 2.8.10 with compatible `antd` 5.29.3. Ant Design 6.6.5 was not installed because ProComponents 2.8.10 officially peers with Ant Design 4.24.15 or 5.11.2 and does not declare Ant 6 compatibility.
+- Existing shell dimensions, permissions, API paths, Dialog behavior, localStorage key, and resizable inspector were preserved even where the static mock does not show them.
+- The desktop acceptance viewport is 1440×900 rather than the mock's wider canvas, so the main table is denser while keeping the same section structure.
+
+**Primary interactions tested**
+
+- Chain dropdown opening, viewport containment, and Polygon selection.
+- Address and transaction input routing with unchanged paths.
+- Help Dialog and clear-confirm Dialog open/close behavior.
+- Address Tab URL updates and all nine deep-link href values.
+- Transaction Overview/Logs/Trace Tab labels and URL behavior.
+- Desktop, tablet, mobile, and compact overflow checks; browser console and page errors are zero.
+- Full user-console render suite, permission matrix, reduced-motion behavior, CSP, and cross-page smoke routes.
+
+**Implementation Checklist**
+
+- [x] White, crisp Explorer canvas without gray wash.
+- [x] Query controls aligned to one 48px baseline.
+- [x] Ant Tabs applied to address and transaction detail pages.
+- [x] Grouped overview metrics with hairline dividers.
+- [x] Current balance table aligned to the approved column design.
+- [x] Real APIs, routes, permissions, localStorage, precision, and deep links preserved.
+- [x] Desktop/mobile visual and interaction acceptance passed.
+
+final result: passed

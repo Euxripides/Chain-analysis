@@ -1,10 +1,10 @@
 {
   "verdict": "PASS",
   "source_binding": {
-    "source_commit": "25e004dd2f9846e841e2628d979b659ebe3ab453",
+    "source_commit": "23d593527bfaacef74b4dffe2ecc0b2f4819adc2",
     "source_branch": "main",
-    "dist_index_sha256": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
-    "served_index_sha256": "5941ec43af8305c319f746bc456f1c7c5fabb5b17526b132706345a5fead5af2",
+    "dist_index_sha256": "eb1db8c30bca2567ac9ba305922fd01695354e6ce10353dd93e4002e9fc10bfa",
+    "served_index_sha256": "eb1db8c30bca2567ac9ba305922fd01695354e6ce10353dd93e4002e9fc10bfa",
     "served_matches_dist": true,
     "all_equal": true
   },
@@ -55,7 +55,7 @@
       "dataset_columns": 4,
       "vertical_rail": false,
       "horizontal_rail": true,
-      "cls": 0.0012,
+      "cls": 0,
       "console_errors": [],
       "page_errors": [],
       "csp_errors": [],
@@ -574,9 +574,9 @@
         "reduced_motion_pulse": false
       },
       "hidden": {
-        "visible_move": 128.99999999999994,
+        "visible_move": 128.3,
         "hidden_move": 0,
-        "resumed_move": 92.6
+        "resumed_move": 91.10000000000002
       },
       "reduced": {
         "dots": 0,
@@ -760,9 +760,14 @@
     "grayscale_distinguishable": true
   },
   "dataset_limit": {
-    "real_e2e_passed": true,
-    "seven_item_component_test_passed": true,
-    "server_limit_passed": true
+    "total": 7,
+    "selected_after_six": 6,
+    "dialog_text": "注意 Dataset 数量超出上限 单次下载最多选择 6 种 Dataset，无法再加入 测试专用第 7 项。请先取消一个已选项。 知道了",
+    "selected_after_seven": 6,
+    "keyboard_blocked": true,
+    "selected_after_uncheck": 5,
+    "screenshot": "viewport/dataset-cap-1440x900.png",
+    "seven_item_component_test_passed": true
   },
   "reuse_policy_visible": false,
   "preview_request_reuse_policy": "prefer_local",
@@ -1581,18 +1586,5 @@
     "opaque_canvas": true,
     "group_frames_ok": true,
     "dataset_seven_item_component_ok": true
-  },
-  "r9": {
-    "r9_07_passed": true,
-    "report_present": true,
-    "matrix_missing": 0
-  },
-  "udl01": {
-    "v5b_passed": true,
-    "v6_passed": true,
-    "zip64_branch_hit": true,
-    "zip64_layout_ok": true,
-    "zip64_rejection": "错误 文件解析失败 无法读取 udl01-zip64.xlsx：暂不支持 ZIP64 工作簿（本导入只接受经典 ZIP） 知道了",
-    "stable_semantic_assertions": true
   }
 }

@@ -1,0 +1,135 @@
+{
+  "ok": true,
+  "problems": [],
+  "viewports": {
+    "desktop": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "header": {
+        "x": 258,
+        "y": 82,
+        "width": 1160,
+        "height": 107
+      },
+      "query": {
+        "x": 279,
+        "y": 245,
+        "width": 1118,
+        "height": 42
+      },
+      "recent": {
+        "x": 279,
+        "y": 373,
+        "width": 1118,
+        "height": 97
+      },
+      "chain": {
+        "x": 280,
+        "y": 246,
+        "width": 220,
+        "height": 40
+      },
+      "input": {
+        "x": 512,
+        "y": 246,
+        "width": 812,
+        "height": 40
+      },
+      "submit": {
+        "x": 1336,
+        "y": 246,
+        "width": 60,
+        "height": 40
+      }
+    },
+    "tablet": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "header": {
+        "x": 16,
+        "y": 70,
+        "width": 736,
+        "height": 107
+      },
+      "query": {
+        "x": 37,
+        "y": 233,
+        "width": 694,
+        "height": 42
+      },
+      "recent": {
+        "x": 37,
+        "y": 361,
+        "width": 694,
+        "height": 157
+      },
+      "chain": {
+        "x": 38,
+        "y": 234,
+        "width": 220,
+        "height": 40
+      },
+      "input": {
+        "x": 270,
+        "y": 234,
+        "width": 388,
+        "height": 40
+      },
+      "submit": {
+        "x": 670,
+        "y": 234,
+        "width": 60,
+        "height": 40
+      }
+    },
+    "mobile": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "header": {
+        "x": 12,
+        "y": 66,
+        "width": 366,
+        "height": 183
+      },
+      "query": {
+        "x": 33,
+        "y": 304,
+        "width": 324,
+        "height": 94
+      },
+      "recent": {
+        "x": 33,
+        "y": 484,
+        "width": 324,
+        "height": 226
+      },
+      "chain": {
+        "x": 34,
+        "y": 305,
+        "width": 220,
+        "height": 40
+      },
+      "input": {
+        "x": 34,
+        "y": 357,
+        "width": 250,
+        "height": 40
+      },
+      "submit": {
+        "x": 296,
+        "y": 357,
+        "width": 60,
+        "height": 40
+      }
+    }
+  },
+  "navigation": {
+    "recent_after_cancel": 2,
+    "address_url": "/app-v2/addresses/arbitrum/0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649"
+  },
+  "dialogs": {
+    "help_escape_closed": false
+  },
+  "console_errors": [],
+  "page_errors": []
+}

@@ -73,7 +73,18 @@ const SESSION = {
   csrf_token: "csrf-fixture",
 };
 
-const CHAINS = { items: [{ slug: "tron", name: "TRON", enabled: true }] };
+const CHAINS = {
+  items: [
+    { slug: "tron", name: "TRON", enabled: true },
+    { slug: "arbitrum", name: "Arbitrum One", enabled: true },
+    { slug: "avalanche", name: "Avalanche C-Chain", enabled: true },
+    { slug: "base", name: "Base", enabled: true },
+    { slug: "bsc", name: "BNB Smart Chain", enabled: true },
+    { slug: "ethereum", name: "Ethereum", enabled: true },
+    { slug: "optimism", name: "OP Mainnet", enabled: true },
+    { slug: "polygon", name: "Polygon PoS", enabled: true },
+  ],
+};
 
 /* 7 项 Dataset：既覆盖参考图的一行 6 项，也留出"第 7 项被上限挡住"的负向空间。 */
 const DATASETS = {
@@ -500,6 +511,7 @@ function safeReusePolicy(body) {
 }
 
 const viewports = [
+  { name: "wide", file: "wide-1920x1080.png", width: 1920, height: 1080, compact: false, mobile: false },
   { name: "desktop", file: "desktop-1440x900.png", width: 1440, height: 900, compact: false, mobile: false },
   { name: "laptop", file: "laptop-1024x768.png", width: 1024, height: 768, compact: false, mobile: false },
   { name: "tablet", file: "tablet-768x1024.png", width: 768, height: 1024, compact: true, mobile: false },
@@ -616,6 +628,89 @@ async function overflow(page) {
       offenders: offenders.slice(0, 10),
     };
   });
+}
+
+/** 桌面结构与链下拉视觉契约：用于阻断“挤成一团 / 图标错位 / 名称拼 slug”的回归。 */
+async function checkDesktopStructure(page, vp, sink) {
+  if (vp.name !== "desktop") return;
+
+  const layout = await page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { top: rect.top, bottom: rect.bottom, height: rect.height } : null;
+    };
+    const computed = (selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return null;
+      const style = getComputedStyle(node);
+      return { borderTopWidth: style.borderTopWidth, overflow: style.overflow, maxHeight: style.maxHeight };
+    };
+    const sections = Array.from(document.querySelectorAll(".dl-config-section")).map((node) => node.getBoundingClientRect());
+    return {
+      page: computed(".dl-flow-page"),
+      surface: computed(".dl-config-surface"),
+      rangeFieldset: computed(".dl-field--range"),
+      modeFieldset: computed(".dl-field--mode"),
+      textarea: box(".dl-address__textarea"),
+      fileTrigger: box(".dl-address__file-trigger"),
+      sectionGap: sections.length > 1 ? sections[1].top - sections[0].bottom : 0,
+    };
+  });
+  sink.desktop_layout = layout;
+  /*
+   * 曾经的「自然页面滚动」整改（页面 height:auto / max-height:none / 去整块外框 / 配置卡间距）
+   * 与用户规范《新建数据下载页面全量整改实施规范》§6.1–§6.3 直接冲突：
+   *   "桌面端必须是高度受控的工作台，而不是自然向下无限堆叠的表单页"、
+   *   "width >= 1200px 时页面根节点不因本页产生纵向滚动"、
+   *   REM-002 明确要求 2309×1257 根页面无纵向滚动、创建按钮完整可见。
+   * 同一份工作区里 remediation 验收仍在断言这条受控工作台契约（root 不滚动、右栏 footer 不出视口），
+   * 两者不可能同时成立；这里以**规范**为准，因此不再断言被废弃的那版自然滚动布局。
+   * 保留的断言：fieldset 不得出现浏览器默认横线框、地址框/文件入口严格对齐、链下拉的图标槽位与名称契约。
+   */
+  if (layout.rangeFieldset?.borderTopWidth !== "0px" || layout.modeFieldset?.borderTopWidth !== "0px") {
+    problem("[desktop] fieldset 仍出现浏览器默认横线框");
+  }
+  if (!layout.textarea || !layout.fileTrigger) problem("[desktop] 缺少地址输入框或文件入口");
+  else {
+    if (Math.abs(layout.textarea.top - layout.fileTrigger.top) > 1) problem("[desktop] 地址框与文件入口顶部未对齐");
+    if (Math.abs(layout.textarea.height - layout.fileTrigger.height) > 1) problem("[desktop] 地址框与文件入口高度不一致");
+    if (Math.abs(layout.textarea.bottom - layout.fileTrigger.bottom) > 1) problem("[desktop] 地址框与文件入口底部未对齐");
+  }
+
+  await page.locator(".cs-chainselect .ant-select-selector").click();
+  const popup = page.locator(".cs-select-dropdown-wizard:visible").last();
+  await popup.waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForTimeout(300);
+  const options = popup.locator(".cs-chainoption");
+  await options.first().waitFor({ state: "visible", timeout: 10_000 });
+  const rows = await options.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const icon = node.querySelector(".cs-chainicon")?.getBoundingClientRect();
+      const name = node.querySelector(".cs-chainoption__name")?.getBoundingClientRect();
+      return {
+        chain: node.getAttribute("data-chain"),
+        text: (node.textContent ?? "").trim(),
+        name: (node.querySelector(".cs-chainoption__name")?.textContent ?? "").trim(),
+        iconWidth: icon?.width ?? 0,
+        iconHeight: icon?.height ?? 0,
+        iconLeft: icon?.left ?? 0,
+        centerDelta: icon && name ? Math.abs(icon.top + icon.height / 2 - (name.top + name.height / 2)) : 99,
+      };
+    }),
+  );
+  sink.chain_dropdown = rows;
+  const expectedNames = new Map(CHAINS.items.map((item) => [item.slug, item.name]));
+  expectedNames.set("polygon", "Polygon 马蹄链");
+  const firstLeft = rows[0]?.iconLeft ?? 0;
+  for (const row of rows) {
+    if (row.text !== expectedNames.get(row.chain)) problem("[desktop] 链名称被拼接或改写：" + JSON.stringify(row));
+    if (row.iconWidth !== 24 || row.iconHeight !== 24) problem("[desktop] 链图标槽位不是 24×24：" + JSON.stringify(row));
+    if (Math.abs(row.iconLeft - firstLeft) > 1) problem("[desktop] 链图标未左对齐：" + JSON.stringify(row));
+    if (row.centerDelta > 1) problem("[desktop] 链图标与名称未垂直居中：" + JSON.stringify(row));
+  }
+  await page.screenshot({ path: join(OUT, "chain-dropdown-1440x900.png") });
+  report.screenshots.push("chain-dropdown-1440x900.png");
+  await page.keyboard.press("Escape");
 }
 
 /** 走完 地址导入 → 服务端校验 → 真实预览 的完整链路。 */
@@ -884,6 +979,9 @@ async function runViewport(browser, vp) {
     sink.contrast_checks = {};
     await checkClarity(page, vp.name, sink.contrast_checks);
 
+    /* 5.1 桌面结构、地址/文件严格对齐、链下拉图标与名称。 */
+    await checkDesktopStructure(page, vp, sink);
+
     /* 6. 完整业务链路：导入 → 校验 → 预览 → 创建。 */
     await runPreviewFlow(page, vp, sink, { dialogShot: vp.name === "desktop" ? "risk-dialog-1440x900.png" : vp.name === "mobile" ? "risk-dialog-390x844.png" : null });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -1045,12 +1143,16 @@ async function runMultiChainCheck(browser) {
   await page.waitForTimeout(400);
 
   await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
-  for (let index = 0; index < 4; index += 1) {
-    const dialog = page.locator(".cs-dialog").filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
-    if ((await dialog.count()) === 0) break;
-    await dialog.first().getByRole("button", { name: "知道了" }).click();
-    await page.waitForTimeout(500);
+  for (let index = 0; index < 10; index += 1) {
+    const dialog = page.locator(".cs-dialog:visible").first();
+    try { await dialog.waitFor({ state: "visible", timeout: 1200 }); } catch { break; }
+    const dismiss = dialog.getByRole("button", { name: "知道了" });
+    if (await dismiss.count() === 0) break;
+    await dismiss.click();
+    await page.waitForTimeout(250);
   }
+  const lingeringDialog = await page.locator(".cs-dialog:visible").allTextContents();
+  if (lingeringDialog.length > 0) problem("[multi-chain] 预览弹窗未关闭：" + JSON.stringify(lingeringDialog));
 
   await page.locator(".dl-task-preview button.dl-btn--primary").click();
   const confirm = page.locator(".cs-dialog").filter({ hasText: "确认创建下载任务？" });
@@ -1075,6 +1177,98 @@ async function runMultiChainCheck(browser) {
   return result;
 }
 
+async function runMetadataCheck(browser) {
+  const addresses = ["0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649", "0x84ce9959559f755d75645551e5112544a4555555"];
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const envelope = (data) => JSON.stringify({ success: true, data, meta: { request_id: "req-meta", trace_id: "trace-meta", server_time: new Date().toISOString() } });
+  const net = { preview: [], create: [] };
+  page.on("request", (request) => {
+    if (request.method() !== "POST") return;
+    if (request.url().endsWith("/api/v2/downloads/preview")) net.preview.push(JSON.parse(request.postData() || "{}"));
+    if (request.url().endsWith("/api/v2/downloads")) net.create.push(JSON.parse(request.postData() || "{}"));
+  });
+  await page.route("**/api/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({}) }));
+  await page.route("**/api/auth/v1/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope(SESSION) }));
+  await page.route(/\/api\/v2\/notifications(\?[^/]*)?$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope([]) }));
+  await page.route(/\/api\/v2\/meta\/chains(\?[^/]*)?$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope(CHAINS) }));
+  await page.route(/\/api\/v2\/meta\/datasets(\?[^/]*)?$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope(DATASETS) }));
+  await page.route(/\/api\/v1\/cases$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ cases: [{ id: "case-1", name: "案件甲" }] }) }));
+  await page.route(/\/api\/v1\/tags$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tags: [{ id: "tag-a", name: "默认标签" }, { id: "tag-b", name: "地址乙标签" }] }) }));
+  await page.route(/\/api\/v2\/downloads\/validate-addresses$/, (route) => {
+    const request = route.request().postDataJSON();
+    const accepted = request.items.map((item, index) => ({
+      index, row: index + 1, input: item.address, chain: item.chain || request.chain,
+      normalized: item.address.toLowerCase(), case_name: item.case || request.case_name || "",
+      tags: item.tags?.length ? item.tags : request.tags || [],
+    }));
+    const caseNames = [...new Set(accepted.map((item) => item.case_name).filter(Boolean))];
+    const tagNames = [...new Set(accepted.flatMap((item) => item.tags))];
+    return route.fulfill({ status: 200, contentType: "application/json", body: envelope({
+      ...VALIDATE_RESULT, accepted, rejected: [], field_rejections: [],
+      meta: { cases: caseNames.map((name) => ({ name, kind: "case", status: "resolved", case_id: "case-1" })), tags: tagNames.map((name) => ({ name, kind: "tag", status: "resolved", tag_id: "tag-a" })) },
+      summary: { ...VALIDATE_RESULT.summary, submitted: accepted.length, accepted: accepted.length, chains: { polygon: accepted.length } },
+    }) });
+  });
+  await page.route(/\/api\/v2\/downloads\/preview$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope(PREVIEW) }));
+  await page.route(/\/api\/v2\/downloads$/, (route) => route.request().method() === "POST"
+    ? route.fulfill({ status: 200, contentType: "application/json", body: envelope(CREATE_RESULT) })
+    : route.fulfill({ status: 200, contentType: "application/json", body: envelope({ items: [] }) }));
+
+  await page.goto(BASE + "/downloads/new", { waitUntil: "domcontentloaded" });
+  await page.locator(".cs-chainselect .ant-select-selector").click();
+  await page.locator('.cs-chainoption[data-chain="polygon"]').click();
+  await page.locator("#download-addresses").fill(addresses.join("\n"));
+  await page.getByRole("button", { name: "解析导入" }).click();
+  const verdict = page.locator(".cs-dialog").filter({ hasText: "服务端地址校验结果" });
+  await verdict.waitFor({ state: "visible" });
+  await verdict.getByRole("button", { name: "使用服务端结果" }).click();
+  await page.getByRole("button", { name: /高级设置/ }).click();
+  await page.locator(".dl-meta-select--case").click();
+  await page.locator(".dl-meta-select-dropdown:visible .ant-select-item-option").filter({ hasText: "案件甲" }).click();
+  await page.locator(".dl-meta__defaults .dl-meta-select--multiple").click();
+  await page.locator(".dl-meta-select-dropdown:visible .ant-select-item-option").filter({ hasText: "默认标签" }).click();
+  await page.locator(".dl-meta__address-row").nth(1).locator(".dl-meta-select").click();
+  await page.locator('[id^="download-address-tags-2_list_"]').filter({ hasText: "地址乙标签" }).click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, "metadata-desktop-1440x900.png") });
+  report.screenshots.push("metadata-desktop-1440x900.png");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#download-step-objects").getByRole("button", { name: "编辑" }).click();
+  await page.locator(".dl-meta__toggle").click();
+  await page.locator(".dl-meta__addresses").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  if (mobileOverflow > 1) problem(`[metadata] 移动端横向溢出 ${mobileOverflow}px`);
+  await page.screenshot({ path: join(OUT, "metadata-mobile-390x844.png") });
+  report.screenshots.push("metadata-mobile-390x844.png");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(250);
+
+  await page.getByRole("button", { name: "预览 Coverage 与成本" }).first().click();
+  const previewDialog = page.locator(".cs-dialog:visible").filter({ hasText: /预览完成|无需新增 Provider/ });
+  await previewDialog.getByRole("button", { name: "知道了" }).click();
+  await previewDialog.waitFor({ state: "hidden" });
+  await page.locator(".dl-task-preview button.dl-btn--primary").click();
+  const confirm = page.locator(".cs-dialog").filter({ hasText: "确认创建下载任务？" });
+  await confirm.waitFor({ state: "visible" });
+  await confirm.getByRole("button", { name: "确认创建" }).click();
+  await page.waitForTimeout(500);
+
+  const check = (body, stage) => {
+    if (!body || body.chain !== "polygon" || body.case_name !== "案件甲" || body.tags?.join() !== "默认标签" || body.create_missing_meta !== false || body.reuse_policy !== "prefer_local") problem(`[metadata] ${stage} 任务级字段不正确：${JSON.stringify(body)}`);
+    const override = body?.subject_meta?.[addresses[1]];
+    if (!override || override.case_name !== "案件甲" || override.tags?.join() !== "地址乙标签" || body.subject_meta?.[addresses[0]]) problem(`[metadata] ${stage} 逐地址标签覆盖不正确：${JSON.stringify(body?.subject_meta)}`);
+  };
+  check(net.preview.at(-1), "preview");
+  check(net.create.at(-1), "create");
+  if (!await page.getByText("Polygon 马蹄链").count()) problem("[metadata] Polygon 马蹄链别名未显示");
+  const result = { preview_requests: net.preview.length, create_requests: net.create.length, preview: net.preview.at(-1), create: net.create.at(-1) };
+  await context.close();
+  return result;
+}
+
 async function main() {
   if (!existsSync(join(DIST, "index.html"))) {
     console.error("缺少构建产物，请先运行 pnpm build:user");
@@ -1084,6 +1278,14 @@ async function main() {
   const server = await startStaticServer();
   const browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL ?? "chromium" });
   try {
+    if (process.env.DL_CHECK_ONLY === "metadata") {
+      console.log(JSON.stringify(await runMetadataCheck(browser), null, 2));
+      return;
+    }
+    if (process.env.DL_CHECK_ONLY === "multi") {
+      console.log(JSON.stringify(await runMultiChainCheck(browser), null, 2));
+      return;
+    }
     for (const vp of viewports) {
       const sink = await runViewport(browser, vp);
       report.viewports[vp.name] = {
@@ -1109,6 +1311,7 @@ async function main() {
     }
 
     report.multi_chain = await runMultiChainCheck(browser);
+    report.metadata = await runMetadataCheck(browser);
 
     const reduced = await runReducedMotion(browser);
     report.reduced_motion = {

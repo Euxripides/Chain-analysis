@@ -12,6 +12,7 @@
 | [operations.md](operations.md) | 运维 | 环境概览、部署、迁移、升级、密钥轮换、备份恢复、分区维护、日常巡检、SLO 与告警处置 |
 | [troubleshooting.md](troubleshooting.md) | 运维、值班 | 按症状→诊断→处置→验证组织的故障手册（含 §27 DATA-006/007/008、审计链、SSO、限流、Provider） |
 | [rollback.md](rollback.md) | 运维、应急响应 | 应用回滚、迁移回滚、配置回滚、灰度回退、紧急 Kill Switch、不可回滚红线 |
+| [data-download-api.md](data-download-api.md) | 需要脚本取数的调查员、分析员、外部协作方 | 数据下载接口调用方式：Bearer API Key、`/api/v1/data/ensure` 与 `/api/v1/export/*` 全流程、票据/直连下载、只读查询、v2 会话面差异、错误码与实测记录 |
 
 ## 阅读顺序建议
 

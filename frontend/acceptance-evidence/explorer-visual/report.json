@@ -1,0 +1,183 @@
+{
+  "ok": true,
+  "problems": [],
+  "viewports": {
+    "desktop": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "header": {
+        "x": 258,
+        "y": 82,
+        "width": 1160,
+        "height": 83
+      },
+      "query": {
+        "x": 283,
+        "y": 244,
+        "width": 1110,
+        "height": 75
+      },
+      "recent": {
+        "x": 259,
+        "y": 431,
+        "width": 1158,
+        "height": 164
+      },
+      "chain": {
+        "x": 283,
+        "y": 271,
+        "width": 250,
+        "height": 48
+      },
+      "input": {
+        "x": 547,
+        "y": 271,
+        "width": 720,
+        "height": 48
+      },
+      "submit": {
+        "x": 1281,
+        "y": 271,
+        "width": 112,
+        "height": 48
+      }
+    },
+    "tablet": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "header": {
+        "x": 16,
+        "y": 70,
+        "width": 736,
+        "height": 83
+      },
+      "query": {
+        "x": 41,
+        "y": 232,
+        "width": 686,
+        "height": 75
+      },
+      "recent": {
+        "x": 17,
+        "y": 419,
+        "width": 734,
+        "height": 164
+      },
+      "chain": {
+        "x": 41,
+        "y": 259,
+        "width": 210,
+        "height": 48
+      },
+      "input": {
+        "x": 263,
+        "y": 259,
+        "width": 356,
+        "height": 48
+      },
+      "submit": {
+        "x": 631,
+        "y": 259,
+        "width": 96,
+        "height": 48
+      }
+    },
+    "mobile": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "header": {
+        "x": 12,
+        "y": 66,
+        "width": 366,
+        "height": 131
+      },
+      "query": {
+        "x": 29,
+        "y": 272,
+        "width": 332,
+        "height": 162
+      },
+      "recent": {
+        "x": 13,
+        "y": 536,
+        "width": 364,
+        "height": 243
+      },
+      "chain": {
+        "x": 29,
+        "y": 299,
+        "width": 332,
+        "height": 48
+      },
+      "input": {
+        "x": 29,
+        "y": 386,
+        "width": 238,
+        "height": 48
+      },
+      "submit": {
+        "x": 279,
+        "y": 386,
+        "width": 82,
+        "height": 48
+      }
+    },
+    "compact": {
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "header": {
+        "x": 12,
+        "y": 66,
+        "width": 296,
+        "height": 131
+      },
+      "query": {
+        "x": 29,
+        "y": 272,
+        "width": 262,
+        "height": 162
+      },
+      "recent": {
+        "x": 13,
+        "y": 536,
+        "width": 294,
+        "height": 289
+      },
+      "chain": {
+        "x": 29,
+        "y": 299,
+        "width": 262,
+        "height": 48
+      },
+      "input": {
+        "x": 29,
+        "y": 386,
+        "width": 168,
+        "height": 48
+      },
+      "submit": {
+        "x": 209,
+        "y": 386,
+        "width": 82,
+        "height": 48
+      },
+      "dropdown": {
+        "x": 29,
+        "y": 350,
+        "width": 262,
+        "height": 179.9964599609375
+      }
+    }
+  },
+  "navigation": {
+    "recent_after_cancel": 2,
+    "selected_chain": "Polygon PoS",
+    "address_url": "/app-v2/addresses/polygon/0x9139b65d2a9f8d9c8e29e9dbbb0a888b1b48c649",
+    "transaction_url": "/app-v2/transactions/polygon/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "dialogs": {
+    "help_escape_closed": false
+  },
+  "console_errors": [],
+  "page_errors": []
+}

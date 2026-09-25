@@ -2113,6 +2113,30 @@ async function main() {
         }
       }
 
+      /*
+       * ---------- 6c-2. 交易详情：hash 形状契约（回归 §21.5） ----------
+       *
+       * 真实事故：查询框把 hash 的 0x 前缀 strip 掉再跳详情页（该 URL 形状被
+       * explorer-visual-acceptance.mjs 冻结），详情页又把路由参数原样拼进
+       * /api/v2/explorer/transactions/{chain}/{hash}，服务端按 0x + 64 hex 解析，
+       * 于是页面弹「加载失败 · 交易哈希不合法」，交易数据一直不可用。
+       *
+       * 上面的 SMOKE_ROUTES 用的是 tron 裸 hash，而服务端对 tron 恰好单独放行过，
+       * 所以整条链路"看着是通的"——必须换成 EVM 链并断言**请求 URL**才拦得住。
+       */
+      {
+        const TX_HASH_BARE = "9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c";
+        requestLog.length = 0;
+        await page.goto(`${base}/transactions/bsc/${TX_HASH_BARE}`, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(700);
+        const detailCalls = requestLog.filter((url) => url.includes("/api/v2/explorer/transactions/bsc/"));
+        if (detailCalls.length === 0) {
+          problems.push(`[${vp.name}] 交易详情（bsc，裸 hash）没有发出详情请求：请求被路由形状挡在了前端`);
+        } else if (!detailCalls.some((url) => url.includes(`/transactions/bsc/0x${TX_HASH_BARE}`))) {
+          problems.push(`[${vp.name}] 交易详情请求丢失 0x 前缀：${detailCalls[0]}（服务端会判「交易哈希不合法」）`);
+        }
+      }
+
       /* ---------- 6d. CSS 使用面审计（R7 遗留清理的判据，规范 §60 Phase R7） ---------- */
       {
         /*
