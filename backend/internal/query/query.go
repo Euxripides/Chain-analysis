@@ -601,14 +601,27 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 // 已收敛的部分结果（API 层还会按同一组键再去重一次，因此文件内容不会因重复行变多）。
 func (s *Service) rangeExportNoFinal(ctx context.Context, dataset, sel, where string, args []any,
 	limit, offset int) ([]map[string]any, error) {
+	// 流式去重只在两个条件同时满足时启用：
+	//   - 单页取数（offset==0）：分页时"存活行数达到 limit 就停"会把后续页算错；
+	//   - 该数据集确有去重键：没有键时 exportRowKey 返回同一个常量键，
+	//     会把所有行当成重复行而只剩一行（比慢更糟）。
+	wantLimit := 0
+	if offset == 0 && len(exportDedupeColumns(dataset)) > 0 {
+		wantLimit = limit
+	}
 	overFetch := int(float64(limit) * dedupeExportRetryFactor)
 	for attempt := 0; attempt < dedupeExportMaxAttempts; attempt++ {
 		queryArgs := append(append([]any{}, args...), overFetch, offset)
-		raw, err := s.queryRowsExport(ctx, dataset, sel, overFetch, queryArgs...)
+		raw, err := s.queryRowsExport(ctx, dataset, sel, wantLimit, queryArgs...)
 		if err != nil {
 			return nil, err
 		}
 		distinct := dedupeExportRows(dataset, raw, limit)
+		if wantLimit > 0 {
+			// 流式路径已按去重键收敛并攒够 limit 行；再走一次去重是幂等的，只做截断。
+			// （LIMIT=0 或数据集没有去重键时 wantLimit 为 0，走下面的重试分支。）
+			return distinct, nil
+		}
 		if len(distinct) >= limit || len(raw) < overFetch {
 			return distinct, nil
 		}
