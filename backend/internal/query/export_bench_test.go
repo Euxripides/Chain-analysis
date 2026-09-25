@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"runtime/pprof"
 	"testing"
 	"time"
@@ -46,7 +47,16 @@ func scanFloor(ctx context.Context, svc *Service, q string, args []any, _ int) (
 	return n, rows.Err()
 }
 
+// tuneExportGC 复刻 app.TuneExportGC（query 包不能反向 import app，否则成环）。
+// 不设这一层的话，查询层基准跑在默认 GC 下，与生产进程的实测不可比：
+// 导出行物化是分配密集路径，实测 GC 标记能占掉一半 CPU。
+func tuneExportGC() {
+	debug.SetGCPercent(400)
+	debug.SetMemoryLimit(int64(6*1024) << 20)
+}
+
 func BenchmarkExportFetch(b *testing.B) {
+	tuneExportGC()
 	dsn := os.Getenv("CLICKHOUSE_URL")
 	subject := os.Getenv("EXPORT_BENCH_SUBJECT")
 	if dsn == "" || subject == "" {

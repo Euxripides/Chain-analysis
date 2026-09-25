@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
@@ -36,6 +37,15 @@ import (
  * 粒度到月，而一个月的行数可达数百万，无法定位到"第 N 行"；按天聚合才能把下界压到
  * 目标量级，且它的成本只与"只读一列"有关。
  */
+
+// exportBoundedEnabled 控制两阶段形状是否启用。
+//
+// 默认启用；EXPORT_BOUNDED=0 可一键回退到无界形状（两阶段改变了"扫描哪些行"，
+// 虽然 TestBoundedFetchMatchesUnbounded 已锁定集合等价，线上仍需一个不改代码的
+// 回滚开关）。
+func exportBoundedEnabled() bool {
+	return os.Getenv("EXPORT_BOUNDED") != "0"
+}
 
 // minExportBoundaryLimit 是启用两阶段形状的最小 limit：低于它时多一次边界查询
 // （约 150 ms）抵不过省下的物化开销。
@@ -79,7 +89,7 @@ type dayBucket struct {
 // 返回 ok=false 表示该数据集/请求不适合两阶段形状（调用方走原有形状）。
 func (s *Service) exportTimeBoundary(ctx context.Context, dataset, chain, subject string,
 	fromBlock, toBlock *int64, fromTime, toTime *time.Time, limit, offset int, ratio float64) (time.Time, uint64, bool) {
-	if offset != 0 || limit < minExportBoundaryLimit {
+	if !exportBoundedEnabled() || offset != 0 || limit < minExportBoundaryLimit {
 		return time.Time{}, 0, false
 	}
 	// 带范围条件时下界会和调用方条件相互影响，交给原有形状，避免语义漂移。
