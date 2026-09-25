@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,9 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/minio/minio-go/v7"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/app"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
@@ -188,5 +192,44 @@ func BenchmarkExportBatchPipeline(b *testing.B) {
 		if err := streamCSV(io.Discard, rows); err != nil {
 			b.Fatalf("csv: %v", err)
 		}
+	}
+}
+
+// BenchmarkExportBatchPipelineFull 在 BenchmarkExportBatchPipeline 之上补上传与 SHA 回读，
+// 即生产路径的完整"点击到可下载"（不含 HTTP 与票据）。
+func BenchmarkExportBatchPipelineFull(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	if srv.deps.Raw == nil {
+		b.Skip("no object store configured")
+	}
+	bucket := os.Getenv("EXPORT_BENCH_BUCKET")
+	if bucket == "" {
+		b.Skip("EXPORT_BENCH_BUCKET not set")
+	}
+	client := srv.deps.Raw.Client()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := srv.query.RowsForExportRange(ctx, "token_transfers", "bsc", subject, limit, 0, nil, nil, nil, nil)
+		if err != nil {
+			b.Fatalf("query: %v", err)
+		}
+		srv.attachTokenMetadata(ctx, "bsc", rows)
+		pr, pw := io.Pipe()
+		go func() { _ = pw.CloseWithError(streamCSV(pw, rows)) }()
+		key := fmt.Sprintf("bench/full-%d.csv", time.Now().UnixNano())
+		if _, err := client.PutObject(ctx, bucket, key, pr, -1, minio.PutObjectOptions{ContentType: "text/csv"}); err != nil {
+			b.Fatalf("put: %v", err)
+		}
+		obj, err := client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+		if err != nil {
+			b.Fatalf("get: %v", err)
+		}
+		h := sha256.New()
+		if _, err := io.Copy(h, obj); err != nil {
+			b.Fatalf("sha: %v", err)
+		}
+		obj.Close()
+		client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
 	}
 }
