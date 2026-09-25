@@ -509,7 +509,9 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 	req := explorer.QueryRequest{
 		Chain: sub.Chain, Addresses: []string{sub.Normalized}, Dataset: dataset,
 		Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")), Limit: limit,
-		Light: r.URL.Query().Get("full") == "1",
+		// 地址详情列表可显式选择轻量读取，避免对本页所有对手方同步解析地址类型；
+		// 未传参数时仍保留原有完整富化响应，兼容其他 API 调用方。
+		Light: r.URL.Query().Get("full") == "1" || r.URL.Query().Get("light") == "1",
 		Filters: explorer.Filter{
 			Direction: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("direction"))),
 			Token:     strings.TrimSpace(r.URL.Query().Get("token")),
@@ -671,8 +673,11 @@ func (s *Server) resolveExplorerTx(w http.ResponseWriter, r *http.Request) (stri
 		validationError(w, r, "不支持的链", []fieldError{{Field: "chain", Code: "invalid", Message: err.Error()}})
 		return "", "", false
 	}
-	// TRON 交易哈希在链上/Provider 中通常不带 0x 前缀；不做 EVM 式拒绝。
-	if chainSlug == "tron" && hexHashRe.MatchString(raw) && !strings.HasPrefix(strings.ToLower(raw), "0x") {
+	// 交易哈希有两种合法书写：0x + 64 hex 与裸 64 hex（TRON 的链上/Provider 形式，
+	// 也是用户端 /transactions/{chain}/{hash} 的既有路由形状 —— 见 ExplorerPage 的
+	// `value.replace(/^0x/i, "")`）。裸形式对所有链都补前缀，避免同一个 hash
+	// 在「查询框里能用、直接打开详情页却报 交易哈希不合法」之间摇摆。
+	if hexHashRe.MatchString(raw) {
 		raw = "0x" + raw
 	}
 	hash, err := chain.ParseHash(raw)
@@ -699,6 +704,28 @@ func (s *Server) explorerDecodeMode(r *http.Request) (method.DecodeMode, bool) {
 	}
 }
 
+// explorerPartialTransactionDetail 在 transactions 行缺失时判断「还有没有本地证据」：
+// 逐笔或内部调用命中任意一条，就返回只含本地证据的详情骨架（transaction 为 null），
+// 让控制台交易页显示真实存在的逐笔/日志，而不是整页「交易数据不可用」。
+// 三个数据集都没有该 hash 时返回 false，调用方仍按 404 处理。
+func (s *Server) explorerPartialTransactionDetail(ctx context.Context, chain, hash string) (*method.TransactionDetail, bool) {
+	if s.query == nil || s.detail == nil {
+		return nil, false
+	}
+	transfers, err := s.query.ActionTransactionRows(ctx, "token_transfers", chain, hash)
+	if err != nil {
+		return nil, false
+	}
+	internal, err := s.query.ActionTransactionRows(ctx, "internal_transactions", chain, hash)
+	if err != nil {
+		return nil, false
+	}
+	if len(transfers) == 0 && len(internal) == 0 {
+		return nil, false
+	}
+	return s.detail.PartialDetail(ctx, chain, hash), true
+}
+
 func (s *Server) handleExplorerTransaction(w http.ResponseWriter, r *http.Request) {
 	subChain, hash, ok := s.resolveExplorerTx(w, r)
 	if !ok {
@@ -715,8 +742,14 @@ func (s *Server) handleExplorerTransaction(w http.ResponseWriter, r *http.Reques
 	}
 	detail, err := s.detail.Detail(r.Context(), subChain, hash, mode)
 	if errors.Is(err, method.ErrTransactionNotFound) {
-		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
-		return
+		// 交易行缺失但逐笔/内部调用已入库：返回部分详情，而不是让整页报「交易数据不可用」。
+		partial, ok := s.explorerPartialTransactionDetail(r.Context(), subChain, hash)
+		if !ok {
+			respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
+			return
+		}
+		detail = partial
+		err = nil
 	}
 	if err != nil {
 		respondError(w, r, http.StatusBadGateway, "PROVIDER_UNAVAILABLE", "交易详情暂不可用", nil)
@@ -740,8 +773,14 @@ func (s *Server) handleExplorerTransactionLogs(w http.ResponseWriter, r *http.Re
 	}
 	detail, err := s.detail.Detail(r.Context(), subChain, hash, method.DecodeLocalOnly)
 	if errors.Is(err, method.ErrTransactionNotFound) {
-		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
-		return
+		// 日志是独立数据集：交易行缺席时仍然返回本地日志。
+		partial, ok := s.explorerPartialTransactionDetail(r.Context(), subChain, hash)
+		if !ok {
+			respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
+			return
+		}
+		detail = partial
+		err = nil
 	}
 	if err != nil {
 		respondError(w, r, http.StatusBadGateway, "DATA_UNAVAILABLE", "日志暂不可用", nil)

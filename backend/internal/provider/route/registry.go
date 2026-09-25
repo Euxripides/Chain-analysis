@@ -294,9 +294,17 @@ func resolveBuiltin(chain, dataset string, solanaEnabled bool, solanaProvider st
 		if solanaProvider == "" {
 			solanaProvider = ProviderDRPC
 		}
+		// 通道是 **Provider 的实现细节**，不是数据集属性：
+		// dRPC 用 Data API 承载交易历史，而旧的 solana-rpc Provider 只有 JSON-RPC。
+		// 把 data_api 贴到 solana-rpc 上会造出假元数据（shard.api_channel、任务详情的
+		// Provider 运行面板、用量按通道核对都会跟着错）。
+		dataChannel := ChannelSolanaRPC
+		if solanaProvider == ProviderDRPC {
+			dataChannel = ChannelDataAPI
+		}
 		switch dataset {
 		case DatasetTransactions, DatasetTokenTransfers, DatasetNFTTransfers:
-			return builtinRoute(solanaProvider, ChannelDataAPI, OperationSolanaHistory, chain, dataset), true
+			return builtinRoute(solanaProvider, dataChannel, OperationSolanaHistory, chain, dataset), true
 		case DatasetBalances:
 			return builtinRoute(solanaProvider, ChannelSolanaRPC, OperationSolanaBalance, chain, dataset), true
 		case DatasetLogs:

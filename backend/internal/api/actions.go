@@ -76,6 +76,22 @@ func actionOK(w http.ResponseWriter, data any, meta map[string]any) {
 	}
 	writeJSON(w, http.StatusOK, actionEnvelope{Success: true, Data: publicActionChains(data), Meta: meta})
 }
+
+// actionScanFailure 把「查询在自身交互预算内被拒」翻译成可诊断的 503，
+// 而不是等 60 s 网关超时后回一个笼统的 500（现场：bsc 地址的明细查询 60.0 s → 500 INTERNAL_ERROR）。
+// 返回 true 表示已经写出响应，调用方直接 return。
+func actionScanFailure(w http.ResponseWriter, e error) bool {
+	switch {
+	case errors.Is(e, clickhouse.ErrScanTooLarge):
+		actionFail(w, http.StatusServiceUnavailable, "SCAN_TOO_LARGE", "The query exceeds the bounded ClickHouse scan budget; narrow it with start_time and end_time")
+		return true
+	case errors.Is(e, clickhouse.ErrScanTimeout):
+		actionFail(w, http.StatusServiceUnavailable, "SCAN_TIMEOUT", "The query exceeded the bounded ClickHouse scan time; narrow it with start_time and end_time")
+		return true
+	}
+	return false
+}
+
 func publicActionChains(value any) any {
 	switch v := value.(type) {
 	case map[string]any:
@@ -782,6 +798,9 @@ func (s *Server) handleActionOverview(w http.ResponseWriter, r *http.Request) {
 		if s.deps.Log != nil {
 			s.deps.Log.Error("action address overview query failed", "chain", c, "address", a, "err", e)
 		}
+		if actionScanFailure(w, e) {
+			return
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query address overview")
 		return
 	}
@@ -907,6 +926,9 @@ func (s *Server) handleActionRows(w http.ResponseWriter, r *http.Request, datase
 		if s.deps.Log != nil {
 			s.deps.Log.Error("action rows query failed", "dataset", dataset, "chain", f.Chain, "address", f.Address, "err", e)
 		}
+		if actionScanFailure(w, e) {
+			return
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query records")
 		return
 	}
@@ -928,6 +950,9 @@ func (s *Server) handleActionCounterparties(w http.ResponseWriter, r *http.Reque
 	if e != nil {
 		if s.deps.Log != nil {
 			s.deps.Log.Error("action counterparties query failed", "chain", f.Chain, "address", f.Address, "err", e)
+		}
+		if actionScanFailure(w, e) {
+			return
 		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to aggregate counterparties")
 		return
@@ -984,6 +1009,9 @@ func (s *Server) handleActionTopFlows(w http.ResponseWriter, r *http.Request) {
 		if s.deps.Log != nil {
 			s.deps.Log.Error("action top flows query failed", "chain", f.Chain, "address", f.Address, "group_by", groupBy, "err", e)
 		}
+		if actionScanFailure(w, e) {
+			return
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query top flows")
 		return
 	}
@@ -997,6 +1025,9 @@ func (s *Server) handleActionFirstFunding(w http.ResponseWriter, r *http.Request
 	}
 	data, e := s.query.ActionFirstFunding(r.Context(), c, a)
 	if e != nil {
+		if actionScanFailure(w, e) {
+			return
+		}
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query first funding")
 		return
 	}
@@ -1015,21 +1046,48 @@ func actionTransactionIdentity(r *http.Request) (string, string, error) {
 	}
 	return c, h.String(), nil
 }
-func (s *Server) transactionActionData(ctx context.Context, c, h string) (map[string]any, error) {
+
+// transactionActionData 返回一笔交易的详情。
+//
+// 2026-09-21：本地 transactions 行缺失不再直接 404。
+// 现场（DL-20260921-0041 等 TRON 任务）只下载了 token_transfers：AI 从逐笔结果里拿到
+// TxHash 再调 getTransactionDetail，明细行不在本地索引里 → 整笔 404，连已经拿到的逐笔/
+// 内部调用一起被丢掉。现在的规则是「有没有证据」，而不是「有没有那一行」：
+//   - 三个本地数据集都没有该 hash → 仍然 404 TRANSACTION_NOT_FOUND；
+//   - 任意一个数据集有该 hash → 200，返回已观察到的证据，transaction 字段整体缺省，
+//     并在 meta 里明确 transaction_row_present=false（缺行不等于交易不存在）。
+func (s *Server) transactionActionData(ctx context.Context, c, h string) (map[string]any, map[string]any, error) {
 	if s.detail == nil {
-		return nil, errors.New("transaction detail disabled")
+		return nil, nil, errors.New("transaction detail disabled")
 	}
 	d, e := s.detail.Detail(ctx, c, h, method.DecodeAuto)
-	if e != nil {
-		return nil, e
+	rowMissing := errors.Is(e, method.ErrTransactionNotFound)
+	if e != nil && !rowMissing {
+		return nil, nil, e
 	}
 	transfers, e := s.query.ActionTransactionRows(ctx, "token_transfers", c, h)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	internal, e := s.query.ActionTransactionRows(ctx, "internal_transactions", c, h)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
+	}
+	if rowMissing {
+		if len(transfers) == 0 && len(internal) == 0 {
+			return nil, nil, method.ErrTransactionNotFound
+		}
+		logs, logErr := s.query.ActionTransactionRows(ctx, "logs", c, h)
+		if logErr != nil || logs == nil {
+			logs = []map[string]any{}
+		}
+		return map[string]any{
+				"tx_hash": h, "receipt": nil, "decoded_input": nil,
+				"token_transfers": transfers, "internal_transactions": internal, "logs": logs,
+			}, map[string]any{
+				"transaction_row_present": false,
+				"evidence_scope":          "the local transactions dataset has no row for this hash (that dataset may not be downloaded for the involved addresses); token_transfers / internal_transactions / logs below are the evidence actually observed. A missing transaction row is not proof that the transaction does not exist.",
+			}, nil
 	}
 	var receipt any
 	if s.deps.ChainRead != nil {
@@ -1038,7 +1096,7 @@ func (s *Server) transactionActionData(ctx context.Context, c, h string) (map[st
 			receipt = value
 		}
 	}
-	return map[string]any{"tx_hash": h, "transaction": d.Transaction, "receipt": receipt, "decoded_input": d.DecodedInput, "token_transfers": transfers, "internal_transactions": internal, "logs": d.Logs}, nil
+	return map[string]any{"tx_hash": h, "transaction": d.Transaction, "receipt": receipt, "decoded_input": d.DecodedInput, "token_transfers": transfers, "internal_transactions": internal, "logs": d.Logs}, nil, nil
 }
 func (s *Server) handleActionTransactionDetail(w http.ResponseWriter, r *http.Request) {
 	c, h, e := actionTransactionIdentity(r)
@@ -1046,7 +1104,7 @@ func (s *Server) handleActionTransactionDetail(w http.ResponseWriter, r *http.Re
 		actionFail(w, 400, "INVALID_TX_HASH", e.Error())
 		return
 	}
-	data, e := s.transactionActionData(r.Context(), c, h)
+	data, meta, e := s.transactionActionData(r.Context(), c, h)
 	if errors.Is(e, method.ErrTransactionNotFound) {
 		actionFail(w, 404, "TRANSACTION_NOT_FOUND", "Transaction not found")
 		return
@@ -1055,7 +1113,7 @@ func (s *Server) handleActionTransactionDetail(w http.ResponseWriter, r *http.Re
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query transaction detail")
 		return
 	}
-	actionOK(w, data, nil)
+	actionOK(w, data, meta)
 }
 
 func (s *Server) handleActionTransactionDecode(w http.ResponseWriter, r *http.Request) {

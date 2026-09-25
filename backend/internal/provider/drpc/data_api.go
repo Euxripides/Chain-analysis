@@ -72,6 +72,7 @@ func (c *Client) fetchDataAPI(ctx context.Context, req provider.FetchRequest, ex
 		return provider.FetchResult{}, err
 	}
 	call := httpCall{
+		ctx: ctx, channel: ChannelDataAPI,
 		apiType: APITypeDataAPI, dataset: req.Dataset, method: MethodDataAPIHistory,
 		usageTyp: UsageDatasetDownload, cu: CUDataAPIHistory, pageSize: limit,
 		key: key, requestID: requestID, priority: req.Priority, attemptNo: req.AttemptNo,
@@ -283,8 +284,14 @@ func buildTxRow(tx dataAPITx, signature, requestID string) txRow {
 		}
 	}
 	to, value := tx.RecipientAddress, ""
+	from := tx.sender()
 	switch nativeTransferCount {
 	case 1:
+		// 单笔原生转账：from/to/value 都取转账本身的字段，比行级 owner 更准确
+		// （owner 是"历史所属地址"，收款交易里它是收款方而不是发起方）。
+		if nativeTransfer.SenderAddress != "" {
+			from = nativeTransfer.SenderAddress
+		}
 		to = nativeTransfer.RecipientAddress
 		value = string(nativeTransfer.AmountString)
 	case 0:
@@ -292,17 +299,14 @@ func buildTxRow(tx dataAPITx, signature, requestID string) txRow {
 	default:
 		to, value = "", ""
 	}
-	feeRaw := ""
-	if tx.Fee != nil && tx.Fee.TokenAddress == "" {
-		// 只有原生手续费才能用 lamports 表达；代币计价手续费留空（不换算）。
-		feeRaw = string(tx.Fee.TokenAmountString)
-	}
+	// 手续费：数字形态（Solana）按 1 SOL = 1e9 lamports 精确换算；对象形态只在原生时沿用。
+	feeRaw := tx.Fee.lamportsText()
 	return txRow{
 		BlockNumber: strconv.FormatUint(tx.slot(), 10),
 		BlockHash:   "",
 		Hash:        signature,
 		Timestamp:   tx.unixSeconds(),
-		From:        tx.SenderAddress,
+		From:        from,
 		To:          to,
 		Value:       value,
 		// Solana 没有 EVM 的 nonce/gas：按契约写 "0"，不虚构含义。
@@ -477,6 +481,7 @@ func (c *Client) probeDataAPI(ctx context.Context) channelProbe {
 		return c.probeFromError(0, err)
 	}
 	call := httpCall{
+		ctx: ctx, channel: ChannelDataAPI,
 		apiType: APITypeDataAPI, method: MethodDataAPIHistory, usageTyp: UsageProviderTest,
 		cu: CUDataAPIHistory, pageSize: probeLimit, key: key,
 		requestID:  "drpc-probe-" + strconv.FormatInt(started.UnixNano(), 10),

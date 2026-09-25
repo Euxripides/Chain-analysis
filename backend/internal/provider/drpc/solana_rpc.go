@@ -92,6 +92,7 @@ func (c *Client) callRPC(ctx context.Context, exec plan, requestID, key string, 
 		return nil, perr
 	}
 	call := httpCall{
+		ctx: ctx, channel: ChannelSolanaRPC,
 		apiType: APITypeRPC, dataset: spec.dataset, method: spec.method, usageTyp: spec.usageType,
 		cu: spec.cu, key: key, requestID: requestID, httpMethod: http.MethodPost,
 		url: c.rpcURL(key), body: body, contentType: "application/json",
@@ -555,6 +556,7 @@ func (c *Client) fetchBalances(ctx context.Context, req provider.FetchRequest, e
 		perr.Retryable = false
 		// 用量已在各次 RPC 调用里记录；这里只补一条失败信号。
 		c.recordUsage(usageMeta{
+			ctx: ctx, channel: ChannelSolanaRPC,
 			dataset: req.Dataset, apiType: APITypeRPC, method: MethodTokenAccounts,
 			usageTyp: UsageBalanceSnapshot, rows: len(rows), requestID: requestID,
 			started: started, err: perr,

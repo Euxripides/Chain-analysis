@@ -103,6 +103,10 @@ type Options struct {
 	// 规范 §1.5 的 Options 未列出该字段，由工作流 D 按集成需要补充。匹配顺序为
 	// 指纹 -> Key 名 -> Key ID；都匹配不到时退回"启用且当日 CU 消耗最大"的 Key（见 selectTeamKey）。
 	RuntimeKeyFingerprint string
+	// Tier 由 app 从 DRPC_TIER 注入（paid|free|unknown）。
+	// 官方管理接口不返回套餐档位，档位只能来自配置；不注入时保持 unknown，
+	// 页面显示"层级未知"，而不是把未知当成免费或付费。
+	Tier string
 	// OnSnapshot 由 app 注入：把额度注入 drpc.Client.SetQuotaSnapshot 并更新 Prometheus Gauge。
 	// 只在本轮同步不是 error 时回调：失败时字段未知，注入空额度会把数据面闸门误判成"没有额度"。
 	OnSnapshot func(Snapshot)
@@ -281,8 +285,12 @@ func (s *Service) sync(ctx context.Context, debounced bool) (Snapshot, error) {
 
 // syncOnce 是一次完整同步。所有调用串行执行，间隔由 getJSON 保证。
 func (s *Service) syncOnce(ctx context.Context) (Snapshot, error) {
+	tier := strings.TrimSpace(s.opts.Tier)
+	if tier == "" {
+		tier = TierUnknown
+	}
 	snap := Snapshot{
-		Tier:        TierUnknown,
+		Tier:        tier,
 		BalanceUnit: DefaultBalanceUnit,
 		SyncedAt:    s.now().UTC(),
 		SyncStatus:  SyncStatusOK,

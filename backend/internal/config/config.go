@@ -609,6 +609,18 @@ type DRPCConfig struct {
 
 	// SecretsFile 是受管密钥文件（后台录入明文后写入此处，0600）。
 	SecretsFile string
+
+	// SolanaHistoryEnabled 决定 Solana 的**历史类**数据集（transactions /
+	// token_transfers / nft_transfers）是否允许路由到 dRPC Data API。
+	//
+	// 默认 false，因为 2026-09-22 实测 dRPC 的 Solana 历史通道有三个硬问题：
+	//  1) 不稳定：同一分钟内 200 / 500 / -32601 交替出现；
+	//  2) 响应没有 slot/block 字段，而本平台的下载以 slot 区间为准，
+	//     无 slot 的行会让 block_number=0、覆盖区间与地址活动失去区块维度；
+	//  3) 该端点按时间倒序返回，无法按时间起点定位旧区间。
+	// 因此默认继续用既有 Solana JSON-RPC（slot 精确、稳定），
+	// 待 dRPC 侧修复并给出 slot 字段后把本开关置 true 即可切换，无需改代码。
+	SolanaHistoryEnabled bool
 }
 
 // drpcConfigFromEnv 组装 dRPC 配置。
@@ -643,6 +655,8 @@ func drpcConfigFromEnv() DRPCConfig {
 		ManagementSafeOnlyAfter: time.Duration(envInt("DRPC_MANAGEMENT_SAFE_ONLY_AFTER_SECONDS", 3600)) * time.Second,
 
 		SecretsFile: strings.TrimSpace(os.Getenv("PROVIDER_SECRETS_FILE")),
+
+		SolanaHistoryEnabled: envBool("DRPC_SOLANA_HISTORY_ENABLED", false),
 	}
 }
 
@@ -728,11 +742,23 @@ func parsePageLevels(s string) []int {
 	return out
 }
 
-// drpcAllowedHosts 是 dRPC Endpoint 的允许列表（开发文档 §16-7：防止管理员把 Endpoint
-// 改成内网或本机地址造成 SSRF）。
-var drpcAllowedHosts = map[string]bool{
-	"lb.drpc.live": true,
-	"drpc.org":     true,
+// drpcHostAllowed 判断 dRPC Endpoint 的 Host 是否合法
+// （开发文档 §16-7：防止管理员把 Endpoint 改成内网或本机地址造成 SSRF）。
+//
+// 允许 dRPC 自有域名的任意子域而不是固定几个字面量：付费套餐可能分配专属端点
+// （例如按链或按区域的独立 Host），写死字面量会让"换成专属域名"必须改代码。
+// 仍然只放行 dRPC 的域名，内网/本机/其它第三方一律拒绝。
+func drpcHostAllowed(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	for _, domain := range []string{"drpc.live", "drpc.org"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
 }
 
 // validateDRPC 校验 dRPC 配置。配置错误在启动期失败，而不是等到第一次下载。
@@ -752,8 +778,8 @@ func (c *Config) validateDRPC() error {
 		if u.Scheme != "https" {
 			return fmt.Errorf("DRPC_BASE_URL must use https, got %q", u.Scheme)
 		}
-		if !drpcAllowedHosts[strings.ToLower(u.Hostname())] {
-			return fmt.Errorf("DRPC_BASE_URL host %q is not in the allowed list", u.Hostname())
+		if !drpcHostAllowed(u.Hostname()) {
+			return fmt.Errorf("DRPC_BASE_URL host %q is not a dRPC host", u.Hostname())
 		}
 		// Endpoint 里不允许直接内嵌明文 Key（唯一合法形态是不带 key 的 base URL）。
 		if strings.Contains(u.Path, "/lambda") {
@@ -762,8 +788,8 @@ func (c *Config) validateDRPC() error {
 	}
 	if cfg.ManagementBaseURL != "" {
 		u, err := url.Parse(cfg.ManagementBaseURL)
-		if err != nil || u.Scheme != "https" || !drpcAllowedHosts[strings.ToLower(u.Hostname())] {
-			return fmt.Errorf("DRPC_MANAGEMENT_BASE_URL must be https on an allowed dRPC host")
+		if err != nil || u.Scheme != "https" || !drpcHostAllowed(u.Hostname()) {
+			return fmt.Errorf("DRPC_MANAGEMENT_BASE_URL must be https on a dRPC host")
 		}
 	}
 	if cfg.HistoryPageSize <= 0 || cfg.HistoryPageSize > 1000 {

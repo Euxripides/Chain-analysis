@@ -85,14 +85,14 @@ type parsedTokenAccount struct {
 func (c *Client) fetchBalancesPage(ctx context.Context, req provider.FetchRequest, started time.Time) (provider.FetchResult, error) {
 	slotRaw, _, err := c.callWithSize(ctx, MethodSlot, nil)
 	if err != nil {
-		c.recordUsage(req, MethodSlot, 0, time.Since(started), "error", err)
+		c.recordUsage(ctx, req, MethodSlot, 0, time.Since(started), "error", err)
 		return provider.FetchResult{}, err
 	}
 	var slot slotValue
 	if err := json.Unmarshal(slotRaw, &slot); err != nil {
 		perr := &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
 			Message: "invalid getSlot result: " + err.Error(), Retryable: true, Cause: err}
-		c.recordUsage(req, MethodSlot, 0, time.Since(started), "error", perr)
+		c.recordUsage(ctx, req, MethodSlot, 0, time.Since(started), "error", perr)
 		return provider.FetchResult{}, perr
 	}
 	snapshot := uint64(slot)
@@ -105,14 +105,14 @@ func (c *Client) fetchBalancesPage(ctx context.Context, req provider.FetchReques
 	nativeResult, nativeBytes, err := c.callWithSize(ctx, MethodBalance, []any{req.Address})
 	decoded += nativeBytes
 	if err != nil {
-		c.recordUsage(req, MethodBalance, 0, time.Since(started), "error", err)
+		c.recordUsage(ctx, req, MethodBalance, 0, time.Since(started), "error", err)
 		return provider.FetchResult{}, err
 	}
 	var native balanceResult
 	if err := json.Unmarshal(nativeResult, &native); err != nil {
 		perr := &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
 			Message: "invalid getBalance result: " + err.Error(), Retryable: true, Cause: err}
-		c.recordUsage(req, MethodBalance, 0, time.Since(started), "error", perr)
+		c.recordUsage(ctx, req, MethodBalance, 0, time.Since(started), "error", perr)
 		return provider.FetchResult{}, perr
 	}
 	rows = append(rows, balanceRow{
@@ -129,14 +129,14 @@ func (c *Client) fetchBalancesPage(ctx context.Context, req provider.FetchReques
 		result, size, err := c.callWithSize(ctx, MethodTokenAccounts, params)
 		decoded += size
 		if err != nil {
-			c.recordUsage(req, MethodTokenAccounts, 0, time.Since(started), "error", err)
+			c.recordUsage(ctx, req, MethodTokenAccounts, 0, time.Since(started), "error", err)
 			return provider.FetchResult{}, err
 		}
 		var accounts tokenAccountsResult
 		if err := json.Unmarshal(result, &accounts); err != nil {
 			perr := &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
 				Message: "invalid getTokenAccountsByOwner result: " + err.Error(), Retryable: true, Cause: err}
-			c.recordUsage(req, MethodTokenAccounts, 0, time.Since(started), "error", perr)
+			c.recordUsage(ctx, req, MethodTokenAccounts, 0, time.Since(started), "error", perr)
 			return provider.FetchResult{}, perr
 		}
 		// 同一 owner 可能对同一 mint 持有多个代币账户（ATA）：按 mint 求和后只落一行。
@@ -183,12 +183,12 @@ func (c *Client) fetchBalancesPage(ctx context.Context, req provider.FetchReques
 		perr := &provider.Error{Provider: "solana", Class: provider.ClassResponseTooLarge,
 			Message: fmt.Sprintf("balance snapshot for %s has %d accounts, above the %d cap; refusing to truncate",
 				req.Address, len(rows), maxBalanceAccounts), Retryable: false}
-		c.recordUsage(req, MethodTokenAccounts, len(rows), time.Since(started), "error", perr)
+		c.recordUsage(ctx, req, MethodTokenAccounts, len(rows), time.Since(started), "error", perr)
 		return provider.FetchResult{}, perr
 	}
 
 	encoded := encodeRows(rows)
-	c.recordUsage(req, MethodTokenAccounts, len(encoded), time.Since(started), "ok", nil)
+	c.recordUsage(ctx, req, MethodTokenAccounts, len(encoded), time.Since(started), "ok", nil)
 	return provider.FetchResult{
 		Rows: encoded, NextPageToken: "", HasMore: false,
 		RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: len(encoded),

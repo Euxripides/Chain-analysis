@@ -6,13 +6,14 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 )
 
-// Solana 策略投影是本次接入最容易踩的坑：迁移把策略指向 drpc，但部署顺序是「先上代码、后录 Key」。
-// 这个测试固定住「未就绪时必须投影回旧通道」，否则一旦回归，Solana 下载会在 Key 录入前全部失败。
-func TestProjectSolanaPoliciesFallsBackUntilDRPCReady(t *testing.T) {
-	raw := []route.PolicyRow{
+func solanaPolicyRows() []route.PolicyRow {
+	return []route.PolicyRow{
 		{PolicyKey: "solana:transactions", Chain: "solana", Dataset: "transactions",
 			Enabled: true, PrimaryProvider: "drpc", APIChannel: route.ChannelDataAPI,
 			OperationClass: route.OperationSolanaHistory, Revision: 2},
+		{PolicyKey: "solana:balances", Chain: "solana", Dataset: "balances",
+			Enabled: true, PrimaryProvider: "drpc", APIChannel: route.ChannelSolanaRPC,
+			OperationClass: route.OperationSolanaBalance, Revision: 1},
 		{PolicyKey: "tron:transactions", Chain: "tron", Dataset: "transactions",
 			Enabled: true, PrimaryProvider: "tron-grid", APIChannel: route.ChannelTronGrid,
 			OperationClass: route.OperationTronHistory, Revision: 1},
@@ -20,26 +21,59 @@ func TestProjectSolanaPoliciesFallsBackUntilDRPCReady(t *testing.T) {
 			Enabled: true, PrimaryProvider: "ankr-multichain", APIChannel: route.ChannelAnkrAdvanced,
 			OperationClass: route.OperationEVMHistory, Revision: 1},
 	}
+}
 
-	notReady := projectSolanaPolicies(raw, false)
-	if notReady[0].PrimaryProvider != "solana-rpc" {
-		t.Fatalf("未配置 Key 时 Solana 必须回退到旧通道，得到 %q", notReady[0].PrimaryProvider)
-	}
-	// 语义字段不能被改动。
-	if notReady[0].APIChannel != route.ChannelDataAPI || notReady[0].OperationClass != route.OperationSolanaHistory || notReady[0].Revision != 2 {
-		t.Fatalf("投影不应改变通道/操作类/revision: %+v", notReady[0])
-	}
-	// 非 Solana 链的别名归一化照常生效，且不受 dRPC 开关影响。
-	if notReady[1].PrimaryProvider != "trongrid" || notReady[2].PrimaryProvider != "ankr" {
-		t.Fatalf("别名归一化失效: %q / %q", notReady[1].PrimaryProvider, notReady[2].PrimaryProvider)
-	}
+// 未启用 Data API 历史时：历史留在旧通道（slot 精确、稳定），余额可以走 dRPC。
+//
+// 这个组合是 2026-09-22 的线上事实：dRPC 的 Solana Data API 时好时坏且不返回 slot，
+// 而它的 getBalance 稳定可用。把两者绑在一起切换，要么白扔可用的余额能力，
+// 要么把历史下载送进不稳定通道。
+func TestProjectSolanaPoliciesSplitsBalancesFromHistory(t *testing.T) {
+	raw := solanaPolicyRows()
+	plan := solanaRoutePlan{balancesKey: route.ProviderDRPC, historyKey: "solana-rpc"}
+	rows := projectSolanaPolicies(raw, plan)
 
-	ready := projectSolanaPolicies(raw, true)
-	if ready[0].PrimaryProvider != route.ProviderDRPC {
-		t.Fatalf("Key 就绪后 Solana 必须走 drpc，得到 %q", ready[0].PrimaryProvider)
+	if rows[0].PrimaryProvider != "solana-rpc" || rows[0].APIChannel != route.ChannelSolanaRPC {
+		t.Fatalf("历史应留在旧通道且通道跟着 Provider 走：%+v", rows[0])
 	}
-	// 原始输入不能被就地修改（否则下一次投影拿到的已经是改过的行）。
-	if raw[0].PrimaryProvider != "drpc" {
-		t.Fatalf("投影函数修改了输入切片: %q", raw[0].PrimaryProvider)
+	if rows[1].PrimaryProvider != route.ProviderDRPC || rows[1].APIChannel != route.ChannelSolanaRPC {
+		t.Fatalf("余额应走 dRPC 的 Solana JSON-RPC 通道：%+v", rows[1])
+	}
+	// 语义字段（操作类 / 策略版本）必须原样透传。
+	if rows[0].OperationClass != route.OperationSolanaHistory || rows[0].Revision != 2 {
+		t.Fatalf("投影不应改变操作类/revision: %+v", rows[0])
+	}
+	// 非 Solana 链的别名归一化照常生效。
+	if rows[2].PrimaryProvider != "trongrid" || rows[3].PrimaryProvider != "ankr" {
+		t.Fatalf("别名归一化失效: %q / %q", rows[2].PrimaryProvider, rows[3].PrimaryProvider)
+	}
+	// 原有输入不能被就地修改。
+	if raw[0].PrimaryProvider != "drpc" || raw[1].APIChannel != route.ChannelSolanaRPC {
+		t.Fatalf("投影函数修改了输入切片: %+v", raw[0])
+	}
+}
+
+// 历史通道真正就绪并显式启用时，历史数据集才切到 dRPC 的 Data API。
+func TestProjectSolanaPoliciesHistoryOnDataAPI(t *testing.T) {
+	plan := solanaRoutePlan{balancesKey: route.ProviderDRPC, historyKey: route.ProviderDRPC, historyDataAPI: true}
+	rows := projectSolanaPolicies(solanaPolicyRows(), plan)
+	if rows[0].PrimaryProvider != route.ProviderDRPC || rows[0].APIChannel != route.ChannelDataAPI {
+		t.Fatalf("启用后历史应走 dRPC Data API：%+v", rows[0])
+	}
+	if rows[1].APIChannel != route.ChannelSolanaRPC {
+		t.Fatalf("余额始终走 JSON-RPC 通道：%+v", rows[1])
+	}
+}
+
+// 没有旧通道可回退时 fail closed：所有 Solana 数据集清空 Provider，
+// 由链级默认决定（未注册则报 unsupported），绝不静默取别的链的数据。
+func TestSolanaRoutePlanFailClosed(t *testing.T) {
+	plan := solanaRoutePlan{}
+	if plan.anyEnabled() {
+		t.Fatal("空计划不应启用 Solana 路由")
+	}
+	rows := projectSolanaPolicies(solanaPolicyRows(), plan)
+	if rows[0].PrimaryProvider != "solana-rpc" || rows[1].PrimaryProvider != "solana-rpc" {
+		t.Fatalf("空计划应把 Solana 行落到旧通道默认值（不启用路由时不会被读到）：%+v", rows[:2])
 	}
 }

@@ -5,9 +5,20 @@ package drpc
 //  2. 规范 §3 冻结的 Row 契约：交给 ingest 的每一行都是 Ankr 同构 JSON，字段名固定。
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
+	"strings"
+
+	"github.com/shopspring/decimal"
 )
+
+// solanaNativeMint 是 Solana 原生 SOL 的铸币标识（System Program id）。
+//
+// 关键实测（2026-09-22）：Data API 在原生 SOL 转账里返回的是这个地址，而**不是空串**。
+// 早期实现按"token.address 为空即原生"判断，会把原生转账误当成 SPL Token 写进
+// token_transfers（违反开发文档 §8.3），因此这里显式识别该常量。
+const solanaNativeMint = "11111111111111111111111111111111"
 
 // ---- 兼容解码：官方文档给的是 EVM 示例，Solana 复用同一端点 ----
 //
@@ -105,23 +116,97 @@ type dataAPITx struct {
 	Hash string `json:"hash"`
 	// Signature 是 Solana 上"交易标识"的常见叫法；官方文档未给 Solana 示例，
 	// 因此 hash/signature 都接受，hash 优先，两者皆空时该行计入 skipped 而不是猜造签名。
-	Signature        string            `json:"signature"`
-	Block            flexUint64        `json:"block"`
-	Slot             flexUint64        `json:"slot"`
-	Timestamp        flexInt64         `json:"timestamp"` // 毫秒（官方请求参数 start/end 也是毫秒）
-	SenderAddress    string            `json:"sender_address"`
-	RecipientAddress string            `json:"recipient_address"`
-	Status           string            `json:"status"`
-	Fee              *dataAPIFee       `json:"fee"`
-	Transfers        []dataAPITransfer `json:"transfers"`
-	Attributes       map[string]any    `json:"attributes"`
+	Signature        string     `json:"signature"`
+	Block            flexUint64 `json:"block"`
+	Slot             flexUint64 `json:"slot"`
+	Timestamp        flexInt64  `json:"timestamp"` // 毫秒（官方请求参数 start/end 也是毫秒）
+	SenderAddress    string     `json:"sender_address"`
+	RecipientAddress string     `json:"recipient_address"`
+	Status           string     `json:"status"`
+	// Success 是 Solana 实测里与 status 并存的布尔结果；status 缺失时用它判定。
+	Success *bool `json:"success"`
+	// Owner 是"这条历史属于谁"（即被查询地址）。Solana 实测行里没有 sender_address，
+	// 只有 owner，因此它是 from 的兜底来源 —— 且仅在单笔原生转账缺失发送方时才用。
+	Owner      string            `json:"owner"`
+	Fee        *dataAPIFee       `json:"fee"`
+	Transfers  []dataAPITransfer `json:"transfers"`
+	Attributes map[string]any    `json:"attributes"`
 }
 
+// dataAPIFee 兼容两种**真实**形态：
+//
+//	Solana（2026-09-22 实测）："fee": 7e-06        —— 数字，原生币（SOL）十进制金额
+//	EVM（官方文档示例）      ："fee": {"token_symbol":..., "token_amount_string":...}
+//
+// 早期实现只按对象解码，真实 Solana 页面整页解码失败（json: cannot unmarshal number
+// into Go struct field ... of type drpc.dataAPIFee），导致所有历史下载报
+// DRPC_INVALID_RESPONSE —— 这正是"必须用真实端点验收"的原因。
 type dataAPIFee struct {
 	TokenSymbol       string     `json:"token_symbol"`
 	TokenAddress      string     `json:"token_address"`
 	TokenDecimals     flexUint16 `json:"token_decimals"`
 	TokenAmountString flexString `json:"token_amount_string"`
+
+	// nativeAmountText 保存数字形态的原始文本（如 "7e-06"），绝不经过 float64。
+	nativeAmountText string
+}
+
+func (f *dataAPIFee) UnmarshalJSON(raw []byte) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return nil
+	}
+	if trimmed[0] == '{' {
+		type plain dataAPIFee // 防止递归调用本方法
+		var object plain
+		if err := json.Unmarshal(trimmed, &object); err != nil {
+			return err
+		}
+		*f = dataAPIFee(object)
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(trimmed, &number); err == nil {
+		f.nativeAmountText = number.String()
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err == nil {
+		f.nativeAmountText = strings.TrimSpace(text)
+		return nil
+	}
+	// 其它形态（数组/bool）忽略：手续费是附加信息，不能让整页解码失败。
+	return nil
+}
+
+// lamportsText 把手续费换算成 Row 契约要求的 lamports 文本。
+//
+// 数字形态用十进制换算（1 SOL = 1e9 lamports）：7e-06 SOL 用 float64 会得到
+// 7000.000000000001，用 decimal 得到精确的 7000。
+// 对象形态只在原生（无 token_address）时沿用 token_amount_string，代币计价手续费留空。
+func (f *dataAPIFee) lamportsText() string {
+	if f == nil {
+		return ""
+	}
+	if f.nativeAmountText != "" {
+		value, err := decimal.NewFromString(f.nativeAmountText)
+		if err != nil {
+			return ""
+		}
+		return value.Mul(decimal.NewFromInt(1_000_000_000)).Truncate(0).String()
+	}
+	if f.TokenAddress == "" {
+		return string(f.TokenAmountString)
+	}
+	return ""
+}
+
+// sender 返回交易的行级发起方；Solana 实测没有 sender_address，用 owner 兜底。
+func (tx dataAPITx) sender() string {
+	if tx.SenderAddress != "" {
+		return tx.SenderAddress
+	}
+	return tx.Owner
 }
 
 type dataAPITransfer struct {
@@ -148,7 +233,9 @@ func (t dataAPIToken) isNFT() bool {
 }
 
 // isNative 表示原生 SOL 转账：token.address 为空即原生（EVM 示例同构）。
-func (t dataAPITransfer) isNative() bool { return t.Token.Address == "" }
+func (t dataAPITransfer) isNative() bool {
+	return t.Token.Address == "" || t.Token.Address == solanaNativeMint
+}
 
 // signature 返回交易标识：hash 优先，缺失时退回 signature。
 func (tx dataAPITx) signature() string {
@@ -190,6 +277,12 @@ func (tx dataAPITx) succeeded() string {
 	switch normalizeStatus(tx.Status) {
 	case "success", "succeeded", "confirmed", "finalized", "ok", "true":
 		return "1"
+	case "":
+		// status 缺失时才用 success 布尔；status 明确失败时不以 success 覆盖。
+		if tx.Success != nil && *tx.Success {
+			return "1"
+		}
+		return "0"
 	default:
 		return "0"
 	}

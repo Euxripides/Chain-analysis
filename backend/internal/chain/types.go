@@ -83,7 +83,9 @@ func ParseHash(value string) (Hash, error) {
 	}
 	body := s[2:]
 	if len(body) != 64 {
-		return "", fmt.Errorf("hash must be 32 bytes")
+		// 报实际长度而不是笼统的「不是 32 字节」：用户端提示直接取这条 Message，
+		// 少一位/多一位时要能一眼看出来（真实事故：粘贴到 62 位 hex 一直报错）。
+		return "", fmt.Errorf("hash must be 64 hex characters (32 bytes), got %d", len(body))
 	}
 	if !isHex(body) {
 		return "", fmt.Errorf("hash is not valid hex")

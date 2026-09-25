@@ -226,6 +226,65 @@ type activityRow struct {
 	FeeAmountRaw             string `ch:"fee_amount_raw" json:"fee_amount_raw"`
 }
 
+/*
+ * ---- ReplacingMergeTree 显式去重（替代 FINAL） -------------------------------------
+ *
+ * 为什么不能在按地址过滤的读路径上用 FINAL（2026-09-21 实测，blockchain.token_transfers
+ * 92,274,258 行 / 8.37 GiB）：
+ *
+ *   SELECT count() FROM blockchain.token_transfers FINAL
+ *    WHERE chain='bsc' AND (from_address='0x7696…' OR to_address='0x7696…')
+ *   → 27.2 s，整链合并读；同一个问题在 from_address/to_address 上只有 bloom_filter 跳数
+ *     索引，而 FINAL 会先按排序键 (chain, tx_hash, log_index, token_address) 合并整条链，
+ *     跳数索引完全用不上。整个 AI 查询面（/api/v1 的明细、概览、对手方、首笔资金、网络边）
+ *     因此经常 11–36 s，超过 60 s 时直接 500 INTERNAL_ERROR。
+ *
+ * 等价的显式去重（每个排序键保留 source_ingested_at 最大的一行，语义与 FINAL 完全一致）：
+ *
+ *   SELECT uniqExact(tuple(tx_hash, log_index, token_address)) FROM blockchain.token_transfers
+ *    WHERE chain='bsc' AND (from_address='0x7696…' OR to_address='0x7696…')
+ *   → 0.27 s，同一个答案 4877。
+ *
+ * 行取数同样：把 FINAL 换成 row_number() OVER (PARTITION BY <排序键> ORDER BY <版本列> DESC)=1
+ * 的子查询，跳数索引即可生效（实测 11.0 s → 0.16 s，行内容逐列一致）。
+ */
+
+// dedupVersion 返回各表 ReplacingMergeTree 的版本列（建表 engine 的第二参数）。
+// internal_calls / transaction_traces 用的是 traced_at，其余是 source_ingested_at。
+func dedupVersion(dataset string) string {
+	switch dataset {
+	case "internal_transactions", "transaction_traces":
+		return "traced_at"
+	default:
+		return "source_ingested_at"
+	}
+}
+
+// dedupSupported 报出哪些数据集可以安全地走显式去重：它们都有明确的排序键
+// （见 explorerPartition）与版本列。balances 只有几千行，保持 FINAL 不变。
+func dedupSupported(dataset string) bool {
+	switch dataset {
+	case "transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "activity":
+		return true
+	default:
+		return false
+	}
+}
+
+// dedupSource 返回「去重后的行集合」子查询（SELECT *，去掉内部标记列 _rn）。
+// where 里的谓词留在子查询内，跳数索引才能在扫描前裁剪 granule。
+func dedupSource(dataset, where string) string {
+	return "SELECT * EXCEPT _rn FROM (SELECT *, row_number() OVER (PARTITION BY " +
+		explorerPartition(dataset) + " ORDER BY " + dedupVersion(dataset) + " DESC) AS _rn FROM blockchain." +
+		tableName(dataset) + " WHERE " + where + ") WHERE _rn = 1"
+}
+
+// dedupCount 返回去重后的行数，等价于 count() ... FINAL。
+func dedupCount(dataset, where string) string {
+	return "SELECT uniqExact(tuple(" + explorerPartition(dataset) + ")) FROM blockchain." +
+		tableName(dataset) + " WHERE " + where
+}
+
 // tableName dataset 逻辑名 → ClickHouse 表名。
 func tableName(dataset string) string {
 	if dataset == "balances" {
@@ -254,7 +313,12 @@ func (s *Service) Rows(ctx context.Context, dataset, chain, subject string, limi
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
 	}
 	args = append(args, limit, offset)
-	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	// 按地址过滤的读路径必须走显式去重，不能 FINAL（见 dedupSource 的实测注释）。
+	source := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where
+	if dedupSupported(dataset) {
+		source = dedupSource(dataset, where)
+	}
+	q := source + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	return s.queryRows(ctx, dataset, q, args...)
 }
 
@@ -301,7 +365,13 @@ func (s *Service) Explorer(ctx context.Context, dataset, chain string, addresses
 		where += " AND " + condition
 		args = append(args, values...)
 	}
-	q := "SELECT * FROM blockchain." + table + " FINAL WHERE " + where
+	// 同一个理由：地址过滤的浏览查询走显式去重（token_transfers/transactions/…）。
+	// activity 走 address_activity 的 (chain, address) 前缀，两种写法本来就快。
+	source := "SELECT * FROM blockchain." + table + " FINAL WHERE " + where
+	if dataset != "activity" && dedupSupported(dataset) {
+		source = dedupSource(dataset, where)
+	}
+	q := source
 	if len(addresses) > 1 && dataset != "activity" {
 		// 多地址：A→B 交易只显示一次（QUALIFY 窗口去重，不加额外列）
 		q += " QUALIFY row_number() OVER (PARTITION BY " + explorerPartition(dataset) + " ORDER BY timestamp DESC) = 1"
@@ -506,6 +576,9 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 		where += " AND timestamp<=?"
 		args = append(args, *toTime)
 	}
+	if subject != "" {
+		where, args = exportIndexedFinalWhere(dataset, where, args)
+	}
 	args = append(args, limit, offset)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	return s.queryRows(ctx, dataset, q, args...)
@@ -560,9 +633,28 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 		where += " AND timestamp<=?"
 		args = append(args, *toTime)
 	}
+	where, args = exportIndexedFinalWhere(dataset, where, args)
 	args = append(args, limit)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ?"
 	return s.queryRows(ctx, dataset, q, args...)
+}
+
+// FINAL expands address bloom-filter matches to all primary-key granules.
+// The subquery gets candidate keys with the address index. The outer FINAL
+// still selects the latest version, then reapplies all original filters.
+func exportIndexedFinalWhere(dataset, where string, args []any) (string, []any) {
+	var key string
+	switch dataset {
+	case "transactions":
+		key = "tx_hash"
+	case "token_transfers":
+		key = "(tx_hash, log_index, token_address)"
+	default:
+		return where, args
+	}
+	table := "blockchain." + tableName(dataset)
+	subquery := "SELECT " + strings.Trim(key, "()") + " FROM " + table + " WHERE " + where
+	return where + " AND " + key + " IN (" + subquery + ")", append(args, args...)
 }
 
 func (s *Service) queryRows(ctx context.Context, dataset, q string, args ...any) ([]map[string]any, error) {
@@ -670,8 +762,10 @@ func isEmptyCell(v any) bool {
 
 // HydrateActivityMethods 给活动行补方法名：address_activity 不存方法，方法在 transactions 里。
 //
-// 只按本页 distinct 交易哈希回查一次（有界：一页最多几十个哈希），
-// 与 hydrateActivityAmounts 同一套路，失败不致命（前端"方法"列退化为空/转账）。
+// 只按本页 distinct 交易哈希回查一次。transactions 按月份分区，直接 FINAL 会在
+// 多个月份的所有分区做合并，实测 BSC 一页扫描约 1700 万行 / 34-38 秒。
+// 这里先用 (chain,tx_hash) 键过滤，再仅对命中的版本按 source_ingested_at 取最新，
+// 与 ReplacingMergeTree 的版本选择一致，且只投影方法所需的三列。
 func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows []map[string]any) error {
 	hashSet := map[string]bool{}
 	for _, row := range rows {
@@ -688,8 +782,18 @@ func (s *Service) HydrateActivityMethods(ctx context.Context, chain string, rows
 	for hash := range hashSet {
 		hashes = append(hashes, hash)
 	}
-	candidates, err := s.queryRows(ctx, "transactions",
-		"SELECT * FROM blockchain.transactions FINAL WHERE chain=? AND tx_hash IN (?)", chain, hashes)
+	candidates, err := s.queryRows(ctx, "transactions", `
+		SELECT tx_hash,
+		       tupleElement(method_fields, 1) AS method_id,
+		       tupleElement(method_fields, 2) AS method_name,
+		       tupleElement(method_fields, 3) AS method_signature
+		FROM (
+			SELECT tx_hash,
+			       argMax(tuple(method_id, method_name, method_signature), source_ingested_at) AS method_fields
+			FROM blockchain.transactions
+			WHERE chain=? AND tx_hash IN (?)
+			GROUP BY tx_hash
+		)`, chain, hashes)
 	if err != nil {
 		return err
 	}

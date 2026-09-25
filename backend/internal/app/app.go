@@ -219,6 +219,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			StatisticsTokenRef:    cfg.DRPC.StatisticsTokenRef,
 			KeysTokenRef:          cfg.DRPC.KeysTokenRef,
 			RuntimeKeyFingerprint: keyStatus.Fingerprint,
+			Tier:                  cfg.DRPC.Tier,
 			OnSnapshot: func(snap drpcmgmt.Snapshot) {
 				// 额度闸门跨通道共享：Data API 与 JSON-RPC 同属一个账户，
 				// 任一侧把 CU 用尽都必须同时拦住另一侧。
@@ -245,52 +246,80 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		rawPolicies = policies
 		log.Info("routing policies loaded", "count", len(policies))
 	}
-	applyPolicies := func(drpcReady bool) {
-		routes.LoadPolicies(projectSolanaPolicies(rawPolicies, drpcReady))
+	applyPolicies := func(plan solanaRoutePlan) {
+		routes.LoadPolicies(projectSolanaPolicies(rawPolicies, plan))
 	}
 
-	// Solana 路由按"密钥是否真的可解析"动态开关（开发文档 §12 的部署顺序）：
-	// 部署时先开着 DRPC_ENABLED、Key 随后在后台录入 —— 在那之前必须继续走旧通道，
-	// 而不是让所有 Solana 下载立刻失败。10 秒重估一次，与 dRPC 客户端的密钥缓存同量级。
+	// Solana 路由按"密钥是否真的可解析 + 历史通道是否真的可用"动态开关
+	// （开发文档 §12 的部署顺序）：部署时先开着 DRPC_ENABLED、Key 随后在后台录入 ——
+	// 在那之前必须继续走旧通道，而不是让所有 Solana 下载立刻失败。
+	// 10 秒重估一次，与 dRPC 客户端的密钥缓存同量级。
+	//
+	// 初始状态是安全的零值：路由未命中 → 调用方回落到既有的 solana Provider。
+	// 第一次求值刻意**不阻塞启动**：探针是外部 HTTP 调用，实测会把启动从 5 秒拖到 50 秒，
+	// 而启动路径上有 systemd 超时与健康检查，不该被第三方网络状况左右。
+	// historyStreak 记录历史通道连续成功的次数：Data API 时好时坏，
+	// 单次成功不足以把历史下载切过去（否则路由会跟着抖，任务在两个来源之间来回）。
+	historyStreak := 0
 	var lastRouteKey string
 	solanaRouteGate := func(ctx context.Context) {
-		key, ok := "",
-			false
+		// 默认（也是唯一的兜底）：既有 Solana JSON-RPC，slot 精确且稳定。
+		plan := solanaRoutePlan{balancesKey: "solana-rpc", historyKey: "solana-rpc"}
+
 		if drpcClient != nil && drpcClient.Configured(ctx) {
-			// 密钥"能解析"不等于"能用"：录入错误的 Key 时数据面会 401，
-			// 此时 Health 进入 OPEN。继续把新任务路由到 dRPC 只会让它们全部失败，
-			// 因此熔断打开期间退回旧通道，Key 修正后自动恢复。
+			// 密钥"能解析"不等于"能用"：Key 错误会让数据面 401、Health 进 OPEN。
 			if health := drpcClient.Health(ctx); health.State != provider.HealthOpen {
-				key, ok = route.ProviderDRPC, true
-			}
-		}
-		if !ok && solanaLegacy != nil {
-			key, ok = "solana-rpc", true
-		}
-		routes.SetSolanaRoute(ok, key)
-		applyPolicies(key == route.ProviderDRPC)
-		model.SetSolanaDataAPI(key == route.ProviderDRPC)
-		if key != lastRouteKey {
-			lastRouteKey = key
-			// 后台录入 Key 后不需要重启，这条日志就是"已生效"的证据。
-			log.Info("solana route resolved", "provider", key, "drpc_configured", drpcClient != nil && drpcClient.Configured(ctx))
-		}
-	}
-	solanaRouteGate(ctx)
-	if drpcClient != nil {
-		go func() {
-			ticker := time.NewTicker(10 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					solanaRouteGate(ctx)
+				// balances 走 getBalance（Solana JSON-RPC 通道），与 Data API 无关，
+				// 只要密钥可用就是真实收益，因此单独切换。
+				plan.balancesKey = route.ProviderDRPC
+				if cfg.DRPC.SolanaHistoryEnabled && drpcClient.HistoryChannelAvailable(ctx) {
+					// 连续 2 次探针成功才认为历史通道稳定（10s 一次，约 20s 确认）。
+					historyStreak++
+					if historyStreak >= 2 {
+						plan.historyKey = route.ProviderDRPC
+						plan.historyDataAPI = true
+					}
+				} else {
+					historyStreak = 0
 				}
 			}
-		}()
+		}
+		if solanaLegacy == nil {
+			// 没有旧通道可回退时只能 fail closed：不启用 Solana 路由，
+			// 让请求按链级默认走 solana（未注册则报 unsupported），而不是静默取错来源。
+			plan.balancesKey, plan.historyKey, plan.historyDataAPI = "", "", false
+		}
+		routes.SetSolanaRoute(plan.anyEnabled(), "solana-rpc")
+		applyPolicies(plan)
+		// 能力表跟随"历史是否真的由 Data API 承载"：
+		// 历史仍走旧通道时 nft_transfers 必须保持不可用（ADR-023 D9）。
+		model.SetSolanaDataAPI(plan.historyDataAPI)
+		if plan.signature() != lastRouteKey {
+			lastRouteKey = plan.signature()
+			log.Info("solana route resolved",
+				"balances", plan.balancesKey, "history", plan.historyKey, "history_data_api", plan.historyDataAPI,
+				"history_streak", historyStreak, "drpc_configured", drpcClient != nil && drpcClient.Configured(ctx))
+		}
 	}
+	go func() {
+		// 首次求值带超时：单次外部探针不能长期占住这个 goroutine。
+		firstCtx, cancelFirst := context.WithTimeout(ctx, 60*time.Second)
+		solanaRouteGate(firstCtx)
+		cancelFirst()
+		if drpcClient == nil {
+			return
+		}
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				solanaRouteGate(ctx)
+			}
+		}
+	}()
 
 	if cfg.Tron.Enabled {
 		needsAnkr, needsTronGrid := false, false
@@ -384,6 +413,17 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	// TRON 的 Dispatcher 才是非 Solana 链的最终取数实现，早于它注册 fallback 会把
 	// TRON 请求直接送回 Ankr，绕过整个 TRON 数据集路由。
 	routes.SetFallback(prov)
+	// 把最终实现也注册到路由会产出的 key 上。
+	//
+	// 为什么必须注册而不是只靠 fallback：内置通配路由（其它链 → ankr/ankr_advanced）
+	// 与 TRON 路由（→ trongrid / ankr）给出的是具体 key，未注册时每次请求都会打印
+	// "routed provider is not registered; falling back" 再回退 —— 功能上侥幸正确，
+	// 但把"路由生效"与"路由失效"混成同一种日志，运维无法据此判断路由是否真的在工作。
+	routes.Register(route.ProviderAnkr, "Ankr Multichain Advanced", []string{route.ChannelAnkrAdvanced}, prov)
+	routes.Register(route.ProviderTronGrid, "TronGrid", []string{route.ChannelTronGrid}, prov)
+	if name := prov.Name(); name != "" && name != route.ProviderAnkr && name != route.ProviderTronGrid {
+		routes.Register(name, name, nil, prov)
+	}
 	routes.SetProfileSource(st)
 	// 下载引擎与后台探针共用同一个注册表实例：
 	// 后台"测试连接"取到的实现与真正跑下载的实现因此不可能不一致。
@@ -392,7 +432,11 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	capabilities := capability.NewRegistry()
 	capability.RegisterBuiltins(capabilities)
 	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov,
-		Capabilities: capabilities, Investigations: investigation.New(st.Pool), Canvases: canvas.New(st.Pool)}
+		Capabilities: capabilities, Investigations: investigation.New(st.Pool), Canvases: canvas.New(st.Pool),
+		// dRPC/Solana 接入的运行时对象必须在这里装配：下载引擎的路由固化、后台探针、
+		// 额度同步与管理页都从 infra 取它们，漏掉任何一项都会静默降级成"配置存在但运行时未加载"。
+		Routes: routes, Secrets: secrets, DRPC: drpcClient, DRPCManagement: drpcManagement,
+	}
 	if err := infra.initMethod(ctx, cfg, log); err != nil {
 		return nil, err
 	}
@@ -637,20 +681,68 @@ func drpcQuotaFromSnapshot(snap drpcmgmt.Snapshot) drpc.QuotaSnapshot {
 	}
 }
 
-// projectSolanaPolicies 按 dRPC 运行时就绪情况投影 Solana 策略行。
+// solanaRoutePlan 是 Solana 逐数据集的落点决定。
+//
+// 为什么要按数据集分开：dRPC 的 Solana JSON-RPC 通道（getBalance/getSlot/getTransaction）
+// 稳定可用，而 Data API 的历史通道（transactions/token_transfers/nft_transfers）
+// 2026-09-22 实测时好时坏且不返回 slot。把两者绑在一起切换，要么白扔可用的余额能力，
+// 要么把历史下载送进一个不稳定的通道。
+type solanaRoutePlan struct {
+	balancesKey    string
+	historyKey     string
+	historyDataAPI bool
+}
+
+// anyEnabled 报告是否至少有一个数据集由 dRPC 承载（否则 Solana 路由整体关闭）。
+func (p solanaRoutePlan) anyEnabled() bool {
+	return p.balancesKey != "" || p.historyKey != ""
+}
+
+// signature 用于日志去重：只在落点真正变化时打印一行。
+func (p solanaRoutePlan) signature() string {
+	channel := route.ChannelSolanaRPC
+	if p.historyDataAPI {
+		channel = route.ChannelDataAPI
+	}
+	return p.balancesKey + "|" + p.historyKey + "|" + channel
+}
+
+// solanaHistoryDatasets 是按 Data API 承载历史时走 data_api 通道的数据集。
+var solanaHistoryDatasets = map[string]bool{
+	route.DatasetTransactions:   true,
+	route.DatasetTokenTransfers: true,
+	route.DatasetNFTTransfers:   true,
+}
+
+// projectSolanaPolicies 把数据库里的 solana:* 策略行投影成本次运行的实际落点。
 //
 // 背景（本次接入最容易踩的坑）：0075 迁移把 solana:* 策略行的 primary_provider 改成 drpc，
-// 这是「配置事实」。但部署顺序是「先上代码、后录 Key」，在 Key 到位之前 dRPC 无法服务；
-// 如果直接按策略行路由，Solana 下载会全部失败 —— 比不接 dRPC 还差。
-// 因此运行期必须按「密钥是否真的可解析」投影回旧通道，Key 到位后自动切回 drpc。
+// 这是「配置事实」。但部署顺序是「先上代码、后录 Key」，而且 dRPC 的历史通道目前不稳定；
+// 直接按策略行路由会让 Solana 下载失败或写入没有 slot 的行 —— 比不接 dRPC 还差。
 //
-// 只改 Provider，不动 api_channel / operation_class / revision：
-// 那两个字段描述的是数据集语义，与由谁承载无关。
-func projectSolanaPolicies(raw []route.PolicyRow, drpcReady bool) []route.PolicyRow {
+// 只改 Provider 与 APIChannel；operation_class / revision 保持原样：
+// 前者描述数据集语义（与由谁承载无关），后者是策略版本，必须如实透传。
+func projectSolanaPolicies(raw []route.PolicyRow, plan solanaRoutePlan) []route.PolicyRow {
 	rows := make([]route.PolicyRow, 0, len(raw))
 	for _, row := range raw {
-		if !drpcReady && strings.EqualFold(strings.TrimSpace(row.Chain), route.ChainSolana) {
-			row.PrimaryProvider = "solana-rpc"
+		if strings.EqualFold(strings.TrimSpace(row.Chain), route.ChainSolana) {
+			switch {
+			case row.Dataset == route.DatasetBalances && plan.balancesKey != "":
+				row.PrimaryProvider = plan.balancesKey
+				row.APIChannel = route.ChannelSolanaRPC
+			case solanaHistoryDatasets[strings.ToLower(strings.TrimSpace(row.Dataset))] && plan.historyKey != "":
+				row.PrimaryProvider = plan.historyKey
+				if plan.historyDataAPI {
+					row.APIChannel = route.ChannelDataAPI
+				} else {
+					// 通道必须跟着 Provider 走：策略行里的 data_api 是给 dRPC 的，
+					// 贴到只有 JSON-RPC 的旧 Provider 上就是假元数据。
+					row.APIChannel = route.ChannelSolanaRPC
+				}
+			default:
+				row.PrimaryProvider = "solana-rpc"
+				row.APIChannel = route.ChannelSolanaRPC
+			}
 		}
 		rows = append(rows, row)
 	}

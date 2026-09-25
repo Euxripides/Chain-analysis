@@ -299,6 +299,39 @@ func (s *DetailService) recordUsage(usage DeepDecodeUsage) {
 	}
 }
 
+// LocalLogs 只读本地日志，**不要求 transactions 行存在**。
+//
+// 为什么需要它：`Detail` 在本地没有交易行时直接返回 ErrTransactionNotFound，
+// 而 transactions 与 logs 是两个独立数据集 —— 只下载了逐笔/日志的地址上，
+// 交易行缺失但日志是真实存在的证据，不该跟着 404 一起被丢掉。
+func (s *DetailService) LocalLogs(ctx context.Context, chain, txHash string) []map[string]any {
+	chain = strings.ToLower(strings.TrimSpace(chain))
+	txHash = strings.ToLower(strings.TrimSpace(txHash))
+	logs, err := s.Data.GetLogs(ctx, chain, txHash)
+	if err != nil {
+		s.warn("load logs failed", err)
+		return []map[string]any{}
+	}
+	annotated := s.annotateLogs(chain, logs)
+	if annotated == nil {
+		return []map[string]any{}
+	}
+	return annotated
+}
+
+// PartialDetail 构造「交易行缺失、但有本地证据」的详情骨架：
+// Transaction 为 nil（调用方序列化成 null，页面按缺省值渲染），日志照常返回。
+// 是否算「有证据」由调用方决定（它才知道逐笔/内部调用是否命中）。
+func (s *DetailService) PartialDetail(ctx context.Context, chain, txHash string) *TransactionDetail {
+	chain = strings.ToLower(strings.TrimSpace(chain))
+	txHash = strings.ToLower(strings.TrimSpace(txHash))
+	return &TransactionDetail{
+		Chain:  chain,
+		TxHash: txHash,
+		Logs:   s.LocalLogs(ctx, chain, txHash),
+	}
+}
+
 func (s *DetailService) warn(message string, err error) {
 	if s.Log != nil {
 		s.Log.Warn(message, "err", err)

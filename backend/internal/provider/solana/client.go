@@ -343,18 +343,18 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	}
 	result, signatureBytes, err := c.callWithSize(ctx, MethodSignatures, params)
 	if err != nil {
-		c.recordUsage(req, MethodSignatures, 0, time.Since(started), "error", err)
+		c.recordUsage(ctx, req, MethodSignatures, 0, time.Since(started), "error", err)
 		return provider.FetchResult{}, err
 	}
 	var signatures []signatureInfo
 	if err := json.Unmarshal(result, &signatures); err != nil {
 		perr := &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
 			Message: "invalid getSignaturesForAddress result: " + err.Error(), Retryable: true, Cause: err}
-		c.recordUsage(req, MethodSignatures, 0, time.Since(started), "error", perr)
+		c.recordUsage(ctx, req, MethodSignatures, 0, time.Since(started), "error", perr)
 		return provider.FetchResult{}, perr
 	}
 	if len(signatures) == 0 {
-		c.recordUsage(req, MethodSignatures, 0, time.Since(started), "ok", nil)
+		c.recordUsage(ctx, req, MethodSignatures, 0, time.Since(started), "ok", nil)
 		return provider.FetchResult{
 			RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: pageSize,
 			RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock,
@@ -389,14 +389,14 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	case "transactions":
 		txRows, txBytes, txErr := c.fetchTransactions(ctx, selected)
 		if txErr != nil {
-			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
+			c.recordUsage(ctx, req, MethodTransaction, 0, time.Since(started), "error", txErr)
 			return provider.FetchResult{}, txErr
 		}
 		encoded, payloadBytes = encodeRows(txRows), txBytes
 	case "token_transfers", "nft_transfers", "internal_transactions", "logs":
 		decoded, txErr := c.fetchInstructionRows(ctx, req.Dataset, selected)
 		if txErr != nil {
-			c.recordUsage(req, MethodTransaction, 0, time.Since(started), "error", txErr)
+			c.recordUsage(ctx, req, MethodTransaction, 0, time.Since(started), "error", txErr)
 			return provider.FetchResult{}, txErr
 		}
 		encoded, payloadBytes = decoded.rows, decoded.bytes
@@ -407,7 +407,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			"skipped_no_mint", decoded.stats.SkippedNoBalance, "cpi_nodes", decoded.cpiNodes,
 			"cpi_value_unpaired", decoded.cpiValueUnpaired)
 	}
-	c.recordUsage(req, MethodTransaction, len(encoded), time.Since(started), "ok", nil)
+	c.recordUsage(ctx, req, MethodTransaction, len(encoded), time.Since(started), "ok", nil)
 	return provider.FetchResult{
 		Rows: encoded, NextPageToken: nextToken, HasMore: hasMore,
 		RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: pageSize,
@@ -560,14 +560,28 @@ func nativeValue(tx *txResult) string {
 	return strconv.FormatInt(outflow, 10)
 }
 
-func (c *Client) recordUsage(req provider.FetchRequest, method string, rows int, elapsed time.Duration, status string, perr error) {
+// recordUsage 写一条用量行。
+//
+// ctx 携带调度器注入的任务/分片归属（仓库既有约定：字符串键 "job_id"/"shard_id"）。
+// 缺了它，后台"任务详情 → Provider 运行"的已用请求/已用 CU 永远是 0，
+// 计划 §15.1 要求的 job_id/shard_id 归因也落不了库。
+// APIChannel 固定为 solana_rpc：本 Provider 只有 JSON-RPC 通道（与 dRPC 的 data_api 区分）。
+func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, method string, rows int, elapsed time.Duration, status string, perr error) {
 	if c.hook == nil {
 		return
 	}
+	jobID, shardID := "", ""
+	if ctx != nil {
+		jobID, _ = ctx.Value("job_id").(string)
+		shardID, _ = ctx.Value("shard_id").(string)
+	}
 	usage := model.UsageRow{
 		Provider: "solana", Method: method, Dataset: req.Dataset,
+		APIType: "rpc", APIChannel: "solana_rpc", Chain: "solana",
+		JobID: jobID, ShardID: shardID, RequestID: req.RequestID,
+		MethodCalls: 1, HTTPRequests: 1,
 		RequestTime: time.Now(), DurationMs: int(elapsed.Milliseconds()),
-		Status: status, Rows: rows, PageSize: req.PageSize,
+		Status: status, Rows: rows, ReturnedRows: rows, PageSize: req.PageSize,
 	}
 	if perr != nil {
 		usage.APIError = perr.Error()

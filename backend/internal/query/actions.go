@@ -54,33 +54,24 @@ func normalizeActionAddress(chain, address string) string {
 	return addressnorm.NormalizeKey(chain, address)
 }
 
+// ActionOverview 单地址概览。
+//
+// 2026-09-21：改成直接复用 ActionBatchOverview 的按 dataset 单次聚合实现。
+// 原来这里是 7 个标量子查询，每个都是 "... FINAL WHERE (from_address=? OR to_address=?)"：
+// 在 bsc 上单次 count 就要 16.5–27.2 s（整链合并读，跳数索引失效）。批量实现已经把
+// 同一批数字算成 3 个「按地址分组、无 FINAL」的聚合，单地址走它既快又只有一份口径。
 func (s *Service) ActionOverview(ctx context.Context, chain, address string) (ActionOverview, error) {
-	address = normalizeActionAddress(chain, address)
-	out := ActionOverview{Chain: chain, Address: address, AddressType: "unknown", NativeBalance: "0", NativeBalanceSource: "unavailable"}
-	q := `SELECT
-		(SELECT count() FROM blockchain.transactions FINAL WHERE chain=? AND (from_address=? OR to_address=?)),
-		(SELECT count() FROM blockchain.token_transfers FINAL WHERE chain=? AND (from_address=? OR to_address=?)),
-		(SELECT count() FROM blockchain.internal_calls FINAL WHERE chain=? AND (from_address=? OR to_address=?)),
-		(SELECT uniqExact(from_address) FROM blockchain.token_transfers FINAL WHERE chain=? AND to_address=? AND from_address!=?),
-		(SELECT uniqExact(to_address) FROM blockchain.token_transfers FINAL WHERE chain=? AND from_address=? AND to_address!=?),
-		(SELECT nullIf(min(timestamp), toDateTime64(0,3,'UTC')) FROM
-			(SELECT timestamp FROM blockchain.transactions FINAL WHERE chain=? AND (from_address=? OR to_address=?)
-			 UNION ALL SELECT timestamp FROM blockchain.token_transfers FINAL WHERE chain=? AND (from_address=? OR to_address=?))),
-		(SELECT nullIf(max(timestamp), toDateTime64(0,3,'UTC')) FROM
-			(SELECT timestamp FROM blockchain.transactions FINAL WHERE chain=? AND (from_address=? OR to_address=?)
-			 UNION ALL SELECT timestamp FROM blockchain.token_transfers FINAL WHERE chain=? AND (from_address=? OR to_address=?)))`
-	err := s.CH.DB().QueryRow(ctx, q,
-		chain, address, address, chain, address, address, chain, address, address,
-		chain, address, address, chain, address, address,
-		chain, address, address, chain, address, address,
-		chain, address, address, chain, address, address,
-	).Scan(&out.TransactionCount, &out.TokenTransferCount, &out.InternalTransactionCount,
-		&out.UniqueInCounterparties, &out.UniqueOutCounterparties, &out.FirstActivity, &out.LastActivity)
+	normalized := normalizeActionAddress(chain, address)
+	items, err := s.ActionBatchOverview(ctx, chain, []string{normalized})
 	if err != nil {
-		return out, err
+		return ActionOverview{}, err
 	}
+	if len(items) == 0 {
+		return ActionOverview{}, fmt.Errorf("overview returned no rows")
+	}
+	out := items[0]
 	// Latest native balance uses an empty token contract and the chain native symbol.
-	_ = s.CH.DB().QueryRow(ctx, `SELECT toString(argMax(balance, timestamp)) FROM blockchain.address_balances FINAL WHERE chain=? AND address=? AND token_address=''`, chain, address).Scan(&out.NativeBalance)
+	_ = s.CH.DB().QueryRow(ctx, `SELECT toString(argMax(balance, timestamp)) FROM blockchain.address_balances FINAL WHERE chain=? AND address=? AND token_address=''`, chain, normalized).Scan(&out.NativeBalance)
 	return out, nil
 }
 
@@ -92,10 +83,14 @@ func (s *Service) ActionOverview(ctx context.Context, chain, address string) (Ac
 func (s *Service) ActionBatchOverview(ctx context.Context, chain string, addresses []string) ([]ActionOverview, error) {
 	out := make([]ActionOverview, len(addresses))
 	byAddress := make(map[string]*ActionOverview, len(addresses))
+	// 查询键必须与写入侧一致（Solana 保留 base58 大小写）：只有归一化后的键才进 SQL，
+	// 否则原始输入与入库键不一致的地址会静默返回 0 行。
+	keys := make([]string, 0, len(addresses))
 	for i, raw := range addresses {
 		address := normalizeActionAddress(chain, raw)
 		out[i] = ActionOverview{Chain: chain, Address: address, AddressType: "unknown", NativeBalance: "0", NativeBalanceSource: "unavailable"}
 		byAddress[address] = &out[i]
+		keys = append(keys, address)
 	}
 	if len(addresses) == 0 {
 		return out, nil
@@ -111,6 +106,10 @@ func (s *Service) ActionBatchOverview(ctx context.Context, chain string, address
 			item.LastActivity = &value
 		}
 	}
+	// 交互读预算：概览是 AI 的第一个调用，绝不能拖满网关 60 s。
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
 	var resultMu sync.Mutex
 	g, queryCtx := errgroup.WithContext(ctx)
 
@@ -125,7 +124,7 @@ func (s *Service) ActionBatchOverview(ctx context.Context, chain string, address
 			UNION ALL
 			SELECT to_address AS address,tx_hash,timestamp FROM blockchain.transactions
 				WHERE chain=? AND to_address IN (?))
-		GROUP BY address`, chain, addresses, chain, addresses)
+		GROUP BY address`, chain, keys, chain, keys)
 		if err != nil {
 			return fmt.Errorf("batch transactions overview: %w", err)
 		}
@@ -163,7 +162,7 @@ func (s *Service) ActionBatchOverview(ctx context.Context, chain string, address
 			SELECT to_address AS address,from_address AS counterparty,'in' AS direction,
 				tx_hash,log_index,token_address,timestamp FROM blockchain.token_transfers
 				WHERE chain=? AND to_address IN (?))
-		GROUP BY address`, chain, addresses, chain, addresses)
+		GROUP BY address`, chain, keys, chain, keys)
 		if err != nil {
 			return fmt.Errorf("batch token transfer overview: %w", err)
 		}
@@ -198,7 +197,7 @@ func (s *Service) ActionBatchOverview(ctx context.Context, chain string, address
 			UNION ALL
 			SELECT to_address AS address,tx_hash,call_index FROM blockchain.internal_calls
 				WHERE chain=? AND to_address IN (?))
-		GROUP BY address`, chain, addresses, chain, addresses)
+		GROUP BY address`, chain, keys, chain, keys)
 		if err != nil {
 			return fmt.Errorf("batch internal transaction overview: %w", err)
 		}
@@ -321,6 +320,10 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 	f.Address = normalizeActionAddress(f.Chain, f.Address)
 	where := []string{"chain=?", "(from_address=? OR to_address=?)"}
 	args := []any{f.Chain, f.Address, f.Address}
+	// 状态过滤是一个半连接（见下面的 LEFT ANY JOIN），它的参数必须排在主 where 参数之后，
+	// 因为占位符在 SQL 文本里出现在 WHERE 之后。
+	statusJoin := ""
+	var statusJoinArgs []any
 	add := func(sql string, value any) { where = append(where, sql); args = append(args, value) }
 	if f.Direction == "in" {
 		add("to_address=?", f.Address)
@@ -354,8 +357,29 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 		} else if dataset == "transactions" {
 			add("status=?", boolToUint8(ok))
 		} else if dataset == "token_transfers" {
-			where = append(where, "tx_hash IN (SELECT tx_hash FROM blockchain.transactions FINAL WHERE chain=? AND status=?)")
-			args = append(args, f.Chain, boolToUint8(ok))
+			/*
+			 * 状态过滤只能按「每个 tx 的最新版本」判定，绝不能用 FINAL、也不能用 IN 子查询：
+			 * 实测 bsc 上 FINAL 形态 70.6 s，`tx_hash IN (SELECT … 2360 万个 hash)` 形态 45.7 s
+			 * （状态聚合本身 3.9 s，其余全是 IN 集合的构建与探测）。
+			 * 改成 INNER JOIN … USING (tx_hash)（半连接语义；LEFT ANY JOIN 会保留未匹配的左行，
+			 * 状态过滤就等于没生效）：连接键只出现一次，SELECT * 仍然只投影左表列（22 列，
+			 * 与逐笔表完全一致），同样的答案实测 0.30–0.83 s。调用方给的时间窗同时下推到
+			 * 状态聚合（同笔交易的转账时间就是交易时间，语义等价：3.9 s → 0.21 s）。
+			 */
+			statusWhere := []string{"chain=?", "status=?"}
+			statusArgs := []any{f.Chain, boolToUint8(ok)}
+			if f.StartTime != nil {
+				statusWhere = append(statusWhere, "timestamp>=?")
+				statusArgs = append(statusArgs, *f.StartTime)
+			}
+			if f.EndTime != nil {
+				statusWhere = append(statusWhere, "timestamp<=?")
+				statusArgs = append(statusArgs, *f.EndTime)
+			}
+			statusJoin = " INNER JOIN (SELECT tx_hash FROM (SELECT tx_hash,argMax(status,source_ingested_at) AS st FROM blockchain.transactions WHERE " +
+				strings.Join(statusWhere, " AND ") + " GROUP BY tx_hash) WHERE st=?) AS s USING (tx_hash)"
+			statusJoinArgs = append(statusJoinArgs, statusArgs...)
+			statusJoinArgs = append(statusJoinArgs, boolToUint8(ok))
 		}
 	}
 	if dataset == "token_transfers" {
@@ -380,16 +404,40 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 			add(amountSQL+"<=toDecimal256(?,18)", f.MaxAmount)
 		}
 	}
-	table := tableName(dataset)
-	base := " FROM blockchain." + table + " FINAL WHERE " + strings.Join(where, " AND ")
+	// 明细页与计数都必须走显式去重：FINAL 会按排序键合并整条链，
+	// from_address/to_address 的 bloom_filter 跳数索引完全用不上（实测 27.2 s vs 0.27 s）。
+	// 详见 dedupSource / dedupCount 的实测注释。
+	whereSQL := strings.Join(where, " AND ")
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
+	// 连接形态的源：内部先去重，再用左表列做半连接（只投影左表列，保证行结构与数据集一致）。
+	joinedSource := func() string {
+		source := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + whereSQL
+		if dedupSupported(dataset) {
+			source = dedupSource(dataset, whereSQL)
+		}
+		if statusJoin != "" {
+			source = "SELECT * FROM (" + source + ") AS t" + statusJoin
+		}
+		return source
+	}
+	queryArgs := append(append([]any{}, args...), statusJoinArgs...)
 	var total uint64
 	if withTotal {
-		if err := s.CH.DB().QueryRow(ctx, "SELECT count()"+base, args...).Scan(&total); err != nil {
-			return ActionPage{}, err
+		countSQL := "SELECT count() FROM blockchain." + tableName(dataset) + " FINAL WHERE " + whereSQL
+		if dedupSupported(dataset) {
+			countSQL = dedupCount(dataset, whereSQL)
+		}
+		if statusJoin != "" {
+			countSQL = "SELECT count() FROM (" + dedupSource(dataset, whereSQL) + ") AS t" + statusJoin
+		}
+		if err := s.CH.DB().QueryRow(ctx, countSQL, queryArgs...).Scan(&total); err != nil {
+			return ActionPage{}, clickhouse.DescribeInteractiveScanError(err)
 		}
 	}
 	offset := (f.Page - 1) * f.PageSize
-	rows, err := s.queryRows(ctx, dataset, "SELECT *"+base+" ORDER BY "+orderBy+" LIMIT ? OFFSET ?", append(args, f.PageSize, offset)...)
+	rows, err := s.queryRows(ctx, dataset, joinedSource()+" ORDER BY "+orderBy+" LIMIT ? OFFSET ?", append(queryArgs, f.PageSize, offset)...)
 	if err != nil {
 		return ActionPage{}, err
 	}
@@ -541,22 +589,33 @@ func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minT
 	having := []string{"count()>=?"}
 	args = append(args, minCount)
 	if minTotal != "" {
-		having = append(having, "sum(amount)>=toDecimal256(?,38)")
+		having = append(having, "sum(amt)>=toDecimal256(?,38)")
 		args = append(args, minTotal)
 	}
-	order := map[string]string{"tx_count": "tx_count", "total_amount": "sum(amount)", "net_flow": "abs(sumIf(amount,to_address=target AND from_address!=target)-sumIf(amount,from_address=target AND to_address!=target))", "last_time": "last_tx_time"}[sortBy]
+	// 排序/HAVING 必须读去重后的别名（amt/fr_addr/to_addr），否则 ClickHouse 会把
+	// 聚合别名替换进子查询的 WHERE（code 184：Aggregate function argMax(...) is found in WHERE）。
+	order := map[string]string{"tx_count": "tx_count", "total_amount": "sum(amt)", "net_flow": "abs(sumIf(amt,to_addr=target AND fr_addr!=target)-sumIf(amt,fr_addr=target AND to_addr!=target))", "last_time": "last_tx_time"}[sortBy]
 	if order == "" {
-		order = "sum(amount)"
+		order = "sum(amt)"
 	}
-	q := `WITH ? AS target SELECT if(to_address=target,from_address,to_address) counterparty,count() tx_count,
-		countIf(to_address=target AND from_address!=target) incoming_tx_count,countIf(from_address=target AND to_address!=target) outgoing_tx_count,
-		toString(sumIf(amount,to_address=target AND from_address!=target)) incoming_amount,
-		toString(sumIf(amount,from_address=target AND to_address!=target)) outgoing_amount,
-		toString(sumIf(amount,to_address=target AND from_address!=target)-sumIf(amount,from_address=target AND to_address!=target)) net_flow,
-		toString(sum(amount)) total_amount,min(timestamp) first_tx_time,max(timestamp) last_tx_time,any(token_symbol) asset_symbol
-		FROM blockchain.token_transfers FINAL WHERE ` + strings.Join(where, " AND ") + " GROUP BY counterparty HAVING " + strings.Join(having, " AND ") + " ORDER BY " + order + " DESC LIMIT ?"
+	// FINAL 会按排序键合并整条链（同一地址实测 27.2 s vs 0.27 s），这里用排序键上的
+	// argMax 显式去重后，再在外层做对手方聚合；跳数索引因此可以裁剪 granule。
+	inner := "SELECT argMax(amount,source_ingested_at) AS amt," +
+		"argMax(timestamp,source_ingested_at) AS ts,argMax(from_address,source_ingested_at) AS fr_addr," +
+		"argMax(to_address,source_ingested_at) AS to_addr,argMax(token_symbol,source_ingested_at) AS sym " +
+		"FROM blockchain.token_transfers WHERE " + strings.Join(where, " AND ") + " GROUP BY tx_hash,log_index,token_address"
+	q := `WITH ? AS target SELECT if(to_addr=target,fr_addr,to_addr) counterparty,count() tx_count,
+		countIf(to_addr=target AND fr_addr!=target) incoming_tx_count,countIf(fr_addr=target AND to_addr!=target) outgoing_tx_count,
+		toString(sumIf(amt,to_addr=target AND fr_addr!=target)) incoming_amount,
+		toString(sumIf(amt,fr_addr=target AND to_addr!=target)) outgoing_amount,
+		toString(sumIf(amt,to_addr=target AND fr_addr!=target)-sumIf(amt,fr_addr=target AND to_addr!=target)) net_flow,
+		toString(sum(amt)) total_amount,min(ts) first_tx_time,max(ts) last_tx_time,any(sym) asset_symbol
+		FROM (` + inner + ") GROUP BY counterparty HAVING " + strings.Join(having, " AND ") + " ORDER BY " + order + " DESC LIMIT ?"
 	args = append([]any{f.Address}, args...)
 	args = append(args, limit)
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
 	rows, err := s.CH.DB().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -596,15 +655,20 @@ func (s *Service) ActionTopFlows(ctx context.Context, f ActionFilter, groupBy st
 }
 
 func (s *Service) ActionFirstFunding(ctx context.Context, chain, address string) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
 	address = normalizeActionAddress(chain, address)
 	out := map[string]any{"address": address, "first_native_funding": nil, "first_token_funding": []map[string]any{}}
 	var from, amount, rawValue, hash string
 	var ts time.Time
-	err := s.CH.DB().QueryRow(ctx, `SELECT from_address,toString(toDecimal256OrZero(value_raw,0)/if(chain='tron',1000000,1000000000000000000)),value_raw,tx_hash,timestamp FROM blockchain.transactions FINAL WHERE chain=? AND to_address=? AND from_address!=? AND toDecimal256OrZero(value_raw,0)>0 ORDER BY timestamp ASC LIMIT 1`, chain, address, address).Scan(&from, &amount, &rawValue, &hash, &ts)
+	// 逐 tx_hash 显式去重（transactions 的排序键就是 (chain, tx_hash)），不再 FINAL 整链合并。
+	// 别名必须与列名不同：同名的聚合别名会被替换进子查询的 WHERE（code 184）。
+	err := s.CH.DB().QueryRow(ctx, `SELECT fr,amt,rawv,txh,ts FROM (SELECT argMax(from_address,source_ingested_at) AS fr,argMax(toString(toDecimal256OrZero(value_raw,0)/if(chain='tron',1000000,1000000000000000000)),source_ingested_at) AS amt,argMax(value_raw,source_ingested_at) AS rawv,argMax(tx_hash,source_ingested_at) AS txh,argMax(timestamp,source_ingested_at) AS ts FROM blockchain.transactions WHERE chain=? AND to_address=? AND from_address!=? AND toDecimal256OrZero(value_raw,0)>0 GROUP BY tx_hash) ORDER BY ts ASC LIMIT 1`, chain, address, address).Scan(&from, &amount, &rawValue, &hash, &ts)
 	if err == nil {
 		out["first_native_funding"] = map[string]any{"from": from, "amount": amount, "raw_value": rawValue, "tx_hash": hash, "timestamp": ts}
 	}
-	rows, e := s.queryRows(ctx, "token_transfers", `SELECT * FROM blockchain.token_transfers FINAL WHERE chain=? AND to_address=? AND from_address!=? ORDER BY timestamp ASC LIMIT 20`, chain, address, address)
+	rows, e := s.queryRows(ctx, "token_transfers", dedupSource("token_transfers", "chain=? AND to_address=? AND from_address!=?")+" ORDER BY timestamp ASC LIMIT 20", chain, address, address)
 	if e != nil {
 		return nil, e
 	}
@@ -658,7 +722,12 @@ func (s *Service) ActionEdges(ctx context.Context, chain string, from []string, 
 		limit = 500
 	}
 	args = append(args, limit)
-	q := `SELECT from_address,to_address,any(token_symbol),any(token_address),toString(sum(amount)),count(),min(timestamp),max(timestamp) FROM blockchain.token_transfers FINAL WHERE ` + strings.Join(where, " AND ") + ` GROUP BY from_address,to_address,token_address ORDER BY sum(amount) DESC LIMIT ?`
+	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+	defer cancel()
+	ctx = clickhouse.InteractiveScanContext(ctx)
+	q := `SELECT from_address,to_address,any(token_symbol),any(token_address),toString(sum(amount)),count(),min(timestamp),max(timestamp) FROM (` +
+		dedupSource("token_transfers", strings.Join(where, " AND ")) +
+		`) GROUP BY from_address,to_address,token_address ORDER BY sum(amount) DESC LIMIT ?`
 	rows, err := s.CH.DB().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

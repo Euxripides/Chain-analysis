@@ -4,6 +4,7 @@ package drpc
 // **每次 HTTP 请求**写一条 model.UsageRow，包含通道/方法/用量类型/行数/方法调用数/
 // CU/CostUSD/状态/HTTP 状态/RPC code/错误分类/request_id/时长/TTFB/Body/wire/decoded 字节。
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -30,8 +31,13 @@ const (
 
 // usageMeta 是一次 HTTP 请求的用量归因。
 type usageMeta struct {
+	// ctx 携带调度器注入的任务/分片归属（与 ankr/chainbase 相同的 "job_id"/"shard_id"
+	// 字符串键约定）。缺了它，后台"任务详情 → Provider 运行"的已用请求/已用 CU 永远是 0，
+	// 计划 §15.1 要求的 job_id/shard_id 归因也就落不了库。
+	ctx      context.Context
 	dataset  string
 	apiType  string
+	channel  string
 	method   string
 	usageTyp string
 
@@ -78,11 +84,18 @@ func (c *Client) recordUsage(meta usageMeta) {
 	if meta.methodCalls <= 0 {
 		meta.methodCalls = 1
 	}
+	jobID, shardID, traceID, tenantID := usageAttribution(meta.ctx)
 	row := model.UsageRow{
-		Provider:     ProviderKey,
-		APIType:      meta.apiType,
+		Provider: ProviderKey,
+		APIType:  meta.apiType,
+		// APIChannel 让后台能按通道核对额度：data_api 与 solana_rpc 的并发、速率与 CU 口径不同。
+		APIChannel:   meta.channel,
 		Chain:        ChainSolana,
 		Method:       meta.method,
+		JobID:        jobID,
+		ShardID:      shardID,
+		TraceID:      traceID,
+		TenantID:     tenantID,
 		UsageType:    meta.usageTyp,
 		Dataset:      meta.dataset,
 		Rows:         meta.rows,
@@ -132,4 +145,21 @@ func (c *Client) recordUsage(meta usageMeta) {
 		}
 	}
 	c.hook(row)
+}
+
+// usageAttribution 从 ctx 读出任务/分片归属。
+//
+// 键名沿用仓库既有约定（ankr/client.go、chainbase/client.go 同样读 "job_id"）：
+// 调度器在 runShard 里用字符串键注入，Provider 不该另立一套键。
+func usageAttribution(ctx context.Context) (jobID, shardID, traceID, tenantID string) {
+	if ctx == nil {
+		return "", "", "", ""
+	}
+	text := func(key string) string {
+		if v, ok := ctx.Value(key).(string); ok {
+			return v
+		}
+		return ""
+	}
+	return text("job_id"), text("shard_id"), text("trace_id"), text("tenant_id")
 }

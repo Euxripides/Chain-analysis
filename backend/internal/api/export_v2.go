@@ -474,7 +474,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 				}
 				continue
 			}
-			fh := &zip.FileHeader{Name: name, Method: zip.Deflate}
+			fh := &zip.FileHeader{Name: name, Method: zipEntryMethod(format)}
 			fh.SetModTime(time.Now())
 			fw, err := zw.CreateHeader(fh)
 			if err != nil {
@@ -529,6 +529,15 @@ type preparedZipEntry struct {
 	crc32                    uint32
 	compressed, uncompressed int64
 }
+
+// XLSX is itself ZIP; Parquet already compresses its data pages.
+func zipEntryMethod(format string) uint16 {
+	if format == "xlsx" || format == "parquet" {
+		return zip.Store
+	}
+	return zip.Deflate
+}
+
 type countOnlyWriter struct{ n int64 }
 
 func (w *countOnlyWriter) Write(p []byte) (int, error) { w.n += int64(len(p)); return len(p), nil }

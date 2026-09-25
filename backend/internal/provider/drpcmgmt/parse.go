@@ -356,6 +356,16 @@ func parseTeamKeys(raw json.RawMessage) ([]teamKey, error) {
 func collectKeyCandidates(node any, out *[]keyCandidate) {
 	switch value := node.(type) {
 	case map[string]any:
+		// 真实 Keys API 的形态是「Key 对象 + 用量兄弟字段」：
+		//   [{"key": {key_id,name,api_key,cu_day_limit,rate_limit,status,...},
+		//     "cu_spent_today": N, "public_keys": [...]}]
+		// 外层同时含 key 与 cu_spent_today 两个强信号，会被误判成 Key 对象而**停止下探**，
+		// 结果 name/status/api_key 全读不到、cu_spent_today 也挂错层（2026-09-21 实测）。
+		// 因此先识别包装形态：内层对象即 Key，外层标量（用量等）并入其中。
+		if merged, ok := unwrapKeyWrapper(value); ok {
+			*out = append(*out, keyCandidate{object: merged, strong: true})
+			return
+		}
 		if strong, weak := keyObjectSignals(value); strong || weak {
 			*out = append(*out, keyCandidate{object: value, strong: strong})
 			return
@@ -628,4 +638,28 @@ func parseTimeLoose(raw string) (time.Time, bool) {
 		return time.Unix(seconds, 0).UTC(), true
 	}
 	return time.Time{}, false
+}
+
+// unwrapKeyWrapper 识别 {"key": {...}, <标量兄弟字段>} 的包装形态。
+//
+// 返回的 map 以内层 Key 对象为主体，并把外层**标量**字段并进来（内层优先）。
+// 只并标量：外层可能还有 public_keys 这类数组/对象，它们不属于 Key 的标量属性。
+func unwrapKeyWrapper(object map[string]any) (map[string]any, bool) {
+	normalized := normalizeMap(object)
+	inner, ok := normalized["key"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	merged := make(map[string]any, len(inner)+len(object))
+	for name, value := range normalizeMap(object) {
+		switch value.(type) {
+		case map[string]any, []any:
+			continue
+		}
+		merged[name] = value
+	}
+	for name, value := range normalizeMap(inner) {
+		merged[name] = value
+	}
+	return merged, true
 }

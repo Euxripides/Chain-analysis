@@ -411,6 +411,9 @@ func (c *Client) EffectiveMode(requested string) (string, string) {
 // httpCall 描述一次 HTTP 往返；用量行由调用方在解码后经 finishUsage 写入
 // （保证"每次 HTTP 请求恰好一条 UsageRow"，且 CU 只在真正拿到 200 时计入）。
 type httpCall struct {
+	// ctx 随调用一起传递，供用量归因读取 task/shard（见 usageAttribution）。
+	ctx       context.Context
+	channel   string
 	apiType   string
 	dataset   string
 	method    string
@@ -494,6 +497,7 @@ func (c *Client) doHTTP(ctx context.Context, call httpCall) (httpResult, error) 
 
 // finishUsage 写用量行；每个 HTTP 请求调用且只调用一次。
 func (c *Client) finishUsage(call httpCall, result httpResult, started time.Time, rows int, err error) {
+	// 归因：任务/分片来自 ctx，通道来自本次调用本身。
 	cu := int64(0)
 	if result.status == http.StatusOK {
 		// 只有真正拿到响应的请求才计入 CU：HTTP 错误（401/402/429/5xx）无法确认
@@ -501,6 +505,7 @@ func (c *Client) finishUsage(call httpCall, result httpResult, started time.Time
 		cu = call.cu
 	}
 	c.recordUsage(usageMeta{
+		ctx: call.ctx, channel: call.channel,
 		dataset: call.dataset, apiType: call.apiType, method: call.method, usageTyp: call.usageTyp,
 		rows: rows, cu: cu, httpStatus: result.status, err: err,
 		requestID: call.requestID, started: started, ttfb: result.ttfb, body: result.body,

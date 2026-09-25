@@ -98,6 +98,22 @@ func (c *Client) ProbeChannels(ctx context.Context) map[string]any {
 	return c.probeAll(ctx, false)
 }
 
+// HistoryChannelAvailable 报告"地址历史枚举"通道（Data API）当前是否真的可用。
+//
+// 存在理由（2026-09-21 实测，trace-id 已留档）：密钥能解析 ≠ 这条链的历史能取。
+// 实测同一把 Key：EVM 的 /lambda/v1/transactions/{addr}/history 正常返回，
+// 而 solana 的同名端点稳定 HTTP 500；RPC 侧 getSignaturesForAddress 又返回 -32601
+// "does not exist/is not available"。因此路由闸门必须按**通道可用性**判断，
+// 否则会把 Solana 任务送进一个必然失败的通道 —— 比不接 dRPC 更差。
+//
+// 复用 Health 的 30s 探针缓存，因此可以按需调用，不会额外打请求。
+func (c *Client) HistoryChannelAvailable(ctx context.Context) bool {
+	if c.unavailableReason() != "" {
+		return false
+	}
+	return probeAt(c.probeCached(ctx), ChannelDataAPI).OK
+}
+
 // probeCached 供 Health 使用：30s 内的结果直接复用。
 func (c *Client) probeCached(ctx context.Context) map[string]any {
 	if probes, ok := c.health.cached(probeCacheTTL); ok {
