@@ -1,0 +1,339 @@
+/* Task and export workspaces: crisp white surfaces and legible investigation data. */
+html[data-app="user"] .cs-workspace-focus {
+  --cs-text-primary: #0b1c34;
+  --cs-text-secondary: #354965;
+  --cs-text-muted: #52657e;
+  --cs-border: #cfdbeb;
+  --cs-border-strong: #aebfda;
+  --cs-border-subtle: #e2eaf5;
+  --cs-surface-blue: #f4f8ff;
+  --cs-shadow-surface: 0 3px 15px rgba(22, 57, 108, .045);
+  --text-primary: #0b1c34;
+  --text-secondary: #354965;
+  --border-default: #cfdbeb;
+  --border-strong: #aebfda;
+  --bg-surface-muted: #f4f8ff;
+  --font-sans: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  min-width: 0;
+  min-height: calc(100vh - var(--topbar-h));
+  margin: calc(-1 * var(--cs-gutter)) calc(-1 * var(--cs-gutter)) calc(-1 * var(--sp-12));
+  padding: 26px var(--cs-gutter) 56px;
+  background: #fff;
+  color: var(--cs-text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+html[data-app="user"] .cs-workspace-focus > * {
+  width: 100%;
+  max-width: 1740px;
+  margin-inline: auto;
+}
+html[data-app="user"] .cs-workspace-focus--jobs > * { max-width: 1880px; }
+
+html[data-app="user"] .cs-workspace-focus .cs-pageheader {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--cs-border);
+}
+html[data-app="user"] .cs-workspace-focus .cs-pageheader__title {
+  color: #071a34;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+@media (min-width: 1200px) {
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__main { flex-basis: 340px; }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__actions { margin-left: auto; }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__actions .toolbar { flex-wrap: nowrap; }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__actions .toolbar > .select { flex: 0 0 150px; width: 150px; }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__actions .toolbar > .btn { flex: none; white-space: nowrap; }
+}
+html[data-app="user"] .cs-workspace-focus .cs-pageheader__crumbs,
+html[data-app="user"] .cs-workspace-focus .cs-pageheader__crumbs a {
+  color: var(--cs-text-secondary);
+  font-size: 13px;
+}
+html[data-app="user"] .cs-workspace-focus .cs-meta {
+  color: var(--cs-text-secondary);
+  font-size: 13px;
+}
+html[data-app="user"] .cs-workspace-focus .cs-meta__item b {
+  color: var(--cs-text-primary);
+  font-weight: 700;
+}
+html[data-app="user"] .cs-workspace-focus .cs-section {
+  gap: 14px;
+}
+html[data-app="user"] .cs-workspace-focus .cs-section__head {
+  align-items: center;
+  border-left: 3px solid #2563eb;
+  padding-left: 12px;
+  min-height: 23px;
+}
+html[data-app="user"] .cs-workspace-focus .cs-section__title {
+  color: #0b1c34;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+html[data-app="user"] .cs-workspace-focus .cs-section__count {
+  color: #405570;
+  font-size: 13px;
+}
+
+html[data-app="user"] .cs-workspace-focus .btn {
+  font-size: 14px;
+  font-weight: 600;
+  border-color: #bdcde3;
+}
+html[data-app="user"] .cs-workspace-focus .btn--primary {
+  background: #2463e5;
+  border-color: #2463e5;
+  color: #fff;
+}
+html[data-app="user"] .cs-workspace-focus .btn--primary:hover:not(:disabled) {
+  background: #164ec3;
+  border-color: #164ec3;
+}
+html[data-app="user"] .cs-workspace-focus .btn--ghost { border-color: transparent; }
+html[data-app="user"] .cs-workspace-focus .input,
+html[data-app="user"] .cs-workspace-focus .select,
+html[data-app="user"] .cs-workspace-focus .textarea {
+  color: #10233d;
+  background: #fff;
+  border-color: #b7c9e2;
+  font-size: 15px;
+}
+html[data-app="user"] .cs-workspace-focus .input::placeholder,
+html[data-app="user"] .cs-workspace-focus .textarea::placeholder { color: #52657e; opacity: 1; }
+html[data-app="user"] .cs-workspace-focus .field__label {
+  color: #10233d;
+  font-size: 14px;
+  font-weight: 700;
+}
+html[data-app="user"] .cs-workspace-focus .field__hint { color: #405570; font-size: 13px; }
+
+html[data-app="user"] .cs-workspace-focus .cs-protable {
+  border: 1px solid var(--cs-border);
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+}
+html[data-app="user"] .cs-workspace-focus .cs-protable table thead th {
+  background: #eef4ff;
+  color: #273d5c;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  border-bottom-color: #bdcde3;
+}
+html[data-app="user"] .cs-workspace-focus .cs-protable table tbody td {
+  color: #162941;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.5;
+  border-bottom-color: #e0e9f4;
+}
+html[data-app="user"] .cs-workspace-focus .cs-protable table tbody tr:hover td { background: #f6f9ff; }
+html[data-app="user"] .cs-workspace-focus .cs-protable .mono,
+html[data-app="user"] .cs-workspace-focus .cs-protable .cs-hash__text {
+  color: #17304f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+html[data-app="user"] .cs-workspace-focus .cs-protable .badge { font-size: 12px; font-weight: 700; }
+html[data-app="user"] .cs-workspace-focus .cs-protable .btn--sm { min-height: 34px; font-size: 12px; }
+html[data-app="user"] .cs-workspace-focus .cs-inspector {
+  border-color: var(--cs-border);
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-workspace-focus .cs-inspector__title { font-size: 15px; font-weight: 700; }
+html[data-app="user"] .cs-workspace-focus .cs-kv dt {
+  color: #354965;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+html[data-app="user"] .cs-workspace-focus .cs-kv dd { color: #10233d; font-size: 14px; }
+html[data-app="user"] .cs-workspace-focus .cs-stickybar {
+  background: #fff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-top-color: var(--cs-border);
+}
+html[data-app="user"] .cs-workspace-focus .cs-rowcard {
+  border-color: var(--cs-border);
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(22, 57, 108, .055);
+}
+html[data-app="user"] .cs-workspace-focus .cs-rowcard__title { color: #1652c0; font-size: 15px; font-weight: 700; }
+html[data-app="user"] .cs-workspace-focus .cs-rowcard__meta { color: #354965; font-size: 13px; }
+
+/* The four task states form one operational status rail. */
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--cs-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item { min-width: 0; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item > .metric {
+  min-height: 100px;
+  height: 100%;
+  padding: 15px 20px;
+  border: 0;
+  border-right: 1px solid var(--cs-border-subtle);
+  border-top: 3px solid #2d6bea;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:last-child > .metric { border-right: 0; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:nth-child(-n+2) > .metric { border-top-color: #d78c1f; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:nth-child(3) > .metric { border-top-color: #ca4040; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:nth-child(4) > .metric { border-top-color: #159160; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item > .metric:hover,
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item > .metric:focus-within {
+  background: #f7faff;
+  box-shadow: none;
+  transform: none;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item[data-active="true"] > .metric {
+  background: #f0f6ff;
+  box-shadow: inset 0 -3px #2d6bea;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__label { color: #273d5c; font-size: 14px; font-weight: 700; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__value { font-size: 32px; font-weight: 700; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__unit { color: #405570; font-size: 12px; font-weight: 600; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__hint { color: #52657e; font-size: 11px; font-weight: 600; }
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar {
+  align-items: flex-end;
+  padding: 14px;
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  background: #fff;
+  gap: 9px;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > svg {
+  align-self: flex-end;
+  margin-bottom: 12px;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .select,
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .input,
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .btn,
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar .cs-range .input {
+  height: 40px;
+  min-height: 40px;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .select {
+  width: min(100%, 178px);
+  flex: 0 1 178px;
+}
+html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .btn--ghost {
+  flex: none;
+  margin-left: auto;
+  border-color: #bdcde3;
+  background: #fff;
+}
+
+/* Export is a three-step form; section numbers and its live summary carry the hierarchy. */
+html[data-app="user"] .cs-workspace-focus--exports .cs-stepper {
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-stepper > li { list-style: none; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-stepper__step {
+  min-height: 38px;
+  padding: 7px 13px;
+  border-color: #bdcde3;
+  color: #354965;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-stepper__step[aria-current="step"] {
+  color: #174fbb;
+  border-color: #4b82ea;
+  background: #eaf2ff;
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__section {
+  padding: 22px;
+  border-color: var(--cs-border);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dce7f5;
+  color: #0b1c34;
+  font-size: 18px;
+  font-weight: 700;
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor .textarea { min-height: 116px; line-height: 1.6; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-inspector {
+  background: #fff;
+  border-color: var(--cs-border);
+  border-top: 3px solid #2563eb;
+  box-shadow: var(--cs-shadow-surface);
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-inspector__head {
+  padding-block: 17px;
+  background: #fff;
+  border-bottom-color: var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-inspector__title { color: #0b1c34; font-size: 16px; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv__row {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--cs-border-subtle);
+}
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv__row:last-child { border-bottom: 0; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv dd { font-weight: 600; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv dt { font-size: 13px; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary .cs-kv dd { font-size: 15px; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__options { gap: 12px 22px; }
+html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__options label { color: #10233d; font-size: 14px; }
+
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-workspace-focus {
+    margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-12));
+    padding: 20px var(--sp-4) 64px;
+    gap: 22px;
+  }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__title { font-size: 24px; }
+  html[data-app="user"] .cs-workspace-focus--exports .cs-export-summary { position: static; }
+}
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-workspace-focus {
+    margin: calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)) calc(-1 * var(--sp-12));
+    padding: 18px var(--sp-3) 72px;
+  }
+  html[data-app="user"] .cs-workspace-focus .cs-pageheader__actions .btn { font-size: 13px; padding-inline: 11px; }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item > .metric { min-height: 90px; padding: 11px 12px; }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:nth-child(2) > .metric { border-right: 0; }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status__item:nth-child(-n+2) > .metric { border-bottom: 1px solid var(--cs-border-subtle); }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__value { font-size: 26px; }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-jobs-status .metric__hint { font-size: 10px; }
+  html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__section { padding: 17px; }
+  html[data-app="user"] .cs-workspace-focus--exports .cs-export-editor__section h3 { font-size: 15px; }
+  html[data-app="user"] .cs-workspace-focus .cs-section__head { align-items: flex-start; }
+  html[data-app="user"] .cs-workspace-focus--jobs .cs-filterbar > .select { width: 100%; flex: 1 1 100%; }
+}

@@ -1,0 +1,49 @@
+html[data-app="user"] .cs-export-main {
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-export-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-export-editor__section {
+  min-width: 0;
+  padding: var(--sp-5);
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-card-sm);
+  box-shadow: var(--cs-shadow-surface);
+  scroll-margin-top: calc(var(--topbar-h, 56px) + var(--sp-4));
+}
+
+html[data-app="user"] .cs-export-editor__section h3 {
+  margin: 0 0 var(--sp-4);
+  color: var(--cs-text-primary);
+  font-size: var(--fs-14);
+  font-weight: 650;
+}
+
+html[data-app="user"] .cs-export-editor__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-5);
+}
+
+html[data-app="user"] .cs-export-summary {
+  position: sticky;
+  top: calc(var(--topbar-h, 56px) + var(--sp-4));
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-export-editor .textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-export-editor__section { padding: var(--sp-4); }
+  html[data-app="user"] .cs-export-summary { position: static; }
+}

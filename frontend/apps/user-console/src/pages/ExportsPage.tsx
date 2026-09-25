@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState } from "react";
-import type { ReactNode } from "react";
 import { Braces,
   Database,
   FileArchive,
@@ -27,6 +26,7 @@ import {
   MetaLine,
   PageSection,
   SplitPane,
+  Stepper,
   StatusBadge,
   StatusBadgeForState,
   StickyActionBar,
@@ -36,6 +36,16 @@ import {
 import { CsPageHeader, CsRefreshBar } from "@chain/user-ui";
 import { CsProTable } from "@chain/user-ui/pro-table";
 import { formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
+import {
+  addressChainFamily,
+  chainFamilyOf,
+  chainForFamily,
+  familyLabel,
+  unanimousAddressFamily,
+  type AddressChainFamily,
+} from "../app/chain-address";
+import "./exports.css";
+import "./workspaces.css";
 
 /* ============================================================================
  * U-EXPORT-01 /exports：导出列表 + 新建导出 + 60 秒一次性下载票据。
@@ -122,6 +132,11 @@ const FORMATS: ExportFormat[] = ["csv", "xlsx", "jsonl", "parquet"];
 const EXPORTABLE_JOB_STATUSES = new Set(["COMPLETED", "PAUSED", "PAUSED_FALLBACK_TOO_EXPENSIVE"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_EXPORT_ADDRESSES = 100;
+const EXPORT_STEPS = [
+  { key: "object", label: "导出对象" },
+  { key: "data", label: "数据与格式" },
+  { key: "options", label: "导出选项" },
+];
 
 const EMPTY_DRAFT: ExportDraft = {
   mode: "addresses",
@@ -139,7 +154,7 @@ const EMPTY_DRAFT: ExportDraft = {
 function parseAddressInput(raw: string): string[] {
   const seen = new Set<string>();
   const list: string[] = [];
-  for (const token of raw.split(/[\s,;，；|]+/)) {
+  for (const token of raw.split(/[\s,;，；、|]+/)) {
     const value = token.trim();
     if (!value) continue;
     const key = value.toLowerCase();
@@ -194,7 +209,6 @@ function ExportDraftEditor({
   jobOptions,
   jobsLoading,
   idPrefix,
-  footer,
 }: {
   value: ExportDraft;
   onChange: (next: ExportDraft) => void;
@@ -204,14 +218,16 @@ function ExportDraftEditor({
   jobsLoading: boolean;
   /** 表单内联与 Dialog 两个实例必须使用不同的 id 前缀（同页不得出现重复 id）。 */
   idPrefix: string;
-  footer?: ReactNode;
 }) {
   const draft = value;
   const id = (name: string) => idPrefix + name;
   const update = (patch: Partial<ExportDraft>) => onChange({ ...draft, ...patch });
 
   return (
-    <div className="s4-form-grid">
+    <div className="cs-export-editor">
+      <section className="cs-export-editor__section" id={id("export-step-object")}>
+        <h3>① 导出对象</h3>
+        <div className="s4-form-grid">
       <Field label="导出对象" htmlFor={id("export-mode")}>
         <select
           id={id("export-mode")}
@@ -282,7 +298,12 @@ function ExportDraftEditor({
           </div>
         </>
       )}
+        </div>
+      </section>
 
+      <section className="cs-export-editor__section" id={id("export-step-data")}>
+        <h3>② 数据与格式</h3>
+        <div className="s4-form-grid">
       <Field label="格式" htmlFor={id("export-format")}>
         <select
           id={id("export-format")}
@@ -311,8 +332,12 @@ function ExportDraftEditor({
           label="Dataset"
         />
       </div>
+        </div>
+      </section>
 
-      <div className="field--wide toolbar">
+      <section className="cs-export-editor__section" id={id("export-step-options")}>
+        <h3>③ 导出选项</h3>
+        <div className="cs-export-editor__options">
         <Checkbox checked={draft.includeMeta} onChange={(next) => update({ includeMeta: next })} label="include_meta" />
         <Checkbox checked={draft.forceZip} onChange={(next) => update({ forceZip: next })} label="force_zip" />
         <Checkbox
@@ -320,9 +345,9 @@ function ExportDraftEditor({
           onChange={(next) => update({ includeDecodedInput: next })}
           label="include_decoded_input"
         />
-      </div>
+        </div>
+      </section>
 
-      {footer ? <div className="field--wide">{footer}</div> : null}
     </div>
   );
 }
@@ -409,7 +434,33 @@ export default function ExportsPage() {
     updateDraft({ ...draftRef.current, chain: first.slug });
   }, [chainItems, updateDraft]);
 
+  /*
+   * 地址形状决定链：链选择的默认值是注册表第一条（arbitrum），而地址框接受
+   * EVM / TRON / Solana 三种形状。形状与当前链不同族时**在输入时就切换**，
+   * 否则导出会用 arbitrum 去查 TRON 地址，结果为空。
+   * 多族混合不在这里猜——createExport 会拦截并提示按链拆分。
+   */
+  useEffect(() => {
+    const current = draftRef.current;
+    if (current.mode !== "addresses") return;
+    const list = current.addresses.length > 0 ? current.addresses : parseAddressInput(current.addressText);
+    const family = unanimousAddressFamily(list);
+    if (family === "" || chainFamilyOf(current.chain) === family) return;
+    const matched = chainForFamily(chainItems, family);
+    if (matched && matched !== current.chain) updateDraft({ ...current, chain: matched });
+  }, [draft.addressText, draft.addresses, draft.mode, draft.chain, chainItems, updateDraft]);
+
   const jobOptions = useMemo(() => (jobsApi.data?.items ?? []).filter((job) => EXPORTABLE_JOB_STATUSES.has(job.status)), [jobsApi.data]);
+  const activeStep = draft.mode === "job"
+    ? UUID_RE.test(draft.jobId.trim()) ? "options" : "object"
+    : !draft.chain || draft.addresses.length === 0 ? "object" : draft.datasets.length === 0 ? "data" : "options";
+  const jumpToStep = (key: string) => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(`inline-export-step-${key}`)?.scrollIntoView({
+      block: "start",
+      behavior: reduceMotion ? "instant" : "smooth",
+    });
+  };
 
   const createExport = useCallback(async () => {
     const current = draftRef.current;
@@ -439,6 +490,30 @@ export default function ExportsPage() {
       }
       if (addresses.length > MAX_EXPORT_ADDRESSES) {
         dialog.notify("warning", "地址数量超出上限", `单次导出最多 ${MAX_EXPORT_ADDRESSES} 个地址。`);
+        return;
+      }
+      /*
+       * 地址族与所选链必须一致：一次导出只对应一条链。族不同时在此拦截，
+       * 否则服务端会按所选链去查另一族的地址（TRON 地址 + arbitrum → 结果为空，
+       * 用户只会看到"导出了但没有数据"）。
+       */
+      const families = new Set<AddressChainFamily>();
+      for (const address of addresses) {
+        const family = addressChainFamily(address);
+        if (family !== "") families.add(family);
+      }
+      if (families.size > 1) {
+        const names = [...families].map((family) => familyLabel(family)).join(" 与 ");
+        dialog.notify("warning", "一次导出只能对应一条链", `地址里同时出现了 ${names}。请按链拆分后分别创建导出。`);
+        return;
+      }
+      const family = families.values().next().value;
+      if (family && chainFamilyOf(current.chain) !== family) {
+        dialog.notify(
+          "warning",
+          "链与地址不匹配",
+          `当前选择的是 ${current.chain}，但地址属于 ${familyLabel(family)}。请切换链后再创建导出。`,
+        );
         return;
       }
       body = {
@@ -623,6 +698,33 @@ export default function ExportsPage() {
           }
         />
       }
+      mobileCard={(row) => (
+        <div className="cs-rowcard" aria-label={`导出 ${row.id}`}>
+          <div className="cs-rowcard__head">
+            <span className="cs-rowcard__title mono" title={row.id}>{shortValue(row.id, 10, 6)}</span>
+            <StatusBadgeForState value={row.status} />
+          </div>
+          <div className="cs-rowcard__meta">
+            <FormatTag format={row.format} zip={row.zip} />
+            <span>{row.dataset || "—"}</span>
+            <span>{formatRawAmount(String(row.rows), 0)} 行</span>
+          </div>
+          {row.job_id ? <div className="cs-rowcard__meta mono" title={row.job_id}>任务 {shortValue(row.job_id, 10, 6)}</div> : null}
+          <div className="cs-rowcard__meta">创建 {formatTime(row.created_at)}</div>
+          {row.expires_at ? <div className="cs-rowcard__meta">有效期 {formatTime(row.expires_at)}</div> : null}
+          {row.status === "RUNNING" || row.status === "QUEUED" ? (
+            <CompactProgress percent={null} state={progressStateFor(row.status)} label={`导出进度 ${row.id}`} />
+          ) : null}
+          <div className="cs-rowcard__actions">
+            <button type="button" className="btn btn--sm" disabled={!row.download_available || busy} onClick={() => void downloadItem(row)}>
+              下载票据
+            </button>
+            <HashValue value={row.id} label="导出 ID" />
+            {row.sha256 ? <HashValue value={row.sha256} label="导出 SHA-256" /> : null}
+            {row.error_safe ? <button type="button" className="btn btn--sm btn--ghost" onClick={() => dialog.notify("error", "导出错误", row.error_safe)}>错误详情</button> : null}
+          </div>
+        </div>
+      )}
       columns={[
         {
           key: "export",
@@ -639,7 +741,7 @@ export default function ExportsPage() {
                 </span>
                 <CopyButton value={row.id} label="导出 ID" />
               </span>
-              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }} title={row.job_id ?? undefined}>
+              <span className="mono" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }} title={row.job_id ?? undefined}>
                 {row.job_id ? shortValue(row.job_id, 10, 6) : "无关联任务"}
               </span>
             </div>
@@ -654,7 +756,7 @@ export default function ExportsPage() {
               <span className="mono" style={{ overflowWrap: "anywhere" }}>
                 {row.dataset || "—"}
               </span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>
                 {row.object_ref ? "对象已生成" : "对象待生成"}
               </span>
             </div>
@@ -737,10 +839,10 @@ export default function ExportsPage() {
           width: "170px",
           render: (row) => (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span className="mono" style={{ fontSize: "var(--fs-11)" }}>
+              <span className="mono" style={{ fontSize: "var(--fs-12)" }}>
                 {formatTime(row.created_at)}
               </span>
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)" }}>{formatTime(row.finished_at)}</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>{formatTime(row.finished_at)}</span>
             </div>
           ),
         },
@@ -814,7 +916,7 @@ export default function ExportsPage() {
     ) : undefined;
 
   return (
-    <>
+    <div className="cs-workspace-focus cs-workspace-focus--exports">
       <CsPageHeader
         title="导出中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "导出中心" }]}
@@ -854,7 +956,7 @@ export default function ExportsPage() {
                 Trace
               </button>
             ) : null}
-            <button type="button" className="btn btn--sm btn--ghost" onClick={explainCaliber}>
+            <button type="button" className="btn btn--sm" onClick={explainCaliber}>
               口径说明
             </button>
           </span>
@@ -867,30 +969,49 @@ export default function ExportsPage() {
       />
 
       <PageSection title="创建导出" count={draft.mode === "job" ? "按任务 job_id" : "按地址 + 链"}>
-        <ExportDraftEditor
-          value={draft}
-          onChange={updateDraft}
-          chains={chainItems}
-          datasets={datasetItems}
-          jobOptions={jobOptions}
-          jobsLoading={jobsApi.loading}
-          idPrefix="inline-"
-          footer={
-            <StickyActionBar
-              leading={
-                <span className="cs-section__count">
-                  {draft.mode === "job"
-                    ? "按任务导出时链与 Dataset 由服务端按任务确定"
-                    : `已解析 ${draft.addresses.length} 个地址（上限 ${MAX_EXPORT_ADDRESSES}）`}
-                </span>
-              }
-            >
-              <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void createExport()}>
-                创建导出
-              </button>
-            </StickyActionBar>
+        <Stepper steps={EXPORT_STEPS} current={activeStep} onJump={jumpToStep} ariaLabel="新建导出步骤" />
+        <SplitPane
+          main={
+            <div className="cs-export-main">
+              <ExportDraftEditor
+                value={draft}
+                onChange={updateDraft}
+                chains={chainItems}
+                datasets={datasetItems}
+                jobOptions={jobOptions}
+                jobsLoading={jobsApi.loading}
+                idPrefix="inline-"
+              />
+            </div>
           }
+          aside={
+            <div className="cs-export-summary">
+              <InspectorDrawer title="导出摘要" ariaLabel="导出摘要">
+                <KeyValueList items={[
+                  { label: "导出对象", value: draft.mode === "job" ? "任务" : "地址 + 链" },
+                  { label: "链", value: draft.mode === "job" ? "由任务确定" : draft.chain || "—" },
+                  { label: "任务 ID", value: draft.mode === "job" ? draft.jobId || "—" : "—", wide: true },
+                  { label: "地址数", value: draft.mode === "addresses" ? `${draft.addresses.length} / ${MAX_EXPORT_ADDRESSES}` : "—" },
+                  { label: "Dataset", value: draft.mode === "job" ? "由任务确定" : draft.datasets.join("、") || "—", wide: true },
+                  { label: "格式", value: draft.format.toUpperCase() },
+                  { label: "包含元数据", value: draft.includeMeta ? "是" : "否" },
+                  { label: "ZIP", value: draft.forceZip ? "强制" : "按服务端规则" },
+                  { label: "解码输入", value: draft.includeDecodedInput ? "是" : "否" },
+                ]} />
+              </InspectorDrawer>
+            </div>
+          }
+          storageKey="cs-export-new-aside"
+          defaultAsideWidth={340}
+          minAsideWidth={300}
+          maxAsideWidth={460}
+          asideLabel="导出摘要"
         />
+        <StickyActionBar leading={<span className="cs-section__count">{draft.mode === "job" ? "按任务导出" : `已解析 ${draft.addresses.length} 个地址`}</span>}>
+          <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void createExport()}>
+            创建导出
+          </button>
+        </StickyActionBar>
       </PageSection>
 
       <SplitPane
@@ -904,6 +1025,6 @@ export default function ExportsPage() {
         defaultAsideWidth={380}
         asideLabel="导出快速预览"
       />
-    </>
+    </div>
   );
 }
