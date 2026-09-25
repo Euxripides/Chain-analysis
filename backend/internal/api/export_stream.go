@@ -29,12 +29,24 @@ import (
  *  3. 序列化复用同一套 appendCSVValue / 引号规则。
  */
 
-// exportStreamEnabled 控制单地址导出是否走流式路径。
+// exportStreamEnabled 控制单地址导出是否走流式路径（边取边写 MinIO）。
 //
-// 默认开启；EXPORT_STREAM=0 可强制回退批量路径，用于 A/B 对照与线上回滚
-// （两条路径的输出必须逐字节一致，见 export_stream_equivalence_test.go）。
+// **默认关闭**：实测流式比批量慢，不是快。同样 20 万行、同一批数据：
+//
+//	批量（一次取齐 → 一次富化 → 一次序列化）  5.32 s
+//	流式（32k 一块，边取边富化边写）          7.2-7.8 s
+//	流式单块（chunk=200k，等价于不分块）      7.18 s
+//
+// 原因不是分块开销（把它调到单块只快 7%），而是**流式把 ClickHouse 发送结果集的
+// 时间与我们的 CPU 工作重叠掉了**：批量路径在查询阶段专心收数据（服务端有
+// max_block_size 的流水线），拿到内存后再集中做富化与序列化，两者不互相拖慢；
+// 流式则在接收过程中穿插富化，接收被 CPU 压制。
+//
+// 流式仍保留的价值是**内存**：单块几十 MiB vs 批量峰值约 1.6 GiB（20 万行 × 27 列）。
+// 因此它作为显式选项保留：EXPORT_STREAM=1 开启。两条路径的输出由
+// TestStreamEnrichMatchesBatch 与 CSV 等价性用例锁定为逐列一致。
 func exportStreamEnabled() bool {
-	return os.Getenv("EXPORT_STREAM") != "0"
+	return os.Getenv("EXPORT_STREAM") == "1"
 }
 
 // exportStreamRawLimit 把"目标不同行数"换算成"要扫描的原始行数"。

@@ -172,3 +172,21 @@ func BenchmarkExportStreamPipelineNoEnrich(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkExportBatchPipeline 量生产默认路径（批量）：查询 + 一次富化 + CSV 序列化。
+// 与 BenchmarkExportStreamPipeline 是同一件事的两种做法，用来支撑"默认走哪条"的决定。
+func BenchmarkExportBatchPipeline(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := srv.query.RowsForExportRange(ctx, "token_transfers", "bsc", subject, limit, 0, nil, nil, nil, nil)
+		if err != nil {
+			b.Fatalf("query: %v", err)
+		}
+		srv.attachTokenMetadata(ctx, "bsc", rows)
+		if err := streamCSV(io.Discard, rows); err != nil {
+			b.Fatalf("csv: %v", err)
+		}
+	}
+}
