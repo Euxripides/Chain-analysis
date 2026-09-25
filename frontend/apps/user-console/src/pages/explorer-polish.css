@@ -1,0 +1,436 @@
+/*
+ * Explorer 查询页：以 Ant Design Pro 的清晰内容面为目标。
+ * 只调整表现层；路由、API、权限、识别规则与 localStorage 契约均在组件中保持不变。
+ */
+html[data-app="user"] .cs-shell__content:has(.cs-pro-page) {
+  background: #fff;
+}
+
+html[data-app="user"] .cs-pro-page {
+  display: contents;
+}
+
+html[data-app="user"] .cs-explorer-header {
+  margin-bottom: 18px;
+}
+
+html[data-app="user"] .cs-explorer-header .page-head__title {
+  color: #0f1f3d;
+  letter-spacing: -.025em;
+}
+
+html[data-app="user"] .cs-explorer-header__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #60708d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+html[data-app="user"] .cs-explorer-header__meta strong {
+  color: #1f3357;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+html[data-app="user"] .cs-explorer-help,
+html[data-app="user"] .cs-explorer-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+html[data-app="user"] .cs-explorer-section {
+  margin-bottom: 24px;
+}
+
+/* 查询与最近查询均为一个完整分组面，不再出现悬浮卡堆叠。 */
+html[data-app="user"] .cs-explorer-query-card,
+html[data-app="user"] .cs-explorer-recent-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #dfe7f2;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, .025);
+}
+
+html[data-app="user"] .cs-explorer-query-card:hover,
+html[data-app="user"] .cs-explorer-recent-card:hover {
+  transform: none;
+  border-color: #dfe7f2;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, .025);
+}
+
+html[data-app="user"] .cs-explorer-query-card::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 68px;
+  height: 3px;
+  border-radius: 0 999px 999px 0;
+  background: #1677ff;
+  content: "";
+  pointer-events: none;
+  transform-origin: left;
+  transition: width 220ms cubic-bezier(.2, .8, .2, 1);
+}
+
+html[data-app="user"] .cs-explorer-query-card:focus-within::before {
+  width: 96px;
+}
+
+html[data-app="user"] .cs-explorer-query-card .card__head,
+html[data-app="user"] .cs-explorer-recent-card .card__head {
+  min-height: 58px;
+  padding: 18px 24px 14px;
+  border-bottom: 0;
+  background: #fff;
+}
+
+html[data-app="user"] .cs-explorer-query-card .card__title,
+html[data-app="user"] .cs-explorer-recent-card .card__title {
+  color: #0f1f3d;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+html[data-app="user"] .cs-explorer-query-card .card__body {
+  padding: 2px 24px 22px;
+}
+
+html[data-app="user"] .cs-explorer-query {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-app="user"] .cs-explorer-query__row {
+  display: grid;
+  grid-template-columns: minmax(220px, 250px) minmax(320px, 1fr) 112px;
+  align-items: end;
+  gap: 14px;
+}
+
+html[data-app="user"] .cs-explorer-query__field {
+  display: grid;
+  align-content: end;
+  gap: 7px;
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-explorer-query__field > label {
+  color: #243858;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+/* Select / Input / Button 统一为 48px，修正此前链下拉与地址框上下不齐。 */
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect,
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-selector,
+html[data-app="user"] .cs-explorer-query__input.ant-input-affix-wrapper,
+html[data-app="user"] .cs-explorer-query__submit.ant-btn {
+  height: 48px;
+  min-height: 48px;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-selector,
+html[data-app="user"] .cs-explorer-query__input.ant-input-affix-wrapper {
+  border-color: #cfd9e8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-selector {
+  padding-inline: 14px 42px !important;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-selection-wrap {
+  align-self: stretch;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-selection-item {
+  display: flex;
+  align-items: center;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect .ant-select-arrow {
+  inset-inline-end: 14px;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect:not(.ant-select-disabled):hover .ant-select-selector,
+html[data-app="user"] .cs-explorer-query__input.ant-input-affix-wrapper:hover {
+  border-color: #6aa7ff;
+}
+
+html[data-app="user"] .cs-explorer-query__chain .cs-chainselect.ant-select-focused .ant-select-selector,
+html[data-app="user"] .cs-explorer-query__input.ant-input-affix-wrapper-focused {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, .12);
+}
+
+html[data-app="user"] .cs-explorer-query__input .ant-input-prefix {
+  margin-inline-end: 12px;
+  color: #6c7d98;
+}
+
+html[data-app="user"] .cs-explorer-query__input .ant-input {
+  background: transparent;
+  color: #102344;
+  font-size: 14px;
+  font-variant-ligatures: none;
+}
+
+html[data-app="user"] .cs-explorer-query__input .ant-input::placeholder {
+  color: #8795aa;
+  opacity: 1;
+}
+
+html[data-app="user"] .cs-explorer-query__submit.ant-btn {
+  width: 112px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, .2);
+}
+
+html[data-app="user"] .cs-explorer-query__submit.ant-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(22, 119, 255, .22);
+}
+
+html[data-app="user"] .cs-explorer-query__submit.ant-btn:disabled {
+  color: #8997ac;
+  border-color: #dfe7f2;
+  background: #f4f7fb;
+  box-shadow: none;
+}
+
+html[data-app="user"] .cs-explorer-recent-card .card__head {
+  min-height: 64px;
+  border-bottom: 1px solid #e6ecf4;
+  padding-block: 14px;
+}
+
+html[data-app="user"] .cs-explorer-recent-card__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+html[data-app="user"] .cs-explorer-recent-card__title > span {
+  color: #60708d;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-app="user"] .cs-explorer-recent-card .card__body--flush {
+  padding: 0;
+}
+
+html[data-app="user"] .cs-explorer-recent__item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 82px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #e9eef5;
+  transition: background-color 180ms ease;
+}
+
+html[data-app="user"] .cs-explorer-recent__item:last-child {
+  border-bottom: 0;
+}
+
+html[data-app="user"] .cs-explorer-recent__item:hover {
+  background: #f7faff;
+}
+
+html[data-app="user"] .cs-explorer-recent__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #f3f7fc;
+}
+
+html[data-app="user"] .cs-explorer-recent__identity {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-explorer-recent__identity .cs-recentlist__value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: #102344;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-ligatures: none;
+}
+
+html[data-app="user"] .cs-explorer-recent__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-width: 0;
+  color: #60708d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+html[data-app="user"] .cs-explorer-recent__chain {
+  color: #334766;
+  font-weight: 650;
+}
+
+html[data-app="user"] .cs-explorer-recent__meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-app="user"] .cs-explorer-recent__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+html[data-app="user"] .cs-explorer-recent__open,
+html[data-app="user"] .cs-explorer-recent__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+}
+
+html[data-app="user"] .cs-explorer-recent__open {
+  color: #0969da;
+  border-color: #cfd9e8;
+  background: #fff;
+}
+
+html[data-app="user"] .cs-explorer-recent__open > svg {
+  transition: transform 180ms ease;
+}
+
+html[data-app="user"] .cs-explorer-recent__open:hover > svg {
+  transform: translate(2px, -2px);
+}
+
+html[data-app="user"] .cs-explorer-recent__remove {
+  width: 36px;
+  padding: 0;
+  color: #60708d;
+}
+
+html[data-app="user"] .cs-explorer-recent__remove:hover:not(:disabled) {
+  color: #b42318;
+  border-color: #efc5c1;
+  background: #fff7f6;
+}
+
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-explorer-query__row {
+    grid-template-columns: 210px minmax(0, 1fr) 96px;
+    gap: 12px;
+  }
+
+  html[data-app="user"] .cs-explorer-query__submit.ant-btn {
+    width: 96px;
+  }
+}
+
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-explorer-header {
+    margin-bottom: 14px;
+  }
+
+  html[data-app="user"] .cs-explorer-section {
+    margin-bottom: 18px;
+  }
+
+  html[data-app="user"] .cs-explorer-query-card .card__head,
+  html[data-app="user"] .cs-explorer-recent-card .card__head {
+    padding-inline: 16px;
+  }
+
+  html[data-app="user"] .cs-explorer-query-card .card__body {
+    padding: 2px 16px 18px;
+  }
+
+  html[data-app="user"] .cs-explorer-query__row {
+    grid-template-columns: minmax(0, 1fr) 82px;
+    gap: 12px;
+  }
+
+  html[data-app="user"] .cs-explorer-query__chain {
+    grid-column: 1 / -1;
+  }
+
+  html[data-app="user"] .cs-explorer-query__address {
+    grid-column: 1;
+  }
+
+  html[data-app="user"] .cs-explorer-query__submit.ant-btn {
+    grid-column: 2;
+    width: 82px;
+    padding-inline: 10px;
+  }
+
+  html[data-app="user"] .cs-explorer-query__submit .ant-btn-icon {
+    display: none;
+  }
+
+  html[data-app="user"] .cs-explorer-query__input .ant-input {
+    font-size: 16px;
+  }
+
+  html[data-app="user"] .cs-explorer-recent__item {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 9px 12px;
+    padding: 14px 16px;
+  }
+
+  html[data-app="user"] .cs-explorer-recent__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  html[data-app="user"] .cs-explorer-recent__actions {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  html[data-app="user"] .cs-explorer-recent__meta {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-explorer-query-card::before,
+  html[data-app="user"] .cs-explorer-query__submit.ant-btn,
+  html[data-app="user"] .cs-explorer-recent__open > svg,
+  html[data-app="user"] .cs-explorer-recent__item {
+    transition: none;
+  }
+}
