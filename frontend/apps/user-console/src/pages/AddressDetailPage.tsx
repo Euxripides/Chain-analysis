@@ -6,6 +6,8 @@ import {
 import { Link,
   useParams,
   useSearchParams } from "react-router-dom";
+import { ArrowLeftRight, CalendarDays, Clock3, FileText, Users } from "lucide-react";
+import { Tabs } from "antd";
 import {
   Amount,
   BackLink,
@@ -30,7 +32,6 @@ import {
   useDialog,
 } from "@chain/ui";
 import { CsPageHeader } from "@chain/user-ui";
-import type { KeyValueEntry } from "@chain/ui";
 import { useAuth } from "@chain/api-client";
 import { formatRawAmount, formatTime, shortValue, useApi } from "../sprint5/common";
 import "./detail-polish.css";
@@ -45,7 +46,7 @@ import "./detail-polish.css";
  * 2026-09 表现层重构（蓝图 §12.15）：
  *   Header（链 / 完整地址 / 复制 / 数据时间）→ Overview（指标 + 当前余额 + 历史净流量）
  *   → Activity（tab + 参考站点式胶囊工具栏）→ Fund Flow（对手方 / 资金流边）→ Analysis（flow-profile）
- *   → Side Inspector（选中活动行或对手方行的详情；未选中时显示数据来源与口径）。
+ *   → Side Inspector（仅在选中活动行或对手方行时显示详情）。
  *   接口路径、请求参数、分页与错误语义一律未改；本文件只重组信息架构。
  */
 
@@ -108,7 +109,7 @@ export default function AddressDetailPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   // 仅用于展示"已经真实拿到多少行"——服务端不提供总量，因此进度条保持 indeterminate。
   const [bulkLoaded, setBulkLoaded] = useState(0);
-  // 右侧检查器：选中活动行 / 对手方行 → 行详情；未选中 → 数据来源与口径。
+  // 右侧检查器只在选中活动行或对手方行时显示；未选中时主内容占满宽度。
   const [selectedActivity, setSelectedActivity] = useState<ActivityRow | null>(null);
   const [selectedCounterparty, setSelectedCounterparty] = useState<CounterpartyRow | null>(null);
   const requestedTab = searchParams.get("tab") ?? "overview";
@@ -175,6 +176,9 @@ export default function AddressDetailPage() {
     activityActive
       ? {
           limit: 200,
+          // 列表只需本地索引和批量元数据；完整富化会对一页中大量对手方逐个外呼。
+          // 选中行所展示的证据字段仍由 /activity 返回，其他调用方默认响应不变。
+          light: 1,
           cursor: cursor || undefined,
           direction: direction || undefined,
           token: tab === "transfers" && assetType === "token" ? token || undefined : undefined,
@@ -236,6 +240,16 @@ export default function AddressDetailPage() {
     setSearchParams(params);
   };
 
+  const selectTab = (nextTab: string) => {
+    setSelectedActivity(null);
+    setSelectedCounterparty(null);
+    updateParams({
+      tab: nextTab,
+      cursor: null,
+      ...(nextTab !== "transfers" ? { token: null } : {}),
+    });
+  };
+
   const copy = async (value: string, label: string) => {
     if (!value) {
       dialog.notify("warning", "没有可复制的内容");
@@ -289,24 +303,6 @@ export default function AddressDetailPage() {
   const events = extractEvents(semantic.data?.items);
   const nextCursor = activity.meta.next_cursor ?? "";
   const fullAddress = subject?.normalized_address || subject?.address || address;
-
-  /** 数据来源与口径：Header 元信息与右侧检查器共用同一份服务端字段。 */
-  const sourceItems: KeyValueEntry[] = [
-    { label: "数据来源", value: overview.data?.source?.provider || "—" },
-    { label: "as_of", value: formatTime(overview.data?.source?.as_of) },
-    { label: "数据表", value: (overview.data?.source?.tables ?? []).join("，") || "—", wide: true },
-    { label: "Coverage", value: coverageItems.length + " 个 dataset" },
-    {
-      label: "余额口径",
-      value: (currentBlock?.source || "—") + " · is_current_balance=" + String(currentBlock?.is_current_balance ?? true),
-    },
-    {
-      label: "净流口径",
-      value: (flowBlock?.source || "—") + " · is_current_balance=" + String(flowBlock?.is_current_balance ?? false),
-    },
-    { label: "Coverage 来源", value: overview.data?.coverage?.source || "—", wide: true },
-    { label: "规范化地址", value: subject?.normalized_address ? <HashValue value={subject.normalized_address} label="规范化地址" wrap /> : "—", wide: true },
-  ];
 
   // UX-004：显式加载最多 10,000 行真实数据，验证客户端虚拟滚动而非渲染 10k DOM 行。
   const loadAllActivity = async () => {
@@ -379,34 +375,39 @@ export default function AddressDetailPage() {
     }
     return (
       <>
-        <PageSection title="概览指标" count="5 项">
-          <div className="metric-grid cs-stagger">
+        <PageSection title="概览指标" count="5 项" className="cs-overview-metrics">
+          <div className="metric-grid cs-stagger cs-statistic-group">
             <MetricCard
               label="交易数"
+              icon={<ArrowLeftRight size={20} strokeWidth={1.9} />}
               value={summary?.transaction_count ?? "—"}
               source="summary.transaction_count"
               sourceNote="来自服务端地址概览接口的 summary.transaction_count：该地址作为参与方的普通交易计数，范围受当前链与本地索引覆盖限制。"
             />
             <MetricCard
               label="代币转账"
+              icon={<FileText size={20} strokeWidth={1.9} />}
               value={summary?.token_transfer_count ?? "—"}
               source="summary.token_transfer_count"
               sourceNote="来自 summary.token_transfer_count：token 转账事件计数（activity_type=transfer 的真实行）。"
             />
             <MetricCard
               label="对手方"
+              icon={<Users size={20} strokeWidth={1.9} />}
               value={summary?.counterparty_count ?? "—"}
               source="summary.counterparty_count"
               sourceNote="来自 summary.counterparty_count：与该地址发生过资金往来的不同地址数，由服务端去重后给出。"
             />
             <MetricCard
               label="首次活动"
+              icon={<CalendarDays size={20} strokeWidth={1.9} />}
               value={formatTime(summary?.first_seen)}
               source="summary.first_seen"
               sourceNote="来自 summary.first_seen：本地索引中该地址最早一条活动记录的链上时间。"
             />
             <MetricCard
               label="最近活动"
+              icon={<Clock3 size={20} strokeWidth={1.9} />}
               value={formatTime(summary?.last_seen)}
               source="summary.last_seen"
               sourceNote="来自 summary.last_seen：本地索引中该地址最新一条活动记录的链上时间。"
@@ -529,12 +530,13 @@ export default function AddressDetailPage() {
      * 与表格实际过滤出来的行不是一回事，宁可只报"已加载多少行"，也不编一个总数。
      */
     const serverTotal = tab === "transfers" && assetType === "token" ? summary?.token_transfer_count : undefined;
-    const countText =
-      !filtersActive && typeof serverTotal === "number"
+    const countText = activity.loading
+      ? "正在加载本页交易记录…"
+      : !filtersActive && typeof serverTotal === "number"
         ? "共计 " + serverTotal.toLocaleString("zh-CN") + " 条交易记录（最多加载 1 万行）"
         : "已加载 " + visible.length.toLocaleString("zh-CN") + " 行" + (filtersActive ? "（筛选结果，最多 1 万行）" : "");
     return (
-      <PageSection title={activityTitle} count={visible.length + " 行"}>
+      <PageSection title={activityTitle} count={activity.loading ? "加载中…" : visible.length + " 行"}>
         {/*
           工具栏与计数行按参考站点重排：一行胶囊控件（代币 / 数量 / 日期区间 / 方向 / 发送方·接收方 + 刷新）
           + 「共计 N 条交易记录」与「隐藏数量为 0 的转账」开关同一行。所有筛选能力一个都没少，
@@ -654,12 +656,12 @@ export default function AddressDetailPage() {
                 <Button
                   size="sm"
                   variant="primary"
-                  disabled={!nextCursor}
+                  disabled={activity.loading || !nextCursor}
                   onClick={() => updateParams({ cursor: nextCursor })}
                 >
                   加载更多
                 </Button>
-                <Button size="sm" busy={bulkLoading} busyLabel="加载中…" onClick={() => void loadAllActivity()}>
+                <Button size="sm" disabled={activity.loading} busy={bulkLoading} busyLabel="加载中…" onClick={() => void loadAllActivity()}>
                   加载全部（最多 10,000 行）
                 </Button>
               </>
@@ -810,7 +812,32 @@ export default function AddressDetailPage() {
                 ? renderAnalysis()
                 : renderCoverage();
 
-  /** 右侧检查器：选中行 → 行详情；未选中 → 数据来源与口径（原先 EvidenceRail 的同一份真实字段）。 */
+  const detailTabs = TABS.map((item) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", item.key);
+    params.delete("cursor");
+    if (item.key !== "transfers") params.delete("token");
+    const active = item.key === tab;
+    return {
+      key: item.key,
+      label: (
+        <a
+          className="cs-tab"
+          href={"?" + params.toString()}
+          aria-current={active ? "page" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectTab(item.key);
+          }}
+        >
+          {item.label}
+        </a>
+      ),
+    };
+  });
+
+  /** 右侧检查器只呈现用户主动选中的行详情。 */
   const inspector = selectedActivity ? (
     <InspectorDrawer
       title="活动详情"
@@ -961,14 +988,10 @@ export default function AddressDetailPage() {
         ]}
       />
     </InspectorDrawer>
-  ) : (
-    <InspectorDrawer title="数据来源与口径" subtitle={overview.data?.source?.provider}>
-      <KeyValueList items={sourceItems} />
-    </InspectorDrawer>
-  );
+  ) : null;
 
   return (
-    <>
+    <div className="cs-pro-page cs-pro-page--detail cs-pro-page--address">
       <BackLink to="/explorer" label="返回地址与交易查询" />
       <CsPageHeader
         className="cs-detail-header"
@@ -1005,40 +1028,15 @@ export default function AddressDetailPage() {
           </Button>
         }
       />
-      {/*
-        Tab 保持链接语义：它们是深链接（写进 URL、刷新可恢复、可复制分享），现有 E2E 也按
-        role=link 定位。选中态由 .cs-tab[aria-current="page"] 表达（与按钮版
-        .cs-tab[aria-selected="true"] 同一套视觉），不引入第二套样式。
-      */}
-      <nav className="cs-tabs cs-detail-tabs" aria-label="地址详情分区">
-        {TABS.map((item) => {
-          const params = new URLSearchParams(searchParams);
-          params.set("tab", item.key);
-          params.delete("cursor");
-          if (item.key !== "transfers") params.delete("token");
-          const active = item.key === tab;
-          return (
-            <a
-              key={item.key}
-              className="cs-tab"
-              href={"?" + params.toString()}
-              aria-current={active ? "page" : undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                setSelectedActivity(null);
-                setSelectedCounterparty(null);
-                updateParams({
-                  tab: item.key,
-                  cursor: null,
-                  ...(item.key !== "transfers" ? { token: null } : {}),
-                });
-              }}
-            >
-              {item.label}
-            </a>
-          );
-        })}
-      </nav>
+      {/* Ant Tabs 提供键盘与 ink-bar；label 仍是可复制、可刷新的真实深链接。 */}
+      <Tabs
+        className="cs-detail-tabs"
+        aria-label="地址详情分区"
+        activeKey={tab}
+        animated={{ inkBar: true, tabPane: false }}
+        items={detailTabs}
+        onChange={selectTab}
+      />
       <SplitPane
         className="cs-detail-split"
         storageKey="cs-address-inspector-width"
@@ -1046,14 +1044,10 @@ export default function AddressDetailPage() {
         defaultAsideWidth={360}
         minAsideWidth={300}
         maxAsideWidth={640}
-        /*
-         * 活动类 Tab（普通交易 / Token Transfer / Internal）默认收起检查器，让七列表格拿到
-         * 整幅宽度（列表参考站点没有右侧常驻面板）；点任意一行仍然展开它看证据。
-         * 其他 Tab 维持原行为：检查器常驻显示数据来源与口径。
-         */
-        aside={activityActive && !selectedActivity && !selectedCounterparty ? undefined : inspector}
+        /* 默认不显示侧栏；点击活动行或对手方行时才展开详情。 */
+        aside={inspector}
         main={<div className="cs-bento-stack cs-detail-content">{content}</div>}
       />
-    </>
+    </div>
   );
 }

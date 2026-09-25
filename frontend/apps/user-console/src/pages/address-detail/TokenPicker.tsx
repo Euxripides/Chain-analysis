@@ -7,7 +7,7 @@
  * 纯控件：确认时才把值交给父组件写 URL。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
 import { Button, SegmentedControl } from "@chain/ui";
 
@@ -137,45 +137,49 @@ export function TokenPill({
     close();
   };
 
-  const rowStyle = { display: "flex", justifyContent: "space-between", gap: 8, width: "100%" } as const;
-
   return (
-    <details ref={detailsRef} className="cs-okpillwrap">
+    <details ref={detailsRef} className="cs-okpillwrap cs-token-picker">
       <summary className="cs-okpill">
         <span className="cs-okpill__label">代币:</span>
         {selectedLogo ? <img className="cs-okpill__logo" src={selectedLogo} alt="" width={16} height={16} /> : null}
         <span className="cs-okpill__value">{assetType === "nft" ? "NFT" : value || "全部"}</span>
         <ChevronDown size={14} className="cs-okpill__chevron" aria-hidden="true" />
       </summary>
-      <div className="cs-okpill__panel">
-        <SegmentedControl
-          ariaLabel="资产类别"
-          value={assetType}
-          onChange={(key) => onAssetType(key === "nft" ? "nft" : "token")}
-          items={[
-            { key: "token", label: "代币" },
-            { key: "nft", label: "NFT" },
-          ]}
-        />
+      <div className="cs-okpill__panel cs-token-picker__panel">
+        <div className="cs-token-picker__mode">
+          <span className="cs-token-picker__eyebrow">资产类别</span>
+          <SegmentedControl
+            ariaLabel="资产类别"
+            value={assetType}
+            onChange={(key) => onAssetType(key === "nft" ? "nft" : "token")}
+            items={[
+              { key: "token", label: "代币" },
+              { key: "nft", label: "NFT" },
+            ]}
+          />
+        </div>
         {assetType === "token" ? (
           <>
-            <input
-              className="input"
-              aria-label="搜索代币"
-              placeholder="搜索代币符号 / 全称 / 合约地址"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  confirm(draft);
-                }
-              }}
-            />
+            <label className="cs-token-picker__search">
+              <Search size={16} aria-hidden="true" />
+              <input
+                className="input"
+                aria-label="搜索代币"
+                placeholder="搜索代币符号 / 全称 / 合约地址"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    confirm(draft);
+                  }
+                }}
+              />
+            </label>
             {history.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span className="s4-list__sub">历史搜索</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <div className="cs-token-picker__history">
+                <span className="cs-token-picker__eyebrow">历史搜索</span>
+                <div className="cs-token-picker__history-list">
                   {history.map((item) => (
                     <Button key={item} size="sm" variant="ghost" onClick={() => confirm(item)}>
                       {item}
@@ -184,22 +188,23 @@ export function TokenPill({
                 </div>
               </div>
             ) : null}
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
-              <span className="s4-list__sub">{keyword ? "搜索结果" : "热门代币（本页频次）"}</span>
+            <div className="cs-token-picker__results">
+              <span className="cs-token-picker__eyebrow">{keyword ? "搜索结果" : "热门代币（本页频次）"}</span>
               {matched.length === 0 ? (
-                <span className="s4-list__sub">没有匹配的代币，可直接回车按输入值筛选。</span>
+                <span className="cs-token-picker__empty">没有匹配的代币，可直接回车按输入值筛选。</span>
               ) : (
                 matched.map((item) => (
                   <button
                     key={item.token}
                     type="button"
-                    className="btn btn--sm btn--ghost"
-                    style={rowStyle}
+                    className="cs-token-picker__option"
+                    aria-current={value.toLowerCase() === item.token.toLowerCase() ? "true" : undefined}
                     onClick={() => confirm(item.token)}
                   >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.token}</span>
-                    <span className="s4-list__sub" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {item.label === item.token ? item.hits + " 笔" : item.label}
+                    <span className="cs-token-picker__symbol" aria-hidden="true">{item.token.slice(0, 1).toUpperCase()}</span>
+                    <span className="cs-token-picker__option-text">
+                      <span className="cs-token-picker__option-name">{item.token}</span>
+                      <span className="cs-token-picker__option-sub">{item.label === item.token ? item.hits + " 笔" : item.label}</span>
                     </span>
                   </button>
                 ))
@@ -207,7 +212,7 @@ export function TokenPill({
             </div>
           </>
         ) : null}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <div className="cs-token-picker__actions">
           <Button size="sm" variant="ghost" onClick={reset}>
             重置
           </Button>

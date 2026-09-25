@@ -11,10 +11,10 @@
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Amount, CopyButton, DataTable, EmptyState, HashValue, StatusBadge, statusToneFor, Card, PageSection, KeyValueList, MetricCard } from "@chain/ui";
+import { CopyButton, DataTable, EmptyState, HashValue, StatusBadge, statusToneFor, Card, PageSection, KeyValueList, MetricCard } from "@chain/ui";
 
 import { formatRawAmount, formatTime, shortValue } from "../../../sprint5/common";
-import { addressPath, amountDirection, blockText, decimalsOf, directionTone, fiatText, jsonText, transactionPath } from "../address-detail.types";
+import { addressPath, blockText, decimalsOf, directionTone, jsonText, transactionPath } from "../address-detail.types";
 import type { ActivityRow, AnalysisData, AnalysisEdge, Asset, CounterpartyRow, CoverageItem, NetFlowAsset, SemanticEvent } from "../address-detail.types";
 
 export function EntityHash({
@@ -353,63 +353,46 @@ export function CurrentBalanceTable({ items }: { items: Asset[] }) {
         {
           key: "asset",
           header: "资产",
+          width: "180px",
           render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{row.token_symbol || row.token_name || "未知资产"}</div>
-              <div className="s4-list__sub">
-                {row.token_address ? (
-                  <HashValue value={row.token_address} label="Token 合约地址" head={10} tail={8} />
-                ) : (
-                  <span className="mono">native</span>
-                )}
+            <div className="cs-balance-asset">
+              <TokenLogo symbol={row.token_symbol || row.token_name} size={32} />
+              <div style={{ minWidth: 0 }}>
+                <div className="cs-balance-asset__symbol">{row.token_symbol || row.token_name || "未知资产"}</div>
+                <div className="s4-list__sub cs-balance-asset__name">
+                  {row.token_name || (row.token_address ? "Token" : "原生资产")}
+                </div>
               </div>
             </div>
           ),
         },
         {
-          key: "amount",
-          header: "金额",
+          key: "balance",
+          header: "余额",
+          width: "170px",
           align: "right",
-          render: (row) => (
-            <div style={{ minWidth: 0 }}>
-              <Amount
-                rawAmount={row.raw_amount}
-                decimals={decimalsOf(row)}
-                unit={row.token_symbol}
-                fiat={fiatText(row.amount_usd)}
-              />
-              <div className="s4-list__sub mono" title={row.raw_amount}>
-                raw {row.raw_amount ?? "—"}
-              </div>
-            </div>
-          ),
+          render: (row) => {
+            const value = row.display_amount || formatRawAmount(row.raw_amount, decimalsOf(row));
+            return <span className="mono cs-balance-number" title={row.raw_amount}>{value || "—"}</span>;
+          },
         },
         {
-          key: "decimals",
-          header: "decimals",
-          width: "92px",
-          render: (row) => <span className="mono">{row.decimals ?? "—"}</span>,
+          key: "price",
+          header: "价格 USD",
+          width: "130px",
+          align: "right",
+          render: (row) => <span className="mono cs-balance-number">{row.token_price || "—"}</span>,
         },
         {
-          key: "source",
-          header: "来源",
-          width: "150px",
-          render: (row) => (
-            <span>
-              <StatusBadge tone="info">{row.source || "—"}</StatusBadge>
-              {row.source_provider ? <div className="s4-list__sub">{row.source_provider}</div> : null}
-            </span>
-          ),
-        },
-        {
-          key: "block",
-          header: "快照区块",
-          width: "110px",
-          render: (row) => <span className="mono">{blockText(row.snapshot_block)}</span>,
+          key: "value",
+          header: "估值 USD",
+          width: "130px",
+          align: "right",
+          render: (row) => <span className="mono cs-balance-number">{row.amount_usd || "—"}</span>,
         },
         {
           key: "observed",
-          header: "观测时间",
+          header: "更新时间",
           width: "165px",
           render: (row) => <span>{formatTime(row.observed_at)}</span>,
         },
@@ -518,6 +501,7 @@ function TransferTable({
     <DataTable<ActivityRow>
       rows={rows}
       loading={loading}
+      keepPreviousData
       hidePager={hidePager}
       rowKey={(row, index) =>
         (row.tx_hash ?? "tx") +
@@ -905,4 +889,3 @@ export function CoverageTable({ items }: { items: CoverageItem[] }) {
     />
   );
 }
-

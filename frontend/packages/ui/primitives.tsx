@@ -145,6 +145,7 @@ export type MetricTone = "ok" | "warn" | "danger" | "neutral";
  */
 export function MetricCard({
   label,
+  icon,
   value,
   hint,
   tone,
@@ -156,6 +157,8 @@ export function MetricCard({
   sourceNote,
 }: {
   label: string;
+  /** 可选的装饰性图标；业务含义仍由 label 提供，图标只增强扫读。 */
+  icon?: React.ReactNode;
   value: React.ReactNode;
   hint?: React.ReactNode;
   tone?: MetricTone;
@@ -198,7 +201,8 @@ export function MetricCard({
   const content = (
     <>
       <div className="metric__label">
-        {label}
+        {icon ? <span className="metric__icon" aria-hidden="true">{icon}</span> : null}
+        <span>{label}</span>
         {interactive ? null : info}
       </div>
       <div className="metric__value" style={{ color }}>

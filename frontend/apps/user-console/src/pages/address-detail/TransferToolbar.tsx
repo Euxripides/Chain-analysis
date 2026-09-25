@@ -8,7 +8,7 @@
  * 纯控件：不发请求、不持业务状态，草稿值只在"回车 / 应用"时向上提交。
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, RefreshCw, X } from "lucide-react";
+import { ArrowRight, ChevronDown, RefreshCw, X } from "lucide-react";
 
 import { Button } from "@chain/ui";
 
@@ -216,7 +216,6 @@ export function TransferToolbar(props: TransferToolbarProps) {
           value={props.toDate || props.windowTo}
           onChange={(event) => props.onDates({ from: props.fromDate || null, to: event.target.value || null })}
         />
-        <CalendarDays size={15} className="cs-okpill__chevron" aria-hidden="true" />
         {props.fromDate || props.toDate || props.windowDays !== 30 ? (
           <button
             type="button"

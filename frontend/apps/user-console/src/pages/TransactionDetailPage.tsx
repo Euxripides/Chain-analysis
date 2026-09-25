@@ -1,11 +1,13 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState } from "react";
 import { useParams,
   useSearchParams } from "react-router-dom";
 import { ChevronDown,
   ChevronRight } from "lucide-react";
+import { Tabs } from "antd";
 import { ApiError,
   useAuth } from "@chain/api-client";
 import {
@@ -32,6 +34,7 @@ import {
 import { CsPageHeader } from "@chain/user-ui";
 import type { StatusTone } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
+import "./detail-polish.css";
 
 /**
  * U-EXP-03 交易详情。
@@ -240,7 +243,7 @@ function TraceResultView({ trace, chain }: { trace: TraceResult; chain: string }
   return (
     <>
       <PageSection title="Trace 概要">
-        <div className="metric-grid cs-stagger">
+        <div className="metric-grid cs-stagger cs-statistic-group cs-statistic-group--trace">
           <MetricCard label="来源" value={trace.source ?? "—"} />
           <MetricCard label="帧数" value={trace.frame_count ?? "—"} />
           <MetricCard label="最大深度" value={trace.max_depth ?? "—"} />
@@ -372,6 +375,19 @@ function LogsTable({ rows }: { rows: LogRow[] }) {
   );
 }
 
+/**
+ * 交易哈希路由参数 → API 可用的规范形式。
+ *
+ * 路由契约（不变）：/transactions/{chain}/{hash} 的 hash 可以带 0x，也可以是裸 64 hex
+ * （ExplorerPage 跳转时统一 strip 掉前缀，explorer-visual-acceptance.mjs 冻结了该形状）。
+ * 后端 /api/v2/explorer/transactions 按库内形式解析（0x + 64 hex），所以两处都不能少前缀。
+ */
+export function normalizeTxHashParam(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "" || /^0x/i.test(trimmed)) return trimmed;
+  return "0x" + trimmed;
+}
+
 export default function TransactionDetailPage() {
   const { chain = "", hash = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -381,18 +397,25 @@ export default function TransactionDetailPage() {
   const requestedTab = searchParams.get("tab") ?? "overview";
   const tab = TABS.some((item) => item.key === requestedTab) ? requestedTab : "overview";
   const ready = Boolean(chain && hash);
+  /*
+   * 路由参数 hash 是**去 0x 前缀**的既有形状（ExplorerPage 跳转时 strip，
+   * 见 explorer-visual-acceptance.mjs 冻结的 URL 断言），而 /api/v2 的
+   * explorer 交易接口按库内形式（0x + 64 hex）解析。这里统一补回前缀，
+   * 否则详情页会拿裸 hash 去请求，被服务端判成「交易哈希不合法」。
+   */
+  const txHash = useMemo(() => normalizeTxHashParam(hash), [hash]);
   const base = ready
-    ? "/api/v2/explorer/transactions/" + encodeURIComponent(chain) + "/" + encodeURIComponent(hash)
+    ? "/api/v2/explorer/transactions/" + encodeURIComponent(chain) + "/" + encodeURIComponent(txHash)
     : null;
 
-  const detail = useApi<{ items: TxDetail | null }>(base, [chain, hash]);
+  const detail = useApi<{ items: TxDetail | null }>(base, [chain, txHash]);
   const logs = useApi<{ items: LogRow[] }>(
     tab === "logs" && base ? base + "/logs" : null,
-    [chain, hash, tab],
+    [chain, txHash, tab],
   );
   const localTrace = useApi<{ items: TraceResult | null }>(
     tab === "trace" && base ? base + "/trace" : null,
-    [chain, hash, tab],
+    [chain, txHash, tab],
     { mode: "local_only" },
   );
   const [providerTrace, setProviderTrace] = useState<TraceResult | null>(null);
@@ -401,7 +424,7 @@ export default function TransactionDetailPage() {
 
   useEffect(() => {
     setProviderTrace(null);
-  }, [chain, hash]);
+  }, [chain, txHash]);
 
   const loadErrors = [detail.error, logs.error].filter((message): message is string => Boolean(message));
   const loadErrorsKey = loadErrors.join("|");
@@ -444,6 +467,10 @@ export default function TransactionDetailPage() {
     setSearchParams(params);
   };
 
+  const selectTab = (nextTab: string) => {
+    updateParams({ tab: nextTab });
+  };
+
   const copy = async (value: string, label: string) => {
     if (!value) {
       dialog.notify("warning", "没有可复制的内容");
@@ -473,7 +500,7 @@ export default function TransactionDetailPage() {
       body: "本地没有这笔交易的 Trace。继续将新增一次 Provider 请求，可能产生费用并占用供应商配额；只有确认后才会发出请求。",
       details: [
         { label: "链", value: chain },
-        { label: "交易", value: shortValue(hash, 14, 10) },
+        { label: "交易", value: shortValue(txHash, 14, 10) },
         { label: "模式", value: "auto" },
         { label: "所需权限", value: "explorer:fetch" },
       ],
@@ -745,10 +772,29 @@ export default function TransactionDetailPage() {
 
   const content = tab === "logs" ? renderLogs() : tab === "trace" ? renderTrace() : renderOverview();
 
+  const detailTabs = TABS.map((item) => ({
+    key: item.key,
+    label: (
+      <a
+        className="cs-tab"
+        href={"?tab=" + item.key}
+        aria-current={item.key === tab ? "page" : undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectTab(item.key);
+        }}
+      >
+        {item.label}
+      </a>
+    ),
+  }));
+
   return (
-    <>
+    <div className="cs-pro-page cs-pro-page--detail">
       <BackLink to="/explorer" label="返回地址与交易查询" />
       <CsPageHeader
+        className="cs-detail-header"
         breadcrumb={[{ label: "地址与交易查询", to: "/explorer" }, { label: "交易详情" }]}
         title="交易详情"
         status={<StatusBadge tone={statusToneOf(record)}>{statusLabel(record)}</StatusBadge>}
@@ -757,7 +803,7 @@ export default function TransactionDetailPage() {
             <div className="cs-objecthead__top">
               <span className="cs-objecthead__kind">{chain || "链未知"}</span>
               <span className="cs-objecthead__value">
-                <HashValue value={tx?.tx_hash || hash} label="交易哈希" wrap />
+                <HashValue value={tx?.tx_hash || txHash} label="交易哈希" wrap />
               </span>
             </div>
             <MetaLine
@@ -772,32 +818,20 @@ export default function TransactionDetailPage() {
           </div>
         }
         primaryAction={
-          <Button size="sm" variant="primary" onClick={() => void copy(tx?.tx_hash ?? hash, "交易哈希")}>
+          <Button size="sm" variant="primary" onClick={() => void copy(tx?.tx_hash ?? txHash, "交易哈希")}>
             复制哈希
           </Button>
         }
       />
-      {/*
-        Tab 保持链接语义（写进 URL、刷新可恢复、现有 E2E 按 role=link 定位）；
-        选中态由 .cs-tab[aria-current="page"] 表达，与按钮版 .cs-tab[aria-selected="true"] 同一套视觉。
-      */}
-      <nav className="cs-tabs" aria-label="交易详情分区">
-        {TABS.map((item) => (
-          <a
-            key={item.key}
-            className="cs-tab"
-            href={"?" + "tab=" + item.key}
-            aria-current={item.key === tab ? "page" : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              updateParams({ tab: item.key });
-            }}
-          >
-            {item.label}
-          </a>
-        ))}
-      </nav>
-      <div className="cs-bento-stack">{content}</div>
-    </>
+      <Tabs
+        className="cs-detail-tabs"
+        aria-label="交易详情分区"
+        activeKey={tab}
+        animated={{ inkBar: true, tabPane: false }}
+        items={detailTabs}
+        onChange={selectTab}
+      />
+      <div className="cs-bento-stack cs-detail-content">{content}</div>
+    </div>
   );
 }

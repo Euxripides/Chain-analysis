@@ -109,7 +109,11 @@ export function SplitPane({
   }, [storageKey, width]);
 
   if (!aside) {
-    return <div className={cx("cs-split", className)}>{main}</div>;
+    return (
+      <div className={cx("cs-split", className)}>
+        <div className="cs-split__pane cs-split__pane--main">{main}</div>
+      </div>
+    );
   }
 
   return (

@@ -1,199 +1,411 @@
-/* 地址 / 交易详情：保留 OKLink 式对象头、横向 Tab 与内容顺序，只提升组件清晰度。 */
-html[data-app="user"] .cs-detail-header {
-  margin-bottom: 16px;
+/* 地址 / 交易详情：Ant Design Pro 内容面、原生 Tabs 与成组指标。 */
+html[data-app="user"] .cs-shell__content:has(.cs-pro-page) {
+  background: #fff;
 }
+
+html[data-app="user"] .cs-pro-page {
+  display: contents;
+}
+
+html[data-app="user"] .cs-detail-header {
+  margin-bottom: 0;
+  padding-bottom: 20px;
+}
+
 html[data-app="user"] .cs-detail-header .page-head__title {
-  color: var(--cs-text-primary);
+  color: #0f1f3d;
   letter-spacing: -.025em;
 }
+
 html[data-app="user"] .cs-detail-header .cs-objecthead {
-  gap: 11px;
-  padding-bottom: 16px;
-  border-bottom-color: var(--cs-border);
+  gap: 12px;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
+
 html[data-app="user"] .cs-detail-header .cs-objecthead__top {
   gap: 10px;
 }
+
 html[data-app="user"] .cs-detail-header .cs-objecthead__kind {
-  padding: 4px 9px;
-  border: 1px solid var(--cs-border-selected);
+  padding: 4px 10px;
+  border: 1px solid #a9ccff;
   border-radius: 7px;
-  background: var(--cs-primary-soft);
-  color: var(--cs-primary-text);
-  letter-spacing: .035em;
+  background: #f4f8ff;
+  color: #0969da;
+  font-weight: 700;
+  letter-spacing: .02em;
 }
+
 html[data-app="user"] .cs-detail-header .cs-objecthead__value {
-  color: var(--cs-text-primary);
+  color: #102344;
   font-size: 14px;
   font-weight: 650;
   font-variant-ligatures: none;
 }
+
 html[data-app="user"] .cs-detail-header .cs-meta {
-  gap: 7px 18px;
-  color: var(--cs-text-secondary);
+  gap: 8px 20px;
+  color: #60708d;
   line-height: 1.5;
 }
+
 html[data-app="user"] .cs-detail-header .cs-meta__item b {
-  color: var(--cs-text-primary);
+  color: #203657;
 }
 
-/* Tabs 仍按原顺序横向排列，选中态继续写入 URL；仅换成清楚的白色轨道。 */
+/* 真正的 Ant Tabs：白底、1px 基线、3px 蓝色 ink bar，不再使用胶囊外框。 */
 html[data-app="user"] .cs-detail-tabs {
-  gap: 2px;
-  margin: 0 0 20px;
-  padding: 0 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border: 1px solid var(--cs-border);
-  border-radius: 12px;
-  background: var(--cs-surface);
-  box-shadow: 0 4px 16px rgba(16, 38, 78, .035);
-  scrollbar-width: thin;
-  scrollbar-color: var(--cs-border-strong) transparent;
+  margin: 0 -1px 22px;
 }
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-nav {
+  margin: 0;
+}
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-nav::before {
+  border-bottom-color: #dfe7f2;
+}
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-nav-wrap {
+  padding-inline: 2px;
+}
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab {
+  margin: 0 28px 0 0;
+  padding: 14px 2px 13px;
+  color: #334766;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab:last-child {
+  margin-inline-end: 0;
+}
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab-btn {
+  color: inherit;
+  text-shadow: none;
+}
+
 html[data-app="user"] .cs-detail-tabs .cs-tab {
-  position: relative;
-  flex: 0 0 auto;
-  min-height: 44px;
-  padding: 11px 14px 10px;
-  border-bottom: 0;
-  border-radius: 8px;
+  display: block;
+  color: inherit;
+  text-decoration: none;
   white-space: nowrap;
 }
-html[data-app="user"] .cs-detail-tabs .cs-tab::after {
-  position: absolute;
-  right: 14px;
-  bottom: 4px;
-  left: 14px;
-  height: 2px;
-  border-radius: 999px;
-  background: transparent;
-  content: "";
-  transform: scaleX(.45);
-  transition: background-color 180ms ease, transform 180ms ease;
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab:hover,
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab-active {
+  color: #0969da;
 }
-html[data-app="user"] .cs-detail-tabs .cs-tab:hover {
-  background: var(--cs-surface-blue);
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-tab-active .cs-tab {
+  color: #0969da;
+  font-weight: 700;
 }
-html[data-app="user"] .cs-detail-tabs .cs-tab[aria-current="page"] {
-  background: var(--cs-primary-soft);
-  color: var(--cs-primary-text);
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-ink-bar {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #1677ff;
 }
-html[data-app="user"] .cs-detail-tabs .cs-tab[aria-current="page"]::after {
-  background: var(--cs-primary);
-  transform: scaleX(1);
+
+html[data-app="user"] .cs-detail-tabs .ant-tabs-content-holder {
+  display: none;
 }
 
 html[data-app="user"] .cs-detail-content {
-  gap: 22px;
+  gap: 18px;
 }
+
+/* PageSection + Card 合并为单一 ProCard 视觉，避免标题外再套一层横线框。 */
 html[data-app="user"] .cs-detail-content .cs-section {
-  gap: 12px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #dfe7f2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, .025);
 }
+
+html[data-app="user"] .cs-detail-content .cs-section__head {
+  min-height: 58px;
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e6ecf4;
+  background: #fff;
+}
+
 html[data-app="user"] .cs-detail-content .cs-section__title {
-  color: var(--cs-text-primary);
-  font-size: 15px;
+  color: #102344;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -.01em;
 }
+
 html[data-app="user"] .cs-detail-content .cs-section__count {
-  color: var(--cs-text-secondary);
+  color: #60708d;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
-html[data-app="user"] .cs-detail-content .metric-grid {
-  gap: 14px;
+
+html[data-app="user"] .cs-detail-content .cs-section > .card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
-html[data-app="user"] .cs-detail-content .metric {
+
+html[data-app="user"] .cs-detail-content .cs-section > .card:hover {
+  transform: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* StatisticCard.Group：一块内容面、内部只用细分隔线。 */
+html[data-app="user"] .cs-detail-content .cs-statistic-group {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  background: #fff;
+}
+
+html[data-app="user"] .cs-detail-content .cs-statistic-group--trace {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+html[data-app="user"] .cs-detail-content .cs-statistic-group .metric {
   position: relative;
-  overflow: hidden;
-  min-height: 96px;
-  padding: 18px;
-  border-color: var(--cs-border);
-  border-radius: 14px;
-  background: var(--cs-surface);
-  box-shadow: 0 5px 16px rgba(16, 38, 78, .045);
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  min-width: 0;
+  min-height: 100px;
+  padding: 18px 20px;
+  border: 0;
+  border-inline-end: 1px solid #e6ecf4;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  transition: background-color 180ms ease;
 }
-html[data-app="user"] .cs-detail-content .metric::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  background: linear-gradient(90deg, var(--cs-primary), #22b8d2 72%, transparent);
-  content: "";
-  opacity: .48;
+
+html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:last-child {
+  border-inline-end: 0;
 }
-html[data-app="user"] .cs-detail-content .metric:hover {
-  transform: translateY(-1px);
-  border-color: var(--cs-border-selected);
-  box-shadow: 0 9px 22px rgba(16, 38, 78, .075);
+
+html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:hover {
+  transform: none;
+  border-color: #e6ecf4;
+  background: #f8fbff;
+  box-shadow: none;
 }
+
 html[data-app="user"] .cs-detail-content .metric__label {
-  color: var(--cs-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #60708d;
   font-size: 12px;
   font-weight: 600;
 }
+
+html[data-app="user"] .cs-detail-content .metric__icon {
+  display: inline-grid;
+  flex: 0 0 22px;
+  place-items: center;
+  width: 22px;
+  color: #1677ff;
+}
+
+html[data-app="user"] .cs-detail-content .metric__info {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
 html[data-app="user"] .cs-detail-content .metric__value {
-  color: var(--cs-text-primary);
-  font-size: 28px;
+  margin-top: 9px;
+  color: #102344;
+  font-size: 24px;
   font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -.025em;
 }
-html[data-app="user"] .cs-detail-content .card,
-html[data-app="user"] .cs-detail-split .cs-inspector {
-  border-color: var(--cs-border);
-  border-radius: 16px;
-  background: var(--cs-surface);
-  box-shadow: 0 7px 22px rgba(16, 38, 78, .05);
+
+html[data-app="user"] .cs-overview-metrics .metric:nth-child(4) .metric__value,
+html[data-app="user"] .cs-overview-metrics .metric:nth-child(5) .metric__value {
+  font-size: 17px;
+  letter-spacing: -.01em;
 }
-html[data-app="user"] .cs-detail-content .card:hover {
-  transform: none;
-  border-color: var(--cs-border);
-  box-shadow: 0 7px 22px rgba(16, 38, 78, .05);
-}
+
 html[data-app="user"] .cs-detail-content .state {
   min-height: 132px;
   padding: 32px 24px;
 }
-html[data-app="user"] .cs-detail-split .cs-inspector__head {
-  padding: 14px 16px;
-  border-bottom-color: var(--cs-border);
-  background: var(--cs-surface);
+
+html[data-app="user"] .cs-detail-split .cs-inspector {
+  overflow: hidden;
+  border: 1px solid #dfe7f2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, .025);
 }
+
+html[data-app="user"] .cs-detail-split .cs-split__handle {
+  position: relative;
+  background: transparent;
+}
+
+html[data-app="user"] .cs-detail-split .cs-split__handle::after {
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  background: #dfe7f2;
+  content: "";
+  transform: translateX(-50%);
+  transition: width 160ms ease, background-color 160ms ease;
+}
+
+html[data-app="user"] .cs-detail-split .cs-split__handle:hover::after,
+html[data-app="user"] .cs-detail-split .cs-split__handle:focus-visible::after {
+  width: 3px;
+  background: #8fbbff;
+}
+
+html[data-app="user"] .cs-detail-split .cs-inspector__head {
+  min-height: 58px;
+  padding: 16px 20px;
+  border-bottom-color: #e6ecf4;
+  background: #fff;
+}
+
 html[data-app="user"] .cs-detail-split .cs-inspector__title {
-  color: var(--cs-text-primary);
-  font-size: 14px;
+  color: #102344;
+  font-size: 16px;
   font-weight: 700;
 }
+
 html[data-app="user"] .cs-detail-split .cs-inspector__body {
-  padding: 16px;
+  padding: 10px 20px 18px;
+}
+
+html[data-app="user"] .cs-detail-split .cs-kv__row {
+  border-bottom-color: #e6ecf4;
+}
+
+html[data-app="user"] .cs-detail-content .table th {
+  background: #f7f9fc;
+  color: #334766;
+  font-weight: 650;
+}
+
+html[data-app="user"] .cs-detail-content .table td {
+  border-bottom-color: #e9eef5;
+}
+
+html[data-app="user"] .cs-detail-content .table tbody tr:hover td {
+  background: #f8fbff;
+}
+
+html[data-app="user"] .cs-balance-asset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-balance-asset__symbol {
+  overflow: hidden;
+  color: #102344;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-app="user"] .cs-balance-asset__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-app="user"] .cs-balance-number {
+  color: #102344;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1180px) {
+  html[data-app="user"] .cs-detail-content .cs-statistic-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:nth-child(3n) {
+    border-inline-end: 0;
+  }
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:nth-child(n + 4) {
+    border-top: 1px solid #e6ecf4;
+  }
 }
 
 @media (max-width: 599px) {
-  html[data-app="user"] .cs-detail-header { margin-bottom: 14px; }
-  html[data-app="user"] .cs-detail-header .cs-objecthead__value { font-size: 13px; }
+  html[data-app="user"] .cs-detail-header {
+    padding-bottom: 14px;
+  }
+
+  html[data-app="user"] .cs-detail-header .cs-objecthead__value {
+    font-size: 13px;
+  }
+
   html[data-app="user"] .cs-detail-tabs {
     margin-inline: 0;
     margin-bottom: 18px;
-    border-right: 0;
-    border-left: 0;
-    border-radius: 0;
   }
-  html[data-app="user"] .cs-detail-tabs .cs-tab { min-height: 46px; padding-inline: 13px; }
-  html[data-app="user"] .cs-detail-content { gap: 18px; }
-  html[data-app="user"] .cs-detail-content .metric-grid {
+
+  html[data-app="user"] .cs-detail-tabs .ant-tabs-tab {
+    margin-inline-end: 22px;
+    padding-block: 12px;
+  }
+
+  html[data-app="user"] .cs-detail-content {
+    gap: 16px;
+  }
+
+  html[data-app="user"] .cs-detail-content .cs-section__head,
+  html[data-app="user"] .cs-detail-split .cs-inspector__head {
+    min-height: 54px;
+    padding: 14px 16px;
+  }
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group,
+  html[data-app="user"] .cs-detail-content .cs-statistic-group--trace {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
   }
-  html[data-app="user"] .cs-detail-content .metric {
-    min-height: 104px;
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric,
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:nth-child(3n) {
+    min-height: 100px;
     padding: 15px;
+    border-inline-end: 1px solid #e6ecf4;
+    border-top: 1px solid #e6ecf4;
   }
-  html[data-app="user"] .cs-detail-content .metric__value { font-size: 25px; }
-  html[data-app="user"] .cs-detail-content .state { min-height: 120px; padding: 28px 18px; }
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  html[data-app="user"] .cs-detail-content .cs-statistic-group .metric:nth-child(2n) {
+    border-inline-end: 0;
+  }
+
+  html[data-app="user"] .cs-detail-content .metric__value {
+    font-size: 22px;
+  }
+
+  html[data-app="user"] .cs-detail-content .state {
+    min-height: 120px;
+    padding: 28px 18px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-app="user"] .cs-detail-tabs .cs-tab::after,
   html[data-app="user"] .cs-detail-content .metric {
     transition: none;
   }
@@ -219,22 +431,27 @@ html[data-app="user"] .cs-detail-split .cs-inspector__body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
+  height: 36px;
   padding: 0 12px;
-  border: 1px solid var(--cs-border);
+  border: 1px solid #bfd0e8;
   border-radius: var(--cs-radius-pill);
-  background: var(--cs-surface);
-  color: var(--cs-text-primary);
+  background: #fff;
+  color: #112746;
   font-size: var(--fs-13);
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: 0 1px 0 #edf3fb;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
 }
-.cs-okpill:hover { border-color: var(--cs-border-selected); }
-.cs-okpill:focus-within { border-color: var(--cs-primary); box-shadow: 0 0 0 3px var(--interactive-ring); }
-.cs-okpill__label { color: var(--cs-text-secondary); }
+.cs-okpill:hover { border-color: #64a3f9; background: #f8fbff; box-shadow: 0 2px 8px rgba(22, 103, 230, .09); }
+.cs-okpill:focus-visible,
+.cs-okpill:focus-within { outline: 0; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
+.cs-okpillwrap[open] > .cs-okpill { border-color: #2563eb; color: #1655c8; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+.cs-okpill__label { color: #415672; }
 .cs-okpill__value { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.cs-okpill__chevron { color: var(--cs-text-muted); flex: 0 0 auto; }
+.cs-okpill__chevron { color: #49749e; flex: 0 0 auto; transition: transform 180ms ease, color 180ms ease; }
+.cs-okpillwrap[open] > .cs-okpill .cs-okpill__chevron { transform: rotate(180deg); color: #2563eb; }
 .cs-okpill__logo { border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
 .cs-okpill--date { gap: 8px; padding-inline: 14px; }
 .cs-okpill--icon { padding: 0 10px; }
@@ -294,6 +511,235 @@ html[data-app="user"] .cs-detail-split .cs-inspector__body {
   cursor: pointer;
 }
 .cs-okreset:hover { color: var(--cs-primary-text); text-decoration: underline; }
+
+/* 代币筛选：只覆盖地址转账弹层，保留筛选/URL 行为与页面结构。 */
+.cs-token-picker__panel {
+  width: 352px;
+  gap: 14px;
+  padding: 17px;
+  overflow: hidden;
+  border: 1px solid #a9c6f2;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #2563eb, #19b5e8) top / 100% 3px no-repeat, #fff;
+  box-shadow: 0 18px 42px rgba(13, 40, 82, .16), 0 3px 9px rgba(13, 40, 82, .08);
+  animation: cs-token-panel-in 180ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.cs-token-picker__mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cs-token-picker__eyebrow {
+  display: block;
+  color: #49617e;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .015em;
+  line-height: 1.5;
+}
+html[data-app="user"] .cs-token-picker__mode .cs-segmented {
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #d4e2f5;
+  border-radius: 11px;
+  background: #f6faff;
+}
+html[data-app="user"] .cs-token-picker__mode .cs-segmented__item {
+  min-width: 58px;
+  min-height: 30px;
+  border-radius: 8px;
+  color: #3c5573;
+  font-size: 13px;
+  font-weight: 600;
+}
+html[data-app="user"] .cs-token-picker__mode .cs-segmented__item:hover:not([aria-pressed="true"]) {
+  background: #e7f2ff;
+  color: #135ac8;
+}
+html[data-app="user"] .cs-token-picker__mode .cs-segmented__item[aria-pressed="true"] {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, .22);
+}
+.cs-token-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #adc5e9;
+  border-radius: 10px;
+  background: #fff;
+  color: #2770d5;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.cs-token-picker__search:hover { border-color: #6ea8ef; }
+.cs-token-picker__search:focus-within { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .13); }
+html[data-app="user"] .cs-token-picker__search .input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #13294a;
+  font-size: 13px;
+}
+html[data-app="user"] .cs-token-picker__search .input:focus { outline: 0; box-shadow: none; }
+html[data-app="user"] .cs-token-picker__search .input::placeholder { color: #647792; opacity: 1; }
+.cs-token-picker__history,
+.cs-token-picker__results { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cs-token-picker__history-list { display: flex; flex-wrap: wrap; gap: 6px; }
+html[data-app="user"] .cs-token-picker__history-list .btn {
+  min-height: 27px;
+  padding: 0 10px;
+  border: 1px solid #d0e0f3;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #1259bd;
+  font-size: 12px;
+}
+html[data-app="user"] .cs-token-picker__history-list .btn:hover { border-color: #7aaff2; background: #eaf4ff; }
+.cs-token-picker__results { max-height: 232px; overflow-y: auto; scrollbar-color: #abc4e5 transparent; }
+.cs-token-picker__results > .cs-token-picker__eyebrow { margin-bottom: 1px; }
+.cs-token-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #fff;
+  color: #152b4b;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.cs-token-picker__option + .cs-token-picker__option { border-top-color: #e9eff7; border-radius: 0 0 9px 9px; }
+.cs-token-picker__option:hover,
+.cs-token-picker__option[aria-current="true"] { border-color: #c4ddfb; border-radius: 9px; background: #f2f8ff; transform: translateX(2px); }
+.cs-token-picker__option:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.cs-token-picker__symbol {
+  display: grid;
+  flex: 0 0 30px;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #c6dcf7;
+  border-radius: 10px;
+  background: #ecf5ff;
+  color: #175cc6;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1;
+}
+.cs-token-picker__option-text { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; flex: 1; }
+.cs-token-picker__option-name { overflow: hidden; color: #152b4b; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.cs-token-picker__option-sub { overflow: hidden; color: #526883; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.cs-token-picker__empty { padding: 8px 2px; color: #526883; font-size: 12px; line-height: 1.5; }
+.cs-token-picker__actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid #e4edf8; }
+html[data-app="user"] .cs-token-picker__actions .btn { min-height: 32px; padding-inline: 13px; border-radius: 8px; font-weight: 650; }
+html[data-app="user"] .cs-token-picker__actions .btn--ghost { border: 1px solid #c6d9f0; background: #fff; color: #23436b; }
+html[data-app="user"] .cs-token-picker__actions .btn--ghost:hover { border-color: #84b0e9; background: #f5faff; }
+html[data-app="user"] .cs-token-picker__actions .btn--primary { background: #2563eb; background-image: none; box-shadow: 0 3px 8px rgba(37, 99, 235, .19); }
+html[data-app="user"] .cs-token-picker__actions .btn--primary:hover { background: #1655d4; }
+@keyframes cs-token-panel-in { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .cs-token-picker__panel { animation: none; }
+  .cs-okpill, .cs-okpill__chevron, .cs-token-picker__option, .cs-token-picker__search { transition: none; }
+}
+
+/* 地址详情的科技感来自精确层级和状态线，不使用大面积灰蓝填充。 */
+html[data-app="user"] .cs-pro-page--address .cs-detail-header .page-head__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #0b2142;
+  font-weight: 750;
+}
+html[data-app="user"] .cs-pro-page--address .cs-detail-header .page-head__title::before {
+  content: "";
+  width: 3px;
+  height: 21px;
+  border-radius: 3px;
+  background: linear-gradient(#2563eb, #14b8e8);
+}
+html[data-app="user"] .cs-pro-page--address .cs-detail-header .cs-meta { color: #475d79; }
+html[data-app="user"] .cs-pro-page--address .cs-detail-tabs .ant-tabs-tab { transition: color 160ms ease; }
+html[data-app="user"] .cs-pro-page--address .cs-detail-tabs .ant-tabs-ink-bar {
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #16b7e8);
+  box-shadow: 0 -1px 5px rgba(37, 99, 235, .15);
+}
+html[data-app="user"] .cs-pro-page--address .cs-detail-content .cs-section {
+  border-color: #cbdcf2;
+  border-radius: 14px;
+  box-shadow: 0 5px 22px rgba(18, 52, 102, .06);
+}
+html[data-app="user"] .cs-pro-page--address .cs-detail-content .cs-section__head { border-bottom-color: #dfebf9; }
+html[data-app="user"] .cs-pro-page--address .cs-detail-content .cs-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #10294c;
+  font-weight: 730;
+}
+html[data-app="user"] .cs-pro-page--address .cs-detail-content .cs-section__title::before {
+  content: "";
+  width: 3px;
+  height: 17px;
+  border-radius: 3px;
+  background: linear-gradient(#2563eb, #21b5e7);
+}
+html[data-app="user"] .cs-pro-page--address .cs-oktoolbar {
+  margin-bottom: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e3edf9;
+  background: #fff;
+}
+html[data-app="user"] .cs-pro-page--address .cs-okreset {
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid #cbdcf2;
+  border-radius: 999px;
+  background: #fff;
+  color: #385674;
+  font-weight: 600;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+html[data-app="user"] .cs-pro-page--address .cs-okreset:hover {
+  border-color: #7eaff1;
+  background: #f5faff;
+  color: #165cc7;
+  text-decoration: none;
+}
+html[data-app="user"] .cs-pro-page--address .cs-okcount__text { color: #294360; font-weight: 600; }
+html[data-app="user"] .cs-pro-page--address .cs-oklist .table th {
+  border-bottom-color: #cbdcf2;
+  background: #f7fbff;
+  color: #1d3b61;
+}
+html[data-app="user"] .cs-pro-page--address .cs-oklist .table tbody tr:hover td { background: #f4f9ff; }
+@media (max-width: 599px) {
+  html[data-app="user"] .cs-pro-page--address .cs-oktoolbar { padding: 12px; }
+  .cs-okpill__panel.cs-token-picker__panel {
+    position: fixed;
+    inset: auto 12px 12px;
+    width: auto;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="user"] .cs-pro-page--address .cs-detail-tabs .ant-tabs-tab,
+  html[data-app="user"] .cs-pro-page--address .cs-okreset { transition: none; }
+}
 
 /* ---- 计数行：左"共计 N 条交易记录"，右"隐藏数量为 0 的转账" ---- */
 .cs-okcount {
