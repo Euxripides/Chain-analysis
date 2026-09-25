@@ -56,8 +56,8 @@ import (
 // 少给三成行。
 const (
 	dedupeExportRetryFactor = 1.45
-	dedupeExportMaxAttempts = 3
-	dedupeExportExtraRows   = 200_000
+	dedupeExportMaxAttempts = 4
+	dedupeExportExtraRows   = 300_000
 )
 
 // NewWithLog 返回带日志的查询服务；不传日志时退化为无日志。

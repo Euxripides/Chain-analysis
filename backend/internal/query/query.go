@@ -609,8 +609,13 @@ func (s *Service) rangeExportNoFinal(ctx context.Context, dataset, sel, where st
 	if offset == 0 && len(exportDedupeColumns(dataset)) > 0 {
 		wantLimit = limit
 	}
+	// 单次取数上限：数据不足时不要把重试放大成无界扫描。
+	const maxDedupeFetch = 4_000_000
 	overFetch := int(float64(limit) * dedupeExportRetryFactor)
 	for attempt := 0; attempt < dedupeExportMaxAttempts; attempt++ {
+		if overFetch > maxDedupeFetch {
+			overFetch = maxDedupeFetch
+		}
 		queryArgs := append(append([]any{}, args...), overFetch, offset)
 		raw, err := s.queryRowsExport(ctx, dataset, sel, wantLimit, queryArgs...)
 		if err != nil {
@@ -632,7 +637,27 @@ func (s *Service) rangeExportNoFinal(ctx context.Context, dataset, sel, where st
 		}
 		overFetch += dedupeExportExtraRows
 	}
-	return nil, fmt.Errorf("export dedupe did not converge for dataset %s (limit=%d)", dataset, limit)
+	// 走到这里说明数据真的不够（地址/范围内没有 limit 个不同键），而不是去重没收敛：
+	// 返回已取到的最大行集，而不是报错——API 层会按同一组键再去重一次，
+	// 导出文件因此是"该地址在此范围内的全部行"，与历史行为一致。
+	if s.Log != nil {
+		s.Log.Info("导出取数不足目标行数，返回已取到的全部行",
+			"dataset", dataset, "want", limit, "over_fetch", overFetch)
+	}
+	raw, err := s.queryRowsExport(ctx, dataset, sel, offsetCapture(offset, wantLimit, limit),
+		append(append([]any{}, args...), overFetch, offset)...)
+	if err != nil {
+		return nil, err
+	}
+	return dedupeExportRows(dataset, raw, limit), nil
+}
+
+// offsetCapture 让最后一次兜底取数也启用流式早停（仅单页且有去重键时）。
+func offsetCapture(offset, wantLimit, limit int) int {
+	if offset == 0 && wantLimit > 0 {
+		return limit
+	}
+	return 0
 }
 
 // RowsForExportRangeMulti scans ClickHouse once for all requested addresses.
