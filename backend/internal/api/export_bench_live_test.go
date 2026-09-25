@@ -143,3 +143,32 @@ func BenchmarkExportStreamPipeline(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkExportStreamPipelineNoEnrich 与 BenchmarkExportStreamPipeline 同链，
+// 但富化回调为空。两者之差就是逐块富化的真实成本，用来判断该不该继续压富化。
+func BenchmarkExportStreamPipelineNoEnrich(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	// 两条形状的参数不同（无界形状 WHERE 里带 address，带界形状把下界也写进 SQL），
+	// 必须用各自配套的参数，不能混用。
+	sql := exportStreamSQL("token_transfers", "bsc", subject)
+	sqlArgs := exportStreamArgs("bsc", subject)
+	raw := exportStreamRawLimit(limit)
+	if sel, selArgs, fetch, ok := srv.query.BoundedExportSelect(ctx, "token_transfers", "bsc", subject, limit); ok {
+		sql, sqlArgs, raw = sel, selArgs, fetch
+		b.Logf("bounded select applied, fetch=%d args=%d", fetch, len(selArgs))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		writer := newStreamCSVWriter(io.Discard)
+		if _, err := srv.query.ForEachExportChunk(ctx, "token_transfers", sql, raw, exportStreamChunk,
+			func(chunk []map[string]any) error {
+				return writer.write(chunk)
+			}, sqlArgs...); err != nil {
+			b.Fatalf("stream: %v", err)
+		}
+		if err := writer.close(); err != nil {
+			b.Fatalf("close: %v", err)
+		}
+	}
+}

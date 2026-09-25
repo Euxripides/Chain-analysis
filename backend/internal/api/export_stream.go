@@ -61,8 +61,9 @@ type streamEnrichment struct {
 	known       map[string]struct{} // 已查过元数据的合约（含查不到的）
 	unknown     []string            // 待批量查询的新合约
 
-	caseCache map[string][]string
-	tagCache  map[string][]string
+	caseCache    map[string][]string
+	tagCache     map[string][]string
+	rowContracts []string // 复用缓冲：本块每行的归一化合约
 
 	includeMeta bool
 }
@@ -78,18 +79,32 @@ func newStreamEnrichment(srv *Server, chain, wsID string, includeMeta bool) *str
 	}
 }
 
-// resolveTokens 按块补齐新出现的合约元数据。
+// resolveTokens 按块补齐新出现的合约元数据，并把每行的合约名缓存到 rowContracts
+// （避免 enrich 再逐行归一化一次——批量路径此前正是在这里重复计算了两次）。
 //
-// TokenMeta.GetMany 会对传入的每个地址做 ANY(...) 查询，没有缓存；网格式逐行调用
-// 会让它变成每行一次 SQL。这里按"本块新出现的合约"批量取，并记录 known，
-// 后续块不再重复查询。
+// TokenMeta.GetMany 会对传入的每个地址做 ANY(...) 查询，没有缓存；逐行调用会让它
+// 变成每行一次 SQL。这里按"本块新出现的合约"批量取，并记录 known，后续块不再查询。
+//
+// **每个新合约都会在 tokenPlans 里留下一条记录**（元数据缺失时是零值 plan）。
+// 这一点是必须的：applyTokenMeta 用"是否在 plans 里"判断该行要不要写 token_contract
+// /raw_value/formatted_amount 三列。若只给查到元数据的合约建条目，缺元数据的行就会
+// 少这三列，与批量路径产出**列集不同**的文件（CSV 列集取自第一块的行）。
 func (e *streamEnrichment) resolveTokens(ctx context.Context, rows []map[string]any) {
-	if e.srv.deps.TokenMeta == nil || len(rows) == 0 {
+	if len(e.rowContracts) < len(rows) {
+		e.rowContracts = make([]string, len(rows))
+	}
+	e.rowContracts = e.rowContracts[:len(rows)]
+	if e.srv.deps.TokenMeta == nil {
+		for i, row := range rows {
+			e.rowContracts[i] = streamRowContract(e.chain, row)
+		}
 		return
 	}
+
 	e.unknown = e.unknown[:0]
-	for _, row := range rows {
+	for i, row := range rows {
 		contract := streamRowContract(e.chain, row)
+		e.rowContracts[i] = contract
 		if contract == "" {
 			continue
 		}
@@ -98,13 +113,16 @@ func (e *streamEnrichment) resolveTokens(ctx context.Context, rows []map[string]
 		}
 		e.known[contract] = struct{}{}
 		e.unknown = append(e.unknown, contract)
+		// 先落零值 plan：即使下面查询失败或该合约没有元数据，这一行也会按
+		// "合约已知但元数据未知"的形态写全三列。
+		e.tokenPlans[contract] = tokenMetaPlan{}
 	}
 	if len(e.unknown) == 0 {
 		return
 	}
 	metas, err := e.srv.deps.TokenMeta.GetMany(ctx, e.chain, e.unknown)
 	if err != nil {
-		// 与批量路径一致：查不到就跳过富化，不放大成导出失败。
+		// 与批量路径一致：查不到就跳过元数据填充，不放大成导出失败。
 		return
 	}
 	for contract, m := range metas {
@@ -122,10 +140,13 @@ func (e *streamEnrichment) resolveTokens(ctx context.Context, rows []map[string]
 
 // enrich 对单块施加与批量路径相同的派生列。
 func (e *streamEnrichment) enrich(ctx context.Context, subject string, rows []map[string]any) {
-	if e.srv.deps.TokenMeta != nil {
-		e.resolveTokens(ctx, rows)
-		for _, row := range rows {
-			contract := streamRowContract(e.chain, row)
+	if len(rows) == 0 {
+		return
+	}
+	e.resolveTokens(ctx, rows)
+	if len(e.tokenPlans) > 0 {
+		for i, row := range rows {
+			contract := e.rowContracts[i]
 			if contract == "" {
 				continue
 			}
