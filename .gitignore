@@ -27,3 +27,15 @@ frontend/.tmp/
 artifacts/
 *.exe
 /home/
+
+# 部署脚本的构建产物与本地副本（2026-09-25）
+#   frontend/apps/*/dist.bak-* | dist.prev-* | dist.staged-* | dist.*-previous
+#     deploy-frontend-controlled.sh 的备份/暂存目录，实测累计 151 个、每轮部署都会新增；
+#     它们既不是源文件也不是证据，入库只会让状态噪声淹没真实改动。
+#   注意：只匹配 "dist.<后缀>"，不匹配 app 源码目录，也不动 git 已跟踪的 dist.*（若有）。
+frontend/apps/*/dist.*/
+# e2e 本地运行输出（含 tests-live / nginx-* / dlflow-* 等带后缀的运行目录）
+frontend/test-results*/
+# 未跟踪的验收证据日志副本（仓库约定入库的是逐项列 SHA-256 的 manifest 证据，
+# 不是逐次运行的原始日志；现存同类文件均为数 KB 级）
+acceptance-evidence/dual-system-v1/sprint7/ops/prune-job-event-log-*.log
