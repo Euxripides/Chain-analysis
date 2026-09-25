@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -17,7 +18,8 @@ import (
 )
 
 type Service struct {
-	CH *clickhouse.Conn
+	CH  *clickhouse.Conn
+	Log *slog.Logger
 }
 
 func New(ch *clickhouse.Conn) *Service { return &Service{CH: ch} }
@@ -576,12 +578,48 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 		where += " AND timestamp<=?"
 		args = append(args, *toTime)
 	}
+	// 无 FINAL 形状（见 export_dedupe.go 的实测说明）：列集/过滤/排序与现网完全一致，
+	// 只把"选版本"交给 Go 侧去重。FINAL 会先按排序键合并整条链，导致
+	// from_address/to_address 上的 bloom_filter 完全用不上
+	// （实测 19.6-23.8 s / 5.86 GiB → 5.7 s / 1.12 GiB，去重后 20 万行逐列相等）。
+	if sel, ok := exportSelectNoFinal(dataset, where); ok {
+		return s.rangeExportNoFinal(ctx, dataset, sel, where, args, limit, offset)
+	}
 	if subject != "" {
 		where, args = exportIndexedFinalWhere(dataset, where, args)
 	}
 	args = append(args, limit, offset)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	return s.queryRows(ctx, dataset, q, args...)
+}
+
+// rangeExportNoFinal 执行不带 FINAL 的导出查询，并在 Go 侧完成 ReplacingMergeTree
+// 语义的版本收敛。
+//
+// 重复行会占用 LIMIT 名额（bsc 实测重复率 31.4%），所以按 dedupeExportRetryFactor
+// 起超采、去重后不足 limit 就放宽重试，最多 dedupeExportMaxAttempts 次；取不满时返回
+// 已收敛的部分结果（API 层还会按同一组键再去重一次，因此文件内容不会因重复行变多）。
+func (s *Service) rangeExportNoFinal(ctx context.Context, dataset, sel, where string, args []any,
+	limit, offset int) ([]map[string]any, error) {
+	overFetch := int(float64(limit) * dedupeExportRetryFactor)
+	for attempt := 0; attempt < dedupeExportMaxAttempts; attempt++ {
+		queryArgs := append(append([]any{}, args...), overFetch, offset)
+		raw, err := s.queryRows(ctx, dataset, sel, queryArgs...)
+		if err != nil {
+			return nil, err
+		}
+		distinct := dedupeExportRows(dataset, raw, limit)
+		if len(distinct) >= limit || len(raw) < overFetch {
+			return distinct, nil
+		}
+		if s.Log != nil {
+			s.Log.Info("导出扫描去重后不足目标行数，放宽上限重试",
+				"dataset", dataset, "want", limit, "got", len(distinct),
+				"over_fetch", overFetch, "attempt", attempt+1)
+		}
+		overFetch += dedupeExportExtraRows
+	}
+	return nil, fmt.Errorf("export dedupe did not converge for dataset %s (limit=%d)", dataset, limit)
 }
 
 // RowsForExportRangeMulti scans ClickHouse once for all requested addresses.

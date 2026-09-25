@@ -219,7 +219,7 @@ func (r chainAwareAddressTypeResolver) ResolveAddressTypes(ctx context.Context, 
 }
 
 func New(deps Deps) *Server {
-	s := &Server{deps: deps, hub: NewSSEHub(), query: query.New(deps.CH), capabilities: deps.Capabilities, investigations: deps.Investigations, canvases: deps.Canvases}
+	s := &Server{deps: deps, hub: NewSSEHub(), query: query.NewWithLog(deps.CH, deps.Log), capabilities: deps.Capabilities, investigations: deps.Investigations, canvases: deps.Canvases}
 	s.legacyConsole = newLegacyConsoleAuth(deps.Cfg, deps.Log)
 	if deps.Store != nil && deps.Store.Pool != nil {
 		s.mfa = mfa.NewStore(deps.Store.Pool)

@@ -51,6 +51,13 @@ var exportScanSettings = ch.Settings{
 	"max_bytes_before_external_group_by": int(1) << 30,
 	"max_memory_usage":                   int(14) << 30,
 	"max_threads":                        4,
+	// 注：探针与临时查询走同一个 context 时，也依赖这里放开 max_result_rows。
+	// 导出行数上限由调用方（maxExportRows）控制，不能叠加服务端默认的
+	// max_result_rows=100000：实测两段式导出的第二段（带时间下界取数）在 200000 行
+	// 目标上被服务端静默截到 100 行，导出文件比目标少三个数量级而**不报错**。
+	// 内存仍由上面的 max_memory_usage 约束，超限会以 Code 241 明确失败。
+	"max_result_rows":      0,
+	"result_overflow_mode": "break",
 }
 
 // ExportScanContext returns a context whose queries carry exportScanSettings.
