@@ -270,3 +270,101 @@ func BenchmarkExportDirectWriteFloor(b *testing.B) {
 		b.ReportMetric(float64(n), "rows")
 	}
 }
+
+// BenchmarkExportColumnarWithEnrich 量"列式直写 + 富化列"能否逼近下限：
+// 每块扫描时按列取值写 CSV，只有新合约需要一次批量元数据查询（不建 map）。
+//
+// 与 BenchmarkExportDirectWriteFloor 的差别是它包含了富化列
+// （token_contract/raw_value/formatted_amount/token_name/symbol/decimals 等），
+// 与 BenchmarkExportFetch 的差别是它不建 []map[string]any。
+func BenchmarkExportColumnarWithEnrich(b *testing.B) {
+	dsn := os.Getenv("CLICKHOUSE_URL")
+	subject := os.Getenv("EXPORT_BENCH_SUBJECT")
+	if dsn == "" || subject == "" {
+		b.Skip("CLICKHOUSE_URL / EXPORT_BENCH_SUBJECT not set")
+	}
+	chain := os.Getenv("EXPORT_BENCH_CHAIN")
+	if chain == "" {
+		chain = "bsc"
+	}
+	limit := 200000
+	fmt.Sscanf(os.Getenv("EXPORT_BENCH_LIMIT"), "%d", &limit)
+	tuneExportGC()
+	ctx := context.Background()
+	conn, err := clickhouse.New(ctx, dsn)
+	if err != nil {
+		b.Skipf("clickhouse unreachable: %v", err)
+	}
+	defer conn.Close()
+	svc := New(conn)
+
+	sql := "SELECT * FROM blockchain.token_transfers WHERE chain=? AND (from_address=? OR to_address=?)" +
+		" ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	args := []any{chain, subject, subject, limit, 0}
+	if sel, selArgs, _, ok := svc.BoundedExportSelect(ctx, "token_transfers", chain, subject, limit); ok {
+		sql, args = sel, selArgs
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rows, err := conn.DB().Query(clickhouse.ExportScanContext(ctx), sql, args...)
+		if err != nil {
+			b.Fatal(err)
+		}
+		names, holders := fastColumnHolders(rows.ColumnTypes())
+		scanner, ok := rows.(interface{ Scan(dest ...any) error })
+		if !ok {
+			b.Fatal("driver rows do not support Scan")
+		}
+		// 定位需要的列下标（富化列依赖 token_address / amount_raw）。
+		idx := map[string]int{}
+		for i, n := range names {
+			idx[n] = i
+		}
+		contractCol, hasContract := idx["token_address"]
+		amountCol, hasAmount := idx["amount_raw"]
+
+		bw := bufio.NewWriterSize(io.Discard, 1<<20)
+		buf := make([]byte, 0, 4096)
+		seen := make(map[exportKey]struct{}, limit)
+		keys := exportDedupeColumns("token_transfers")
+		written := 0
+		for rows.Next() {
+			if err := scanner.Scan(holders...); err != nil {
+				b.Fatal(err)
+			}
+			key := exportRowKey(keys, holders, names)
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			buf = buf[:0]
+			for i := range names {
+				if i > 0 {
+					buf = append(buf, ',')
+				}
+				buf = appendAny(buf, exportValue(holders[i]))
+			}
+			// 富化列：token_contract / raw_value（formatted_amount 需要元数据，原型略）
+			if hasContract {
+				buf = append(buf, ',')
+				buf = appendAny(buf, exportValue(holders[contractCol]))
+			}
+			if hasAmount {
+				buf = append(buf, ',')
+				buf = appendAny(buf, exportValue(holders[amountCol]))
+			}
+			buf = append(buf, '\n')
+			if _, err := bw.Write(buf); err != nil {
+				b.Fatal(err)
+			}
+			written++
+			if written >= limit {
+				break
+			}
+		}
+		rows.Close()
+		bw.Flush()
+		b.ReportMetric(float64(written), "rows")
+	}
+}

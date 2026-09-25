@@ -233,3 +233,21 @@ func BenchmarkExportBatchPipelineFull(b *testing.B) {
 		client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
 	}
 }
+
+// BenchmarkExportColumnarPipeline 量列式直写路径（生产默认已启用）：
+// 分块取数 + 逐块富化 + 直写 CSV，不建 []map[string]any。
+func BenchmarkExportColumnarPipeline(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		written, ok, err := srv.exportColumnarStream(ctx, "token_transfers", "bsc", subject, io.Discard, limit)
+		if err != nil {
+			b.Fatalf("columnar: %v", err)
+		}
+		if !ok {
+			b.Fatal("columnar unsupported")
+		}
+		b.ReportMetric(float64(written), "rows")
+	}
+}

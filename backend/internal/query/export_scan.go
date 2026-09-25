@@ -138,6 +138,10 @@ func scanRowMap(plan *fastScanPlan, columns []string, holders []any) (map[string
 	return item, nil
 }
 
+// ExportValue 是 exportValue 的导出包装：API 层的列式导出路径需要按列取值，
+// 但不能反向 import 本包内部符号。
+func ExportValue(holder any) any { return exportValue(holder) }
+
 // exportValue 把列持有变量解引用成值。
 //
 // time.Time 与 decimal.Decimal 直接返回值本身：导出侧只在格式化时读取它们，
@@ -336,6 +340,128 @@ func (s *Service) ForEachExportChunk(ctx context.Context, dataset, q string, wan
 		emitted += len(buf)
 	}
 	return emitted, nil
+}
+
+// ColumnChunk 是一块列式导出的原始单元格文本。
+//
+// 为什么在这里就把值格式化成字符串：列持有变量是**按列**的、每次 Scan 覆盖，
+// 而富化必须"先收集整块的合约、批量查元数据、再写出"。两者不能同时成立，
+// 除非把块内数据复制出来。复制的代价很小（字符串 + 切片），而且避免了整行 map
+// （每行 30 个键 / 30 个装箱值，实测 20 万行分配 1524 MiB）。
+type ColumnChunk struct {
+	Names []string
+	// Cells[ i*Rows + j ] 是第 j 行第 i 列的可直接写出的文本（未加引号）。
+	// 空字符串既表示空值也表示空文本——导出里两者在 CSV 中是同一形态。
+	Cells []string
+	Rows  int
+}
+
+// ForEachExportColumnChunk 按块遍历导出结果并把单元格文本交给回调，不建行 map。
+//
+// 去重沿用同一套 seen 集合与键算法；cells 只装**存活行**，因此与 map 路径选出
+// 完全相同的行集。回调拿到的是已复制的文本，可以在块内自由分两遍处理
+// （先收集合约再写出）。
+//
+// 返回 ok=false 表示驱动不支持按列消费，调用方必须回退 map 路径。
+func (s *Service) ForEachExportColumnChunk(ctx context.Context, dataset, q string, wantLimit, chunk int,
+	fn func(c *ColumnChunk) error, args ...any) (int, bool, error) {
+	rows, err := s.CH.DB().Query(ctx, q, args...)
+	if err != nil {
+		return 0, false, clickhouse.DescribeScanError(err)
+	}
+	defer rows.Close()
+
+	names, holders := fastColumnHolders(rows.ColumnTypes())
+	scanner, canScan := rows.(interface{ Scan(dest ...any) error })
+	if !canScan {
+		return 0, false, nil
+	}
+	if chunk <= 0 {
+		chunk = exportChunkRows
+	}
+	seen := make(map[exportKey]struct{}, 1024)
+	keys := exportDedupeColumns(dataset)
+	emitted := 0
+	cellBuf := make([]string, 0, chunk*len(names))
+	rowsInChunk := 0
+	flush := func() error {
+		if rowsInChunk == 0 {
+			return nil
+		}
+		err := fn(&ColumnChunk{Names: names, Cells: cellBuf, Rows: rowsInChunk})
+		cellBuf = cellBuf[:0]
+		rowsInChunk = 0
+		return err
+	}
+	for rows.Next() {
+		if scanErr := scanner.Scan(holders...); scanErr != nil {
+			return emitted, true, fmt.Errorf("clickhouse [ScanExportRow]: %w", scanErr)
+		}
+		if len(keys) > 0 {
+			key := exportRowKey(keys, holders, names)
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+		for i := range names {
+			cellBuf = append(cellBuf, formatCellText(exportValue(holders[i])))
+		}
+		rowsInChunk++
+		emitted++
+		if rowsInChunk >= chunk {
+			if err := flush(); err != nil {
+				return emitted, true, err
+			}
+		}
+		if wantLimit > 0 && emitted >= wantLimit {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return emitted, true, err
+	}
+	if err := flush(); err != nil {
+		return emitted, true, err
+	}
+	return emitted, true, nil
+}
+
+// formatCellText 把单元格值写成与 map 路径一致的文本。
+//
+// 必须与 api 包 appendCSVValue 的取值语义相同（时间 RFC3339Nano、Decimal String()、
+// nil→空）；引号由写出方统一处理，因此这里不带引号。
+func formatCellText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	case uint64:
+		return strconv.FormatUint(x, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(x), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(x), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(x), 10)
+	case int:
+		return strconv.FormatInt(int64(x), 10)
+	case int64:
+		return strconv.FormatInt(x, 10)
+	case int32:
+		return strconv.FormatInt(int64(x), 10)
+	case int16:
+		return strconv.FormatInt(int64(x), 10)
+	case int8:
+		return strconv.FormatInt(int64(x), 10)
+	case float64:
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	default:
+		return fmt.Sprint(x)
+	}
 }
 
 // exportChunkRows 是流式导出的默认块大小：过大则内存峰值回升，过小则元数据

@@ -372,6 +372,17 @@ func exportStreamTable(dataset string) string {
 }
 
 func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *model.DownloadJob, key, chain, wsID, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
+	// 列式直写：不建 []map[string]any，从 ClickHouse 列直接写 CSV。实测把 20 万行
+	// 完整链路从 5.5-5.9 s 压到 2 s 量级（见 export_columnar.go 文件头的下限测算）。
+	// 只在"单地址 + csv + 不带 GPT 过滤 + 不开 decoded_input + 不需要案件/标签注释"
+	// 时启用；其余情形语义不同（多文件、随机访问格式、整批哈希查询、按用途改行值），
+	// 一律回退原有 map 路径。
+	if exportColumnarEnabled() && canUseColumnarExport(job, format, dataset, includeMeta, includeDecodedInput) {
+		rows, sha, loc, err := s.writeSingleExportColumnar(ctx, exportID, key, chain, addr, dataset)
+		if !errors.Is(err, errColumnarUnsupported) {
+			return rows, sha, loc, err
+		}
+	}
 	if exportStreamEnabled() && canStreamSingleExport(format, includeDecodedInput, job) {
 		rows, sha, loc, err := s.writeSingleExportStream(ctx, exportID, key, chain, wsID, addr, dataset, format, includeMeta)
 		if !errors.Is(err, errStreamUnsupported) {
