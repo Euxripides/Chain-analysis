@@ -717,10 +717,16 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 		where += " AND timestamp<=?"
 		args = append(args, *toTime)
 	}
-	where, args = exportIndexedFinalWhere(dataset, where, args)
+	// 该形状由调用方（API 层）自行去重，因此这里不做流式收敛，但**不能再用** FINAL：
+	// FINAL 会先按排序键合并整条链，把 from_address/to_address 上的 bloom_filter
+	// 跳数索引全部作废；它前面那层"键 IN 子查询"也没有 LIMIT，等价于先把该地址的
+	// 全部键物化一遍。实测同一请求（20 万行目标、单地址）：本形状 28.5 s，
+	// 去掉 FINAL 与键子查询后 4.86 s。
+	//
+	// 这与单地址路径（exportSelectNoFinal）是同一处修正；multi 路径此前一直没改，
+	// 而它正是 Actions 导出（csv→强制 zip）实际走的路径。
 	args = append(args, limit)
-	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ?"
-	// 该形状由调用方（API 层）自行去重，这里不做流式收敛。
+	q := "SELECT * FROM blockchain." + tableName(dataset) + " WHERE " + where + " ORDER BY timestamp DESC LIMIT ?"
 	return s.queryRowsExport(ctx, dataset, q, 0, args...)
 }
 
