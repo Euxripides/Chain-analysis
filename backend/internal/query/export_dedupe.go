@@ -71,8 +71,12 @@ func exportDedupeColumns(dataset string) []string {
 	switch dataset {
 	case "transactions", "activity":
 		return []string{"tx_hash"}
-	case "token_transfers", "internal_transactions":
+	case "token_transfers":
 		return []string{"tx_hash", "log_index", "token_address"}
+	case "internal_transactions":
+		// internal_calls 的排序键是 (chain, tx_hash, call_index)，没有 log_index；
+		// 扫描后该列以 internal_index 暴露，用 call_index 才是与建表一致的版本键。
+		return []string{"tx_hash", "call_index"}
 	case "nft_transfers":
 		return []string{"tx_hash", "log_index", "contract_address", "token_id"}
 	case "logs":

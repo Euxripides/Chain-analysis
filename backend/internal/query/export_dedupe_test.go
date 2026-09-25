@@ -15,7 +15,7 @@ func TestExportDedupeColumnsMatchReplacingMergeTreeSortKeys(t *testing.T) {
 		"transactions":          {"tx_hash"},
 		"token_transfers":       {"tx_hash", "log_index", "token_address"},
 		"nft_transfers":         {"tx_hash", "log_index", "contract_address", "token_id"},
-		"internal_transactions": {"tx_hash", "log_index", "token_address"},
+		"internal_transactions": {"tx_hash", "call_index"},
 		"logs":                  {"tx_hash", "log_index"},
 		"balances":              {"address", "token_address", "token_symbol"},
 		"activity":              {"tx_hash"},
