@@ -260,6 +260,19 @@ func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 	if err != nil {
 		return err
 	}
+	return s.storeLogo(ctx, meta, body)
+}
+
+/*
+ * storeLogo 是"图标字节 → 自托管对象"的唯一下游：校验大小/MIME/尺寸，写 MinIO，
+ * 再把 logo_object_key 写回行。worker 抓取与人工提交（admin 上传 / CLI 批量）共用这一段，
+ * 保证两条路的质量门槛完全一致。
+ */
+func (s *Service) storeLogo(ctx context.Context, meta Metadata, body []byte) error {
+	max := s.Logo.MaxBytes
+	if max <= 0 {
+		max = 2 << 20
+	}
 	if int64(len(body)) > max {
 		return fmt.Errorf("logo exceeds %d bytes", max)
 	}
@@ -290,6 +303,74 @@ func (s *Service) localizeLogo(ctx context.Context, meta Metadata) error {
 	// 会把地址小写化，UPDATE 匹配不到任何行（图标写进了 MinIO，行却永远停在"待本地化"）。
 	_, err = s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET logo_object_key=$3,logo_mime_type=$4,updated_at=now() WHERE chain=$1 AND normalized_address=$2`, meta.Chain, normalizeAddressForChain(meta.Chain, meta.ContractAddress), key, mime)
 	return err
+}
+
+/*
+ * SetLogoFromURL 由管理员/运维指派一个外部图标 URL，并**同步**完成自托管本地化。
+ *
+ * 为什么需要它：像 OKLink 那样给"公开目录里没有图"的代币配图标，只能靠人工/外部来源
+ * （项目官网、BscScan、社区提交）。走这条入口的 URL 与 worker 扫描共用同一套校验
+ * （https + 公网 IP + 大小/MIME/尺寸），配置了图片镜像时同样自动走镜像。
+ */
+func (s *Service) SetLogoFromURL(ctx context.Context, chain, contract, logoURL string) (Metadata, error) {
+	logoURL = strings.TrimSpace(logoURL)
+	if logoURL == "" {
+		return Metadata{}, fmt.Errorf("logo url required")
+	}
+	if !s.Logo.Enabled || s.Raw == nil {
+		return Metadata{}, fmt.Errorf("logo storage disabled")
+	}
+	tag, err := s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET logo_url=$3, metadata_source='curated', updated_at=now() WHERE chain=$1 AND normalized_address=$2`, strings.ToLower(strings.TrimSpace(chain)), normalizeAddressForChain(chain, contract), logoURL)
+	if err != nil {
+		return Metadata{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return Metadata{}, fmt.Errorf("token not found")
+	}
+	m, err := s.Get(ctx, chain, contract)
+	if err != nil || m == nil {
+		return Metadata{}, fmt.Errorf("token not found")
+	}
+	if err := s.localizeLogo(ctx, *m); err != nil {
+		return Metadata{}, err
+	}
+	out, _ := s.Get(ctx, chain, contract)
+	if out == nil {
+		return Metadata{}, fmt.Errorf("token not found")
+	}
+	return *out, nil
+}
+
+/* SetLogoBytes 直接收人工上传的图标字节（PNG/JPEG/WebP），校验后落自托管对象。 */
+func (s *Service) SetLogoBytes(ctx context.Context, chain, contract string, body []byte) (Metadata, error) {
+	if !s.Logo.Enabled || s.Raw == nil {
+		return Metadata{}, fmt.Errorf("logo storage disabled")
+	}
+	m, err := s.Get(ctx, chain, contract)
+	if err != nil || m == nil {
+		return Metadata{}, fmt.Errorf("token not found")
+	}
+	if err := s.storeLogo(ctx, *m, body); err != nil {
+		return Metadata{}, err
+	}
+	_, _ = s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET metadata_source='curated', updated_at=now() WHERE chain=$1 AND normalized_address=$2`, strings.ToLower(strings.TrimSpace(chain)), normalizeAddressForChain(chain, contract))
+	out, _ := s.Get(ctx, chain, contract)
+	if out == nil {
+		return Metadata{}, fmt.Errorf("token not found")
+	}
+	return *out, nil
+}
+
+/* ClearLogo 清掉图标来源与自托管对象键（用于纠正错误图标）。 */
+func (s *Service) ClearLogo(ctx context.Context, chain, contract string) error {
+	tag, err := s.Store.Pool.Exec(ctx, `UPDATE token_metadata SET logo_url='', logo_object_key='', logo_mime_type='', updated_at=now() WHERE chain=$1 AND normalized_address=$2`, strings.ToLower(strings.TrimSpace(chain)), normalizeAddressForChain(chain, contract))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("token not found")
+	}
+	return nil
 }
 func imageDimensions(body []byte, mime string) (int, int, error) {
 	if mime != "image/webp" {

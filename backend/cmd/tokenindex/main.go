@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -22,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +33,9 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/logger"
+	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/blockchain-platform/blockchain-platform/internal/tokenmeta"
 )
 
 const (
@@ -112,12 +116,13 @@ func main() {
 	cgURL := flag.String("coingecko-url", "", "直接抓取 CoinGecko coins/list（留空表示不用；传 default 使用官方地址）")
 	resolve := flag.Bool("resolve-logos", false, "把目录里的 logo_url 回填到缺图标的 token_metadata")
 	repair := flag.Bool("repair-logos", false, "把已指向 Trust Wallet 但 URL 与目录不一致的 logo_url 纠正为规范 URL")
+	logos := flag.String("logos", "", "批量指派图标：每行 chain<TAB>address<TAB>图标URL或本地图片路径")
 	chains := flag.String("chains", "", "只导入这些链（逗号分隔，默认全部）")
 	batch := flag.Int("batch", 500, "每批 upsert 行数")
 	limit := flag.Int("limit", 0, "最多导入多少条（0=不限，用于试跑）")
 	flag.Parse()
 
-	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && *cgBasic == "" && !*derive && !*resolve && !*repair {
+	if *twDir == "" && *cgFile == "" && *cgURL == "" && *cgTokenList == "" && *cgBasic == "" && !*derive && !*resolve && !*repair && *logos == "" {
 		fmt.Fprintln(os.Stderr, "至少指定 -trustwallet / -coingecko / -coingecko-url / -resolve-logos 之一")
 		flag.Usage()
 		os.Exit(2)
@@ -214,6 +219,76 @@ func main() {
 		}
 		fmt.Printf("repair-logos: 纠正 %d 行指向 Trust Wallet 的错误 URL\n", n)
 	}
+	if *logos != "" {
+		ok, failed, err := applyLogos(ctx, st, cfg, *logos, log)
+		if err != nil {
+			log.Error("apply logos failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("logos: 成功 %d 行，失败 %d 行\n", ok, failed)
+	}
+}
+
+/*
+ * applyLogos 批量指派图标：每行 `chain<TAB>address<TAB>来源`。
+ * 来源既可以是 https URL（走 tokenmeta 的 https+公网 IP 校验，配置了镜像则自动走镜像），
+ * 也可以是本地图片路径（人工收集好的一批 PNG/JPEG/WebP）。
+ *
+ * 存在的意义：公开目录（Trust Wallet / CoinGecko / PancakeSwap）覆盖不到的小币，
+ * 只能像 OKLink 那样人工/外部补图；这条命令让"一次补几百个"变成一条命令。
+ */
+func applyLogos(ctx context.Context, st *store.Store, cfg *config.Config, path string, log *slog.Logger) (int, int, error) {
+	raw, err := rawstore.New(ctx, cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioSecure, cfg.RawBucket)
+	if err != nil {
+		return 0, 0, err
+	}
+	svc := tokenmeta.New(st, nil, nil, log)
+	svc.ConfigureLogo(raw, tokenmeta.LogoConfig{
+		Enabled: true, MaxBytes: cfg.TokenMetadata.LogoMaxBytes,
+		MaxWidth: cfg.TokenMetadata.LogoMaxWidth, MaxHeight: cfg.TokenMetadata.LogoMaxHeight,
+		MirrorBase: cfg.TokenMetadata.LogoMirrorBase, MirrorHosts: cfg.TokenMetadata.LogoMirrorHosts,
+	})
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+	ok, failed := 0, 0
+	sc := bufio.NewScanner(file)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	line := 0
+	for sc.Scan() {
+		line++
+		text := strings.TrimSpace(sc.Text())
+		if text == "" || strings.HasPrefix(text, "#") {
+			continue
+		}
+		parts := strings.Split(text, "\t")
+		if len(parts) < 3 {
+			fmt.Printf("  第 %d 行字段不足（需要 chain<TAB>address<TAB>来源）：%s\n", line, text)
+			failed++
+			continue
+		}
+		chain, address, source := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2])
+		var applyErr error
+		if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+			_, applyErr = svc.SetLogoFromURL(ctx, chain, address, source)
+		} else {
+			body, readErr := os.ReadFile(source)
+			if readErr != nil {
+				applyErr = readErr
+			} else {
+				_, applyErr = svc.SetLogoBytes(ctx, chain, address, body)
+			}
+		}
+		if applyErr != nil {
+			failed++
+			fmt.Printf("  失败 %s %s：%v\n", chain, address, applyErr)
+			continue
+		}
+		ok++
+	}
+	return ok, failed, sc.Err()
 }
 
 func download(url, path string) error {

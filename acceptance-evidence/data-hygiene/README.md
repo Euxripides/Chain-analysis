@@ -138,6 +138,38 @@ psql "$MIGRATION_DATABASE_URL" -c "select count(*) filter (where coalesce(logo_u
        count(*) filter (where coalesce(logo_object_key,'')<>'') as localized from token_metadata;"
 ```
 
+## L3 续：人工/外部图标入库能力（"和 OKLink 一样"缺的就是这块）
+
+公开目录已经榨干（TW / CoinGecko / PancakeSwap / TW chain tokenlist 全部试过），
+剩下 34,972 个代币的图标**在任何可达公开源里都不存在**：DexScreener、GeckoTerminal、
+CoinGecko API 在本机出网被切断（proxy 只能取图，不能取 JSON/HTML）；BscScan 代币页 403，
+而且按 `/token/images/<slug>_32.png` 逐个试探（FOX / sFOX 等）全部 404 —— **BscScan 自己也没有**。
+OKLink 能给它们出图，是因为它有自建图标库（人工/社区提交）。所以补上这条入口：
+
+**接口**（`admin:dataset:manage`）：
+
+```
+POST   /api/v1/admin/tokens/{chain}/{contract}/logo   # JSON {"url": "https://…"} 或直接 POST 图片字节
+DELETE /api/v1/admin/tokens/{chain}/{contract}/logo   # 清除图标（纠正错误图标用）
+```
+
+- URL 形态与 worker 扫描共用同一套校验（https + 公网 IP + ≤2MB + PNG/JPEG/WebP + ≤4096px），
+  配了图片镜像的 host 同样自动走镜像；
+- 上传形态直接把字节写进 MinIO `token-assets/{chain}/{contract}/logo.<ext>`；
+- 落库即生效（读路径按 `logo_object_key` 取图，不需要等 5 分钟扫描）；
+- `metadata_source` 标记为 `curated`，与目录来源可区分。
+
+**批量**：`cmd/tokenindex -logos <file>`，每行 `chain<TAB>address<TAB>图标URL或本地图片路径`。
+一次补几百个就是一条命令；`SetLogoFromURL`/`SetLogoBytes`/`ClearLogo` 与接口共用同一实现。
+
+**实测（round-trip）**：CAKE（bsc `0x0e09fa…`）清空对象键 → `/logo` 立刻 404；
+用 `-logos` 重新指派同一 URL（走镜像抓取）→ `/logo` 立刻 200。图标设置/清除两条路都验证过。
+
+**待补清单**：`l3-missing-logo-worklist-top300.tsv` —— 近 30 天转账笔数最高的 300 个无图标代币
+（chain / address / symbol / name / 30d 笔数 / 区块浏览器链接）。补前几十个就能覆盖列表里
+绝大多数可见内容；素材需要从项目官网、社区或自有图标库取——这一步是人工/外部来源，本轮只把
+入口和清单准备好。
+
 ## 门禁
 
 - `go build ./...`、`go test -count=1 ./internal/tokenmeta/` 通过（新增镜像 URL 改写单测）；

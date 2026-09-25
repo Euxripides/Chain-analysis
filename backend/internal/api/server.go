@@ -596,6 +596,9 @@ func (s *Server) buildRouter() {
 		api.Get("/tokens/enrichment", s.require("admin:dataset:read", s.handleTokenEnrichment))
 		api.Post("/admin/tokens/{chain}/{contract}/resolve", s.require("admin:dataset:manage", s.handleTokenResolve))
 		api.Post("/admin/tokens/{chain}/{contract}/override", s.require("admin:dataset:manage", s.handleTokenOverride))
+		// 人工/外部来源的图标指派（公开目录没有图的代币用它补齐，见 data-hygiene 证据）。
+		api.Post("/admin/tokens/{chain}/{contract}/logo", s.require("admin:dataset:manage", s.handleTokenLogoSet))
+		api.Delete("/admin/tokens/{chain}/{contract}/logo", s.require("admin:dataset:manage", s.handleTokenLogoClear))
 		api.Post("/admin/token-metadata/backfill", s.require("admin:dataset:manage", s.handleTokenBackfill))
 		api.Get("/admin/token-metadata/backfill", s.require("admin:dataset:read", s.handleTokenBackfillList))
 		api.Get("/methods/enrichment", s.require("admin:dataset:read", s.handleMethodEnrichment))

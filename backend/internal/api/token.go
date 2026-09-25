@@ -125,6 +125,75 @@ func (s *Server) handleTokenOverride(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"token": m})
 }
 
+/*
+ * handleTokenLogoSet 给单个代币指派图标（人工/外部来源），同步本地化后立即可见。
+ *
+ * 两种请求形态：
+ *   - JSON  {"url": "https://…/logo.png"}：走与 worker 相同的 URL 校验（https + 公网 IP）；
+ *   - 原始图片字节（Content-Type: image/png|jpeg|webp，≤ TOKEN_LOGO_MAX_BYTES）：直接落对象存储。
+ * 需要 admin:dataset:manage（与 override 同一权限）。
+ */
+func (s *Server) handleTokenLogoSet(w http.ResponseWriter, r *http.Request) {
+	if s.deps.TokenMeta == nil {
+		writeJSON(w, 503, map[string]any{"error": "token metadata disabled"})
+		return
+	}
+	chain := chi.URLParam(r, "chain")
+	contract := chi.URLParam(r, "contract")
+	if !tokenmeta.IsValidContractAddress(contract) {
+		writeJSON(w, 400, map[string]any{"error": "invalid token contract address"})
+		return
+	}
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "image/") {
+		max := s.cfg.TokenMetadata.LogoMaxBytes
+		if max <= 0 {
+			max = 2 << 20
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, max+1))
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"error": "read body failed"})
+			return
+		}
+		if int64(len(body)) > max {
+			writeJSON(w, 400, map[string]any{"error": "logo too large"})
+			return
+		}
+		m, err := s.deps.TokenMeta.SetLogoBytes(r.Context(), chain, contract, body)
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"token": m, "logo_url": "/api/v1/tokens/" + chain + "/" + contract + "/logo"})
+		return
+	}
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	m, err := s.deps.TokenMeta.SetLogoFromURL(r.Context(), chain, contract, req.URL)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"token": m, "logo_url": "/api/v1/tokens/" + chain + "/" + contract + "/logo"})
+}
+
+/* handleTokenLogoClear 清除图标（logo_url + 自托管对象键），用于纠正错误图标。 */
+func (s *Server) handleTokenLogoClear(w http.ResponseWriter, r *http.Request) {
+	if s.deps.TokenMeta == nil {
+		writeJSON(w, 503, map[string]any{"error": "token metadata disabled"})
+		return
+	}
+	if err := s.deps.TokenMeta.ClearLogo(r.Context(), chi.URLParam(r, "chain"), chi.URLParam(r, "contract")); err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"status": "cleared"})
+}
+
 func (s *Server) handleTokenBackfill(w http.ResponseWriter, r *http.Request) {
 	if s.deps.TokenBackfill == nil {
 		writeJSON(w, 503, map[string]any{"error": "token metadata backfill disabled"})
