@@ -36,6 +36,11 @@ artifacts/
 frontend/apps/*/dist.*/
 # e2e 本地运行输出（含 tests-live / nginx-* / dlflow-* 等带后缀的运行目录）
 frontend/test-results*/
+# 人工校对时从 dist 复制出来的前端构建快照（frontend/.codex-user-dist-<日期>-<随机后缀>/）
+frontend/.codex-user-dist-*/
+# 未跟踪的导出探针二进制（backend/api 为历史遗留的 53.6 MB 构建产物）
+backend/api
+backend/exportbench
 # 未跟踪的验收证据日志副本（仓库约定入库的是逐项列 SHA-256 的 manifest 证据，
 # 不是逐次运行的原始日志；现存同类文件均为数 KB 级）
 acceptance-evidence/dual-system-v1/sprint7/ops/prune-job-event-log-*.log
