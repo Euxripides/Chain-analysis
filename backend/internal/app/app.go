@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,6 +81,30 @@ type Infra struct {
 }
 
 // Bootstrap 连接全部依赖并执行迁移。
+// TuneExportGC 上调 GC 目标百分比，以换取导出高峰期的吞吐。
+//
+// 实测（cmd/exportbench + internal/query 的 BenchmarkExportFetch，真实实例）：
+// 导出行物化会为每行分配一个 map 与 22 个装箱值，GC 标记占掉 50-60% 的 CPU。
+// GOGC 从默认 100 提到 400：
+//
+//	20 万行导出  7.73 s → 6.80 s（-12%）
+//	100 万行导出 19.95 s → 16.39 s（-18%）
+//
+// 提高 GOGC 会放大堆峰值，因此**必须**配一个硬上限：用 SetMemoryLimit 把 Go 堆
+// 顶在预算内，让 GC 在接近上限时自动变得更积极（Go 1.19+ 的软内存限制），
+// 而不是靠 GOGC 的倍数关系失控。上限按导出峰值留余量：100 万行导出实测堆 3.5 GiB，
+// 这里默认 6 GiB，可用 EXPORT_GC_MEMORY_LIMIT_MB 覆盖。
+func TuneExportGC() {
+	debug.SetGCPercent(400)
+	limitMB := 6 * 1024
+	if raw := strings.TrimSpace(os.Getenv("EXPORT_GC_MEMORY_LIMIT_MB")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limitMB = parsed
+		}
+	}
+	debug.SetMemoryLimit(int64(limitMB) << 20)
+}
+
 func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infra, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config invalid: %w", err)

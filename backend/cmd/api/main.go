@@ -17,6 +17,9 @@ import (
 )
 
 func main() {
+	// 导出高峰期的 GC 调优必须发生在任何大批量分配之前；见 app.TuneExportGC 的实测数据。
+	app.TuneExportGC()
+
 	ctx := context.Background()
 	cfg := config.Load()
 	log := logger.New(cfg.LogLevel)

@@ -604,7 +604,7 @@ func (s *Service) rangeExportNoFinal(ctx context.Context, dataset, sel, where st
 	overFetch := int(float64(limit) * dedupeExportRetryFactor)
 	for attempt := 0; attempt < dedupeExportMaxAttempts; attempt++ {
 		queryArgs := append(append([]any{}, args...), overFetch, offset)
-		raw, err := s.queryRows(ctx, dataset, sel, queryArgs...)
+		raw, err := s.queryRowsExport(ctx, dataset, sel, overFetch, queryArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -674,7 +674,8 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 	where, args = exportIndexedFinalWhere(dataset, where, args)
 	args = append(args, limit)
 	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC LIMIT ?"
-	return s.queryRows(ctx, dataset, q, args...)
+	// 该形状由调用方（API 层）自行去重，这里不做流式收敛。
+	return s.queryRowsExport(ctx, dataset, q, 0, args...)
 }
 
 // FINAL expands address bloom-filter matches to all primary-key granules.
@@ -871,25 +872,33 @@ func activityCandidateMatches(chain string, activity, transfer map[string]any) b
 }
 
 // scanOne 按 dataset 用对应结构体 ScanStruct，再转 map（json 往返，decimal → 字符串）。
-func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[string]any, error) {
-	var v any
+// newRowStruct 返回该数据集的行结构体指针。快路径（export_scan.go）用它的字段
+// 建立列映射，因此这里是"哪些列属于哪个数据集"的唯一定义，新增列只改这一处。
+func newRowStruct(dataset string) (any, error) {
 	switch dataset {
 	case "transactions":
-		v = &txRow{}
+		return &txRow{}, nil
 	case "token_transfers":
-		v = &tokenTransferRow{}
+		return &tokenTransferRow{}, nil
 	case "nft_transfers":
-		v = &nftTransferRow{}
+		return &nftTransferRow{}, nil
 	case "logs":
-		v = &logRow{}
+		return &logRow{}, nil
 	case "balances":
-		v = &balanceRow{}
+		return &balanceRow{}, nil
 	case "activity":
-		v = &activityRow{}
+		return &activityRow{}, nil
 	case "internal_transactions":
-		v = &internalTransferRow{}
+		return &internalTransferRow{}, nil
 	default:
 		return nil, fmt.Errorf("unknown dataset %s", dataset)
+	}
+}
+
+func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[string]any, error) {
+	v, err := newRowStruct(dataset)
+	if err != nil {
+		return nil, err
 	}
 	if err := rows.ScanStruct(v); err != nil {
 		return nil, err
