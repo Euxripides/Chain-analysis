@@ -350,6 +350,8 @@ func (s *Service) ForEachExportChunk(ctx context.Context, dataset, q string, wan
 // （每行 30 个键 / 30 个装箱值，实测 20 万行分配 1524 MiB）。
 type ColumnChunk struct {
 	Names []string
+	// NameIndex 是列名→下标，供按列名取值（注释列需要 from_address/to_address/address）。
+	NameIndex map[string]int
 	// Cells[ i*Rows + j ] 是第 j 行第 i 列的可直接写出的文本（未加引号）。
 	// 空字符串既表示空值也表示空文本——导出里两者在 CSV 中是同一形态。
 	Cells []string
@@ -379,6 +381,10 @@ func (s *Service) ForEachExportColumnChunk(ctx context.Context, dataset, q strin
 	if chunk <= 0 {
 		chunk = exportChunkRows
 	}
+	nameIndex := make(map[string]int, len(names))
+	for i, n := range names {
+		nameIndex[n] = i
+	}
 	seen := make(map[exportKey]struct{}, 1024)
 	keys := exportDedupeColumns(dataset)
 	emitted := 0
@@ -388,7 +394,7 @@ func (s *Service) ForEachExportColumnChunk(ctx context.Context, dataset, q strin
 		if rowsInChunk == 0 {
 			return nil
 		}
-		err := fn(&ColumnChunk{Names: names, Cells: cellBuf, Rows: rowsInChunk})
+		err := fn(&ColumnChunk{Names: names, NameIndex: nameIndex, Cells: cellBuf, Rows: rowsInChunk})
 		cellBuf = cellBuf[:0]
 		rowsInChunk = 0
 		return err

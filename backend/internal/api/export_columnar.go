@@ -2,14 +2,17 @@ package api
 
 import (
 	"bufio"
+	"compress/flate"
 	"context"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 )
@@ -50,6 +53,10 @@ var exportFieldRank = func() map[string]int {
 
 // enrichmentColumns 是富化会给一行补上的全部列名（applyTokenMeta 的写集）。
 // token_decimals 不在此列：它是结果集既有列，富化会**覆盖**它的值。
+// annotationColumns 是案件/标签注释会给一行补上的列（include_meta=true 时）。
+// 与 enrich 无关：它只依赖该行是否匹配导出主体地址、以及工作区里的案件/标签库。
+var annotationColumns = []string{"matched_address", "case_names", "tag_names"}
+
 var enrichmentColumns = []string{
 	"token_contract", "raw_value", "formatted_amount", "token_name",
 	"token_type", "token_metadata_status", "token_metadata_source", "token_metadata_confidence",
@@ -84,7 +91,7 @@ type columnarPlan struct {
 // 「结果集列名 ∪ 实际写过的富化列」——token_name 只在元数据有名字时才出现，
 // 但导出契约要求列集稳定，因此这里一律并入全部富化列（实测缺元数据的行
 // 也会写 token_contract/raw_value/formatted_amount，其余列在整批里必然出现）。
-func buildColumnarPlan(resultColumns []string) (*columnarPlan, error) {
+func buildColumnarPlan(resultColumns []string, includeMeta bool) (*columnarPlan, error) {
 	p := &columnarPlan{contractCol: -1, amountCol: -1}
 	for i, n := range resultColumns {
 		switch n {
@@ -97,7 +104,7 @@ func buildColumnarPlan(resultColumns []string) (*columnarPlan, error) {
 		}
 	}
 
-	all := make([]string, 0, len(resultColumns)+len(enrichmentColumns))
+	all := make([]string, 0, len(resultColumns)+len(enrichmentColumns)+len(annotationColumns))
 	seen := make(map[string]struct{}, len(resultColumns)+len(enrichmentColumns))
 	for _, n := range resultColumns {
 		if _, dup := seen[n]; dup {
@@ -112,6 +119,15 @@ func buildColumnarPlan(resultColumns []string) (*columnarPlan, error) {
 		}
 		seen[n] = struct{}{}
 		all = append(all, n)
+	}
+	if includeMeta {
+		for _, n := range annotationColumns {
+			if _, dup := seen[n]; dup {
+				continue
+			}
+			seen[n] = struct{}{}
+			all = append(all, n)
+		}
 	}
 	// 与 mapKeys 相同的排序（exportFieldOrder 优先，未登记的按字典序兜底）。
 	sort.SliceStable(all, func(i, j int) bool { return exportColumnLess(all[i], all[j]) })
@@ -190,6 +206,14 @@ func exportColumnarEnabled() bool {
 // 消费 / 结果集列名异常），调用方必须回退 map 路径；此时已写出的内容由调用方丢弃。
 func (s *Server) exportColumnarStream(ctx context.Context, dataset, chain, subject string,
 	w io.Writer, limit int) (int64, bool, error) {
+	return s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, limit, false, "")
+}
+
+// exportColumnarStreamOpts 是列式导出的完整入口；includeMeta 为真时额外写
+// matched_address / case_names / tag_names 三列（wsID 为空则按 annotateRows 的规则
+// 不附加，避免把别的租户的案件名写进文件）。
+func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, subject string,
+	w io.Writer, limit int, includeMeta bool, wsID string) (int64, bool, error) {
 	const chunk = 32 * 1024
 
 	sql := exportStreamSQL(dataset, chain, subject)
@@ -212,12 +236,19 @@ func (s *Server) exportColumnarStream(ctx context.Context, dataset, chain, subje
 	buf := make([]byte, 0, 4096)
 	rowContracts := make([]string, 0, chunk)
 
+	var annCache *annotationCache
+	if includeMeta && wsID != "" {
+		annCache = &annotationCache{}
+		annCache.cases, _ = s.deps.Store.AddressCaseNames(ctx, wsID, chain, addressnorm.NormalizeKey(chain, subject))
+		annCache.tags, _ = s.deps.Store.AddressTagNames(ctx, wsID, chain, addressnorm.NormalizeKey(chain, subject))
+	}
+
 	// 每块分两遍：先收集本块出现的全部合约并批量补齐元数据，再逐行写出。
 	// 必须整块收集——只按块内最后一行的合约去补元数据会漏掉其它合约
 	// （实测：LYX 这类行整块写不出 token_name）。
 	onChunk := func(c *query.ColumnChunk) error {
 		if plan == nil {
-			built, buildErr := buildColumnarPlan(c.Names)
+			built, buildErr := buildColumnarPlan(c.Names, includeMeta)
 			if buildErr != nil {
 				return buildErr
 			}
@@ -275,7 +306,8 @@ func (s *Server) exportColumnarStream(ctx context.Context, dataset, chain, subje
 		// 第二遍：写出。
 		for j := 0; j < c.Rows; j++ {
 			buf = buf[:0]
-			buf = writeColumnarChunkRow(buf, plan, c, j, rowContracts[j], plans, amounts)
+			buf = writeColumnarChunkRow(buf, plan, c, j, rowContracts[j], plans, amounts,
+				s, chain, subject, wsID, annCache)
 			buf = append(buf, '\n')
 			if _, werr := bw.Write(buf); werr != nil {
 				return werr
@@ -300,7 +332,8 @@ func (s *Server) exportColumnarStream(ctx context.Context, dataset, chain, subje
 
 // writeColumnarChunkRow 写出一行的所有列（不含行尾换行）。
 func writeColumnarChunkRow(buf []byte, p *columnarPlan, c *query.ColumnChunk, rowIdx int,
-	contract string, plans map[string]tokenMetaPlan, amounts map[amountKey]string) []byte {
+	contract string, plans map[string]tokenMetaPlan, amounts map[amountKey]string,
+	srv *Server, chain, subject, wsID string, annCache *annotationCache) []byte {
 	base := rowIdx * len(c.Names)
 	amountRaw := ""
 	if p.amountCol >= 0 {
@@ -320,9 +353,75 @@ func writeColumnarChunkRow(buf []byte, p *columnarPlan, c *query.ColumnChunk, ro
 			buf = appendCSVQuoted(buf, c.Cells[base+p.source[i]])
 			continue
 		}
+		if p.enrich[i] == "" {
+			// 注释列（matched_address/case_names/tag_names）
+			buf = srv.appendColumnarAnnotations(buf, annotationColumnName(p, i), chain, subject, wsID, c, rowIdx, annCache)
+			continue
+		}
 		buf = appendChunkEnrichment(buf, p.enrich[i], contract, amountRaw, plans, amounts)
 	}
 	return buf
+}
+
+// annotationColumnName 判断该输出列是否是注释列之一。
+func annotationColumnName(p *columnarPlan, i int) string {
+	for _, n := range annotationColumns {
+		if p.names[i] == n {
+			return n
+		}
+	}
+	return ""
+}
+
+// appendColumnarAnnotations 按 annotateRows 的规则写出注释三列。
+//
+// annotateRows 的逻辑是：先判断该行的 from/to/address 是否等于导出主体（归一化后），
+// 匹配则 matched_address=subject，case_names/tag_names 取自工作区的案件/标签库并去重。
+// 列式路径直接在这里复刻，缓存按 subject 复用（导出主体在整条链上只有一个）。
+func (s *Server) appendColumnarAnnotations(buf []byte, enrichCol, chain, subject, wsID string,
+	c *query.ColumnChunk, rowIdx int, cache *annotationCache) []byte {
+	if wsID == "" || subject == "" {
+		return buf
+	}
+	base := rowIdx * len(c.Names)
+	normalize := func(v string) string { return addressnorm.NormalizeKey(chain, v) }
+	subj := normalize(subject)
+	matched := false
+	for _, col := range []string{"from_address", "to_address", "address"} {
+		idx, ok := c.NameIndex[col]
+		if !ok {
+			continue
+		}
+		if normalize(c.Cells[base+idx]) == subj {
+			matched = true
+			break
+		}
+	}
+	switch enrichCol {
+	case "matched_address":
+		if !matched {
+			return buf
+		}
+		return appendCSVQuoted(buf, subj)
+	case "case_names", "tag_names":
+		if !matched {
+			return buf
+		}
+		if cache == nil {
+			return buf
+		}
+		if enrichCol == "case_names" {
+			return appendCSVQuoted(buf, strings.Join(cache.cases, "|"))
+		}
+		return appendCSVQuoted(buf, strings.Join(cache.tags, "|"))
+	}
+	return buf
+}
+
+// annotationCache 是导出主体在案件/标签库里的名字（整条导出只查一次）。
+type annotationCache struct {
+	cases []string
+	tags  []string
 }
 
 // appendChunkEnrichment 按 applyTokenMeta 的规则算出一个富化单元格。
@@ -381,9 +480,14 @@ var errColumnarUnsupported = errors.New("columnar export unsupported for this re
 //   - 只支持 csv（xlsx/parquet/jsonl 的写出器要么需要随机访问，要么逐 map 编码）；
 //   - 不接受 GPT Actions 的 job（那条路径会按 token 过滤整批行）；
 //   - 不开 include_decoded_input（要先按整批 tx_hash 查解码表）；
-//   - 不开 include_meta（要按整个 subject 解析案件/标签名，列值取决于"整批"而不仅是本行）。
-func canUseColumnarExport(job *model.DownloadJob, format, dataset string, includeMeta, includeDecodedInput bool) bool {
-	if job != nil || includeMeta || includeDecodedInput {
+//   - 不开 include_decoded_input（要先按整批 tx_hash 查解码表）。
+//
+// include_meta（案件/标签注释）**可以**支持：matched_address/case_names/tag_names
+// 三列的取值只取决于"该行是否匹配导出主体"与工作区里的案件/标签库，两者在列式路径
+// 都能拿到（见 appendColumnarAnnotations）。此前把它列为不支持是保守过头，
+// 而 Actions 导出恰好固定传 includeMeta=true——那一刀把用户真实路径挡在了外面。
+func canUseColumnarExport(job *model.DownloadJob, format, dataset string, includeDecodedInput bool) bool {
+	if job != nil || includeDecodedInput {
 		return false
 	}
 	if format != "csv" {
@@ -398,7 +502,8 @@ func canUseColumnarExport(job *model.DownloadJob, format, dataset string, includ
 }
 
 // writeSingleExportColumnar 把单地址 CSV 导出写成对象：列式直写 → io.Pipe → MinIO。
-func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, chain, addr, dataset string) (int64, string, exportLocation, error) {
+func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, chain, wsID, addr, dataset string,
+	includeMeta bool) (int64, string, exportLocation, error) {
 	pr, pw := io.Pipe()
 	type result struct {
 		rows int64
@@ -407,7 +512,7 @@ func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, c
 	}
 	done := make(chan result, 1)
 	go func() {
-		rows, ok, err := s.exportColumnarStream(ctx, dataset, chain, addr, pw, maxExportRows)
+		rows, ok, err := s.exportColumnarStreamOpts(ctx, dataset, chain, addr, pw, maxExportRows, includeMeta, wsID)
 		if err == nil && !ok {
 			// 列式不适用：让调用方回退，且不把已写内容当成成品。
 			err = errColumnarUnsupported
@@ -430,4 +535,54 @@ func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, c
 	}
 	sha, err := s.objectSHA256(ctx, key)
 	return res.rows, sha, loc, err
+}
+
+// prepareColumnarZipEntry 把列式导出直接 deflate 到临时文件，返回可写进 ZIP 条目的
+// 元数据（CRC32 / 压缩后大小 / 原始大小）。
+//
+// 为什么不复用 prepareZipEntry：那条路要先有 []map[string]any（1.7M 行时常驻堆
+// 1.7-2 GiB，实测 GC 占掉 79.7% CPU、单条目 16.6 s）。列式路径内存恒定在块级，
+// 且输出与 map 路径逐字节一致（TestColumnarMatchesMapPath）。
+func (s *Server) prepareColumnarZipEntry(ctx context.Context, dataset, chain, subject string, limit int,
+	includeMeta bool, wsID string) (*preparedZipEntry, int64, error) {
+	f, err := os.CreateTemp("", "export-entry-*.deflate")
+	if err != nil {
+		return nil, 0, err
+	}
+	entry := &preparedZipEntry{path: f.Name()}
+	ok := false
+	defer func() {
+		_ = f.Close()
+		if !ok {
+			entry.remove()
+		}
+	}()
+
+	zw, err := flate.NewWriter(f, flate.DefaultCompression)
+	if err != nil {
+		return nil, 0, err
+	}
+	hash := crc32.NewIEEE()
+	counter := &countOnlyWriter{}
+	w := io.MultiWriter(zw, hash, counter)
+
+	rows, supported, err := s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, limit, includeMeta, wsID)
+	if err != nil {
+		_ = zw.Close()
+		return nil, 0, err
+	}
+	if !supported {
+		_ = zw.Close()
+		return nil, 0, errColumnarUnsupported
+	}
+	if err := zw.Close(); err != nil {
+		return nil, 0, err
+	}
+	entry.crc32 = hash.Sum32()
+	entry.uncompressed = counter.n
+	if st, statErr := f.Stat(); statErr == nil {
+		entry.compressed = st.Size()
+	}
+	ok = true
+	return entry, rows, nil
 }
