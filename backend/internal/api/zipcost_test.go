@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
 	"io"
 	"log/slog"
@@ -138,4 +140,40 @@ func BenchmarkColumnarZipEntry(b *testing.B) {
 		b.ReportMetric(float64(rows), "rows")
 		b.ReportMetric(float64(entry.compressed)/1048576, "compressed_mib")
 	}
+}
+
+// BenchmarkColumnarZipCompressionLevels 量 deflate 级别对"列式 zip 条目"的影响：
+// 默认级别（6）在 754 MiB 未压缩输入上可能是主要耗时，需要知道换级别能省多少、
+// 以及压缩后体积会涨多少。
+func BenchmarkColumnarZipCompressionLevels(b *testing.B) {
+	srv, ctx, subject := benchServer(b)
+	limit := benchLimit()
+	payload := make([]byte, 0, 1<<20)
+	for i := 0; i < 1<<14; i++ {
+		payload = append(payload, "bsc,0x1234567890abcdef,121939936,2026-09-15T01:15:14Z,148,0x62dbd60ed9456cd59b47c70ad5f6945978cbabf7,1764025991317028396,1.764025991317028396\n"...)
+	}
+	b.SetBytes(int64(len(payload)))
+	for _, level := range []int{1, 3, 6} {
+		b.Run("level"+string(rune('0'+level)), func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var sink bytes.Buffer
+				zw, err := flate.NewWriter(&sink, level)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if _, err := zw.Write(payload); err != nil {
+					b.Fatal(err)
+				}
+				if err := zw.Close(); err != nil {
+					b.Fatal(err)
+				}
+				b.ReportMetric(float64(sink.Len())/1048576, "mib_out")
+			}
+		})
+	}
+	_ = srv
+	_ = ctx
+	_ = subject
+	_ = limit
 }

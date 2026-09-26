@@ -51,6 +51,15 @@ func exportBoundedEnabled() bool {
 // （约 150 ms）抵不过省下的物化开销。
 const minExportBoundaryLimit = 5000
 
+// exportBoundaryProbeLimit 是**定界查询**最多按多少行去找边界。
+//
+// 它不代表"超过就不定界"：导出调用方的上限是 maxExportRows=200 万，而单个地址的
+// 不同转账数往往只有 170 万。若超过它就直接放弃定界，回退的无界查询会按 1.45 倍
+// 超采去物化 290 万行 × 30 列，实测 RowsForExportRange 从 25.9 s 恶化到 97.5 s
+// （比不定界还慢 3.8 倍）。正确做法是按上限夹取探测目标——边界更保守、可用行数更多，
+// 正确性不变，而带界查询仍能靠 LIMIT 早停。
+const exportBoundaryProbeLimit = 2_000_000
+
 // exportWhere 返回导出形状的过滤条件（与 RowsForExportRange / 流式路径同一口径）。
 func exportWhere(dataset, chain, subject string) (string, []any) {
 	switch dataset {
@@ -91,6 +100,11 @@ func (s *Service) exportTimeBoundary(ctx context.Context, dataset, chain, subjec
 	fromBlock, toBlock *int64, fromTime, toTime *time.Time, limit, offset int, ratio float64) (time.Time, uint64, bool) {
 	if !exportBoundedEnabled() || offset != 0 || limit < minExportBoundaryLimit {
 		return time.Time{}, 0, false
+	}
+	// 探测目标夹到上限之内：limit 超过上限时仍可以定界，只是最多按探测上限的
+	// 行数去找边界（拿到的边界更保守、可用行数更多，不影响正确性）。
+	if limit > exportBoundaryProbeLimit {
+		limit = exportBoundaryProbeLimit
 	}
 	// 带范围条件时下界会和调用方条件相互影响，交给原有形状，避免语义漂移。
 	if fromBlock != nil || toBlock != nil || fromTime != nil || toTime != nil {
@@ -190,14 +204,27 @@ func (s *Service) rowsForExportBounded(ctx context.Context, dataset, chain, subj
 			return nil, false, nil
 		}
 
-		// LIMIT 必须小于边界下的可用行数：超采可以，但"要的比有的多"会让
-		// ClickHouse 放弃 LIMIT 优化而退化成无界扫描（实测 100 万目标 27 s）。
+		// fetch（要扫描并物化的原始行数）必须**严格小于**边界下的可用行数，
+		// 否则 LIMIT 失去早停作用、查询退化成全量物化。
+		//
+		// 实测踩过的坑：目标 200 万、地址只有 173 万个不同转账时，可用行数被
+		// 超采推到 465 万，fetch 也顶到 290 万——于是每一行都被物化成 map，
+		// 97 s（比不定界的 25.9 s 还慢 3.8 倍）。带上限余量后，超采到
+		// available 的 90% 就够，Fetch 停在 2.9M 以内且必然早停。
+		// 余量充足时（可用行数已远超目标）不必超采：超采只是为了让"去重后仍够 limit"，
+		// 而这里原始行数已经是目标的 2 倍以上，超采只会把 fetch 顶到 available 附近、
+		// 让 LIMIT 失去早停作用。实测 173 万不同转账、目标 200 万时，超采把
+		// fetch 推到 290 万，全部物化 -> 97 s；不超采后早停生效。
 		fetch := int(float64(limit) * dedupeExportRetryFactor)
-		if uint64(fetch) > available {
-			fetch = int(available)
+		if float64(available) > float64(limit)*dedupeExportRetryFactor {
+			fetch = limit
+		}
+		maxUsable := int(float64(available) * 0.9)
+		if fetch > maxUsable {
+			fetch = maxUsable
 		}
 		if fetch < limit {
-			// 可用行数已少于目标：加大边界倍数重来，而不是发一条注定取不满的查询。
+			// 没有余量：加大边界倍数重来，而不是发一条"要的比有的多"的查询。
 			ratio += exportBoundaryGrowthStep
 			if ratio > exportBoundaryMaxRatio {
 				return nil, false, nil
