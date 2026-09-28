@@ -50,3 +50,48 @@ func TestExportScanSlotRespectsCancellation(t *testing.T) {
 		t.Fatalf("a cancelled caller must get context.Canceled, got %v", err)
 	}
 }
+
+// TestSpeculativeScanYieldsInsteadOfQueueing 锁定预生成（投机扫描）的资源边界。
+//
+// 导出扫描槽容量是 1。预生成是"用户还没点导出"的投机任务，**绝不能排队占住槽位**：
+// 否则一个 20 秒的预生成会把正在等结果的用户挡在后面。带投机标记的扫描抢不到槽
+// 必须立刻返回 ErrSpeculativeScanBusy，而普通导出仍然排队等待。
+func TestSpeculativeScanYieldsInsteadOfQueueing(t *testing.T) {
+	release1, err := acquireExportScanSlot(context.Background())
+	if err != nil {
+		t.Fatalf("hold slot: %v", err)
+	}
+
+	// 投机扫描：槽被占时立即让路，不阻塞。
+	start := time.Now()
+	if _, serr := acquireExportScanSlotFor(WithSpeculativeScan(context.Background())); serr != ErrSpeculativeScanBusy {
+		t.Fatalf("want ErrSpeculativeScanBusy, got %v", serr)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("speculative scan blocked for %s; it must yield immediately", elapsed)
+	}
+
+	// 普通扫描：排队等槽，释放后必须拿到。
+	queued := make(chan error, 1)
+	go func() {
+		rel, qerr := acquireExportScanSlotFor(context.Background())
+		if qerr == nil {
+			rel()
+		}
+		queued <- qerr
+	}()
+	select {
+	case err := <-queued:
+		t.Fatalf("normal scan acquired the slot while it was held (err=%v)", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	release1()
+	select {
+	case err := <-queued:
+		if err != nil {
+			t.Fatalf("normal scan failed after the slot was released: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("normal scan never acquired the slot after it was released")
+	}
+}

@@ -4,6 +4,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -42,6 +43,40 @@ func acquireExportScanSlot(ctx context.Context) (func(), error) {
 		return nil, ctx.Err()
 	}
 }
+
+// speculativeScanCtxKey 标记"这次导出是投机的"（预生成）。
+type speculativeScanCtxKey struct{}
+
+// WithSpeculativeScan 标记该 context 下的导出扫描是投机任务。
+//
+// 预生成（用户还没点导出）**绝不能排队占住扫描槽**：槽容量是 1，一个 20 秒的预生成
+// 会把真正在等结果的用户挡在后面。带这个标记的扫描抢不到槽就直接放弃，投机任务失败
+// 无所谓——用户点导出时照常走正常路径。
+func WithSpeculativeScan(ctx context.Context) context.Context {
+	return context.WithValue(ctx, speculativeScanCtxKey{}, true)
+}
+
+// isSpeculativeScan 报告该 context 是否被标记为投机扫描。
+func isSpeculativeScan(ctx context.Context) bool {
+	v, _ := ctx.Value(speculativeScanCtxKey{}).(bool)
+	return v
+}
+
+// acquireExportScanSlotFor 按 context 决定"排队等槽"还是"抢不到就让路"。
+func acquireExportScanSlotFor(ctx context.Context) (func(), error) {
+	if !isSpeculativeScan(ctx) {
+		return acquireExportScanSlot(ctx)
+	}
+	select {
+	case exportScanSlots <- struct{}{}:
+		return func() { <-exportScanSlots }, nil
+	default:
+		return nil, ErrSpeculativeScanBusy
+	}
+}
+
+// ErrSpeculativeScanBusy 表示投机扫描（预生成）没抢到扫描槽，主动让路。
+var ErrSpeculativeScanBusy = errors.New("speculative export scan skipped: export scan slot is busy")
 
 // 各表结构体（列顺序与建表一致；clickhouse-go ScanStruct 使用 ch tag）
 type txRow struct {
@@ -534,7 +569,7 @@ func (s *Service) RowsForExportRange(ctx context.Context, dataset, chain, subjec
 	fromBlock, toBlock *int64, fromTime, toTime *time.Time) ([]map[string]any, error) {
 	// Export scans run one at a time with an explicit, bounded ClickHouse
 	// memory budget; see exportScanSettings for the measured Code 241 defect.
-	release, slotErr := acquireExportScanSlot(ctx)
+	release, slotErr := acquireExportScanSlotFor(ctx)
 	if slotErr != nil {
 		return nil, slotErr
 	}
@@ -678,7 +713,7 @@ func (s *Service) RowsForExportRangeMulti(ctx context.Context, dataset, chain st
 	}
 	// Bounded exactly like RowsForExportRange: one ZIP worker per dataset can
 	// otherwise hold millions of rows in server memory at the same time.
-	release, slotErr := acquireExportScanSlot(ctx)
+	release, slotErr := acquireExportScanSlotFor(ctx)
 	if slotErr != nil {
 		return nil, slotErr
 	}

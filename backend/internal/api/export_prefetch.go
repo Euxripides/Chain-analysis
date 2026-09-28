@@ -13,6 +13,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
@@ -172,6 +173,10 @@ func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, specHash, ch
 			s.deps.Log.Warn("prefetch intent cleanup failed", "export_id", exp.ID, "err", derr.Error())
 		}
 	}()
+
+	// 标记为投机扫描：预生成绝不能排队占住导出扫描槽（容量 1），否则会把正在等结果的
+	// 用户挡在一个他还没点的导出后面。抢不到槽就直接失败——用户点导出时照常走正常路径。
+	ctx = query.WithSpeculativeScan(ctx)
 
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "RUNNING", "", "", 0, "")
 	key := fmt.Sprintf("exports/%s.%s", exp.ID, extFor(format))
