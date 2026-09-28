@@ -44,13 +44,21 @@ POST /api/v1/datasets/ensure
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/exports` | format: csv / xlsx / json(JSONL) / parquet；支持 addresses/datasets/include_meta |
+| POST | `/exports` | format: csv / xlsx / json(JSONL) / parquet；支持 addresses/datasets/include_meta；可选 start_time/end_time（RFC3339，闭区间，缺省即全量） |
+| POST | `/exports/prefetch` | 预生成同一份规格的产物（草稿稳定时触发）；用户点导出时按规格哈希提升，实测 5 ms 返回 |
+| GET | `/exports/prefetch/status` | 按 spec_hash 查预生成是否就绪（可选，用于界面提示） |
 | GET | `/exports/{id}` | 导出状态、真实行数、对象大小和 SHA-256 |
 | GET | `/exports/{id}/download` | API 代理下载；支持 HTTP Range / 206 |
 | POST | `/exports/{id}/download-ticket` | 创建 15 分钟下载 Ticket |
 | GET | `/download/{ticket}` | 校验 Ticket 后由 API 流式下载；支持 HTTP Range / 206 |
 
-超过 3 个地址时自动生成 ZIP，结构为 `addresses/{address}/{dataset}.{ext}` 加 `manifest.json`。当前单次导出最多读取 2,000,000 行；超大导出仍应按地址/数据集拆分，后续再接真正的分批游标写入。
+超过 3 个地址时自动生成 ZIP，结构为 `addresses/{address}/{dataset}.{ext}` 加 `manifest.json`。
+
+**导出不截断**：csv 走列式直写 + 键集（keyset）分页，一直取到取空，没有行数上限——排序键本身是数据的全序，每页只把"上一页最后一行的排序键元组"带进下一页谓词（`ORDER BY timestamp DESC, …` 配 `(k1,…,kn) < (v1,…,vn)`），无损性由 `backend/internal/query/export_keyset_test.go` 与 `backend/internal/api/export_keyset_full_live_test.go` 冻结（实测 2,331,094 个版本键 100% 落到文件里）。
+
+可选时间范围：请求体里带 `start_time` / `end_time`（RFC3339，闭区间，可只给一端）即只导出该窗口；都不带就是全量。预生成（`POST /exports/prefetch`）的规格哈希包含这两个字段，"全量"与"某段时间"是两份不同的缓存产物，不会互相命中。
+
+必须把全部行同时放进内存的写出器（xlsx / parquet / 多条目 ZIP 的 map 路径）设有 2,000,000 行的内存上限：超过时导出**明确失败**并提示改用 csv 或指定时间范围，绝不产出缺行的文件。
 
 ## 地址活动（资金分析统一入口，§87）
 

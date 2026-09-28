@@ -79,7 +79,7 @@ func TestPrefetchHTTPBodyMatchesExportBody(t *testing.T) {
 	for time.Now().Before(deadline) {
 		// 预生成的规格哈希由 handler 算出；这里用同一份快照复算以取得哈希。
 		snapshot := buildExportSnapshot("bsc", []string{normalizeForTest(subject)}, []string{"token_transfers"},
-			"csv", false, false, false, "", false, "")
+			"csv", false, false, false, "", false, "", exportBounds{})
 		pre, _ = srv.deps.Store.FindCompletedPrefetch(ctx, store.PrefetchSpecHash(snapshot),
 			scope.OrganizationID, scope.WorkspaceID)
 		if pre != nil {
@@ -226,7 +226,7 @@ func TestPrefetchMultiDatasetProducesZipAndHits(t *testing.T) {
 	}
 
 	snapshot := buildExportSnapshot("bsc", []string{normalizeForTest(subject)},
-		[]string{"transactions", "token_transfers"}, "csv", false, true, false, "", false, "")
+		[]string{"transactions", "token_transfers"}, "csv", false, true, false, "", false, "", exportBounds{})
 	specHash := store.PrefetchSpecHash(snapshot)
 
 	var pre *store.PrefetchRow

@@ -129,7 +129,8 @@ var _ = fmt.Sprint
 func BenchmarkExportStreamPipeline(b *testing.B) {
 	srv, ctx, subject := benchServer(b)
 	limit := benchLimit()
-	sql := exportStreamSQL("token_transfers", "bsc", subject)
+	table, where, sqlArgs := exportStreamQueryParts("token_transfers", "bsc", subject)
+	sql := exportStreamSQLUnbounded(table, where, exportStreamRawLimit(limit))
 	raw := exportStreamRawLimit(limit)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -139,7 +140,7 @@ func BenchmarkExportStreamPipeline(b *testing.B) {
 			func(chunk []map[string]any) error {
 				enrich.enrich(ctx, subject, chunk)
 				return writer.write(chunk)
-			}, "bsc", subject, subject, raw, 0); err != nil {
+			}, append(append([]any{}, sqlArgs...), raw, 0)...); err != nil {
 			b.Fatalf("stream: %v", err)
 		}
 		if err := writer.close(); err != nil {
@@ -155,8 +156,8 @@ func BenchmarkExportStreamPipelineNoEnrich(b *testing.B) {
 	limit := benchLimit()
 	// 两条形状的参数不同（无界形状 WHERE 里带 address，带界形状把下界也写进 SQL），
 	// 必须用各自配套的参数，不能混用。
-	sql := exportStreamSQL("token_transfers", "bsc", subject)
-	sqlArgs := exportStreamArgs("bsc", subject)
+	table, where, sqlArgs := exportStreamQueryParts("token_transfers", "bsc", subject)
+	sql := exportStreamSQLUnbounded(table, where, exportStreamRawLimit(limit))
 	raw := exportStreamRawLimit(limit)
 	if sel, selArgs, fetch, ok := srv.query.BoundedExportSelect(ctx, "token_transfers", "bsc", subject, limit); ok {
 		sql, sqlArgs, raw = sel, selArgs, fetch

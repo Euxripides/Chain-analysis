@@ -46,7 +46,12 @@ const TRACKED = [
 /* 新建下载恢复高级设置时，显式接入已上线且受工作区/RBAC 保护的 v1 案件、标签目录。
  * 案件 GET/POST 分别要求 case:list/case:create；标签 GET/POST 分别要求
  * case:read/case:update。仅允许这两条新增字面量，其他接口仍逐字冻结。 */
-const APPROVED_API_ADDITIONS = ["/api/v1/cases", "/api/v1/tags"];
+/* 导出表单的预生成入口（`/api/v2/exports/prefetch`）：用户在表单上停留的
+ * 30-60 秒里先把产物算好，点"导出"时服务端做一次规格哈希提升即返回（实测 5 ms）。
+ * 它与 `/api/v2/exports` 同权限（服务端 require export:create）、同租户作用域，
+ * 且请求体由同一个 buildAddressExportBody 产出；失败静默，不改变任何导出语义。
+ * 仅允许这一条新增字面量。 */
+const APPROVED_API_ADDITIONS = ["/api/v1/cases", "/api/v1/tags", "/api/v2/exports/prefetch"];
 
 /**
  * 案件详情 Tab 的权限契约（**钉死在本脚本里**，不与基准提交比对）。

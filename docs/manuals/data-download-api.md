@@ -182,7 +182,9 @@ curl -sS -X POST https://aurore.online/api/v1/export/create \
 | `csv` | `export-<id>.zip` | zip 内是 `manifest.json` + `addresses/<address>/<dataset>.csv`；**单地址也是 zip** |
 | `parquet` | `export-<id>.parquet` | 单个 Parquet 文件，不打包 |
 
-单地址单数据集一次最多导出 2,000,000 行（超出会被截断，超大范围请按时间/区块拆分）。
+**导出不截断**：单地址单数据集的 csv 导出走列式直写 + 键集分页，一直取到取空，没有行数上限（实测一个 2,331,094 个版本键的地址，导出 2,331,094 行，与库侧 `uniqExact` 一致）。
+
+需要指定范围时在请求体里给 `start_time` / `end_time`（RFC3339，闭区间，可只给一端）；都不给就是全量。xlsx / parquet / 多条目 ZIP 这类"必须把全部行放进内存"的写出器仍有 2,000,000 行的内存上限，超过时会返回明确错误并建议改用 csv 或缩小时间范围——不会静默截断。
 
 ### 3.4 第 4 步：轮询导出 —— `GET /api/v1/export/status`
 
@@ -332,7 +334,8 @@ curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'X-Auth-Audience: user' \
 |---|---|
 | `data/ensure` 地址数 | 1–200 / 次 |
 | `export/create` 地址数 | 1 / 次 |
-| 单次导出行数上限 | 2,000,000 行（每地址每数据集） |
+| 单次导出行数上限 | csv：无上限（列式 + 键集分页取全量）；xlsx/parquet/多条目 ZIP：2,000,000 行，超过时明确报错而非截断 |
+| 时间范围导出 | 可选 `start_time` / `end_time`（RFC3339，闭区间，可只给一端），不传即全量 |
 | 明细接口 `page_size` | ≤ 500 |
 | Key 速率 | 默认 300 次/分钟（可签发时自定义） |
 | 时间格式 | RFC3339 UTC，例如 `2024-12-09T10:00:00Z` |

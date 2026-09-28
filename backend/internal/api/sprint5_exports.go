@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
 // ---- U-EXPORT-01 / S5-BE-03（§21.5 / §21.7）----
@@ -24,6 +24,9 @@ type exportV2CreateRequest struct {
 	IncludeMeta         bool     `json:"include_meta"`
 	ForceZip            bool     `json:"force_zip"`
 	IncludeDecodedInput bool     `json:"include_decoded_input"`
+	// 用户指定的导出时间范围（闭区间）；两者都可省略，省略即全量。
+	StartTime *time.Time `json:"start_time"`
+	EndTime   *time.Time `json:"end_time"`
 }
 
 func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
@@ -99,14 +102,27 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		validationError(w, r, "单次导出最多 100 个地址；更多地址请拆分任务", nil)
 		return
 	}
+	bounds, boundsErr := newExportBounds(req.StartTime, req.EndTime)
+	if boundsErr != nil {
+		validationError(w, r, boundsErr.Error(), []fieldError{{Field: "start_time", Code: "invalid", Message: boundsErr.Error()}})
+		return
+	}
 	zipIt := req.ForceZip || len(addresses) > 3 || len(datasets) > 1
 	partial := job != nil && job.Status != model.JobCompleted
-	snapshot, _ := json.Marshal(map[string]any{
-		"chain": req.Chain, "addresses": addresses, "datasets": datasets,
-		"format": req.Format, "include_meta": req.IncludeMeta, "zip": zipIt,
-		"include_decoded_input": req.IncludeDecodedInput, "job_id": req.JobID,
-		"partial": partial, "job_status": statusOfJob(job),
-	})
+	// 快照必须由 buildExportSnapshot 统一产出：预生成（handleExportPrefetch）用
+	// 同一份内容算规格哈希，任何字段/顺序差异都会让"预生成命中"永远失败——
+	// 而且不报错，只是用户每次都白等一遍完整生成。
+	snapshot := buildExportSnapshot(req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt,
+		req.IncludeDecodedInput, req.JobID, partial, statusOfJob(job), bounds)
+	// 预生成命中：同一份规格的产物已经算好了，直接提升成正式导出（实测 5 ms），
+	// 不再跑流水线。只在"单地址 + 无 job"时尝试——那正是预生成唯一支持的形态。
+	if job == nil && len(addresses) == 1 {
+		if promoted, ok := s.tryPromotePrefetch(r.Context(), store.PrefetchSpecHash(snapshot),
+			p.OrganizationID, p.WorkspaceID, p.IdentityID, strings.Join(datasets, "+"), req.Format, zipIt, snapshot); ok {
+			respondOK(w, r, promoted)
+			return
+		}
+	}
 	if job != nil {
 		var existingID string
 		if err := s.deps.Store.Pool.QueryRow(r.Context(), `
@@ -150,7 +166,7 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "创建导出失败", nil)
 		return
 	}
-	go s.runExportMulti(backgroundAuditCtx(r), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, bounds)
 	s.writeAuditNow(r, "export.create", "export", "export", exp.ID, map[string]any{
 		"job_id": req.JobID, "format": req.Format, "zip": zipIt, "addresses": len(addresses), "datasets": datasets,
 	})

@@ -302,12 +302,8 @@ func (s *Service) ForEachExportChunk(ctx context.Context, dataset, q string, wan
 		if scanErr := scanner.Scan(holders...); scanErr != nil {
 			return emitted, fmt.Errorf("clickhouse [ScanExportRow]: %w", scanErr)
 		}
-		if len(keys) > 0 {
-			key := exportRowKey(keys, holders, names)
-			if _, dup := seen[key]; dup {
-				continue
-			}
-			seen[key] = struct{}{}
+		if !acceptExportRow(dataset, names, holders, keys, seen) {
+			continue
 		}
 		item, mapErr := scanRowMap(plan, names, holders)
 		if mapErr != nil {
@@ -403,12 +399,8 @@ func (s *Service) ForEachExportColumnChunk(ctx context.Context, dataset, q strin
 		if scanErr := scanner.Scan(holders...); scanErr != nil {
 			return emitted, true, fmt.Errorf("clickhouse [ScanExportRow]: %w", scanErr)
 		}
-		if len(keys) > 0 {
-			key := exportRowKey(keys, holders, names)
-			if _, dup := seen[key]; dup {
-				continue
-			}
-			seen[key] = struct{}{}
+		if !acceptExportRow(dataset, names, holders, keys, seen) {
+			continue
 		}
 		for i := range names {
 			cellBuf = append(cellBuf, formatCellText(exportValue(holders[i])))

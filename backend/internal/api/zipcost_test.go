@@ -83,7 +83,7 @@ func TestZipPathCost(t *testing.T) {
 	prep.remove()
 
 	stageStart = time.Now()
-	colEntry, colRows, colErr := srv.prepareColumnarZipEntry(ctx, "token_transfers", "bsc", subject, maxExportRows, true, "")
+	colEntry, colRows, colErr := srv.prepareColumnarZipEntry(ctx, "token_transfers", "bsc", subject, maxExportRows, true, "", exportBounds{}, "")
 	if colErr != nil {
 		t.Fatalf("columnar entry: %v", colErr)
 	}
@@ -92,7 +92,7 @@ func TestZipPathCost(t *testing.T) {
 	colEntry.remove()
 
 	start := time.Now()
-	rows, sha, loc, err := srv.writeZipExport(ctx, exp, nil, key, "bsc", "", []string{subject}, []string{"token_transfers"}, "csv", true, false)
+	rows, sha, loc, err := srv.writeZipExport(ctx, exp, nil, key, "bsc", "", []string{subject}, []string{"token_transfers"}, "csv", true, false, exportBounds{})
 	dur := time.Since(start)
 	if err != nil {
 		t.Fatalf("writeZipExport: %v", err)
@@ -132,7 +132,7 @@ func BenchmarkColumnarZipEntry(b *testing.B) {
 	limit := benchLimit()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		entry, rows, err := srv.prepareColumnarZipEntry(ctx, "token_transfers", "bsc", subject, limit, true, "")
+		entry, rows, err := srv.prepareColumnarZipEntry(ctx, "token_transfers", "bsc", subject, limit, true, "", exportBounds{}, "")
 		if err != nil {
 			b.Fatalf("prepare: %v", err)
 		}

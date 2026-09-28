@@ -2,6 +2,7 @@ package api
 
 import (
 	"testing"
+	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
@@ -37,15 +38,15 @@ func TestPrefetchSpecHashMatchesExportPath(t *testing.T) {
 	}
 
 	datasets := []string{"token_transfers"}
-	exportSnapshot := buildExportSnapshot(chain, exportAddresses, datasets, "csv", false, false, false, "", false, "")
-	prefetchSnapshot := buildExportSnapshot(chain, prefetchAddresses, datasets, "csv", false, false, false, "", false, "")
+	exportSnapshot := buildExportSnapshot(chain, exportAddresses, datasets, "csv", false, false, false, "", false, "", exportBounds{})
+	prefetchSnapshot := buildExportSnapshot(chain, prefetchAddresses, datasets, "csv", false, false, false, "", false, "", exportBounds{})
 	if store.PrefetchSpecHash(exportSnapshot) != store.PrefetchSpecHash(prefetchSnapshot) {
 		t.Fatal("spec hashes differ for the same logical request; prefetch would never hit")
 	}
 
 	// 大小写不同的写法必须命中同一份规格（前端可能回填大写地址）。
-	lower := buildExportSnapshot(chain, []string{addressnorm.NormalizeKey(chain, raw)}, datasets, "csv", false, false, false, "", false, "")
-	upperSnap := buildExportSnapshot(chain, []string{addressnorm.NormalizeKey(chain, "0x0000000000000000000000000000000000000001")}, datasets, "csv", false, false, false, "", false, "")
+	lower := buildExportSnapshot(chain, []string{addressnorm.NormalizeKey(chain, raw)}, datasets, "csv", false, false, false, "", false, "", exportBounds{})
+	upperSnap := buildExportSnapshot(chain, []string{addressnorm.NormalizeKey(chain, "0x0000000000000000000000000000000000000001")}, datasets, "csv", false, false, false, "", false, "", exportBounds{})
 	if store.PrefetchSpecHash(lower) != store.PrefetchSpecHash(upperSnap) {
 		t.Fatal("case variations of the same address must hash identically")
 	}
@@ -56,17 +57,23 @@ func TestPrefetchSpecHashMatchesExportPath(t *testing.T) {
 // 否则"命中率 100%"这种假象会掩盖一个更糟的问题——用户改了选项却拿到了按旧规格生成的
 // 产物，而那意味着导出的内容与他看到的选项不符。
 func TestPrefetchSpecHashSensitiveToSpecFields(t *testing.T) {
-	base := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "")
+	base := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "", exportBounds{})
 	baseHash := store.PrefetchSpecHash(base)
 
 	variants := map[string][]byte{
-		"force_zip 不同":     buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, true, false, "", false, ""),
-		"include_meta 不同":  buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", true, false, false, "", false, ""),
-		"decoded_input 不同": buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, true, "", false, ""),
-		"format 不同":        buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "jsonl", false, false, false, "", false, ""),
-		"dataset 不同":       buildExportSnapshot("bsc", []string{"0xabc"}, []string{"transactions"}, "csv", false, false, false, "", false, ""),
-		"地址不同":             buildExportSnapshot("bsc", []string{"0xabd"}, []string{"token_transfers"}, "csv", false, false, false, "", false, ""),
-		"链不同":              buildExportSnapshot("eth", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, ""),
+		"force_zip 不同":     buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, true, false, "", false, "", exportBounds{}),
+		"include_meta 不同":  buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", true, false, false, "", false, "", exportBounds{}),
+		"decoded_input 不同": buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, true, "", false, "", exportBounds{}),
+		"format 不同":        buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "jsonl", false, false, false, "", false, "", exportBounds{}),
+		"dataset 不同":       buildExportSnapshot("bsc", []string{"0xabc"}, []string{"transactions"}, "csv", false, false, false, "", false, "", exportBounds{}),
+		"地址不同":             buildExportSnapshot("bsc", []string{"0xabd"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "", exportBounds{}),
+		"链不同":              buildExportSnapshot("eth", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "", exportBounds{}),
+		// 时间范围必须进哈希：全量与"某段时间"是**内容不同**的产物，
+		// 少了这一维会让用户拿到范围外的数据（而且不会报错，只是命中了一份旧产物）。
+		"带时间范围": buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "",
+			exportBounds{From: timePtr(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))}),
+		"范围终点不同": buildExportSnapshot("bsc", []string{"0xabc"}, []string{"token_transfers"}, "csv", false, false, false, "", false, "",
+			exportBounds{To: timePtr(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))}),
 	}
 	for name, snap := range variants {
 		if store.PrefetchSpecHash(snap) == baseHash {
@@ -100,9 +107,9 @@ func TestExportZipDecisionSharedByBothPaths(t *testing.T) {
 	}
 	// 同一份逻辑规格在两条路径上必须得到同一哈希（含 zip 字段）。
 	snapZip := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"a", "b"}, "csv", false,
-		exportZipDecision(false, 1, 2), false, "", false, "")
+		exportZipDecision(false, 1, 2), false, "", false, "", exportBounds{})
 	snapZip2 := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"a", "b"}, "csv", false,
-		exportZipDecision(false, 1, 2), false, "", false, "")
+		exportZipDecision(false, 1, 2), false, "", false, "", exportBounds{})
 	if store.PrefetchSpecHash(snapZip) != store.PrefetchSpecHash(snapZip2) {
 		t.Fatal("identical specs must hash identically")
 	}

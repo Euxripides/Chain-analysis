@@ -233,24 +233,46 @@ func exportColumnarEnabled() bool {
 // 消费 / 结果集列名异常），调用方必须回退 map 路径；此时已写出的内容由调用方丢弃。
 func (s *Server) exportColumnarStream(ctx context.Context, dataset, chain, subject string,
 	w io.Writer, limit int) (int64, bool, error) {
-	return s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, limit, false, "")
+	return s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, columnarStreamOpts{Limit: limit})
+}
+
+// columnarStreamOpts 是列式直写的全部选项。
+//
+// 用结构体而不是位置参数：这条路径的开关已经多到（limit/meta/ws/时间范围/token 过滤）
+// 位置参数很容易传错顺序，而传错的后果是"导出内容静默不同"。
+type columnarStreamOpts struct {
+	// Limit<=0 表示**全量**：键集分页取到取空（见 query/export_keyset.go），
+	// 不再有"取满 N 行就停"的静默截断。>0 只用于内部需要显式上限的调用。
+	Limit int
+	// IncludeMeta 额外写 matched_address / case_names / tag_names 三列。
+	IncludeMeta bool
+	// WSID 为空时按 annotateRows 的规则不附加案件/标签列，避免把别的租户的
+	// 案件名写进文件。
+	WSID string
+	// Bounds 是请求的时间范围（闭区间）。
+	Bounds exportBounds
+	// TokenFilter 非空时只保留 token_symbol 等于它的行——与
+	// filterGPTActionExportToken 同一判据（大小写不敏感、按 token_symbol 比较），
+	// 让 GPT Actions 的 csv 导出也能走列式路径（它此前因为带 job 被整体排除，
+	// 于是 2 百万行上限对这条真实路径一直生效）。
+	TokenFilter string
 }
 
 // exportColumnarStreamOpts 是列式导出的完整入口；includeMeta 为真时额外写
 // matched_address / case_names / tag_names 三列（wsID 为空则按 annotateRows 的规则
 // 不附加，避免把别的租户的案件名写进文件）。
+//
+// limit<=0 表示**全量**：走键集分页一直取到取空（见 query/export_keyset.go），
+// 不再有"取满 N 行就停"的静默截断。bounds 是用户在请求里给出的时间范围。
 func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, subject string,
-	w io.Writer, limit int, includeMeta bool, wsID string) (int64, bool, error) {
+	w io.Writer, opts columnarStreamOpts) (int64, bool, error) {
 	const chunk = 32 * 1024
 
-	sql := exportStreamSQL(dataset, chain, subject)
-	sqlArgs := exportStreamArgs(chain, subject)
-	wantLimit := limit
-	if sel, selArgs, _, ok := s.query.BoundedExportSelect(ctx, dataset, chain, subject, limit); ok {
-		sql, sqlArgs = sel, selArgs
-	} else {
-		sqlArgs = append(append([]any{}, sqlArgs...), exportStreamRawLimit(limit), 0)
-	}
+	limit := opts.Limit
+	includeMeta := opts.IncludeMeta
+	wsID := opts.WSID
+	bounds := opts.Bounds
+	tokenFilter := strings.ToUpper(strings.TrimSpace(opts.TokenFilter))
 
 	bw := bufio.NewWriterSize(w, 1<<20)
 	amounts := make(map[amountKey]string, 4096)
@@ -292,6 +314,21 @@ func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, s
 			headerWritten = true
 		}
 
+		// token 过滤（GPT Actions）：必须在收集合约之前生效——map 路径也是
+		// "先过滤再富化"，顺序不同会让被过滤掉的行仍然影响元数据缓存与列值。
+		keep := func(int) bool { return true }
+		if tokenFilter != "" {
+			filterCol, hasFilterCol := c.NameIndex["token_symbol"]
+			keep = func(j int) bool {
+				if !hasFilterCol {
+					// 结果集没有 token_symbol 时 map 路径同样一行都留不下
+					// （fmt.Sprint(nil) 不等于 token），这里保持同一判据。
+					return false
+				}
+				return strings.EqualFold(c.Cells[j*len(c.Names)+filterCol], tokenFilter)
+			}
+		}
+
 		// 第一遍：收集合约。
 		if cap(rowContracts) < c.Rows {
 			rowContracts = make([]string, c.Rows)
@@ -304,7 +341,7 @@ func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, s
 				contract = streamRowContractValue(chain, c.Cells[j*len(c.Names)+plan.contractCol])
 			}
 			rowContracts[j] = contract
-			if contract == "" {
+			if contract == "" || !keep(j) {
 				continue
 			}
 			if _, seen := known[contract]; seen {
@@ -332,6 +369,9 @@ func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, s
 
 		// 第二遍：写出。
 		for j := 0; j < c.Rows; j++ {
+			if !keep(j) {
+				continue
+			}
 			buf = buf[:0]
 			buf = writeColumnarChunkRow(buf, plan, c, j, rowContracts[j], plans, amounts,
 				s, chain, subject, wsID, annCache)
@@ -344,12 +384,32 @@ func (s *Server) exportColumnarStreamOpts(ctx context.Context, dataset, chain, s
 		return nil
 	}
 
-	_, ok, err := s.query.ForEachExportColumnChunk(ctx, dataset, sql, wantLimit, chunk, onChunk, sqlArgs...)
-	if err != nil {
-		return written, false, err
-	}
-	if !ok {
-		return 0, false, nil
+	// 取数形状：支持键集游标的数据集走分页（每页一条有限查询），
+	// 其余数据集（balances 快照等）走单查询、limit<=0 时不带 LIMIT。
+	table, where, sqlArgs := exportStreamQueryParts(dataset, chain, subject)
+	where, sqlArgs = appendExportTimeBounds(where, sqlArgs, bounds)
+	if _, ok := query.ExportCursorFor(dataset); ok {
+		_, supported, err := s.query.ForEachExportColumnChunkKeyset(ctx,
+			query.ExportKeysetQuery{Dataset: dataset, Table: table, Where: where, Args: sqlArgs},
+			limit, chunk, onChunk)
+		if err != nil {
+			return written, false, err
+		}
+		if !supported {
+			return 0, false, nil
+		}
+	} else {
+		sql := exportStreamSQLUnbounded(table, where, limit)
+		if limit > 0 {
+			sqlArgs = append(sqlArgs, exportStreamRawLimit(limit), 0)
+		}
+		_, ok, err := s.query.ForEachExportColumnChunk(ctx, dataset, sql, limit, chunk, onChunk, sqlArgs...)
+		if err != nil {
+			return written, false, err
+		}
+		if !ok {
+			return 0, false, nil
+		}
 	}
 	if err := bw.Flush(); err != nil {
 		return written, true, err
@@ -535,10 +595,13 @@ var errColumnarUnsupported = errors.New("columnar export unsupported for this re
 // 都能拿到（见 appendColumnarAnnotations）。此前把它列为不支持是保守过头，
 // 而 Actions 导出恰好固定传 includeMeta=true——那一刀把用户真实路径挡在了外面。
 func canUseColumnarExport(job *model.DownloadJob, format, dataset string, includeDecodedInput bool) bool {
-	if job != nil || includeDecodedInput {
+	if includeDecodedInput {
 		return false
 	}
 	if format != "csv" {
+		return false
+	}
+	if _, ok := columnarTokenFilter(job); !ok {
 		return false
 	}
 	switch dataset {
@@ -549,9 +612,44 @@ func canUseColumnarExport(job *model.DownloadJob, format, dataset string, includ
 	}
 }
 
+// columnarTokenFilter 判定作业能否用列式路径表达，并给出它要求的 token 过滤。
+//
+// 列式路径支持且只支持作业里"时间范围 + token_symbol 过滤"这两种约束
+// （GPT Actions 的导出就是这个形态）。出现区块范围或别的过滤器时返回 ok=false，
+// 由调用方回退 map 路径——宁可慢，不可把范围/过滤条件丢掉一部分。
+func columnarTokenFilter(job *model.DownloadJob) (string, bool) {
+	if job == nil {
+		return "", true
+	}
+	if job.FromBlock != nil || job.ToBlock != nil {
+		return "", false
+	}
+	switch job.RangeType {
+	case "", "full", "time":
+	default:
+		return "", false
+	}
+	for k := range job.Stats {
+		switch k {
+		case "gpt_actions_token_filter", "gpt_actions_token_contract_filter":
+		default:
+			return "", false
+		}
+	}
+	raw, ok := job.Stats["gpt_actions_token_filter"]
+	if !ok || raw == nil {
+		return "", true
+	}
+	token := strings.ToUpper(strings.TrimSpace(fmt.Sprint(raw)))
+	if token == "" || token == "<NIL>" {
+		return "", true
+	}
+	return token, true
+}
+
 // writeSingleExportColumnar 把单地址 CSV 导出写成对象：列式直写 → io.Pipe → MinIO。
 func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, chain, wsID, addr, dataset string,
-	includeMeta bool) (int64, string, exportLocation, error) {
+	includeMeta bool, bounds exportBounds, tokenFilter string) (int64, string, exportLocation, error) {
 	pr, pw := io.Pipe()
 	type result struct {
 		rows int64
@@ -560,7 +658,12 @@ func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, c
 	}
 	done := make(chan result, 1)
 	go func() {
-		rows, ok, err := s.exportColumnarStreamOpts(ctx, dataset, chain, addr, pw, maxExportRows, includeMeta, wsID)
+		rows, ok, err := s.exportColumnarStreamOpts(ctx, dataset, chain, addr, pw, columnarStreamOpts{
+			// Limit=0：全量导出。单地址单数据集是用户最常用的形态，
+			// 2 百万行上限曾经正是在这条路上把最老的数据悄悄丢掉。
+			Limit: 0, IncludeMeta: includeMeta, WSID: wsID, Bounds: bounds,
+			TokenFilter: tokenFilter,
+		})
 		if err == nil && !ok {
 			// 列式不适用：让调用方回退，且不把已写内容当成成品。
 			err = errColumnarUnsupported
@@ -592,7 +695,7 @@ func (s *Server) writeSingleExportColumnar(ctx context.Context, exportID, key, c
 // 1.7-2 GiB，实测 GC 占掉 79.7% CPU、单条目 16.6 s）。列式路径内存恒定在块级，
 // 且输出与 map 路径逐字节一致（TestColumnarMatchesMapPath）。
 func (s *Server) prepareColumnarZipEntry(ctx context.Context, dataset, chain, subject string, limit int,
-	includeMeta bool, wsID string) (*preparedZipEntry, int64, error) {
+	includeMeta bool, wsID string, bounds exportBounds, tokenFilter string) (*preparedZipEntry, int64, error) {
 	f, err := os.CreateTemp("", "export-entry-*.deflate")
 	if err != nil {
 		return nil, 0, err
@@ -616,7 +719,9 @@ func (s *Server) prepareColumnarZipEntry(ctx context.Context, dataset, chain, su
 	counter := &countOnlyWriter{}
 	w := io.MultiWriter(zw, hash, counter)
 
-	rows, supported, err := s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, limit, includeMeta, wsID)
+	rows, supported, err := s.exportColumnarStreamOpts(ctx, dataset, chain, subject, w, columnarStreamOpts{
+		Limit: limit, IncludeMeta: includeMeta, WSID: wsID, Bounds: bounds, TokenFilter: tokenFilter,
+	})
 	if err != nil {
 		_ = zw.Close()
 		return nil, 0, err

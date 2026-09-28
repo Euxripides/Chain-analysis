@@ -1520,7 +1520,8 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	if req.StartTime != nil || req.EndTime != nil || req.Token != "" || req.TokenContract != "" {
 		boundsJob = &model.DownloadJob{RangeType: "time", FromTimestamp: req.StartTime, ToTimestamp: req.EndTime, Status: model.JobCompleted, Stats: map[string]any{"gpt_actions_token_filter": strings.ToUpper(strings.TrimSpace(req.Token)), "gpt_actions_token_contract_filter": strings.TrimSpace(req.TokenContract)}}
 	}
-	go s.runExportMulti(backgroundAuditCtx(r), exp, boundsJob, c, []string{req.Address}, req.DataTypes, req.Format, true, zipIt, false)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, boundsJob, c, []string{req.Address}, req.DataTypes, req.Format, true, zipIt, false,
+		exportBounds{From: req.StartTime, To: req.EndTime})
 	writeJSON(w, http.StatusAccepted, actionEnvelope{Success: true, Data: map[string]any{"job_id": exp.ID, "status": "processing"}, Meta: map[string]any{}})
 }
 

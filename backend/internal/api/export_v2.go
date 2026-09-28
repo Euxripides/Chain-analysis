@@ -25,6 +25,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
@@ -41,6 +42,9 @@ type exportV2Request struct {
 	ForceZip    bool     `json:"force_zip"`
 	// §47：Method 字段默认导出；Decoded Input 默认关闭（完整参数会显著增加文件体积）
 	IncludeDecodedInput bool `json:"include_decoded_input"`
+	// 用户指定的导出时间范围（闭区间）；两者都可省略，省略即全量。
+	StartTime *time.Time `json:"start_time"`
+	EndTime   *time.Time `json:"end_time"`
 	// 服务端注入的租户/操作者作用域；不从 JSON 读取（§21.2）。
 	OrgID  string `json:"-"`
 	WSID   string `json:"-"`
@@ -139,8 +143,13 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	partial := job != nil && job.Status != model.JobCompleted
 	// 快照必须由 buildExportSnapshot 统一产出：预生成（export_prefetch.go）用同一份
 	// 内容算规格哈希，任何字段/顺序差异都会让命中率归零。
+	bounds, boundsErr := newExportBounds(req.StartTime, req.EndTime)
+	if boundsErr != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": boundsErr.Error()})
+		return
+	}
 	snapshot := buildExportSnapshot(chain, addresses, datasets, format, req.IncludeMeta, zipIt,
-		req.IncludeDecodedInput, req.JobID, partial, jobStatusOf(job))
+		req.IncludeDecodedInput, req.JobID, partial, jobStatusOf(job), bounds)
 	// Reuse an identical artifact produced after the job's last mutation instead
 	// of querying and compressing millions of rows again. Snapshot equality keeps
 	// paused/partial exports from reusing a different progress version.
@@ -187,12 +196,12 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 		writeJSON(w, 500, map[string]any{"error": err.Error()})
 		return
 	}
-	go s.runExportMulti(backgroundAuditCtx(r), exp, job, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput)
+	go s.runExportMulti(backgroundAuditCtx(r), exp, job, chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, bounds)
 	writeJSON(w, 202, exp)
 }
 
 // runExportMulti 流式多地址导出（`52：Go API 不承载 GB 级文件，行级流式写 MinIO）。
-func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *model.DownloadJob, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool) {
+func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *model.DownloadJob, chain string, addresses, datasets []string, format string, includeMeta, zipIt, includeDecodedInput bool, bounds exportBounds) {
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "RUNNING", "", "", 0, "")
 	// NOTE (P4, 2026-09-15): there is deliberately NO start-of-pipeline intent
 	// check here. The pipeline goroutine is launched inside the request handler,
@@ -217,9 +226,9 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *mod
 	exportWS := s.exportWorkspaceID(ctx, exp.ID)
 
 	if zipIt {
-		rowsTotal, objectSHA, loc, ferr = s.writeZipExport(ctx, exp, job, key, chain, exportWS, addresses, datasets, format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, loc, ferr = s.writeZipExport(ctx, exp, job, key, chain, exportWS, addresses, datasets, format, includeMeta, includeDecodedInput, bounds)
 	} else {
-		rowsTotal, objectSHA, loc, ferr = s.writeSingleExport(ctx, exp.ID, job, key, chain, exportWS, addresses[0], datasets[0], format, includeMeta, includeDecodedInput)
+		rowsTotal, objectSHA, loc, ferr = s.writeSingleExport(ctx, exp.ID, job, key, chain, exportWS, addresses[0], datasets[0], format, includeMeta, includeDecodedInput, bounds)
 	}
 	if ferr != nil {
 		// A failed pipeline used to be visible only in the exports row, so the
@@ -235,6 +244,10 @@ func (s *Server) runExportMulti(ctx context.Context, exp *model.Export, job *mod
 	_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "COMPLETED", key, objectSHA, rowsTotal, "")
 	multiDetail := map[string]any{
 		"chain": chain, "addresses": len(addresses), "datasets": datasets, "format": format, "zip": zipIt, "rows": rowsTotal,
+	}
+	// 时间范围进入审计：用户能据此核对"我导出的到底是哪一段"。
+	for k, v := range bounds.auditFields() {
+		multiDetail[k] = v
 	}
 	// ADR-019 §2.2：完成事件必须带落桶证据。
 	for k, v := range loc.auditFields() {
@@ -275,12 +288,7 @@ func canStreamSingleExport(format string, includeDecodedInput bool, job *model.D
 // 实测（EXPORT_STREAM=1 时由 export_flowcost_test 记录）与批量路径的内存差异见
 // export_stream.go 文件头。
 func (s *Server) writeSingleExportStream(ctx context.Context, exportID string, key, chain, wsID, addr, dataset, format string,
-	includeMeta bool) (int64, string, exportLocation, error) {
-	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, nil)
-	if fromBlock != nil || toBlock != nil || fromTime != nil || toTime != nil {
-		// 带范围的导出走批量路径：范围条件会改变取数形状，暂不在流式路径上重复实现。
-		return 0, "", exportLocation{Key: key}, errStreamUnsupported
-	}
+	includeMeta bool, bounds exportBounds) (int64, string, exportLocation, error) {
 
 	pr, pw := io.Pipe()
 	type streamResult struct {
@@ -307,17 +315,23 @@ func (s *Server) writeSingleExportStream(ctx context.Context, exportID string, k
 			// 优先走两阶段形状（先按天聚合定时间下界，再带界取数）：实测同一导出
 			// 请求的服务端耗时从 3.68 s 降到 0.75 s 量级，因为成本主要在"物化 22 列
 			// 宽行"而不是扫描或排序。定界不适用时回退无界形状。
-			sql := exportStreamSQL(dataset, chain, addr)
-			sqlArgs := exportStreamArgs(chain, addr)
-			rawLimit := exportStreamRawLimit(maxExportRows)
-			if sel, selArgs, fetch, ok := s.query.BoundedExportSelect(ctx, dataset, chain, addr, maxExportRows); ok {
-				sql, sqlArgs, rawLimit = sel, selArgs, fetch
+			// 全量取数：支持键集游标的数据集走分页（每页一条有限查询），其余数据集
+			// 走不带 LIMIT 的单查询流式消费。两条路都不再有行数上限，也不再需要
+			// "先按天聚合定时间下界"的两阶段形状——分页本身就把扫描量限住了。
+			table, where, sqlArgs := exportStreamQueryParts(dataset, chain, addr)
+			where, sqlArgs = appendExportTimeBounds(where, sqlArgs, bounds)
+			emit := func(chunk []map[string]any) error {
+				enrich.enrich(ctx, addr, chunk)
+				return writer.write(chunk)
 			}
-			total, werr = s.query.ForEachExportChunk(ctx, dataset,
-				sql, rawLimit, exportStreamChunk, func(chunk []map[string]any) error {
-					enrich.enrich(ctx, addr, chunk)
-					return writer.write(chunk)
-				}, sqlArgs...)
+			if _, ok := query.ExportCursorFor(dataset); ok {
+				total, _, werr = s.query.ForEachExportChunkKeyset(ctx,
+					query.ExportKeysetQuery{Dataset: dataset, Table: table, Where: where, Args: sqlArgs},
+					0, exportStreamChunk, emit)
+			} else {
+				total, werr = s.query.ForEachExportChunk(ctx, dataset,
+					exportStreamSQLUnbounded(table, where, 0), 0, exportStreamChunk, emit, sqlArgs...)
+			}
 			if werr == nil {
 				werr = writer.close()
 			}
@@ -348,23 +362,30 @@ const exportStreamChunk = 32 * 1024
 
 // exportStreamSQL 与 RowsForExportRange 的无 FINAL 形状保持一致：
 // 列集、过滤、排序完全相同，只是由调用方按块消费。
-func exportStreamSQL(dataset, chain, subject string) string {
-	where, _ := exportStreamWhere(dataset)
-	return "SELECT * FROM blockchain." + exportStreamTable(dataset) + " WHERE " + where +
-		" ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-}
-
-func exportStreamArgs(chain, subject string) []any {
-	return []any{chain, subject, subject}
-}
-
-func exportStreamWhere(dataset string) (string, []any) {
+// exportStreamQueryParts 给出数据集的取数组成：表名、条件子句与参数。
+//
+// 参数个数必须与占位符个数严格一致：logs/balances 的 `chain=? AND address=?`
+// 只有两个占位符，而 exportStreamArgs 过去恒返回三个——多出的参数会让驱动直接报错，
+// 也就是 logs/balances 的流式导出从未真正跑通。由
+// TestExportStreamQueryPartsMatchPlaceholders 冻结这条不变量。
+func exportStreamQueryParts(dataset, chain, subject string) (string, string, []any) {
 	switch dataset {
 	case "logs", "balances":
-		return "chain=? AND address=?", nil
+		return exportStreamTable(dataset), "chain=? AND address=?", []any{chain, subject}
 	default:
-		return "chain=? AND (from_address=? OR to_address=?)", nil
+		return exportStreamTable(dataset), "chain=? AND (from_address=? OR to_address=?)",
+			[]any{chain, subject, subject}
 	}
+}
+
+// exportStreamSQLUnbounded 渲染导出查询。limit<=0 时不带 LIMIT——那是"全量"，
+// 由键集分页（每页自带 LIMIT）或单查询流式消费保证内存有界。
+func exportStreamSQLUnbounded(table, where string, limit int) string {
+	sql := "SELECT * FROM blockchain." + table + " WHERE " + where + " ORDER BY timestamp DESC"
+	if limit > 0 {
+		sql += " LIMIT ? OFFSET ?"
+	}
+	return sql
 }
 
 func exportStreamTable(dataset string) string {
@@ -374,26 +395,31 @@ func exportStreamTable(dataset string) string {
 	return dataset
 }
 
-func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *model.DownloadJob, key, chain, wsID, addr, dataset, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
+func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *model.DownloadJob, key, chain, wsID, addr, dataset, format string, includeMeta, includeDecodedInput bool, bounds exportBounds) (int64, string, exportLocation, error) {
 	// 列式直写：不建 []map[string]any，从 ClickHouse 列直接写 CSV。实测把 20 万行
 	// 完整链路从 5.5-5.9 s 压到 2 s 量级（见 export_columnar.go 文件头的下限测算）。
 	// 只在"单地址 + csv + 不带 GPT 过滤 + 不开 decoded_input + 不需要案件/标签注释"
 	// 时启用；其余情形语义不同（多文件、随机访问格式、整批哈希查询、按用途改行值），
 	// 一律回退原有 map 路径。
 	if exportColumnarEnabled() && canUseColumnarExport(job, format, dataset, includeDecodedInput) {
-		rows, sha, loc, err := s.writeSingleExportColumnar(ctx, exportID, key, chain, wsID, addr, dataset, includeMeta)
+		tokenFilter, _ := columnarTokenFilter(job)
+		rows, sha, loc, err := s.writeSingleExportColumnar(ctx, exportID, key, chain, wsID, addr, dataset, includeMeta, bounds, tokenFilter)
 		if !errors.Is(err, errColumnarUnsupported) {
 			return rows, sha, loc, err
 		}
 	}
 	if exportStreamEnabled() && canStreamSingleExport(format, includeDecodedInput, job) {
-		rows, sha, loc, err := s.writeSingleExportStream(ctx, exportID, key, chain, wsID, addr, dataset, format, includeMeta)
+		rows, sha, loc, err := s.writeSingleExportStream(ctx, exportID, key, chain, wsID, addr, dataset, format, includeMeta, bounds)
 		if !errors.Is(err, errStreamUnsupported) {
 			return rows, sha, loc, err
 		}
 	}
 	fromBlock, toBlock, fromTime, toTime := exportJobBounds(dataset, job)
-	rows, err := s.query.RowsForExportRange(ctx, dataset, chain, addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
+	bounds = bounds.intersect(exportBounds{From: fromTime, To: toTime})
+	fromTime, toTime = bounds.From, bounds.To
+	// 批量写出器（xlsx/parquet/整批过滤）必须一次拿到全部行：走键集分页取全量，
+	// 超过内存上限时明确失败，绝不再截断。
+	rows, err := s.collectExportRows(ctx, dataset, chain, addr, bounds, fromBlock, toBlock)
 	if err != nil {
 		return 0, "", exportLocation{Key: key}, err
 	}
@@ -442,7 +468,7 @@ func (s *Server) writeSingleExport(ctx context.Context, exportID string, job *mo
 }
 
 // writeZipExport 多地址/多文件：流式 ZIP（`49 结构 + manifest.json）。
-func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *model.DownloadJob, key, chain, wsID string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool) (int64, string, exportLocation, error) {
+func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *model.DownloadJob, key, chain, wsID string, addresses, datasets []string, format string, includeMeta, includeDecodedInput bool, bounds exportBounds) (int64, string, exportLocation, error) {
 	pr, pw := io.Pipe()
 	type zipResult struct {
 		rows int64
@@ -511,6 +537,8 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 				defer wg.Done()
 				for task := range jobs {
 					fromBlock, toBlock, fromTime, toTime := exportJobBounds(task.ds, job)
+					taskBounds := bounds.intersect(exportBounds{From: fromTime, To: toTime})
+					fromTime, toTime = taskBounds.From, taskBounds.To
 					if task.multi {
 						rows, err := s.query.RowsForExportRangeMulti(pipelineCtx, task.ds, chain, append([]string(nil), addresses...), maxExportRows*len(addresses), fromBlock, toBlock, fromTime, toTime)
 						if err != nil {
@@ -550,10 +578,11 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 					//
 					// 条件里的 job == nil 是因为带 job 的导出还要按 token 过滤整批行
 					// （filterGPTActionExportToken），那条语义列式路径目前不复刻。
-					useColumnar := job == nil && format == "csv" && exportColumnarEnabled() &&
+					useColumnar := format == "csv" && exportColumnarEnabled() &&
 						canUseColumnarExport(job, format, task.ds, includeDecodedInput)
 					if useColumnar {
-						entry, entryRows, entryErr := s.prepareColumnarZipEntry(pipelineCtx, task.ds, chain, task.addr, maxExportRows, includeMeta, wsID)
+						tokenFilter, _ := columnarTokenFilter(job)
+						entry, entryRows, entryErr := s.prepareColumnarZipEntry(pipelineCtx, task.ds, chain, task.addr, 0, includeMeta, wsID, taskBounds, tokenFilter)
 						if entryErr == nil {
 							select {
 							case parts <- exportPart{addr: task.addr, ds: task.ds, prepared: entry, columnarRows: entryRows}:
@@ -571,7 +600,7 @@ func (s *Server) writeZipExport(ctx context.Context, exp *model.Export, job *mod
 							continue
 						}
 					}
-					rows, err := s.query.RowsForExportRange(pipelineCtx, task.ds, chain, task.addr, maxExportRows, 0, fromBlock, toBlock, fromTime, toTime)
+					rows, err := s.collectExportRows(pipelineCtx, task.ds, chain, task.addr, taskBounds, fromBlock, toBlock)
 					if err == nil {
 						rows = filterGPTActionExportToken(job, rows)
 						rows = dedupeExportRows(task.ds, rows)

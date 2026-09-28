@@ -24,7 +24,13 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 )
 
-const maxExportRows = 2_000_000
+// maxExportRows 是**批量 map 写出器的内存上限**，不是导出内容的行数上限。
+//
+// 它曾经被当作"导出最多 200 万行"的截断阈值用，结果是静默丢行：token_transfers
+// 实测 2,331,094 个版本键，文件里只有 2,000,000 行且状态为 COMPLETED。
+// 现在全量导出走键集分页（query/export_keyset.go），超过该上限的批量路径
+// 一律返回 errExportTooLargeToMaterialize，让用户改用 csv 或缩小时间范围。
+const maxExportRows = maxMaterializedExportRows
 
 func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -38,6 +44,9 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		IncludeMeta         bool     `json:"include_meta"`
 		ForceZip            bool     `json:"force_zip"`
 		IncludeDecodedInput bool     `json:"include_decoded_input"`
+		// 用户指定的导出时间范围（闭区间）；两者都可省略，省略即全量。
+		StartTime *time.Time `json:"start_time"`
+		EndTime   *time.Time `json:"end_time"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -61,7 +70,8 @@ func (s *Server) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 			Subject: req.Subject, Chain: req.Chain, Addresses: req.Addresses,
 			Datasets: req.Datasets, IncludeMeta: req.IncludeMeta, ForceZip: req.ForceZip,
 			IncludeDecodedInput: req.IncludeDecodedInput,
-			OrgID:               scope.OrganizationID, WSID: wsID, UserID: actor.IdentityID,
+			StartTime:           req.StartTime, EndTime: req.EndTime,
+			OrgID: scope.OrganizationID, WSID: wsID, UserID: actor.IdentityID,
 		})
 		return
 	}
@@ -585,19 +595,20 @@ func (s *Server) runExport(ctx context.Context, exp *model.Export, subject, chai
 	if job != nil {
 		fromBlock, toBlock, fromTime, toTime = exportJobBounds(exp.Dataset, job)
 	}
+	bounds := exportBounds{From: fromTime, To: toTime}
 	rows := make([]map[string]any, 0)
 	var err error
 	for _, itemSubject := range subjects {
-		remaining := maxExportRows - len(rows)
-		if remaining <= 0 {
-			break
-		}
 		var batch []map[string]any
-		batch, err = s.query.RowsForExportRange(ctx, exp.Dataset, chain, itemSubject, remaining, 0, fromBlock, toBlock, fromTime, toTime)
+		batch, err = s.collectExportRows(ctx, exp.Dataset, chain, itemSubject, bounds, fromBlock, toBlock)
 		if err != nil {
 			break
 		}
 		rows = append(rows, batch...)
+		if len(rows) > maxExportRows {
+			err = errExportTooLargeToMaterialize
+			break
+		}
 	}
 	if err != nil {
 		_ = s.deps.Store.UpdateExport(ctx, exp.ID, "FAILED", "", "", 0, err.Error())

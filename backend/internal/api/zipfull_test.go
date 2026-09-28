@@ -37,7 +37,7 @@ func TestZipFullBreakdown(t *testing.T) {
 	}
 	key := "bench/full-" + exp.ID + ".zip"
 	start := time.Now()
-	rows, sha, _, err := srv.writeZipExport(ctx, exp, nil, key, "bsc", "", []string{subject}, []string{"token_transfers"}, "csv", true, false)
+	rows, sha, _, err := srv.writeZipExport(ctx, exp, nil, key, "bsc", "", []string{subject}, []string{"token_transfers"}, "csv", true, false, exportBounds{})
 	if err != nil {
 		t.Fatalf("writeZipExport: %v", err)
 	}

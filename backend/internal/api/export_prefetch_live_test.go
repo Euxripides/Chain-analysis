@@ -53,7 +53,7 @@ func TestPrefetchPromotesToInstantExport(t *testing.T) {
 
 	const dataset, format = "token_transfers", "csv"
 	zipIt := false
-	snapshot := buildExportSnapshot("bsc", []string{subject}, []string{dataset}, format, false, zipIt, false, "", false, "")
+	snapshot := buildExportSnapshot("bsc", []string{subject}, []string{dataset}, format, false, zipIt, false, "", false, "", exportBounds{})
 	specHash := store.PrefetchSpecHash(snapshot)
 
 	// 1) 预生成
@@ -65,7 +65,7 @@ func TestPrefetchPromotesToInstantExport(t *testing.T) {
 		t.Logf("an identical prefetch already exists (%s); reusing its row", id)
 	}
 	start := time.Now()
-	srv.runExportPrefetch(ctx, id, "bsc", subject, []string{dataset}, format, zipIt, false, false, orgID, wsID)
+	srv.runExportPrefetch(ctx, id, "bsc", subject, []string{dataset}, format, zipIt, false, false, orgID, wsID, exportBounds{})
 	t.Logf("预生成耗时 %s", time.Since(start).Round(time.Millisecond))
 
 	pre, err := srv.deps.Store.FindCompletedPrefetch(ctx, specHash, orgID, wsID)

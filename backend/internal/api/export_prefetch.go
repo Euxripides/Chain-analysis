@@ -47,6 +47,9 @@ type prefetchRequest struct {
 	IncludeMeta         bool     `json:"include_meta"`
 	IncludeDecodedInput bool     `json:"include_decoded_input"`
 	JobID               string   `json:"job_id"`
+	// 与 POST /exports 同一套时间范围语义（闭区间，省略即全量）。
+	StartTime *time.Time `json:"start_time"`
+	EndTime   *time.Time `json:"end_time"`
 }
 
 // exportZipDecision 是"本次导出是否打包成 ZIP"的**唯一**判定点。
@@ -64,12 +67,15 @@ func exportZipDecision(forceZip bool, addressCount, datasetCount int) bool {
 // **预生成的规格哈希与真实导出的命中判定都用它**：任何字段或顺序差异都会让
 // 预生成永远命不中（且不会报错，只是白算）。因此这里是唯一构造点。
 func buildExportSnapshot(chain string, addresses, datasets []string, format string,
-	includeMeta, zip, includeDecodedInput bool, jobID string, partial bool, jobStatus string) []byte {
+	includeMeta, zip, includeDecodedInput bool, jobID string, partial bool, jobStatus string, bounds exportBounds) []byte {
 	snapshot, _ := json.Marshal(map[string]any{
 		"chain": chain, "addresses": addresses, "datasets": datasets,
 		"format": format, "include_meta": includeMeta, "zip": zip,
 		"include_decoded_input": includeDecodedInput, "job_id": jobID,
 		"partial": partial, "job_status": jobStatus,
+		// 时间范围必须进规格哈希：全量与"某段时间"是两份不同的产物，
+		// 少了这两个字段就会把全量产物当成范围产物的命中，用户拿到范围外的数据。
+		"from_time": bounds.From, "to_time": bounds.To,
 	})
 	return snapshot
 }
@@ -132,7 +138,12 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zipIt := exportZipDecision(req.ForceZip, len(addresses), len(datasets))
-	snapshot := buildExportSnapshot(chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, req.JobID, false, "")
+	bounds, boundsErr := newExportBounds(req.StartTime, req.EndTime)
+	if boundsErr != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": boundsErr.Error()})
+		return
+	}
+	snapshot := buildExportSnapshot(chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, req.JobID, false, "", bounds)
 	specHash := store.PrefetchSpecHash(snapshot)
 
 	id, created, err := s.deps.Store.CreatePrefetch(r.Context(), specHash, scope.OrganizationID, scope.WorkspaceID,
@@ -143,7 +154,7 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 	}
 	if created {
 		go s.runExportPrefetch(backgroundAuditCtx(r), id, chain, addresses[0], datasets, format, zipIt,
-			req.IncludeMeta, req.IncludeDecodedInput, scope.OrganizationID, scope.WorkspaceID)
+			req.IncludeMeta, req.IncludeDecodedInput, scope.OrganizationID, scope.WorkspaceID, bounds)
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"prefetched": true, "prefetch_id": id, "started": created})
 }
@@ -154,7 +165,7 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 // 要求存在已提交的导出意图），跑完把对象名与行数抄进 export_prefetch，随后删掉那条
 // 临时行——用户的导出列表因此看不到它。
 func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, chain, addr string, datasets []string,
-	format string, zipIt, includeMeta, includeDecodedInput bool, orgID, wsID string) {
+	format string, zipIt, includeMeta, includeDecodedInput bool, orgID, wsID string, bounds exportBounds) {
 	datasetLabel := strings.Join(datasets, "+")
 	fail := func(err error) {
 		_ = s.deps.Store.UpdatePrefetch(ctx, prefetchID, "FAILED", "", "", "", 0, err.Error())
@@ -163,7 +174,7 @@ func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, chain, addr 
 	}
 
 	// 与用户点导出时的快照逐字一致（无 job ⇒ partial=false、job_status=""）。
-	snapshot := buildExportSnapshot(chain, []string{addr}, datasets, format, includeMeta, zipIt, includeDecodedInput, "", false, "")
+	snapshot := buildExportSnapshot(chain, []string{addr}, datasets, format, includeMeta, zipIt, includeDecodedInput, "", false, "", bounds)
 	exp, err := s.deps.Store.CreateExportV2(ctx, wsID, orgID, nil, nil, datasetLabel, format, zipIt, snapshot)
 	if err != nil {
 		fail(fmt.Errorf("create intent: %w", err))
@@ -191,11 +202,11 @@ func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, chain, addr 
 	var loc exportLocation
 	if zipIt {
 		rowsTotal, objectSHA, loc, err = s.writeZipExport(ctx, exp, nil, key, chain, wsID,
-			[]string{addr}, datasets, format, includeMeta, includeDecodedInput)
+			[]string{addr}, datasets, format, includeMeta, includeDecodedInput, bounds)
 	} else {
 		// 非 zip 只可能是单数据集（多数据集会被 exportZipDecision 强制 ZIP）。
 		rowsTotal, objectSHA, loc, err = s.writeSingleExport(ctx, exp.ID, nil, key, chain, wsID, addr, datasets[0],
-			format, includeMeta, includeDecodedInput)
+			format, includeMeta, includeDecodedInput, bounds)
 	}
 	if err != nil {
 		_ = s.deps.Store.UpdateExportV2(ctx, exp.ID, "FAILED", "", "", 0, err.Error())

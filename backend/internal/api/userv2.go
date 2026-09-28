@@ -124,6 +124,9 @@ func (s *Server) registerUserV2(r chi.Router) {
 	r.Head("/exports/download/{ticket}", s.require("export:download", s.handleExportV2Download))
 	r.Get("/exports", s.require("export:list", s.handleExportsV2List))
 	r.Post("/exports", s.require("export:create", s.handleExportV2Create))
+	// 预生成：与 /exports 同权限、同租户作用域。前端在表单草稿稳定后触发，
+	// 用户点"导出"时命中即返回（提升 = 一次数据库更新）。
+	r.Post("/exports/prefetch", s.require("export:create", s.handleExportPrefetch))
 	r.Get("/exports/{id}", s.require("export:read", s.handleExportV2Detail))
 	r.Post("/exports/{id}/download-ticket", s.require("export:download", s.handleExportV2Ticket))
 
