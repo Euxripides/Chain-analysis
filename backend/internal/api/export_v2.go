@@ -135,7 +135,7 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 		return
 	}
 	// `48：超过 3 地址强制 ZIP；文件数 >1 也 ZIP
-	zipIt := req.ForceZip || len(addresses) > 3 || len(datasets) > 1
+	zipIt := exportZipDecision(req.ForceZip, len(addresses), len(datasets))
 	partial := job != nil && job.Status != model.JobCompleted
 	// 快照必须由 buildExportSnapshot 统一产出：预生成（export_prefetch.go）用同一份
 	// 内容算规格哈希，任何字段/顺序差异都会让命中率归零。

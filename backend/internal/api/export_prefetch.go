@@ -48,6 +48,16 @@ type prefetchRequest struct {
 	JobID               string   `json:"job_id"`
 }
 
+// exportZipDecision 是"本次导出是否打包成 ZIP"的**唯一**判定点。
+//
+// createExportV2 与预生成必须得到同一个结论，否则规格哈希里 zip 字段不同、命中率
+// 归零（而且不报错，只是每次都白算）。原先预生成只看 force_zip，漏了
+// "地址数>3 或数据集数>1 也强制 ZIP" 这条——用户选两个数据集时预生成算 false、
+// 真正导出算 true，永不命中。
+func exportZipDecision(forceZip bool, addressCount, datasetCount int) bool {
+	return forceZip || addressCount > 3 || datasetCount > 1
+}
+
 // buildExportSnapshot 产出写进 exports.query_snapshot 的规范化规格。
 //
 // **预生成的规格哈希与真实导出的命中判定都用它**：任何字段或顺序差异都会让
@@ -119,7 +129,7 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zipIt := req.ForceZip
+	zipIt := exportZipDecision(req.ForceZip, len(addresses), len(datasets))
 	snapshot := buildExportSnapshot(chain, addresses, datasets, format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, req.JobID, false, "")
 	specHash := store.PrefetchSpecHash(snapshot)
 

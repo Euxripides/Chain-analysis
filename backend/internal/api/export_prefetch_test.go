@@ -74,3 +74,36 @@ func TestPrefetchSpecHashSensitiveToSpecFields(t *testing.T) {
 		}
 	}
 }
+
+// TestExportZipDecisionSharedByBothPaths 锁定"是否打 ZIP"的判定只有一处。
+//
+// 两边不一致时规格哈希里的 zip 字段会不同，预生成永不命中——而且不会报错。
+// 实测踩过：预生成原先只看 force_zip，漏了"地址数>3 或数据集数>1 也强制 ZIP"。
+func TestExportZipDecisionSharedByBothPaths(t *testing.T) {
+	cases := []struct {
+		forceZip            bool
+		addresses, datasets int
+		want                bool
+	}{
+		{false, 1, 1, false},
+		{true, 1, 1, true},
+		{false, 2, 1, false},
+		{false, 4, 1, true}, // 地址数 > 3
+		{false, 1, 2, true}, // 数据集数 > 1
+		{true, 4, 2, true},
+	}
+	for _, c := range cases {
+		if got := exportZipDecision(c.forceZip, c.addresses, c.datasets); got != c.want {
+			t.Fatalf("force_zip=%v addresses=%d datasets=%d: got %v want %v",
+				c.forceZip, c.addresses, c.datasets, got, c.want)
+		}
+	}
+	// 同一份逻辑规格在两条路径上必须得到同一哈希（含 zip 字段）。
+	snapZip := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"a", "b"}, "csv", false,
+		exportZipDecision(false, 1, 2), false, "", false, "")
+	snapZip2 := buildExportSnapshot("bsc", []string{"0xabc"}, []string{"a", "b"}, "csv", false,
+		exportZipDecision(false, 1, 2), false, "", false, "")
+	if store.PrefetchSpecHash(snapZip) != store.PrefetchSpecHash(snapZip2) {
+		t.Fatal("identical specs must hash identically")
+	}
+}
