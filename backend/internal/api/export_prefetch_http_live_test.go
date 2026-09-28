@@ -183,3 +183,80 @@ func TestPrefetchStatusHTTPReportsReadiness(t *testing.T) {
 		t.Fatalf("missing spec_hash must be 400, got %d", rec2.Code)
 	}
 }
+
+// TestPrefetchMultiDatasetProducesZipAndHits 覆盖多数据集预生成（表单里加一个数据集
+// 就会进入的形态）。
+//
+// 这条路径与单数据集不同：exportZipDecision 会强制 ZIP，产物是 .zip、内部按数据集
+// 分条目。此前的实现只接受单数据集，用户加一个数据集后预生成直接不启动、
+// 点了导出也永远命不中。
+func TestPrefetchMultiDatasetProducesZipAndHits(t *testing.T) {
+	subject := os.Getenv("EXPORT_FLOW_SUBJECT")
+	if subject == "" {
+		t.Skip("EXPORT_FLOW_SUBJECT not set")
+	}
+	ctx := context.Background()
+	app.TuneExportGC()
+	cfg := config.Load()
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	infra, err := app.Bootstrap(ctx, cfg, log)
+	if err != nil {
+		t.Skipf("bootstrap: %v", err)
+	}
+	srv := New(Deps{Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Log: log,
+		TokenMeta: infra.TokenMeta, MethodData: infra.MethodData})
+	scope, serr := srv.systemScope(ctx)
+	if serr != nil {
+		t.Skipf("scope: %v", serr)
+	}
+	id, ierr := resolveScopeIdentity(ctx, srv, scope.OrganizationID, scope.WorkspaceID)
+	if ierr != nil {
+		t.Skipf("no identity in scope: %v", ierr)
+	}
+	principal := policy.Principal{IdentityID: id, OrganizationID: scope.OrganizationID,
+		WorkspaceID: scope.WorkspaceID, Authenticated: true}
+
+	// 两个数据集 + force_zip=false：实际会因"数据集数>1"强制 ZIP，两边必须一致。
+	body := `{"chain":"bsc","addresses":["` + subject + `"],"datasets":["transactions","token_transfers"],"format":"csv","include_meta":false,"force_zip":false,"include_decoded_input":false}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/exports/prefetch", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handleExportPrefetch(rec, req.WithContext(withPrincipal(ctx, principal)))
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"prefetched":true`) {
+		t.Fatalf("multi-dataset prefetch not started: %d %s", rec.Code, rec.Body.String())
+	}
+
+	snapshot := buildExportSnapshot("bsc", []string{normalizeForTest(subject)},
+		[]string{"transactions", "token_transfers"}, "csv", false, true, false, "", false, "")
+	specHash := store.PrefetchSpecHash(snapshot)
+
+	var pre *store.PrefetchRow
+	deadline := time.Now().Add(8 * time.Minute)
+	for time.Now().Before(deadline) {
+		pre, _ = srv.deps.Store.FindCompletedPrefetch(ctx, specHash, scope.OrganizationID, scope.WorkspaceID)
+		if pre != nil {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+	if pre == nil {
+		t.Fatal("multi-dataset prefetch never completed; see export.prefetch_failed audit")
+	}
+	if !strings.HasSuffix(pre.ObjectRef, ".zip") {
+		t.Fatalf("multi-dataset prefetch must produce a ZIP, got %s", pre.ObjectRef)
+	}
+	t.Logf("多数据集预生成完成：object_ref=%s rows=%d", pre.ObjectRef, pre.Rows)
+
+	// 导出必须命中同一份产物
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v2/exports", strings.NewReader(body))
+	rec2 := httptest.NewRecorder()
+	start := time.Now()
+	srv.handleCreateExport(rec2, req2.WithContext(withPrincipal(ctx, principal)))
+	hit := time.Since(start)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("create export returned %d: %s", rec2.Code, rec2.Body.String())
+	}
+	if hit > 3*time.Second || !strings.Contains(rec2.Body.String(), pre.ObjectRef) {
+		t.Fatalf("multi-dataset export did not hit the prefetched zip (%s): %s", hit.Round(time.Millisecond), truncateStr(rec2.Body.String(), 200))
+	}
+	t.Logf("多数据集导出命中：%s", hit.Round(time.Millisecond))
+}

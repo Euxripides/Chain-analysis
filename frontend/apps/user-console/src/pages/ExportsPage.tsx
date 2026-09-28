@@ -503,15 +503,16 @@ export default function ExportsPage() {
    * 30-60 秒——这段时间足够把产物备好，命中时服务端只做一次数据库提升（实测 5 ms）。
    *
    * 刻意的取舍：
-   *   - **只对"单地址 + 单数据集"触发**。这是表单的默认形态，也是服务端预生成唯一
-   *     支持的形态；多地址/多数据集服务端会直接回 200 但 prefetched=false，不需要发。
+   *   - **只对"单地址"触发**。数据集个数不限：多数据集服务端会强制 ZIP 并组装多条目，
+   *     实测同样能命中（173 万行 zip 命中 7 ms）。多地址要按地址扇出文件、产物结构不同，
+   *     服务端会回 200 但 prefetched=false，因此这里不必发。
    *   - **静默**：预生成失败、或服务端不支持，都不打扰用户——它只是省时间的投机行为，
    *     点导出时照常走正常路径。因此这里不弹任何提示。
    *   - 请求体必须与 createExport 完全一致，所以两条路径共用 buildAddressExportBody。
    */
   useEffect(() => {
     if (draft.mode !== "addresses") return;
-    if (draft.addresses.length !== 1 || draft.datasets.length !== 1) return;
+    if (draft.addresses.length !== 1) return;
     const built = buildAddressExportBody(draftRef.current);
     if (!built.body) return;
     const timer = window.setTimeout(() => {

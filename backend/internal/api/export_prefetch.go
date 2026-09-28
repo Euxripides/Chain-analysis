@@ -122,11 +122,12 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "addresses required"})
 		return
 	}
-	// 预生成只做"单地址 + 单数据集"这一种最常见形态：它是用户端表单的默认形状，
-	// 也是唯一能用一次列式直写覆盖的形态。多地址/多数据集走 zip 组装，
-	// 预生成的收益不足以支撑额外的复杂度与内存占用。
-	if len(addresses) != 1 || len(datasets) != 1 {
-		writeJSON(w, http.StatusOK, map[string]any{"prefetched": false, "reason": "prefetch supports a single address and dataset"})
+	// 预生成只做**单地址**形态：多地址要按地址扇出文件（一地址一文件），
+	// 与单地址的产物结构不同，收益不足以支撑额外复杂度。
+	// 数据集个数不限——多数据集会走 ZIP 组装（zipIt 由 exportZipDecision 判定），
+	// 那正是表单里加一个数据集就会进入的形态。
+	if len(addresses) != 1 {
+		writeJSON(w, http.StatusOK, map[string]any{"prefetched": false, "reason": "prefetch supports a single address"})
 		return
 	}
 
@@ -141,7 +142,7 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if created {
-		go s.runExportPrefetch(backgroundAuditCtx(r), id, specHash, chain, addresses[0], datasets[0], format, zipIt,
+		go s.runExportPrefetch(backgroundAuditCtx(r), id, chain, addresses[0], datasets, format, zipIt,
 			req.IncludeMeta, req.IncludeDecodedInput, scope.OrganizationID, scope.WorkspaceID)
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"prefetched": true, "prefetch_id": id, "started": created})
@@ -152,17 +153,18 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 // 复用正式导出的流水线：先建一条**临时 exports 行**（putExportStream 的 intent gate
 // 要求存在已提交的导出意图），跑完把对象名与行数抄进 export_prefetch，随后删掉那条
 // 临时行——用户的导出列表因此看不到它。
-func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, specHash, chain, addr, dataset, format string,
-	zipIt, includeMeta, includeDecodedInput bool, orgID, wsID string) {
+func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, chain, addr string, datasets []string,
+	format string, zipIt, includeMeta, includeDecodedInput bool, orgID, wsID string) {
+	datasetLabel := strings.Join(datasets, "+")
 	fail := func(err error) {
 		_ = s.deps.Store.UpdatePrefetch(ctx, prefetchID, "FAILED", "", "", "", 0, err.Error())
 		s.writeAuditCtx(ctx, "export.prefetch_failed", "export", "export_prefetch", prefetchID,
-			map[string]any{"error": err.Error(), "chain": chain, "dataset": dataset})
+			map[string]any{"error": err.Error(), "chain": chain, "dataset": datasetLabel})
 	}
 
 	// 与用户点导出时的快照逐字一致（无 job ⇒ partial=false、job_status=""）。
-	snapshot := buildExportSnapshot(chain, []string{addr}, []string{dataset}, format, includeMeta, zipIt, includeDecodedInput, "", false, "")
-	exp, err := s.deps.Store.CreateExportV2(ctx, wsID, orgID, nil, nil, dataset, format, zipIt, snapshot)
+	snapshot := buildExportSnapshot(chain, []string{addr}, datasets, format, includeMeta, zipIt, includeDecodedInput, "", false, "")
+	exp, err := s.deps.Store.CreateExportV2(ctx, wsID, orgID, nil, nil, datasetLabel, format, zipIt, snapshot)
 	if err != nil {
 		fail(fmt.Errorf("create intent: %w", err))
 		return
@@ -189,9 +191,10 @@ func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, specHash, ch
 	var loc exportLocation
 	if zipIt {
 		rowsTotal, objectSHA, loc, err = s.writeZipExport(ctx, exp, nil, key, chain, wsID,
-			[]string{addr}, []string{dataset}, format, includeMeta, includeDecodedInput)
+			[]string{addr}, datasets, format, includeMeta, includeDecodedInput)
 	} else {
-		rowsTotal, objectSHA, loc, err = s.writeSingleExport(ctx, exp.ID, nil, key, chain, wsID, addr, dataset,
+		// 非 zip 只可能是单数据集（多数据集会被 exportZipDecision 强制 ZIP）。
+		rowsTotal, objectSHA, loc, err = s.writeSingleExport(ctx, exp.ID, nil, key, chain, wsID, addr, datasets[0],
 			format, includeMeta, includeDecodedInput)
 	}
 	if err != nil {
@@ -205,7 +208,7 @@ func (s *Server) runExportPrefetch(ctx context.Context, prefetchID, specHash, ch
 	}
 	s.writeAuditCtx(ctx, "export.prefetched", "export", "export_prefetch", prefetchID,
 		map[string]any{"rows": rowsTotal, "bytes_sha256": objectSHA, "object_bucket": loc.Name, "object_ref": key,
-			"chain": chain, "dataset": dataset, "format": format, "zip": zipIt})
+			"chain": chain, "dataset": datasetLabel, "format": format, "zip": zipIt})
 }
 
 // tryPromotePrefetch 尝试把一份已完成的预生成产物提升成正式导出。
