@@ -378,6 +378,52 @@ function DialogDraftEditor(props: {
   );
 }
 
+/*
+ * buildAddressExportBody 把"按地址导出"的草稿变成请求体。
+ *
+ * 预生成（prefetch）与真正导出必须发出**完全一致的请求体**：服务端按请求体算规格
+ * 哈希来判定命中，任何一个字段的有无或取值不同都会让命中率归零（而且不会报错，
+ * 只是每次都白算一遍）。因此这里是唯一的构造点，两条路径都走它。
+ *
+ * 返回 { error } 表示草稿还不完整或自相矛盾，调用方按原有方式提示用户。
+ */
+function buildAddressExportBody(current: ExportDraft): { body?: Record<string, unknown>; error?: { title: string; detail: string } } {
+  if (!current.chain) {
+    return { error: { title: "请选择链", detail: "按地址导出时必须指定链。" } };
+  }
+  const addresses = current.addresses.length > 0 ? current.addresses : parseAddressInput(current.addressText);
+  if (addresses.length === 0) {
+    return { error: { title: "请填写地址", detail: "按地址导出时至少需要一个地址。" } };
+  }
+  if (addresses.length > MAX_EXPORT_ADDRESSES) {
+    return { error: { title: "地址数量超出上限", detail: `单次导出最多 ${MAX_EXPORT_ADDRESSES} 个地址。` } };
+  }
+  const families = new Set<AddressChainFamily>();
+  for (const address of addresses) {
+    const family = addressChainFamily(address);
+    if (family !== "") families.add(family);
+  }
+  if (families.size > 1) {
+    const names = [...families].map((family) => familyLabel(family)).join(" 与 ");
+    return { error: { title: "一次导出只能对应一条链", detail: `地址里同时出现了 ${names}。请按链拆分后分别创建导出。` } };
+  }
+  const family = families.values().next().value;
+  if (family && chainFamilyOf(current.chain) !== family) {
+    return { error: { title: "链与地址不匹配", detail: `当前选择的是 ${current.chain}，但地址属于 ${familyLabel(family)}。请切换链后再创建导出。` } };
+  }
+  return {
+    body: {
+      chain: current.chain,
+      addresses,
+      datasets: current.datasets,
+      format: current.format,
+      include_meta: current.includeMeta,
+      force_zip: current.forceZip,
+      include_decoded_input: current.includeDecodedInput,
+    },
+  };
+}
+
 export default function ExportsPage() {
   const dialog = useDialog();
   const { can } = useAuth();
@@ -450,6 +496,43 @@ export default function ExportsPage() {
     if (matched && matched !== current.chain) updateDraft({ ...current, chain: matched });
   }, [draft.addressText, draft.addresses, draft.mode, draft.chain, chainItems, updateDraft]);
 
+  /*
+   * 预生成：草稿（防抖后）一稳定就请服务端先生成产物，用户真正点"导出"时命中即返回。
+   *
+   * 为什么值得做：一份 173 万行的 csv+zip 实测要 17 秒生成，而用户在表单上通常要花
+   * 30-60 秒——这段时间足够把产物备好，命中时服务端只做一次数据库提升（实测 5 ms）。
+   *
+   * 刻意的取舍：
+   *   - **只对"单地址 + 单数据集"触发**。这是表单的默认形态，也是服务端预生成唯一
+   *     支持的形态；多地址/多数据集服务端会直接回 200 但 prefetched=false，不需要发。
+   *   - **静默**：预生成失败、或服务端不支持，都不打扰用户——它只是省时间的投机行为，
+   *     点导出时照常走正常路径。因此这里不弹任何提示。
+   *   - 请求体必须与 createExport 完全一致，所以两条路径共用 buildAddressExportBody。
+   */
+  useEffect(() => {
+    if (draft.mode !== "addresses") return;
+    if (draft.addresses.length !== 1 || draft.datasets.length !== 1) return;
+    const built = buildAddressExportBody(draftRef.current);
+    if (!built.body) return;
+    const timer = window.setTimeout(() => {
+      void client.post("/api/v2/exports/prefetch", built.body).catch(() => {
+        /* 投机行为，失败静默 */
+      });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [
+    client,
+    draft.mode,
+    draft.chain,
+    draft.addressText,
+    draft.addresses,
+    draft.datasets,
+    draft.format,
+    draft.includeMeta,
+    draft.forceZip,
+    draft.includeDecodedInput,
+  ]);
+
   const jobOptions = useMemo(() => (jobsApi.data?.items ?? []).filter((job) => EXPORTABLE_JOB_STATUSES.has(job.status)), [jobsApi.data]);
   const activeStep = draft.mode === "job"
     ? UUID_RE.test(draft.jobId.trim()) ? "options" : "object"
@@ -479,52 +562,12 @@ export default function ExportsPage() {
         include_decoded_input: current.includeDecodedInput,
       };
     } else {
-      if (!current.chain) {
-        dialog.notify("warning", "请选择链", "按地址导出时必须指定链。");
+      const built = buildAddressExportBody(current);
+      if (built.error) {
+        dialog.notify("warning", built.error.title, built.error.detail);
         return;
       }
-      const addresses = current.addresses.length > 0 ? current.addresses : parseAddressInput(current.addressText);
-      if (addresses.length === 0) {
-        dialog.notify("warning", "请填写地址", "按地址导出时至少需要一个地址。");
-        return;
-      }
-      if (addresses.length > MAX_EXPORT_ADDRESSES) {
-        dialog.notify("warning", "地址数量超出上限", `单次导出最多 ${MAX_EXPORT_ADDRESSES} 个地址。`);
-        return;
-      }
-      /*
-       * 地址族与所选链必须一致：一次导出只对应一条链。族不同时在此拦截，
-       * 否则服务端会按所选链去查另一族的地址（TRON 地址 + arbitrum → 结果为空，
-       * 用户只会看到"导出了但没有数据"）。
-       */
-      const families = new Set<AddressChainFamily>();
-      for (const address of addresses) {
-        const family = addressChainFamily(address);
-        if (family !== "") families.add(family);
-      }
-      if (families.size > 1) {
-        const names = [...families].map((family) => familyLabel(family)).join(" 与 ");
-        dialog.notify("warning", "一次导出只能对应一条链", `地址里同时出现了 ${names}。请按链拆分后分别创建导出。`);
-        return;
-      }
-      const family = families.values().next().value;
-      if (family && chainFamilyOf(current.chain) !== family) {
-        dialog.notify(
-          "warning",
-          "链与地址不匹配",
-          `当前选择的是 ${current.chain}，但地址属于 ${familyLabel(family)}。请切换链后再创建导出。`,
-        );
-        return;
-      }
-      body = {
-        chain: current.chain,
-        addresses,
-        datasets: current.datasets,
-        format: current.format,
-        include_meta: current.includeMeta,
-        force_zip: current.forceZip,
-        include_decoded_input: current.includeDecodedInput,
-      };
+      body = built.body!;
     }
 
     const response = await run(async () => {

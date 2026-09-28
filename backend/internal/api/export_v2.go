@@ -25,6 +25,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
 // exportV2Request 多地址/多数据集异步导出（`47-`53）。
@@ -136,17 +137,10 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	// `48：超过 3 地址强制 ZIP；文件数 >1 也 ZIP
 	zipIt := req.ForceZip || len(addresses) > 3 || len(datasets) > 1
 	partial := job != nil && job.Status != model.JobCompleted
-	snapshot, _ := json.Marshal(map[string]any{
-		"chain": chain, "addresses": addresses, "datasets": datasets,
-		"format": format, "include_meta": req.IncludeMeta, "zip": zipIt,
-		"include_decoded_input": req.IncludeDecodedInput, "job_id": req.JobID,
-		"partial": partial, "job_status": func() string {
-			if job != nil {
-				return job.Status
-			}
-			return ""
-		}(),
-	})
+	// 快照必须由 buildExportSnapshot 统一产出：预生成（export_prefetch.go）用同一份
+	// 内容算规格哈希，任何字段/顺序差异都会让命中率归零。
+	snapshot := buildExportSnapshot(chain, addresses, datasets, format, req.IncludeMeta, zipIt,
+		req.IncludeDecodedInput, req.JobID, partial, jobStatusOf(job))
 	// Reuse an identical artifact produced after the job's last mutation instead
 	// of querying and compressing millions of rows again. Snapshot equality keeps
 	// paused/partial exports from reusing a different progress version.
@@ -170,6 +164,15 @@ func (s *Server) createExportV2(w http.ResponseWriter, r *http.Request, req expo
 	// GPT Actions 来自 systemScope）。这里不再回退到 DefaultOrgWorkspace ——
 	// 否则任何认证用户都能把导出写进默认组织，并在导出列表/详情里读到它。
 	orgID, wsID := req.OrgID, req.WSID
+	// 预生成命中：同一份规格的产物已经算好了，直接提升成正式导出，不再跑流水线。
+	// 只在"单地址 + 无 job"时尝试——那正是预生成唯一支持的形态（见 handleExportPrefetch）。
+	if job == nil && len(addresses) == 1 {
+		if promoted, ok := s.tryPromotePrefetch(r.Context(), store.PrefetchSpecHash(snapshot),
+			orgID, wsID, req.UserID, strings.Join(datasets, "+"), format, zipIt, snapshot); ok {
+			writeJSON(w, http.StatusOK, promoted)
+			return
+		}
+	}
 	if orgID == "" || wsID == "" {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "tenant scope is required for exports"})
 		return

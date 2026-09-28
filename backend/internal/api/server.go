@@ -569,6 +569,9 @@ func (s *Server) buildRouter() {
 
 		// ---- 导出（租户对象） ----
 		api.Post("/exports", s.require("export:create", s.handleCreateExport))
+		// 预生成：表单草稿变化时触发，产物不进导出列表；用户点导出时命中即返回。
+		api.Post("/exports/prefetch", s.require("export:create", s.handleExportPrefetch))
+		api.Get("/exports/prefetch/status", s.require("export:create", s.handleExportPrefetchStatus))
 		api.Get("/exports/{id}", s.require("export:read", s.handleGetExport))
 		api.Get("/exports/{id}/download", s.require("export:download", s.handleExportDownloadScoped))
 		api.Head("/exports/{id}/download", s.require("export:download", s.handleExportDownloadScoped))
