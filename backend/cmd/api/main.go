@@ -71,6 +71,8 @@ func main() {
 		Routes: infra.Routes, Secrets: infra.Secrets, DRPCManagement: infra.DRPCManagement, DRPC: infra.DRPC,
 	})
 	srv.StartForwarder()
+	// 预生成产物的过期清理（投机产物，过一小时没人认领就连对象一起删）。
+	srv.StartPrefetchGC(runCtx)
 
 	server := &http.Server{
 		Addr:              ":" + itoa(cfg.HTTPPort),

@@ -5,13 +5,23 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/app"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
+
+func minioPutOptions() minio.PutObjectOptions {
+	return minio.PutObjectOptions{ContentType: "text/plain"}
+}
+func minioStatOptions() minio.StatObjectOptions     { return minio.StatObjectOptions{} }
+func minioRemoveOptions() minio.RemoveObjectOptions { return minio.RemoveObjectOptions{} }
 
 // TestPrefetchPromotesToInstantExport 是预生成的端到端判据：
 //
@@ -95,4 +105,87 @@ func TestPrefetchPromotesToInstantExport(t *testing.T) {
 		t.Logf("cleanup export row: %v", derr)
 	}
 	_ = io.Discard
+}
+
+// TestPrefetchGCSweepsOnlyExpired 锁定清理循环的边界：
+// 过期行连同对象一起删；**未过期**行必须原样保留（否则用户刚预生成的东西会被清掉）。
+func TestPrefetchGCSweepsOnlyExpired(t *testing.T) {
+	subject := os.Getenv("EXPORT_FLOW_SUBJECT")
+	if subject == "" {
+		t.Skip("EXPORT_FLOW_SUBJECT not set")
+	}
+	ctx := context.Background()
+	cfg := config.Load()
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	infra, err := app.Bootstrap(ctx, cfg, log)
+	if err != nil {
+		t.Skipf("bootstrap: %v", err)
+	}
+	srv := New(Deps{Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Log: log,
+		TokenMeta: infra.TokenMeta, MethodData: infra.MethodData})
+	scope, serr := srv.systemScope(ctx)
+	if serr != nil {
+		t.Skipf("scope: %v", serr)
+	}
+	orgID, wsID := scope.OrganizationID, scope.WorkspaceID
+
+	// 造两行：一行已过期、一行未过期。分别指向同一个真实存在的对象（用 MinIO 里的
+	// bench 前缀对象不现实，这里直接放一个空对象）。
+	const bucket = "blockchain-exports"
+	client := srv.deps.Raw.Client()
+	mkObject := func(name string) string {
+		key := "bench/gc-" + name + ".txt"
+		if _, err := client.PutObject(ctx, bucket, key, strings.NewReader("x"), 1, minioPutOptions()); err != nil {
+			t.Skipf("cannot put test object: %v", err)
+		}
+		return key
+	}
+	expiredKey := mkObject("expired")
+	freshKey := mkObject("fresh")
+
+	// 表里只有 status/object_ref 等列；这里用最小插入直接落两行。
+	insert := func(key string, expires string) string {
+		id := uuid.NewString()
+		_, err := srv.deps.Store.Pool.Exec(ctx,
+			"INSERT INTO export_prefetch (id, spec_hash, organization_id, workspace_id, dataset, format, zip, status, object_ref, object_bucket, rows, expires_at) "+
+				"VALUES ($1,$2,$3,$4,'token_transfers','csv',false,'COMPLETED',$5,$6,1, now() + $7::interval)",
+			id, "gctest-"+id, orgID, wsID, key, bucket, expires)
+		if err != nil {
+			t.Fatalf("insert prefetch row: %v", err)
+		}
+		return id
+	}
+	expiredID := insert(expiredKey, "-1 hour")
+	freshID := insert(freshKey, "+1 hour")
+	t.Cleanup(func() {
+		_, _ = srv.deps.Store.Pool.Exec(context.Background(), "DELETE FROM export_prefetch WHERE id IN ($1,$2)", expiredID, freshID)
+		client.RemoveObject(context.Background(), bucket, expiredKey, minioRemoveOptions())
+		client.RemoveObject(context.Background(), bucket, freshKey, minioRemoveOptions())
+	})
+
+	srv.sweepExpiredPrefetch(ctx)
+
+	// 过期行应被删除
+	var n int
+	if err := srv.deps.Store.Pool.QueryRow(ctx, "SELECT count(*) FROM export_prefetch WHERE id=$1", expiredID).Scan(&n); err != nil {
+		t.Fatalf("query expired row: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expired prefetch row %s survived the sweep", expiredID)
+	}
+	// 未过期行必须还在
+	if err := srv.deps.Store.Pool.QueryRow(ctx, "SELECT count(*) FROM export_prefetch WHERE id=$1", freshID).Scan(&n); err != nil {
+		t.Fatalf("query fresh row: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("unexpired prefetch row %s was swept away", freshID)
+	}
+	// 过期对象应被删除
+	if _, err := client.StatObject(ctx, bucket, expiredKey, minioStatOptions()); err == nil {
+		t.Fatalf("expired object %s still exists", expiredKey)
+	}
+	// 未过期对象必须还在
+	if _, err := client.StatObject(ctx, bucket, freshKey, minioStatOptions()); err != nil {
+		t.Fatalf("unexpired object %s was removed: %v", freshKey, err)
+	}
 }
