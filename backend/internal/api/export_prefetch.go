@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
@@ -96,10 +97,14 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "csv"
 	}
+	// 地址归一化必须与 createExportV2 **完全一致**：规格哈希是在归一化之后算的，
+	// 两边规则只要有一点不同（大小写、空白、空串处理）就会静默失配——用户点导出时
+	// 永远命中不了，而且不会报错，只是每次都白算一遍。
+	// 因此这里调用同一个 addressnorm.NormalizeKey，而不是自己写 trim/lower。
 	addresses := make([]string, 0, len(req.Addresses))
 	for _, a := range req.Addresses {
-		if a = strings.TrimSpace(a); a != "" {
-			addresses = append(addresses, a)
+		if norm := addressnorm.NormalizeKey(chain, a); norm != "" {
+			addresses = append(addresses, norm)
 		}
 	}
 	if len(addresses) == 0 {
