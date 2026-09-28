@@ -63,6 +63,15 @@ var enrichmentColumns = []string{
 	"token_type", "token_metadata_status", "token_metadata_source", "token_metadata_confidence",
 }
 
+// enrichmentNeedsTokenAddress 是"哪些结果集列的存在意味着 applyTokenMeta 会真的跑"。
+//
+// applyTokenMeta 开头是 `if contract == "" { continue }`，contract 取自
+// token_address 或 contract_address。**没有这两列的导出数据集（transactions、logs）
+// 里它一次都不会跑**，因此 raw_value / formatted_amount 不会出现在产物里；
+// token_name 也不会（它只在 `plan.name != ""` 时写入）。列式路径必须照此裁剪，
+// 否则会多出四列、与 map 路径的列集不一致——实测 transactions 因此 header 直接不同。
+var enrichmentNeedsTokenAddress = []string{"token_address", "contract_address"}
+
 // columnarPlan 是列式导出的列映射：每一列要么取自结果集的某列，要么由富化现算。
 // overwrittenByEnrichment 是"结果集里有同名列、但必须以富化值为准"的列。
 // token_contract 就是这种：迁移里它存在于 token_transfers，但导出契约要求它等于
@@ -105,6 +114,16 @@ func buildColumnarPlan(resultColumns []string, includeMeta bool) (*columnarPlan,
 		}
 	}
 
+	// 该结果集是否具备让 applyTokenMeta 真正执行的前提（有 token_address/contract_address）。
+	hasTokenAddress := false
+	for _, n := range resultColumns {
+		for _, want := range enrichmentNeedsTokenAddress {
+			if n == want {
+				hasTokenAddress = true
+			}
+		}
+	}
+
 	all := make([]string, 0, len(resultColumns)+len(enrichmentColumns)+len(annotationColumns))
 	seen := make(map[string]struct{}, len(resultColumns)+len(enrichmentColumns))
 	for _, n := range resultColumns {
@@ -114,7 +133,14 @@ func buildColumnarPlan(resultColumns []string, includeMeta bool) (*columnarPlan,
 		seen[n] = struct{}{}
 		all = append(all, n)
 	}
+	// 没有 token 地址列的数据集（transactions、logs）：applyTokenMeta 整段不执行
+	// （它的开头就是 `if contract == "" { continue }`，而 contract 只从
+	// token_address/contract_address 取），因此**一个富化列都不会出现**。
+	// 实测 transactions 若硬加这几列，header 与 map 路径直接不同。
 	for _, n := range enrichmentColumns {
+		if !hasTokenAddress {
+			continue
+		}
 		if _, dup := seen[n]; dup {
 			continue
 		}

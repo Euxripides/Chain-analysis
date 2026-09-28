@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"sort"
@@ -128,4 +129,87 @@ func truncate(b []byte) string {
 		return string(b[:max]) + "..."
 	}
 	return string(b)
+}
+
+// TestColumnarHandlesArrayColumns 是 transactions/logs 数据集的回归判据。
+//
+// 这两个数据集有 Array(String) 列（transactions: signers/account_keys/program_ids；
+// logs: topics）。列式路径原先没有数组绑定，驱动会报
+// "column signers - needs a slice or any"，导致**整条 transactions 导出失败**
+// （实测：Actions csv+zip、两个数据集，4.5 s 后 FAILED）。
+//
+// 这里对每个含数组列的数据集比列式与 map 两条路径的输出，且必须**至少有一行非空数组**
+// ——首行往往是空数组，只测空数组证明不了渲染一致性。
+func TestColumnarHandlesArrayColumns(t *testing.T) {
+	subject := os.Getenv("EXPORT_EQUIV_SUBJECT")
+	if subject == "" {
+		t.Skip("EXPORT_EQUIV_SUBJECT not set")
+	}
+	ctx := context.Background()
+	app.TuneExportGC()
+	cfg := config.Load()
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	infra, err := app.Bootstrap(ctx, cfg, log)
+	if err != nil {
+		t.Skipf("bootstrap unavailable: %v", err)
+	}
+	srv := New(Deps{Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Log: log,
+		TokenMeta: infra.TokenMeta, MethodData: infra.MethodData})
+
+	for _, dataset := range []string{"transactions", "logs"} {
+		rows, qerr := srv.query.RowsForExportRange(ctx, dataset, "bsc", subject, 2000, 0, nil, nil, nil, nil)
+		if qerr != nil {
+			t.Fatalf("%s: map query: %v", dataset, qerr)
+		}
+		if len(rows) == 0 {
+			t.Logf("%s: no rows for this subject, skipping", dataset)
+			continue
+		}
+		// 非空数组必须被覆盖到，否则这条用例证明不了渲染一致性。
+		arrayCol := "signers"
+		if dataset == "logs" {
+			arrayCol = "topics"
+		}
+		nonEmpty := 0
+		for _, r := range rows {
+			if s := fmt.Sprint(r[arrayCol]); s != "" && s != "[]" {
+				nonEmpty++
+			}
+		}
+		if nonEmpty == 0 {
+			t.Logf("%s: %d rows but no non-empty %s; rendering of populated arrays is not covered by this data", dataset, len(rows), arrayCol)
+		}
+
+		srv.attachTokenMetadata(ctx, "bsc", rows)
+		var want bytes.Buffer
+		if werr := streamCSV(&want, rows); werr != nil {
+			t.Fatalf("%s: map csv: %v", dataset, werr)
+		}
+		var got bytes.Buffer
+		if _, ok, cerr := srv.exportColumnarStream(ctx, dataset, "bsc", subject, &got, len(rows)); cerr != nil {
+			t.Fatalf("%s: columnar: %v", dataset, cerr)
+		} else if !ok {
+			t.Fatalf("%s: columnar reported unsupported", dataset)
+		}
+
+		gotLines := nonEmptyLines(got.Bytes())
+		wantLines := nonEmptyLines(want.Bytes())
+		if len(gotLines) == 0 || len(wantLines) == 0 {
+			t.Fatalf("%s: empty output", dataset)
+		}
+		if !bytes.Equal(gotLines[0], wantLines[0]) {
+			t.Fatalf("%s: header differs\n columnar: %s\n map     : %s", dataset, truncate(gotLines[0]), truncate(wantLines[0]))
+		}
+		if len(gotLines) != len(wantLines) {
+			t.Fatalf("%s: row count differs: columnar=%d map=%d", dataset, len(gotLines)-1, len(wantLines)-1)
+		}
+		gotBody := sortedLines(gotLines[1:])
+		wantBody := sortedLines(wantLines[1:])
+		for i := range gotBody {
+			if !bytes.Equal(gotBody[i], wantBody[i]) {
+				t.Fatalf("%s: row differs (sorted %d)\n columnar: %s\n map     : %s", dataset, i, truncate(gotBody[i]), truncate(wantBody[i]))
+			}
+		}
+		t.Logf("%s: columnar == map over %d rows (non-empty arrays: %d)", dataset, len(gotLines)-1, nonEmpty)
+	}
 }

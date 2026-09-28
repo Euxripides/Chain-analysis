@@ -443,6 +443,22 @@ func formatCellText(v any) string {
 		return ""
 	case string:
 		return x
+	case []string:
+		// 数组列（transactions.signers 等）：map 路径的值是 []string，
+		// 导出时经 fmt.Sprint 渲染成 "[a b c]"。这里必须给出同样的文本。
+		return fmt.Sprint(x)
+	case []any:
+		return fmt.Sprint(x)
+	case []uint64:
+		return fmt.Sprint(x)
+	case []uint32:
+		return fmt.Sprint(x)
+	case []int64:
+		return fmt.Sprint(x)
+	case []int32:
+		return fmt.Sprint(x)
+	case []float64:
+		return fmt.Sprint(x)
 	case uint64:
 		return strconv.FormatUint(x, 10)
 	case uint32:
@@ -537,8 +553,46 @@ func (k *exportKey) add(s string) {
 func (k *exportKey) addUint(v uint64) { k.add(strconv.FormatUint(v, 10)) }
 func (k *exportKey) addInt(v int64)   { k.add(strconv.FormatInt(v, 10)) }
 
+// newArrayHolder 按数组元素类型分配扫描目标。
+//
+// 驱动要求数组列用"元素类型的切片指针"接收（实测 Array(String) → *[]string，
+// ColumnType.ScanType() 也返回 []string）。未知元素类型退回 *[]any——
+// 驱动支持用 *[]any 接任意数组，代价是每个元素装箱；正确性优先于这点开销。
+func newArrayHolder(arrayType string) any {
+	inner := strings.TrimSuffix(strings.TrimPrefix(arrayType, "array("), ")")
+	inner = strings.TrimSpace(inner)
+	// 去掉 Nullable(...) 包裹，取底层类型。
+	inner = strings.TrimPrefix(inner, "nullable(")
+	inner = strings.TrimSuffix(inner, ")")
+	switch {
+	case strings.HasPrefix(inner, "string"), strings.HasPrefix(inner, "fixedstring"),
+		strings.HasPrefix(inner, "uuid"), strings.HasPrefix(inner, "enum"):
+		return new([]string)
+	case strings.HasPrefix(inner, "uint64"):
+		return new([]uint64)
+	case strings.HasPrefix(inner, "uint32"):
+		return new([]uint32)
+	case strings.HasPrefix(inner, "int64"):
+		return new([]int64)
+	case strings.HasPrefix(inner, "int32"):
+		return new([]int32)
+	case strings.HasPrefix(inner, "float64"):
+		return new([]float64)
+	default:
+		return new([]any)
+	}
+}
+
 func newColumnHolder(typ string) any {
 	t := strings.ToLower(typ)
+	// 数组列必须先处理：transactions 的 signers/account_keys/program_ids 与 logs 的
+	// topics 都是 Array(String)。此前没有这一支，它们会落到 default 的 *string，
+	// 驱动报 "(signers string) column signers - needs a slice or any"——**transactions
+	// 数据集整条导出直接失败**（实测：Actions csv+zip 两个数据集 4.5 s 后 FAILED）。
+	switch {
+	case strings.HasPrefix(t, "array("):
+		return newArrayHolder(t)
+	}
 	switch {
 	case strings.Contains(t, "datetime"):
 		return new(time.Time)
