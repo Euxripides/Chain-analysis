@@ -134,3 +134,52 @@ func resolveScopeIdentity(ctx context.Context, srv *Server, orgID, wsID string) 
 }
 
 var _ = io.Discard
+
+// TestPrefetchStatusHTTPReportsReadiness 覆盖 status 端点（前端可选用来显示"已预生成"）。
+//
+// 这个端点不在关键路径上（命中判定在导出时自己做），所以之前 curl 它拿 404 只是
+// 因为 API key 不属于这个鉴权面——这里用真实处理器把它验一遍，免得留下一个坏端点。
+func TestPrefetchStatusHTTPReportsReadiness(t *testing.T) {
+	subject := os.Getenv("EXPORT_FLOW_SUBJECT")
+	if subject == "" {
+		t.Skip("EXPORT_FLOW_SUBJECT not set")
+	}
+	ctx := context.Background()
+	cfg := config.Load()
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	infra, err := app.Bootstrap(ctx, cfg, log)
+	if err != nil {
+		t.Skipf("bootstrap: %v", err)
+	}
+	srv := New(Deps{Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Log: log,
+		TokenMeta: infra.TokenMeta, MethodData: infra.MethodData})
+	scope, serr := srv.systemScope(ctx)
+	if serr != nil {
+		t.Skipf("scope: %v", serr)
+	}
+	id, ierr := resolveScopeIdentity(ctx, srv, scope.OrganizationID, scope.WorkspaceID)
+	if ierr != nil {
+		t.Skipf("no identity in scope: %v", ierr)
+	}
+	principal := policy.Principal{IdentityID: id, OrganizationID: scope.OrganizationID,
+		WorkspaceID: scope.WorkspaceID, Authenticated: true}
+
+	// 未知规格：ready 必须是 false（而不是报错）。
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/exports/prefetch/status?spec_hash=deadbeef", nil)
+	rec := httptest.NewRecorder()
+	srv.handleExportPrefetchStatus(rec, req.WithContext(withPrincipal(ctx, principal)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status handler returned %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"ready":false`) {
+		t.Fatalf("unknown spec must report ready=false, got %s", rec.Body.String())
+	}
+
+	// 缺参数：400。
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v2/exports/prefetch/status", nil)
+	rec2 := httptest.NewRecorder()
+	srv.handleExportPrefetchStatus(rec2, req2.WithContext(withPrincipal(ctx, principal)))
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("missing spec_hash must be 400, got %d", rec2.Code)
+	}
+}
