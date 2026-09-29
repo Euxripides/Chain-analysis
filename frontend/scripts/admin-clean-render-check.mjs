@@ -188,6 +188,31 @@ try {
       }
       await page.screenshot({ path: join(out, `${path.replaceAll("/", "-")}-${viewport.name}.png`), fullPage: true });
     }
+    const normalName = session.display_name;
+    const probeName = '<img src=x onerror="window.__admin_xss_probe=1">SCRIPT';
+    session.display_name = probeName;
+    await page.goto(`${base}/admin/overview`, { waitUntil: "domcontentloaded" });
+    await page.locator(".shell__user").waitFor({ timeout: 8000 });
+    const nameProbe = await page.evaluate(() => {
+      const user = document.querySelector(".shell__user");
+      const name = user?.querySelector(":scope > span:last-child > span:first-child");
+      return {
+        text: name?.textContent ?? "",
+        hasImage: Boolean(user?.querySelector("img")),
+        executed: Boolean(window.__admin_xss_probe),
+        documentWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        nameWidth: name?.clientWidth ?? 0,
+        nameScrollWidth: name?.scrollWidth ?? 0,
+      };
+    });
+    session.display_name = normalName;
+    report.pages.push({ viewport: viewport.name, path: "display-name-escape", ...nameProbe });
+    if (nameProbe.text !== probeName || nameProbe.hasImage || nameProbe.executed ||
+      nameProbe.documentWidth > nameProbe.clientWidth + 1 ||
+      (viewport.name === "desktop" && nameProbe.nameScrollWidth <= nameProbe.nameWidth)) {
+      report.problems.push({ viewport: viewport.name, path: "display-name-escape", ...nameProbe });
+    }
     await page.goto(`${base}/admin/overview`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "指标口径" }).click();
     const infoDialog = page.getByRole("dialog");

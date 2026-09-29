@@ -234,9 +234,9 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "用户不存在", nil)
 		return
 	}
-	name := strings.TrimSpace(body.DisplayName)
-	if name == "" || len([]rune(name)) > 80 {
-		validationError(w, r, "显示名称长度必须在 1-80 个字符之间", nil)
+	name, nameProblem := normalizeIdentityDisplayName(body.DisplayName)
+	if nameProblem != nil {
+		validationError(w, r, nameProblem.Message, []fieldError{*nameProblem})
 		return
 	}
 	if _, err := s.deps.Store.Pool.Exec(r.Context(),

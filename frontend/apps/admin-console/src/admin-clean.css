@@ -106,8 +106,15 @@ html[data-app="admin"] .shell__env {
   border-color: #d2e6f6;
   font-weight: 650;
 }
-html[data-app="admin"] .shell__user { color: var(--c-neutral); }
+html[data-app="admin"] .shell__user { color: var(--c-neutral); min-width: 0; }
 html[data-app="admin"] .shell__user > svg { color: #7990a2; }
+html[data-app="admin"] .shell__user > span:last-child { min-width: 0; max-width: 180px; overflow: hidden; }
+html[data-app="admin"] .shell__user > span:last-child > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 html[data-app="admin"] .shell__content {
   padding: 29px clamp(20px, 2.8vw, 42px) 48px;
   gap: 21px;

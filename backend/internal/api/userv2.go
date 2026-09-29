@@ -235,9 +235,9 @@ func (s *Server) handleUserProfileUpdate(w http.ResponseWriter, r *http.Request)
 		validationError(w, r, "请求体不是合法 JSON", nil)
 		return
 	}
-	name := strings.TrimSpace(body.DisplayName)
-	if name == "" || len([]rune(name)) > 80 {
-		validationError(w, r, "显示名称长度必须在 1-80 个字符之间", []fieldError{{Field: "display_name", Code: "invalid_length", Message: "1-80 个字符"}})
+	name, nameProblem := normalizeIdentityDisplayName(body.DisplayName)
+	if nameProblem != nil {
+		validationError(w, r, nameProblem.Message, []fieldError{*nameProblem})
 		return
 	}
 	if s.deps.Store == nil {
