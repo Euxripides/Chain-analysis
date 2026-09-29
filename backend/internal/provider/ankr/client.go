@@ -413,17 +413,26 @@ func (c *Client) buildParams(req provider.FetchRequest) map[string]any {
 	}
 	params["blockchain"] = req.Chain
 	params["address"] = req.Address
-	if req.FromBlock != nil {
-		params["fromBlock"] = fmt.Sprintf("0x%x", *req.FromBlock)
-	}
-	if req.ToBlock != nil {
-		params["toBlock"] = fmt.Sprintf("0x%x", *req.ToBlock)
-	}
-	if req.FromTime != nil && c.Capabilities().SupportsTimeRange[req.Dataset] {
-		params["fromTimestamp"] = req.FromTime.UnixMilli()
-	}
-	if req.ToTime != nil && c.Capabilities().SupportsTimeRange[req.Dataset] {
-		params["toTimestamp"] = req.ToTime.UnixMilli()
+	// Ankr rejects a request that contains block and timestamp bounds together.
+	// Time-range jobs retain broad block metadata for coverage/range guards, so
+	// the wire adapter must deliberately choose one dimension. Prefer timestamps
+	// only for datasets that advertise native time-range support; otherwise keep
+	// the block interval and omit unsupported timestamp fields.
+	useTimeRange := c.Capabilities().SupportsTimeRange[req.Dataset] && (req.FromTime != nil || req.ToTime != nil)
+	if useTimeRange {
+		if req.FromTime != nil {
+			params["fromTimestamp"] = req.FromTime.UnixMilli()
+		}
+		if req.ToTime != nil {
+			params["toTimestamp"] = req.ToTime.UnixMilli()
+		}
+	} else {
+		if req.FromBlock != nil {
+			params["fromBlock"] = fmt.Sprintf("0x%x", *req.FromBlock)
+		}
+		if req.ToBlock != nil {
+			params["toBlock"] = fmt.Sprintf("0x%x", *req.ToBlock)
+		}
 	}
 	params["pageSize"] = req.PageSize
 	if req.PageToken != "" {
