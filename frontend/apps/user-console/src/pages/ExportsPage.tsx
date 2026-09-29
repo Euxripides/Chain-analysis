@@ -23,7 +23,6 @@ import {
   HashValue,
   InspectorDrawer,
   KeyValueList,
-  MetaLine,
   PageSection,
   SplitPane,
   Stepper,
@@ -964,15 +963,6 @@ export default function ExportsPage() {
       <CsPageHeader
         title="导出中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "导出中心" }]}
-        meta={
-          <MetaLine
-            items={[
-              { label: "状态筛选", value: statusFilter || "全部状态" },
-              { label: "本页", value: `${rows.length} 条` },
-              { label: "数据源", value: "/api/v2/exports" },
-            ]}
-          />
-        }
         secondaryAction={
           <span className="toolbar">
             <select
@@ -1000,8 +990,8 @@ export default function ExportsPage() {
                 Trace
               </button>
             ) : null}
-            <button type="button" className="btn btn--sm" onClick={explainCaliber}>
-              口径说明
+            <button type="button" className="btn btn--sm btn--ghost" aria-label="导出数据说明" onClick={explainCaliber}>
+              ⓘ
             </button>
           </span>
         }

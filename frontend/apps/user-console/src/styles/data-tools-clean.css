@@ -1,0 +1,248 @@
+/* The approved powder-blue data-tool treatment is scoped to its seven routes. */
+html[data-app="user"] .cs-shell:has(.cs-route:is(
+  [data-route="/explorer"],
+  [data-route="/downloads/new"],
+  [data-route="/jobs"],
+  [data-route^="/jobs/"],
+  [data-route="/exports"],
+  [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+)) {
+  --cs-canvas: #f1f8fc;
+  --cs-canvas-strong: #eaf4fb;
+  --cs-surface-rail: #f4f9fd;
+  --cs-surface-blue: #f7fbfe;
+  --cs-surface-sunken: #eef6fc;
+  --cs-border: #dce9f3;
+  --cs-border-strong: #bbd4e9;
+  --cs-border-subtle: #e9f0f6;
+  --cs-primary: #2875cf;
+  --cs-primary-hover: #2269bd;
+  --cs-primary-active: #1b5da9;
+  --cs-primary-text: #1b5da9;
+  --cs-primary-soft: #e5f2fe;
+  --cs-shadow-surface: 0 2px 12px rgba(23, 69, 111, .045);
+  --cs-shadow-surface-hover: 0 4px 18px rgba(23, 69, 111, .075);
+  --cs-shadow-rail-active: none;
+  --bg-canvas: var(--cs-canvas);
+  --bg-rail: var(--cs-surface-rail);
+  --bg-surface-muted: var(--cs-surface-blue);
+  --interactive: var(--cs-primary);
+  --interactive-hover: var(--cs-primary-hover);
+  --interactive-soft: var(--cs-primary-soft);
+  --interactive-on-rail: var(--cs-primary);
+  --border-default: var(--cs-border);
+  --border-strong: var(--cs-border-strong);
+  background: var(--cs-canvas);
+  background-image: none;
+}
+
+html[data-app="user"] .cs-shell:has(.cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+)) .cs-shell__rail {
+  background: var(--cs-surface-rail);
+}
+
+html[data-app="user"] .cs-shell:has(.cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+)) .cs-shell__topbar {
+  background: rgba(255, 255, 255, .94);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-app="user"] .cs-shell:has(.cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+)) .cs-brand__mark {
+  background-color: var(--cs-primary);
+  background-image: linear-gradient(145deg, #82c1f0, #2875cf);
+  box-shadow: 0 3px 10px rgba(40, 117, 207, .18);
+}
+
+html[data-app="user"] .cs-shell:has(.cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+)) .cs-nav__link[aria-current="page"] {
+  background: var(--cs-primary-soft);
+  color: var(--cs-primary-text);
+  box-shadow: none;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) {
+  color: var(--cs-text-primary);
+  min-width: 0;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .cs-pageheader__title {
+  font-size: clamp(24px, 2.1vw, 30px);
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) :is(.card, .cs-surface, .cs-inspector, .cs-export-editor__section, .cs-protable) {
+  border-color: var(--cs-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--cs-shadow-surface);
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .card:hover {
+  transform: none;
+  border-color: var(--cs-border);
+  box-shadow: var(--cs-shadow-surface);
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .cs-section__head {
+  border-left: 0;
+  padding-left: 0;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .cs-section__title {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) :is(.input, .select, .textarea) {
+  border-color: var(--cs-border-strong);
+  background: #fff;
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .btn--primary {
+  background: var(--cs-primary);
+  border-color: var(--cs-primary);
+  box-shadow: 0 2px 7px rgba(40, 117, 207, .14);
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .btn--primary:hover:not(:disabled) {
+  background: var(--cs-primary-hover);
+  border-color: var(--cs-primary-hover);
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) :is(.table thead th, .cs-protable table thead th) {
+  background: #f5f9fd;
+  border-bottom-color: var(--cs-border);
+}
+
+html[data-app="user"] .cs-route:is(
+  [data-route="/explorer"], [data-route="/downloads/new"],
+  [data-route="/jobs"], [data-route^="/jobs/"],
+  [data-route="/exports"], [data-route^="/addresses/"],
+  [data-route^="/transactions/"]
+) .cs-workspace-focus {
+  --cs-border: #dce9f3;
+  --cs-border-strong: #bbd4e9;
+  --cs-border-subtle: #e9f0f6;
+  --cs-surface-blue: #f7fbfe;
+  --border-default: var(--cs-border);
+  --border-strong: var(--cs-border-strong);
+  --bg-surface-muted: var(--cs-surface-blue);
+  background: var(--cs-canvas);
+  gap: 20px;
+}
+
+html[data-app="user"] .cs-route[data-route="/jobs"] .cs-jobs-status__item > .metric {
+  border-top-color: transparent;
+}
+
+html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress {
+  gap: 18px;
+  padding: 24px;
+}
+
+html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__fact {
+  padding: 14px 16px;
+  border: 1px solid var(--cs-border-subtle);
+  border-radius: 10px;
+  background: #f8fbfe;
+}
+
+html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__factvalue {
+  font-size: 17px;
+}
+
+@media (max-width: 1099px) {
+  html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  html[data-app="user"] .cs-shell:has(.cs-route:is(
+    [data-route="/explorer"], [data-route="/downloads/new"],
+    [data-route="/jobs"], [data-route^="/jobs/"],
+    [data-route="/exports"], [data-route^="/addresses/"],
+    [data-route^="/transactions/"]
+  )) .cs-shell__content {
+    padding-inline: 14px;
+  }
+
+  html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress {
+    padding: 18px;
+  }
+}

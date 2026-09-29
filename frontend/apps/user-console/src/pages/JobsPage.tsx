@@ -17,7 +17,6 @@ import {
   InspectorDrawer,
   KeyValueList,
   MetricCard,
-  MetaLine,
   PageSection,
   RelativeTime,
   RowCheckbox,
@@ -792,15 +791,6 @@ export default function JobsPage() {
       <CsPageHeader
         title="任务中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "任务中心" }]}
-        meta={
-          <MetaLine
-            items={[
-              { label: "范围", value: scope === "workspace" ? "工作区任务" : "我的任务" },
-              { label: "已加载", value: `${allRows.length} 条` },
-              { label: "数据源", value: "/api/v2/jobs" },
-            ]}
-          />
-        }
         secondaryAction={
           <span className="toolbar">
             <select
@@ -825,8 +815,8 @@ export default function JobsPage() {
                 Trace
               </button>
             ) : null}
-            <button type="button" className="btn btn--sm" onClick={explainCaliber}>
-              口径说明
+            <button type="button" className="btn btn--sm btn--ghost" aria-label="任务数据说明" onClick={explainCaliber}>
+              ⓘ
             </button>
           </span>
         }
