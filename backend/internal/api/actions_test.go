@@ -99,6 +99,56 @@ func TestActionsOpenAPIUsesAIFacingBoundsAndEnums(t *testing.T) {
 	}
 }
 
+func TestActionsOpenAPISeparatesDownloadAndAnalysisChains(t *testing.T) {
+	downloadProps := actionRequestSchema("ensureChainData")["properties"].(map[string]any)
+	downloadChains := downloadProps["chain"].(map[string]any)["enum"].([]string)
+	if !contains(downloadChains, "solana") {
+		t.Fatalf("ensureChainData chains = %#v; solana download capability missing", downloadChains)
+	}
+	queryParams := actionParameters("getAddressOverview")
+	queryChains := queryParams[0].(map[string]any)["schema"].(map[string]any)["enum"].([]string)
+	if contains(queryChains, "solana") {
+		t.Fatalf("analysis chains must not advertise incomplete solana query contracts: %#v", queryChains)
+	}
+	if got, err := canonicalActionDownloadChain("Solana"); err != nil || got != "solana" {
+		t.Fatalf("canonicalActionDownloadChain(Solana) = %q, %v", got, err)
+	}
+}
+
+func TestActionsOpenAPIDownloadStatusAcceptsEitherIdentifier(t *testing.T) {
+	params := actionParameters("getAIDownloadStatus")
+	if len(params) != 2 {
+		t.Fatalf("download status params = %d want 2", len(params))
+	}
+	found := map[string]bool{}
+	for _, raw := range params {
+		param := raw.(map[string]any)
+		found[param["name"].(string)] = true
+		if param["required"].(bool) {
+			t.Fatalf("%s must be optional because the handler accepts either identifier", param["name"])
+		}
+	}
+	if !found["download_job_id"] || !found["job_no"] {
+		t.Fatalf("download status params = %#v", found)
+	}
+}
+
+func TestActionsOpenAPIRetryRequiresDownloadJobID(t *testing.T) {
+	schema := actionRequestSchema("retryAIDownloadFailures")
+	required := schema["required"].([]string)
+	if len(required) != 1 || required[0] != "download_job_id" {
+		t.Fatalf("retry required fields = %#v", required)
+	}
+	props := schema["properties"].(map[string]any)
+	jobID := props["download_job_id"].(map[string]any)
+	if jobID["format"] != "uuid" {
+		t.Fatalf("download_job_id schema = %#v", jobID)
+	}
+	if actionSchemas()["AIDownloadRetryResponse"] == nil {
+		t.Fatal("missing AIDownloadRetryResponse")
+	}
+}
+
 func TestActionsOpenAPIDeepEvidenceSchemasExposeRequiredFields(t *testing.T) {
 	schemas := actionSchemas()
 	itemProps := func(response string) map[string]any {

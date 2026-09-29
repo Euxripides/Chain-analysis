@@ -477,6 +477,7 @@ func (s *Server) registerActionRoutes(api chi.Router) {
 		actions.Get("/export/status", s.handleActionExportStatus)
 		actions.Post("/data/ensure", s.handleActionEnsureData)
 		actions.Get("/data/download-status", s.handleActionDownloadStatus)
+		actions.Post("/data/download-retry", s.handleActionDownloadRetry)
 	})
 }
 
@@ -496,6 +497,12 @@ func (s *Server) handleActionEnsureData(w http.ResponseWriter, r *http.Request) 
 		actionFail(w, 400, "INVALID_QUERY", "addresses must contain 1 to 200 items")
 		return
 	}
+	canonicalChain, chainErr := canonicalActionDownloadChain(req.Chain)
+	if chainErr != nil {
+		actionFail(w, 400, "INVALID_CHAIN", chainErr.Error())
+		return
+	}
+	req.Chain = canonicalChain
 	if req.Range.Type == "" {
 		req.Range.Type = "full"
 	}
@@ -519,8 +526,41 @@ func (s *Server) handleActionEnsureData(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleActionDownloadStatus(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("download_job_id"))
-	if _, e := uuid.Parse(id); e != nil {
-		actionFail(w, 400, "JOB_NOT_FOUND", "Invalid download_job_id")
+	jobNo := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("job_no")))
+	if id == "" && jobNo == "" {
+		actionFail(w, 400, "JOB_NOT_FOUND", "download_job_id or job_no is required")
+		return
+	}
+	if id != "" && jobNo != "" {
+		actionFail(w, 400, "INVALID_QUERY", "Provide either download_job_id or job_no, not both")
+		return
+	}
+	if id != "" {
+		if _, e := uuid.Parse(id); e != nil {
+			actionFail(w, 400, "JOB_NOT_FOUND", "Invalid download_job_id")
+			return
+		}
+	}
+	scope, scopeErr := s.systemScope(r.Context())
+	if scopeErr != nil {
+		actionFail(w, 500, "INTERNAL_ERROR", "Unable to resolve Actions workspace")
+		return
+	}
+	query := `SELECT id::text FROM download_jobs
+		WHERE source='chatgpt_mcp' AND organization_id=$1::uuid AND workspace_id=$2::uuid AND id=$3::uuid`
+	lookup := id
+	if jobNo != "" {
+		query = `SELECT id::text FROM download_jobs
+			WHERE source='chatgpt_mcp' AND organization_id=$1::uuid AND workspace_id=$2::uuid AND upper(job_no)=$3
+			ORDER BY created_at DESC LIMIT 1`
+		lookup = jobNo
+	}
+	if e := s.deps.Store.Pool.QueryRow(r.Context(), query, scope.OrganizationID, scope.WorkspaceID, lookup).Scan(&id); e != nil {
+		if errors.Is(e, pgx.ErrNoRows) {
+			actionFail(w, 404, "JOB_NOT_FOUND", "AI download job not found")
+			return
+		}
+		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query AI download job")
 		return
 	}
 	job, e := s.deps.Store.GetJob(r.Context(), id)
@@ -532,7 +572,101 @@ func (s *Server) handleActionDownloadStatus(w http.ResponseWriter, r *http.Reque
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query AI download job")
 		return
 	}
-	actionOK(w, map[string]any{"download_job_id": job.ID, "job_no": job.JobNo, "status": strings.ToLower(job.Status), "source": job.Source, "ai_managed": true, "chain": publicActionChain(job.Chain), "datasets": job.Datasets, "range_type": job.RangeType, "from_block": job.FromBlock, "to_block": job.ToBlock, "from_time": job.FromTimestamp, "to_time": job.ToTimestamp, "stats": job.Stats, "error": job.Error}, nil)
+	failures, failureErr := s.actionDownloadFailures(r.Context(), job.ID)
+	if failureErr != nil && s.deps.Log != nil {
+		s.deps.Log.Warn("AI download failure details unavailable", "job_id", job.ID, "err", failureErr)
+	}
+	errorText := job.Error
+	if errorText == "" && len(failures) > 0 {
+		first := failures[0]
+		errorText = fmt.Sprintf("%d dataset item(s) failed; first: %s %s: %s", len(failures), first["address"], first["dataset"], first["reason"])
+	}
+	actionOK(w, map[string]any{"download_job_id": job.ID, "job_no": job.JobNo, "status": strings.ToLower(job.Status), "source": job.Source, "ai_managed": true, "chain": publicActionChain(job.Chain), "datasets": job.Datasets, "range_type": job.RangeType, "from_block": job.FromBlock, "to_block": job.ToBlock, "from_time": job.FromTimestamp, "to_time": job.ToTimestamp, "stats": job.Stats, "error": errorText, "failures": failures}, nil)
+}
+
+// handleActionDownloadRetry retries only the failed portion of an AI-managed
+// download. RetryJobFailures preserves completed shards and resets FAILED_FINAL
+// page/checkpoint state so a missing durable page is fetched again rather than
+// replayed forever.
+func (s *Server) handleActionDownloadRetry(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DownloadJobID string `json:"download_job_id"`
+	}
+	if err := decodeActionJSON(r, &req); err != nil {
+		actionFail(w, http.StatusBadRequest, "INVALID_QUERY", err.Error())
+		return
+	}
+	req.DownloadJobID = strings.TrimSpace(req.DownloadJobID)
+	if _, err := uuid.Parse(req.DownloadJobID); err != nil {
+		actionFail(w, http.StatusBadRequest, "JOB_NOT_FOUND", "Invalid download_job_id")
+		return
+	}
+	scope, err := s.systemScope(r.Context())
+	if err != nil {
+		actionFail(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unable to resolve Actions workspace")
+		return
+	}
+	job, err := s.deps.Store.GetJob(r.Context(), req.DownloadJobID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			actionFail(w, http.StatusNotFound, "JOB_NOT_FOUND", "AI download job not found")
+			return
+		}
+		actionFail(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unable to query AI download job")
+		return
+	}
+	if job == nil || !strings.EqualFold(job.Source, "chatgpt_mcp") || job.OrganizationID == nil || job.WorkspaceID == nil || *job.OrganizationID != scope.OrganizationID || *job.WorkspaceID != scope.WorkspaceID {
+		actionFail(w, http.StatusNotFound, "JOB_NOT_FOUND", "AI download job not found")
+		return
+	}
+	switch job.Status {
+	case model.JobCreated, model.JobPlanning, model.JobQueued, model.JobRunning, model.JobResuming:
+		actionOK(w, map[string]any{"download_job_id": job.ID, "job_no": job.JobNo, "status": strings.ToLower(job.Status), "reset_shards": 0, "already_active": true, "source": job.Source, "ai_managed": true}, nil)
+		return
+	case model.JobCompleted:
+		actionOK(w, map[string]any{"download_job_id": job.ID, "job_no": job.JobNo, "status": "completed", "reset_shards": 0, "already_completed": true, "source": job.Source, "ai_managed": true}, nil)
+		return
+	case model.JobFailed, model.JobPartialFailed, model.JobPausedFallbackTooExpensive:
+	default:
+		actionFail(w, http.StatusConflict, "RETRY_NOT_AVAILABLE", "Download job cannot be retried from status "+strings.ToLower(job.Status))
+		return
+	}
+	reset, err := s.deps.Store.RetryJobFailures(r.Context(), job.ID)
+	if err != nil {
+		actionFail(w, http.StatusConflict, "RETRY_NOT_AVAILABLE", err.Error())
+		return
+	}
+	var preserved int64
+	_ = s.deps.Store.Pool.QueryRow(r.Context(), `SELECT count(*) FROM download_shards WHERE job_id=$1 AND status='COMPLETED'`, job.ID).Scan(&preserved)
+	actionOK(w, map[string]any{
+		"download_job_id": job.ID, "job_no": job.JobNo, "status": "queued",
+		"reset_shards": reset, "preserved_completed_shards": preserved,
+		"source": job.Source, "ai_managed": true,
+	}, map[string]any{"retry_strategy": "failed_parts_only"})
+}
+
+func (s *Server) actionDownloadFailures(ctx context.Context, jobID string) ([]map[string]any, error) {
+	rows, err := s.deps.Store.Pool.Query(ctx, `
+		SELECT s.subject,d.dataset,COALESCE(d.stats->>'failure_reason',''),d.progress
+		FROM download_datasets d
+		JOIN download_subjects s ON s.id=d.subject_id
+		WHERE d.job_id=$1 AND d.status='FAILED'
+		ORDER BY s.subject,d.dataset
+		LIMIT 20`, jobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	failures := []map[string]any{}
+	for rows.Next() {
+		var address, datasetName, reason string
+		var progress float32
+		if err := rows.Scan(&address, &datasetName, &reason, &progress); err != nil {
+			return nil, err
+		}
+		failures = append(failures, map[string]any{"address": address, "dataset": datasetName, "reason": reason, "progress": progress})
+	}
+	return failures, rows.Err()
 }
 
 func actionAdminAuth(next http.Handler) http.Handler {
@@ -692,7 +826,9 @@ func (s *Server) handleActionRequestLogs(w http.ResponseWriter, r *http.Request)
 	actionOK(w, out, map[string]any{"count": len(out)})
 }
 
-var actionChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true}
+var actionChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true}
+
+var actionDownloadChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true, "solana": true}
 
 func canonicalActionChain(v string) (string, error) {
 	v = strings.ToLower(strings.TrimSpace(v))
@@ -700,6 +836,17 @@ func canonicalActionChain(v string) (string, error) {
 		v = "eth"
 	}
 	if !actionChains[v] {
+		return "", fmt.Errorf("unsupported chain")
+	}
+	return v, nil
+}
+
+func canonicalActionDownloadChain(v string) (string, error) {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if v == "ethereum" {
+		v = "eth"
+	}
+	if !actionDownloadChains[v] {
 		return "", fmt.Errorf("unsupported chain")
 	}
 	return v, nil

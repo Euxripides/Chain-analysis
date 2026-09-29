@@ -33,7 +33,8 @@ var actionOperations = []actionOperation{
 	{"post", "/api/v1/export/create", "createExport", "Create export", "Create an asynchronous export instead of paging huge JSON histories.", true},
 	{"get", "/api/v1/export/status", "getExportStatus", "Get export status", "Poll an export job and download only after completion.", false},
 	{"post", "/api/v1/data/ensure", "ensureChainData", "Ensure chain data", "Use the optimized system downloader to fill only missing Coverage. AI jobs are marked source=chatgpt_mcp.", true},
-	{"get", "/api/v1/data/download-status", "getAIDownloadStatus", "Get AI download status", "Poll only an AI-managed system download job.", false},
+	{"get", "/api/v1/data/download-status", "getAIDownloadStatus", "Get AI download status", "Poll an AI-managed system download job by download_job_id or job_no.", false},
+	{"post", "/api/v1/data/download-retry", "retryAIDownloadFailures", "Retry failed download parts", "Retry only failed or unrecoverable shards of an AI-managed download. Completed shards and successful checkpoints are preserved.", true},
 }
 
 func actionsOpenAPIDocument() map[string]any {
@@ -70,13 +71,13 @@ func actionParameters(id string) []any {
 		"getInternalTransactions": {"chain", "address", "direction", "start_time", "end_time", "counterparty", "min_value", "max_value", "page", "page_size", "sort"},
 		"getCounterparties":       {"chain", "address", "token", "token_contract", "direction", "start_time", "end_time", "min_total_amount", "min_tx_count", "sort_by", "limit"},
 		"getFlowSummary":          {"chain", "address", "token", "token_contract", "start_time", "end_time"}, "getTopFlows": {"chain", "address", "direction", "token", "token_contract", "group_by", "limit", "start_time", "end_time"},
-		"getTransactionDetail": {"chain", "tx_hash"}, "getTransactionTrace": {"chain", "tx_hash"}, "getTransactionLogs": {"chain", "tx_hash"}, "decodeTransaction": {"chain", "tx_hash"}, "getExportStatus": {"job_id"}, "getAIDownloadStatus": {"download_job_id"},
+		"getTransactionDetail": {"chain", "tx_hash"}, "getTransactionTrace": {"chain", "tx_hash"}, "getTransactionLogs": {"chain", "tx_hash"}, "decodeTransaction": {"chain", "tx_hash"}, "getExportStatus": {"job_id"}, "getAIDownloadStatus": {"download_job_id", "job_no"},
 	}[id]
 	out := make([]any, 0, len(names))
 	for _, name := range names {
 		schema := map[string]any{"type": "string"}
 		if name == "chain" {
-			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base"}
+			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"}
 		}
 		switch name {
 		case "direction":
@@ -114,14 +115,15 @@ func actionParameters(id string) []any {
 		if name == "job_id" || name == "download_job_id" {
 			schema["format"] = "uuid"
 		}
-		out = append(out, map[string]any{"name": name, "in": "query", "required": name == "chain" || name == "address" || name == "tx_hash" || name == "job_id" || name == "download_job_id", "schema": schema})
+		out = append(out, map[string]any{"name": name, "in": "query", "required": name == "chain" || name == "address" || name == "tx_hash" || name == "job_id", "schema": schema})
 	}
 	return out
 }
 
 func actionRequestSchema(id string) map[string]any {
 	str := map[string]any{"type": "string"}
-	chainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base"}}
+	chainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"}}
+	downloadChainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}}
 	addressArray := map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": str}
 	props := map[string]any{}
 	required := []string{}
@@ -143,7 +145,7 @@ func actionRequestSchema(id string) map[string]any {
 		required = []string{"chain", "address", "data_types", "format", "compression"}
 	case "ensureChainData":
 		props = map[string]any{
-			"chain":     chainSchema,
+			"chain":     downloadChainSchema,
 			"addresses": addressArray,
 			"datasets":  map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs"}}},
 			"range": map[string]any{
@@ -165,6 +167,9 @@ func actionRequestSchema(id string) map[string]any {
 			"performance_mode": map[string]any{"type": "string", "enum": []string{"safe", "fast", "turbo"}, "default": "fast"},
 		}
 		required = []string{"chain", "addresses", "datasets", "range"}
+	case "retryAIDownloadFailures":
+		props = map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}}
+		required = []string{"download_job_id"}
 	}
 	out := map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": props}
 	if id == "findFundPaths" || id == "buildAddressNetwork" {
@@ -187,7 +192,7 @@ func actionResponseSchemaName(id string) string {
 		"getTransactionTrace": "TransactionTraceResponse", "getTransactionLogs": "TransactionLogsResponse", "decodeTransaction": "DecodeTransactionResponse",
 		"batchGetAddressOverview": "BatchOverviewResponse", "batchGetAddressAssets": "BatchAssetsResponse", "findFundPaths": "FundPathResponse",
 		"buildAddressNetwork": "AddressNetworkResponse", "createExport": "ExportCreateResponse", "getExportStatus": "ExportStatusResponse",
-		"ensureChainData": "EnsureChainDataResponse", "getAIDownloadStatus": "AIDownloadStatusResponse",
+		"ensureChainData": "EnsureChainDataResponse", "getAIDownloadStatus": "AIDownloadStatusResponse", "retryAIDownloadFailures": "AIDownloadRetryResponse",
 	}
 	return names[id]
 }
@@ -274,7 +279,8 @@ func actionSchemas() map[string]any {
 	exportFile := object(map[string]any{"name": str("Export part filename."), "url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "rows": integer, "size_bytes": integer, "sha256": str("SHA-256 digest.")})
 	schemas["ExportStatusResponse"] = envelope(object(map[string]any{"job_id": str("Export job UUID."), "status": str("Export status."), "total_rows": map[string]any{"type": "integer"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}}, "files": list(exportFile), "manifest_url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "download_url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "sha256": map[string]any{"type": []string{"string", "null"}}, "expires_at": timeValue}))
 	schemas["EnsureChainDataResponse"] = envelope(object(map[string]any{"status": str("ready when Coverage is complete, otherwise created."), "dataset_ref": str("Stable dataset reference."), "download_job_id": map[string]any{"type": []string{"string", "null"}, "format": "uuid"}, "coverage_before": decimal, "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}}))
-	schemas["AIDownloadStatusResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("Download job status."), "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}, "chain": str("Canonical chain key."), "datasets": map[string]any{"type": "array", "items": str("Dataset key.")}, "range": map[string]any{"type": "object", "additionalProperties": true}, "stats": map[string]any{"type": "object", "additionalProperties": true}, "error": map[string]any{"type": []string{"string", "null"}}}))
+	schemas["AIDownloadStatusResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("Download job status."), "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}, "chain": str("Canonical chain key."), "datasets": map[string]any{"type": "array", "items": str("Dataset key.")}, "range": map[string]any{"type": "object", "additionalProperties": true}, "stats": map[string]any{"type": "object", "additionalProperties": true}, "error": map[string]any{"type": []string{"string", "null"}}, "failures": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}}}))
+	schemas["AIDownloadRetryResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("queued, an already-active state, or completed."), "reset_shards": integer, "preserved_completed_shards": integer, "already_active": map[string]any{"type": "boolean"}, "already_completed": map[string]any{"type": "boolean"}, "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}}))
 	return schemas
 }
 
