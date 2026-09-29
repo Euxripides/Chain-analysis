@@ -7,6 +7,10 @@ export type Config = {
   restBaseUrl: string;
   restApiKey: string;
   mcpKeyHashes: Buffer[];
+  oauthAccessCodeHashes: Buffer[];
+  oauthSigningKey: Buffer;
+  publicBaseUrl: string;
+  publicMcpUrl: string;
   requestTimeoutMs: number;
   maxConcurrent: number;
   rateLimitPerMinute: number;
@@ -27,6 +31,12 @@ export function loadConfig(): Config {
   const restApiKey = (process.env.REST_API_KEY ?? process.env.GPT_ACTIONS_API_KEY ?? "").trim();
   if (keys.length === 0) throw new Error("MCP_API_KEY or MCP_API_KEYS is required");
   if (!restApiKey) throw new Error("REST_API_KEY or GPT_ACTIONS_API_KEY is required");
+  const oauthAccessCodes = (process.env.MCP_OAUTH_ACCESS_CODES ?? "")
+    .split(",")
+    .map((key) => key.trim())
+    .filter(Boolean);
+  const publicBaseUrl = (process.env.MCP_PUBLIC_URL ?? "https://aurore.online").replace(/\/$/, "");
+  const oauthSigningSecret = (process.env.MCP_OAUTH_SIGNING_KEY ?? "").trim() || `oauth:${keys[0]}`;
   return {
     host: process.env.MCP_HOST ?? "127.0.0.1",
     allowedHosts: (process.env.MCP_ALLOWED_HOSTS ?? "aurore.online,localhost,127.0.0.1").split(",").map((host) => host.trim()).filter(Boolean),
@@ -34,6 +44,10 @@ export function loadConfig(): Config {
     restBaseUrl: (process.env.REST_API_BASE_URL ?? "http://127.0.0.1:8080/api/v1").replace(/\/$/, ""),
     restApiKey,
     mcpKeyHashes: keys.map(sha256),
+    oauthAccessCodeHashes: (oauthAccessCodes.length > 0 ? oauthAccessCodes : keys).map(sha256),
+    oauthSigningKey: sha256(oauthSigningSecret),
+    publicBaseUrl,
+    publicMcpUrl: `${publicBaseUrl}/mcp`,
     requestTimeoutMs: integer("MCP_REQUEST_TIMEOUT_MS", 60_000, 1_000, 120_000),
     maxConcurrent: integer("MCP_MAX_CONCURRENT", 16, 1, 128),
     rateLimitPerMinute: integer("MCP_RATE_LIMIT_PER_MINUTE", 60, 1, 10_000),

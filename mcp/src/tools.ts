@@ -2,9 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { RESTClient, type RESTEnvelope } from "./rest-client.js";
 
-export const CHAIN_VALUES = ["bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base"] as const;
+export const CHAIN_VALUES = ["bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"] as const;
+export const DOWNLOAD_CHAIN_VALUES = [...CHAIN_VALUES, "solana"] as const;
 const chain = z.enum(CHAIN_VALUES).describe("Blockchain network. Use exactly one supported lowercase value.");
+const downloadChain = z.enum(DOWNLOAD_CHAIN_VALUES).describe("Download-capable blockchain network. Solana is supported for acquisition; analysis tools advertise their own narrower chain list.");
 const address = z.string().min(1).describe("Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it.");
+const downloadAddress = z.string().min(1).describe("Complete EVM 0x, TRON Base58Check, or Solana base58 address. Never abbreviate it.");
 const txHash = z.string().min(1).describe("Complete transaction hash without abbreviation.");
 const optionalTime = z.string().datetime({ offset: true }).optional().describe("ISO 8601 timestamp, for example 2026-09-10T01:30:00Z.");
 const direction = z.enum(["all", "in", "out"]).default("all").describe("Transfer direction relative to the investigated address.");
@@ -31,6 +34,18 @@ const pathInputSchema = { ...pathBase, token: z.string().min(1).optional().descr
 const networkBase = { chain, seed_addresses: z.array(address).min(1).max(200), max_depth: z.number().int().min(1).max(5).default(3), min_total_amount: z.string().optional(), max_nodes: z.number().int().min(1).max(500).default(200), ...timeFilters };
 const networkInputSchema = { ...networkBase, token: z.string().min(1).optional().describe("Token symbol such as USDT; optional when token_contract is provided."), token_contract: z.string().min(1).optional().describe("Complete token contract address; optional when token is provided.") };
 const exportInputSchema = { chain, address, data_types: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1), ...tokenFilters, ...timeFilters, format: z.enum(["parquet", "csv"]), compression: z.enum(["zstd", "zip"]) };
+const ensureRange = z.object({
+  type: z.enum(["full", "block", "time"]),
+  from_block: z.number().int().min(0).optional(), to_block: z.number().int().min(0).optional(),
+  from: optionalTime, to: optionalTime,
+});
+const ensureRequest = z.object({
+  chain: downloadChain,
+  addresses: z.array(downloadAddress).min(1).max(200),
+  datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1),
+  range: ensureRange,
+  performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
+});
 
 type ToolDefinition = {
   name: string;
@@ -204,20 +219,27 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "ensure_chain_data",
     title: "Ensure chain data through the system downloader",
-    description: "Use before analysis when Coverage is incomplete. Reuses the platform's optimized Coverage→Planner→Worker download pipeline and downloads only missing ranges. Created jobs are isolated with source=chatgpt_mcp and ai_managed=true, distinct from user_download jobs. Returns immediately with a download_job_id when acquisition is needed.",
+    description: "Use before analysis when Coverage is incomplete. Reuses the platform's optimized Coverage→Planner→Worker download pipeline and downloads only missing ranges. Supports EVM, TRON and Solana acquisition; Solana availability and range support follow the active provider capability. Created jobs are isolated with source=chatgpt_mcp and ai_managed=true, distinct from user_download jobs. Returns immediately with a download_job_id when acquisition is needed.",
     path: "/data/ensure", method: "POST", readOnly: false,
     inputSchema: {
-      chain,
-      addresses: z.array(address).min(1).max(200),
+      chain: downloadChain,
+      addresses: z.array(downloadAddress).min(1).max(200),
       datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1),
-      range: z.object({
-        type: z.enum(["full", "block", "time"]),
-        from_block: z.number().int().min(0).optional(), to_block: z.number().int().min(0).optional(),
-        from: optionalTime, to: optionalTime,
-      }),
+      range: ensureRange,
       performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
     },
     summarize: () => "Coverage checked through the system downloader; inspect status and download_job_id before querying evidence.",
+  },
+  {
+    name: "ensure_chain_data_batch",
+    title: "Start multiple chain downloads concurrently",
+    description: "Submit 2-20 independent Coverage/download requests in one MCP call. The server starts them concurrently with a bounded fan-out, so ChatGPT does not have to serialize separate tool confirmations. Each result retains its own chain, status and download_job_id; identical requests may be reused by platform idempotency.",
+    path: "/data/ensure", method: "POST", readOnly: false,
+    inputSchema: {
+      requests: z.array(ensureRequest).min(2).max(20),
+      max_concurrent: z.number().int().min(1).max(8).default(4),
+    },
+    summarize: () => "Independent Coverage/download requests were submitted with bounded concurrency; inspect every result separately.",
   },
   {
     name: "get_ai_download_status",
@@ -226,6 +248,14 @@ export const toolDefinitions: ToolDefinition[] = [
     path: "/data/download-status",
     inputSchema: { download_job_id: z.string().uuid() },
     summarize: () => "AI-managed system download status retrieved.",
+  },
+  {
+    name: "retry_ai_download_failures",
+    title: "Retry failed AI download parts",
+    description: "Retry failed or partially failed portions of a ChatGPT/MCP download. Completed shards are preserved; unrecoverable failed pages are fetched again. Use bounded retries rather than repeatedly creating replacement full-history jobs.",
+    path: "/data/download-retry", method: "POST", readOnly: false,
+    inputSchema: { download_job_id: z.string().uuid() },
+    summarize: (r) => `Failed portions queued for backfill (${String((r.data as Record<string, unknown> | undefined)?.reset_shards ?? 0)} shard(s) reset).`,
   },
 ];
 
@@ -248,6 +278,33 @@ export function registerTools(server: McpServer, client: RESTClient): void {
           if (definition.name === "create_large_export") {
             const valid = (input.format === "parquet" && input.compression === "zstd") || (input.format === "csv" && input.compression === "zip");
             if (!valid) throw new Error("Supported export pairs are parquet+zstd and csv+zip");
+          }
+          if (definition.name === "ensure_chain_data_batch") {
+            const requests = input.requests as Array<Record<string, unknown>>;
+            const limit = Math.min(Number(input.max_concurrent) || 4, requests.length);
+            const results: Array<Record<string, unknown>> = new Array(requests.length);
+            let cursor = 0;
+            await Promise.all(Array.from({ length: limit }, async () => {
+              for (;;) {
+                const index = cursor++;
+                if (index >= requests.length) return;
+                try {
+                  const response = await client.post(definition.path, requests[index]);
+                  results[index] = { index, request: requests[index], success: true, response };
+                } catch (error) {
+                  results[index] = { index, request: requests[index], success: false, error: error instanceof Error ? error.message : "Unknown REST error" };
+                }
+              }
+            }));
+            const started = results.filter((item) => item.success).length;
+            const failed = results.length - started;
+            const result: RESTEnvelope = {
+              success: failed === 0,
+              data: { results, started, failed },
+              meta: { requested: results.length, max_concurrent: limit },
+              error: failed ? { code: "BATCH_PARTIAL_FAILURE", message: `${failed} of ${results.length} requests failed` } : null,
+            };
+            return { structuredContent: result, content: [{ type: "text" as const, text: `${started} download request(s) started; ${failed} failed during submission.` }] };
           }
           const result = definition.method === "POST" ? await client.post(definition.path, input) : await client.get(definition.path, input);
           return {

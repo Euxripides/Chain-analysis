@@ -4,7 +4,9 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import type { NextFunction, Request, Response } from "express";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { authorized, loadConfig, type Config } from "./config.js";
+import { ChainOAuthProvider } from "./oauth.js";
 import { RESTClient } from "./rest-client.js";
 import { registerTools, toolDefinitions } from "./tools.js";
 
@@ -25,11 +27,28 @@ export function createServer(config: Config): McpServer {
 
 export function createApp(config: Config) {
   const app = createMcpExpressApp({ host: config.host, allowedHosts: config.allowedHosts });
+  const oauth = new ChainOAuthProvider(config);
+  const issuer = new URL(config.publicBaseUrl);
+  const resource = new URL(config.publicMcpUrl);
+  const protectedResourceMetadata = {
+    resource: resource.href,
+    authorization_servers: [issuer.href],
+    scopes_supported: ["mcp:tools"],
+    resource_name: "Chain Data Platform",
+  };
+  app.get("/.well-known/oauth-protected-resource", (_req, res) => res.json(protectedResourceMetadata));
+  app.use(mcpAuthRouter({
+    provider: oauth,
+    issuerUrl: issuer,
+    resourceServerUrl: resource,
+    scopesSupported: ["mcp:tools"],
+    resourceName: "Chain Data Platform",
+  }));
   const windows = new Map<string, { minute: number; count: number }>();
   let active = 0;
 
   app.get("/health", (_req, res) => res.json({ status: "ok", tools: toolDefinitions.length }));
-  app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
+  app.use("/mcp", async (req: Request, res: Response, next: NextFunction) => {
     const started = performance.now();
     const requestId = req.header("x-request-id")?.slice(0, 128) || randomUUID();
     res.setHeader("x-request-id", requestId);
@@ -37,8 +56,19 @@ export function createApp(config: Config) {
       level: "info", event: "mcp_http_request", request_id: requestId,
       method: req.method, status: res.statusCode, duration_ms: Math.round(performance.now() - started),
     })));
-    if (!authorized(req.header("authorization"), config.mcpKeyHashes)) {
-      res.setHeader("WWW-Authenticate", 'Bearer realm="aurore-mcp"');
+    const authHeader = req.header("authorization");
+    let bearerAuthorized = authorized(authHeader, config.mcpKeyHashes);
+    if (!bearerAuthorized && authHeader?.startsWith("Bearer ")) {
+      try {
+        const info = await oauth.verifyAccessToken(authHeader.slice(7).trim());
+        bearerAuthorized = info.scopes.includes("mcp:tools") && info.resource?.href === config.publicMcpUrl;
+      } catch {
+        bearerAuthorized = false;
+      }
+    }
+    if (!bearerAuthorized) {
+      const metadata = `${config.publicBaseUrl}/.well-known/oauth-protected-resource/mcp`;
+      res.setHeader("WWW-Authenticate", `Bearer realm="aurore-mcp", resource_metadata="${metadata}", scope="mcp:tools"`);
       res.status(401).json({ error: "unauthorized" });
       return;
     }
