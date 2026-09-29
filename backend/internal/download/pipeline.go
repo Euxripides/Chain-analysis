@@ -5,6 +5,9 @@ package download
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -172,11 +175,26 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 				p.scheduled.Delete(pr.pageID)
 				return
 			}
-			p.failPagePermanent(ctx, pr, "spool load: "+err.Error())
+			// If the raw uploader won the race, MinIO is the durable second
+			// copy. Recover from it instead of losing an otherwise valid page.
+			if upload, ok := p.uploads.Load(pr.pageID); ok && p.raw != nil {
+				if raw, rawErr := p.raw.GetGzip(ctx, upload.(uploadInfo).key); rawErr == nil {
+					rows, err = decodeRawRows(raw, pr.meta.SHA256)
+					if err == nil {
+						p.log.Warn("spool page recovered from raw object", "page_id", pr.pageID,
+							"shard_id", pr.shardID, "page_no", pr.pageNo)
+					}
+				}
+			}
+			if err != nil {
+				p.failPagePermanent(ctx, pr, "spool load: "+err.Error())
+				return
+			}
+		}
+		if err != nil {
+			p.failPage(ctx, pr, "spool load: "+err.Error())
 			return
 		}
-		p.failPage(ctx, pr, "spool load: "+err.Error())
-		return
 	}
 	batch, err := p.sc.buildRows(ctx, pr.dataset, rows, pr.chain, pr.address, pr.snapshotBlock)
 	if err != nil {
@@ -262,6 +280,19 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 			}
 		}()
 	}
+}
+
+func decodeRawRows(data []byte, expectedSHA256 string) ([]json.RawMessage, error) {
+	sum := sha256.Sum256(data)
+	actual := hex.EncodeToString(sum[:])
+	if expectedSHA256 != "" && actual != expectedSHA256 {
+		return nil, fmt.Errorf("raw object checksum mismatch: expected %s actual %s", expectedSHA256, actual)
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, fmt.Errorf("raw object corrupt: %w", err)
+	}
+	return rows, nil
 }
 
 func normalizedFactRows(dataset string, batch rowBatch) int {

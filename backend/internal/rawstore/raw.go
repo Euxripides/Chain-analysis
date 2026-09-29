@@ -127,6 +127,26 @@ func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// GetGzip reads an object written by PutGzip and returns its original bytes.
+// It is used as the durable recovery source when the local spool copy has
+// already been released by a racing ingest/upload completion path.
+func (s *Store) GetGzip(ctx context.Context, key string) ([]byte, error) {
+	compressed, err := s.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return nil, fmt.Errorf("open gzip %s: %w", key, err)
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("read gzip %s: %w", key, err)
+	}
+	return data, nil
+}
+
 // OpenRange 按字节区间流式读取（HTTP Range 断点续传，§57）。
 func (s *Store) OpenRange(ctx context.Context, key string, start, end int64) (io.ReadCloser, int64, error) {
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})

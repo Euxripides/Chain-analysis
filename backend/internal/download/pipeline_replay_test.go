@@ -2,6 +2,8 @@ package download
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 )
 
@@ -26,5 +28,20 @@ func TestIngestPipelineSubmitDeduplicatesPageReplay(t *testing.T) {
 	}
 	if got := len(p.queue); got != 2 {
 		t.Fatalf("retry was not queued: queue length=%d, want 2", got)
+	}
+}
+
+func TestDecodeRawRowsValidatesDurableObject(t *testing.T) {
+	raw := []byte(`[{"id":1},{"id":2}]`)
+	sum := sha256.Sum256(raw)
+	rows, err := decodeRawRows(raw, hex.EncodeToString(sum[:]))
+	if err != nil {
+		t.Fatalf("decode valid raw rows: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("decoded %d rows, want 2", len(rows))
+	}
+	if _, err := decodeRawRows(raw, "bad-checksum"); err == nil {
+		t.Fatal("checksum mismatch must fail")
 	}
 }
