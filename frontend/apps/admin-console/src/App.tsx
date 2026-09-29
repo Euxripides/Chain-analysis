@@ -251,7 +251,7 @@ function Shell() {
   return (
     <AppShell
       productName="ChainSight Admin"
-      productTag="后台管理系统 · admin"
+      productTag="后台管理系统"
       brandMark="AD"
       env={session.audience === "admin" ? "后台管理系统" : session.audience}
       navGroups={navGroups(can)}

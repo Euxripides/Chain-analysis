@@ -240,11 +240,11 @@ export default function ProvidersPage() {
       />
 
       <div className="metric-grid">
-        <Metric label="Provider" value={fmtNumber(items.length)} hint="provider_descriptors" />
+        <Metric label="Provider" value={fmtNumber(items.length)} />
         <Metric label="已连接" value={fmtNumber(summary.connected)} />
         <Metric label="24h 调用" value={fmtNumber(summary.calls)} />
         <Metric label="24h 错误" value={fmtNumber(summary.errors)} tone={summary.errors > 0 ? "warn" : "ok"} />
-        <Metric label="24h 成本" value={fmtUSD(summary.cost)} hint="provider_usage.estimated_cost_usd" />
+        <Metric label="24h 成本" value={fmtUSD(summary.cost)} />
         <Metric
           label="未配置密钥"
           value={fmtNumber(summary.runtimeKeyMissing)}
