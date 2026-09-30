@@ -126,6 +126,18 @@ func (c *Client) probeAll(ctx context.Context, cached bool) map[string]any {
 	probes := map[string]any{
 		"checked_at": c.cfg.now().UTC().Format(time.RFC3339Nano),
 	}
+	if c.cfg.disableProbes {
+		failure := channelProbe{
+			State:   string(provider.HealthDegraded),
+			Message: "DRPC_PROBES_DISABLED: channel probes are disabled",
+		}
+		probes[ChannelDataAPI] = failure
+		probes[ChannelSolanaRPC] = failure
+		if cached {
+			c.health.cache(probes)
+		}
+		return probes
+	}
 	if reason := c.unavailableReason(); reason != "" {
 		// 未配置时不发任何请求：两条通道都报 DEGRADED + DRPC_NOT_CONFIGURED。
 		failure := channelProbe{OK: false, State: string(provider.HealthDegraded), Message: reason}

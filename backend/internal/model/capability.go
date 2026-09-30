@@ -17,6 +17,13 @@ const (
 // 因此 nft_transfers 有明确来源；旧的 getSignaturesForAddress+getTransaction 路径只能靠
 // decimals=0 猜测 NFT，ADR-023 D9 因此把它排除在白名单外。两者不能共用一份白名单。
 var solanaDataAPI atomic.Bool
+var solanaDRPCHistory atomic.Bool
+var solanaDRPCBalances atomic.Bool
+
+func SetSolanaDRPCRoutes(history, balances bool) {
+	solanaDRPCHistory.Store(history)
+	solanaDRPCBalances.Store(balances)
+}
 
 // SetSolanaDataAPI 由 app 启动时按 provider 路由结果设置一次（进程级能力开关）。
 func SetSolanaDataAPI(enabled bool) { solanaDataAPI.Store(enabled) }
@@ -87,6 +94,9 @@ func ChainDatasetCapabilities(chain string) []DatasetCapability {
 func solanaDatasetCapabilities() []DatasetCapability {
 	dataAPI := solanaDataAPI.Load()
 	provider, dataChannel, rpcChannel := "solana-rpc", "solana_rpc", "solana_rpc"
+	if solanaDRPCHistory.Load() {
+		provider = "drpc"
+	}
 	if dataAPI {
 		provider, dataChannel = "drpc", "data_api"
 	}
@@ -96,9 +106,14 @@ func solanaDatasetCapabilities() []DatasetCapability {
 		// internal_transactions（CPI 调用树）不是 dRPC 的能力，但现有 JSON-RPC 解码器
 		// 已经能产出它。删除一个可用能力不是"接入 dRPC"的一部分，因此它继续由旧的
 		// Solana JSON-RPC Provider 承载：路由未命中 dRPC 时按链级默认回落到 solana-rpc。
-		{ID: "internal_transactions", Status: DatasetAvailable, Provider: "solana-rpc", APIChannel: "solana_rpc"},
+		{ID: "internal_transactions", Status: DatasetAvailable, Provider: provider, APIChannel: "solana_rpc"},
 		{ID: "logs", Status: DatasetAvailable, Provider: provider, APIChannel: rpcChannel},
-		{ID: "balances", Status: DatasetAvailable, Provider: provider, APIChannel: rpcChannel},
+		{ID: "balances", Status: DatasetAvailable, Provider: func() string {
+			if solanaDRPCBalances.Load() {
+				return "drpc"
+			}
+			return "solana-rpc"
+		}(), APIChannel: rpcChannel},
 
 		{ID: "nft_transfers", Status: DatasetUnsupported},
 	}
@@ -111,11 +126,8 @@ func solanaDatasetCapabilities() []DatasetCapability {
 			continue
 		}
 		switch items[i].ID {
-		case "transactions", "token_transfers", "nft_transfers":
+		case "transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs":
 			items[i].SupportsFull, items[i].SupportsTimeRange, items[i].SupportsBlockRange = true, true, true
-		case "logs":
-			// 程序日志按 Slot 枚举：时间范围需要先做 Slot/时间换算，首期不承诺。
-			items[i].SupportsFull, items[i].SupportsBlockRange = true, true
 		case "balances":
 			// 当前余额快照：没有范围语义。
 		}

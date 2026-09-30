@@ -42,6 +42,10 @@ func NormalizeSolanaTransaction(raw json.RawMessage, provider string) (ingest.Tx
 	// 空值不能变成 "0"：没有单笔原生转账时 value_raw 必须是空串（§8.2）。
 	row.ValueRaw = strings.TrimSpace(stringField(m, "value"))
 	row.Nonce, row.Gas, row.GasUsed, row.GasPrice = 0, 0, 0, ""
+	// The shared normalizer classifies an empty `to` as EVM contract creation.
+	// Solana signatures can contain several instructions and have no such EVM
+	// transaction-level method; instruction evidence lives in the native rows.
+	row.MethodID, row.MethodType = "", "unknown"
 	row.NativeSymbol = "SOL"
 	row.Confirmation = strings.TrimSpace(stringField(m, "confirmation"))
 	if row.Confirmation == "" {

@@ -15,24 +15,17 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
-// solanaRangeGuard：Solana 取数没有可用的时间→slot 索引，主网 slot 已达数亿，
-// full 区间既无法解析也不可安全全量下载，因此只接受显式 slot 区间（2026-09-20）。
+// solanaRangeGuard accepts native Solana range modes. Full jobs pin a finalized
+// head slot; time jobs filter signature blockTime (null timestamps fail closed).
 func solanaRangeGuard(chain, rangeType string) error {
 	if !strings.EqualFold(chain, "solana") {
 		return nil
 	}
 	switch rangeType {
-	case "block":
+	case "block", "time", "full", "":
 		return nil
-	case "time", "full", "":
-		// dRPC Data API 的 start/end 是毫秒时间戳，不需要"时间→slot 索引"，
-		// 因此时间范围由 Provider 原生支持；full 由任务创建时固化的目标 Slot 界定。
-		// 未启用 Data API 时仍是旧的 getSignaturesForAddress 路径：只能按 slot 翻页。
-		if model.SolanaDataAPIEnabled() {
-			return nil
-		}
 	}
-	return errors.New("Solana 目前只支持显式区块（slot）区间：请选择 block 范围")
+	return errors.New("unsupported Solana range type")
 }
 
 type HeadFn func(ctx context.Context, chain string) (int64, error)

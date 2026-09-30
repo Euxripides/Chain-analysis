@@ -41,9 +41,13 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	if err != nil {
 		return nil, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/"+c.apiKey, bytes.NewReader(body))
+	endpoint, err := c.requestEndpoint(ctx)
 	if err != nil {
 		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, &provider.Error{Provider: "ankr", Class: provider.ClassInvalidRequest, Message: "Ankr endpoint is invalid"}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept-Encoding", "gzip")
@@ -54,7 +58,7 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	observability.AnkrInflight.Dec()
 	elapsed := time.Since(start)
 	if err != nil {
-		pe := c.classifyCtxErr(ctx, err, 0)
+		pe := c.safeTransportError(ctx, err, 0)
 		pe.Duration = elapsed
 		c.recordFailure(pe)
 		c.recordDeepUsage(txHash, "error", pe, elapsed, 0)
@@ -86,6 +90,7 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	}
 	if res.StatusCode != http.StatusOK {
 		pe := c.classifyHTTPError(res.StatusCode, respBody, parseRetryAfter(res.Header))
+		sanitizeEndpointError(pe, endpoint)
 		pe.Duration = elapsed
 		c.recordFailure(pe)
 		c.recordDeepUsage(txHash, "error", pe, elapsed, len(respBody))
@@ -101,6 +106,7 @@ func (c *Client) TxDetail(ctx context.Context, chain, txHash string, decodeTxDat
 	}
 	if rpc.Error != nil {
 		pe := c.classifyRPCError(rpc.Error, parseRetryAfter(res.Header))
+		sanitizeEndpointError(pe, endpoint)
 		pe.Duration = elapsed
 		c.recordFailure(pe)
 		c.recordDeepUsage(txHash, "error", pe, elapsed, len(respBody))

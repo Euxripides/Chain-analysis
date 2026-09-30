@@ -1310,6 +1310,16 @@ func trackBlocks(minB, maxB *int64, b int64) {
 // commitCoverage 数据全部持久化 + 校验之后才提交 Coverage（不允许提前标记 COMPLETE，§7）。
 func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, address string, minBlock, maxBlock, rows, bytes int64) {
 	if rows == 0 {
+		if from, to, ok := solanaEmptyCoverageBounds(sh, chain); ok {
+			// An exhausted finalized signature stream proves even a zero-row
+			// Solana dataset was checked through the pinned head. Persist its
+			// exact scope, otherwise future ensure calls redownload it and the
+			// coverage response has no as-of slot.
+			if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, 0, bytes, sh.ToBlock); err != nil {
+				sc.log.Error("Solana empty coverage commit failed", "shard_id", sh.ID, "err", err)
+			}
+			return
+		}
 		sc.log.Info("coverage skipped (zero rows)", "shard_id", sh.ID, "dataset", sh.Dataset)
 		return
 	}
@@ -1331,6 +1341,19 @@ func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, 
 	if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, rows, bytes, sh.ToBlock); err != nil {
 		sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)
 	}
+}
+
+func solanaEmptyCoverageBounds(sh model.Shard, chain string) (int64, int64, bool) {
+	if !strings.EqualFold(chain, "solana") || sh.Dataset == "balances" || sh.ToBlock <= 0 {
+		return 0, 0, false
+	}
+	// The adaptive page policy replaces page_state at checkpoint time; its
+	// query_mode marker is not durable. Full/block shards have pinned slot
+	// bounds, while time-scoped shards retain From/ToTimestamp below.
+	if sh.FromTimestamp != nil || sh.ToTimestamp != nil || sh.FromBlock < 0 || sh.FromBlock > sh.ToBlock {
+		return 0, 0, false
+	}
+	return sh.FromBlock, sh.ToBlock, true
 }
 
 func (sc *Scheduler) recompute(ctx context.Context, sh model.Shard) {

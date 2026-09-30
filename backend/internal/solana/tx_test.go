@@ -45,6 +45,9 @@ func TestNormalizeSolanaTransactionCarriesExtensions(t *testing.T) {
 	if row.NativeSymbol != "SOL" || row.Confirmation != "finalized" {
 		t.Fatalf("unexpected solana semantics: %+v", row)
 	}
+	if row.MethodType != "unknown" || row.MethodID != "" {
+		t.Fatalf("Solana signature must not be classified as an EVM method: %+v", row)
+	}
 }
 
 // 缺失字段一律零值：value 不能变成 "0"，gas/nonce/input 不能凭空出现 EVM 语义。

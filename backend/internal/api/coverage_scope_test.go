@@ -3,7 +3,32 @@ package api
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestSolanaCoverageRequiresContinuousSlotsThroughPinnedHead(t *testing.T) {
+	state := &actionCoverageState{full: true, fullHead: 100, committedAt: time.Now(), contiguousTo: -1}
+	state.addSolanaInterval(0, 49)
+	state.addSolanaInterval(51, 100)
+	if state.solanaFullCovered() {
+		t.Fatal("a gap at slot 50 cannot assert full history")
+	}
+	state.addSolanaInterval(50, 60)
+	if state.solanaFullCovered() {
+		t.Fatal("intervals must be processed in slot order; a later bridge cannot retroactively hide a gap")
+	}
+	state = &actionCoverageState{full: true, fullHead: 100, committedAt: time.Now(), contiguousTo: -1}
+	state.addSolanaInterval(0, 49)
+	state.addSolanaInterval(50, 75)
+	state.addSolanaInterval(75, 100)
+	if !state.solanaFullCovered() {
+		t.Fatal("continuous committed coverage through the pinned head must be complete")
+	}
+	state.fullHead = 101
+	if state.solanaFullCovered() {
+		t.Fatal("coverage ending before the pinned head cannot be complete")
+	}
+}
 
 // ADR-025：完整性断言按 (subject, dataset) 判定。若把作业级状态重新加回 SQL，
 // 同一 full-range 作业里已经全部完成并 commit 覆盖的 dataset 又会被兄弟 dataset 的

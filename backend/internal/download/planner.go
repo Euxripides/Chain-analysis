@@ -270,6 +270,25 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 		sh := p.baseShard(job, subj, item)
 		return p.createShards(ctx, job.Chain, []model.Shard{sh})
 	}
+	if job.Chain == "solana" {
+		// Signature pagination is one newest-to-oldest address stream. Splitting
+		// by slot repeats the same prefix in every shard, making large full jobs
+		// appear stuck and multiplying RPC work. Use one resumable cursor stream.
+		if bounded {
+			intervals := make([]store.BlockInterval, 0, len(covered))
+			for _, c := range covered {
+				intervals = append(intervals, store.BlockInterval{From: c.FromBlock, To: c.ToBlock})
+			}
+			if len(dataset.ComputeGaps(intervals, want)) == 0 {
+				return p.store.UpdateDatasetStatus(ctx, item.ID, model.ItemSkipped)
+			}
+		}
+		sh := p.baseShard(job, subj, item)
+		if bounded {
+			sh.FromBlock, sh.ToBlock = want.From, want.To
+		}
+		return p.createShards(ctx, job.Chain, []model.Shard{sh})
+	}
 
 	var gaps []store.BlockInterval
 	if !bounded {

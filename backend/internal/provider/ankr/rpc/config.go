@@ -7,6 +7,7 @@
 package ankrrpc
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ type Options struct {
 	// EndpointTemplate 支持 {chain} 与 {key} 占位符
 	EndpointTemplate string
 	APIKey           string
+	Runtime          func(context.Context) (endpointTemplate, apiKey string, enabled bool, err error)
 
 	// ChainPaths 平台链 slug → Ankr 链路径（默认同名）
 	ChainPaths map[string]string
@@ -84,20 +86,35 @@ func (c *Client) chainPath(slug string) (string, bool) {
 }
 
 // endpoint 运行时拼接（Secret 永不落入日志）。
-func (c *Client) endpoint(slug string) (string, bool) {
+func (c *Client) endpoint(ctx context.Context, slug string) (string, bool, error) {
 	path, ok := c.chainPath(slug)
 	if !ok {
-		return "", false
+		return "", false, nil
 	}
-	url := strings.ReplaceAll(c.opts.EndpointTemplate, "{chain}", path)
-	url = strings.ReplaceAll(url, "{key}", c.opts.APIKey)
-	return strings.TrimSuffix(url, "/"), true
+	template, key := c.opts.EndpointTemplate, c.opts.APIKey
+	if c.opts.Runtime != nil {
+		var enabled bool
+		var err error
+		template, key, enabled, err = c.opts.Runtime(ctx)
+		if err != nil {
+			return "", false, err
+		}
+		if !enabled {
+			return "", false, nil
+		}
+	}
+	if key == "" {
+		return "", false, nil
+	}
+	url := strings.ReplaceAll(template, "{chain}", path)
+	url = strings.ReplaceAll(url, "{key}", key)
+	return strings.TrimSuffix(url, "/"), true, nil
 }
 
 // SafeEndpoint 脱敏后的端点（日志/管理接口用，§31）。
 func (c *Client) SafeEndpoint(slug string) string {
-	url, ok := c.endpoint(slug)
-	if !ok {
+	url, ok, err := c.endpoint(context.Background(), slug)
+	if !ok || err != nil {
 		return ""
 	}
 	return rpc.RedactURL(url)

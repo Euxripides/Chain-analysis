@@ -74,7 +74,7 @@ func New(opts Options, hook provider.UsageHook) *Client {
 		log:         cfg.log,
 		httpData:    newHTTPClient(cfg.dataTimeout),
 		httpRPC:     newHTTPClient(cfg.rpcTimeout),
-		keys:        newKeyCache(keyCacheTTL, cfg.now),
+		keys:        newKeyCache(cfg.keyCacheTTL, cfg.now),
 		quota:       newQuotaGate(cfg),
 		cursors:     newCursorGuard(),
 		health:      newHealthTracker(cfg.now),
@@ -138,18 +138,24 @@ func checkEndpointAllowed(base string) error {
 func (c *Client) Name() string { return ProviderKey }
 
 func (c *Client) Capabilities() provider.Capabilities {
+	datasets := []string{DatasetTransactions, DatasetTokenTransfers, DatasetNFTTransfers, DatasetLogs, DatasetBalances}
+	if c.cfg.rpcHistory {
+		// NFT classification is not proven on the RPC history route. Do not
+		// advertise or silently fall back to Data API rows without real slots.
+		datasets = []string{DatasetTransactions, DatasetTokenTransfers, DatasetInternalTransactions, DatasetLogs, DatasetBalances}
+	}
 	return provider.Capabilities{
-		Name: ProviderKey,
-		// internal_transactions 不在其中：Solana 没有该数据集（规范 §1.4）。
-		Datasets:    []string{DatasetTransactions, DatasetTokenTransfers, DatasetNFTTransfers, DatasetLogs, DatasetBalances},
+		Name:        ProviderKey,
+		Datasets:    datasets,
 		MaxPageSize: maxSignaturesPerCall,
 		// Data API 数据集支持时间范围；logs 用 slot 区间，balances 是取数时刻快照。
 		SupportsTimeRange: map[string]bool{
-			DatasetTransactions:   true,
-			DatasetTokenTransfers: true,
-			DatasetNFTTransfers:   true,
-			DatasetLogs:           false,
-			DatasetBalances:       false,
+			DatasetTransactions:         true,
+			DatasetTokenTransfers:       true,
+			DatasetInternalTransactions: c.cfg.rpcHistory,
+			DatasetNFTTransfers:         !c.cfg.rpcHistory,
+			DatasetLogs:                 c.cfg.rpcHistory,
+			DatasetBalances:             false,
 		},
 	}
 }
@@ -165,9 +171,14 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		err.Retryable = false
 		return provider.FetchResult{}, err
 	}
+	if c.cfg.rpcHistory && req.Dataset == DatasetNFTTransfers {
+		return provider.FetchResult{}, unsupportedDataset(req.Dataset)
+	}
 	channel, operation, ok := channelForDataset(req.Dataset)
+	if c.cfg.rpcHistory && (req.Dataset == DatasetTransactions || req.Dataset == DatasetTokenTransfers || req.Dataset == DatasetInternalTransactions) {
+		channel, operation, ok = ChannelSolanaRPC, OperationSolanaHistory, true
+	}
 	if !ok {
-		// internal_transactions 走这里：Message 以 SOLANA_DATASET_UNSUPPORTED 开头（规范 §1.4）。
 		return provider.FetchResult{}, unsupportedDataset(req.Dataset)
 	}
 	exec, err := c.plan(ctx, req.Dataset, channel, operation)
@@ -215,6 +226,11 @@ func (c *Client) plan(ctx context.Context, dataset, channel, operation string) (
 	mode := lowerMode(requested, dec.AllowedMode)
 
 	profile, ok := c.profile(ctx, dataset, operation, mode)
+	if c.cfg.rpcHistory && channel == ChannelSolanaRPC && operation == OperationSolanaHistory {
+		// Existing DB solana_history profiles were calibrated for Data API RPM
+		// and CU/request. They cannot safely drive a JSON-RPC RPS limiter.
+		profile, ok = Profile{}, false
+	}
 	if !ok {
 		profile = defaultProfile(channel, mode)
 	}
@@ -325,6 +341,22 @@ func (c *Client) runtimeKey(ctx context.Context) (string, error) {
 		return "", notConfigured("dRPC runtime key " + sanitizeText(c.cfg.keyRef, "") + " is not resolvable: " + sanitizeText(err.Error(), ""))
 	}
 	return key, nil
+}
+
+func (c *Client) effectiveBaseURL(ctx context.Context) (string, error) {
+	base := c.cfg.baseURL
+	if c.cfg.baseURLResolver != nil {
+		var err error
+		base, err = c.cfg.baseURLResolver(ctx)
+		if err != nil {
+			return "", notConfigured("dRPC endpoint is unavailable")
+		}
+	}
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if err := checkEndpointAllowed(base); err != nil {
+		return "", notConfigured("dRPC endpoint is invalid")
+	}
+	return base, nil
 }
 
 type keyCache struct {

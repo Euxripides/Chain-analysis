@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strings"
 
@@ -100,17 +101,13 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeSolanaTransaction(raw, providerName)
 				if err != nil {
-					sc.log.Warn("Solana transaction normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana transaction normalization failed: %w", err)
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.txs = append(b.txs, r)
-				dir, cp := directionOf(address, r.From, r.To)
-				b.acts = append(b.acts, ingest.ActivityRow{
-					Chain: chain, Address: address, Counterparty: cp, Direction: dir,
-					ActivityType: "transaction", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
-					TxHash: r.TxHash, AmountRaw: r.ValueRaw, Dataset: "transactions", Provider: providerName,
-				})
+				b.acts = append(b.acts, ingest.ActivityRow{Chain: chain, Address: address,
+					Direction: "observed", ActivityType: "solana_signature", Timestamp: r.Timestamp,
+					BlockNumber: r.BlockNumber, TxHash: r.TxHash, Dataset: dataset, Provider: providerName})
 			}
 			return b, nil
 		case "token_transfers":
@@ -119,11 +116,13 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeTokenTransferForChain(raw, chain, providerName)
 				if err != nil {
-					sc.log.Warn("Solana transfer normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana token transfer normalization failed: %w", err)
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.transfers = append(b.transfers, r)
+				if r.From != address && r.To != address {
+					continue
+				}
 				dir, cp := directionOf(address, r.From, r.To)
 				// 主体视角的代币账户：转出看 from ATA，转入看 to ATA（self 取转出侧并注明）。
 				ownAccount, counterpartyAccount := r.FromTokenAccount, r.ToTokenAccount
@@ -146,8 +145,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeNftTransfer(raw, providerName)
 				if err != nil {
-					sc.log.Warn("Solana NFT normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana NFT normalization failed: %w", err)
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.nfts = append(b.nfts, r)
@@ -158,8 +156,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeBalance(raw, providerName)
 				if err != nil {
-					sc.log.Warn("Solana balance normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana balance normalization failed: %w", err)
 				}
 				b.bals = append(b.bals, r)
 			}
@@ -169,8 +166,7 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeProgramLog(raw, providerName)
 				if err != nil {
-					sc.log.Warn("Solana program log normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana program log normalization failed: %w", err)
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.logRows = append(b.logRows, r)
@@ -187,11 +183,17 @@ func (sc *Scheduler) buildRows(ctx context.Context, dataset string, rows []json.
 			for _, raw := range rows {
 				r, err := solana.NormalizeInternal(raw, providerName)
 				if err != nil {
-					sc.log.Warn("Solana CPI normalization skipped", "err", err)
-					continue
+					return b, fmt.Errorf("Solana internal normalization failed: %w", err)
 				}
 				trackBlocks(&b.minB, &b.maxB, int64(r.BlockNumber))
 				b.internals = append(b.internals, r)
+				if r.AssetType == "SOL" && !r.Failed && r.ValueRaw != "0" && (r.From == address || r.To == address) {
+					dir, cp := directionOf(address, r.From, r.To)
+					b.acts = append(b.acts, ingest.ActivityRow{Chain: chain, Address: address, Counterparty: cp,
+						Direction: dir, ActivityType: "native_transfer", Timestamp: r.Timestamp, BlockNumber: r.BlockNumber,
+						TxHash: r.TxHash, LogIndex: r.CallIndex, AmountRaw: r.ValueRaw, Amount: tronAmount(r.ValueRaw),
+						TokenSymbol: "SOL", TokenDecimals: 9, Dataset: dataset, Provider: providerName})
+				}
 			}
 			return b, nil
 		}

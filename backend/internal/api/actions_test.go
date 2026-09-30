@@ -8,7 +8,27 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	"github.com/blockchain-platform/blockchain-platform/internal/query"
 )
+
+func TestActionFlowCoverageFollowsQueriedDataset(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		filter query.ActionFilter
+		want   string
+	}{
+		{"Solana SOL", query.ActionFilter{Chain: "solana", Token: "SOL"}, "internal_transactions"},
+		{"Solana SOL with contract", query.ActionFilter{Chain: "solana", Token: "SOL", TokenContract: "mint"}, "token_transfers"},
+		{"Solana SPL", query.ActionFilter{Chain: "solana", Token: "USDC"}, "token_transfers"},
+		{"TRON token", query.ActionFilter{Chain: "tron", Token: "USDT"}, "token_transfers"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := actionFlowCoverageDataset(tc.filter); got != tc.want {
+				t.Fatalf("coverage dataset = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestActionAuthRequiresConfiguredBearerKey(t *testing.T) {
 	t.Setenv("GPT_ACTIONS_API_KEYS", "alpha,beta")
@@ -67,8 +87,8 @@ func TestActionsOpenAPI31HasUniqueOperations(t *testing.T) {
 			}
 		}
 	}
-	if len(seen) != len(actionOperations) {
-		t.Fatalf("operations = %d want %d", len(seen), len(actionOperations))
+	if len(seen) != len(actionOperations)+len(investigationOperations) {
+		t.Fatalf("operations = %d want %d", len(seen), len(actionOperations)+len(investigationOperations))
 	}
 	if _, err := json.Marshal(doc); err != nil {
 		t.Fatal(err)
@@ -99,7 +119,7 @@ func TestActionsOpenAPIUsesAIFacingBoundsAndEnums(t *testing.T) {
 	}
 }
 
-func TestActionsOpenAPISeparatesDownloadAndAnalysisChains(t *testing.T) {
+func TestActionsOpenAPIIncludesSolanaDownloadAndAnalysisChains(t *testing.T) {
 	downloadProps := actionRequestSchema("ensureChainData")["properties"].(map[string]any)
 	downloadChains := downloadProps["chain"].(map[string]any)["enum"].([]string)
 	if !contains(downloadChains, "solana") {
@@ -107,8 +127,8 @@ func TestActionsOpenAPISeparatesDownloadAndAnalysisChains(t *testing.T) {
 	}
 	queryParams := actionParameters("getAddressOverview")
 	queryChains := queryParams[0].(map[string]any)["schema"].(map[string]any)["enum"].([]string)
-	if contains(queryChains, "solana") {
-		t.Fatalf("analysis chains must not advertise incomplete solana query contracts: %#v", queryChains)
+	if !contains(queryChains, "solana") {
+		t.Fatalf("Solana analysis chain is missing: %#v", queryChains)
 	}
 	if got, err := canonicalActionDownloadChain("Solana"); err != nil || got != "solana" {
 		t.Fatalf("canonicalActionDownloadChain(Solana) = %q, %v", got, err)

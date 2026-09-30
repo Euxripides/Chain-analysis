@@ -134,8 +134,23 @@ func actionFail(w http.ResponseWriter, status int, code, message string) {
 
 type actionCoverageState struct {
 	full               bool
+	fullHead           int64
 	fromBlock, toBlock int64
+	contiguousTo       int64
 	committedAt        time.Time
+}
+
+func (state *actionCoverageState) addSolanaInterval(from, to int64) {
+	if from < 0 || to < from {
+		return
+	}
+	if from <= state.contiguousTo+1 && to > state.contiguousTo {
+		state.contiguousTo = to
+	}
+}
+
+func (state *actionCoverageState) solanaFullCovered() bool {
+	return state.full && state.fullHead > 0 && !state.committedAt.IsZero() && state.contiguousTo >= state.fullHead
 }
 
 // actionCoverageAssertionSQL 是 full-range 完整性断言的唯一定义（ADR-025）。
@@ -143,12 +158,13 @@ type actionCoverageState struct {
 // 只按 (subject, dataset) 判定：dataset 自己在 full-range 作业里 COMPLETED 即成立。
 // **不要**再加 download_jobs.status='COMPLETED'——那会让同作业里其它 dataset 的失败
 // 连带否决已经完成并 commit 覆盖的数据集（DL-20260921-0041 / DL-20260916-0011 现场）。
-const actionCoverageAssertionSQL = `SELECT DISTINCT ds.subject,dd.dataset
+const actionCoverageAssertionSQL = `SELECT ds.subject,dd.dataset,max(j.head_block)
 	FROM download_jobs j
 	JOIN download_subjects ds ON ds.job_id=j.id
 	JOIN download_datasets dd ON dd.subject_id=ds.id
 	WHERE j.chain=$1 AND j.range_type='full'
-	  AND ds.subject=ANY($2) AND dd.dataset=ANY($3) AND dd.status='COMPLETED'`
+	  AND ds.subject=ANY($2) AND dd.dataset=ANY($3) AND dd.status='COMPLETED'
+	GROUP BY ds.subject,dd.dataset`
 
 // actionCoverageMeta turns the downloader's durable completion records into
 // an endpoint-scoped evidence assertion.
@@ -173,7 +189,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	key := func(address, dataset string) string { return address + "\x00" + dataset }
 	for _, address := range addresses {
 		for _, dataset := range datasets {
-			states[key(address, dataset)] = &actionCoverageState{}
+			states[key(address, dataset)] = &actionCoverageState{contiguousTo: -1}
 		}
 	}
 	fullRows, err := s.deps.Store.Pool.Query(ctx, actionCoverageAssertionSQL, chain, addresses, datasets)
@@ -183,13 +199,15 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	}
 	for fullRows.Next() {
 		var address, dataset string
-		if scanErr := fullRows.Scan(&address, &dataset); scanErr != nil {
+		var head int64
+		if scanErr := fullRows.Scan(&address, &dataset, &head); scanErr != nil {
 			fullRows.Close()
 			coverage["reason"] = "Unable to read full-range completion assertions"
 			return map[string]any{"coverage": coverage}
 		}
 		if state := states[key(address, dataset)]; state != nil {
 			state.full = true
+			state.fullHead = head
 		}
 	}
 	if err := fullRows.Err(); err != nil {
@@ -199,22 +217,52 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	}
 	fullRows.Close()
 
-	coveredRows, err := s.deps.Store.Pool.Query(ctx, `SELECT subject,dataset,min(from_block),max(to_block),max(committed_at)
+	coverageSQL := `SELECT subject,dataset,min(from_block),max(to_block),max(committed_at)
 		FROM dataset_coverage
 		WHERE chain=$1 AND status='COMPLETE' AND subject=ANY($2) AND dataset=ANY($3)
-		GROUP BY subject,dataset`, chain, addresses, datasets)
+		GROUP BY subject,dataset`
+	if chain == "solana" {
+		coverageSQL = `SELECT subject,dataset,from_block,to_block,committed_at
+			FROM dataset_coverage
+			WHERE chain=$1 AND status='COMPLETE' AND subject=ANY($2) AND dataset=ANY($3)
+			ORDER BY subject,dataset,from_block,to_block`
+	}
+	coveredRows, err := s.deps.Store.Pool.Query(ctx, coverageSQL, chain, addresses, datasets)
 	if err == nil {
 		for coveredRows.Next() {
 			var address, dataset string
 			var fromBlock, toBlock int64
 			var committedAt time.Time
-			if coveredRows.Scan(&address, &dataset, &fromBlock, &toBlock, &committedAt) == nil {
+			if scanErr := coveredRows.Scan(&address, &dataset, &fromBlock, &toBlock, &committedAt); scanErr == nil {
 				if state := states[key(address, dataset)]; state != nil {
-					state.fromBlock, state.toBlock, state.committedAt = fromBlock, toBlock, committedAt
+					if state.committedAt.IsZero() || fromBlock < state.fromBlock {
+						state.fromBlock = fromBlock
+					}
+					if toBlock > state.toBlock {
+						state.toBlock = toBlock
+					}
+					if committedAt.After(state.committedAt) {
+						state.committedAt = committedAt
+					}
+					if chain == "solana" {
+						state.addSolanaInterval(fromBlock, toBlock)
+					}
 				}
+			} else if chain == "solana" {
+				coveredRows.Close()
+				coverage["reason"] = "Unable to decode committed Solana coverage intervals"
+				return map[string]any{"coverage": coverage}
 			}
 		}
+		if coveredRows.Err() != nil && chain == "solana" {
+			coveredRows.Close()
+			coverage["reason"] = "Unable to read committed Solana coverage intervals"
+			return map[string]any{"coverage": coverage}
+		}
 		coveredRows.Close()
+	} else if chain == "solana" {
+		coverage["reason"] = "Unable to read committed Solana coverage intervals"
+		return map[string]any{"coverage": coverage}
 	}
 
 	complete := true
@@ -222,6 +270,7 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	var minBlock, maxBlock int64
 	var latest time.Time
 	haveBounds := false
+	var verifiedSolanaHead int64
 	for _, address := range addresses {
 		for _, dataset := range datasets {
 			state := states[key(address, dataset)]
@@ -229,6 +278,14 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 				complete = false
 				missing = append(missing, map[string]any{"address": address, "dataset": dataset, "reason": "No completed full-range download assertion for this dataset"})
 				continue
+			}
+			if chain == "solana" && !state.solanaFullCovered() {
+				complete = false
+				missing = append(missing, map[string]any{"address": address, "dataset": dataset, "reason": "Completed full-range Solana download has no continuous committed coverage from slot 0 through its pinned head"})
+				continue
+			}
+			if chain == "solana" && (verifiedSolanaHead == 0 || state.fullHead < verifiedSolanaHead) {
+				verifiedSolanaHead = state.fullHead
 			}
 			if !state.committedAt.IsZero() {
 				if !haveBounds || state.fromBlock < minBlock {
@@ -249,6 +306,9 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	if haveBounds {
 		coverage["start_block"], coverage["end_block"] = minBlock, maxBlock
 	}
+	if complete && chain == "solana" {
+		coverage["start_block"], coverage["end_block"] = int64(0), verifiedSolanaHead
+	}
 	if complete {
 		coverage["reason"] = "Completed full-range downloads are recorded for every address and dataset in this response"
 	} else {
@@ -257,6 +317,9 @@ func (s *Server) actionCoverageMeta(ctx context.Context, chain string, addresses
 	meta := map[string]any{"coverage": coverage}
 	if !latest.IsZero() {
 		meta["freshness"] = map[string]any{"as_of_block": func() any {
+			if complete && chain == "solana" {
+				return verifiedSolanaHead
+			}
 			if haveBounds {
 				return maxBlock
 			}
@@ -377,6 +440,9 @@ func (w *actionStatusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 func actionScopeForPath(path string) string {
+	if investigationReadScope(path) {
+		return "read"
+	}
 	if strings.Contains(path, "/analysis/") {
 		return "analysis"
 	}
@@ -456,6 +522,7 @@ func (s *Server) registerActionRoutes(api chi.Router) {
 	api.Group(func(actions chi.Router) {
 		actions.Use(authn.middleware)
 		actions.Use(actionGzip)
+		s.registerInvestigationRoutes(actions)
 		actions.Get("/address/overview", s.handleActionOverview)
 		actions.Get("/address/assets", s.handleActionAssets)
 		actions.Get("/address/transactions", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "transactions") })
@@ -469,12 +536,16 @@ func (s *Server) registerActionRoutes(api chi.Router) {
 		actions.Get("/transaction/logs", s.handleActionTransactionLogs)
 		actions.Get("/transaction/decode", s.handleActionTransactionDecode)
 		actions.Get("/transaction/trace", s.handleActionTransactionTrace)
+		actions.Get("/solana/address/signatures", s.handleActionSolanaSignatures)
+		actions.Get("/solana/transaction", s.handleActionSolanaTransaction)
+		actions.Get("/bridge/source-transaction", s.handleActionBridgeSourceTransaction)
 		actions.Post("/addresses/batch-overview", s.handleActionBatchOverview)
 		actions.Post("/addresses/batch-assets", s.handleActionBatchAssets)
 		actions.Post("/analysis/path", s.handleActionPath)
 		actions.Post("/analysis/address-network", s.handleActionNetwork)
 		actions.Post("/export/create", s.handleActionCreateExport)
 		actions.Get("/export/status", s.handleActionExportStatus)
+		actions.Get("/export/address-summary", s.handleActionExportAddressSummary)
 		actions.Post("/data/ensure", s.handleActionEnsureData)
 		actions.Get("/data/download-status", s.handleActionDownloadStatus)
 		actions.Post("/data/download-retry", s.handleActionDownloadRetry)
@@ -826,7 +897,7 @@ func (s *Server) handleActionRequestLogs(w http.ResponseWriter, r *http.Request)
 	actionOK(w, out, map[string]any{"count": len(out)})
 }
 
-var actionChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true}
+var actionChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true, "solana": true}
 
 var actionDownloadChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true, "solana": true}
 
@@ -952,19 +1023,30 @@ func (s *Server) handleActionOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := overviews[0]
+	if c == "solana" {
+		if detailed, detailErr := s.query.ActionOverview(r.Context(), c, a); detailErr == nil {
+			o.NativeBalance, o.NativeBalanceSource = detailed.NativeBalance, detailed.NativeBalanceSource
+		}
+	}
 	o.Chain = publicActionChain(o.Chain)
 	if balanceCh != nil {
 		if balanceResult := <-balanceCh; balanceResult.err == nil {
 			for _, balance := range balanceResult.balances {
 				if balance.Native {
-					o.NativeBalance = baseUnitBalance(balance.RawBalance, 6)
+					decimals := 18
+					if c == "tron" {
+						decimals = 6
+					} else if c == "solana" {
+						decimals = 9
+					}
+					o.NativeBalance = baseUnitBalance(balance.RawBalance, decimals)
 					o.NativeBalanceSource = "balance_snapshot"
 					break
 				}
 			}
 		}
 	}
-	if s.deps.AddressType != nil && c != "tron" {
+	if s.deps.AddressType != nil && c != "tron" && c != "solana" {
 		if types, e := s.deps.AddressType.ResolveAddressTypes(r.Context(), c, []string{a}); e == nil {
 			if types[a] {
 				o.AddressType = "contract"
@@ -973,8 +1055,14 @@ func (s *Server) handleActionOverview(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	meta := s.actionCoverageMeta(r.Context(), c, []string{a}, []string{"transactions", "token_transfers"})
-	meta["coverage"].(map[string]any)["not_asserted_datasets"] = []string{"internal_transactions"}
+	datasets := []string{"transactions", "token_transfers"}
+	if c == "solana" {
+		datasets = append(datasets, "internal_transactions")
+	}
+	meta := s.actionCoverageMeta(r.Context(), c, []string{a}, datasets)
+	if c != "solana" {
+		meta["coverage"].(map[string]any)["not_asserted_datasets"] = []string{"internal_transactions"}
+	}
 	actionOK(w, o, meta)
 }
 func (s *Server) handleActionAssets(w http.ResponseWriter, r *http.Request) {
@@ -1006,7 +1094,7 @@ func (s *Server) handleActionAssets(w http.ResponseWriter, r *http.Request) {
 	meta := map[string]any{}
 	if resolver, ok := s.deps.Prov.(provider.CurrentBalanceResolver); ok {
 		if balances, balanceErr := resolver.CurrentBalances(r.Context(), c, a); balanceErr == nil {
-			native, nativeSource, nativeCurrent, nativeAsOfBlock, nativeAsOfTime, tokenAssets = applyCurrentBalanceSnapshot(balances, tokenAssets)
+			native, nativeSource, nativeCurrent, nativeAsOfBlock, nativeAsOfTime, tokenAssets = applyCurrentBalanceSnapshotForChain(c, balances, tokenAssets)
 			total = ""
 			meta["balance_snapshot_source"] = "provider_latest"
 		} else {
@@ -1029,19 +1117,29 @@ func baseUnitBalance(raw string, decimals int) string {
 }
 
 func applyCurrentBalanceSnapshot(snapshot []provider.CurrentBalance, assets []map[string]any) (string, string, bool, any, any, []map[string]any) {
+	return applyCurrentBalanceSnapshotForChain("tron", snapshot, assets)
+}
+
+func applyCurrentBalanceSnapshotForChain(chain string, snapshot []provider.CurrentBalance, assets []map[string]any) (string, string, bool, any, any, []map[string]any) {
 	native, nativeSource, nativeCurrent := "0", "unavailable", false
 	var nativeBlock, nativeTime any
 	tokens := make(map[string]provider.CurrentBalance, len(snapshot))
 	for _, balance := range snapshot {
 		if balance.Native {
-			native = baseUnitBalance(balance.RawBalance, 6)
+			decimals := 18
+			if chain == "tron" {
+				decimals = 6
+			} else if chain == "solana" {
+				decimals = 9
+			}
+			native = baseUnitBalance(balance.RawBalance, decimals)
 			nativeSource, nativeCurrent, nativeTime = "balance_snapshot", true, balance.AsOfTime
 			continue
 		}
-		tokens[strings.ToLower(balance.TokenAddress)] = balance
+		tokens[addressnorm.NormalizeKey(chain, balance.TokenAddress)] = balance
 	}
 	for _, asset := range assets {
-		contract := strings.ToLower(strings.TrimSpace(fmt.Sprint(asset["token_address"])))
+		contract := addressnorm.NormalizeKey(chain, strings.TrimSpace(fmt.Sprint(asset["token_address"])))
 		decimals, _ := strconv.Atoi(fmt.Sprint(asset["token_decimals"]))
 		balance, exists := tokens[contract]
 		raw := "0"
@@ -1083,8 +1181,21 @@ func (s *Server) handleActionRows(w http.ResponseWriter, r *http.Request, datase
 	if p.HasMore {
 		nextPage = p.Page + 1
 	}
-	actionOK(w, p.Items, map[string]any{"pagination": map[string]any{"page": p.Page, "page_size": p.PageSize, "returned": len(p.Items), "total": p.Total, "has_more": p.HasMore, "next_page": nextPage}})
+	meta := s.actionCoverageMeta(r.Context(), f.Chain, []string{f.Address}, []string{dataset})
+	meta["pagination"] = map[string]any{"page": p.Page, "page_size": p.PageSize, "returned": len(p.Items), "total": p.Total, "has_more": p.HasMore, "next_page": nextPage}
+	actionOK(w, p.Items, meta)
 }
+
+// Solana native SOL flows come from System transfers in internal_transactions;
+// other flow aggregations use token_transfers. Coverage must follow the table
+// actually queried rather than a broader or unrelated address download.
+func actionFlowCoverageDataset(f query.ActionFilter) string {
+	if f.Chain == "solana" && strings.EqualFold(f.Token, "SOL") && f.TokenContract == "" {
+		return "internal_transactions"
+	}
+	return "token_transfers"
+}
+
 func (s *Server) handleActionCounterparties(w http.ResponseWriter, r *http.Request) {
 	f, e := parseActionFilter(r)
 	if e != nil {
@@ -1104,7 +1215,9 @@ func (s *Server) handleActionCounterparties(w http.ResponseWriter, r *http.Reque
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to aggregate counterparties")
 		return
 	}
-	actionOK(w, rows, map[string]any{"count": len(rows)})
+	meta := s.actionCoverageMeta(r.Context(), f.Chain, []string{f.Address}, []string{actionFlowCoverageDataset(f)})
+	meta["count"] = len(rows)
+	actionOK(w, rows, meta)
 }
 func flowMap(f query.FlowSummary) map[string]any {
 	return map[string]any{"total_in": f.TotalIn, "total_out": f.TotalOut, "net_flow": f.NetFlow, "in_tx_count": f.InTxCount, "out_tx_count": f.OutTxCount, "unique_in_addresses": f.UniqueInAddresses, "unique_out_addresses": f.UniqueOutAddresses, "first_in_time": f.FirstInTime, "last_in_time": f.LastInTime, "first_out_time": f.FirstOutTime, "last_out_time": f.LastOutTime}
@@ -1141,7 +1254,8 @@ func (s *Server) handleActionFlowSummary(w http.ResponseWriter, r *http.Request)
 	data["address"] = f.Address
 	data["token_symbol"] = strings.ToUpper(strings.TrimSpace(f.Token))
 	data["token_contract"] = f.TokenContract
-	actionOK(w, data, nil)
+	meta := s.actionCoverageMeta(r.Context(), f.Chain, []string{f.Address}, []string{actionFlowCoverageDataset(f)})
+	actionOK(w, data, meta)
 }
 func (s *Server) handleActionTopFlows(w http.ResponseWriter, r *http.Request) {
 	f, e := parseActionFilter(r)
@@ -1162,7 +1276,9 @@ func (s *Server) handleActionTopFlows(w http.ResponseWriter, r *http.Request) {
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query top flows")
 		return
 	}
-	actionOK(w, rows, map[string]any{"count": len(rows)})
+	meta := s.actionCoverageMeta(r.Context(), f.Chain, []string{f.Address}, []string{actionFlowCoverageDataset(f)})
+	meta["count"] = len(rows)
+	actionOK(w, rows, meta)
 }
 func (s *Server) handleActionFirstFunding(w http.ResponseWriter, r *http.Request) {
 	c, a, e := actionIdentity(r)
@@ -1178,6 +1294,13 @@ func (s *Server) handleActionFirstFunding(w http.ResponseWriter, r *http.Request
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to query first funding")
 		return
 	}
+	if c == "solana" {
+		meta := s.actionCoverageMeta(r.Context(), c, []string{a}, []string{"transactions", "token_transfers", "internal_transactions"})
+		coverage, _ := meta["coverage"].(map[string]any)
+		data["coverage_complete_before_first_observed_tx"] = coverage["complete"] == true
+		actionOK(w, data, meta)
+		return
+	}
 	data["coverage_complete_before_first_observed_tx"] = false
 	actionOK(w, data, map[string]any{"evidence_scope": "earliest observed within platform coverage; not asserted as the address's true first funding"})
 }
@@ -1186,6 +1309,13 @@ func actionTransactionIdentity(r *http.Request) (string, string, error) {
 	c, e := canonicalActionChain(r.URL.Query().Get("chain"))
 	if e != nil {
 		return "", "", e
+	}
+	if c == "solana" {
+		signature := strings.TrimSpace(r.URL.Query().Get("tx_hash"))
+		if !validSolanaBase58(signature, 64) {
+			return "", "", fmt.Errorf("invalid Solana signature")
+		}
+		return c, signature, nil
 	}
 	h, e := chain.ParseHash(r.URL.Query().Get("tx_hash"))
 	if e != nil {
@@ -1204,6 +1334,34 @@ func actionTransactionIdentity(r *http.Request) (string, string, error) {
 //   - 任意一个数据集有该 hash → 200，返回已观察到的证据，transaction 字段整体缺省，
 //     并在 meta 里明确 transaction_row_present=false（缺行不等于交易不存在）。
 func (s *Server) transactionActionData(ctx context.Context, c, h string) (map[string]any, map[string]any, error) {
+	if c == "solana" {
+		record, err := s.query.ActionTransactionRecord(ctx, c, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		transfers, err := s.query.ActionTransactionRows(ctx, "token_transfers", c, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		internal, err := s.query.ActionTransactionRows(ctx, "internal_transactions", c, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		logs, err := s.query.ActionTransactionRows(ctx, "logs", c, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		meta := map[string]any{"transaction_row_present": record != nil, "chain_semantics": "solana"}
+		if record == nil && len(transfers) == 0 && len(internal) == 0 && len(logs) == 0 {
+			remote, rpcErr := solanaTransaction(ctx, h)
+			if rpcErr != nil {
+				return nil, nil, method.ErrTransactionNotFound
+			}
+			meta["rpc_source"] = remote["rpc_source"]
+			return map[string]any{"chain": c, "tx_hash": h, "transaction": remote, "token_transfers": transfers, "internal_transactions": internal, "logs": logs}, meta, nil
+		}
+		return map[string]any{"chain": c, "tx_hash": h, "transaction": record, "token_transfers": transfers, "internal_transactions": internal, "logs": logs}, meta, nil
+	}
 	if s.detail == nil {
 		return nil, nil, errors.New("transaction detail disabled")
 	}
@@ -1269,6 +1427,17 @@ func (s *Server) handleActionTransactionDecode(w http.ResponseWriter, r *http.Re
 		actionFail(w, 400, "INVALID_TX_HASH", e.Error())
 		return
 	}
+	if c == "solana" {
+		tx, readErr := solanaTransaction(r.Context(), h)
+		if readErr != nil {
+			solanaReadFailure(w, readErr)
+			return
+		}
+		transaction, _ := tx["transaction"].(map[string]any)
+		meta, _ := tx["meta"].(map[string]any)
+		actionOK(w, map[string]any{"chain": c, "tx_hash": h, "message": transaction["message"], "inner_instructions": meta["innerInstructions"], "logs": meta["logMessages"]}, map[string]any{"decode_source": tx["rpc_source"], "chain_semantics": "solana_json_parsed"})
+		return
+	}
 	if s.detail == nil {
 		actionFail(w, 503, "INTERNAL_ERROR", "Transaction detail service is disabled")
 		return
@@ -1303,6 +1472,15 @@ func (s *Server) handleActionTransactionTrace(w http.ResponseWriter, r *http.Req
 	c, h, e := actionTransactionIdentity(r)
 	if e != nil {
 		actionFail(w, 400, "INVALID_TX_HASH", e.Error())
+		return
+	}
+	if c == "solana" {
+		rows, queryErr := s.query.ActionTransactionRows(r.Context(), "internal_transactions", c, h)
+		if queryErr != nil {
+			actionFail(w, 500, "INTERNAL_ERROR", "Unable to query Solana instruction trace")
+			return
+		}
+		actionOK(w, map[string]any{"chain": c, "tx_hash": h, "calls": rows}, map[string]any{"trace_source": "local_instruction_decoder", "count": len(rows)})
 		return
 	}
 	if s.deps.Trace == nil {
@@ -1381,9 +1559,15 @@ func (s *Server) handleActionBatchOverview(w http.ResponseWriter, r *http.Reques
 	for i := range out {
 		out[i].Chain = publicActionChain(out[i].Chain)
 	}
-	meta := s.actionCoverageMeta(r.Context(), c, addresses, []string{"transactions", "token_transfers"})
+	datasets := []string{"transactions", "token_transfers"}
+	if c == "solana" {
+		datasets = append(datasets, "internal_transactions")
+	}
+	meta := s.actionCoverageMeta(r.Context(), c, addresses, datasets)
 	meta["count"] = len(out)
-	meta["coverage"].(map[string]any)["not_asserted_datasets"] = []string{"internal_transactions"}
+	if c != "solana" {
+		meta["coverage"].(map[string]any)["not_asserted_datasets"] = []string{"internal_transactions"}
+	}
 	actionOK(w, out, meta)
 }
 func (s *Server) handleActionBatchAssets(w http.ResponseWriter, r *http.Request) {
@@ -1602,14 +1786,16 @@ func (s *Server) handleActionNetwork(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Chain              string   `json:"chain"`
-		Address            string   `json:"address"`
-		Format             string   `json:"format"`
-		Compression        string   `json:"compression"`
-		Token              string   `json:"token"`
-		TokenContract      string   `json:"token_contract"`
-		DataTypes          []string `json:"data_types"`
-		StartTime, EndTime *time.Time
+		Chain         string     `json:"chain"`
+		Address       string     `json:"address"`
+		Addresses     []string   `json:"addresses"`
+		Format        string     `json:"format"`
+		Compression   string     `json:"compression"`
+		Token         string     `json:"token"`
+		TokenContract string     `json:"token_contract"`
+		DataTypes     []string   `json:"data_types"`
+		StartTime     *time.Time `json:"start_time"`
+		EndTime       *time.Time `json:"end_time"`
 	}
 	if e := decodeActionJSON(r, &req); e != nil {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
@@ -1619,6 +1805,23 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	if e != nil {
 		actionFail(w, 400, "INVALID_CHAIN", e.Error())
 		return
+	}
+	addresses, addressErr := normalizeActionExportAddresses(c, req.Address, req.Addresses)
+	if addressErr != nil {
+		actionFail(w, 400, "INVALID_ADDRESS", addressErr.Error())
+		return
+	}
+	if _, boundsErr := newExportBounds(req.StartTime, req.EndTime); boundsErr != nil {
+		actionFail(w, 400, "INVALID_QUERY", boundsErr.Error())
+		return
+	}
+	if req.TokenContract != "" {
+		contract, err := addressnorm.Normalize(c, req.TokenContract)
+		if err != nil {
+			actionFail(w, 400, "INVALID_QUERY", "Invalid token_contract")
+			return
+		}
+		req.TokenContract = contract
 	}
 	if len(req.DataTypes) == 0 {
 		actionFail(w, 400, "INVALID_QUERY", "data_types required")
@@ -1642,14 +1845,21 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 		actionFail(w, 400, "INVALID_QUERY", "supported export pairs are parquet+zstd and csv+zip")
 		return
 	}
+	datasets := make([]string, 0, len(req.DataTypes))
+	seenDatasets := map[string]bool{}
 	for _, d := range req.DataTypes {
 		if d != "transactions" && d != "token_transfers" && d != "internal_transactions" && d != "logs" {
 			actionFail(w, 400, "INVALID_QUERY", "unsupported data_type "+d)
 			return
 		}
+		if !seenDatasets[d] {
+			seenDatasets[d] = true
+			datasets = append(datasets, d)
+		}
 	}
-	zipIt := req.Format == "csv" || len(req.DataTypes) > 1
-	snapshot, _ := json.Marshal(map[string]any{"chain": c, "addresses": []string{req.Address}, "datasets": req.DataTypes, "format": req.Format, "compression": req.Compression, "token": req.Token, "token_contract": req.TokenContract, "start_time": req.StartTime, "end_time": req.EndTime})
+	req.DataTypes = datasets
+	zipIt := req.Format == "csv" || len(req.DataTypes) > 1 || len(addresses) > 1
+	snapshot, _ := json.Marshal(map[string]any{"chain": c, "addresses": addresses, "datasets": req.DataTypes, "format": req.Format, "compression": req.Compression, "token": req.Token, "token_contract": req.TokenContract, "start_time": req.StartTime, "end_time": req.EndTime})
 	// GPT Actions 走独立的 Bearer API Key，不产生 session 主体，因此使用
 	// systemScope 显式解析平台数据面的租户绑定（见 objectaccess.go 的说明）。
 	scope, workspaceErr := s.systemScope(r.Context())
@@ -1665,11 +1875,11 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	}
 	var boundsJob *model.DownloadJob
 	if req.StartTime != nil || req.EndTime != nil || req.Token != "" || req.TokenContract != "" {
-		boundsJob = &model.DownloadJob{RangeType: "time", FromTimestamp: req.StartTime, ToTimestamp: req.EndTime, Status: model.JobCompleted, Stats: map[string]any{"gpt_actions_token_filter": strings.ToUpper(strings.TrimSpace(req.Token)), "gpt_actions_token_contract_filter": strings.TrimSpace(req.TokenContract)}}
+		boundsJob = &model.DownloadJob{Chain: c, RangeType: "time", FromTimestamp: req.StartTime, ToTimestamp: req.EndTime, Status: model.JobCompleted, Stats: map[string]any{"gpt_actions_token_filter": strings.ToUpper(strings.TrimSpace(req.Token)), "gpt_actions_token_contract_filter": strings.TrimSpace(req.TokenContract)}}
 	}
-	go s.runExportMulti(backgroundAuditCtx(r), exp, boundsJob, c, []string{req.Address}, req.DataTypes, req.Format, true, zipIt, false,
+	go s.runExportMulti(backgroundAuditCtx(r), exp, boundsJob, c, addresses, req.DataTypes, req.Format, true, zipIt, false,
 		exportBounds{From: req.StartTime, To: req.EndTime})
-	writeJSON(w, http.StatusAccepted, actionEnvelope{Success: true, Data: map[string]any{"job_id": exp.ID, "status": "processing"}, Meta: map[string]any{}})
+	writeJSON(w, http.StatusAccepted, actionEnvelope{Success: true, Data: map[string]any{"job_id": exp.ID, "status": "processing", "addresses": addresses, "address_count": len(addresses)}, Meta: map[string]any{}})
 }
 
 // handleActionExportStatus 返回 Actions 自己创建的导出状态。
@@ -1713,16 +1923,23 @@ func (s *Server) handleActionExportStatus(w http.ResponseWriter, r *http.Request
 	data := map[string]any{"job_id": exp.ID, "status": strings.ToLower(exp.Status), "total_rows": exp.Rows, "row_count": exp.Rows, "format": exp.Format, "compression": nil, "files": []any{}, "manifest_url": nil, "download_url": nil, "sha256": nil, "expires_at": nil}
 	if exp.Status == "COMPLETED" {
 		// 票据绑定到导出对象自己的租户归属（上面已校验它与 Actions 作用域一致）。
-		if ticketID, ticketErr := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, exportOrg, exportWS, 15*time.Minute); ticketErr == nil {
-			if ticketErr == nil {
-				scheme := r.Header.Get("X-Forwarded-Proto")
-				if scheme == "" {
-					scheme = "https"
-				}
-				data["download_url"] = scheme + "://" + r.Host + "/api/v1/download/" + ticketID
-				data["expires_at"] = time.Now().UTC().Add(15 * time.Minute)
-			}
+		size, _, objectErr := s.statExportObject(r.Context(), exp.ObjectRef)
+		if objectErr != nil {
+			actionFail(w, http.StatusServiceUnavailable, "EXPORT_FILE_UNAVAILABLE", "Unable to read the completed export file")
+			return
 		}
+		ticketID, ticketErr := s.deps.Store.CreateExportTicket(r.Context(), exp.ID, nil, exportOrg, exportWS, 15*time.Minute)
+		if ticketErr != nil {
+			actionFail(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unable to create export download ticket")
+			return
+		}
+		downloadURL := actionsPublicBaseURL() + "/api/v1/download/" + ticketID
+		file := actionExportFile(exp, downloadURL, size)
+		data["download_url"] = downloadURL
+		data["files"] = []any{file}
+		data["compression"] = file["compression"]
+		data["sha256"] = exp.SHA256
+		data["expires_at"] = time.Now().UTC().Add(15 * time.Minute)
 	}
 	if exp.Status == "FAILED" {
 		data["error"] = exp.Error

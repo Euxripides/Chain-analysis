@@ -97,9 +97,14 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "初始密码生成失败", nil)
 		return
 	}
-	displayName := strings.TrimSpace(in.DisplayName)
-	if displayName == "" {
-		displayName = email
+	rawDisplayName := in.DisplayName
+	if strings.TrimSpace(rawDisplayName) == "" {
+		rawDisplayName = email
+	}
+	displayName, nameProblem := normalizeIdentityDisplayName(rawDisplayName)
+	if nameProblem != nil {
+		validationError(w, r, nameProblem.Message, []fieldError{*nameProblem})
+		return
 	}
 	var identityID string
 	if err := s.deps.Store.Pool.QueryRow(ctx, `

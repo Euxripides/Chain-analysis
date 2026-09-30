@@ -124,9 +124,6 @@ func (s *Server) registerUserV2(r chi.Router) {
 	r.Head("/exports/download/{ticket}", s.require("export:download", s.handleExportV2Download))
 	r.Get("/exports", s.require("export:list", s.handleExportsV2List))
 	r.Post("/exports", s.require("export:create", s.handleExportV2Create))
-	// 预生成：与 /exports 同权限、同租户作用域。前端在表单草稿稳定后触发，
-	// 用户点"导出"时命中即返回（提升 = 一次数据库更新）。
-	r.Post("/exports/prefetch", s.require("export:create", s.handleExportPrefetch))
 	r.Get("/exports/{id}", s.require("export:read", s.handleExportV2Detail))
 	r.Post("/exports/{id}/download-ticket", s.require("export:download", s.handleExportV2Ticket))
 
@@ -238,9 +235,9 @@ func (s *Server) handleUserProfileUpdate(w http.ResponseWriter, r *http.Request)
 		validationError(w, r, "请求体不是合法 JSON", nil)
 		return
 	}
-	name := strings.TrimSpace(body.DisplayName)
-	if name == "" || len([]rune(name)) > 80 {
-		validationError(w, r, "显示名称长度必须在 1-80 个字符之间", []fieldError{{Field: "display_name", Code: "invalid_length", Message: "1-80 个字符"}})
+	name, nameProblem := normalizeIdentityDisplayName(body.DisplayName)
+	if nameProblem != nil {
+		validationError(w, r, nameProblem.Message, []fieldError{*nameProblem})
 		return
 	}
 	if s.deps.Store == nil {

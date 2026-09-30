@@ -100,6 +100,7 @@ func trc20LogCapabilityEpoch(from, to uint64) (uint64, bool) {
 
 type AnkrOptions struct {
 	APIKey                    string
+	AllowMissingKey           bool
 	RequestTimeout            time.Duration
 	ConnectTimeout            time.Duration
 	MaxRetries                int
@@ -155,6 +156,7 @@ type ankrTokenMetadata struct {
 type AnkrClient struct {
 	rpcURL     string
 	restURL    string
+	runtime    func(context.Context) (rpcURL, restURL string, enabled bool, err error)
 	http       *http.Client
 	maxRetries int
 	usage      provider.UsageHook
@@ -190,7 +192,7 @@ type AnkrClient struct {
 
 func NewAnkr(opts AnkrOptions, usage provider.UsageHook, log *slog.Logger) (*AnkrClient, error) {
 	key := strings.TrimSpace(opts.APIKey)
-	if key == "" {
+	if key == "" && !opts.AllowMissingKey {
 		return nil, errors.New("ANKR_API_KEY is required for TRON_PROVIDER=ankr")
 	}
 	if opts.RequestTimeout <= 0 {
@@ -277,10 +279,21 @@ func NewAnkr(opts AnkrOptions, usage provider.UsageHook, log *slog.Logger) (*Ank
 }
 
 func (c *AnkrClient) Name() string { return "ankr" }
+
+// SetRuntime connects the control-plane configuration after the startup probe.
+func (c *AnkrClient) SetRuntime(resolve func(context.Context) (string, string, bool, error)) {
+	c.runtime = resolve
+}
 func (c *AnkrClient) Capabilities() provider.Capabilities {
 	return provider.Capabilities{Name: "ankr_tron_node", Datasets: []string{"transactions", "token_transfers", "internal_transactions"}, MaxPageSize: int(c.opts.LogMaxSpan), SupportsTimeRange: map[string]bool{"transactions": true, "token_transfers": true, "internal_transactions": true}}
 }
-func (c *AnkrClient) Health(context.Context) provider.HealthStatus {
+func (c *AnkrClient) Health(ctx context.Context) provider.HealthStatus {
+	if c.runtime != nil {
+		_, _, enabled, err := c.runtime(ctx)
+		if err != nil || !enabled {
+			return provider.HealthStatus{Provider: c.Name(), State: provider.HealthOpen, LastCheck: time.Now(), Error: "provider configuration unavailable or disabled"}
+		}
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.health
@@ -2161,6 +2174,21 @@ func (c *AnkrClient) rest(ctx context.Context, req provider.FetchRequest, path s
 }
 
 func (c *AnkrClient) call(ctx context.Context, fetchReq provider.FetchRequest, endpoint string, payload any, usageType string, out any) ([]byte, error) {
+	if c.runtime != nil {
+		rpcURL, restURL, enabled, err := c.runtime(ctx)
+		if err != nil {
+			return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassUpstream, Message: "Ankr control state unavailable", Retryable: true}
+		}
+		if !enabled {
+			return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassUpstream, Message: "Ankr is disabled in provider control", Retryable: true}
+		}
+		if strings.HasPrefix(endpoint, c.rpcURL) {
+			endpoint = rpcURL + strings.TrimPrefix(endpoint, c.rpcURL)
+		}
+		if strings.HasPrefix(endpoint, c.restURL) {
+			endpoint = restURL + strings.TrimPrefix(endpoint, c.restURL)
+		}
+	}
 	encoded, _ := json.Marshal(payload)
 	methodCalls, batchSize := 1, 0
 	if batch, ok := payload.([]map[string]any); ok {
@@ -2179,7 +2207,7 @@ func (c *AnkrClient) call(ctx context.Context, fetchReq provider.FetchRequest, e
 		started := time.Now()
 		request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 		if requestErr != nil {
-			return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassInvalidRequest, Message: "build Ankr TRON request: " + c.sanitizeError(requestErr.Error()), Cause: requestErr}
+			return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassInvalidRequest, Message: "Ankr TRON endpoint is invalid"}
 		}
 		request.Header.Set("content-type", "application/json")
 		response, err := c.http.Do(request)
@@ -2203,9 +2231,9 @@ func (c *AnkrClient) call(ctx context.Context, fetchReq provider.FetchRequest, e
 			}
 		}
 		class, retryable := classifyAnkr(status, err)
-		message := c.ankrBoundedError(status, body, err)
+		message := c.ankrBoundedError(status, body, err, endpoint)
 		c.recordAnkr(ctx, fetchReq, usageType, started, status, attempt, "error", string(class), 0, len(body), methodCalls, batchSize)
-		last = &provider.Error{Provider: c.Name(), Class: class, Message: message, HTTPStatus: status, Retryable: retryable, ReduceConcurrency: status == 429, SplitRange: class == provider.ClassResponseTooLarge || class == provider.ClassRequestTimeout || status >= 500, Cause: err}
+		last = &provider.Error{Provider: c.Name(), Class: class, Message: message, HTTPStatus: status, Retryable: retryable, ReduceConcurrency: status == 429, SplitRange: class == provider.ClassResponseTooLarge || class == provider.ClassRequestTimeout || status >= 500}
 		c.setAnkrHealth(provider.HealthDegraded, message)
 		if !retryable {
 			break
@@ -2271,7 +2299,7 @@ func classifyAnkr(status int, err error) (provider.ErrorClass, bool) {
 	}
 	return provider.ClassProviderInvalid, false
 }
-func (c *AnkrClient) ankrBoundedError(status int, body []byte, err error) string {
+func (c *AnkrClient) ankrBoundedError(status int, body []byte, err error, endpoint string) string {
 	msg := ""
 	if err != nil {
 		msg = c.sanitizeError(err.Error())
@@ -2284,6 +2312,15 @@ func (c *AnkrClient) ankrBoundedError(status int, body []byte, err error) string
 	}
 	if msg == "" {
 		msg = http.StatusText(status)
+	}
+	msg = strings.ReplaceAll(msg, endpoint, "https://rpc.ankr.com/***")
+	for _, marker := range []string{"/tron_jsonrpc/", "/premium-http/tron/"} {
+		if start := strings.Index(endpoint, marker); start >= 0 {
+			key := strings.SplitN(endpoint[start+len(marker):], "/", 2)[0]
+			if len(key) >= 8 {
+				msg = strings.ReplaceAll(msg, key, "***")
+			}
+		}
 	}
 	return fmt.Sprintf("Ankr TRON HTTP %d: %s", status, msg)
 }

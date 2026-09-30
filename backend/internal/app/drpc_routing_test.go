@@ -77,3 +77,14 @@ func TestSolanaRoutePlanFailClosed(t *testing.T) {
 		t.Fatalf("空计划应把 Solana 行落到旧通道默认值（不启用路由时不会被读到）：%+v", rows[:2])
 	}
 }
+
+func TestProjectSolanaInternalRouteUsesFinalizedRPC(t *testing.T) {
+	rows := projectSolanaPolicies([]route.PolicyRow{{
+		PolicyKey: "solana:internal_transactions", Chain: "solana", Dataset: "internal_transactions",
+		Enabled: true, PrimaryProvider: "drpc", APIChannel: route.ChannelSolanaRPC,
+		OperationClass: route.OperationSolanaHistory, Revision: 1,
+	}}, solanaRoutePlan{historyKey: route.ProviderDRPC})
+	if len(rows) != 1 || rows[0].PrimaryProvider != route.ProviderDRPC || rows[0].APIChannel != route.ChannelSolanaRPC {
+		t.Fatalf("internal_transactions must route through finalized dRPC RPC: %+v", rows)
+	}
+}

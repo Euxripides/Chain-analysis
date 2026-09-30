@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -79,7 +80,10 @@ func (c *Client) Secrets() []string {
 
 // Call 单次 JSON-RPC 调用。
 func (c *Client) Call(ctx context.Context, req rpc.Request) (rpc.Response, error) {
-	endpoint, ok := c.endpoint(req.Chain)
+	endpoint, ok, resolveErr := c.endpoint(ctx, req.Chain)
+	if resolveErr != nil {
+		return rpc.Response{}, &rpc.Error{Class: rpc.ClassNoProvider, Provider: c.Name(), Message: "provider configuration unavailable"}
+	}
 	if !ok {
 		return rpc.Response{}, &rpc.Error{Class: rpc.ClassMethodUnsupported, Provider: c.Name(),
 			Chain: req.Chain, Method: req.Method, Message: "chain is not mapped to an ankr rpc path"}
@@ -103,6 +107,7 @@ func (c *Client) Call(ctx context.Context, req rpc.Request) (rpc.Response, error
 	if decoded.Error != nil {
 		mapped := mapRPCError(decoded.Error.Code, decoded.Error.Message, req.Class)
 		mapped.Provider, mapped.Chain, mapped.Method = c.Name(), req.Chain, req.Method
+		mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 		c.recordFailure(mapped.Message)
 		return rpc.Response{Bytes: size}, mapped
 	}
@@ -117,7 +122,10 @@ func (c *Client) BatchCall(ctx context.Context, reqs []rpc.Request) ([]rpc.Respo
 	if len(reqs) == 0 {
 		return nil, nil
 	}
-	endpoint, ok := c.endpoint(reqs[0].Chain)
+	endpoint, ok, resolveErr := c.endpoint(ctx, reqs[0].Chain)
+	if resolveErr != nil {
+		return nil, &rpc.Error{Class: rpc.ClassNoProvider, Provider: c.Name(), Message: "provider configuration unavailable"}
+	}
 	if !ok {
 		return nil, &rpc.Error{Class: rpc.ClassMethodUnsupported, Provider: c.Name(), Chain: reqs[0].Chain,
 			Message: "chain is not mapped to an ankr rpc path"}
@@ -145,6 +153,7 @@ func (c *Client) BatchCall(ctx context.Context, reqs []rpc.Request) ([]rpc.Respo
 		if err2 := json.Unmarshal(raw, &single); err2 == nil && single.Error != nil {
 			mapped := mapRPCError(single.Error.Code, single.Error.Message, reqs[0].Class)
 			mapped.Provider, mapped.Chain = c.Name(), reqs[0].Chain
+			mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 			c.recordFailure(mapped.Message)
 			return nil, mapped
 		}
@@ -171,6 +180,7 @@ func (c *Client) BatchCall(ctx context.Context, reqs []rpc.Request) ([]rpc.Respo
 			Bytes: perItemBytes, BatchSize: len(reqs)}
 		if item.Error != nil {
 			mapped := mapRPCError(item.Error.Code, item.Error.Message, reqs[idx].Class)
+			mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 			mapped.Provider, mapped.Chain, mapped.Method = c.Name(), reqs[idx].Chain, reqs[idx].Method
 			response.Error = mapped
 		} else {
@@ -203,7 +213,8 @@ func (c *Client) post(ctx context.Context, endpoint string, body []byte, req rpc
 		mapped := mapContextError(ctx, err)
 		mapped.Provider, mapped.Chain, mapped.Method = c.Name(), req.Chain, req.Method
 		// 错误串可能内嵌带 Key 的 URL
-		mapped.Message = rpc.Redact(mapped.Message, c.Secrets()...)
+		mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
+		mapped.Cause = nil
 		c.recordFailure(mapped.Message)
 		return nil, 0, mapped
 	}
@@ -219,6 +230,7 @@ func (c *Client) post(ctx context.Context, endpoint string, body []byte, req rpc
 	if readErr != nil {
 		mapped := mapContextError(ctx, readErr)
 		mapped.Provider, mapped.Chain, mapped.Method = c.Name(), req.Chain, req.Method
+		mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 		c.recordFailure(mapped.Message)
 		return nil, 0, mapped
 	}
@@ -231,6 +243,7 @@ func (c *Client) post(ctx context.Context, endpoint string, body []byte, req rpc
 	if res.StatusCode != http.StatusOK {
 		mapped := mapHTTPError(res.StatusCode, raw, parseRetryAfter(res.Header))
 		mapped.Provider, mapped.Chain, mapped.Method = c.Name(), req.Chain, req.Method
+		mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 		c.recordFailure(mapped.Message)
 		return nil, len(raw), mapped
 	}
@@ -261,6 +274,14 @@ func (c *Client) recordFailure(message string) {
 	c.failures.Add(1)
 	c.lastErr.Store(rpc.Redact(message, c.Secrets()...))
 	c.lastErrTime.Store(time.Now())
+}
+
+func (c *Client) redactEndpointMessage(message, endpoint string) string {
+	secrets := append([]string{}, c.Secrets()...)
+	if last := strings.LastIndex(endpoint, "/"); last >= 0 && len(endpoint)-last-1 >= 8 {
+		secrets = append(secrets, endpoint[last+1:])
+	}
+	return rpc.Redact(strings.ReplaceAll(message, endpoint, rpc.RedactURL(endpoint)), secrets...)
 }
 
 func maxIntValue(a, b int) int {

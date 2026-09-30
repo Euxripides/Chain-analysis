@@ -20,6 +20,7 @@ type MockProvider struct {
 	usageHook  provider.UsageHook
 	requestSeq int64
 	maxPages   int
+	allowed    func(context.Context) (bool, error)
 }
 
 func NewMock(pageSize int, hook provider.UsageHook) *MockProvider {
@@ -30,6 +31,24 @@ func NewMock(pageSize int, hook provider.UsageHook) *MockProvider {
 }
 
 func (m *MockProvider) Name() string { return "ankr-mock" }
+
+func (m *MockProvider) SetRuntimeAllowed(resolve func(context.Context) (bool, error)) {
+	m.allowed = resolve
+}
+
+func (m *MockProvider) checkRuntime(ctx context.Context) error {
+	if m.allowed == nil {
+		return nil
+	}
+	enabled, err := m.allowed(ctx)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return &provider.Error{Provider: "ankr-mock", Class: provider.ClassUpstream, Message: "Ankr is disabled in provider control"}
+	}
+	return nil
+}
 
 func (m *MockProvider) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
@@ -43,6 +62,9 @@ func (m *MockProvider) Capabilities() provider.Capabilities {
 }
 
 func (m *MockProvider) Fetch(ctx context.Context, req provider.FetchRequest) (provider.FetchResult, error) {
+	if err := m.checkRuntime(ctx); err != nil {
+		return provider.FetchResult{}, err
+	}
 	start := time.Now()
 	if err := ctx.Err(); err != nil {
 		return provider.FetchResult{}, err
@@ -236,6 +258,9 @@ func mockInput(rng *rand.Rand, salt uint64) string {
 
 // TxDetail Mock 深度解码（§23）：让本地开发也能验证详情页与缓存路径。
 func (m *MockProvider) TxDetail(ctx context.Context, chain, txHash string, decodeTxData, decodeLogs bool) (json.RawMessage, error) {
+	if err := m.checkRuntime(ctx); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -299,6 +324,8 @@ func (m *MockProvider) mockBalances(chain, address string) []json.RawMessage {
 }
 
 func (m *MockProvider) Health(ctx context.Context) provider.HealthStatus {
-	_ = ctx
+	if err := m.checkRuntime(ctx); err != nil {
+		return provider.HealthStatus{Provider: "ankr-mock", State: provider.HealthOpen, LastCheck: time.Now(), Error: "provider configuration unavailable or disabled"}
+	}
 	return provider.HealthStatus{Provider: "ankr-mock", State: provider.HealthNormal, LastCheck: time.Now()}
 }

@@ -62,6 +62,10 @@ func (c *Client) fetchDataAPI(ctx context.Context, req provider.FetchRequest, ex
 	if err != nil {
 		return provider.FetchResult{}, err
 	}
+	baseURL, err := c.effectiveBaseURL(ctx)
+	if err != nil {
+		return provider.FetchResult{}, err
+	}
 	limit := exec.pageSize
 	if req.PageSize > 0 && req.PageSize < limit {
 		limit = req.PageSize
@@ -77,7 +81,7 @@ func (c *Client) fetchDataAPI(ctx context.Context, req provider.FetchRequest, ex
 		usageTyp: UsageDatasetDownload, cu: CUDataAPIHistory, pageSize: limit,
 		key: key, requestID: requestID, priority: req.Priority, attemptNo: req.AttemptNo,
 		httpMethod: http.MethodGet,
-		url:        c.dataAPIURL(key, address, limit, startMS, endMS, req.PageToken),
+		url:        c.dataAPIURLAt(baseURL, key, address, limit, startMS, endMS, req.PageToken),
 		client:     c.httpData,
 	}
 
@@ -125,6 +129,10 @@ func (c *Client) fetchDataAPI(ctx context.Context, req provider.FetchRequest, ex
 }
 
 func (c *Client) dataAPIURL(key, address string, limit int, startMS, endMS int64, pageToken string) string {
+	return c.dataAPIURLAt(c.cfg.baseURL, key, address, limit, startMS, endMS, pageToken)
+}
+
+func (c *Client) dataAPIURLAt(baseURL, key, address string, limit int, startMS, endMS int64, pageToken string) string {
 	query := url.Values{}
 	if startMS > 0 {
 		query.Set("start", strconv.FormatInt(startMS, 10))
@@ -136,7 +144,7 @@ func (c *Client) dataAPIURL(key, address string, limit int, startMS, endMS int64
 	if pageToken != "" {
 		query.Set("page_token", pageToken)
 	}
-	return c.cfg.baseURL + "/" + key + "/lambda/v1/transactions/" + url.PathEscape(address) + "/history?" + query.Encode()
+	return baseURL + "/" + key + "/lambda/v1/transactions/" + url.PathEscape(address) + "/history?" + query.Encode()
 }
 
 func decodeDataAPIPage(raw []byte) (*dataAPIPage, error) {
@@ -480,13 +488,17 @@ func (c *Client) probeDataAPI(ctx context.Context) channelProbe {
 	if err != nil {
 		return c.probeFromError(0, err)
 	}
+	baseURL, err := c.effectiveBaseURL(ctx)
+	if err != nil {
+		return c.probeFromError(0, err)
+	}
 	call := httpCall{
 		ctx: ctx, channel: ChannelDataAPI,
 		apiType: APITypeDataAPI, method: MethodDataAPIHistory, usageTyp: UsageProviderTest,
 		cu: CUDataAPIHistory, pageSize: probeLimit, key: key,
 		requestID:  "drpc-probe-" + strconv.FormatInt(started.UnixNano(), 10),
 		httpMethod: http.MethodGet,
-		url:        c.dataAPIURL(key, probeAddress, probeLimit, 0, 0, ""),
+		url:        c.dataAPIURLAt(baseURL, key, probeAddress, probeLimit, 0, 0, ""),
 		client:     c.httpData,
 	}
 	release, err := exec.limiter.acquire(ctx, float64(CUDataAPIHistory))

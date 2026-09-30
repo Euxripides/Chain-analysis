@@ -43,6 +43,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankrmgmt"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpcmgmt"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/providercontrol"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
@@ -57,13 +58,14 @@ import (
 )
 
 type Deps struct {
-	Cfg   *config.Config
-	Store *store.Store
-	CH    *clickhouse.Conn
-	Raw   *rawstore.Store
-	Bus   *events.Bus
-	Prov  provider.Provider
-	Log   *slog.Logger
+	Cfg             *config.Config
+	Store           *store.Store
+	CH              *clickhouse.Conn
+	Raw             *rawstore.Store
+	Bus             *events.Bus
+	Prov            provider.Provider
+	ProviderControl *providercontrol.Controller
+	Log             *slog.Logger
 
 	// V1.3 Method / ABI（§25/§52）
 	Registry       *method.Registry
@@ -90,27 +92,28 @@ type Deps struct {
 }
 
 type Server struct {
-	deps           Deps
-	router         chi.Router
-	hub            *SSEHub
-	jobEvents      jobEventThrottle
-	busStop        func()
-	svc            *dataset.Service
-	query          *query.Service
-	meta           *addressmeta.Service
-	explorer       *explorer.Service
-	updates        *update.Service
-	detail         *method.DetailService
-	ankrMgmt       *ankrmgmt.Service
-	capabilities   *capability.Registry
-	investigations *investigation.Service
-	canvases       *canvas.Service
-	runtime        *investigation.Runtime
-	analysis       *analysis.Service
-	semantic       *semantic.Service
-	advanced       *advanced.Service
-	reports        *report.Service
-	subjects       *subjectintel.Service
+	deps            Deps
+	router          chi.Router
+	hub             *SSEHub
+	jobEvents       jobEventThrottle
+	busStop         func()
+	svc             *dataset.Service
+	query           *query.Service
+	meta            *addressmeta.Service
+	explorer        *explorer.Service
+	updates         *update.Service
+	detail          *method.DetailService
+	ankrMgmt        *ankrmgmt.Service
+	providerControl *providercontrol.Controller
+	capabilities    *capability.Registry
+	investigations  *investigation.Service
+	canvases        *canvas.Service
+	runtime         *investigation.Runtime
+	analysis        *analysis.Service
+	semantic        *semantic.Service
+	advanced        *advanced.Service
+	reports         *report.Service
+	subjects        *subjectintel.Service
 
 	// §6.3/§6.5：身份、授权与审计底座。
 	cfg    *config.Config
@@ -220,6 +223,7 @@ func (r chainAwareAddressTypeResolver) ResolveAddressTypes(ctx context.Context, 
 
 func New(deps Deps) *Server {
 	s := &Server{deps: deps, hub: NewSSEHub(), query: query.NewWithLog(deps.CH, deps.Log), capabilities: deps.Capabilities, investigations: deps.Investigations, canvases: deps.Canvases}
+	s.providerControl = deps.ProviderControl
 	s.legacyConsole = newLegacyConsoleAuth(deps.Cfg, deps.Log)
 	if deps.Store != nil && deps.Store.Pool != nil {
 		s.mfa = mfa.NewStore(deps.Store.Pool)

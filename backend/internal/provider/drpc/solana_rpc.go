@@ -6,7 +6,7 @@ package drpc
 //
 //	POST {base}/{key}  {"jsonrpc":"2.0","id":"<request-id>","method":"getTransaction",
 //	                    "params":["<signature>",{"encoding":"jsonParsed","commitment":"finalized",
-//	                    "maxSupportedTransactionVersion":0}]}
+//	                    "maxSupportedTransactionVersion":1}]}
 //
 // 复用的解析逻辑来源：internal/provider/solana/client.go 与 instructions.go
 // （txResult / counterparty / nativeValue / buildProgramLogRows）。本包刻意复制而不是 import，
@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
+	solprovider "github.com/blockchain-platform/blockchain-platform/internal/provider/solana"
 )
 
 // RPC 方法名（进入 UsageRow.Method 与 Raw manifest）。
@@ -91,11 +92,15 @@ func (c *Client) callRPC(ctx context.Context, exec plan, requestID, key string, 
 		perr.Retryable = false
 		return nil, perr
 	}
+	baseURL, err := c.effectiveBaseURL(ctx)
+	if err != nil {
+		return nil, err
+	}
 	call := httpCall{
 		ctx: ctx, channel: ChannelSolanaRPC,
 		apiType: APITypeRPC, dataset: spec.dataset, method: spec.method, usageTyp: spec.usageType,
 		cu: spec.cu, key: key, requestID: requestID, httpMethod: http.MethodPost,
-		url: c.rpcURL(key), body: body, contentType: "application/json",
+		url: baseURL + "/" + key, body: body, contentType: "application/json",
 		client: c.httpRPC, txHash: spec.txHash,
 	}
 	started := c.cfg.now()
@@ -162,7 +167,45 @@ func (c *Client) fetchSolanaRPC(ctx context.Context, req provider.FetchRequest, 
 	if exec.dataset == DatasetBalances {
 		return c.fetchBalances(ctx, req, exec, requestID, address, key)
 	}
+	if c.cfg.rpcHistory && (exec.dataset == DatasetTransactions || exec.dataset == DatasetTokenTransfers || exec.dataset == DatasetInternalTransactions || exec.dataset == DatasetLogs) {
+		return c.fetchRPCHistory(ctx, req, exec, requestID, key)
+	}
 	return c.fetchLogs(ctx, req, exec, requestID, address, key)
+}
+
+// fetchRPCHistory reuses the existing instruction decoder, but every RPC call
+// goes through dRPC's managed key, rate limiter, quota gate and usage ledger.
+func (c *Client) fetchRPCHistory(ctx context.Context, req provider.FetchRequest, exec plan, requestID, key string) (provider.FetchResult, error) {
+	decoder := solprovider.New(solprovider.Options{
+		MaxPageSize: exec.pageSize, MaxTxVersion: c.cfg.maxTxVersion, Concurrency: exec.concurrency, Log: c.log,
+		RPCCall: func(callCtx context.Context, method string, params any) (json.RawMessage, error) {
+			cu := CURPCCall
+			if method == MethodSignatures {
+				cu = CURPCSignatures
+			}
+			txHash := ""
+			if method == MethodTransaction {
+				if values, ok := params.([]any); ok && len(values) > 0 {
+					txHash, _ = values[0].(string)
+				}
+			}
+			return c.callRPC(callCtx, exec, requestID, key, rpcCallSpec{
+				method: method, params: params, cu: cu,
+				usageType: UsageDatasetDownload, dataset: req.Dataset, txHash: txHash,
+			})
+		},
+	}, nil)
+	result, err := decoder.Fetch(ctx, req)
+	if err != nil {
+		return result, err
+	}
+	state, hasState := PageStateFromContext(ctx)
+	if _, err := c.cursors.validate(cursorKey(req), req.PageToken, result.NextPageToken,
+		PageDigest([]json.RawMessage{result.RawResponseBody}), result.Rows, state, hasState); err != nil {
+		return provider.FetchResult{}, err
+	}
+	result.RequestID = requestID
+	return result, nil
 }
 
 // ---- logs ----

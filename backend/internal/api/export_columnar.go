@@ -621,6 +621,13 @@ func columnarTokenFilter(job *model.DownloadJob) (string, bool) {
 	if job == nil {
 		return "", true
 	}
+	// This writer implements symbol filtering only. A nonempty contract must
+	// use the map writer, which checks the actual contract for every row.
+	// Allowing the stats key while ignoring its value silently exports other assets.
+	if gptActionExportFilterValue(job, "gpt_actions_token_contract_filter") != "" {
+		return "", false
+	}
+
 	if job.FromBlock != nil || job.ToBlock != nil {
 		return "", false
 	}

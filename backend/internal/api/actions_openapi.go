@@ -26,12 +26,16 @@ var actionOperations = []actionOperation{
 	{"get", "/api/v1/transaction/trace", "getTransactionTrace", "Get transaction trace", "Use when a contract call hierarchy is required. Local cache is preferred; a bounded provider request may be made on a cache miss.", false},
 	{"get", "/api/v1/transaction/logs", "getTransactionLogs", "Get transaction logs", "Use for event analysis of one transaction.", false},
 	{"get", "/api/v1/transaction/decode", "decodeTransaction", "Decode transaction", "Return cached decoded input or resolve it through the configured bounded provider path.", false},
+	{"get", "/api/v1/solana/address/signatures", "getSolanaAddressSignatures", "List Solana address signatures", "Read one bounded finalized signature page directly from RPC; this does not assert full-history coverage.", false},
+	{"get", "/api/v1/solana/transaction", "getSolanaTransaction", "Read Solana transaction", "Return one finalized parsed source-chain transaction when the configured RPC can read it.", false},
+	{"get", "/api/v1/bridge/source-transaction", "getBridgeSourceTransaction", "Read bridge source transaction", "Read a known source transaction by chain and full hash. An order ID is a correlation label and does not prove bridge-order association.", false},
 	{"post", "/api/v1/addresses/batch-overview", "batchGetAddressOverview", "Batch address overview", "Compare 1 to 200 addresses.", true},
 	{"post", "/api/v1/addresses/batch-assets", "batchGetAddressAssets", "Batch address assets", "Screen current assets for 1 to 200 addresses.", true},
 	{"post", "/api/v1/analysis/path", "findFundPaths", "Find fund paths", "Bounded multi-hop traversal, capped at depth 8 and 2000 nodes.", true},
 	{"post", "/api/v1/analysis/address-network", "buildAddressNetwork", "Build address network", "Return nodes and aggregated edges from seed addresses.", true},
 	{"post", "/api/v1/export/create", "createExport", "Create export", "Create an asynchronous export instead of paging huge JSON histories.", true},
 	{"get", "/api/v1/export/status", "getExportStatus", "Get export status", "Poll an export job and download only after completion.", false},
+	{"get", "/api/v1/export/address-summary", "getExportAddressSummary", "Summarize completed export by payer address", "Server-side CSV/Parquet token-transfer summary. Specify token or token_contract. Totals cover every matched exported record; addresses and original transfer details paginate independently. Data cutoff is the highest observed token-transfer block in the export, not a coverage claim. Cursor is bound to the file and filters and expires on API restart.", false},
 	{"post", "/api/v1/data/ensure", "ensureChainData", "Ensure chain data", "Use the optimized system downloader to fill only missing Coverage. AI jobs are marked source=chatgpt_mcp.", true},
 	{"get", "/api/v1/data/download-status", "getAIDownloadStatus", "Get AI download status", "Poll an AI-managed system download job by download_job_id or job_no.", false},
 	{"post", "/api/v1/data/download-retry", "retryAIDownloadFailures", "Retry failed download parts", "Retry only failed or unrecoverable shards of an AI-managed download. Completed shards and successful checkpoints are preserved.", true},
@@ -56,6 +60,7 @@ func actionsOpenAPIDocument() map[string]any {
 		}
 		paths[op.Path].(map[string]any)[op.Method] = entry
 	}
+	addInvestigationOpenAPI(paths)
 	return map[string]any{"openapi": "3.1.0", "info": map[string]any{"title": "Blockchain Investigation GPT Actions API", "version": "1.1.0", "description": "Evidence-aware blockchain investigation queries for AI clients. Monetary values are decimal strings, identifiers are complete, and current-balance claims require meta.coverage and meta.freshness."}, "servers": []any{map[string]any{"url": "https://your-domain.example"}}, "paths": paths, "components": map[string]any{"securitySchemes": map[string]any{"bearerAuth": map[string]any{"type": "http", "scheme": "bearer"}}, "schemas": actionSchemas()}}
 }
 
@@ -72,12 +77,17 @@ func actionParameters(id string) []any {
 		"getCounterparties":       {"chain", "address", "token", "token_contract", "direction", "start_time", "end_time", "min_total_amount", "min_tx_count", "sort_by", "limit"},
 		"getFlowSummary":          {"chain", "address", "token", "token_contract", "start_time", "end_time"}, "getTopFlows": {"chain", "address", "direction", "token", "token_contract", "group_by", "limit", "start_time", "end_time"},
 		"getTransactionDetail": {"chain", "tx_hash"}, "getTransactionTrace": {"chain", "tx_hash"}, "getTransactionLogs": {"chain", "tx_hash"}, "decodeTransaction": {"chain", "tx_hash"}, "getExportStatus": {"job_id"}, "getAIDownloadStatus": {"download_job_id", "job_no"},
+		"getExportAddressSummary":    {"job_id", "token", "token_contract", "address", "direction", "from_address", "page_size", "cursor", "detail_page_size", "detail_cursor"},
+		"getSolanaAddressSignatures": {"address", "before", "limit"}, "getSolanaTransaction": {"signature"}, "getBridgeSourceTransaction": {"source_chain", "source_tx_hash", "bridge_order_id"},
 	}[id]
 	out := make([]any, 0, len(names))
 	for _, name := range names {
 		schema := map[string]any{"type": "string"}
 		if name == "chain" {
-			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"}
+			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}
+		}
+		if name == "source_chain" {
+			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}
 		}
 		switch name {
 		case "direction":
@@ -91,20 +101,24 @@ func actionParameters(id string) []any {
 		case "status":
 			schema = map[string]any{"type": "string", "enum": []string{"success", "failed"}}
 		}
-		if name == "page" || name == "page_size" || name == "limit" || name == "min_tx_count" {
+		if name == "page" || name == "page_size" || name == "detail_page_size" || name == "limit" || name == "min_tx_count" {
 			schema = map[string]any{"type": "integer", "minimum": 1}
 			if name == "page" {
 				schema["default"] = 1
 			}
-			if name == "page_size" {
+			if name == "page_size" || name == "detail_page_size" {
 				schema["maximum"] = 500
 				schema["default"] = 100
 			}
 			if name == "limit" {
-				schema["maximum"] = 200
-				if id == "getTopFlows" {
+				if id == "getSolanaAddressSignatures" {
+					schema["maximum"] = 100
+					schema["default"] = 20
+				} else if id == "getTopFlows" {
+					schema["maximum"] = 200
 					schema["default"] = 20
 				} else {
+					schema["maximum"] = 200
 					schema["default"] = 50
 				}
 			}
@@ -115,14 +129,17 @@ func actionParameters(id string) []any {
 		if name == "job_id" || name == "download_job_id" {
 			schema["format"] = "uuid"
 		}
-		out = append(out, map[string]any{"name": name, "in": "query", "required": name == "chain" || name == "address" || name == "tx_hash" || name == "job_id", "schema": schema})
+		if name == "cursor" || name == "detail_cursor" {
+			schema["maxLength"] = 2048
+		}
+		out = append(out, map[string]any{"name": name, "in": "query", "required": (name == "address" && id != "getExportAddressSummary") || name == "chain" || name == "tx_hash" || name == "job_id" || name == "signature" || name == "source_chain" || name == "source_tx_hash", "schema": schema})
 	}
 	return out
 }
 
 func actionRequestSchema(id string) map[string]any {
 	str := map[string]any{"type": "string"}
-	chainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"}}
+	chainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}}
 	downloadChainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}}
 	addressArray := map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": str}
 	props := map[string]any{}
@@ -141,13 +158,13 @@ func actionRequestSchema(id string) map[string]any {
 		props = map[string]any{"chain": chainSchema, "seed_addresses": addressArray, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 8, "default": 3}, "min_total_amount": str, "max_nodes": map[string]any{"type": "integer", "minimum": 1, "maximum": 2000, "default": 200}}
 		required = []string{"chain", "seed_addresses"}
 	case "createExport":
-		props = map[string]any{"chain": chainSchema, "address": str, "data_types": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs"}}}, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}, "default": "parquet"}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}, "default": "zstd"}}
-		required = []string{"chain", "address", "data_types", "format", "compression"}
+		props = map[string]any{"chain": chainSchema, "address": str, "addresses": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": str}, "data_types": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs"}}}, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}, "default": "parquet"}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}, "default": "zstd"}}
+		required = []string{"chain", "data_types", "format", "compression"}
 	case "ensureChainData":
 		props = map[string]any{
 			"chain":     downloadChainSchema,
 			"addresses": addressArray,
-			"datasets":  map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs"}}},
+			"datasets":  map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs", "balances"}}},
 			"range": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -176,6 +193,10 @@ func actionRequestSchema(id string) map[string]any {
 		out["anyOf"] = []any{map[string]any{"required": []string{"token"}}, map[string]any{"required": []string{"token_contract"}}}
 	}
 	if id == "createExport" {
+		out["allOf"] = []any{map[string]any{"oneOf": []any{
+			map[string]any{"required": []string{"address"}, "not": map[string]any{"required": []string{"addresses"}}},
+			map[string]any{"required": []string{"addresses"}, "not": map[string]any{"required": []string{"address"}}},
+		}}}
 		out["oneOf"] = []any{
 			map[string]any{"required": []string{"format", "compression"}, "properties": map[string]any{"format": map[string]any{"const": "parquet"}, "compression": map[string]any{"const": "zstd"}}},
 			map[string]any{"required": []string{"format", "compression"}, "properties": map[string]any{"format": map[string]any{"const": "csv"}, "compression": map[string]any{"const": "zip"}}},
@@ -191,8 +212,9 @@ func actionResponseSchemaName(id string) string {
 		"getFlowSummary": "FlowSummaryResponse", "getTopFlows": "TopFlowResponse", "getFirstFunding": "FirstFundingResponse", "getTransactionDetail": "TransactionDetailResponse",
 		"getTransactionTrace": "TransactionTraceResponse", "getTransactionLogs": "TransactionLogsResponse", "decodeTransaction": "DecodeTransactionResponse",
 		"batchGetAddressOverview": "BatchOverviewResponse", "batchGetAddressAssets": "BatchAssetsResponse", "findFundPaths": "FundPathResponse",
-		"buildAddressNetwork": "AddressNetworkResponse", "createExport": "ExportCreateResponse", "getExportStatus": "ExportStatusResponse",
+		"buildAddressNetwork": "AddressNetworkResponse", "createExport": "ExportCreateResponse", "getExportStatus": "ExportStatusResponse", "getExportAddressSummary": "ExportAddressSummaryResponse",
 		"ensureChainData": "EnsureChainDataResponse", "getAIDownloadStatus": "AIDownloadStatusResponse", "retryAIDownloadFailures": "AIDownloadRetryResponse",
+		"getSolanaAddressSignatures": "SolanaAddressSignaturesResponse", "getSolanaTransaction": "SolanaTransactionResponse", "getBridgeSourceTransaction": "BridgeSourceTransactionResponse",
 	}
 	return names[id]
 }
@@ -258,6 +280,10 @@ func actionSchemas() map[string]any {
 	decode := object(map[string]any{"chain": str("Chain."), "tx_hash": str("Complete transaction hash."), "to_address": str("Called address."), "method_id": str("Method selector."), "method_signature": nullString, "method_name": nullString, "decoded": map[string]any{"type": "boolean"}, "decoded_input": map[string]any{}, "decoded_output": map[string]any{}, "abi_source": map[string]any{"type": "string", "enum": []string{"verified_abi", "local_abi", "selector_database", "unknown"}}, "selector_source": nullString, "confidence": map[string]any{"type": "string", "enum": []string{"high", "medium", "low"}}})
 	schemas["DecodeTransactionResponse"] = envelope(decode)
 	schemas["TransactionDetailResponse"] = envelope(object(map[string]any{"tx_hash": str("Complete transaction hash."), "transaction": transaction, "receipt": map[string]any{"type": []string{"object", "null"}, "additionalProperties": true}, "decoded_input": map[string]any{}, "token_transfers": list(tokenTransfer), "internal_transactions": list(internalTx), "logs": list(logItem)}))
+	solanaRecord := object(map[string]any{"chain": map[string]any{"type": "string", "const": "solana"}, "signature": str("Complete case-sensitive Solana signature."), "slot": integer, "block_time": map[string]any{"type": []string{"integer", "null"}}, "version": map[string]any{}, "transaction": object(map[string]any{}), "meta": map[string]any{"type": []string{"object", "null"}, "additionalProperties": true}, "source_record_status": map[string]any{"type": "string", "const": "readable"}, "rpc_source": str("Actual dRPC source, including the optional dRPC archive endpoint.")})
+	schemas["SolanaTransactionResponse"] = envelope(solanaRecord)
+	schemas["SolanaAddressSignaturesResponse"] = envelope(object(map[string]any{"chain": map[string]any{"type": "string", "const": "solana"}, "address": str("Complete case-sensitive Solana address."), "signatures": list(object(map[string]any{"signature": str("Complete transaction signature."), "slot": integer, "blockTime": map[string]any{"type": []string{"integer", "null"}}, "err": map[string]any{}}))}))
+	schemas["BridgeSourceTransactionResponse"] = envelope(object(map[string]any{"bridge_order_id": str("Caller-provided correlation label, not proof of association."), "source_chain": str("Source chain."), "source_tx_hash": str("Complete transaction hash or Solana signature."), "source_record_status": map[string]any{"type": "string", "const": "readable"}, "source_record": object(map[string]any{}), "bridge_order_association_verified": map[string]any{"type": "boolean", "const": false}, "association_reason": str("Why order association is not yet verified.")}))
 	schemas["BatchOverviewResponse"] = envelope(list(object(map[string]any{"address": str("Complete address."), "address_type": str("wallet, contract or unknown."), "transaction_count": integer, "token_transfer_count": integer, "first_activity": timeValue, "last_activity": timeValue, "native_balance": decimal, "native_balance_source": str("Balance evidence source."), "labels": map[string]any{"type": "array", "items": str("Address label.")}})))
 	schemas["BatchAssetsResponse"] = envelope(list(object(map[string]any{"address": str("Complete address."), "native_balance": decimal, "estimated_total_usd": map[string]any{"type": []string{"string", "null"}}, "verified_current_total_usd": map[string]any{"type": []string{"string", "null"}}, "has_current_balance_snapshot": map[string]any{"type": "boolean"}, "assets": list(asset)})))
 	node := object(map[string]any{"address": str("Complete address."), "labels": map[string]any{"type": "array", "items": str("Label.")}, "address_type": str("wallet, contract or unknown."), "current_balance": map[string]any{"type": []string{"string", "null"}}, "balance_source": map[string]any{"type": "string", "enum": []string{"balance_snapshot", "observed_net_flow", "unavailable"}}, "is_current_balance": map[string]any{"type": "boolean"}, "balance_as_of_block": map[string]any{"type": []string{"integer", "null"}}, "balance_as_of_time": timeValue, "total_in": decimal, "total_out": decimal, "net_flow": decimal, "depth": integer})
@@ -275,12 +301,24 @@ func actionSchemas() map[string]any {
 	}
 	schemas["FundPathResponse"] = envelope(object(pathProps))
 	schemas["AddressNetworkResponse"] = envelope(network)
-	schemas["ExportCreateResponse"] = envelope(object(map[string]any{"job_id": str("Export job UUID."), "status": map[string]any{"type": "string", "enum": []string{"processing"}}}))
+	schemas["ExportCreateResponse"] = envelope(object(map[string]any{"job_id": str("Export job UUID."), "status": map[string]any{"type": "string", "enum": []string{"processing"}}, "addresses": list(str("Complete exported address.")), "address_count": integer}))
 	exportFile := object(map[string]any{"name": str("Export part filename."), "url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "rows": integer, "size_bytes": integer, "sha256": str("SHA-256 digest.")})
 	schemas["ExportStatusResponse"] = envelope(object(map[string]any{"job_id": str("Export job UUID."), "status": str("Export status."), "total_rows": map[string]any{"type": "integer"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}}, "files": list(exportFile), "manifest_url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "download_url": map[string]any{"type": []string{"string", "null"}, "format": "uri"}, "sha256": map[string]any{"type": []string{"string", "null"}}, "expires_at": timeValue}))
+
+	addressStatistic := object(map[string]any{"from_address": str("Complete payer address."), "record_count": integer, "total_amount": decimal, "total_amount_raw": map[string]any{"type": []string{"string", "null"}}, "first_block": str("First observed block."), "last_block": str("Last observed block.")})
+	transferDetail := object(map[string]any{"record_id": str("Stable archive entry and record ordinal."), "from_address": str("Complete original payer address."), "to_address": str("Complete original recipient address."), "tx_hash": str("Complete transaction hash or signature."), "block_number": str("Original block number."), "amount": decimal, "amount_raw": str("Original unscaled amount when available."), "fields": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}}})
+	nullableString := map[string]any{"type": []string{"string", "null"}}
+	schemas["ExportAddressSummaryResponse"] = envelope(object(map[string]any{
+		"job_id": str("Export UUID."), "status": map[string]any{"type": "string", "const": "completed"}, "source_sha256": str("Verified complete export SHA-256."),
+		"filters":           object(map[string]any{"job_id": str("Export UUID."), "chain": str("Exported chain."), "address": str("Direction reference address; empty when unrestricted."), "token": str("Selected token symbol."), "token_contract": str("Selected complete contract."), "direction": str("all, in or out."), "from_address": str("Optional payer filter.")}),
+		"export_total_rows": integer, "dataset_rows": integer, "total_records": integer, "total_addresses": integer, "total_amount": decimal, "total_amount_raw": nullableString, "data_cutoff_block": nullableString,
+		"addresses": list(addressStatistic), "next_cursor": nullableString, "has_more": map[string]any{"type": "boolean"},
+		"details": list(transferDetail), "next_detail_cursor": nullableString, "details_has_more": map[string]any{"type": "boolean"}, "page_size": integer, "detail_page_size": integer,
+	}))
 	schemas["EnsureChainDataResponse"] = envelope(object(map[string]any{"status": str("ready when Coverage is complete, otherwise created."), "dataset_ref": str("Stable dataset reference."), "download_job_id": map[string]any{"type": []string{"string", "null"}, "format": "uuid"}, "coverage_before": decimal, "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}}))
 	schemas["AIDownloadStatusResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("Download job status."), "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}, "chain": str("Canonical chain key."), "datasets": map[string]any{"type": "array", "items": str("Dataset key.")}, "range": map[string]any{"type": "object", "additionalProperties": true}, "stats": map[string]any{"type": "object", "additionalProperties": true}, "error": map[string]any{"type": []string{"string", "null"}}, "failures": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}}}))
 	schemas["AIDownloadRetryResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("queued, an already-active state, or completed."), "reset_shards": integer, "preserved_completed_shards": integer, "already_active": map[string]any{"type": "boolean"}, "already_completed": map[string]any{"type": "boolean"}, "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}}))
+	addInvestigationSchemas(schemas)
 	return schemas
 }
 

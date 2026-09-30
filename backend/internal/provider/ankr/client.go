@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 type Options struct {
 	Endpoint               string
 	APIKey                 string
+	Runtime                func(context.Context) (endpoint, apiKey string, enabled bool, err error)
 	MaxPageSize            int
 	RequestsPerMinute      int
 	RequestTimeout         time.Duration
@@ -43,6 +45,7 @@ type Options struct {
 type Client struct {
 	endpoint    string
 	apiKey      string
+	runtime     func(context.Context) (string, string, bool, error)
 	maxPageSize int
 	softLimit   int64
 	hardLimit   int64
@@ -105,6 +108,7 @@ func New(opts Options, hook provider.UsageHook) *Client {
 	c := &Client{
 		endpoint:    strings.TrimSuffix(opts.Endpoint, "/"),
 		apiKey:      opts.APIKey,
+		runtime:     opts.Runtime,
 		maxPageSize: opts.MaxPageSize,
 		softLimit:   opts.ResponseSoftLimitBytes,
 		hardLimit:   opts.ResponseHardLimitBytes,
@@ -122,6 +126,25 @@ func New(opts Options, hook provider.UsageHook) *Client {
 }
 
 func (c *Client) Name() string { return "ankr" }
+
+func (c *Client) requestEndpoint(ctx context.Context) (string, error) {
+	base, key := c.endpoint, c.apiKey
+	if c.runtime != nil {
+		var enabled bool
+		var err error
+		base, key, enabled, err = c.runtime(ctx)
+		if err != nil {
+			return "", err
+		}
+		if !enabled {
+			return "", &provider.Error{Provider: "ankr", Class: provider.ClassUpstream, Message: "Ankr is disabled in provider control", Retryable: true}
+		}
+	}
+	if key == "" && c.runtime != nil {
+		return "", &provider.Error{Provider: "ankr", Class: provider.ClassAuth, Message: "Ankr runtime key is unavailable"}
+	}
+	return strings.TrimSuffix(base, "/") + "/" + url.PathEscape(key), nil
+}
 
 func (c *Client) Capabilities() provider.Capabilities {
 	return provider.Capabilities{
@@ -266,9 +289,13 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	}
 
 	start := time.Now()
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/"+c.apiKey, bytes.NewReader(body))
+	endpoint, err := c.requestEndpoint(ctx)
 	if err != nil {
 		return provider.FetchResult{}, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return provider.FetchResult{}, &provider.Error{Provider: "ankr", Class: provider.ClassInvalidRequest, Message: "Ankr endpoint is invalid"}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	// DisableCompression 后手动声明 gzip：传输层压缩仍生效，字节可分开计量。
@@ -296,7 +323,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	headersAt := time.Now()
 	ttfbMs := headersAt.Sub(start).Milliseconds()
 	if err != nil {
-		pe := c.classifyCtxErr(ctx, err, req.PageSize)
+		pe := c.safeTransportError(ctx, err, req.PageSize)
 		pe.Duration = elapsed
 		pe.Provider = "ankr"
 		c.recordFailureFor(req, pe)
@@ -365,6 +392,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		}
 		if rpc.Error != nil {
 			pe := c.classifyRPCError(rpc.Error, retryAfter)
+			sanitizeEndpointError(pe, endpoint)
 			pe.Duration = elapsed
 			pe.BodyBytes = decodedBytes
 			c.recordFailureFor(req, pe)
@@ -397,6 +425,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	}
 
 	pe := c.classifyHTTPError(res.StatusCode, respBody, retryAfter)
+	sanitizeEndpointError(pe, endpoint)
 	pe.Duration = elapsed
 	pe.BodyBytes = decodedBytes
 	c.recordFailureFor(req, pe)
@@ -475,6 +504,26 @@ func (c *Client) classifyCtxErr(ctx context.Context, err error, pageSize int) *p
 	}
 	return &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
 		Message: err.Error(), Retryable: true, Kind: provider.ErrTemporary}
+}
+
+func (c *Client) safeTransportError(ctx context.Context, err error, pageSize int) *provider.Error {
+	if ctx.Err() != nil {
+		return c.classifyCtxErr(ctx, ctx.Err(), pageSize)
+	}
+	if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
+		return provider.NewTimeout("Ankr transport timed out", pageSize, errors.New("Ankr transport timed out"))
+	}
+	return &provider.Error{Provider: "ankr", Class: provider.ClassUpstream, Message: "Ankr transport request failed", Retryable: true, Kind: provider.ErrTemporary}
+}
+
+func sanitizeEndpointError(pe *provider.Error, endpoint string) {
+	if pe == nil {
+		return
+	}
+	pe.Message = strings.ReplaceAll(pe.Message, endpoint, "Ankr endpoint")
+	if last := strings.LastIndex(endpoint, "/"); last >= 0 && len(endpoint)-last-1 >= 8 {
+		pe.Message = strings.ReplaceAll(pe.Message, endpoint[last+1:], "***")
+	}
 }
 
 // classifyRPCError 官方错误码映射（§2/§22/§23，优先级 3）。
@@ -686,6 +735,12 @@ func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, met
 }
 
 func (c *Client) Health(ctx context.Context) provider.HealthStatus {
+	if c.runtime != nil {
+		_, _, enabled, err := c.runtime(ctx)
+		if err != nil || !enabled {
+			return provider.HealthStatus{Provider: "ankr", State: provider.HealthOpen, LastCheck: time.Now(), Error: "provider configuration unavailable or disabled"}
+		}
+	}
 	st := c.breaker.stateStr()
 	if st == "" {
 		st = "NORMAL"
@@ -694,7 +749,6 @@ func (c *Client) Health(ctx context.Context) provider.HealthStatus {
 	if v, ok := c.lastErr.Load().(string); ok {
 		lastErr = v
 	}
-	_ = ctx
 	return provider.HealthStatus{
 		Provider:           "ankr",
 		State:              provider.HealthState(st),

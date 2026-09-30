@@ -24,8 +24,8 @@ import (
 
 const (
 	flowSummaryFunc      = "func (s *Service) ActionFlowSummary("
-	flowSummaryDedup     = "argMax(amount,source_ingested_at) AS amt"
-	flowSummaryGroupBy   = "GROUP BY tx_hash,log_index,token_address"
+	flowSummaryDedup     = "argMax(` + amountExpr + `,` + versionColumn + `) AS amt"
+	flowSummaryGroupBy   = "GROUP BY ` + key + `"
 	flowSummaryBound     = "clickhouse.InteractiveScanContext(ctx)"
 	flowSummaryTypedErr  = "clickhouse.DescribeInteractiveScanError(err)"
 	flowSummaryAliasIn   = "to_addr=target AND fr_addr!=target"
@@ -65,9 +65,15 @@ func TestFlowSummaryDeduplicatesInsteadOfMergingTheWholeChain(t *testing.T) {
 			"multi-provider duplicate rows are summed twice (measured ~1.87x on a real address)",
 			flowSummaryDedup)
 	}
+	if !strings.Contains(body, `versionColumn := "source_ingested_at"`) || !strings.Contains(body, `versionColumn = "traced_at"`) {
+		t.Error("flow summary must use each table's actual ReplacingMergeTree version column")
+	}
 	if !strings.Contains(body, flowSummaryGroupBy) {
 		t.Errorf("ActionFlowSummary must group by the ReplacingMergeTree sorting key suffix %q, "+
 			"which is what FINAL deduplicates on", flowSummaryGroupBy)
+	}
+	if !strings.Contains(body, `"blockchain.token_transfers", "amount", "tx_hash,log_index,token_address"`) {
+		t.Error("EVM/TRON token transfer deduplication key must remain unchanged")
 	}
 	if !strings.Contains(body, "sumIf(amt,") || strings.Contains(body, "sumIf(amount,") {
 		t.Error("the flow aggregate must read the deduplicated alias amt, not the raw amount column")

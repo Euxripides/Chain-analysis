@@ -202,7 +202,9 @@ func TestRowsAndExplorerUseDedupForAddressScopedDatasets(t *testing.T) {
 // side's tx_hash as a 23rd column, which breaks the strict struct scan).
 func TestTokenTransferStatusFilterUsesASemiJoinNotAnInSubquery(t *testing.T) {
 	body := sourceFunc(t, "actions.go", "func (s *Service) actionRows(")
-	if strings.Contains(body, "tx_hash IN (SELECT tx_hash FROM") {
+	statusFilter := body[strings.Index(body, "if f.Status != \"\""):]
+	statusFilter = statusFilter[:strings.Index(statusFilter, "if dataset == \"token_transfers\" {")]
+	if strings.Contains(statusFilter, "tx_hash IN (SELECT tx_hash FROM") {
 		t.Error("the token_transfers status filter regressed to tx_hash IN (subquery): " +
 			"measured 45.7 s unbounded on bsc (23.6 M value set) and it ends as a 60 s 500")
 	}

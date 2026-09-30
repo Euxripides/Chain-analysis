@@ -62,11 +62,12 @@ func (c *Client) ethCall(ctx context.Context, chain, contract, data string) (str
 	if err := c.limiter.Acquire(ctx); err != nil {
 		return "", err
 	}
-	endpoint := strings.TrimSuffix(c.endpoint, "/")
-	endpoint = strings.TrimSuffix(endpoint, "/multichain") + "/" + strings.ToLower(chain)
-	if c.apiKey != "" {
-		endpoint += "/" + c.apiKey
+	advancedEndpoint, err := c.requestEndpoint(ctx)
+	if err != nil {
+		return "", err
 	}
+	endpoint := strings.TrimSuffix(advancedEndpoint, "/")
+	endpoint = strings.TrimSuffix(endpoint[:strings.LastIndex(endpoint, "/")], "/multichain") + "/" + strings.ToLower(chain) + "/" + endpoint[strings.LastIndex(endpoint, "/")+1:]
 	body, _ := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: int(c.idCounter.Add(1)), Method: "eth_call", Params: map[string]any{"to": contract, "data": data, "block": "latest"}})
 	// Standard JSON-RPC expects positional params.
 	var request map[string]any
@@ -75,12 +76,15 @@ func (c *Client) ethCall(ctx context.Context, chain, contract, data string) (str
 	body, _ = json.Marshal(request)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Ankr chain RPC endpoint is invalid")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := c.http.Do(req)
 	if err != nil {
-		return "", err
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", fmt.Errorf("Ankr chain RPC request failed")
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))

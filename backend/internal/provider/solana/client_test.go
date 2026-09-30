@@ -42,16 +42,35 @@ func fakeRPC(t *testing.T, calls map[string]int) *httptest.Server {
 		case MethodSignatures:
 			// 真实 RPC 会按 limit 截断：fixture 必须同样截断，否则分页语义测不出来。
 			limit := len(allSignatures)
+			start := 0
 			if len(req.Params) > 1 {
 				if options, ok := req.Params[1].(map[string]any); ok {
 					if v, ok := options["limit"].(float64); ok && int(v) < limit {
 						limit = int(v)
 					}
+					if before, ok := options["before"].(string); ok {
+						start = len(allSignatures)
+						for i, info := range allSignatures {
+							if info["signature"] == before {
+								start = i + 1
+								break
+							}
+						}
+					}
 				}
 			}
-			payload, _ := json.Marshal(allSignatures[:limit])
+			end := start + limit
+			if end > len(allSignatures) {
+				end = len(allSignatures)
+			}
+			payload, _ := json.Marshal(allSignatures[start:end])
 			result = string(payload)
 		case MethodTransaction:
+			if len(req.Params) < 2 {
+				t.Errorf("getTransaction options missing: %#v", req.Params)
+			} else if options, ok := req.Params[1].(map[string]any); !ok || options["maxSupportedTransactionVersion"] != float64(1) {
+				t.Errorf("getTransaction must accept version 1: %#v", req.Params)
+			}
 			signature, _ := req.Params[0].(string)
 			slot := 99
 			if signature == "SIG-IN-2" {
@@ -59,6 +78,7 @@ func fakeRPC(t *testing.T, calls map[string]int) *httptest.Server {
 			}
 			result = fmt.Sprintf(`{
 				"slot": %d,
+				"version": 1,
 				"blockTime": 1699999900,
 				"transaction": {"signatures":["%s"],"message":{"recentBlockhash":"BLOCKHASH","accountKeys":[{"pubkey":"FromPubkey1111111111111111111111111111111"},{"pubkey":"ToPubkey111111111111111111111111111111111"}]}},
 				"meta": {"err": null, "fee": 5000, "preBalances": [1000000, 0], "postBalances": [900000, 95000]}
@@ -126,11 +146,11 @@ func TestFetchTransactionsMapsToAnkrShapedRows(t *testing.T) {
 	if row.BlockNumber != "100" || row.Hash != "SIG-IN-2" {
 		t.Fatalf("unexpected row identity: %+v", row)
 	}
-	if row.From == "" || row.To != "ToPubkey111111111111111111111111111111111" {
+	if row.From == "" || row.To != "" {
 		t.Fatalf("unexpected addresses: %+v", row)
 	}
-	if row.Value != "95000" {
-		t.Fatalf("value = %q, want 95000 (net outflow minus fee)", row.Value)
+	if row.Value != "" {
+		t.Fatalf("transaction summary cannot assert a single native value, got %q", row.Value)
 	}
 	if row.Status != "0x1" || row.Type != "solana" {
 		t.Fatalf("unexpected status/type: %+v", row)
@@ -155,8 +175,8 @@ func TestFetchRejectsUnsupportedInputs(t *testing.T) {
 	now := time.Now().UTC()
 	if _, err := client.Fetch(context.Background(), provider.FetchRequest{
 		Chain: "solana", Dataset: "transactions", FromTime: &now,
-	}); err == nil {
-		t.Fatal("expected time range to be rejected")
+	}); err != nil {
+		t.Fatalf("time range must be accepted by signature pagination: %v", err)
 	}
 }
 

@@ -45,19 +45,23 @@ func (c *Client) ResolveAddressTypes(ctx context.Context, chain string, addresse
 	if err != nil {
 		return nil, err
 	}
-	endpoint := strings.TrimSuffix(c.endpoint, "/")
-	endpoint = strings.TrimSuffix(endpoint, "/multichain") + "/" + strings.ToLower(chain)
-	if c.apiKey != "" {
-		endpoint += "/" + c.apiKey
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	advancedEndpoint, err := c.requestEndpoint(ctx)
 	if err != nil {
 		return nil, err
+	}
+	endpoint := strings.TrimSuffix(advancedEndpoint, "/")
+	endpoint = strings.TrimSuffix(endpoint[:strings.LastIndex(endpoint, "/")], "/multichain") + "/" + strings.ToLower(chain) + "/" + endpoint[strings.LastIndex(endpoint, "/")+1:]
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("Ankr chain RPC endpoint is invalid")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("Ankr chain RPC request failed")
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))

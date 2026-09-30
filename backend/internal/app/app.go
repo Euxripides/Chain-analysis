@@ -29,6 +29,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/ankr"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/drpcmgmt"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/providercontrol"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/route"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	solprovider "github.com/blockchain-platform/blockchain-platform/internal/provider/solana"
@@ -41,11 +42,12 @@ import (
 )
 
 type Infra struct {
-	Store *store.Store
-	CH    *clickhouse.Conn
-	Raw   *rawstore.Store
-	Bus   *events.Bus
-	Prov  provider.Provider
+	Store           *store.Store
+	CH              *clickhouse.Conn
+	Raw             *rawstore.Store
+	Bus             *events.Bus
+	Prov            provider.Provider
+	ProviderControl *providercontrol.Controller
 
 	// V1.3 Method / ABI 解析栈（§17/§20）：API 与 Worker 共享同一份内存索引结构。
 	Registry      *method.Registry
@@ -134,6 +136,30 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		log.Warn("postgres ready without runtime role separation", "hint", "set DB_RUNTIME_ROLE=blockchain_app")
 	}
 	usageHook := UsageRecorder(st, log)
+	control := providercontrol.New(st.Pool, os.Getenv("PROVIDER_CONTROL_ENCRYPTION_KEY"))
+	defaultAnkrKey := cfg.Ankr.APIKey
+	if defaultAnkrKey == "" {
+		defaultAnkrKey = cfg.RPC.AnkrAPIKey
+	}
+	ankrDefaults := providercontrol.State{Enabled: true, Endpoints: map[string]string{
+		"advanced": cfg.Ankr.Endpoint, "rpc": cfg.RPC.AnkrEndpointTemplate,
+		"tron_rpc":  "https://rpc.ankr.com/tron_jsonrpc/{key}",
+		"tron_rest": "https://rpc.ankr.com/premium-http/tron/{key}",
+	}, RuntimeKey: defaultAnkrKey}
+	ankrState, err := control.Resolve(ctx, "ankr", ankrDefaults)
+	if err != nil {
+		return nil, fmt.Errorf("Ankr provider control: %w", err)
+	}
+	if ankrState.RuntimeKey != "" {
+		cfg.Ankr.APIKey = ankrState.RuntimeKey
+		cfg.RPC.AnkrAPIKey = ankrState.RuntimeKey
+	}
+	if endpoint := ankrState.Endpoints["advanced"]; endpoint != "" {
+		cfg.Ankr.Endpoint = endpoint
+	}
+	if endpoint := ankrState.Endpoints["rpc"]; endpoint != "" {
+		cfg.RPC.AnkrEndpointTemplate = endpoint
+	}
 
 	ch, err := clickhouse.New(ctx, cfg.ClickHouseURL)
 	if err != nil {
@@ -156,9 +182,13 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	bus := events.New(cfg.NatsURL, log)
 
 	var prov provider.Provider
-	if cfg.Ankr.Mode == "live" && cfg.Ankr.APIKey != "" {
+	if cfg.Ankr.Mode == "live" {
 		prov = ankr.New(ankr.Options{
 			Endpoint: cfg.Ankr.Endpoint, APIKey: cfg.Ankr.APIKey, MaxPageSize: cfg.Ankr.MaxPageSize,
+			Runtime: func(ctx context.Context) (string, string, bool, error) {
+				state, err := control.Resolve(ctx, "ankr", ankrDefaults)
+				return state.Endpoints["advanced"], state.RuntimeKey, state.Enabled, err
+			},
 			RequestsPerMinute: cfg.Ankr.RequestsPerMinute, RequestTimeout: cfg.Ankr.RequestTimeout,
 			ResponseHeaderTimeout:  cfg.Ankr.ResponseHeaderTimeout,
 			ResponseSoftLimitBytes: cfg.Ankr.ResponseSoftLimitBytes,
@@ -170,7 +200,12 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		}, usageHook)
 		log.Info("provider: ankr (live)")
 	} else {
-		prov = ankr.NewMock(cfg.Ankr.MaxPageSize, usageHook)
+		mock := ankr.NewMock(cfg.Ankr.MaxPageSize, usageHook)
+		mock.SetRuntimeAllowed(func(ctx context.Context) (bool, error) {
+			state, err := control.Resolve(ctx, "ankr", ankrDefaults)
+			return state.Enabled, err
+		})
+		prov = mock
 		log.Info("provider: ankr-mock (ANKR_MODE=mock)", "hint", "set ANKR_API_KEY and ANKR_MODE=live for real data")
 	}
 	// Solana 的取数路径有两条：
@@ -179,6 +214,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	//      （internal_transactions）的唯一来源。
 	// 运行期用 Runtime Route Registry 解析，未登记的链继续回落 Ankr。
 	secrets := secret.NewManager(secret.ManagerOptions{FilePath: cfg.DRPC.ProviderSecretsFilePath(), Log: log})
+	controlledDRPCSecrets := providerControlDRPCResolver{base: secrets, control: control, cfg: cfg.DRPC}
 	routes := route.NewRegistry(log)
 	routes.SetTronRouter(func(dataset string) (string, string) {
 		key := cfg.Tron.ProviderForDataset(dataset)
@@ -205,9 +241,21 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	var drpcClient *drpc.Client
 	if cfg.DRPC.Enabled {
 		drpcClient = drpc.New(drpc.Options{
-			Enabled: cfg.DRPC.Enabled, Tier: cfg.DRPC.Tier, BaseURL: cfg.DRPC.BaseURL,
+			Enabled: cfg.DRPC.Enabled, DisableProbes: !cfg.DRPC.ProbesEnabled, RPCHistory: true,
+			Tier: cfg.DRPC.Tier, BaseURL: cfg.DRPC.BaseURL,
+			BaseURLResolver: func(ctx context.Context) (string, error) {
+				state, err := controlledDRPCSecrets.state(ctx)
+				if err != nil {
+					return "", err
+				}
+				template := state.Endpoints["solana_rpc"]
+				if err := providercontrol.ValidateEndpoints("drpc", map[string]string{"solana_rpc": template}); err != nil || !strings.HasSuffix(template, "/{key}") {
+					return "", fmt.Errorf("invalid dRPC endpoint template")
+				}
+				return strings.TrimSuffix(template, "/{key}"), nil
+			},
 			RuntimeKeyRef: cfg.DRPC.RuntimeKeyRef, StatisticsTokenRef: cfg.DRPC.StatisticsTokenRef,
-			KeysTokenRef: cfg.DRPC.KeysTokenRef, Secrets: secrets,
+			KeysTokenRef: cfg.DRPC.KeysTokenRef, Secrets: controlledDRPCSecrets, KeyCacheTTL: time.Second,
 			HistoryPageSize: cfg.DRPC.HistoryPageSize, MaxTxVersion: cfg.DRPC.MaxTxVersion,
 			RPCTimeout: cfg.DRPC.RPCTimeout, DataTimeout: cfg.DRPC.DataTimeout,
 			SlotTimeSearchLimit: cfg.DRPC.SlotTimeSearchLimit, SlotTimeMargin: cfg.DRPC.SlotTimeMargin,
@@ -239,7 +287,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		drpcManagement = drpcmgmt.New(drpcmgmt.Options{
 			Enabled:      managementConfigured,
 			BaseURL:      cfg.DRPC.ManagementBaseURL,
-			Secrets:      secrets,
+			Secrets:      controlledDRPCSecrets,
 			SyncInterval: cfg.DRPC.ManagementSyncInterval,
 			StaleAfter:   cfg.DRPC.ManagementStaleAfter, SafeOnlyAfter: cfg.DRPC.ManagementSafeOnlyAfter,
 			HTTPTimeout:           cfg.DRPC.RPCTimeout,
@@ -285,13 +333,13 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 	// 初始状态是安全的零值：路由未命中 → 调用方回落到既有的 solana Provider。
 	// 第一次求值刻意**不阻塞启动**：探针是外部 HTTP 调用，实测会把启动从 5 秒拖到 50 秒，
 	// 而启动路径上有 systemd 超时与健康检查，不该被第三方网络状况左右。
-	// historyStreak 记录历史通道连续成功的次数：Data API 时好时坏，
-	// 单次成功不足以把历史下载切过去（否则路由会跟着抖，任务在两个来源之间来回）。
-	historyStreak := 0
 	var lastRouteKey string
 	solanaRouteGate := func(ctx context.Context) {
 		// 默认（也是唯一的兜底）：既有 Solana JSON-RPC，slot 精确且稳定。
-		plan := solanaRoutePlan{balancesKey: "solana-rpc", historyKey: "solana-rpc"}
+		plan := solanaRoutePlan{}
+		if solanaLegacy != nil {
+			plan = solanaRoutePlan{balancesKey: "solana-rpc", historyKey: "solana-rpc"}
+		}
 
 		if drpcClient != nil && drpcClient.Configured(ctx) {
 			// 密钥"能解析"不等于"能用"：Key 错误会让数据面 401、Health 进 OPEN。
@@ -299,33 +347,22 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 				// balances 走 getBalance（Solana JSON-RPC 通道），与 Data API 无关，
 				// 只要密钥可用就是真实收益，因此单独切换。
 				plan.balancesKey = route.ProviderDRPC
-				if cfg.DRPC.SolanaHistoryEnabled && drpcClient.HistoryChannelAvailable(ctx) {
-					// 连续 2 次探针成功才认为历史通道稳定（10s 一次，约 20s 确认）。
-					historyStreak++
-					if historyStreak >= 2 {
-						plan.historyKey = route.ProviderDRPC
-						plan.historyDataAPI = true
-					}
-				} else {
-					historyStreak = 0
-				}
+				// Historical rows use finalized JSON-RPC signatures and details.
+				// Data API currently omits reliable slots, so it is never selected.
+				plan.historyKey = route.ProviderDRPC
 			}
-		}
-		if solanaLegacy == nil {
-			// 没有旧通道可回退时只能 fail closed：不启用 Solana 路由，
-			// 让请求按链级默认走 solana（未注册则报 unsupported），而不是静默取错来源。
-			plan.balancesKey, plan.historyKey, plan.historyDataAPI = "", "", false
 		}
 		routes.SetSolanaRoute(plan.anyEnabled(), "solana-rpc")
 		applyPolicies(plan)
 		// 能力表跟随"历史是否真的由 Data API 承载"：
 		// 历史仍走旧通道时 nft_transfers 必须保持不可用（ADR-023 D9）。
 		model.SetSolanaDataAPI(plan.historyDataAPI)
+		model.SetSolanaDRPCRoutes(plan.historyKey == route.ProviderDRPC, plan.balancesKey == route.ProviderDRPC)
 		if plan.signature() != lastRouteKey {
 			lastRouteKey = plan.signature()
 			log.Info("solana route resolved",
 				"balances", plan.balancesKey, "history", plan.historyKey, "history_data_api", plan.historyDataAPI,
-				"history_streak", historyStreak, "drpc_configured", drpcClient != nil && drpcClient.Configured(ctx))
+				"drpc_configured", drpcClient != nil && drpcClient.Configured(ctx))
 		}
 	}
 	go func() {
@@ -371,7 +408,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 		}
 		var tronAnkr, tronGridTransactions, tronGridTRC20 provider.Provider
 		if needsAnkr {
-			client, tronErr := tron.NewAnkr(tron.AnkrOptions{APIKey: cfg.Ankr.APIKey,
+			client, tronErr := tron.NewAnkr(tron.AnkrOptions{APIKey: cfg.Ankr.APIKey, AllowMissingKey: true,
 				RequestTimeout: cfg.Tron.RequestTimeout, ConnectTimeout: cfg.Tron.ConnectTimeout,
 				MaxRetries: cfg.Tron.MaxRetries, Concurrency: cfg.Tron.AnkrConcurrency,
 				LogInitialSpan: cfg.Tron.LogInitialSpan, LogMinSpan: cfg.Tron.LogMinSpan, LogMaxSpan: cfg.Tron.LogMaxSpan,
@@ -387,12 +424,26 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 			if tronErr != nil {
 				return nil, fmt.Errorf("Ankr TRON init: %w", tronErr)
 			}
-			probeCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-			caps, probeErr := client.Probe(probeCtx)
-			cancel()
-			if probeErr != nil {
-				return nil, fmt.Errorf("Ankr TRON capability probe: %w", probeErr)
+			var caps tron.AnkrCapabilities
+			if ankrState.Enabled && ankrState.RuntimeKey != "" {
+				probeCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+				var probeErr error
+				caps, probeErr = client.Probe(probeCtx)
+				cancel()
+				if probeErr != nil {
+					return nil, fmt.Errorf("Ankr TRON capability probe: %w", probeErr)
+				}
 			}
+			client.SetRuntime(func(ctx context.Context) (string, string, bool, error) {
+				state, err := control.Resolve(ctx, "ankr", ankrDefaults)
+				if err != nil {
+					return "", "", false, err
+				}
+				key := url.PathEscape(state.RuntimeKey)
+				rpcURL := strings.ReplaceAll(state.Endpoints["tron_rpc"], "{key}", key)
+				restURL := strings.ReplaceAll(state.Endpoints["tron_rest"], "{key}", key)
+				return rpcURL, restURL, state.Enabled && key != "", nil
+			})
 			tronAnkr = client
 			log.Info("provider: Ankr TRON Node API enabled", "endpoint", "https://rpc.ankr.com/tron_jsonrpc/***", "capabilities", caps)
 		}
@@ -458,7 +509,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 
 	capabilities := capability.NewRegistry()
 	capability.RegisterBuiltins(capabilities)
-	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov,
+	infra := &Infra{Store: st, CH: ch, Raw: raw, Bus: bus, Prov: prov, ProviderControl: control,
 		Capabilities: capabilities, Investigations: investigation.New(st.Pool), Canvases: canvas.New(st.Pool),
 		// dRPC/Solana 接入的运行时对象必须在这里装配：下载引擎的路由固化、后台探针、
 		// 额度同步与管理页都从 infra 取它们，漏掉任何一项都会静默降级成"配置存在但运行时未加载"。
@@ -734,11 +785,14 @@ func (p solanaRoutePlan) signature() string {
 	return p.balancesKey + "|" + p.historyKey + "|" + channel
 }
 
-// solanaHistoryDatasets 是按 Data API 承载历史时走 data_api 通道的数据集。
+// solanaHistoryDatasets contains only the datasets whose finalized RPC
+// history is verified. NFT classification still requires a separate proof and
+// must not inherit the unreliable Data API historical route.
 var solanaHistoryDatasets = map[string]bool{
-	route.DatasetTransactions:   true,
-	route.DatasetTokenTransfers: true,
-	route.DatasetNFTTransfers:   true,
+	route.DatasetTransactions:         true,
+	route.DatasetTokenTransfers:       true,
+	route.DatasetInternalTransactions: true,
+	route.DatasetLogs:                 true,
 }
 
 // projectSolanaPolicies 把数据库里的 solana:* 策略行投影成本次运行的实际落点。

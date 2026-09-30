@@ -87,13 +87,14 @@ func TestDecodeSPLTransferRejectsNonTransferBytes(t *testing.T) {
 	}
 }
 
-func TestBuildTokenTransferRowsReconcilesNetFromBalances(t *testing.T) {
+func TestBuildTokenTransferRowsDoesNotAssignWholeTransactionDeltaToOneInstruction(t *testing.T) {
 	keys := []string{"Payer", "SourceATA", "DestATA", "Mint"}
 	ix := parsedInstruction(ProgramSPLToken, "transferChecked",
 		`{"source":"SourceATA","destination":"DestATA","authority":"Payer","mint":"Mint","tokenAmount":{"amount":"1000","decimals":6}}`,
 		"SourceATA", "Mint", "DestATA")
 
-	// 收款人只收到 990：差额 10 就是 Token-2022 代扣的手续费。
+	// A whole-transaction destination delta cannot be assigned to this one
+	// instruction: another movement may have changed the same ATA.
 	pre := []tokenBalanceEntry{balance(1, "Mint", "OwnerA", "5000", 6)}
 	post := []tokenBalanceEntry{balance(1, "Mint", "OwnerA", "4000", 6), balance(2, "Mint", "OwnerB", "990", 6)}
 
@@ -103,11 +104,11 @@ func TestBuildTokenTransferRowsReconcilesNetFromBalances(t *testing.T) {
 		t.Fatalf("expected 1 row, got %d (stats %+v)", len(rows), stats)
 	}
 	row := rows[0]
-	if row.GrossAmountRaw != "1000" || row.ValueRawInteger != "990" || row.FeeAmountRaw != "10" {
-		t.Fatalf("net must come from balances and fee = gross-net: %+v", row)
+	if row.GrossAmountRaw != "1000" || row.ValueRawInteger != "1000" || row.FeeAmountRaw != "0" {
+		t.Fatalf("per-instruction value must come from the instruction, not aggregate balance delta: %+v", row)
 	}
-	if stats.FeeFromBalances != 1 {
-		t.Fatalf("fee detected from balances must be counted, stats=%+v", stats)
+	if stats.FeeFromBalances != 0 {
+		t.Fatalf("aggregate delta must not be presented as an instruction fee, stats=%+v", stats)
 	}
 	if row.FromAddress != "OwnerA" || row.ToAddress != "OwnerB" {
 		t.Fatalf("owner mapping must come from token balances: %+v", row)
@@ -133,6 +134,9 @@ func TestBuildTokenTransferRowsUsesInnerInstructionKey(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 inner rows, got %d", len(rows))
 	}
+	if rows[0].ValueRawInteger != "1000" || rows[1].ValueRawInteger != "1000" {
+		t.Fatalf("each instruction must retain its own amount: %+v", rows)
+	}
 	if rows[0].LogIndex != 3*256+1 || rows[1].LogIndex != 3*256+2 {
 		t.Fatalf("inner log_index must be outer*256+inner(1-based): %+v", rows)
 	}
@@ -151,6 +155,34 @@ func TestBuildTokenTransferRowsSkipsUnresolvedOwners(t *testing.T) {
 	}
 	if stats.OwnerUnresolved != 1 {
 		t.Fatalf("unresolved owners must be counted, stats=%+v", stats)
+	}
+}
+
+func TestTokenAccountInitializedAndClosedInSameTransaction(t *testing.T) {
+	keys := []string{"Payer", "SourceATA", "EphemeralATA", "Mint"}
+	index := buildTokenAccountIndex(keys, nil, []tokenBalanceEntry{balance(1, "Mint", "OwnerA", "100", 6)})
+	transfer := parsedInstruction(ProgramSPLToken, "transferChecked",
+		`{"source":"SourceATA","destination":"EphemeralATA","mint":"Mint","tokenAmount":{"amount":"10","decimals":6}}`)
+	inner := []innerInstructionGroup{{Index: 0, Instructions: []parsedInstructionRaw{
+		parsedInstruction(ProgramSPLToken, "initializeAccount3", `{"account":"EphemeralATA","mint":"Mint","owner":"OwnerB"}`),
+		transfer,
+	}}}
+	if err := addInitializedTokenAccounts(keys, nil, inner, index); err != nil {
+		t.Fatal(err)
+	}
+	rows, stats := buildTokenTransferRows(1, 1, "SIG", keys, nil, inner, index)
+	if len(rows) != 1 || rows[0].ToAddress != "OwnerB" || rows[0].ContractAddress != "Mint" || stats.OwnerUnresolved != 0 {
+		t.Fatalf("ephemeral token account must use its on-chain initialization: rows=%+v stats=%+v", rows, stats)
+	}
+}
+
+func TestTokenAccountInitializationConflictFailsClosed(t *testing.T) {
+	keys := []string{"SourceATA"}
+	index := buildTokenAccountIndex(keys, nil, []tokenBalanceEntry{balance(0, "Mint", "OwnerA", "100", 6)})
+	outer := []parsedInstructionRaw{parsedInstruction(ProgramSPLToken, "initializeAccount3",
+		`{"account":"SourceATA","mint":"Mint","owner":"DifferentOwner"}`)}
+	if err := addInitializedTokenAccounts(keys, outer, nil, index); err == nil {
+		t.Fatal("conflicting initialization must not overwrite the owner from transaction balances")
 	}
 }
 
@@ -220,5 +252,28 @@ func TestBuildCPITree(t *testing.T) {
 	}
 	if nodes[2].Program != "C" || nodes[2].CallIndex != 256 || !nodes[2].Failed || nodes[2].Error == "" {
 		t.Fatalf("unexpected failure node: %+v", nodes[2])
+	}
+}
+
+func TestBuildCPITreeNestedBranchesHaveDistinctCallIndexes(t *testing.T) {
+	logs := []string{
+		"Program A invoke [1]",
+		"Program B invoke [2]", "Program C invoke [3]", "Program C success", "Program B success",
+		"Program D invoke [2]", "Program E invoke [3]", "Program E success", "Program D success",
+		"Program A success",
+	}
+	nodes := buildCPITree(logs, []string{"A"})
+	if len(nodes) != 5 {
+		t.Fatalf("nodes=%d, want 5", len(nodes))
+	}
+	seen := map[uint32]bool{}
+	for _, node := range nodes {
+		if seen[node.CallIndex] {
+			t.Fatalf("duplicate call index %d for trace %s", node.CallIndex, node.TracePath)
+		}
+		seen[node.CallIndex] = true
+	}
+	if nodes[3].TracePath != "0.1" || nodes[3].CallIndex != 3 || nodes[4].TracePath != "0.1.0" || nodes[4].CallIndex != 4 {
+		t.Fatalf("nested branch numbering is not stable: %+v", nodes)
 	}
 }

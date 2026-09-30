@@ -11,6 +11,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider/mockrpc"
+	"github.com/blockchain-platform/blockchain-platform/internal/provider/providercontrol"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 
 	ankrrpc "github.com/blockchain-platform/blockchain-platform/internal/provider/ankr/rpc"
@@ -65,7 +66,7 @@ func (i *Infra) initRPC(ctx context.Context, cfg *config.Config, log *slog.Logge
 		rpc.PurposeInvestigation: {MaxRequests: cfg.RPC.InvestigationMaxRequests, MaxCredits: cfg.RPC.InvestigationMaxCredits},
 	}, cfg.RPC.BudgetEnabled)
 
-	provider, secrets := buildRPCProvider(cfg, log)
+	provider, secrets := buildRPCProvider(cfg, log, i.ProviderControl)
 	i.RPCProvider = provider
 	pricing, pricingErr := i.Store.ProviderPricing(ctx, provider.Name(), model.APITypeRPC)
 	if pricingErr != nil {
@@ -135,11 +136,15 @@ func (i *Infra) initRPC(ctx context.Context, cfg *config.Config, log *slog.Logge
 }
 
 // buildRPCProvider 有 Key 用真实 Ankr Chain RPC，否则用可编程 Mock（§208）。
-func buildRPCProvider(cfg *config.Config, log *slog.Logger) (rpc.Provider, []string) {
+func buildRPCProvider(cfg *config.Config, log *slog.Logger, control *providercontrol.Controller) (rpc.Provider, []string) {
 	if cfg.RPC.AnkrEnabled && cfg.RPC.AnkrAPIKey != "" {
 		client := ankrrpc.New(ankrrpc.Options{
-			EndpointTemplate:    cfg.RPC.AnkrEndpointTemplate,
-			APIKey:              cfg.RPC.AnkrAPIKey,
+			EndpointTemplate: cfg.RPC.AnkrEndpointTemplate,
+			APIKey:           cfg.RPC.AnkrAPIKey,
+			Runtime: func(ctx context.Context) (string, string, bool, error) {
+				state, err := control.Resolve(ctx, "ankr", providercontrol.State{Enabled: true, Endpoints: map[string]string{"rpc": cfg.RPC.AnkrEndpointTemplate}, RuntimeKey: cfg.RPC.AnkrAPIKey})
+				return state.Endpoints["rpc"], state.RuntimeKey, state.Enabled, err
+			},
 			RequestTimeout:      cfg.RPC.StandardTimeout,
 			ResponseHardLimit:   cfg.RPC.ResponseHardLimitBytes,
 			MaxIdleConns:        cfg.RPC.HTTPMaxIdleConns,

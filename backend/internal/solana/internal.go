@@ -38,7 +38,7 @@ func NormalizeInternal(raw json.RawMessage, provider string) (ingest.InternalTra
 	}
 	timestamp := int64(numberField(m, "timestamp"))
 	if timestamp <= 0 {
-		timestamp = time.Now().Unix()
+		return ingest.InternalTransferRow{}, errors.New("solana CPI row has no verifiable timestamp")
 	}
 	callType := strings.TrimSpace(stringField(m, "callType"))
 	if callType == "" {

@@ -229,6 +229,46 @@ func TestEndpointAllowlistBlocksInternalHosts(t *testing.T) {
 
 // ---- 健康检查与 30s 缓存 ----
 
+func TestDisableProbesKeepsRealFetchAvailable(t *testing.T) {
+	requests := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		_, _ = io.WriteString(w, `{"next_page_token":"","data":[]}`)
+	}))
+	defer server.Close()
+	env := newTestEnv(t, server, func(o *Options) { o.DisableProbes = true })
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		status := env.client.Health(ctx)
+		if status.State != provider.HealthDegraded || !strings.Contains(status.Error, "DRPC_PROBES_DISABLED") {
+			t.Fatalf("disabled health status = %#v", status)
+		}
+		if env.client.HistoryChannelAvailable(ctx) {
+			t.Fatal("history channel must not be marked available without a probe")
+		}
+		channels := env.client.ProbeChannels(ctx)
+		for _, channel := range []string{ChannelDataAPI, ChannelSolanaRPC} {
+			entry := channels[channel].(channelProbe)
+			if entry.OK || !strings.Contains(entry.Message, "DRPC_PROBES_DISABLED") {
+				t.Fatalf("disabled channel %s = %#v", channel, entry)
+			}
+		}
+	}
+	if len(requests) != 0 || len(env.usage.all()) != 0 {
+		t.Fatalf("probes made HTTP requests or usage rows: requests=%d usage=%d", len(requests), len(env.usage.all()))
+	}
+
+	if _, err := env.client.Fetch(ctx, provider.FetchRequest{
+		Chain: ChainSolana, Dataset: DatasetTransactions, Address: testAddress,
+	}); err != nil {
+		t.Fatalf("real fetch must remain available: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("real fetch made %d HTTP requests, want 1", len(requests))
+	}
+}
+
 func TestHealthNormalAndCached(t *testing.T) {
 	var dataCalls, rpcCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

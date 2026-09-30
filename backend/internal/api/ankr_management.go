@@ -27,7 +27,7 @@ func (s *Server) handleAnkrManagementConnect(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleAnkrManagementCallback(w http.ResponseWriter, r *http.Request) {
-	redirect := "/api-control?tab=providers"
+	redirect := "/admin/providers?source=ankr"
 	if s.ankrMgmt != nil && strings.TrimSpace(s.ankrMgmt.FrontendURL()) != "" {
 		redirect = s.ankrMgmt.FrontendURL()
 	}

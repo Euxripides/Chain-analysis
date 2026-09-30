@@ -114,7 +114,13 @@ const (
 // Options 构造 dRPC Provider（规范 §1.4 冻结字段）。
 type Options struct {
 	Enabled bool
-	Tier    string // paid | free | unknown
+	// RPCHistory uses finalized signature pagination and transaction details
+	// for historical datasets. This avoids Data API rows without a real slot.
+	RPCHistory bool
+	// DisableProbes prevents Health and ProbeChannels from making test requests.
+	// Fetch remains available for real download work.
+	DisableProbes bool
+	Tier          string // paid | free | unknown
 	// BaseURL 形如 https://lb.drpc.live/solana（不含 key）。
 	BaseURL            string
 	RuntimeKeyRef      string
@@ -147,14 +153,20 @@ type Options struct {
 	ManagementSafeOnlyAfter time.Duration
 	// Now 是时钟注入点，仅供测试使用（生产为 nil → time.Now）。
 	Now func() time.Time
+	// KeyCacheTTL allows the provider center to apply key and switch changes
+	// across API and worker processes within its one-second control window.
+	KeyCacheTTL     time.Duration
+	BaseURLResolver func(context.Context) (string, error)
 }
 
 // config 是 Options 归一化后的内部配置。零值选项在这里补齐默认值，
 // 使调用方（app.go 接线）不必重复配置默认值。
 type config struct {
-	enabled bool
-	tier    string
-	baseURL string
+	enabled       bool
+	rpcHistory    bool
+	disableProbes bool
+	tier          string
+	baseURL       string
 	// keyRef 为空表示未配置 runtime key。
 	keyRef string
 
@@ -180,13 +192,17 @@ type config struct {
 	hook          provider.UsageHook
 	log           *slog.Logger
 
-	modeResolver func(ctx context.Context) string
-	now          func() time.Time
+	modeResolver    func(ctx context.Context) string
+	now             func() time.Time
+	keyCacheTTL     time.Duration
+	baseURLResolver func(context.Context) (string, error)
 }
 
 func (o Options) normalize() config {
 	cfg := config{
 		enabled:                o.Enabled,
+		rpcHistory:             o.RPCHistory,
+		disableProbes:          o.DisableProbes,
 		tier:                   normalizeTier(o.Tier),
 		baseURL:                strings.TrimRight(strings.TrimSpace(o.BaseURL), "/"),
 		keyRef:                 strings.TrimSpace(o.RuntimeKeyRef),
@@ -209,9 +225,17 @@ func (o Options) normalize() config {
 		log:                    o.Log,
 		modeResolver:           o.ModeResolver,
 		now:                    o.Now,
+		keyCacheTTL:            o.KeyCacheTTL,
+		baseURLResolver:        o.BaseURLResolver,
+	}
+	if cfg.keyCacheTTL <= 0 {
+		cfg.keyCacheTTL = keyCacheTTL
 	}
 	if cfg.historyPageSize <= 0 {
 		cfg.historyPageSize = DefaultHistoryPageSize
+	}
+	if cfg.maxTxVersion < 1 {
+		cfg.maxTxVersion = 1
 	}
 	if cfg.rpcTimeout <= 0 {
 		cfg.rpcTimeout = 30 * time.Second

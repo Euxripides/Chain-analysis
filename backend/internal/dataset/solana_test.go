@@ -32,14 +32,14 @@ func TestNormalizeSolanaAddressesPreserveCase(t *testing.T) {
 	}
 }
 
-func TestSolanaRangeGuardOnlyAllowsBlockRanges(t *testing.T) {
-	if err := solanaRangeGuard("solana", "block"); err != nil {
-		t.Fatalf("block range must be allowed: %v", err)
-	}
-	for _, rangeType := range []string{"full", "", "time"} {
-		if err := solanaRangeGuard("solana", rangeType); err == nil {
-			t.Fatalf("range type %q must be rejected for solana", rangeType)
+func TestSolanaRangeGuardAllowsRPCPaginationRanges(t *testing.T) {
+	for _, rangeType := range []string{"block", "full", "", "time"} {
+		if err := solanaRangeGuard("solana", rangeType); err != nil {
+			t.Fatalf("range type %q must be allowed for solana: %v", rangeType, err)
 		}
+	}
+	if err := solanaRangeGuard("solana", "unknown"); err == nil {
+		t.Fatal("unknown Solana range type must be rejected")
 	}
 	// 其他链完全不受影响。
 	for _, rangeType := range []string{"full", "time", "block"} {

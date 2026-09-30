@@ -54,6 +54,13 @@ func normalizeActionAddress(chain, address string) string {
 	return addressnorm.NormalizeKey(chain, address)
 }
 
+func sameActionAddress(chain, a, b string) bool {
+	if chain == "solana" {
+		return a == b
+	}
+	return strings.EqualFold(a, b)
+}
+
 // ActionOverview 单地址概览。
 //
 // 2026-09-21：改成直接复用 ActionBatchOverview 的按 dataset 单次聚合实现。
@@ -70,8 +77,14 @@ func (s *Service) ActionOverview(ctx context.Context, chain, address string) (Ac
 		return ActionOverview{}, fmt.Errorf("overview returned no rows")
 	}
 	out := items[0]
+	if chain == "solana" {
+		return out, nil // The batch scan already includes the latest SOL snapshot.
+	}
 	// Latest native balance uses an empty token contract and the chain native symbol.
-	_ = s.CH.DB().QueryRow(ctx, `SELECT toString(argMax(balance, timestamp)) FROM blockchain.address_balances FINAL WHERE chain=? AND address=? AND token_address=''`, chain, normalized).Scan(&out.NativeBalance)
+	var snapshots uint64
+	if err := s.CH.DB().QueryRow(ctx, `SELECT count(),toString(argMax(balance, timestamp)) FROM blockchain.address_balances FINAL WHERE chain=? AND address=? AND token_address=''`, chain, normalized).Scan(&snapshots, &out.NativeBalance); err == nil && snapshots > 0 {
+		out.NativeBalanceSource = "balance_snapshot"
+	}
 	return out, nil
 }
 
@@ -112,19 +125,49 @@ func (s *Service) ActionBatchOverview(ctx context.Context, chain string, address
 	ctx = clickhouse.InteractiveScanContext(ctx)
 	var resultMu sync.Mutex
 	g, queryCtx := errgroup.WithContext(ctx)
+	if chain == "solana" {
+		// One indexed scan supplies the latest stored SOL snapshot for the whole
+		// batch. An absent snapshot remains explicitly unavailable, not a zero
+		// balance inferred from partial transfer history.
+		g.Go(func() error {
+			rows, err := s.CH.DB().Query(queryCtx, `SELECT address,toString(argMax(balance,timestamp)) FROM blockchain.address_balances WHERE chain='solana' AND address IN (?) AND token_address='' GROUP BY address`, keys)
+			if err != nil {
+				return fmt.Errorf("batch Solana native balances: %w", err)
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var address, balance string
+				if err := rows.Scan(&address, &balance); err != nil {
+					return fmt.Errorf("scan batch Solana native balances: %w", err)
+				}
+				resultMu.Lock()
+				if item := byAddress[address]; item != nil {
+					item.NativeBalance, item.NativeBalanceSource = balance, "balance_snapshot"
+				}
+				resultMu.Unlock()
+			}
+			return rows.Err()
+		})
+	}
 
 	// Read each indexed direction separately. uniqExact on the immutable row
 	// identity preserves ReplacingMergeTree semantics without FINAL forcing a
 	// chain-wide merge/read and also prevents self-transfers from double count.
 	g.Go(func() error {
-		txRows, err := s.CH.DB().Query(queryCtx, `SELECT address,uniqExact(tx_hash),min(timestamp),max(timestamp)
+		txSQL := `SELECT address,uniqExact(tx_hash),min(timestamp),max(timestamp)
 		FROM (
 			SELECT from_address AS address,tx_hash,timestamp FROM blockchain.transactions
 				WHERE chain=? AND from_address IN (?)
 			UNION ALL
 			SELECT to_address AS address,tx_hash,timestamp FROM blockchain.transactions
 				WHERE chain=? AND to_address IN (?))
-		GROUP BY address`, chain, keys, chain, keys)
+		GROUP BY address`
+		txArgs := []any{chain, keys, chain, keys}
+		if chain == "solana" {
+			txSQL = `SELECT address,uniqExact(tx_hash),min(timestamp),max(timestamp) FROM blockchain.address_activity WHERE chain='solana' AND address IN (?) AND dataset='transactions' AND activity_type='solana_signature' GROUP BY address`
+			txArgs = []any{keys}
+		}
+		txRows, err := s.CH.DB().Query(queryCtx, txSQL, txArgs...)
 		if err != nil {
 			return fmt.Errorf("batch transactions overview: %w", err)
 		}
@@ -234,8 +277,9 @@ func (s *Service) ActionAssets(ctx context.Context, chain, address string) ([]ma
 	seen := map[string]bool{}
 	out := make([]map[string]any, 0, len(rows))
 	total := decimal.Zero
+	hasPrice := false
 	for _, row := range rows {
-		key := strings.ToLower(fmt.Sprint(row["token_address"])) + "|" + strings.ToUpper(fmt.Sprint(row["token_symbol"]))
+		key := normalizeActionAddress(chain, fmt.Sprint(row["token_address"])) + "|" + strings.ToUpper(fmt.Sprint(row["token_symbol"]))
 		if seen[key] {
 			continue
 		}
@@ -250,6 +294,7 @@ func (s *Service) ActionAssets(ctx context.Context, chain, address string) ([]ma
 		row["as_of_block"] = nil
 		if v, e := decimal.NewFromString(fmt.Sprint(row["balance_usd"])); e == nil {
 			total = total.Add(v)
+			hasPrice = true
 		}
 		out = append(out, row)
 	}
@@ -273,7 +318,7 @@ func (s *Service) ActionAssets(ctx context.Context, chain, address string) ([]ma
 		if err := flowRows.Scan(&contract, &symbol, &decimals, &balance, &first, &last, &transferCount); err != nil {
 			return nil, "0", err
 		}
-		key := strings.ToLower(contract) + "|" + strings.ToUpper(symbol)
+		key := normalizeActionAddress(chain, contract) + "|" + strings.ToUpper(symbol)
 		if seen[key] {
 			continue
 		}
@@ -290,7 +335,7 @@ func (s *Service) ActionAssets(ctx context.Context, chain, address string) ([]ma
 	if err := flowRows.Err(); err != nil {
 		return nil, "0", err
 	}
-	if hasObservedFlow {
+	if hasObservedFlow || (len(out) > 0 && !hasPrice) {
 		return out, "unavailable", nil
 	}
 	return out, total.String(), nil
@@ -320,6 +365,13 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 	f.Address = normalizeActionAddress(f.Chain, f.Address)
 	where := []string{"chain=?", "(from_address=? OR to_address=?)"}
 	args := []any{f.Chain, f.Address, f.Address}
+	if f.Chain == "solana" && dataset == "transactions" {
+		if f.Direction == "in" || f.Direction == "out" || f.Counterparty != "" || f.MinAmount != "" || f.MaxAmount != "" {
+			return ActionPage{}, fmt.Errorf("Solana signature lists do not have one direction, counterparty or amount; query native or SPL movements")
+		}
+		where = []string{"chain=?", "tx_hash IN (SELECT tx_hash FROM blockchain.address_activity WHERE chain='solana' AND address=? AND dataset='transactions' AND activity_type='solana_signature')"}
+		args = []any{f.Chain, f.Address}
+	}
 	// 状态过滤是一个半连接（见下面的 LEFT ANY JOIN），它的参数必须排在主 where 参数之后，
 	// 因为占位符在 SQL 文本里出现在 WHERE 之后。
 	statusJoin := ""
@@ -396,7 +448,10 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 			add("amount<=toDecimal256(?,38)", f.MaxAmount)
 		}
 	} else if f.MinAmount != "" || f.MaxAmount != "" {
-		amountSQL := "toDecimal256OrZero(value_raw,0) / if(chain='tron',1000000,1000000000000000000)"
+		amountSQL := "toDecimal256OrZero(value_raw,0) / multiIf(chain='tron',1000000,chain='solana',1000000000,1000000000000000000)"
+		if f.Chain == "solana" && dataset == "internal_transactions" {
+			amountSQL = solanaLamportsDecimalSQL
+		}
 		if f.MinAmount != "" {
 			add(amountSQL+">=toDecimal256(?,18)", f.MinAmount)
 		}
@@ -445,11 +500,15 @@ func (s *Service) actionRows(ctx context.Context, dataset string, f ActionFilter
 		if dataset == "token_transfers" {
 			row["status"] = "unknown"
 		}
+		if f.Chain == "solana" && dataset == "transactions" {
+			row["direction"] = "observed"
+			continue
+		}
 		from, to := fmt.Sprint(row["from_address"]), fmt.Sprint(row["to_address"])
 		switch {
-		case strings.EqualFold(from, f.Address) && strings.EqualFold(to, f.Address):
+		case sameActionAddress(f.Chain, from, f.Address) && sameActionAddress(f.Chain, to, f.Address):
 			row["direction"] = "self"
-		case strings.EqualFold(to, f.Address):
+		case sameActionAddress(f.Chain, to, f.Address):
 			row["direction"] = "in"
 		default:
 			row["direction"] = "out"
@@ -498,11 +557,16 @@ type FlowSummary struct {
 	FirstInTime, LastInTime, FirstOutTime, LastOutTime           *time.Time
 }
 
+// ClickHouse Decimal division by an integer literal truncates lamports to
+// whole SOL. divideDecimal keeps all nine fractional digits without Float64.
+const solanaLamportsDecimalSQL = "divideDecimal(toDecimal256OrZero(value_raw,0),toDecimal256(1000000000,0),9)"
+
 func (s *Service) ActionFlowSummary(ctx context.Context, chain, address, token, contract string, start, end *time.Time) (FlowSummary, error) {
 	address = normalizeActionAddress(chain, address)
+	nativeSOL := chain == "solana" && strings.EqualFold(token, "SOL") && contract == ""
 	where := []string{"chain=?", "(from_address=? OR to_address=?)"}
 	args := []any{chain, address, address}
-	if token != "" {
+	if token != "" && !nativeSOL {
 		where = append(where, "upper(token_symbol)=?")
 		args = append(args, strings.ToUpper(token))
 	}
@@ -517,6 +581,13 @@ func (s *Service) ActionFlowSummary(ctx context.Context, chain, address, token, 
 	if end != nil {
 		where = append(where, "timestamp<=?")
 		args = append(args, *end)
+	}
+	table, amountExpr, key := "blockchain.token_transfers", "amount", "tx_hash,log_index,token_address"
+	versionColumn := "source_ingested_at"
+	if nativeSOL {
+		table, amountExpr, key = "blockchain.internal_calls", solanaLamportsDecimalSQL, "tx_hash,call_index"
+		versionColumn = "traced_at"
+		where = append(where, "call_type IN ('system_transfer','system_create_account')", "success=1", "toDecimal256OrZero(value_raw,0)>0")
 	}
 	// ReplacingMergeTree deduplication is expressed as an explicit argMax group-by
 	// on the sorting key instead of FINAL. Measured 2026-09-15 on the real
@@ -533,7 +604,7 @@ func (s *Service) ActionFlowSummary(ctx context.Context, chain, address, token, 
 	inCond := "to_addr=target AND fr_addr!=target"
 	outCond := "fr_addr=target AND to_addr!=target"
 	args = append([]any{address}, args...)
-	q := `WITH ? AS target SELECT toString(sumIf(amt,` + inCond + `)),toString(sumIf(amt,` + outCond + `)),toString(sumIf(amt,` + inCond + `)-sumIf(amt,` + outCond + `)),countIf(` + inCond + `),countIf(` + outCond + `),uniqExactIf(fr_addr,` + inCond + `),uniqExactIf(to_addr,` + outCond + `),nullIf(minIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(minIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')) FROM (SELECT tx_hash,log_index,token_address,argMax(amount,source_ingested_at) AS amt,argMax(timestamp,source_ingested_at) AS ts,argMax(from_address,source_ingested_at) AS fr_addr,argMax(to_address,source_ingested_at) AS to_addr FROM blockchain.token_transfers WHERE ` + strings.Join(where, " AND ") + ` GROUP BY tx_hash,log_index,token_address)`
+	q := `WITH ? AS target SELECT toString(sumIf(amt,` + inCond + `)),toString(sumIf(amt,` + outCond + `)),toString(sumIf(amt,` + inCond + `)-sumIf(amt,` + outCond + `)),countIf(` + inCond + `),countIf(` + outCond + `),uniqExactIf(fr_addr,` + inCond + `),uniqExactIf(to_addr,` + outCond + `),nullIf(minIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + inCond + `),toDateTime64(0,3,'UTC')),nullIf(minIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')),nullIf(maxIf(ts,` + outCond + `),toDateTime64(0,3,'UTC')) FROM (SELECT ` + key + `,argMax(` + amountExpr + `,` + versionColumn + `) AS amt,argMax(timestamp,` + versionColumn + `) AS ts,argMax(from_address,` + versionColumn + `) AS fr_addr,argMax(to_address,` + versionColumn + `) AS to_addr FROM ` + table + ` WHERE ` + strings.Join(where, " AND ") + ` GROUP BY ` + key + `)`
 	// The scan runs on the bounded interactive budget, so a pathological caller
 	// is refused on its own budget instead of loading the shared server. Both the
 	// deadline and the per-query setting are applied: clickhouse-go derives its
@@ -559,9 +630,10 @@ func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minT
 		limit = 1000
 	}
 	f.Address = normalizeActionAddress(f.Chain, f.Address)
+	nativeSOL := f.Chain == "solana" && strings.EqualFold(f.Token, "SOL") && f.TokenContract == ""
 	where := []string{"chain=?", "(from_address=? OR to_address=?)"}
 	args := []any{f.Chain, f.Address, f.Address}
-	if f.Token != "" {
+	if f.Token != "" && !nativeSOL {
 		where = append(where, "upper(token_symbol)=?")
 		args = append(args, strings.ToUpper(f.Token))
 	}
@@ -586,6 +658,9 @@ func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minT
 		where = append(where, "timestamp<=?")
 		args = append(args, *f.EndTime)
 	}
+	if nativeSOL {
+		where = append(where, "call_type IN ('system_transfer','system_create_account')", "success=1", "toDecimal256OrZero(value_raw,0)>0")
+	}
 	having := []string{"count()>=?"}
 	args = append(args, minCount)
 	if minTotal != "" {
@@ -600,10 +675,16 @@ func (s *Service) ActionCounterparties(ctx context.Context, f ActionFilter, minT
 	}
 	// FINAL 会按排序键合并整条链（同一地址实测 27.2 s vs 0.27 s），这里用排序键上的
 	// argMax 显式去重后，再在外层做对手方聚合；跳数索引因此可以裁剪 granule。
-	inner := "SELECT argMax(amount,source_ingested_at) AS amt," +
-		"argMax(timestamp,source_ingested_at) AS ts,argMax(from_address,source_ingested_at) AS fr_addr," +
-		"argMax(to_address,source_ingested_at) AS to_addr,argMax(token_symbol,source_ingested_at) AS sym " +
-		"FROM blockchain.token_transfers WHERE " + strings.Join(where, " AND ") + " GROUP BY tx_hash,log_index,token_address"
+	amountExpr, table, groupKey, symbolExpr := "amount", "blockchain.token_transfers", "tx_hash,log_index,token_address", "argMax(token_symbol,source_ingested_at)"
+	versionColumn := "source_ingested_at"
+	if nativeSOL {
+		amountExpr, table, groupKey, symbolExpr = solanaLamportsDecimalSQL, "blockchain.internal_calls", "tx_hash,call_index", "'SOL'"
+		versionColumn = "traced_at"
+	}
+	inner := "SELECT argMax(" + amountExpr + "," + versionColumn + ") AS amt," +
+		"argMax(timestamp," + versionColumn + ") AS ts,argMax(from_address," + versionColumn + ") AS fr_addr," +
+		"argMax(to_address," + versionColumn + ") AS to_addr," + symbolExpr + " AS sym " +
+		"FROM " + table + " WHERE " + strings.Join(where, " AND ") + " GROUP BY " + groupKey
 	q := `WITH ? AS target SELECT if(to_addr=target,fr_addr,to_addr) counterparty,count() tx_count,
 		countIf(to_addr=target AND fr_addr!=target) incoming_tx_count,countIf(fr_addr=target AND to_addr!=target) outgoing_tx_count,
 		toString(sumIf(amt,to_addr=target AND fr_addr!=target)) incoming_amount,
@@ -646,6 +727,40 @@ func (s *Service) ActionTopFlows(ctx context.Context, f ActionFilter, groupBy st
 		if limit > 200 {
 			limit = 200
 		}
+		if f.Chain == "solana" && strings.EqualFold(f.Token, "SOL") && f.TokenContract == "" {
+			address := normalizeActionAddress(f.Chain, f.Address)
+			where := []string{"chain='solana'", "(from_address=? OR to_address=?)", "call_type IN ('system_transfer','system_create_account')", "success=1", "toDecimal256OrZero(value_raw,0)>0"}
+			args := []any{address, address}
+			if f.Direction == "in" {
+				where = append(where, "to_address=?")
+				args = append(args, address)
+			}
+			if f.Direction == "out" {
+				where = append(where, "from_address=?")
+				args = append(args, address)
+			}
+			if f.StartTime != nil {
+				where = append(where, "timestamp>=?")
+				args = append(args, *f.StartTime)
+			}
+			if f.EndTime != nil {
+				where = append(where, "timestamp<=?")
+				args = append(args, *f.EndTime)
+			}
+			args = append(args, limit)
+			ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+			defer cancel()
+			rows, err := s.queryRows(clickhouse.InteractiveScanContext(ctx), "internal_transactions", "SELECT * FROM blockchain.internal_calls FINAL WHERE "+strings.Join(where, " AND ")+" ORDER BY toDecimal256OrZero(value_raw,0) DESC,timestamp DESC LIMIT ?", args...)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				amount, _ := decimal.NewFromString(fmt.Sprint(row["value_raw"]))
+				row["amount"] = amount.Shift(-9).String()
+				row["token_symbol"] = "SOL"
+			}
+			return rows, nil
+		}
 		f.Page = 1
 		f.PageSize = limit
 		p, err := s.actionRows(ctx, "token_transfers", f, "amount DESC, timestamp DESC", false)
@@ -664,9 +779,17 @@ func (s *Service) ActionFirstFunding(ctx context.Context, chain, address string)
 	var ts time.Time
 	// 逐 tx_hash 显式去重（transactions 的排序键就是 (chain, tx_hash)），不再 FINAL 整链合并。
 	// 别名必须与列名不同：同名的聚合别名会被替换进子查询的 WHERE（code 184）。
-	err := s.CH.DB().QueryRow(ctx, `SELECT fr,amt,rawv,txh,ts FROM (SELECT argMax(from_address,source_ingested_at) AS fr,argMax(toString(toDecimal256OrZero(value_raw,0)/if(chain='tron',1000000,1000000000000000000)),source_ingested_at) AS amt,argMax(value_raw,source_ingested_at) AS rawv,argMax(tx_hash,source_ingested_at) AS txh,argMax(timestamp,source_ingested_at) AS ts FROM blockchain.transactions WHERE chain=? AND to_address=? AND from_address!=? AND toDecimal256OrZero(value_raw,0)>0 GROUP BY tx_hash) ORDER BY ts ASC LIMIT 1`, chain, address, address).Scan(&from, &amount, &rawValue, &hash, &ts)
+	var err error
+	if chain == "solana" {
+		err = s.CH.DB().QueryRow(ctx, `SELECT from_address,toString(`+solanaLamportsDecimalSQL+`),value_raw,tx_hash,timestamp FROM blockchain.internal_calls FINAL WHERE chain='solana' AND to_address=? AND from_address!=? AND call_type IN ('system_transfer','system_create_account') AND success=1 AND toDecimal256OrZero(value_raw,0)>0 ORDER BY timestamp ASC,call_index ASC LIMIT 1`, address, address).Scan(&from, &amount, &rawValue, &hash, &ts)
+	} else {
+		err = s.CH.DB().QueryRow(ctx, `SELECT fr,amt,rawv,txh,ts FROM (SELECT argMax(from_address,source_ingested_at) AS fr,argMax(toString(toDecimal256OrZero(value_raw,0)/if(chain='tron',1000000,1000000000000000000)),source_ingested_at) AS amt,argMax(value_raw,source_ingested_at) AS rawv,argMax(tx_hash,source_ingested_at) AS txh,argMax(timestamp,source_ingested_at) AS ts FROM blockchain.transactions WHERE chain=? AND to_address=? AND from_address!=? AND toDecimal256OrZero(value_raw,0)>0 GROUP BY tx_hash) ORDER BY ts ASC LIMIT 1`, chain, address, address).Scan(&from, &amount, &rawValue, &hash, &ts)
+	}
 	if err == nil {
 		out["first_native_funding"] = map[string]any{"from": from, "amount": amount, "raw_value": rawValue, "tx_hash": hash, "timestamp": ts}
+		if chain == "solana" {
+			out["first_native_funding"].(map[string]any)["source_type"] = "system_instruction"
+		}
 	}
 	rows, e := s.queryRows(ctx, "token_transfers", dedupSource("token_transfers", "chain=? AND to_address=? AND from_address!=?")+" ORDER BY timestamp ASC LIMIT 20", chain, address, address)
 	if e != nil {
@@ -680,7 +803,21 @@ func (s *Service) ActionTransactionRows(ctx context.Context, dataset, chain, has
 	if dataset != "token_transfers" && dataset != "logs" && dataset != "internal_transactions" {
 		return nil, fmt.Errorf("unsupported transaction dataset")
 	}
-	return s.queryRows(ctx, dataset, "SELECT * FROM blockchain."+tableName(dataset)+" FINAL WHERE chain=? AND tx_hash=? ORDER BY "+explorerOrder(dataset), chain, strings.ToLower(hash))
+	if chain != "solana" {
+		hash = strings.ToLower(hash)
+	}
+	return s.queryRows(ctx, dataset, "SELECT * FROM blockchain."+tableName(dataset)+" FINAL WHERE chain=? AND tx_hash=? ORDER BY "+explorerOrder(dataset), chain, hash)
+}
+
+func (s *Service) ActionTransactionRecord(ctx context.Context, chain, hash string) (map[string]any, error) {
+	if chain != "solana" {
+		hash = strings.ToLower(hash)
+	}
+	rows, err := s.queryRows(ctx, "transactions", "SELECT * FROM blockchain.transactions FINAL WHERE chain=? AND tx_hash=? LIMIT 1", chain, hash)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	return rows[0], nil
 }
 
 type ActionEdge struct {
@@ -698,7 +835,8 @@ func (s *Service) ActionEdges(ctx context.Context, chain string, from []string, 
 	}
 	where := []string{"chain=?", "from_address IN (?)"}
 	args := []any{chain, from}
-	if token != "" {
+	nativeSOL := chain == "solana" && strings.EqualFold(token, "SOL") && tokenContract == ""
+	if token != "" && !nativeSOL {
 		where = append(where, "upper(token_symbol)=?")
 		args = append(args, strings.ToUpper(token))
 	}
@@ -706,7 +844,7 @@ func (s *Service) ActionEdges(ctx context.Context, chain string, from []string, 
 		where = append(where, "token_address=?")
 		args = append(args, normalizeActionAddress(chain, tokenContract))
 	}
-	if minAmount != "" {
+	if minAmount != "" && !nativeSOL {
 		where = append(where, "amount>=toDecimal256(?,38)")
 		args = append(args, minAmount)
 	}
@@ -720,6 +858,32 @@ func (s *Service) ActionEdges(ctx context.Context, chain string, from []string, 
 	}
 	if limit <= 0 {
 		limit = 500
+	}
+	if nativeSOL {
+		where = append(where, "call_type IN ('system_transfer','system_create_account')", "success=1", "toDecimal256OrZero(value_raw,0)>0")
+		if minAmount != "" {
+			where = append(where, solanaLamportsDecimalSQL+">=toDecimal256(?,9)")
+			args = append(args, minAmount)
+		}
+		args = append(args, limit)
+		ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)
+		defer cancel()
+		ctx = clickhouse.InteractiveScanContext(ctx)
+		q := `SELECT fr_addr,to_addr,'SOL','',toString(sum(amt)),count(),min(ts),max(ts) FROM (SELECT tx_hash,call_index,argMax(from_address,traced_at) AS fr_addr,argMax(to_address,traced_at) AS to_addr,argMax(timestamp,traced_at) AS ts,argMax(` + solanaLamportsDecimalSQL + `,traced_at) AS amt FROM blockchain.internal_calls WHERE ` + strings.Join(where, " AND ") + ` GROUP BY tx_hash,call_index) GROUP BY fr_addr,to_addr ORDER BY sum(amt) DESC LIMIT ?`
+		rows, err := s.CH.DB().Query(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := []ActionEdge{}
+		for rows.Next() {
+			var e ActionEdge
+			if err := rows.Scan(&e.From, &e.To, &e.Token, &e.TokenContract, &e.Amount, &e.TxCount, &e.FirstTime, &e.LastTime); err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+		}
+		return out, rows.Err()
 	}
 	args = append(args, limit)
 	ctx, cancel := context.WithTimeout(ctx, clickhouse.InteractiveScanTimeout)

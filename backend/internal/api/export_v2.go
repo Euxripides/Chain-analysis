@@ -51,23 +51,43 @@ type exportV2Request struct {
 	UserID string `json:"-"`
 }
 
+func gptActionExportFilterValue(job *model.DownloadJob, name string) string {
+	if job == nil || job.Stats == nil || job.Stats[name] == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(job.Stats[name]))
+}
+
 func filterGPTActionExportToken(job *model.DownloadJob, rows []map[string]any) []map[string]any {
-	if job == nil || job.Stats == nil {
-		return rows
-	}
-	raw, ok := job.Stats["gpt_actions_token_filter"]
-	if !ok || raw == nil {
-		return rows
-	}
-	token := strings.ToUpper(strings.TrimSpace(fmt.Sprint(raw)))
-	if token == "" || token == "<NIL>" {
+	token := gptActionExportFilterValue(job, "gpt_actions_token_filter")
+	contract := gptActionExportFilterValue(job, "gpt_actions_token_contract_filter")
+	if token == "" && contract == "" {
 		return rows
 	}
 	out := rows[:0]
 	for _, row := range rows {
-		if strings.EqualFold(fmt.Sprint(row["token_symbol"]), token) {
-			out = append(out, row)
+		if token != "" && !strings.EqualFold(strings.TrimSpace(fmt.Sprint(row["token_symbol"])), token) {
+			continue
 		}
+		if contract != "" {
+			chain := job.Chain
+			if chain == "" && row["chain"] != nil {
+				chain = fmt.Sprint(row["chain"])
+			}
+			rowContract := ""
+			for _, key := range []string{"token_address", "token_contract", "contract_address", "mint", "token_mint"} {
+				if row[key] != nil {
+					rowContract = strings.TrimSpace(fmt.Sprint(row[key]))
+					if rowContract != "" {
+						break
+					}
+				}
+			}
+			if rowContract == "" || addressnorm.NormalizeKey(chain, rowContract) != addressnorm.NormalizeKey(chain, contract) {
+				continue
+			}
+		}
+		out = append(out, row)
 	}
 	return out
 }

@@ -40,7 +40,7 @@ func NormalizeProgramLog(raw json.RawMessage, provider string) (ingest.LogRow, e
 	}
 	timestamp := numberField(m, "timestamp")
 	if timestamp <= 0 {
-		timestamp = time.Now().Unix()
+		return ingest.LogRow{}, errors.New("solana program log has no verifiable timestamp")
 	}
 	return ingest.LogRow{
 		Chain: "solana", BlockNumber: blockNumber, TxHash: txHash,
@@ -79,7 +79,7 @@ func NormalizeSolanaProgramLog(raw json.RawMessage, provider string) (ingest.Sol
 	}
 	timestamp := numberField(m, "timestamp")
 	if timestamp <= 0 {
-		timestamp = time.Now().Unix()
+		return ingest.SolanaProgramLogRow{}, errors.New("solana native program log has no verifiable timestamp")
 	}
 	// §3 行契约把 programId 放在 address 上（programId 字段留空），两个键都认。
 	programID := strings.TrimSpace(stringField(m, "programId"))

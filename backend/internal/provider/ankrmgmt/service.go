@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 )
 
 var ErrAuthorizationRequired = errors.New("Ankr account authorization is required")
+var ErrClientMetadataUnsupported = errors.New("Ankr authorization server has not enabled Client ID Metadata Documents")
 
 type Service struct {
 	pool *dbtx.Pool
@@ -66,6 +68,13 @@ func (s *Service) configurationError() error {
 	}
 	if s.cfg.RedirectURI == "" {
 		return fmt.Errorf("ANKR_MANAGEMENT_REDIRECT_URI is not configured")
+	}
+	if s.cfg.ClientMetadataURL != "" {
+		metadataURL, err := url.Parse(s.cfg.ClientMetadataURL)
+		if err != nil || metadataURL.Scheme != "https" || metadataURL.Host == "" || metadataURL.Path == "" || metadataURL.Path == "/" ||
+			metadataURL.User != nil || metadataURL.RawQuery != "" || metadataURL.Fragment != "" {
+			return fmt.Errorf("ANKR_MANAGEMENT_CLIENT_METADATA_URL must be an HTTPS URL with a non-root path")
+		}
 	}
 	if s.aead == nil {
 		return fmt.Errorf("Ankr Management OAuth credential encryption is unavailable")
@@ -172,6 +181,40 @@ func (s *Service) Sync(ctx context.Context) (Account, error) {
 		return Account{}, err
 	}
 	return s.Status(ctx, false), nil
+}
+
+// ReadDetails returns the official usage response and the provider-redacted key
+// list. Account balance remains in Sync, which already stores the official
+// balance snapshot. Partial upstream failures remain explicit to the caller.
+func (s *Service) ReadDetails(ctx context.Context) (map[string]any, map[string]any, error) {
+	if err := s.configurationError(); err != nil {
+		return nil, nil, err
+	}
+	token, err := s.accessToken(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	now := time.Now().UTC()
+	fromMs, toMs := now.Add(-24*time.Hour).UnixMilli(), now.UnixMilli()
+	usageRaw, usageErr := s.callTool(ctx, token, "mgmt_get_usage", map[string]any{
+		"fromMs": fromMs, "toMs": toMs, "timeframe": "D1",
+	})
+	keysRaw, keysErr := s.callTool(ctx, token, "mgmt_list_api_keys", map[string]any{})
+	var usage, keys map[string]any
+	if usageErr == nil {
+		usage, usageErr = parseUsageDetails(usageRaw, fromMs, toMs)
+	}
+	if keysErr == nil {
+		keys, keysErr = parseKeyDetails(keysRaw)
+	}
+	var failures []error
+	if usageErr != nil {
+		failures = append(failures, fmt.Errorf("Ankr usage unavailable: %w", usageErr))
+	}
+	if keysErr != nil {
+		failures = append(failures, fmt.Errorf("Ankr key list unavailable: %w", keysErr))
+	}
+	return usage, keys, errors.Join(failures...)
 }
 
 func (s *Service) doJSON(ctx context.Context, method, endpoint, bearer string, body, out any) error {

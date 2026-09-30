@@ -581,6 +581,8 @@ func solanaConfigFromEnv() SolanaConfig {
 // 凭据只以受控引用形式出现（env:// 或 store://），配置里永远不出现明文 Key。
 type DRPCConfig struct {
 	Enabled bool
+	// ProbesEnabled allows billable Data API and RPC test requests. Default false.
+	ProbesEnabled bool
 	// Tier 为 paid|free|unknown；unknown/free 时数据面按 DRPC_UNKNOWN_TIER_CU_PER_MINUTE 钳制。
 	Tier string
 	// BaseURL 形如 https://lb.drpc.live/solana —— 不含 API Key，Key 在请求时由 secret.Resolver 解析。
@@ -630,6 +632,7 @@ type DRPCConfig struct {
 func drpcConfigFromEnv() DRPCConfig {
 	return DRPCConfig{
 		Enabled:            envBool("DRPC_ENABLED", false),
+		ProbesEnabled:      envBool("DRPC_PROBES_ENABLED", false),
 		Tier:               strings.ToLower(env("DRPC_TIER", "unknown")),
 		BaseURL:            strings.TrimRight(env("DRPC_BASE_URL", "https://lb.drpc.live/solana"), "/"),
 		ManagementBaseURL:  strings.TrimRight(env("DRPC_MANAGEMENT_BASE_URL", "https://drpc.org"), "/"),
@@ -638,7 +641,7 @@ func drpcConfigFromEnv() DRPCConfig {
 		KeysTokenRef:       env("DRPC_KEYS_TOKEN_REF", "store://drpc/keys_api_token"),
 
 		HistoryPageSize:     envInt("DRPC_SOLANA_HISTORY_PAGE_SIZE", 100),
-		MaxTxVersion:        envInt("DRPC_SOLANA_MAX_TX_VERSION", 0),
+		MaxTxVersion:        envInt("DRPC_SOLANA_MAX_TX_VERSION", 1),
 		RPCTimeout:          time.Duration(envInt("DRPC_SOLANA_RPC_REQUEST_TIMEOUT_SECONDS", 30)) * time.Second,
 		DataTimeout:         time.Duration(envInt("DRPC_SOLANA_DATA_REQUEST_TIMEOUT_SECONDS", 60)) * time.Second,
 		SlotTimeSearchLimit: envInt("DRPC_SOLANA_SLOT_TIME_SEARCH_LIMIT", 64),
@@ -678,13 +681,14 @@ func (c DRPCConfig) ProviderSecretsFilePath() string {
 // AnkrManagementConfig controls the account-scoped Management MCP connection.
 // The RPC API key is intentionally not accepted here: Management MCP uses OAuth.
 type AnkrManagementConfig struct {
-	Enabled       bool
-	MCPURL        string
-	IssuerURL     string
-	RedirectURI   string
-	FrontendURL   string
-	EncryptionKey string
-	SyncTTL       time.Duration
+	Enabled           bool
+	MCPURL            string
+	IssuerURL         string
+	RedirectURI       string
+	ClientMetadataURL string
+	FrontendURL       string
+	EncryptionKey     string
+	SyncTTL           time.Duration
 }
 
 // splitList 解析逗号分隔配置。
@@ -948,9 +952,8 @@ func (c *Config) Validate() error {
 			c.Tron.TRC20PageQueueMax < c.Tron.TRC20PrefetchPages || c.Tron.TRC20PageQueueMax > 2048 {
 			return fmt.Errorf("TRON TRC20 prefetch queue settings are invalid")
 		}
-		if providers["ankr"] && strings.TrimSpace(c.Ankr.APIKey) == "" {
-			return fmt.Errorf("ANKR_API_KEY is required for TRON datasets using Ankr")
-		}
+		// The Ankr key may be supplied by encrypted provider_runtime_settings after
+		// database bootstrap. Request paths fail closed until one is available.
 		if providers["trongrid"] {
 			if !c.Tron.TronGridEnabled {
 				return fmt.Errorf("TRONGRID_ENABLED=true is required for TRON datasets using TronGrid")
@@ -1383,13 +1386,14 @@ func Load() *Config {
 			RollbackCooldown:                 time.Duration(envInt("ANKR_RAMP_ROLLBACK_COOLDOWN_SECONDS", 600)) * time.Second,
 		},
 		AnkrManagement: AnkrManagementConfig{
-			Enabled:       envBool("ANKR_MANAGEMENT_ENABLED", false),
-			MCPURL:        env("ANKR_MANAGEMENT_MCP_URL", "https://mcp.ankr.com/mcp"),
-			IssuerURL:     env("ANKR_MANAGEMENT_ISSUER_URL", "https://mcp.ankr.com"),
-			RedirectURI:   strings.TrimSpace(os.Getenv("ANKR_MANAGEMENT_REDIRECT_URI")),
-			FrontendURL:   env("ANKR_MANAGEMENT_FRONTEND_URL", "http://127.0.0.1:3000/api-control?tab=providers"),
-			EncryptionKey: os.Getenv("ANKR_MANAGEMENT_ENCRYPTION_KEY"),
-			SyncTTL:       time.Duration(envInt("ANKR_MANAGEMENT_SYNC_TTL_SECONDS", 300)) * time.Second,
+			Enabled:           envBool("ANKR_MANAGEMENT_ENABLED", false),
+			MCPURL:            env("ANKR_MANAGEMENT_MCP_URL", "https://mcp.ankr.com/mcp"),
+			IssuerURL:         env("ANKR_MANAGEMENT_ISSUER_URL", "https://mcp.ankr.com"),
+			RedirectURI:       strings.TrimSpace(os.Getenv("ANKR_MANAGEMENT_REDIRECT_URI")),
+			ClientMetadataURL: strings.TrimSpace(os.Getenv("ANKR_MANAGEMENT_CLIENT_METADATA_URL")),
+			FrontendURL:       env("ANKR_MANAGEMENT_FRONTEND_URL", "http://127.0.0.1:3000/admin/providers?source=ankr"),
+			EncryptionKey:     os.Getenv("ANKR_MANAGEMENT_ENCRYPTION_KEY"),
+			SyncTTL:           time.Duration(envInt("ANKR_MANAGEMENT_SYNC_TTL_SECONDS", 300)) * time.Second,
 		},
 		Solana: solanaConfigFromEnv(),
 		DRPC:   drpcConfigFromEnv(),

@@ -47,9 +47,13 @@ const (
 
 // Options 构造 Solana Provider。
 type Options struct {
-	Endpoint       string
-	APIKey         string
+	Endpoint string
+	APIKey   string
+	// RPCCall lets a managed transport supply JSON-RPC results while retaining
+	// this package's Solana instruction decoders. The caller owns rate/usage.
+	RPCCall        func(context.Context, string, any) (json.RawMessage, error)
 	MaxPageSize    int
+	MaxTxVersion   int
 	Concurrency    int
 	RequestTimeout time.Duration
 	UsageHook      provider.UsageHook
@@ -58,13 +62,15 @@ type Options struct {
 
 // Client 是 Solana JSON-RPC Provider。
 type Client struct {
-	endpoint    string
-	apiKey      string
-	maxPageSize int
-	concurrency int
-	http        *http.Client
-	hook        provider.UsageHook
-	log         *slog.Logger
+	endpoint     string
+	apiKey       string
+	rpcCall      func(context.Context, string, any) (json.RawMessage, error)
+	maxPageSize  int
+	maxTxVersion int
+	concurrency  int
+	http         *http.Client
+	hook         provider.UsageHook
+	log          *slog.Logger
 
 	mu      sync.Mutex
 	lastErr string
@@ -73,7 +79,7 @@ type Client struct {
 // New 构造 Provider；endpoint 为空时返回 nil（调用方据此不注册该 Provider）。
 func New(opts Options, hook provider.UsageHook) *Client {
 	endpoint := strings.TrimSuffix(strings.TrimSpace(opts.Endpoint), "/")
-	if endpoint == "" {
+	if endpoint == "" && opts.RPCCall == nil {
 		return nil
 	}
 	timeout := opts.RequestTimeout
@@ -91,13 +97,17 @@ func New(opts Options, hook provider.UsageHook) *Client {
 	if concurrency <= 0 {
 		concurrency = 4
 	}
+	maxTxVersion := opts.MaxTxVersion
+	if maxTxVersion < 1 {
+		maxTxVersion = 1
+	}
 	log := opts.Log
 	if log == nil {
 		log = slog.Default()
 	}
 	return &Client{
-		endpoint: endpoint, apiKey: strings.TrimSpace(opts.APIKey),
-		maxPageSize: maxPage, concurrency: concurrency,
+		endpoint: endpoint, apiKey: strings.TrimSpace(opts.APIKey), rpcCall: opts.RPCCall,
+		maxPageSize: maxPage, maxTxVersion: maxTxVersion, concurrency: concurrency,
 		http: &http.Client{Timeout: timeout},
 		hook: hook, log: log,
 	}
@@ -156,6 +166,9 @@ type rpcResponse struct {
 
 // call 执行一次 JSON-RPC 调用，返回 result 原始 JSON。
 func (c *Client) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if c.rpcCall != nil {
+		return c.rpcCall(ctx, method, params)
+	}
 	body, err := json.Marshal(rpcRequest{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
 	if err != nil {
 		return nil, &provider.Error{Provider: "solana", Class: provider.ClassInvalidRequest, Message: err.Error()}
@@ -280,23 +293,29 @@ type txResult struct {
 
 // txRow 与 Ankr EVM 交易行同构，供 ingest.NormalizeTransaction 直接消费。
 type txRow struct {
-	BlockNumber  string `json:"blockNumber"`
-	BlockHash    string `json:"blockHash"`
-	Hash         string `json:"hash"`
-	Timestamp    int64  `json:"timestamp"`
-	From         string `json:"from"`
-	To           string `json:"to"`
-	Value        string `json:"value"`
-	Nonce        string `json:"nonce"`
-	Gas          string `json:"gas"`
-	GasUsed      string `json:"gasUsed"`
-	GasPrice     string `json:"gasPrice"`
-	Type         string `json:"type"`
-	Input        string `json:"input"`
-	Status       string `json:"status"`
-	Slot         uint64 `json:"slot"`
-	Fee          uint64 `json:"fee"`
-	Confirmation string `json:"confirmation"`
+	BlockNumber  string   `json:"blockNumber"`
+	BlockHash    string   `json:"blockHash"`
+	Hash         string   `json:"hash"`
+	Timestamp    int64    `json:"timestamp"`
+	From         string   `json:"from"`
+	To           string   `json:"to"`
+	Value        string   `json:"value"`
+	Nonce        string   `json:"nonce"`
+	Gas          string   `json:"gas"`
+	GasUsed      string   `json:"gasUsed"`
+	GasPrice     string   `json:"gasPrice"`
+	Type         string   `json:"type"`
+	Input        string   `json:"input"`
+	Status       string   `json:"status"`
+	Slot         uint64   `json:"slot"`
+	Fee          uint64   `json:"fee"`
+	FeeRaw       string   `json:"feeRaw"`
+	Signers      []string `json:"signers,omitempty"`
+	AccountKeys  []string `json:"accountKeys,omitempty"`
+	ProgramIDs   []string `json:"programIds,omitempty"`
+	SourceAPI    string   `json:"sourceApi"`
+	SourceMethod string   `json:"sourceMethod"`
+	Confirmation string   `json:"confirmation"`
 }
 
 // ---- Fetch ----
@@ -312,10 +331,6 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	default:
 		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassUnsupported,
 			Message: "solana provider does not serve dataset " + req.Dataset}
-	}
-	if req.FromTime != nil || req.ToTime != nil {
-		return provider.FetchResult{}, &provider.Error{Provider: "solana", Class: provider.ClassInvalidRequest,
-			Message: "solana provider does not support time ranges; use a slot (block) range"}
 	}
 	// balances 是"取数时刻的快照"，与服务端区间无关：直接走 getSlot + 两个余额调用，
 	// 不经过 getSignaturesForAddress（ADR-024 D2）。
@@ -337,7 +352,7 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	}
 
 	started := time.Now()
-	params := []any{req.Address, map[string]any{"limit": pageSize}}
+	params := []any{req.Address, map[string]any{"limit": pageSize, "commitment": "finalized"}}
 	if req.PageToken != "" {
 		params[1].(map[string]any)["before"] = req.PageToken
 	}
@@ -358,8 +373,9 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		return provider.FetchResult{
 			RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: pageSize,
 			RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock,
-			DecodedBytes: signatureBytes,
-			StartedAt:    started, BodyCompleteAt: time.Now(),
+			RawResponseBody: result,
+			DecodedBytes:    signatureBytes,
+			StartedAt:       started, BodyCompleteAt: time.Now(),
 		}, nil
 	}
 
@@ -375,9 +391,45 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			reachedOlder = true
 			break
 		}
+		if req.FromTime != nil || req.ToTime != nil {
+			// Signature blockTime can be null. Resolve it from the finalized
+			// transaction; never silently classify an unknown-time signature.
+			if info.BlockTime == nil {
+				tx, _, detailErr := c.fetchTxDetail(ctx, info.Signature)
+				if detailErr != nil {
+					return provider.FetchResult{}, detailErr
+				}
+				info.BlockTime = tx.BlockTime
+			}
+			if info.BlockTime == nil || *info.BlockTime <= 0 {
+				return provider.FetchResult{}, fmt.Errorf("solana signature %s has no verifiable block time", info.Signature)
+			}
+			at := time.Unix(*info.BlockTime, 0)
+			if req.ToTime != nil && at.After(*req.ToTime) {
+				continue
+			}
+			if req.FromTime != nil && at.Before(*req.FromTime) {
+				reachedOlder = true
+				break
+			}
+		}
 		selected = append(selected, info)
 	}
 	hasMore := !reachedOlder && len(signatures) == pageSize
+	if !reachedOlder && len(signatures) < pageSize {
+		// An RPC may return a short page before its archive boundary. Probe
+		// behind the last signature rather than treating page length as proof
+		// that all older address history has been exhausted.
+		probe, probeErr := c.call(ctx, MethodSignatures, []any{req.Address, map[string]any{"limit": 1, "before": oldestSeen, "commitment": "finalized"}})
+		if probeErr != nil {
+			return provider.FetchResult{}, probeErr
+		}
+		var older []signatureInfo
+		if err := json.Unmarshal(probe, &older); err != nil {
+			return provider.FetchResult{}, err
+		}
+		hasMore = len(older) > 0
+	}
 	nextToken := ""
 	if hasMore {
 		nextToken = oldestSeen
@@ -412,8 +464,9 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		Rows: encoded, NextPageToken: nextToken, HasMore: hasMore,
 		RequestID: req.RequestID, AttemptNo: req.AttemptNo, RequestPageSize: pageSize,
 		RequestFromBlock: req.FromBlock, RequestToBlock: req.ToBlock,
-		DecodedBytes: signatureBytes + payloadBytes,
-		StartedAt:    started, BodyCompleteAt: time.Now(),
+		RawResponseBody: result,
+		DecodedBytes:    signatureBytes + payloadBytes,
+		StartedAt:       started, BodyCompleteAt: time.Now(),
 	}, nil
 }
 
@@ -456,7 +509,7 @@ func (c *Client) fetchTransactions(ctx context.Context, selected []signatureInfo
 }
 
 func (c *Client) fetchTransaction(ctx context.Context, info signatureInfo) (txRow, int64, error) {
-	params := []any{info.Signature, map[string]any{"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}}
+	params := []any{info.Signature, map[string]any{"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": c.maxTxVersion}}
 	result, size, err := c.callWithSize(ctx, MethodTransaction, params)
 	if err != nil {
 		return txRow{}, 0, err
@@ -468,6 +521,12 @@ func (c *Client) fetchTransaction(ctx context.Context, info signatureInfo) (txRo
 	if err := json.Unmarshal(result, &tx); err != nil {
 		return txRow{}, size, &provider.Error{Provider: "solana", Class: provider.ClassInvalidJSON,
 			Message: "invalid getTransaction result: " + err.Error(), Retryable: true, Cause: err}
+	}
+	if tx.BlockTime == nil {
+		tx.BlockTime = info.BlockTime
+	}
+	if tx.BlockTime == nil || *tx.BlockTime <= 0 {
+		return txRow{}, size, fmt.Errorf("solana transaction %s has no verifiable block time", info.Signature)
 	}
 	return buildRow(info, &tx), size, nil
 }
@@ -489,21 +548,21 @@ func buildRow(info signatureInfo, tx *txResult) txRow {
 	if blockTime != nil {
 		timestamp = *blockTime
 	}
-	if timestamp == 0 {
-		timestamp = time.Now().Unix()
-	}
 	slot := tx.Slot
 	if slot == 0 {
 		slot = info.Slot
 	}
 	row := txRow{
-		BlockNumber:  strconv.FormatUint(slot, 10),
-		BlockHash:    tx.Transaction.Message.RecentBlockhash,
-		Hash:         info.Signature,
-		Timestamp:    timestamp,
-		From:         from,
-		To:           counterparty(tx),
-		Value:        nativeValue(tx),
+		BlockNumber: strconv.FormatUint(slot, 10),
+		// A transaction's recentBlockhash is not the block hash of its slot.
+		BlockHash: "",
+		Hash:      info.Signature,
+		Timestamp: timestamp,
+		From:      from,
+		// A Solana transaction can contain many native transfers and SPL calls;
+		// no single destination/value belongs on the transaction summary.
+		To:           "",
+		Value:        "",
 		Nonce:        "0",
 		Gas:          "0",
 		GasUsed:      "0",
@@ -513,10 +572,20 @@ func buildRow(info signatureInfo, tx *txResult) txRow {
 		Status:       status,
 		Slot:         slot,
 		Confirmation: "finalized",
+		SourceAPI:    "solana_rpc",
+		SourceMethod: "getTransaction",
 	}
 	if tx.Meta != nil {
 		row.Fee = tx.Meta.Fee
+		row.FeeRaw = strconv.FormatUint(tx.Meta.Fee, 10)
 	}
+	row.AccountKeys = tx.accountKeys()
+	for _, key := range tx.Transaction.Message.AccountKeys {
+		if key.Signer {
+			row.Signers = append(row.Signers, key.Pubkey)
+		}
+	}
+	row.ProgramIDs = tx.outerPrograms()
 	return row
 }
 
@@ -661,7 +730,7 @@ func (tx *txResult) failed() (bool, string) {
 
 // fetchTxDetail 抓取一笔已解析交易（jsonParsed），供三个数据集共用。
 func (c *Client) fetchTxDetail(ctx context.Context, signature string) (*txResult, int64, error) {
-	params := []any{signature, map[string]any{"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}}
+	params := []any{signature, map[string]any{"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": c.maxTxVersion}}
 	result, size, err := c.callWithSize(ctx, MethodTransaction, params)
 	if err != nil {
 		return nil, 0, err
@@ -707,10 +776,31 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 				return
 			}
 			results[i].bytes = size
+			if tx.BlockTime == nil {
+				tx.BlockTime = selected[i].BlockTime
+			}
+			if tx.BlockTime == nil || *tx.BlockTime <= 0 {
+				results[i].err = fmt.Errorf("solana transaction %s has no verifiable block time", selected[i].Signature)
+				return
+			}
+			if tx.Slot == 0 {
+				tx.Slot = selected[i].Slot
+			}
+			if tx.Meta == nil {
+				results[i].err = fmt.Errorf("solana transaction %s has no transaction metadata", selected[i].Signature)
+				return
+			}
 			keys := tx.accountKeys()
 			switch dataset {
 			case "token_transfers", "nft_transfers":
+				if tx.Meta.Err != nil {
+					break
+				}
 				index := buildTokenAccountIndex(keys, tx.Meta.PreTokenBalances, tx.Meta.PostTokenBalances)
+				if err := addInitializedTokenAccounts(keys, tx.Transaction.Message.Instructions, tx.Meta.InnerInstructions, index); err != nil {
+					results[i].err = err
+					return
+				}
 				rows, stats := buildTokenTransferRows(tx.Slot, tx.blockTimeValue(), selected[i].Signature, keys,
 					tx.Transaction.Message.Instructions, tx.Meta.InnerInstructions, index)
 				// ADR-024 D3：同一笔转账只进一个数据集——判定为 NFT 的不再进 token_transfers。
@@ -737,6 +827,12 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 			case "internal_transactions":
 				nodes := buildCPITree(tx.Meta.LogMessages, tx.outerPrograms())
 				rows, unpaired := cpiRowsFor(selected[i].Signature, tx, nodes)
+				native, nativeErr := systemTransferRows(tx, selected[i].Signature)
+				if nativeErr != nil {
+					results[i].err = nativeErr
+					return
+				}
+				rows = append(rows, native...)
 				results[i].nodes = len(nodes)
 				results[i].unpaired = unpaired
 				results[i].rows = encodeRows(rows)
@@ -760,6 +856,10 @@ func (c *Client) fetchInstructionRows(ctx context.Context, dataset string, selec
 		result.stats.NFTClassificationUnknown += res.stats.NFTClassificationUnknown
 		result.cpiNodes += res.nodes
 		result.cpiValueUnpaired += res.unpaired
+	}
+	if dataset == "token_transfers" && (result.stats.OwnerUnresolved > 0 || result.stats.SkippedNoBalance > 0 || result.stats.FeeMismatch > 0) {
+		return result, fmt.Errorf("solana token transfer page has unresolved evidence: owner=%d mint=%d fee=%d",
+			result.stats.OwnerUnresolved, result.stats.SkippedNoBalance, result.stats.FeeMismatch)
 	}
 	return result, nil
 }

@@ -23,6 +23,7 @@ type rawEntry struct {
 	Type            string         `json:"type"`
 	Name            string         `json:"name"`
 	Inputs          []rawComponent `json:"inputs"`
+	Outputs         []rawComponent `json:"outputs"`
 	StateMutability string         `json:"stateMutability"`
 	Anonymous       bool           `json:"anonymous"`
 }
@@ -35,10 +36,12 @@ type ABIField struct {
 
 // ABIMethod ABI 中的一个函数。
 type ABIMethod struct {
-	Name      string
-	Signature string
-	Selector  string
-	Inputs    []ABIField
+	Name            string
+	Signature       string
+	Selector        string
+	Inputs          []ABIField
+	Outputs         []ABIField
+	StateMutability string
 }
 
 // ABIEvent ABI 中的一个事件（§29 预留）。
@@ -123,10 +126,14 @@ func parseABI(raw []byte, wrapperDepth int) (*ABI, error) {
 			if err != nil {
 				continue // 单条不可解析不应让整个 ABI 失败
 			}
+			outputs, err := parseFieldsDepth(entry.Outputs, 0)
+			if err != nil {
+				continue
+			}
 			signature := entry.Name + "(" + joinCanonical(fields) + ")"
 			selector := SelectorOf(signature)
 			out.Methods[selector] = append(out.Methods[selector], &ABIMethod{
-				Name: entry.Name, Signature: signature, Selector: selector, Inputs: fields,
+				Name: entry.Name, Signature: signature, Selector: selector, Inputs: fields, Outputs: outputs, StateMutability: entry.StateMutability,
 			})
 		case "event":
 			if entry.Name == "" {

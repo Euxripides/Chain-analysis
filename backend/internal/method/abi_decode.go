@@ -313,7 +313,8 @@ func signedFromWord(word []byte, bits int) *big.Int {
 		bits = 256
 	}
 	limit := new(big.Int).Lsh(big.NewInt(1), uint(bits))
-	half := new(big.Int).Rsh(limit, 1)
+	value.Mod(value, limit)
+	half := new(big.Int).Rsh(new(big.Int).Set(limit), 1)
 	if value.Cmp(half) >= 0 {
 		value.Sub(value, limit)
 	}

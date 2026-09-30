@@ -61,7 +61,7 @@ func main() {
 	}
 
 	srv := api.New(api.Deps{
-		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, Log: log,
+		Cfg: cfg, Store: infra.Store, CH: infra.CH, Raw: infra.Raw, Bus: infra.Bus, Prov: infra.Prov, ProviderControl: infra.ProviderControl, Log: log,
 		Registry: infra.Registry, MethodData: infra.MethodData, DeepDecode: infra.DeepDecode,
 		TokenMeta: infra.TokenMeta, TokenBackfill: infra.TokenBackfill,
 		Head: infra.Head, AddressType: infra.AddressType, BalanceRead: infra.BalanceRead,
@@ -73,6 +73,9 @@ func main() {
 	srv.StartForwarder()
 	// 预生成产物的过期清理（投机产物，过一小时没人认领就连对象一起删）。
 	srv.StartPrefetchGC(runCtx)
+	if !standby {
+		srv.StartProviderCenterSync(runCtx)
+	}
 
 	server := &http.Server{
 		Addr:              ":" + itoa(cfg.HTTPPort),

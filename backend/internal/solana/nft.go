@@ -37,7 +37,7 @@ func NormalizeNftTransfer(raw json.RawMessage, provider string) (ingest.NftTrans
 	}
 	timestamp := numberField(m, "timestamp")
 	if timestamp <= 0 {
-		timestamp = time.Now().Unix()
+		return ingest.NftTransferRow{}, errors.New("solana nft row has no verifiable timestamp")
 	}
 	return ingest.NftTransferRow{
 		Chain: "solana", BlockNumber: blockNumber, Timestamp: time.Unix(timestamp, 0).UTC(),

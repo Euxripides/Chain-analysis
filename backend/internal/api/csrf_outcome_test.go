@@ -96,7 +96,9 @@ func TestCSRFGateOrderingCalibration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read authmw.go: %v", err)
 	}
-	source := string(raw)
+	// The calibration edits exact source lines. Normalize checkout line endings
+	// so the same ordering contract is checked on Windows and Linux.
+	source := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if err := csrfOrderViolation(source); err != nil {
 		t.Fatalf("authorization layer ordering contract violated: %v", err)
 	}

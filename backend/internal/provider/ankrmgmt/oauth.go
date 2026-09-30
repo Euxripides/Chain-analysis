@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,9 +24,48 @@ type oauthToken struct {
 	ExpiresAt    time.Time `json:"expires_at,omitempty"`
 }
 
+type oauthServerMetadata struct {
+	Issuer                            string `json:"issuer"`
+	ClientIDMetadataDocumentSupported bool   `json:"client_id_metadata_document_supported"`
+}
+
+func (s *Service) metadataClientID(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		strings.TrimRight(s.cfg.IssuerURL, "/")+"/.well-known/oauth-authorization-server", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("discover Ankr authorization server: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", sanitizedHTTPError("discover Ankr authorization server", resp)
+	}
+	var metadata oauthServerMetadata
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&metadata); err != nil {
+		return "", fmt.Errorf("decode Ankr authorization server metadata: %w", err)
+	}
+	if metadata.Issuer != strings.TrimRight(s.cfg.IssuerURL, "/") {
+		return "", fmt.Errorf("Ankr authorization server issuer mismatch")
+	}
+	if !metadata.ClientIDMetadataDocumentSupported {
+		return "", ErrClientMetadataUnsupported
+	}
+	return s.cfg.ClientMetadataURL, nil
+}
+
 func (s *Service) registerClient(ctx context.Context) (string, error) {
+	applicationType := "web"
+	if redirect, err := url.Parse(s.cfg.RedirectURI); err == nil && redirect.Scheme == "http" &&
+		(redirect.Hostname() == "127.0.0.1" || redirect.Hostname() == "localhost" || redirect.Hostname() == "::1") {
+		applicationType = "native"
+	}
 	body := map[string]any{
 		"client_name":                "Blockchain Platform API Control Center",
+		"application_type":           applicationType,
 		"redirect_uris":              []string{s.cfg.RedirectURI},
 		"grant_types":                []string{"authorization_code"},
 		"response_types":             []string{"code"},
@@ -47,11 +87,21 @@ func (s *Service) StartOAuth(ctx context.Context) (string, error) {
 	}
 	var clientID, registeredRedirect string
 	_ = s.pool.QueryRow(ctx, `SELECT client_id,redirect_uri FROM ankr_management_connection WHERE id=1`).Scan(&clientID, &registeredRedirect)
-	if clientID == "" || registeredRedirect != s.cfg.RedirectURI {
+	storedClientID := clientID
+	if s.cfg.ClientMetadataURL != "" {
 		var err error
-		clientID, err = s.registerClient(ctx)
+		clientID, err = s.metadataClientID(ctx)
 		if err != nil {
 			return "", err
+		}
+	}
+	if clientID == "" || registeredRedirect != s.cfg.RedirectURI || clientID != storedClientID {
+		var err error
+		if s.cfg.ClientMetadataURL == "" {
+			clientID, err = s.registerClient(ctx)
+			if err != nil {
+				return "", err
+			}
 		}
 		_, err = s.pool.Exec(ctx, `UPDATE ankr_management_connection SET client_id=$1,redirect_uri=$2,updated_at=now() WHERE id=1`, clientID, s.cfg.RedirectURI)
 		if err != nil {
@@ -150,6 +200,5 @@ func (s *Service) CompleteOAuth(ctx context.Context, state, code string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Sync(ctx)
-	return err
+	return nil
 }

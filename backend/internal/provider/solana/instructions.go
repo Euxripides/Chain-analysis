@@ -11,6 +11,7 @@ package solana
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -214,6 +215,65 @@ func buildTokenAccountIndex(keys []string, pre, post []tokenBalanceEntry) map[st
 		}
 	}
 	return index
+}
+
+// A token account created and closed in one transaction can be absent from
+// both token-balance arrays. Its initializeAccount instruction still records
+// the account, mint and owner directly in the finalized transaction.
+func addInitializedTokenAccounts(keys []string, outer []parsedInstructionRaw, inner []innerInstructionGroup, index map[string]*tokenAccountState) error {
+	keyIndex := make(map[string]int, len(keys))
+	for i, key := range keys {
+		keyIndex[key] = i
+	}
+	visit := func(ix parsedInstructionRaw) error {
+		if ix.ProgramID != ProgramSPLToken && ix.ProgramID != ProgramToken2022 {
+			return nil
+		}
+		if ix.Parsed == nil {
+			return nil
+		}
+		switch ix.Parsed.Type {
+		case "initializeAccount", "initializeAccount2", "initializeAccount3":
+		default:
+			return nil
+		}
+		info := ix.Parsed.infoMap()
+		account, _ := info["account"].(string)
+		owner, _ := info["owner"].(string)
+		mint, _ := info["mint"].(string)
+		position, present := keyIndex[account]
+		if !present || owner == "" || mint == "" {
+			return nil
+		}
+		state := index[account]
+		if state == nil {
+			index[account] = &tokenAccountState{Key: account, Index: position, Owner: owner, Mint: mint}
+			return nil
+		}
+		if (state.Owner != "" && state.Owner != owner) || (state.Mint != "" && state.Mint != mint) {
+			return fmt.Errorf("solana token account %s initialization conflicts with transaction balances", account)
+		}
+		if state.Owner == "" {
+			state.Owner = owner
+		}
+		if state.Mint == "" {
+			state.Mint = mint
+		}
+		return nil
+	}
+	for _, ix := range outer {
+		if err := visit(ix); err != nil {
+			return err
+		}
+	}
+	for _, group := range inner {
+		for _, ix := range group.Instructions {
+			if err := visit(ix); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // splTransfer 是一条已解码的代币转账指令。
@@ -443,21 +503,18 @@ func buildTokenTransferRows(slot uint64, blockTime int64, signature string, keys
 		if gross == nil || gross.Sign() <= 0 {
 			return
 		}
-		net := destination.net()
-		if net.Sign() < 0 {
-			net = big.NewInt(0)
+		// pre/postTokenBalances are whole-transaction account deltas, not
+		// per-instruction deltas. Reusing the destination delta for each transfer
+		// duplicates amounts when one ATA receives multiple transfers in one tx.
+		fee := big.NewInt(0)
+		if transfer.DecodedFee != nil {
+			fee = transfer.DecodedFee
 		}
-		fee := new(big.Int).Sub(gross, net)
-		if fee.Sign() < 0 {
-			fee = big.NewInt(0)
-		}
-		if fee.Sign() > 0 && transfer.DecodedFee == nil {
-			stats.FeeFromBalances++
-		}
-		if transfer.DecodedFee != nil && transfer.DecodedFee.Cmp(fee) != 0 {
-			// 指令显式费用与余额差额不一致：以余额为准（余额是链上事实），但必须计数。
+		if fee.Sign() < 0 || fee.Cmp(gross) > 0 {
 			stats.FeeMismatch++
+			return
 		}
+		net := new(big.Int).Sub(gross, fee)
 		logIndex := uint32(outerIndex)*256 + uint32(innerIndex)
 		rows = append(rows, tokenTransferRow{
 			BlockHeight: strconv.FormatUint(slot, 10), Timestamp: blockTime,
@@ -506,12 +563,12 @@ type cpiFrame struct {
 // 标准 Solana RPC 不返回 CPI 树；官方做法就是解析 "Program <id> invoke [n]" /
 // "success" / "failed: ..." 日志并按栈还原嵌套。depth 来自日志，trace_path 由父路径
 // 与兄弟序号拼出；call_index 采用 ADR-023 D3 的合成键格式 outer*256+ordinal，
-// 其中 depth-1 节点的 outer 按外层指令顺序对应，ordinal 是该外层下的 CPI 序号。
+// 其中 ordinal 在同一个 outer 下全局递增，不能在每个父节点下重新从 1 开始。
 func buildCPITree(logs []string, outerPrograms []string) []cpiNode {
 	var nodes []cpiNode
 	var stack []*cpiFrame
 	rootOrdinal := 0
-	rootChildren := map[int]int{}
+	childOrdinals := map[int]int{}
 
 	for _, raw := range logs {
 		line := strings.TrimSpace(raw)
@@ -534,18 +591,23 @@ func buildCPITree(logs []string, outerPrograms []string) []cpiNode {
 				parent := stack[len(stack)-1]
 				parent.childCount++
 				outerIndex = parentOuterIndex(parent)
-				ordinal = parent.childCount
+				childOrdinals[outerIndex]++
+				ordinal = childOrdinals[outerIndex]
 				tracePath = parent.path + "." + strconv.Itoa(parent.childCount-1)
 			} else {
 				outerIndex = rootOrdinal
 				if outerIndex < len(outerPrograms) {
 					rootOrdinal++
 				}
-				rootChildren[outerIndex]++
 				ordinal = 0
 				tracePath = strconv.Itoa(outerIndex)
 			}
 			callIndex := uint32(outerIndex)*256 + uint32(ordinal)
+			if ordinal >= 256 {
+				// Keep the system-transfer namespace (bit 31) distinct while
+				// preserving a unique key beyond the per-outer 8-bit range.
+				callIndex = uint32(1<<30) | uint32(len(nodes))
+			}
 			parentProgram := ""
 			if len(stack) > 0 {
 				parentProgram = stack[len(stack)-1].program
@@ -672,4 +734,88 @@ type cpiRow struct {
 	MethodID    string `json:"methodId"`
 	Failed      bool   `json:"failed"`
 	Error       string `json:"error"`
+}
+
+// systemTransferRows records executed native SOL movements with their actual
+// account endpoints. CPI program nodes alone do not identify a funding source.
+func systemTransferRows(tx *txResult, signature string) ([]cpiRow, error) {
+	if tx.Meta == nil || tx.Meta.Err != nil {
+		return nil, nil
+	}
+	keys := tx.accountKeys()
+	rows := []cpiRow{}
+	emit := func(outer, inner int, ix parsedInstructionRaw) error {
+		if ix.programID(keys) != SystemProgram {
+			return nil
+		}
+		kind := ""
+		from, to, amount := "", "", ""
+		if ix.Parsed != nil {
+			switch ix.Parsed.Type {
+			case "transfer", "transferWithSeed":
+				kind = "system_transfer"
+			case "createAccount", "createAccountWithSeed":
+				kind = "system_create_account"
+			}
+			if kind != "" {
+				var info map[string]json.RawMessage
+				if err := json.Unmarshal(ix.Parsed.Info, &info); err != nil {
+					return err
+				}
+				_ = json.Unmarshal(info["source"], &from)
+				if kind == "system_create_account" {
+					_ = json.Unmarshal(info["newAccount"], &to)
+				} else {
+					_ = json.Unmarshal(info["destination"], &to)
+				}
+				if err := json.Unmarshal(info["lamports"], &amount); err != nil {
+					var number json.Number
+					if err := json.Unmarshal(info["lamports"], &number); err == nil {
+						amount = number.String()
+					}
+				}
+			}
+		}
+		if kind == "" {
+			data, accounts := ix.dataBytes(), ix.accountList(keys)
+			if len(data) >= 12 && len(accounts) >= 2 && data[1] == 0 && data[2] == 0 && data[3] == 0 && (data[0] == 0 || data[0] == 2) {
+				if data[0] == 2 {
+					kind = "system_transfer"
+				} else {
+					kind = "system_create_account"
+				}
+				from, to = accounts[0], accounts[1]
+				if value, ok := littleEndianUint64(data, 4); ok {
+					amount = value.String()
+				}
+			}
+		}
+		if kind == "" {
+			return nil
+		}
+		value, ok := new(big.Int).SetString(amount, 10)
+		if from == "" || to == "" || !ok || value.Sign() < 0 {
+			return fmt.Errorf("solana system transfer %s has incomplete funding evidence", signature)
+		}
+		rows = append(rows, cpiRow{
+			TxHash: signature, CallIndex: uint32(1<<31) | uint32(outer*4096+inner),
+			BlockNumber: strconv.FormatUint(tx.Slot, 10), Timestamp: tx.blockTimeValue(),
+			From: from, To: to, ValueRaw: amount, AssetType: "SOL", CallType: kind,
+			Depth: uint16(1 + min(inner, 1)), TracePath: fmt.Sprintf("system.%d.%d", outer, inner),
+		})
+		return nil
+	}
+	for i, ix := range tx.Transaction.Message.Instructions {
+		if err := emit(i, 0, ix); err != nil {
+			return nil, err
+		}
+	}
+	for _, group := range tx.Meta.InnerInstructions {
+		for i, ix := range group.Instructions {
+			if err := emit(group.Index, i+1, ix); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return rows, nil
 }
