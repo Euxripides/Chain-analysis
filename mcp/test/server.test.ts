@@ -1,3 +1,4 @@
+import { investigationTools } from "../src/investigation.js";
 import assert from "node:assert/strict";
 import { createServer as createHTTPServer, type Server } from "node:http";
 import { once } from "node:events";
@@ -81,7 +82,7 @@ test("health reports the actual registered tool count", async () => {
   const healthURL = new URL("/health", mcpUrl);
   const response = await fetch(healthURL);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ok", tools: 23 });
+  assert.deepEqual(await response.json(), { status: "ok", tools: 71 });
 });
 
 test("initialize, list tools and call a real REST-backed tool", async () => {
@@ -91,21 +92,37 @@ test("initialize, list tools and call a real REST-backed tool", async () => {
   });
   await client.connect(transport);
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 23);
+  assert.equal(listed.tools.length, 71);
   assert.deepEqual(listed.tools.map((tool) => tool.name), [
+    "get_address_overview", "get_address_assets", "get_token_transfers", "get_transactions",
+    "get_internal_transactions", "get_counterparties", "get_flow_summary", "get_top_flows",
+    "get_first_funding", "get_transaction_detail", "get_solana_address_signatures", "get_solana_transaction", "get_bridge_source_transaction", "batch_get_address_overview",
+    "batch_get_address_assets", "get_transaction_trace", "get_transaction_logs",
+    "decode_transaction", "find_fund_paths", "build_address_network",
+    "create_large_export", "get_export_status", "get_export_address_summary", "ensure_chain_data", "ensure_chain_data_batch", "get_ai_download_status", "retry_ai_download_failures",
+    ...investigationTools.map(x => x.name),
+    "batch_get_token_transfers", "batch_get_transactions", "batch_get_internal_transactions", "batch_get_counterparties",
+    "batch_get_flow_summary", "batch_get_top_flows", "batch_get_first_funding", "batch_get_solana_address_signatures",
+    "batch_get_export_address_summary", "batch_find_fund_paths", "batch_get_balances", "batch_get_contract_control", "batch_get_labels", "batch_get_receipts", "batch_get_transaction_details", "batch_call_tools",
+  ]);
+  assert.equal(listed.tools.filter((tool) => tool.annotations?.readOnlyHint === true).length, 66);
+  assert.equal(listed.tools.find((tool) => tool.name === "create_large_export")?.annotations?.readOnlyHint, false);
+  const downloadChains = (listed.tools.find((tool) => tool.name === "ensure_chain_data")?.inputSchema as any).properties.chain.enum;
+  const solanaQueryTools = [
     "get_address_overview", "get_address_assets", "get_token_transfers", "get_transactions",
     "get_internal_transactions", "get_counterparties", "get_flow_summary", "get_top_flows",
     "get_first_funding", "get_transaction_detail", "batch_get_address_overview",
     "batch_get_address_assets", "get_transaction_trace", "get_transaction_logs",
     "decode_transaction", "find_fund_paths", "build_address_network",
-    "create_large_export", "get_export_status", "ensure_chain_data", "ensure_chain_data_batch", "get_ai_download_status", "retry_ai_download_failures",
-  ]);
-  assert.equal(listed.tools.filter((tool) => tool.annotations?.readOnlyHint === true).length, 19);
-  assert.equal(listed.tools.find((tool) => tool.name === "create_large_export")?.annotations?.readOnlyHint, false);
-  const analysisChains = (listed.tools.find((tool) => tool.name === "get_address_overview")?.inputSchema as any).properties.chain.enum;
-  const downloadChains = (listed.tools.find((tool) => tool.name === "ensure_chain_data")?.inputSchema as any).properties.chain.enum;
-  assert.ok(!analysisChains.includes("solana"), "query tools must not advertise Solana analysis before those contracts are complete");
+  ];
+  for (const name of solanaQueryTools) {
+    const schema = listed.tools.find((tool) => tool.name === name)?.inputSchema as
+      | { properties?: { chain?: { enum?: string[] } } }
+      | undefined;
+    assert.ok(schema?.properties?.chain?.enum?.includes("solana"), `${name} must advertise Solana in chain`);
+  }
   assert.ok(downloadChains.includes("solana"), "download tool must advertise the deployed Solana acquisition provider");
+  assert.ok(listed.tools.some((tool) => tool.name === "get_solana_transaction"), "MCP must expose direct Solana source-chain reads");
   for (const name of ["find_fund_paths", "build_address_network"]) {
     const schema = listed.tools.find((tool) => tool.name === name)?.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
     assert.ok(schema.properties?.token, `${name} must advertise token in tools/list`);
@@ -130,6 +147,9 @@ test("initialize, list tools and call a real REST-backed tool", async () => {
     get_top_flows: { chain: "tron", address: "TValid", limit: 20 },
     get_first_funding: { chain: "tron", address: "TValid" },
     get_transaction_detail: { chain: "tron", tx_hash: "abc123" },
+    get_solana_address_signatures: { address: "11111111111111111111111111111111", limit: 20 },
+    get_solana_transaction: { signature: "5eDPXxyeaHuK9YJKPXpXbWUne9At11oQzdJv6hLmuVqQqneiiYdAMFDn7CYn9Edc9RQWbULAnv33GK34mnoSinfZ" },
+    get_bridge_source_transaction: { source_chain: "solana", source_tx_hash: "5eDPXxyeaHuK9YJKPXpXbWUne9At11oQzdJv6hLmuVqQqneiiYdAMFDn7CYn9Edc9RQWbULAnv33GK34mnoSinfZ" },
     batch_get_address_overview: { chain: "tron", addresses: ["TValid"] },
     batch_get_address_assets: { chain: "tron", addresses: ["TValid"] },
     get_transaction_trace: { chain: "tron", tx_hash: "abc123" },

@@ -1,12 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ResourceLink } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { RESTClient, type RESTEnvelope } from "./rest-client.js";
+import { investigationTools, investigationFileResources, registerInvestigationResources } from "./investigation.js";
+import { createBatchTools, executeBatch, type ToolDefinition } from "./batch.js";
 
-export const CHAIN_VALUES = ["bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche"] as const;
-export const DOWNLOAD_CHAIN_VALUES = [...CHAIN_VALUES, "solana"] as const;
-const chain = z.enum(CHAIN_VALUES).describe("Blockchain network. Use exactly one supported lowercase value.");
-const downloadChain = z.enum(DOWNLOAD_CHAIN_VALUES).describe("Download-capable blockchain network. Solana is supported for acquisition; analysis tools advertise their own narrower chain list.");
-const address = z.string().min(1).describe("Complete EVM 0x address or complete TRON Base58 address. Never abbreviate it.");
+export const CHAIN_VALUES = ["bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"] as const;
+export const DOWNLOAD_CHAIN_VALUES = CHAIN_VALUES;
+const chain = z.enum(CHAIN_VALUES).describe("Blockchain network, including Solana. Use a lowercase chain value; preserve the case of Solana addresses and signatures.");
+const downloadChain = z.enum(DOWNLOAD_CHAIN_VALUES).describe("Download-capable blockchain network, including Solana through dRPC JSON-RPC history.");
+const address = z.string().trim().min(1).describe("Complete EVM 0x, TRON Base58Check, or case-sensitive Solana Base58 address. Never abbreviate it.");
 const downloadAddress = z.string().min(1).describe("Complete EVM 0x, TRON Base58Check, or Solana base58 address. Never abbreviate it.");
 const txHash = z.string().min(1).describe("Complete transaction hash without abbreviation.");
 const optionalTime = z.string().datetime({ offset: true }).optional().describe("ISO 8601 timestamp, for example 2026-09-10T01:30:00Z.");
@@ -33,7 +36,7 @@ const pathBase = { chain, source: address, max_depth: z.number().int().min(1).ma
 const pathInputSchema = { ...pathBase, token: z.string().min(1).optional().describe("Token symbol such as USDT; optional when token_contract is provided."), token_contract: z.string().min(1).optional().describe("Complete token contract address; optional when token is provided.") };
 const networkBase = { chain, seed_addresses: z.array(address).min(1).max(200), max_depth: z.number().int().min(1).max(5).default(3), min_total_amount: z.string().optional(), max_nodes: z.number().int().min(1).max(500).default(200), ...timeFilters };
 const networkInputSchema = { ...networkBase, token: z.string().min(1).optional().describe("Token symbol such as USDT; optional when token_contract is provided."), token_contract: z.string().min(1).optional().describe("Complete token contract address; optional when token is provided.") };
-const exportInputSchema = { chain, address, data_types: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1), ...tokenFilters, ...timeFilters, format: z.enum(["parquet", "csv"]), compression: z.enum(["zstd", "zip"]) };
+const exportInputSchema = { chain, address: address.optional().describe("One address, or use addresses for a combined export; supply exactly one form."), addresses: z.array(address).min(1).max(100).optional().describe("1-100 addresses in one combined export; duplicates are normalized and removed by the server."), data_types: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1), ...tokenFilters, ...timeFilters, format: z.enum(["parquet", "csv"]), compression: z.enum(["zstd", "zip"]) };
 const ensureRange = z.object({
   type: z.enum(["full", "block", "time"]),
   from_block: z.number().int().min(0).optional(), to_block: z.number().int().min(0).optional(),
@@ -42,21 +45,12 @@ const ensureRange = z.object({
 const ensureRequest = z.object({
   chain: downloadChain,
   addresses: z.array(downloadAddress).min(1).max(200),
-  datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1),
+  datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs", "balances"])).min(1),
   range: ensureRange,
   performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
 });
 
-type ToolDefinition = {
-  name: string;
-  title: string;
-  description: string;
-  path: string;
-  method?: "GET" | "POST";
-  readOnly?: boolean;
-  inputSchema: Record<string, z.ZodTypeAny> | z.ZodTypeAny;
-  summarize: (result: RESTEnvelope) => string;
-};
+
 
 export const toolDefinitions: ToolDefinition[] = [
   {
@@ -78,7 +72,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_token_transfers",
     title: "List token transfers",
-    description: "Use this for filtered, paginated ERC-20/BEP-20/TRC-20 transfer evidence. Prefer counterparties, flow summary or top flows for aggregate questions. Never page through a massive history; use export outside P0 when needed.",
+    description: "Use this for filtered, paginated ERC-20/BEP-20/TRC-20 or Solana SPL transfer evidence. Solana native SOL movements are in internal transactions; use token=SOL for native flow aggregations. Never page through a massive history.",
     path: "/address/token-transfers",
     inputSchema: { ...listFilters, ...tokenFilters, min_amount: z.string().optional(), max_amount: z.string().optional(), status: z.enum(["success", "failed"]).optional() },
     summarize: (r) => `Token transfers retrieved (${String(r.meta?.page_size ?? "bounded page")}).`,
@@ -86,7 +80,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_transactions",
     title: "List native transactions",
-    description: "Use this for filtered, paginated top-level blockchain transactions, native value, status and contract method evidence. Do not use it as a substitute for token transfers or internal calls.",
+    description: "Use this for filtered, paginated top-level blockchain transactions. On Solana it lists address signatures; direction and a unique counterparty are not intrinsic to a Solana transaction. Use native/SPL movement rows for funding attribution.",
     path: "/address/transactions",
     inputSchema: { ...listFilters, min_value: z.string().optional(), max_value: z.string().optional(), method_id: z.string().optional(), status: z.enum(["success", "failed"]).optional() },
     summarize: () => "Top-level transactions retrieved as a bounded page.",
@@ -94,7 +88,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_internal_transactions",
     title: "List internal transactions",
-    description: "Use this when the user needs contract-internal native value movements or call traces associated with an address. Results are paginated and evidence-bound.",
+    description: "Use this for internal calls and native movements. On Solana, asset_type=SOL with call_type=system_transfer/system_create_account has exact source, destination and lamports; PROGRAM rows are CPI call nodes, not fund flows.",
     path: "/address/internal-transactions",
     inputSchema: { ...listFilters, min_value: z.string().optional(), max_value: z.string().optional() },
     summarize: () => "Internal transactions retrieved as a bounded page.",
@@ -115,7 +109,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_flow_summary",
     title: "Get fund-flow summary",
-    description: "Use this to compare cumulative inflow, outflow, net flow, counts, unique counterparties and activity times for one token. A positive historical net flow does not by itself prove current retention.",
+    description: "Compare cumulative inflow, outflow, net flow, counts and counterparties for one asset. On Solana, token=SOL selects executed native System Program movements; an SPL mint uses token_contract. Historical net flow is not a current balance.",
     path: "/address/flow-summary",
     inputSchema: { chain, address, ...tokenFilters, ...timeFilters },
     summarize: () => "Fund-flow summary retrieved from database-side aggregation.",
@@ -135,7 +129,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_first_funding",
     title: "Get first funding source",
-    description: "Use this to identify the earliest observed native funding, first gas source, or earliest token funding for an address. Treat it as earliest available platform evidence, subject to dataset coverage.",
+    description: "Find first observed native and token funding. Solana native funding uses executed System Program instructions with exact source/destination and full signature; check meta.coverage before claiming complete history.",
     path: "/address/first-funding",
     inputSchema: { chain, address },
     summarize: () => "Earliest available funding evidence retrieved.",
@@ -143,10 +137,42 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "get_transaction_detail",
     title: "Get transaction detail",
-    description: "Use this when the user provides a transaction hash or needs one transaction's status, method, decoded input, token transfers, internal transactions and logs. Do not infer a recurring distribution rule from one transaction.",
+    description: "Read combined local transaction, transfer, internal movement and log evidence. Solana accepts a case-sensitive Base58 signature and returns native JSON-parsed transaction data rather than EVM ABI fields.",
     path: "/transaction/detail",
     inputSchema: { chain, tx_hash: txHash },
     summarize: () => "Transaction detail and available decoded evidence retrieved.",
+  },
+  {
+    name: "get_solana_address_signatures",
+    title: "List Solana address signatures",
+    description: "Read a bounded page of finalized Solana signatures through dRPC. An optional dRPC archive endpoint may supply missing older records. A signature list is not full-history coverage; inspect meta.source and next_before.",
+    path: "/solana/address/signatures",
+    inputSchema: {
+      address: z.string().min(32).max(44).describe("Complete case-sensitive Solana Base58 address."),
+      before: z.string().min(64).max(88).optional().describe("Full signature cursor returned as next_before."),
+      limit: z.number().int().min(1).max(100).default(20),
+    },
+    summarize: () => "Bounded Solana signature page retrieved; full historical coverage is not asserted.",
+  },
+  {
+    name: "get_solana_transaction",
+    title: "Read Solana transaction",
+    description: "Read one finalized Solana transaction by complete Base58 signature through dRPC, including parsed message, instructions, inner instructions, token balances and logs when available. Inspect meta.source. A missing RPC result is not proof the transaction never existed.",
+    path: "/solana/transaction",
+    inputSchema: { signature: z.string().min(64).max(88).describe("Complete case-sensitive Solana transaction signature.") },
+    summarize: () => "Solana source-chain transaction record retrieved from RPC.",
+  },
+  {
+    name: "get_bridge_source_transaction",
+    title: "Read bridge order source transaction",
+    description: "Given a bridge order's known source chain and complete source transaction hash/signature, read that source-chain record. The order ID is only a correlation label: this tool does not independently prove that the transaction belongs to the order. An order ID alone is insufficient.",
+    path: "/bridge/source-transaction",
+    inputSchema: {
+      source_chain: z.enum(DOWNLOAD_CHAIN_VALUES),
+      source_tx_hash: txHash,
+      bridge_order_id: z.string().max(256).optional(),
+    },
+    summarize: () => "Source-chain transaction read by hash; bridge-order association remains unverified without protocol evidence.",
   },
   {
     name: "batch_get_address_overview",
@@ -204,7 +230,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "create_large_export",
     title: "Create large evidence export",
-    description: "Create an asynchronous export for data too large for chat. Prefer parquet+zstd for analysis or csv+zip for compatibility; returns a job_id immediately.",
+    description: "Create an asynchronous export for one address or up to 100 addresses in one combined export. Supply address or addresses, exactly one form. Every address and selected dataset is exported, with token/time filters applied to all addresses. Multi-address output is ZIP containing CSV or zstd-compressed Parquet entries. Returns a job_id immediately; use get_export_address_summary or batch_get_export_address_summary to read completed evidence directly on the server.",
     path: "/export/create", method: "POST", readOnly: false,
     inputSchema: exportInputSchema,
     summarize: () => "Asynchronous export created; poll get_export_status with the returned job_id.",
@@ -217,14 +243,35 @@ export const toolDefinitions: ToolDefinition[] = [
     summarize: () => "Export status retrieved.",
   },
   {
+    name: "get_export_address_summary",
+    title: "Summarize completed export by payer address",
+    description: "Read a COMPLETED token-transfer export on the server, filtered to one token, direction and optional payer. Returns every full payer address through cursor pagination, global matched record count, exact total amounts as decimal strings, highest observed exported block, and independently paginated original transfer details. Totals cover ALL matching records, not just this page. Use token_contract when a symbol is ambiguous. Direction is relative to address; a single exported address is inferred. Continue cursor for addresses and detail_cursor for details using the same filters. Cursors expire on API restart. No public download link is required. This is exported historical transfer evidence, not a current balance or a proof of full-chain coverage.",
+    path: "/export/address-summary",
+    inputSchema: {
+      job_id: z.string().uuid(),
+      ...tokenFilters,
+      address: address.optional().describe("Direction reference address; inferred for a single-address export. Required for in/out on multi-address exports."),
+      direction,
+      from_address: address.optional().describe("Optional complete payer address filter; also useful to reconcile one address against its transfer details."),
+      page_size: z.number().int().min(1).max(500).default(100),
+      cursor: z.string().max(2048).optional().describe("next_cursor returned by a prior page with the same export and filters."),
+      detail_page_size: z.number().int().min(1).max(500).default(100),
+      detail_cursor: z.string().max(2048).optional().describe("next_detail_cursor returned by a prior detail page with the same export and filters."),
+    },
+    summarize: (result) => {
+      const data = result.data as { total_records: number; total_addresses: number; total_amount: string; has_more: boolean; details_has_more: boolean };
+      return `Completed export: ${data.total_records} matching records across ${data.total_addresses} payer addresses; exact total amount ${data.total_amount}. More address pages: ${data.has_more}; more detail pages: ${data.details_has_more}.`;
+    },
+  },
+  {
     name: "ensure_chain_data",
     title: "Ensure chain data through the system downloader",
-    description: "Use before analysis when Coverage is incomplete. Reuses the platform's optimized Coverage→Planner→Worker download pipeline and downloads only missing ranges. Supports EVM, TRON and Solana acquisition; Solana availability and range support follow the active provider capability. Created jobs are isolated with source=chatgpt_mcp and ai_managed=true, distinct from user_download jobs. Returns immediately with a download_job_id when acquisition is needed.",
+    description: "Use before analysis when Coverage is incomplete. Solana full, time and slot ranges use dRPC finalized signature pagination and parsed transactions; do not claim full coverage until the job and required datasets are completed. Created AI jobs are isolated from user_download jobs.",
     path: "/data/ensure", method: "POST", readOnly: false,
     inputSchema: {
       chain: downloadChain,
       addresses: z.array(downloadAddress).min(1).max(200),
-      datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1),
+      datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs", "balances"])).min(1),
       range: ensureRange,
       performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
     },
@@ -259,7 +306,54 @@ export const toolDefinitions: ToolDefinition[] = [
   },
 ];
 
+toolDefinitions.push(...investigationTools);
+toolDefinitions.push(...createBatchTools(toolDefinitions.slice()));
+
+// Return an MCP file resource, rather than hiding the download URL in JSON.
+export function exportFileResources(result: RESTEnvelope): ResourceLink[] {
+  const data = result.data as Record<string, unknown> | null;
+  if (!result.success || !data || data.status !== "completed" || !Array.isArray(data.files)) return [];
+  return data.files.map((value: unknown) => {
+    const file = value as Record<string, unknown>;
+    if (!file || typeof file.url !== "string" || typeof file.name !== "string") throw new Error("Completed export file metadata is invalid");
+    const url = new URL(file.url);
+    if (url.protocol !== "https:" || url.username || url.password || !url.pathname.startsWith("/api/v1/download/")) throw new Error("Completed export download URL is invalid");
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "[::1]" || /^127\./.test(hostname) || hostname === "0.0.0.0") throw new Error("Completed export download URL points to loopback");
+    return {
+      type: "resource_link" as const,
+      uri: file.url,
+      name: file.name,
+      mimeType: typeof file.mime_type === "string" ? file.mime_type : "application/octet-stream",
+      ...(typeof file.size_bytes === "number" && Number.isSafeInteger(file.size_bytes) && file.size_bytes >= 0 ? { size: file.size_bytes } : {}),
+      annotations: { audience: ["user", "assistant"] as ("user" | "assistant")[] },
+    };
+  });
+}
+
+export function validateToolInput(name: string, input: Record<string, unknown>): void {
+  if (["get_token_balance", "trace_funds", "aggregate_transfers"].includes(name) && !input.token && !input.token_contract) throw new Error("token or token_contract is required");
+  if (input.timestamp && (input.block !== undefined || input.blockTag !== undefined)) throw new Error("timestamp and block/blockTag are mutually exclusive");
+  if (input.block !== undefined && input.blockTag !== undefined) throw new Error("use block or blockTag");
+  if(name==="read_contract") {
+    const check=(value:unknown):void=>{if(typeof value==="number"&&!Number.isSafeInteger(value))throw new Error("ABI integers outside safe JSON range must be strings");if(Array.isArray(value))value.forEach(check);else if(value&&typeof value==="object")Object.values(value).forEach(check)};
+    check(input.args);
+  }
+
+  if ((name === "find_fund_paths" || name === "build_address_network" || name === "get_export_address_summary") && !input.token && !input.token_contract) {
+    throw new Error("token or token_contract is required; cross-asset amounts cannot be aggregated");
+  }
+  if (name === "create_large_export") {
+    const single = typeof input.address === "string" && input.address.trim().length > 0;
+    const multiple = Array.isArray(input.addresses) && input.addresses.length > 0;
+    if (single === multiple) throw new Error("Provide address or addresses, exactly one form");
+    const valid = (input.format === "parquet" && input.compression === "zstd") || (input.format === "csv" && input.compression === "zip");
+    if (!valid) throw new Error("Supported export pairs are parquet+zstd and csv+zip");
+  }
+}
+
 export function registerTools(server: McpServer, client: RESTClient): void {
+  registerInvestigationResources(server, client);
   for (const definition of toolDefinitions) {
     server.registerTool(
       definition.name,
@@ -272,13 +366,13 @@ export function registerTools(server: McpServer, client: RESTClient): void {
       async (args: unknown) => {
         try {
           const input = args as Record<string, unknown>;
-          if ((definition.name === "find_fund_paths" || definition.name === "build_address_network") && !input.token && !input.token_contract) {
-            throw new Error("token or token_contract is required; cross-asset amounts cannot be aggregated");
+          if (definition.batch) {
+            const { envelope, items } = await executeBatch(client, definition.batch, input, validateToolInput);
+            const files = items.flatMap(item => item.success && item.response ? (item.tool === "get_export_status" ? exportFileResources(item.response) : investigationFileResources(item.response)) : []);
+            const counts = envelope.data as { succeeded: number; failed: number };
+            return { structuredContent: envelope, content: [{ type: "text" as const, text: `${counts.succeeded} operation(s) succeeded; ${counts.failed} failed. Every result retains its own precision, evidence and pagination.` }, ...files] };
           }
-          if (definition.name === "create_large_export") {
-            const valid = (input.format === "parquet" && input.compression === "zstd") || (input.format === "csv" && input.compression === "zip");
-            if (!valid) throw new Error("Supported export pairs are parquet+zstd and csv+zip");
-          }
+          validateToolInput(definition.name, input);
           if (definition.name === "ensure_chain_data_batch") {
             const requests = input.requests as Array<Record<string, unknown>>;
             const limit = Math.min(Number(input.max_concurrent) || 4, requests.length);
@@ -307,9 +401,10 @@ export function registerTools(server: McpServer, client: RESTClient): void {
             return { structuredContent: result, content: [{ type: "text" as const, text: `${started} download request(s) started; ${failed} failed during submission.` }] };
           }
           const result = definition.method === "POST" ? await client.post(definition.path, input) : await client.get(definition.path, input);
+          const files = definition.name === "get_export_status" ? exportFileResources(result) : investigationFileResources(result);
           return {
             structuredContent: result,
-            content: [{ type: "text" as const, text: definition.summarize(result) }],
+            content: [{ type: "text" as const, text: definition.summarize(result) }, ...files],
           };
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown MCP tool error";

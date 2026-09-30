@@ -10,7 +10,7 @@ import { ChainOAuthProvider } from "./oauth.js";
 import { RESTClient } from "./rest-client.js";
 import { registerTools, toolDefinitions } from "./tools.js";
 
-const instructions = "For a new address, call get_address_overview first, then get_flow_summary and get_counterparties. Use get_top_flows for largest sources or destinations. Historical net flow is not a verified current balance: inspect balance_source and is_current_balance from get_address_assets. Prefer aggregates over raw pages and never request more than 500 rows.";
+const instructions = "For current wealth use get_native_balance/get_token_balance/get_all_token_balances, which pin actual state and source. Use aggregate_transfers with full cursor pagination for all counterparties. Read completed exports with get_export_file and resources/read; verify SHA256. For fund lots use trace_funds and compare both FIFO and proportional assumptions. Labels, inferred exchange deposits and control analysis must retain confidence, provenance and coverage. Use batch_call_tools or dedicated batches for multiple addresses; preserve every independent cursor and monetary string.";
 
 export function createServer(config: Config): McpServer {
   const server = new McpServer(

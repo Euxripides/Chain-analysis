@@ -64,7 +64,7 @@ export class RESTClient {
       const response = await fetch(`${this.options.baseUrl}${path}`, { ...init, signal: controller.signal });
       const body = (await response.json()) as RESTEnvelope;
       if (!response.ok || !body.success) {
-        throw new Error(body.error?.message ?? `REST request failed with HTTP ${response.status}`);
+        throw new Error(`${body.error?.code ?? `HTTP_${response.status}`}: ${body.error?.message ?? "REST request failed"}`);
       }
       return body;
     } finally {
