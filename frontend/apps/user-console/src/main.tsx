@@ -32,6 +32,7 @@ import "@chain/user-ui/styles/shell.css";
 import "@chain/user-ui/styles/graph-shell.css";
 import "@chain/user-ui/styles/legacy-bridge.css";
 import "@chain/user-ui/styles/adapter.css";
+import "./styles/data-tools-clean.css";
 import { DialogProvider } from "@chain/ui";
 import { ChainSightProvider, UserDialogRenderer } from "@chain/user-ui";
 import { App } from "./App";

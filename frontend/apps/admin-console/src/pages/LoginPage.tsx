@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Field, StatusBadge, TopToast, useDialog, useTopToast } from "@chain/ui";
+import { Field, StatusBadge, useDialog } from "@chain/ui";
 import {
   ApiError,
   MFA_ERROR_CODES,
@@ -40,8 +40,6 @@ function formatCountdown(seconds: number): string {
 export default function LoginPage() {
   const { login, verifyMfa } = useAuth();
   const dialog = useDialog();
-  /** 登录失败的顶部短提示（2 秒自动消失，与用户端口径一致）。 */
-  const toast = useTopToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState("");
@@ -161,8 +159,7 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      // 登录失败 → 顶部短提示，2 秒自动消失（不再弹模态框）。
-      toast.show(err instanceof ApiError ? err.userMessage : "登录失败，请稍后重试");
+      dialog.notify("error", "登录失败", err instanceof ApiError ? err.userMessage : "请稍后重试");
     } finally {
       setSubmitting(false);
     }
@@ -189,11 +186,11 @@ export default function LoginPage() {
     } catch (err) {
       setCode("");
       if (!(err instanceof ApiError)) {
-        toast.show("第二步验证未通过，请稍后重试");
+        dialog.notify("error", "第二步验证未通过", "请稍后重试");
         return;
       }
       if (err.code === MFA_ERROR_CODES.invalid) {
-        toast.show("验证码不正确：请确认认证器与本机时间同步；恢复码只能用一次");
+        dialog.notify("error", "验证码不正确", "请确认认证器与本机时间同步；恢复码只能用一次。");
       } else if (err.code === MFA_ERROR_CODES.challengeInvalid) {
         backToPasswordStep("本次验证已失效", "第二步验证已过期或已被使用，请重新输入管理员邮箱与密码。");
       } else if (err.code === MFA_ERROR_CODES.attemptsExhausted) {
@@ -202,7 +199,7 @@ export default function LoginPage() {
           { label: "下一步", value: "重新输入管理员邮箱与密码" },
         ]);
       } else {
-        toast.show(err.userMessage);
+        dialog.notify("error", "第二步验证未通过", err.userMessage);
       }
     } finally {
       setSubmitting(false);
@@ -225,7 +222,6 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
-      <TopToast message={toast.message} />
       {/* 品牌面板：与用户端同款左右分栏（同一套 CSS，两个控制台视觉一致）。 */}
       <aside className="auth-aside">
         <div className="auth-aside__top">
@@ -243,14 +239,7 @@ export default function LoginPage() {
             <br />
             统一在这里管理
           </h2>
-          <p className="auth-aside__desc">用户与角色、登录与操作审计、任务与数据控制，全部留痕可追溯。</p>
-          <div className="auth-aside__points">
-            <span className="auth-aside__point"><span className="auth-aside__dot" />账号启停与角色授权</span>
-            <span className="auth-aside__point"><span className="auth-aside__dot" />登录记录与操作审计</span>
-            <span className="auth-aside__point"><span className="auth-aside__dot" />任务、数据与存储控制</span>
-          </div>
         </div>
-        <div className="auth-aside__foot">ChainSight Admin · 仅授权管理员</div>
       </aside>
       <div className="auth-card">
         <div className="auth-card__brand">
@@ -259,9 +248,7 @@ export default function LoginPage() {
           </span>
           <div>
             <div className="auth-card__title">ChainSight 后台管理</div>
-            <div className="auth-card__sub">
-              {mfa ? "两步验证 · 第二步" : "管理员、安全管理员与审计员入口"}
-            </div>
+            {mfa ? <div className="auth-card__sub">两步验证 · 第二步</div> : null}
           </div>
         </div>
         {mfa ? (

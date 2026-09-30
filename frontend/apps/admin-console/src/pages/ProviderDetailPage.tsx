@@ -1102,7 +1102,7 @@ export default function ProviderDetailPage() {
   if (resource.loading && !provider) {
     return (
       <>
-        <PageHeader title="Provider 详情" subtitle={<span className="mono">{providerKey}</span>} />
+        <PageHeader title="Provider 详情" subtitle={<span className="admin-detail-id mono">{providerKey}</span>} />
         <Card title="正在加载">
           <SkeletonRows rows={6} columns={4} />
         </Card>
@@ -1113,7 +1113,7 @@ export default function ProviderDetailPage() {
   if (!provider) {
     return (
       <>
-        <PageHeader title="Provider 详情" subtitle={<span className="mono">{providerKey}</span>} />
+        <PageHeader title="Provider 详情" subtitle={<span className="admin-detail-id mono">{providerKey}</span>} />
         <Card>
           <ErrorState title="Provider 数据加载失败" message={resource.error ?? "对象不存在或无权查看"} onRetry={resource.reload} />
         </Card>
@@ -1881,7 +1881,7 @@ export default function ProviderDetailPage() {
       <PageHeader
         title={provider.display_name || provider.key}
         subtitle={
-          <span className="toolbar">
+          <span className="toolbar admin-detail-id">
             <EntityLink value={provider.key} copyable />
             <StatusBadge tone="info">{provider.kind}</StatusBadge>
             <StatusBadge tone={providerTone(provider.status)}>{provider.status}</StatusBadge>

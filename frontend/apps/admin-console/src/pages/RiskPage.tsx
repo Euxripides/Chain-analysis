@@ -342,7 +342,7 @@ export default function RiskPage() {
             </div>
           </div>
 
-          <Card title="严重度时间轨" actions={<span className="risk-muted">点击任意小时可下钻</span>}>
+          <Card title="严重度时间轨">
             <div className="risk-rail">
               <div className="risk-rail__track" role="group" aria-label="按小时的最高严重度">
                 {buckets.map((bucket) => {
@@ -404,7 +404,7 @@ export default function RiskPage() {
                   </button>
                 ))}
                 {summary.by_reason.length === 0 ? (
-                  <EmptyState title="该窗口内没有异常认证事件" body="换一个时间窗口或等级再试。" />
+                  <EmptyState title="该窗口内没有异常认证事件" />
                 ) : null}
               </div>
             </Card>
@@ -426,7 +426,7 @@ export default function RiskPage() {
                     </span>
                   </div>
                 ))}
-                {summary.top_ips.length === 0 ? <EmptyState title="没有来源数据" body="该窗口内没有异常认证事件。" /> : null}
+                {summary.top_ips.length === 0 ? <EmptyState title="没有来源数据" /> : null}
               </div>
             </Card>
           </div>
@@ -502,14 +502,9 @@ export default function RiskPage() {
               rowKey={(row) => row.id}
               loading={loading}
               error={null}
-              empty={<EmptyState title="没有符合条件的风险事件" body="换一个时间窗口、等级或清除原因筛选后再试。" />}
+              empty={<EmptyState title="没有符合条件的风险事件" />}
               onRetry={() => void load()}
             />
-            {visibleEvents.length > 0 ? (
-              <div className="risk-muted" style={{ paddingTop: "var(--sp-3)" }}>
-                点击任意一行查看完整取证字段（会话、设备、请求与 Trace）。
-              </div>
-            ) : null}
           </Card>
         </>
       ) : null}

@@ -23,7 +23,6 @@ import {
   HashValue,
   InspectorDrawer,
   KeyValueList,
-  MetaLine,
   PageSection,
   SplitPane,
   Stepper,
@@ -126,9 +125,6 @@ interface ExportDraft {
   includeMeta: boolean;
   forceZip: boolean;
   includeDecodedInput: boolean;
-  /** 时间范围（可选，datetime-local 的本地时间字符串）。留空即导出全部。 */
-  rangeStart: string;
-  rangeEnd: string;
 }
 
 const FORMATS: ExportFormat[] = ["csv", "xlsx", "jsonl", "parquet"];
@@ -152,8 +148,6 @@ const EMPTY_DRAFT: ExportDraft = {
   includeMeta: false,
   forceZip: false,
   includeDecodedInput: false,
-  rangeStart: "",
-  rangeEnd: "",
 };
 
 function parseAddressInput(raw: string): string[] {
@@ -337,27 +331,6 @@ function ExportDraftEditor({
           label="Dataset"
         />
       </div>
-
-      {/* 时间范围（可选）：留空即导出全部。两个控件都是 datetime-local，
-          走本地时间输入、由 buildExportRange 转成带时区的 ISO 串。 */}
-      <Field label="开始时间（可选）" htmlFor={id("export-range-start")}>
-        <input
-          id={id("export-range-start")}
-          className="input"
-          type="datetime-local"
-          value={draft.rangeStart}
-          onChange={(event) => update({ rangeStart: event.target.value })}
-        />
-      </Field>
-      <Field label="结束时间（可选）" htmlFor={id("export-range-end")}>
-        <input
-          id={id("export-range-end")}
-          className="input"
-          type="datetime-local"
-          value={draft.rangeEnd}
-          onChange={(event) => update({ rangeEnd: event.target.value })}
-        />
-      </Field>
         </div>
       </section>
 
@@ -437,8 +410,6 @@ function buildAddressExportBody(current: ExportDraft): { body?: Record<string, u
   if (family && chainFamilyOf(current.chain) !== family) {
     return { error: { title: "链与地址不匹配", detail: `当前选择的是 ${current.chain}，但地址属于 ${familyLabel(family)}。请切换链后再创建导出。` } };
   }
-  const range = buildExportRange(current);
-  if (range.error) return { error: range.error };
   return {
     body: {
       chain: current.chain,
@@ -448,41 +419,8 @@ function buildAddressExportBody(current: ExportDraft): { body?: Record<string, u
       include_meta: current.includeMeta,
       force_zip: current.forceZip,
       include_decoded_input: current.includeDecodedInput,
-      ...range.body,
     },
   };
-}
-
-/**
- * 把草稿里的时间范围转成请求字段。
- *
- * 语义（与服务端一致）：闭区间；两端都可省略，都省略就是**全量导出**。
- * 服务端按 start_time/end_time 生成键集分页查询，因此"全量"不再有行数上限，
- * 也不会出现"状态成功但少了行"的情况。
- *
- * 输入控件是 datetime-local：它给出的是**本地时间**（例如 2026-01-02T03:04），
- * 必须转成带时区的 ISO 串再发出去，否则服务端会按 UTC 解析，用户选的范围会整体偏移。
- */
-function buildExportRange(current: ExportDraft): { body?: Record<string, unknown>; error?: { title: string; detail: string } } {
-  const toIso = (raw: string): string | null | undefined => {
-    const value = raw.trim();
-    if (!value) return undefined;
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toISOString();
-  };
-  const start = toIso(current.rangeStart);
-  const end = toIso(current.rangeEnd);
-  if (start === null || end === null) {
-    return { error: { title: "时间范围格式不正确", detail: "请重新选择开始与结束时间。" } };
-  }
-  if (start && end && new Date(start) > new Date(end)) {
-    return { error: { title: "时间范围不合法", detail: "开始时间不能晚于结束时间。" } };
-  }
-  const body: Record<string, unknown> = {};
-  if (start) body.start_time = start;
-  if (end) body.end_time = end;
-  return { body };
 }
 
 export default function ExportsPage() {
@@ -593,8 +531,6 @@ export default function ExportsPage() {
     draft.includeMeta,
     draft.forceZip,
     draft.includeDecodedInput,
-    draft.rangeStart,
-    draft.rangeEnd,
   ]);
 
   const jobOptions = useMemo(() => (jobsApi.data?.items ?? []).filter((job) => EXPORTABLE_JOB_STATUSES.has(job.status)), [jobsApi.data]);
@@ -1027,15 +963,6 @@ export default function ExportsPage() {
       <CsPageHeader
         title="导出中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "导出中心" }]}
-        meta={
-          <MetaLine
-            items={[
-              { label: "状态筛选", value: statusFilter || "全部状态" },
-              { label: "本页", value: `${rows.length} 条` },
-              { label: "数据源", value: "/api/v2/exports" },
-            ]}
-          />
-        }
         secondaryAction={
           <span className="toolbar">
             <select
@@ -1063,8 +990,8 @@ export default function ExportsPage() {
                 Trace
               </button>
             ) : null}
-            <button type="button" className="btn btn--sm" onClick={explainCaliber}>
-              口径说明
+            <button type="button" className="btn btn--sm btn--ghost" aria-label="导出数据说明" onClick={explainCaliber}>
+              ⓘ
             </button>
           </span>
         }

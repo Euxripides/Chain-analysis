@@ -580,7 +580,7 @@ export default function JobDetailPage() {
       <BackLink to="/jobs" label="返回全局任务" />
       <PageHeader
         title={`任务诊断 · ${jobStatus}`}
-        subtitle={`job_id ${jobId} · as_of ${formatTime(data?.as_of)} · 来源 /api/admin/v1/jobs/${jobId}/diagnostics`}
+        subtitle={<span className="admin-detail-id mono">job_id {jobId} · {formatTime(data?.as_of)}</span>}
         actions={
           <>
             <button type="button" className="btn btn--sm" onClick={explainFixedChain}>

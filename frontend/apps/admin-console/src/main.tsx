@@ -3,10 +3,12 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "@chain/design-tokens/tokens.css";
 import "@chain/ui/ui.css";
+import "./admin-clean.css";
 import { DialogProvider } from "@chain/ui";
 import { App } from "./App";
 
 const basename = document.querySelector("base")?.getAttribute("href")?.replace(/\/$/, "") || "/admin";
+document.documentElement.dataset.app = "admin";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

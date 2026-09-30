@@ -163,7 +163,7 @@ export default function StoragePage() {
             ))}
           </div>
 
-          <Card title="最近导出" actions={<span className="dops-note">点击「详情」查看对象引用与错误</span>}>
+          <Card title="最近导出">
             <DataTable<ExportRow>
               columns={[
                 { key: "created_at", header: "创建时间", width: "150px", render: (row) => fmtDateTime(row.created_at) },
@@ -187,7 +187,7 @@ export default function StoragePage() {
               rowKey={(row) => row.id}
               loading={loading}
               error={null}
-              empty={<EmptyState title="还没有导出产物" body="在用户台发起一次导出后，产物会出现在这里。" />}
+              empty={<EmptyState title="还没有导出产物" />}
               onRetry={() => void load()}
             />
           </Card>

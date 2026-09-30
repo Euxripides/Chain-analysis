@@ -364,6 +364,7 @@ export default function AlertsPage() {
         subtitle={"P0 未处置 " + openP0 + " · 本页 " + list.items.length + " 条 · 来源 /api/admin/v1/alerts"}
         actions={
           <>
+            {openP0 > 0 ? <StatusBadge tone="danger">P0 未处置 {openP0}</StatusBadge> : null}
             <button type="button" className="btn btn--sm" onClick={explainScope}>
               口径
             </button>

@@ -1011,8 +1011,6 @@ export default function AddressDetailPage() {
                 { label: "数据来源", value: overview.data?.source?.provider || "—" },
                 { label: "数据时间", value: formatTime(overview.data?.source?.as_of) },
                 { label: "Coverage", value: coverageItems.length + " 个 dataset" },
-                { label: "余额口径", value: currentBlock?.source || "—" },
-                { label: "净流口径", value: flowBlock?.source || "—" },
               ]}
             />
           </div>
@@ -1023,8 +1021,8 @@ export default function AddressDetailPage() {
           </Button>
         }
         secondaryAction={
-          <Button size="sm" disabled={!overview.data} onClick={showCaliber}>
-            口径说明
+          <Button size="sm" aria-label="地址数据说明" disabled={!overview.data} onClick={showCaliber}>
+            ⓘ
           </Button>
         }
       />

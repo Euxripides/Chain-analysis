@@ -232,16 +232,9 @@ export default function ExplorerPage() {
         className="cs-explorer-header"
         title="地址与交易查询"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "地址与交易查询" }]}
-        meta={
-          <div className="cs-explorer-header__meta">
-            <span>已启用链 <strong>{chains.length}</strong></span>
-            <span>最近查询 <strong>{recent.length} / {MAX_RECENT}</strong></span>
-          </div>
-        }
         secondaryAction={
-          <button type="button" className="btn btn--sm cs-explorer-help" onClick={explain}>
+          <button type="button" className="btn btn--sm cs-explorer-help" aria-label="查询说明" onClick={explain}>
             <Info size={15} aria-hidden="true" />
-            说明
           </button>
         }
       />
