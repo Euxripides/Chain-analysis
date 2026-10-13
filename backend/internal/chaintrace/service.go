@@ -71,7 +71,7 @@ func (s *Service) TransactionTrace(ctx context.Context, chainSlug string, hash c
 		cached, cacheErr := s.store.Get(ctx, chainSlug, hash)
 		if cacheErr != nil {
 			s.log.Warn("trace cache lookup failed", "err", cacheErr)
-		} else if cached != nil {
+		} else if currentNormalizedTrace(cached) {
 			rpc.TraceCacheHitTotal.WithLabelValues(chainSlug).Inc()
 			rpc.TraceRequestsTotal.WithLabelValues(chainSlug, "cache_hit").Inc()
 			return cached, nil
@@ -164,7 +164,21 @@ func (s *Service) InternalCalls(ctx context.Context, chainSlug string, hash chai
 	if s.store == nil {
 		return nil, nil
 	}
-	return s.store.InternalCalls(ctx, chainSlug, hash)
+	// Old derived rows can contain shifted indices and missing descendants. Use
+	// the versioned canonical tree instead of mixing them with repaired rows.
+	result, err := s.TransactionTrace(ctx, chainSlug, hash, Options{Consistency: "local_only"})
+	if err != nil {
+		return nil, err
+	}
+	return ExtractInternalActivity(result), nil
+}
+
+func currentNormalizedTrace(t *TraceResult) bool {
+	if t == nil || t.Root == nil || t.Root.NormalizationVersion != NormalizationVersion {
+		return false
+	}
+	frames, depth := Summarize(t.Root)
+	return frames == t.FrameCount && depth == t.MaxDepth
 }
 
 // RawObjectKey 原始 Trace 的对象键（§107）。

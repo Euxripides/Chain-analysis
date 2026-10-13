@@ -249,6 +249,16 @@ func (p *PagePolicy) OnError(key, dataset string, pe *provider.Error, pageSize i
 	case provider.ClassBodyTruncated:
 		// 传输层截断：短抖动重试同一逻辑页（§66），不动 pageSize
 		d.Backoff = 200 * time.Millisecond
+		// Large responses that repeatedly end before the JSON document closes
+		// should not replay the same expensive page unchanged. Small transport
+		// interruptions keep their existing page size.
+		if pe.BodyBytes >= 1<<20 && pe.Duration > 30*time.Second {
+			d.NextPageSize = prevLevel(p.levels, prevLevel(p.levels, s.CurrentPageSize))
+			s.CooldownRemaining = a.PageDownCooldownSuccess
+			if d.NextPageSize < s.CurrentPageSize {
+				observability.AnkrPageSizeDowngrade.Inc()
+			}
+		}
 
 	case provider.ClassBodyIdleTimeout:
 		// Body Idle：Provider 拥塞或超大响应，短抖动重试（§22/§68）

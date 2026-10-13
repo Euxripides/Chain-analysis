@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	downloadprovider "github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"strings"
 	"sync"
 	"time"
@@ -211,6 +212,14 @@ func (g *Gateway) runBatchChunk(ctx context.Context, reqs []Request, specs []Met
 		}
 		callCtx, cancel := context.WithTimeout(ctx, timeout)
 		started := time.Now()
+		if err := downloadprovider.ReserveDownloadRequest(callCtx, int64(len(batch)), g.pricing.CreditsPerCall*float64(len(batch)), g.pricing.CostPerCallUSD*float64(len(batch))); err != nil {
+			cancel()
+			release()
+			for _, idx := range chunk {
+				responses[idx] = Response{Chain: reqs[idx].Chain, Method: reqs[idx].Method, Error: &Error{Class: ClassBudgetExceeded, Message: "download recovery budget exhausted", Cause: err}}
+			}
+			return
+		}
 		results, callErr := candidate.Provider.BatchCall(callCtx, batch)
 		latency := time.Since(started)
 		cancel()
@@ -224,7 +233,7 @@ func (g *Gateway) runBatchChunk(ctx context.Context, reqs []Request, specs []Met
 			perr.Provider, perr.Chain = candidate.Name, chainSlug
 			perr.Message = Redact(perr.Message, g.secrets...)
 		}
-		g.breakers.Record(breakerKey, perr == nil)
+		g.breakers.Record(breakerKey, providerRespondedHealthy(perr))
 		g.health.Observe(candidate.Name, chainSlug, latency, perr)
 		bytes := 0
 		for i := range results {

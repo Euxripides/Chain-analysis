@@ -341,13 +341,19 @@ type BalanceSnapshot struct {
 	Decimals *int    `json:"decimals"`
 	Symbol   *string `json:"token_symbol"`
 	Source   string  `json:"balance_source"`
-	Provider string  `json:"provider"`
+
+	Provider       string    `json:"provider"`
+	RPCProvider    string    `json:"rpc_provider"`
+	QueriedAt      time.Time `json:"queried_at"`
+	BlockNumber    uint64    `json:"block_number"`
+	BlockTimestamp time.Time `json:"block_timestamp"`
+	SourceDetail   string    `json:"balance_source_detail"`
 	StatePoint
 	MetadataErrors map[string]string `json:"metadata_errors,omitempty"`
 }
 
 func (s *Service) SnapshotBalance(ctx context.Context, slug string, holder, token chain.Address, point StatePoint, opt Options) (BalanceSnapshot, error) {
-	out := BalanceSnapshot{Chain: slug, Address: holder.String(), Token: token.String(), Native: token == "", Source: "rpc_state", StatePoint: point}
+	out := BalanceSnapshot{Chain: slug, Address: holder.String(), Token: token.String(), Native: token == "", Source: "rpc", SourceDetail: "rpc_state", StatePoint: point, BlockNumber: point.Block, BlockTimestamp: point.Time, QueriedAt: time.Now().UTC()}
 	var raw *big.Int
 	if token == "" {
 		result, err := s.ReadRPC(ctx, slug, "eth_getBalance", []any{holder.String(), point.Ref.String()}, opt)
@@ -411,6 +417,7 @@ func (s *Service) SnapshotBalance(ctx context.Context, slug string, holder, toke
 			}
 		}
 	}
+	out.RPCProvider = out.Provider
 	out.Raw = raw.String()
 	if out.Decimals != nil {
 		value := decimal.NewFromBigInt(raw, -int32(*out.Decimals)).String()

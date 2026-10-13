@@ -4,6 +4,7 @@ package download
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -63,9 +64,38 @@ func (b *byteBudget) Reserve(n int64) {
 	b.mu.Unlock()
 }
 
-// ReserveExtra 实际响应超出预估时补预留（可能阻塞）。
+// ReserveExtra accounts an already-decoded response without blocking its owner.
 func (b *byteBudget) ReserveExtra(n int64) {
-	b.Reserve(n)
+	if n <= 0 {
+		return
+	}
+	// The decoded body already exists. Account it without waiting while holding
+	// another reservation; further admissions block until these owners release.
+	b.mu.Lock()
+	b.used += n
+	b.mu.Unlock()
+}
+
+// ReserveContext bounds admission before HTTP and lets shutdown cancel waiters.
+func (b *byteBudget) ReserveContext(ctx context.Context, n int64) error {
+	if n <= 0 {
+		return ctx.Err()
+	}
+	if n > b.cap {
+		return fmt.Errorf("page memory prediction %d exceeds budget %d", n, b.cap)
+	}
+	stop := context.AfterFunc(ctx, func() { b.mu.Lock(); b.cond.Broadcast(); b.mu.Unlock() })
+	defer stop()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for b.used+n > b.cap && ctx.Err() == nil {
+		b.cond.Wait()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.used += n
+	return nil
 }
 
 func (b *byteBudget) Release(n int64) {

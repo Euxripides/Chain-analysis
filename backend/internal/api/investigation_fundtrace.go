@@ -9,13 +9,23 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/shopspring/decimal"
+	"golang.org/x/sync/errgroup"
 	"math/big"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 func (s *Server) investigationTrace(ctx context.Context, q investigationRequest) (any, map[string]any, error) {
+
+	if q.AttributionModel == "" {
+		q.AttributionModel = "both"
+	}
+	if q.AttributionModel != "both" && q.AttributionModel != "fifo" && q.AttributionModel != "proportional" {
+		return nil, nil, fmt.Errorf("attribution_model must be both, proportional or fifo")
+	}
 	if q.TokenContract == "" {
 		return nil, nil, fmt.Errorf("trace_funds requires the exact ERC20 token contract")
 	}
@@ -32,7 +42,7 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	}
 	matches := []chainread.Log{}
 	for _, log := range receipt.Logs {
-		if strings.EqualFold(log.Address.String(), q.TokenContract) && len(log.Topics) == 3 && strings.EqualFold(log.Topics[0], method.Topic0Of("Transfer(address,address,uint256)")) && (q.LogIndex == nil || *q.LogIndex == log.LogIndex) {
+		if !log.Removed && log.TxHash == receipt.TxHash && log.BlockNumber == *receipt.BlockNumber && strings.EqualFold(log.Address.String(), q.TokenContract) && len(log.Topics) == 3 && strings.EqualFold(log.Topics[0], method.Topic0Of("Transfer(address,address,uint256)")) && (q.LogIndex == nil || *q.LogIndex == log.LogIndex) {
 			matches = append(matches, log)
 		}
 	}
@@ -55,6 +65,9 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	sourceBlock, e := s.deps.ChainRead.Block(ctx, q.Chain, chain.AtBlock(block), false, investigationOptions())
 	if e != nil || sourceBlock == nil {
 		return nil, nil, fmt.Errorf("source block unavailable")
+	}
+	if e = validateTraceSource(receipt, sourceBlock, h); e != nil {
+		return nil, nil, e
 	}
 	point := chainread.StatePoint{Block: block, Hash: sourceBlock.Hash, Time: time.Unix(int64(sourceBlock.Timestamp), 0).UTC(), Ref: chain.AtBlock(block)}
 	decimals, e := s.probeContract(ctx, q.Chain, q.TokenContract, "decimals()", nil, point)
@@ -111,7 +124,24 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	if e != nil {
 		return nil, nil, e
 	}
+	if head == nil {
+		return nil, nil, summaryError(503, "SOURCE_STATE_UNAVAILABLE", "Latest block is unavailable")
+	}
+
+	if q.StartTime != "" {
+		t, e := time.Parse(time.RFC3339, q.StartTime)
+		if e != nil || point.Time.Before(t) {
+			return nil, nil, fmt.Errorf("start_time must be at or before the source transfer")
+		}
+	}
 	endTime := point.Time.Add(time.Duration(q.TimeWindow) * time.Second)
+	if q.EndTime != "" {
+		t, e := time.Parse(time.RFC3339, q.EndTime)
+		if e != nil || t.Before(point.Time) || t.Sub(point.Time) > 366*24*time.Hour {
+			return nil, nil, fmt.Errorf("end_time must be within 366 days after source transfer")
+		}
+		endTime = t
+	}
 	var endpoint chainread.StatePoint
 	if endTime.Unix() > int64(head.Timestamp) {
 		endpoint, e = s.deps.ChainRead.ResolveState(ctx, q.Chain, chain.Latest(), nil, investigationOptions())
@@ -123,11 +153,15 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	}
 	from := topicAddress(log.Topics[1])
 	to := topicAddress(log.Topics[2])
+	if q.Source != "" && q.Source != from {
+		return nil, nil, fmt.Errorf("source_address must match the selected Transfer sender")
+	}
 	if from == to {
 		return nil, nil, fmt.Errorf("source cannot be a self transfer")
 	}
 	nodes := []string{to}
 	seen := map[string]bool{to: true}
+	arrivals := map[string]tracePosition{to: {Block: block, Index: log.LogIndex}}
 	ledger := map[string]query.LedgerTransfer{}
 	truncated := false
 	reasons := []string{}
@@ -145,21 +179,21 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 			front[a] = true
 		}
 		next := []string{}
+		frontierLimited := false
 		for _, tx := range rows {
-			key := fmt.Sprintf("%s:%d", tx.Hash, tx.Index)
-			if len(ledger) >= q.MaxRecords {
+			if !retainTraceTransfer(ledger, tx, q.MaxRecords) {
 				truncated = true
 				continue
 			}
-			ledger[key] = tx
-			if front[tx.From] && !seen[tx.To] && tx.To != "0x"+strings.Repeat("0", 40) {
-				if len(seen) < q.MaxNodes && hop < q.MaxHops {
-					seen[tx.To] = true
-					next = append(next, tx.To)
-				} else {
-					truncated = true
-				}
+			if added, limited := extendTraceFrontier(tx, front, seen, arrivals, q.MaxNodes, hop < q.MaxHops); added {
+				next = append(next, tx.To)
+			} else if limited {
+				truncated = true
+				frontierLimited = true
 			}
+		}
+		if frontierLimited {
+			reasons = append(reasons, "node or hop budget reached")
 		}
 		nodes = next
 	}
@@ -170,7 +204,8 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	for _, tx := range ledger {
 		transfers = append(transfers, tx)
 		accounts[tx.From] = true
-		accounts[tx.To] = true
+		// Only ledger senders need an older-funds baseline. A sink that never sends
+		// cannot affect allocation; querying its balance just spends archive budget.
 	}
 	if len(accounts) > q.MaxNodes*2 {
 		return nil, nil, fmt.Errorf("too many counterparties for archive baselines; narrow time_window")
@@ -179,26 +214,50 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 	before := point
 	before.Block = block - 1
 	before.Ref = chain.AtBlock(block - 1)
-	for address := range accounts {
-		if address == "0x"+strings.Repeat("0", 40) {
-			baselines[address] = "0"
-			continue
-		}
-		raw, e := s.probeContract(ctx, q.Chain, q.TokenContract, "balanceOf(address)", []any{address}, before)
-		if e != nil {
-			return nil, nil, e
-		}
-		if len(raw) != 32 {
-			return nil, nil, fmt.Errorf("invalid archive balanceOf baseline")
-		}
-		baselines[address] = new(big.Int).SetBytes(raw).String()
+
+	var baselineMu sync.Mutex
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
+	for account := range accounts {
+		address := account
+		g.Go(func() error {
+			value := "0"
+			if address != "0x"+strings.Repeat("0", 40) {
+				raw, e := s.probeContract(gctx, q.Chain, q.TokenContract, "balanceOf(address)", []any{address}, before)
+				if e != nil {
+					return e
+				}
+				if len(raw) != 32 {
+					return fmt.Errorf("invalid archive balanceOf baseline")
+				}
+				value = new(big.Int).SetBytes(raw).String()
+			}
+			baselineMu.Lock()
+			baselines[address] = value
+			baselineMu.Unlock()
+			return nil
+		})
 	}
+	if e = g.Wait(); e != nil {
+		return nil, nil, e
+	}
+	sort.Slice(transfers, func(i, j int) bool {
+		if transfers[i].Block != transfers[j].Block {
+			return transfers[i].Block < transfers[j].Block
+		}
+		if transfers[i].Index != transfers[j].Index {
+			return transfers[i].Index < transfers[j].Index
+		}
+		return transfers[i].Hash < transfers[j].Hash
+	})
+	batchID := fmt.Sprintf("%s:%s:%s:%d:%s", q.Chain, q.TokenContract, q.SourceTx, log.LogIndex, seed.String())
 	models := []fundtrace.Result{}
-	for _, name := range []string{"proportional", "fifo"} {
-		result, e := fundtrace.Allocate(name, transfers, baselines, q.SourceTx, log.LogIndex, seed.String(), q.MaxHops)
+	for _, name := range traceModels(q.AttributionModel) {
+		result, e := fundtrace.AllocateContext(ctx, name, transfers, baselines, q.SourceTx, log.LogIndex, seed.String(), q.MaxHops, batchID)
 		if e != nil {
 			return nil, nil, e
 		}
+		fundtrace.Format(&result, int(d))
 		models = append(models, result)
 		if len(result.Anomalies) > 0 {
 			truncated = true
@@ -217,7 +276,17 @@ func (s *Server) investigationTrace(ctx context.Context, q investigationRequest)
 		}
 		coverage["complete"] = !truncated
 	}
-	return map[string]any{"chain": q.Chain, "token_contract": q.TokenContract, "decimals": d, "source_transfer": seedTx, "seed_amount_raw": seed.String(), "seed_amount": decimal.NewFromBigInt(seed, -int32(d)).String(), "baseline_block": block - 1, "baseline_balances_raw": baselines, "data_cutoff_block": endpoint.Block, "models": models, "evidence": transfers, "complete": !truncated, "limitations": reasons, "interpretation": "Two accounting hypotheses over indexed ERC20 transfers; neither proves identity of fungible units", "max_hops": q.MaxHops}, meta, nil
+
+	comparison := map[string]any{"model_consistency": nil, "reason": "Comparison requires attribution_model=both"}
+	if len(models) == 2 {
+		comparison = fundtrace.Compare(models[0], models[1], int(d))
+	}
+
+	output := map[string]any{"chain": q.Chain, "token_contract": q.TokenContract, "decimals": d, "source_transfer": seedTx, "seed_amount_raw": seed.String(), "seed_amount": decimal.NewFromBigInt(seed, -int32(d)).String(), "baseline_block": block - 1, "baseline_balances_raw": baselines, "baseline_scope": "Senders of retained balance-changing ledger transfers", "ledger_scope": "Zero-value and self transfers have no allocation effect and are excluded; use get_token_transfers for full activity", "data_cutoff_block": endpoint.Block, "models": models, "evidence": transfers, "complete": !truncated, "limitations": reasons, "interpretation": "Accounting hypotheses over indexed ERC20 transfers; they do not prove identity of fungible units", "max_hops": q.MaxHops, "source_batch_id": batchID, "attribution_type": "inferred", "source_selection": "Confirmed receipt Transfer; source_address is its sender", "share_display_precision": 80, "comparison": comparison}
+	for k, v := range comparison {
+		output[k] = v
+	}
+	return output, meta, nil
 }
 func topicAddress(topic string) string {
 	if len(topic) != 66 {

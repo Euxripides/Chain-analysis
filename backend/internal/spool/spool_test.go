@@ -25,7 +25,8 @@ func TestWriteScanLoadRemove(t *testing.T) {
 		json.RawMessage("{\"blockNumber\":\"0x1\",\"txHash\":\"a\"}"),
 		json.RawMessage("{\"blockNumber\":\"0x2\",\"txHash\":\"b\"}"),
 	}
-	rawPath, metaPath, err := s.WritePage(meta, rows)
+	durable, err := s.WritePageWithMeta(meta, rows)
+	rawPath, metaPath := durable.RawPath, durable.MetaPath
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +46,9 @@ func TestWriteScanLoadRemove(t *testing.T) {
 	}
 	if pages[0].Meta.SHA256 == "" || pages[0].Meta.Rows != 2 {
 		t.Fatalf("manifest fields missing: %+v", pages[0].Meta)
+	}
+	if durable.Meta.SHA256 != pages[0].Meta.SHA256 || durable.Meta.Rows != len(rows) || durable.Meta.DecodedBytes != pages[0].Meta.DecodedBytes {
+		t.Fatalf("returned metadata differs from durable manifest: %+v", durable.Meta)
 	}
 	loaded, err := s.LoadRows(pages[0])
 	if err != nil {

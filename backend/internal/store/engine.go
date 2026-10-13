@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,17 +44,17 @@ func (s *Store) PageDurableCheckpoint(ctx context.Context, p model.Page, pageTok
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
-	_, err = tx.Exec(ctx, "INSERT INTO download_pages "+
+	err = tx.QueryRow(ctx, "INSERT INTO download_pages "+
 		"(id, job_id, shard_id, dataset, page_no, query_hash, status, page_size, wire_bytes, decoded_bytes, raw_path, raw_sha256, "+
 		" rows_fetched, rows_parsed, rows_inserted, unique_rows, next_page_token_hash, from_block, to_block, "+
 		" fetch_started_at, body_completed_at, durable_at, ingested_at, validated_at, error) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,0,0,$14,$15,$16,$17,$18,$19,NULL,NULL,$20) "+
-		"ON CONFLICT (shard_id, page_no) DO UPDATE SET status='DURABLE', page_size=$8, wire_bytes=$9, decoded_bytes=$10, "+
+		"ON CONFLICT (shard_id, page_no) DO UPDATE SET status='DURABLE', raw_archive_enabled=true, raw_object_key='', raw_uploaded_at=NULL, next_upload_at=now(), page_size=$8, wire_bytes=$9, decoded_bytes=$10, "+
 		"raw_path=$11, raw_sha256=$12, rows_fetched=$13, next_page_token_hash=$14, from_block=$15, to_block=$16, "+
-		"fetch_started_at=$17, body_completed_at=$18, durable_at=$19, error=$20, updated_at=now()",
+		"fetch_started_at=$17, body_completed_at=$18, durable_at=$19, error=$20, updated_at=now() RETURNING id",
 		p.ID, jobID, p.ShardID, p.Dataset, p.PageNo, p.QueryHash, model.PageDurable, p.PageSize, p.WireBytes, p.DecodedBytes,
 		p.RawPath, p.RawSHA256, p.RowsFetched, p.NextPageTokenHash, p.FromBlock, p.ToBlock,
-		p.FetchStartedAt, p.BodyCompletedAt, time.Now(), p.Error)
+		p.FetchStartedAt, p.BodyCompletedAt, time.Now(), p.Error).Scan(&p.ID)
 	if err != nil {
 		return "", err
 	}
@@ -85,22 +86,74 @@ func (s *Store) EnsurePageRow(ctx context.Context, p model.Page) error {
 	return err
 }
 
+// PageIngestUpdate is committed only after all fact and activity chunks succeeded.
+type PageIngestUpdate struct {
+	PageID                   string
+	Parsed, Inserted, Unique int
+}
+
 func (s *Store) UpdatePageIngested(ctx context.Context, pageID string, parsed, inserted, unique int) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE download_pages SET status=$2, rows_parsed=$3, rows_inserted=$4, unique_rows=$5, ingested_at=now(), error='', updated_at=now() "+
-		"WHERE id=$1", pageID, model.PageIngested, parsed, inserted, unique)
-	return err
+	return s.UpdatePagesIngested(ctx, []PageIngestUpdate{{pageID, parsed, inserted, unique}})
+}
+
+// UpdatePagesIngested commits the entire acknowledgement batch or none of it.
+// Missing IDs must never be mistaken for success: callers release durable spool
+// files only after this transaction commits.
+func (s *Store) UpdatePagesIngested(ctx context.Context, updates []PageIngestUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(updates))
+	parsed, inserted, unique := make([]int64, 0, len(updates)), make([]int64, 0, len(updates)), make([]int64, 0, len(updates))
+	seen := make(map[string]bool, len(updates))
+	for _, u := range updates {
+		if u.PageID == "" || seen[u.PageID] {
+			return fmt.Errorf("invalid or duplicate page acknowledgement: %s", u.PageID)
+		}
+		seen[u.PageID] = true
+		ids = append(ids, u.PageID)
+		parsed = append(parsed, int64(u.Parsed))
+		inserted = append(inserted, int64(u.Inserted))
+		unique = append(unique, int64(u.Unique))
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `UPDATE download_pages p SET
+ status=CASE WHEN p.status='VALIDATED' THEN p.status ELSE 'INGESTED' END,
+ rows_parsed=u.parsed, rows_inserted=u.inserted, unique_rows=u.unique_rows,
+ ingested_at=COALESCE(p.ingested_at,now()), error='', updated_at=now()
+ FROM unnest($1::uuid[], $2::bigint[], $3::bigint[], $4::bigint[]) AS u(id,parsed,inserted,unique_rows)
+ WHERE p.id=u.id AND p.status IN ('DURABLE','FAILED','INGESTED','VALIDATED')`, ids, parsed, inserted, unique)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != int64(len(updates)) {
+		return fmt.Errorf("page acknowledgement mismatch: updated %d of %d", tag.RowsAffected(), len(updates))
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) FailPage(ctx context.Context, pageID, errMsg string) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE download_pages SET status=$2, error=$3, updated_at=now() WHERE id=$1", pageID, model.PageFailed, errMsg)
-	return err
+	return s.failPageChecked(ctx, pageID, model.PageFailed, errMsg)
 }
 
-// FailPageFinal 把一个不可恢复的页标记为终态失败：PagesNeedingIngest 只挑选
-// DURABLE / 30 秒前的 FAILED，因此 FAILED_FINAL 页不会被无限重放。
+// Completed pages cannot be downgraded by a stale parser/recovery result.
 func (s *Store) FailPageFinal(ctx context.Context, pageID, errMsg string) error {
-	_, err := s.Pool.Exec(ctx, "UPDATE download_pages SET status=$2, error=$3, updated_at=now() WHERE id=$1", pageID, model.PageFailedFinal, errMsg)
-	return err
+	return s.failPageChecked(ctx, pageID, model.PageFailedFinal, errMsg)
+}
+
+func (s *Store) failPageChecked(ctx context.Context, pageID, status, errMsg string) error {
+	tag, err := s.Pool.Exec(ctx, "UPDATE download_pages SET status=$2, error=$3, updated_at=now() WHERE id=$1 AND status IN ('DURABLE','FAILED','FAILED_FINAL')", pageID, status, errMsg)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("page failure transition rejected: %s", pageID)
+	}
+	return nil
 }
 
 // PageStatus 返回单页当前状态。spool 文件缺失时用来区分"真的丢了原始对象"和
@@ -112,15 +165,16 @@ func (s *Store) PageStatus(ctx context.Context, pageID string) (string, error) {
 }
 
 // PageIngestSummary 汇总一个 Shard 的页面终态：
-//   ingested  = INGESTED/VALIDATED
-//   pending   = 仍可被重放的页（DURABLE 或 30 秒前的 FAILED）
-//   permanent = FAILED_FINAL（原始 spool 对象不可恢复）
+//
+//	ingested  = INGESTED/VALIDATED
+//	pending   = 仍可被重放的页（包括退避中的 FAILED）
+//	permanent = FAILED_FINAL（原始 spool 对象不可恢复）
 //
 // finalizer 用 permanent>0 && pending==0 判定"这个 Shard 永远不会再进展"。
 func (s *Store) PageIngestSummary(ctx context.Context, shardID string) (ingested, pending, permanent int64, lastErr string, err error) {
 	err = s.Pool.QueryRow(ctx,
 		"SELECT COUNT(*) FILTER (WHERE status IN ('INGESTED','VALIDATED')), "+
-			"COUNT(*) FILTER (WHERE status='DURABLE' OR (status='FAILED' AND updated_at < now() - interval '30 seconds')), "+
+			"COUNT(*) FILTER (WHERE status IN ('DURABLE','FAILED')), "+
 			"COUNT(*) FILTER (WHERE status=$2), "+
 			"COALESCE(MAX(error) FILTER (WHERE status=$2),'') "+
 			"FROM download_pages WHERE shard_id=$1", shardID, model.PageFailedFinal).
@@ -222,9 +276,12 @@ func (s *Store) SetShardIngested(ctx context.Context, shardID string, ingestDura
 // CompleteShardFinalized Validation 通过后才 COMPLETE（§63 Coverage Finalizer）。
 func (s *Store) CompleteShardFinalized(ctx context.Context, shardID, rawObject string, rows, bytes int64, ingestDurationMs int64) error {
 	// 状态守卫：只允许 FETCHED/INGESTED → COMPLETED（幂等，多 finalizer 轮次安全）。
-	_, err := s.Pool.Exec(ctx, "UPDATE download_shards "+
-		"SET status='COMPLETED', validated_at=now(), raw_object=$2, downloaded_rows=$3, downloaded_bytes=$4, ingest_duration_ms=$5, error='', updated_at=now() "+
+	tag, err := s.Pool.Exec(ctx, "UPDATE download_shards "+
+		"SET status='COMPLETED', validated_at=now(), raw_object=CASE WHEN $2='' THEN raw_object ELSE $2 END, downloaded_rows=$3, downloaded_bytes=$4, ingest_duration_ms=$5, error='', updated_at=now() "+
 		"WHERE id=$1 AND status IN ('FETCHED','INGESTED')", shardID, rawObject, rows, bytes, ingestDurationMs)
+	if err == nil && tag.RowsAffected() != 1 {
+		return fmt.Errorf("shard completion transition rejected: %s", shardID)
+	}
 	return err
 }
 
@@ -413,6 +470,32 @@ func (s *Store) ListShardsByStatus(ctx context.Context, status string, limit int
 	return out, rows.Err()
 }
 
+// ListFinalizingShardsAfter scans each status fairly, including pages waiting
+// on ingestion. Callers wrap to the beginning after an empty result.
+func (s *Store) ListFinalizingShardsAfter(ctx context.Context, status string, after time.Time, afterID string, limit int) ([]model.Shard, error) {
+	q := "SELECT " + shardCols + " FROM download_shards WHERE status=$1"
+	args := []any{status, limit}
+	if afterID != "" {
+		q += " AND (updated_at,id)>($3,$4::uuid)"
+		args = append(args, after, afterID)
+	}
+	q += " ORDER BY updated_at,id LIMIT $2"
+	rows, err := s.Pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var shards []model.Shard
+	for rows.Next() {
+		sh, err := scanShard(rows)
+		if err != nil {
+			return nil, err
+		}
+		shards = append(shards, *sh)
+	}
+	return shards, rows.Err()
+}
+
 // IngestedRowsByJob 页面级 Ingest 行数（双进度展示，§61）。
 func (s *Store) IngestedRowsByJob(ctx context.Context, jobID string) (int64, error) {
 	var n int64
@@ -447,11 +530,22 @@ func (s *Store) UpsertShardProfile(ctx context.Context, p model.ShardProfile) er
 }
 
 func (s *Store) UpsertPageProfile(ctx context.Context, p model.PageProfile) error {
+	// Empty-prefix shards and empty downloads do not describe payload density.
+	// Never let their last-writer result erase a populated history or its sample count.
+	if p.PagesObserved <= 0 || p.AvgRows <= 0 {
+		return nil
+	}
+	oldWeight := "CASE WHEN ankr_page_profiles.avg_rows > 0 THEN ankr_page_profiles.pages_observed ELSE 0 END"
+	newWeight := "EXCLUDED.pages_observed"
+	assignments := []string{"preferred_page_size=EXCLUDED.preferred_page_size", "updated_at=now()"}
+	for _, field := range []string{"avg_rows", "avg_wire_bytes", "avg_decoded_bytes", "avg_latency_ms", "timeout_rate", "oversized_rate"} {
+		assignments = append(assignments, field+"=(ankr_page_profiles."+field+"::numeric*("+oldWeight+")+EXCLUDED."+field+"::numeric*"+newWeight+")/("+oldWeight+"+"+newWeight+")")
+	}
+	assignments = append(assignments, "p95_latency_ms=GREATEST(ankr_page_profiles.p95_latency_ms,EXCLUDED.p95_latency_ms)", "pages_observed=("+oldWeight+")+"+newWeight)
 	_, err := s.Pool.Exec(ctx, "INSERT INTO ankr_page_profiles "+
 		"(chain, dataset, query_shape, preferred_page_size, avg_rows, avg_wire_bytes, avg_decoded_bytes, avg_latency_ms, p95_latency_ms, timeout_rate, oversized_rate, pages_observed, updated_at) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now()) "+
-		"ON CONFLICT (chain, dataset, query_shape) DO UPDATE SET preferred_page_size=$4, avg_rows=$5, avg_wire_bytes=$6, avg_decoded_bytes=$7, "+
-		"avg_latency_ms=$8, p95_latency_ms=$9, timeout_rate=$10, oversized_rate=$11, pages_observed=$12, updated_at=now()",
+		"ON CONFLICT (chain, dataset, query_shape) DO UPDATE SET "+strings.Join(assignments, ","),
 		p.Chain, p.Dataset, p.QueryShape, p.PreferredPageSize, p.AvgRows, p.AvgWireBytes, p.AvgDecodedBytes,
 		p.AvgLatencyMs, p.P95LatencyMs, p.TimeoutRate, p.OversizedRate, p.PagesObserved)
 	return err

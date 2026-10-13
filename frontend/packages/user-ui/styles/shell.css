@@ -1,13 +1,9 @@
 /*
- * Shell：冷白统一工作台（用户端重构规范 V4 §6.1 / §7；2026-09-20 清晰度修订）
+ * Shell：淡蓝统一工作台（用户端重构规范 V4 §6.1 / §7）
  *
- * 从「左黑右白传统后台」→「浅色侧栏 + 玻璃顶栏」→ 现在的**冷白实体工作台**：
- *   侧栏 = 纯白实体面 + 1px 灰边界；顶栏 = 不透明纯白（玻璃拟态退役）；
- *   当前项 = 选中层淡蓝胶囊 + 1px 蓝边界 + 左侧 3px 亮蓝指示 + 加重字重
- *   （形状/字重/颜色/边界四通道，不只靠颜色）。
- *
- * 为什么去掉画布上的径向光晕：两条 7% / 6% 的蓝色 radial-gradient 铺满整个视口，
- * 在冷白底上就是一层洗不掉的淡蓝雾，还会把卡片边界"吃"掉。页面底色现在是**单一纯色**。
+ * 从「左黑右白传统后台」改成**浅色侧栏 + 玻璃顶栏**：
+ *   侧栏底色 #F8FBFF，右边框极淡蓝线，Logo 区 64px，
+ *   当前项 = 淡蓝胶囊 + 左侧 3px 亮蓝指示 + 加重字重（形状/字重/颜色三通道，不只靠颜色）。
  *
  * 几何：展开 248px / 收起 72px（规范 §6.1.1，原 264px），顶栏 60px。
  * 本文件只覆盖 .cs-shell__* 这些**用户端专属类**，后台端的 .shell__* 不受影响。
@@ -15,8 +11,7 @@
 
 html[data-app="user"] .cs-shell {
   grid-template-columns: var(--cs-rail-w) minmax(0, 1fr);
-  /* L1 页面底层：单一冷白纯色，无渐变、无光晕。 */
-  background: var(--cs-layer-page);
+  background: var(--cs-canvas);
   background-image: none;
 }
 html[data-app="user"] .cs-shell[data-collapsed="true"] {
@@ -44,11 +39,11 @@ html[data-app="user"] .cs-brand {
 html[data-app="user"] .cs-brand__mark {
   width: 34px;
   height: 34px;
-  border-radius: 11px;
+  border-radius: 8px;
   /* 底色必须显式声明，否则白字会被对比度工具量成"白底白字"（既有约定，保持） */
   background-color: var(--cs-primary);
-  background-image: linear-gradient(150deg, #5E96F8 0%, var(--cs-primary) 52%, var(--cs-primary-active) 100%);
-  box-shadow: 0 4px 14px rgba(52, 120, 246, .30);
+  background-image: none;
+  box-shadow: none;
 }
 html[data-app="user"] .cs-brand__name { color: var(--cs-text-primary); }
 html[data-app="user"] .cs-brand__tag { color: var(--cs-text-secondary); }
@@ -59,15 +54,15 @@ html[data-app="user"] .cs-nav__label {
   color: var(--cs-text-muted);
   font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
 }
 html[data-app="user"] .cs-nav__link {
   position: relative;
-  min-height: 36px;
+  min-height: 44px;
   padding: 8px 10px;
   border-radius: var(--cs-radius-control);
   color: var(--cs-text-secondary);
-  font-size: var(--fs-13);
+  font-size: 14px;
   transition:
     background var(--cs-dur-fast) var(--cs-ease-enter),
     color var(--cs-dur-fast) var(--cs-ease-enter);
@@ -76,14 +71,14 @@ html[data-app="user"] .cs-nav__link:hover {
   background: var(--cs-canvas-strong);
   color: var(--cs-text-primary);
 }
-html[data-app="user"] .cs-nav__link[aria-current="page"] {
+html[data-app="user"] .cs-nav__link:is([aria-current="page"], .active) {
   background: var(--cs-primary-soft);
   color: var(--cs-primary-text);
   font-weight: 620;
   box-shadow: var(--cs-shadow-rail-active);
 }
 /* 左侧 3px 亮蓝指示条：形状通道，灰度下依然可辨 */
-html[data-app="user"] .cs-nav__link[aria-current="page"]::before {
+html[data-app="user"] .cs-nav__link:is([aria-current="page"], .active)::before {
   content: "";
   position: absolute;
   left: -12px;
@@ -94,9 +89,10 @@ html[data-app="user"] .cs-nav__link[aria-current="page"]::before {
   border-radius: 0 3px 3px 0;
   background: var(--cs-primary);
 }
-/* 当前图标用纯色蓝（不再加 drop-shadow 辉光：那会在浅色侧栏上产生一圈模糊）。 */
-html[data-app="user"] .cs-nav__link[aria-current="page"] .cs-nav__icon {
+/* 当前图标轻微蓝色辉光（§6.1.1） */
+html[data-app="user"] .cs-nav__link:is([aria-current="page"], .active) .cs-nav__icon {
   color: var(--cs-primary);
+  filter: none;
 }
 
 html[data-app="user"] .cs-railfoot { border-top-color: var(--cs-border-subtle); }
@@ -107,22 +103,19 @@ html[data-app="user"] .cs-railfoot__collapse:hover {
   color: var(--cs-text-primary);
 }
 
-/* ---------------- 顶栏（§6.1.2）：60px 不透明纯白实体面 ----------------
- * 玻璃拟态退役：顶栏不再半透明、不再 backdrop-filter。
- * 与内容的分层改由「1px 灰边界 + 滚动后的短半径阴影」承担，
- * 这样滚动时标题不会被半透明背景糊住，也不会出现顶部一片发灰。
- */
+/* ---------------- 顶栏（§6.1.2）：60px + 玻璃 + 滚动后 0.86 透明度 ---------------- */
 html[data-app="user"] .cs-shell__topbar {
   height: var(--cs-topbar-h);
   padding: 0 var(--cs-gutter);
-  background: var(--cs-layer-content);
+  background: var(--cs-surface-glass);
   border-bottom: 1px solid var(--cs-border);
-  transition: box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background var(--cs-dur-standard) var(--cs-ease-enter), box-shadow var(--cs-dur-standard) var(--cs-ease-enter);
 }
 html[data-app="user"] .cs-shell__topbar[data-scrolled="true"] {
-  /* 滚动后加深边界并给一层短阴影，明确"内容已经从下面滚过去了"。 */
-  border-bottom-color: var(--cs-border-strong);
-  box-shadow: 0 2px 8px rgba(16, 26, 43, .06);
+  background: #fff;
+  box-shadow: none;
 }
 html[data-app="user"] .cs-shell__content {
   padding: var(--cs-gutter) var(--cs-gutter) 56px;
@@ -158,7 +151,7 @@ html[data-app="user"] .cs-iconbtn__dot { background: var(--cs-danger); border-co
 
 html[data-app="user"] .cs-avatar {
   background-color: var(--cs-primary);
-  background-image: linear-gradient(150deg, #5E96F8, var(--cs-primary));
+  background-image: none;
 }
 html[data-app="user"] .cs-usermenu__trigger:hover { background: var(--cs-canvas-strong); }
 html[data-app="user"] .cs-usermenu__trigger:focus-visible { border-color: var(--cs-primary); box-shadow: var(--cs-shadow-ring); }
@@ -172,7 +165,7 @@ html[data-app="user"] .cs-avatar { color: var(--cs-text-inverse); }
   html[data-app="user"] { --cs-rail-w: 248px; --cs-inspector-w: 360px; }
 }
 @media (max-width: 1599px) and (min-width: 1200px) {
-  html[data-app="user"] { --cs-rail-w: 236px; --cs-inspector-w: 340px; --cs-gutter: 22px; }
+  html[data-app="user"] { --cs-rail-w: 208px; --cs-inspector-w: 340px; --cs-gutter: 24px; }
 }
 @media (max-width: 1365px) {
   html[data-app="user"] { --cs-gutter: 20px; --cs-inspector-w: 320px; }
@@ -202,10 +195,14 @@ html[data-app="user"] .cs-avatar { color: var(--cs-text-inverse); }
   html[data-app="user"] .cs-shell__rail[data-open="true"] { box-shadow: var(--cs-shadow-floating); }
   html[data-app="user"] .cs-shell__content { padding: 16px 16px 48px; gap: 14px; }
   html[data-app="user"] .cs-nav__link { min-height: 44px; }
-  html[data-app="user"] .cs-nav__link[aria-current="page"]::before { left: -12px; }
+  html[data-app="user"] .cs-nav__link:is([aria-current="page"], .active)::before { left: -12px; }
   html[data-app="user"] .cs-iconbtn { width: 44px; height: 44px; }
 }
 @media (max-width: 599px) {
   html[data-app="user"] .cs-shell__topbar { padding: 0 12px; }
   html[data-app="user"] .cs-shell__content { padding: 12px 12px 44px; }
 }
+
+html[data-app="user"] .cs-nav__more { border-top: 1px solid var(--cs-border-subtle); padding-top: 12px; }
+html[data-app="user"] .cs-nav__more > summary { cursor: pointer; font-size: 13px; padding: 10px; }
+html[data-app="user"] .cs-nav__more > summary:focus-visible { outline: 2px solid var(--cs-primary); outline-offset: -2px; }

@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Bitcoin",
+    "file": "frontend/apps/user-console/public/assets/chains/bitcoin.png",
+    "source": "https://static.oklink.com/cdn/explorer/admin/1686558172927.png",
+    "mime": "image/png",
+    "sha256": "634b91c0b4adb816eceb3814c2bc3ac4dd1b4aa01fe5406b90e10fea9f219cd8",
+    "bytes": 7251
+  },
+  {
+    "name": "Ethereum",
+    "file": "frontend/apps/user-console/public/assets/chains/ethereum.png",
+    "source": "https://static.oklink.com/cdn/assets/imgs/234/394F7F0E5AA398F0.png",
+    "mime": "image/png",
+    "sha256": "399924575ac5abc530bcdd316c32fd71595ce3b627db58e47432173503fde67e",
+    "bytes": 6270
+  },
+  {
+    "name": "Solana",
+    "file": "frontend/apps/user-console/public/assets/chains/solana.png",
+    "source": "https://static.oklink.com/cdn/web3/currency/token/1715241932682.png/type=png_350_0",
+    "mime": "image/png",
+    "sha256": "c81076962274038d664d5bd8a26e2c1da317c9ba1a441de6876bbe166fbafa7f",
+    "bytes": 20567
+  },
+  {
+    "name": "TRON",
+    "file": "frontend/apps/user-console/public/assets/chains/tron.png",
+    "source": "https://static.oklink.com/cdn/explorer/admin/1686557723420.png",
+    "mime": "image/png",
+    "sha256": "61a450e0656d1ab9d6bd052271b5f283fdae9b1ded084ea5164e62394ed549aa",
+    "bytes": 7997
+  },
+  {
+    "name": "BNB Chain logo",
+    "file": "frontend/apps/user-console/public/assets/chains/bnb.png",
+    "source": "https://static.oklink.com/cdn/assets/imgs/236/FBF961B15D380AFF.png",
+    "mime": "image/png",
+    "sha256": "e1e7641d2345d57285ea5adc0177949e0991e888147e3ec02d7ad2c1f3a00e8d",
+    "bytes": 5170
+  },
+  {
+    "name": "Arbitrum One",
+    "file": "frontend/apps/user-console/public/assets/chains/arbitrum.png",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png",
+    "mime": "image/png",
+    "sha256": "a12644f04d8b8099dd5f0427a8189abcf1a60707efe68feee354587ec23ae403",
+    "bytes": 21628
+  },
+  {
+    "name": "Avalanche C-Chain",
+    "file": "frontend/apps/user-console/public/assets/chains/avalanche.png",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png",
+    "mime": "image/png",
+    "sha256": "fde310a87a0c83345d8fd194b3a65edf6d73cdd6ef5c2f1aa9344e60ebc88589",
+    "bytes": 23229
+  },
+  {
+    "name": "Base",
+    "file": "frontend/apps/user-console/public/assets/chains/base.png",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png",
+    "mime": "image/png",
+    "sha256": "5a47cf1cb030398a2ba05f578573f3f3ed6b9d9f9a776a772049f05a57d60c6e",
+    "bytes": 3367
+  },
+  {
+    "name": "OP Mainnet",
+    "file": "frontend/apps/user-console/public/assets/chains/optimism.png",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png",
+    "mime": "image/png",
+    "sha256": "ac49f27e374a1f192a8a473ca00082294729410c1c02e6a538ce730681380d7d",
+    "bytes": 2506
+  },
+  {
+    "name": "Polygon",
+    "file": "frontend/apps/user-console/public/assets/chains/polygon.png",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
+    "mime": "image/png",
+    "sha256": "ba495a374776ab6cfaecc15b3e3d0f9b04743cd0309f99575b8599fc0112e030",
+    "bytes": 10248
+  }
+]

@@ -360,6 +360,11 @@ func (s *Server) handleExportTicket(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTicketDownload(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticket")
+	var fileDataset string
+	if err := s.deps.Store.Pool.QueryRow(r.Context(), "SELECT file_dataset FROM export_tickets WHERE id=$1", ticketID).Scan(&fileDataset); err != nil || fileDataset != "" {
+		respondError(w, r, 403, "RESOURCE_TICKET_INVALID", "请通过认证的文件下载入口使用该票据", nil)
+		return
+	}
 	exportID, expiresAt, err := s.deps.Store.GetExportTicket(r.Context(), ticketID)
 	if err != nil || time.Now().After(expiresAt) {
 		writeJSON(w, 403, map[string]any{"error": "ticket expired or invalid"})

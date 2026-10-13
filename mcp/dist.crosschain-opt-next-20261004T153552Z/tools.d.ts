@@ -1,0 +1,10 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ResourceLink } from "@modelcontextprotocol/sdk/types.js";
+import { RESTClient, type RESTEnvelope } from "./rest-client.js";
+import { type ToolDefinition } from "./batch.js";
+export declare const CHAIN_VALUES: readonly ["bsc", "ethereum", "eth", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana", "fantom", "flare", "gnosis", "linea", "scroll", "somnia_mainnet", "story_mainnet", "taiko", "telos", "xlayer"];
+export declare const DOWNLOAD_CHAIN_VALUES: readonly ["bsc", "ethereum", "eth", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana", "fantom", "flare", "gnosis", "linea", "scroll", "somnia_mainnet", "story_mainnet", "taiko", "telos", "xlayer"];
+export declare const toolDefinitions: ToolDefinition[];
+export declare function exportFileResources(result: RESTEnvelope): ResourceLink[];
+export declare function validateToolInput(name: string, input: Record<string, unknown>): void;
+export declare function registerTools(server: McpServer, client: RESTClient): void;

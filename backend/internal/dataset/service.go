@@ -85,6 +85,12 @@ func (s *Service) validateTronFullRange(chain string, datasets []string, spec Ra
 	return nil
 }
 
+// SupportsFullHistory includes runtime provider routing, rather than advertising
+// Ankr Node address scanning as a full-history data API.
+func (s *Service) SupportsFullHistory(chain, dataset string) bool {
+	return s.validateTronFullRange(chain, []string{dataset}, RangeSpec{Type: "full"}) == nil
+}
+
 // NormalizeAndDedupeAddresses 校验 + 按链规范化 + 去重（无效地址跳过，前端已做格式校验与计数展示）。
 func NormalizeAndDedupeAddresses(in []string) ([]string, error) {
 	return NormalizeAndDedupeAddressesForChain("", in)

@@ -24,7 +24,14 @@
  * 用法：node scripts/uc-contract-freeze-check.mjs
  *       UC_CONTRACT_BASELINE=<sha> node scripts/uc-contract-freeze-check.mjs
  */
-const BASELINE = process.env.UC_CONTRACT_BASELINE ?? "25a6ee6";
+// Approved redesign begins at b6f0182; the earlier UI freeze remains in history.
+const BASELINE = process.env.UC_CONTRACT_BASELINE ?? "b6f0182864e65dd0d562283945d5521621f5285c";
+const APPROVED_ADDITIONS = {
+  "路由路径": ["/blocks/:chain/:block", "/tokens/:chain/:contract"],
+  "路由→权限映射": [["/blocks", "explorer:read"], ["/tokens", "explorer:read"]],
+  // v1 case/tag paths preserve the deployed download metadata selectors.
+  "/api 字面量": ["/api/v2/explorer/resolve", "/api/v2/explorer/addresses/{}/{}/history-coverage", "/api/v1/cases", "/api/v1/tags", "/api/v2/explorer/addresses/{}/{}/statistics", "/api/v2/explorer/blocks/{}/{}", "/api/v2/explorer/tokens", "/api/v2/explorer/tokens/{}/{}", "/api/v2/explorer/tokens/{}/{}/logo", "/api/v2/exports/{}", "/api/v2/exports/{}/files/{}/download-ticket"],
+};
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -42,16 +49,6 @@ const TRACKED = [
   "apps/user-console/src/sprint4",
   "apps/user-console/src/sprint5",
 ];
-
-/* 新建下载恢复高级设置时，显式接入已上线且受工作区/RBAC 保护的 v1 案件、标签目录。
- * 案件 GET/POST 分别要求 case:list/case:create；标签 GET/POST 分别要求
- * case:read/case:update。仅允许这两条新增字面量，其他接口仍逐字冻结。 */
-/* 导出表单的预生成入口（`/api/v2/exports/prefetch`）：用户在表单上停留的
- * 30-60 秒里先把产物算好，点"导出"时服务端做一次规格哈希提升即返回（实测 5 ms）。
- * 它与 `/api/v2/exports` 同权限（服务端 require export:create）、同租户作用域，
- * 且请求体由同一个 buildAddressExportBody 产出；失败静默，不改变任何导出语义。
- * 仅允许这一条新增字面量。 */
-const APPROVED_API_ADDITIONS = ["/api/v1/cases", "/api/v1/tags", "/api/v2/exports/prefetch"];
 
 /**
  * 案件详情 Tab 的权限契约（**钉死在本脚本里**，不与基准提交比对）。
@@ -216,9 +213,10 @@ function diff(label, before, after) {
   const beforeSet = new Set(before.map((item) => JSON.stringify(item)));
   const afterSet = new Set(after.map((item) => JSON.stringify(item)));
   const removed = before.filter((item) => !afterSet.has(JSON.stringify(item)));
-  const added = after.filter((item) => !beforeSet.has(JSON.stringify(item)));
+  const approved = new Set((APPROVED_ADDITIONS[label] || []).map(item => JSON.stringify(item)));
+  const added = after.filter((item) => !beforeSet.has(JSON.stringify(item)) && !approved.has(JSON.stringify(item)));
   if (removed.length === 0 && added.length === 0) {
-    console.log(`  OK   ${label}（${after.length} 项，与基准 ${BASELINE} 完全一致）`);
+    console.log(`  OK   ${label}（${after.length} 项，既有契约保留；新增项在批准清单中）`);
     return [];
   }
   const problems = [];
@@ -325,7 +323,7 @@ function main() {
   const problems = [
     ...diff("路由路径", routePaths(headFiles), routePaths(workFiles)),
     ...diff("路由→权限映射", routePermissions(headFiles), routePermissions(workFiles)),
-    ...diff("/api 字面量（含批准的案件/标签目录）", [...new Set([...apiLiterals(headFiles), ...APPROVED_API_ADDITIONS])].sort(), apiLiterals(workFiles)),
+    ...diff("/api 字面量", apiLiterals(headFiles), apiLiterals(workFiles)),
     /*
      * Tab 权限契约不与基准比对（基准里没有这个文件），而是与脚本里钉死的表比对。
      * 放在最后：上面三项一旦红了就没必要再看它。
@@ -338,7 +336,7 @@ function main() {
     for (const problem of problems) console.error("  - " + problem);
     process.exit(1);
   }
-  console.log(`\n契约冻结通过：路由和权限与基准 ${BASELINE} 一致；API 字面量仅增加经批准的案件/标签目录。`);
+  console.log(`\n契约冻结通过：保留基准 ${BASELINE}，仅增加已批准的查询和导出能力。`);
 }
 
 main();

@@ -495,6 +495,9 @@ func (c *Client) doHTTP(ctx context.Context, call httpCall) (httpResult, error) 
 	if client == nil {
 		client = c.httpRPC
 	}
+	if err := provider.ReserveDownloadRequest(ctx, 1, float64(call.cu), float64(call.cu)*USDPerCU); err != nil {
+		return result, err
+	}
 	res, err := client.Do(req)
 	result.ttfb = c.cfg.now().Sub(started)
 	if err != nil {
@@ -529,6 +532,9 @@ func (c *Client) doHTTP(ctx context.Context, call httpCall) (httpResult, error) 
 
 // finishUsage 写用量行；每个 HTTP 请求调用且只调用一次。
 func (c *Client) finishUsage(call httpCall, result httpResult, started time.Time, rows int, err error) {
+	if errors.Is(err, provider.ErrDownloadBudget) {
+		return
+	}
 	// 归因：任务/分片来自 ctx，通道来自本次调用本身。
 	cu := int64(0)
 	if result.status == http.StatusOK {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 )
 
@@ -1497,7 +1498,7 @@ func Load() *Config {
 		RPC: RPCConfig{
 			Enabled:         envBool("RPC_ENABLED", true),
 			DefaultProvider: env("RPC_DEFAULT_PROVIDER", "ankr"),
-			Chains:          splitList(env("RPC_CHAINS", "bsc,eth,polygon,arbitrum,base,avalanche,optimism")),
+			Chains:          splitList(env("RPC_CHAINS", strings.Join(chain.AnkrAdvancedMainnets(), ","))),
 			ChainRegistry:   os.Getenv("CHAIN_REGISTRY_JSON"),
 
 			AnkrEnabled:          envBool("ANKR_RPC_ENABLED", true),
@@ -1533,7 +1534,7 @@ func Load() *Config {
 			WriteEnabled:    envBool("RPC_WRITE_ENABLED", false),
 			TraceRawPersist: envBool("RPC_TRACE_RAW_PERSIST", true),
 
-			ProbeOnStart:    envBool("RPC_PROBE_ON_START", true),
+			ProbeOnStart:    envBool("RPC_PROBE_ON_START", false),
 			HealthSnapshot:  time.Duration(envInt("RPC_HEALTH_SNAPSHOT_SECONDS", 60)) * time.Second,
 			RetryMaxAttempt: envInt("RPC_RETRY_MAX_ATTEMPTS", 3),
 

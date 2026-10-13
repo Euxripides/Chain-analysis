@@ -22,41 +22,26 @@ import type { NavGroup } from "@chain/ui";
 
 /** 蓝图 §5 的分组导航。未实现的路由不在此出现，也不伪装成可用页面。 */
 export const baseNavGroups: NavGroup[] = [
+  { label: "", items: [
+    { to: "/home", label: "工作台", icon: <Gauge size={18} /> },
+    { to: "/explorer", label: "查询", icon: <Search size={18} />, activePrefixes: ["/addresses", "/transactions", "/blocks", "/tokens"] },
+    { to: "/downloads/new", label: "下载", icon: <Download size={18} />, activePrefixes: ["/jobs"] },
+    { to: "/exports", label: "导出", icon: <FileText size={18} /> },
+    { to: "/cases", label: "案件", icon: <FolderOpen size={18} /> },
+    { to: "/graph", label: "图谱", icon: <Network size={18} />, activePrefixes: ["/canvases"] },
+  ] },
   {
-    label: "工作台",
+    label: "更多功能",
+    collapsible: true,
     items: [
-      { to: "/home", label: "我的概览", icon: <Gauge size={16} /> },
       { to: "/search", label: "全局搜索", icon: <Search size={16} /> },
-    ],
-  },
-  {
-    label: "案件与调查",
-    items: [
-      { to: "/cases", label: "案件中心", icon: <FolderOpen size={16} /> },
       { to: "/investigations", label: "调查任务", icon: <SlidersHorizontal size={16} /> },
-      { to: "/graph", label: "资金图谱", icon: <Network size={16} /> },
-    ],
-  },
-  {
-    label: "数据工具",
-    items: [
-      { to: "/explorer", label: "地址与交易查询", icon: <Search size={16} /> },
-      { to: "/downloads/new", label: "数据下载", icon: <Download size={16} /> },
       { to: "/jobs", label: "任务中心", icon: <ListChecks size={16} /> },
-      { to: "/exports", label: "导出中心", icon: <FileText size={16} /> },
-    ],
-  },
-  {
-    label: "协作",
-    items: [
       { to: "/inbox", label: "待我处理", icon: <Inbox size={16} /> },
       { to: "/reports", label: "报告中心", icon: <FileText size={16} /> },
       { to: "/notifications", label: "通知", icon: <FileText size={16} /> },
+      { to: "/profile", label: "个人资料与安全", icon: <User size={16} /> },
     ],
-  },
-  {
-    label: "个人",
-    items: [{ to: "/profile", label: "个人资料与安全", icon: <User size={16} /> }],
   },
 ];
 
@@ -77,6 +62,8 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   "/canvases": "canvas:read",
   "/addresses": "explorer:read",
   "/transactions": "explorer:read",
+  "/blocks": "explorer:read",
+  "/tokens": "explorer:read",
   "/inbox": "inbox:read",
   "/notifications": "notification:list",
   "/reports": "report:list",
@@ -120,6 +107,8 @@ export function pageTitleFor(pathname: string): string {
   if (pathname.startsWith("/canvases")) return "资金图谱";
   if (pathname.startsWith("/addresses")) return "地址详情";
   if (pathname.startsWith("/transactions")) return "交易详情";
+  if (pathname.startsWith("/blocks")) return "区块详情";
+  if (pathname.startsWith("/tokens")) return "代币详情";
   if (pathname.startsWith("/jobs/")) return "任务详情";
   if (pathname.startsWith("/reports/")) return "报告详情";
   if (pathname.startsWith("/investigations/")) return "调查";

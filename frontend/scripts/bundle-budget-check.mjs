@@ -20,7 +20,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const DIST = join(here, "apps/user-console/dist");
+const DIST = process.env.UC_CHECK_DIST ? resolve(process.env.UC_CHECK_DIST) : join(here, "apps/user-console/dist");
 
 /** §56.2 的初始建议值。超过必须在 PR 里说明原因，而不是静默放过。 */
 const BUDGET_INITIAL_KB = 250;

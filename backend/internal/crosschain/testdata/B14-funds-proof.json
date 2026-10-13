@@ -1,0 +1,347 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": false,
+  "final_wallet_state": "downstream_settlement_not_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v2",
+  "proof": {
+    "protocol": {
+      "cctp": {
+        "source_chain": "base",
+        "source_tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+        "message": "0x000000010000000600000007b9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e9800000000000000000000000028b5a0e9c621a5badaa536219b3a228c8168cf5d00000000000000000000000028b5a0e9c621a5badaa536219b3a228c8168cf5d0000000000000000000000000000000000000000000000000000000000000000000003e8000003e800000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000005873861bc27cb0b5e0ccd7b6ddd05b4813239ba100000000000000000000000000000000000000000000000000000000019afe970000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000000000000000000dd20000000000000000000000000000000000000000000000000000000000000dad0000000000000000000000000000000000000000000000000000000005a943cb",
+        "attestation": "0x7ef0e28e11f290e4f710f77a9464be09068173d9971cf859e90962047af16b5f1854415198aa65ecaa3286c231b4643e1dac3c6bd334528d3351e122167072041b796087aff20a5fb619287843f00873e4e7101980894fc1d9cdf28d55d2fff4f8134397644adff2c2ea102b410e7e9917bdd0ede4e91e7f9c5167aa5a55c88e461c",
+        "nonce": "0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98",
+        "evidence": {
+          "source": "https://iris-api.circle.com/v2/messages/6?transactionHash=0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+          "fetched_at": "2026-10-05T07:18:24.349534836Z",
+          "response_sha256": "deb913174e8686f88c05572ea73f8a1021e68cf748258e5916ff3a2e26fd5865",
+          "matched_identifiers": [],
+          "page_truncated": false
+        },
+        "source_message_sha256": "1e85f093cf7cb1f383d06f31c4a259a37611ff2392f9ba2d5fa840b7be3f9219",
+        "executed_call_message_sha256": "6f8245808280fc929ee9e5c5365ea01fd8f89e68b431584615b03d86ee37bcfa",
+        "executed_attestation_sha256": "7c70a4f920d49bfc6d1923713e86284f2fcb4a9a1e424168b7cc9d6f693cb882",
+        "source_minter": "0xfd78ee919681417d192449715b2594ab58f5d002",
+        "source_burn": {
+          "chain": "base",
+          "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+          "dataset": "token_transfers",
+          "event_index": 750,
+          "timestamp": "2026-10-04T10:14:47Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0xfd78ee919681417d192449715b2594ab58f5d002",
+          "to_address": "0x0000000000000000000000000000000000000000",
+          "token_contract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "26934935",
+          "amount": "26.934935",
+          "status": "success"
+        },
+        "fee_raw": "3501",
+        "fee_movement": {
+          "chain": "polygon",
+          "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+          "dataset": "token_transfers",
+          "event_index": 566,
+          "timestamp": "2026-10-04T10:14:59Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x0000000000000000000000000000000000000000",
+          "to_address": "0xa64915eaf58b245b2d2bbe7a7dc8c69956ac8670",
+          "token_contract": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "3501",
+          "amount": "0.003501",
+          "status": "success"
+        }
+      },
+      "protocol": "cctp",
+      "version": "cctp-v2",
+      "identifier": "6/0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98",
+      "source_chain": "base",
+      "destination_chain": "polygon",
+      "payload_sha256": "6f8245808280fc929ee9e5c5365ea01fd8f89e68b431584615b03d86ee37bcfa",
+      "source": {
+        "application_contract": {
+          "address": "0x28b5a0e9c621a5badaa536219b3a228c8168cf5d",
+          "verifier_address": "0x28b5a0e9c621a5badaa536219b3a228c8168cf5d",
+          "code_sha256": "501b4a60e24ea82032b7442d75995dee3bdbfc17b25caffc3c955eadc8c2a418",
+          "implementation": "0x555e272506c06e7e559d57418563742afe363ec8",
+          "implementation_code_sha256": "81ca2a58e76495642226a9ba09391e5c4c6f8edf618f205dff274d1313144ffa",
+          "historical_state": true,
+          "deployment_source": "https://developers.circle.com/cctp/references/contract-addresses"
+        },
+        "chain": "base",
+        "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+        "event_index": 751,
+        "contract": {
+          "address": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
+          "verifier_address": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
+          "code_sha256": "501b4a60e24ea82032b7442d75995dee3bdbfc17b25caffc3c955eadc8c2a418",
+          "implementation": "0x7db629f6acc20be49a0a7565c21cc178e9ac21e3",
+          "implementation_code_sha256": "5814f08b2cfc739969f545b292e0bac835b38011d5efbd936f921bde393d8fca",
+          "historical_state": true,
+          "deployment_source": "https://developers.circle.com/cctp/references/contract-addresses"
+        },
+        "role": "source",
+        "identifier": "6/0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98",
+        "payload_sha256": "6f8245808280fc929ee9e5c5365ea01fd8f89e68b431584615b03d86ee37bcfa",
+        "raw_topics": [
+          "0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036"
+        ],
+        "raw_data": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000178000000010000000600000007000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028b5a0e9c621a5badaa536219b3a228c8168cf5d00000000000000000000000028b5a0e9c621a5badaa536219b3a228c8168cf5d0000000000000000000000000000000000000000000000000000000000000000000003e80000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000005873861bc27cb0b5e0ccd7b6ddd05b4813239ba100000000000000000000000000000000000000000000000000000000019afe970000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000000000000000000dd2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "destination": {
+        "application_contract": {
+          "address": "0x28b5a0e9c621a5badaa536219b3a228c8168cf5d",
+          "verifier_address": "0x28b5a0e9c621a5badaa536219b3a228c8168cf5d",
+          "code_sha256": "501b4a60e24ea82032b7442d75995dee3bdbfc17b25caffc3c955eadc8c2a418",
+          "implementation": "0x555e272506c06e7e559d57418563742afe363ec8",
+          "implementation_code_sha256": "81ca2a58e76495642226a9ba09391e5c4c6f8edf618f205dff274d1313144ffa",
+          "historical_state": true,
+          "deployment_source": "https://developers.circle.com/cctp/references/contract-addresses"
+        },
+        "chain": "polygon",
+        "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+        "event_index": 568,
+        "contract": {
+          "address": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
+          "verifier_address": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
+          "code_sha256": "501b4a60e24ea82032b7442d75995dee3bdbfc17b25caffc3c955eadc8c2a418",
+          "implementation": "0xd40518c1a3139e8f1f73f83e5de74e05c88f5ad3",
+          "implementation_code_sha256": "540cd1aece247c990c0a0d10491f717c966cd09cb78b7c6905f17d85b021fc4e",
+          "historical_state": true,
+          "deployment_source": "https://developers.circle.com/cctp/references/contract-addresses"
+        },
+        "role": "destination",
+        "identifier": "6/0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98",
+        "payload_sha256": "6f8245808280fc929ee9e5c5365ea01fd8f89e68b431584615b03d86ee37bcfa",
+        "raw_topics": [
+          "0xff48c13eda96b1cceacc6b9edeedc9e9db9d6226afbc30146b720c19d3addb1c",
+          "0x00000000000000000000000054eae1fe03d485e6b070cdaea382aceb0570a3be",
+          "0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98",
+          "0x00000000000000000000000000000000000000000000000000000000000003e8"
+        ],
+        "raw_data": "0x000000000000000000000000000000000000000000000000000000000000000600000000000000000000000028b5a0e9c621a5badaa536219b3a228c8168cf5d000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000e400000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000005873861bc27cb0b5e0ccd7b6ddd05b4813239ba100000000000000000000000000000000000000000000000000000000019afe970000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000000000000000000dd20000000000000000000000000000000000000000000000000000000000000dad0000000000000000000000000000000000000000000000000000000005a943cb00000000000000000000000000000000000000000000000000000000"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "role": "source",
+        "chain": "base",
+        "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+        "party": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+        "asset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "amount_raw": "26934935",
+        "amount": "26.934935",
+        "decimals": 6,
+        "bridge_asset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "bridge_amount_raw": "26934935",
+        "binding": "cctp:6/0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "base",
+            "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+            "dataset": "token_transfers",
+            "event_index": 748,
+            "timestamp": "2026-10-04T10:14:47Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+            "to_address": "0xfd78ee919681417d192449715b2594ab58f5d002",
+            "token_contract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+            "token": "",
+            "decimals": 6,
+            "amount_raw": "26934935",
+            "amount": "26.934935",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "base",
+          "network_id": "8453",
+          "number": 52159770,
+          "hash": "0xcc08caafcef44ce0b38f3d949781ebda0c7cf1852c28386fc735517f7bcea556",
+          "finalized_number": 52197075,
+          "finalized_hash": "0x793b398c6e35f733d4ee5b699ba8cc9c30be76669d68bb0b26988764e59c7ba6",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:33.393898893Z",
+          "source": "configured_rpc_gateway:c4ead476-a53f-4f55-8087-917480065bf2",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "3877432b204c4bd065f7d5f43512e24a717465d77e8a11daf00aa02ecbc3ff53",
+        "read_gaps": [],
+        "truncated": false
+      },
+      {
+        "role": "destination",
+        "chain": "polygon",
+        "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+        "party": "0x5873861bc27cb0b5e0ccd7b6ddd05b4813239ba1",
+        "asset": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+        "amount_raw": "26931434",
+        "amount": "26.931434",
+        "decimals": 6,
+        "bridge_asset": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+        "bridge_amount_raw": "26931434",
+        "binding": "cctp:6/0xb9da4efe9a767eb6c2d5c2dc6e273eb03794f706be71c1f1faef34d8be3a5e98:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "polygon",
+            "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+            "dataset": "token_transfers",
+            "event_index": 564,
+            "timestamp": "2026-10-04T10:14:59Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x0000000000000000000000000000000000000000",
+            "to_address": "0x5873861bc27cb0b5e0ccd7b6ddd05b4813239ba1",
+            "token_contract": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+            "token": "",
+            "decimals": 6,
+            "amount_raw": "26931434",
+            "amount": "26.931434",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "polygon",
+          "network_id": "137",
+          "number": 94935832,
+          "hash": "0xb2652a683bfb6ca67118623386710fbf92b603b50402191332adf06321b8ee51",
+          "finalized_number": 94986376,
+          "finalized_hash": "0x16a3c58c718ff1b89d1f382c165f2c9ce4f4b23140e26600fae6474543a4a409",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:39.713338566Z",
+          "source": "configured_rpc_gateway:c4ead476-a53f-4f55-8087-917480065bf2",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "31428fc20b61fa4355d4ad08948c42d94dfe0e587a0d197666927d5248107764",
+        "trace_sha256": "f210797a569b5171849bc42cc6bf59b95d0e5c4c65dacd54eaeef75ceaa4ee0e",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T07:18:24.089169698Z"
+  },
+  "bridge": "cctp",
+  "order_id": "6/84063594848334311675954271461511268967830556302041787409631971316474148707992",
+  "status": "completed",
+  "raw_status": "complete",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "base",
+      "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+      "address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+      "token_contract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token": "USDC",
+      "amount_raw": "26934935",
+      "amount": "26.934935",
+      "decimals": 6,
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "polygon",
+      "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+      "address": "0x5873861bc27cb0b5e0ccd7b6ddd05b4813239ba1",
+      "token_contract": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+      "token": "USDC",
+      "amount_raw": "26931434",
+      "amount": "26.931434",
+      "decimals": 6,
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://iris-api.circle.com/v2/messages/6?transactionHash=0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+    "fetched_at": "2026-10-05T07:18:19.902321554Z",
+    "response_sha256": "deb913174e8686f88c05572ea73f8a1021e68cf748258e5916ff3a2e26fd5865",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": true,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "base",
+      "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "base",
+          "tx_hash": "0x941a9a3cb0f64c36cf32c384d07e9a2fda768f3f26e941c2415192f3f15559a1",
+          "dataset": "token_transfers",
+          "event_index": 748,
+          "timestamp": "2026-10-04T10:14:47Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "to_address": "0xfd78ee919681417d192449715b2594ab58f5d002",
+          "token_contract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "26934935",
+          "amount": "26.934935",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": false
+    },
+    {
+      "leg_role": "destination",
+      "chain": "polygon",
+      "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "polygon",
+          "tx_hash": "0xc1ebeec7b3f56d4bcc6089a570fe20b317c0bd87bdf9c3409c28f4b15ad9540d",
+          "dataset": "token_transfers",
+          "event_index": 564,
+          "timestamp": "2026-10-04T10:14:59Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x0000000000000000000000000000000000000000",
+          "to_address": "0x5873861bc27cb0b5e0ccd7b6ddd05b4813239ba1",
+          "token_contract": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "26931434",
+          "amount": "26.931434",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": true,
+  "message_only": false
+}

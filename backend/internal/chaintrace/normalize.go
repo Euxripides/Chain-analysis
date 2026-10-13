@@ -14,6 +14,8 @@ import (
 
 // maxFrames 防御性上限：超大 trace 不得无界展开（§121）。
 const maxFrames = 50000
+const maxTraceDepth = 1024
+const NormalizationVersion = "trace-tree-v2"
 
 // Normalize 自动识别 parity 数组或 geth 嵌套对象并转成 Canonical Call Tree。
 func Normalize(raw json.RawMessage) (*CallFrame, string, error) {
@@ -23,9 +25,15 @@ func Normalize(raw json.RawMessage) (*CallFrame, string, error) {
 	}
 	if trimmed[0] == '[' {
 		frame, err := normalizeParity(raw)
+		if err == nil {
+			frame.NormalizationVersion = NormalizationVersion
+		}
 		return frame, SourceParity, err
 	}
 	frame, err := normalizeGeth(raw)
+	if err == nil {
+		frame.NormalizationVersion = NormalizationVersion
+	}
 	return frame, SourceGeth, err
 }
 
@@ -55,7 +63,7 @@ type parityTrace struct {
 	Action       parityAction  `json:"action"`
 	Result       *parityResult `json:"result"`
 	Error        string        `json:"error"`
-	Subtraces    int           `json:"subtraces"`
+	Subtraces    *int          `json:"subtraces"`
 	TraceAddress []int         `json:"traceAddress"`
 	Type         string        `json:"type"`
 }
@@ -69,40 +77,55 @@ func normalizeParity(raw json.RawMessage) (*CallFrame, error) {
 		return nil, fmt.Errorf("empty parity trace")
 	}
 	if len(items) > maxFrames {
-		items = items[:maxFrames]
+		return nil, fmt.Errorf("parity trace exceeds complete frame limit")
 	}
-	// 按 traceAddress 深度排序，保证父节点先建立
-	sort.SliceStable(items, func(i, j int) bool { return len(items[i].TraceAddress) < len(items[j].TraceAddress) })
-
-	var root *CallFrame
+	// Nodes own stable allocations. Copy them into parent slices only after all
+	// descendants are assembled; pointers into an appendable slice lose branches.
 	byPath := map[string]*CallFrame{}
+	children := map[string]int{}
 	for _, item := range items {
-		frame := parityFrame(item)
+		if len(item.TraceAddress) > maxTraceDepth {
+			return nil, fmt.Errorf("parity trace depth exceeds limit")
+		}
+		for _, n := range item.TraceAddress {
+			if n < 0 {
+				return nil, fmt.Errorf("negative trace address")
+			}
+		}
 		path := pathKey(item.TraceAddress)
-		if len(item.TraceAddress) == 0 {
-			if root == nil {
-				root = frame
-				byPath[path] = root
-			}
-			continue
+		if byPath[path] != nil {
+			return nil, fmt.Errorf("duplicate parity trace address")
 		}
-		parent, ok := byPath[pathKey(item.TraceAddress[:len(item.TraceAddress)-1])]
-		if !ok {
-			// 父节点缺失（截断的 trace）：挂到根下，绝不丢帧
-			if root == nil {
-				root = frame
-				byPath[path] = root
-				continue
-			}
-			parent = root
+		byPath[path] = parityFrame(item)
+		if len(item.TraceAddress) > 0 {
+			children[pathKey(item.TraceAddress[:len(item.TraceAddress)-1])]++
 		}
-		parent.Children = append(parent.Children, *frame)
-		byPath[path] = &parent.Children[len(parent.Children)-1]
 	}
-	if root == nil {
+	if byPath["root"] == nil {
 		return nil, fmt.Errorf("parity trace has no root frame")
 	}
-	return root, nil
+	for _, item := range items {
+		path := pathKey(item.TraceAddress)
+		if item.Subtraces != nil && (*item.Subtraces < 0 || *item.Subtraces != children[path]) {
+			return nil, fmt.Errorf("incomplete parity subtraces")
+		}
+		byPath[path].Children = make([]CallFrame, children[path])
+		if len(item.TraceAddress) > 0 {
+			parent := pathKey(item.TraceAddress[:len(item.TraceAddress)-1])
+			if byPath[parent] == nil || item.TraceAddress[len(item.TraceAddress)-1] >= children[parent] {
+				return nil, fmt.Errorf("parity trace parent or sibling missing")
+			}
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool { return len(items[i].TraceAddress) > len(items[j].TraceAddress) })
+	for _, item := range items {
+		if len(item.TraceAddress) == 0 {
+			continue
+		}
+		parent := byPath[pathKey(item.TraceAddress[:len(item.TraceAddress)-1])]
+		parent.Children[item.TraceAddress[len(item.TraceAddress)-1]] = *byPath[pathKey(item.TraceAddress)]
+	}
+	return byPath["root"], nil
 }
 
 func parityFrame(item parityTrace) *CallFrame {
@@ -171,6 +194,24 @@ func normalizeGeth(raw json.RawMessage) (*CallFrame, error) {
 	}
 	if item.Type == "" && len(item.Calls) == 0 {
 		return nil, fmt.Errorf("geth trace has no root frame")
+	}
+	// Check completeness before conversion; never return a silently truncated tree.
+	var check func(*gethFrame, int) error
+	total := 0
+	check = func(f *gethFrame, depth int) error {
+		total++
+		if total > maxFrames || depth > maxTraceDepth {
+			return fmt.Errorf("geth trace exceeds complete tree limit")
+		}
+		for i := range f.Calls {
+			if err := check(&f.Calls[i], depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := check(&item, 0); err != nil {
+		return nil, err
 	}
 	count := 0
 	frame := convertGeth(item, &count)

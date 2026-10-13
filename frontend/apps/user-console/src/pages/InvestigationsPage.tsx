@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@chain/api-client";
 import {
   Button,
   CompactProgress,
@@ -69,6 +70,7 @@ function subjectText(subject: Record<string, unknown> | null | undefined, key: s
 }
 
 export default function InvestigationsPage() {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const [status, setStatus] = useState("all");
   const { data, loading, error, reload } = useAsync<InvestigationRow[]>("/api/v2/investigations", [status], {
@@ -83,11 +85,11 @@ export default function InvestigationsPage() {
         title="调查任务"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "调查任务" }]}
         meta={<MetaLine items={[{ label: "数据源", value: "postgres:investigations" }]} />}
-        primaryAction={
+        primaryAction={can("investigation:create") ? (
           <Button variant="primary" size="sm" onClick={() => navigate("/investigations/new")}>
             发起调查
           </Button>
-        }
+        ) : null}
         secondaryAction={
           <Button size="sm" onClick={() => void reload()} busy={loading} busyLabel="刷新中…">
             刷新

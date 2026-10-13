@@ -173,6 +173,7 @@ func (sc *Scheduler) Run(ctx context.Context) error {
 	go sc.concurrencyLoop(ctx)
 	go sc.progressLoop(ctx)
 	go sc.finalizerLoop(ctx)
+	go sc.autoRetryLoop(ctx)
 	go sc.tailLoop(ctx)
 	go sc.benchmarkLoop(ctx)
 	<-ctx.Done()

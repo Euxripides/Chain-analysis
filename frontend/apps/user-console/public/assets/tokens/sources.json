@@ -1,0 +1,38 @@
+[
+  {
+    "chain": "bsc",
+    "contract": "0x55d398326f99059fF775485246999027B3197955",
+    "symbol": "USDT",
+    "decimals": 18,
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x55d398326f99059fF775485246999027B3197955/logo.png",
+    "identity_source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x55d398326f99059fF775485246999027B3197955/info.json",
+    "sha256": "1c2ecfc8c08a821a4839f2ae0df1d8796a8df233939b537b4e26514fa4f91196"
+  },
+  {
+    "chain": "eth",
+    "contract": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    "symbol": "USDT",
+    "decimals": 6,
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png",
+    "identity_source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/info.json",
+    "sha256": "1c2ecfc8c08a821a4839f2ae0df1d8796a8df233939b537b4e26514fa4f91196"
+  },
+  {
+    "chain": "eth",
+    "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "symbol": "USDC",
+    "decimals": 6,
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
+    "identity_source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/info.json",
+    "sha256": "6d14601d0b1109046e366592b8c0f256ffb075f69180b65dddd97ae665d49f9e"
+  },
+  {
+    "chain": "bsc",
+    "contract": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+    "symbol": "USDC",
+    "decimals": 18,
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d/logo.png",
+    "identity_source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d/info.json",
+    "sha256": "6d14601d0b1109046e366592b8c0f256ffb075f69180b65dddd97ae665d49f9e"
+  }
+]

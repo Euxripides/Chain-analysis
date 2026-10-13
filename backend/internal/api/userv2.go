@@ -93,17 +93,29 @@ func (s *Server) registerUserV2(r chi.Router) {
 	//
 	// §7.3：整条 Explorer 读路径挂在 `user.explorer_v2` 开关之下，开关在**真实请求路径**上求值。
 	// 关掉时返回 503 FEATURE_DISABLED（稳定 error code + flag key），而不是静默降级成空数据。
+	r.Get("/explorer/resolve", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerResolve)))
+	r.Get("/explorer/addresses/{chain}/{address}/history-coverage", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerHistory)))
 	r.Get("/explorer/addresses/{chain}/{address}/overview", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerOverview)))
 	r.Get("/explorer/addresses/{chain}/{address}/assets", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerAssets)))
 	r.Get("/explorer/addresses/{chain}/{address}/activity", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerActivity)))
 	r.Get("/explorer/addresses/{chain}/{address}/counterparties", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerCounterparties)))
 	r.Get("/explorer/addresses/{chain}/{address}/semantic", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerSemantic)))
 	r.Get("/explorer/addresses/{chain}/{address}/flow-profile", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerFlowProfile)))
+	r.Get("/explorer/addresses/{chain}/{address}/statistics", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerStatistics)))
+	r.Get("/explorer/blocks/{chain}/{block}", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerBlock)))
+	r.Get("/explorer/tokens", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTokenSearch)))
+	r.Get("/explorer/tokens/{chain}/{contract}", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerToken)))
+	r.Get("/explorer/tokens/{chain}/{contract}/logo", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleTokenLogo)))
+	r.Get("/explorer/tokens/{chain}/{contract}/transfers", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTokenTransfers)))
+	r.Get("/explorer/tokens/{chain}/{contract}/holders", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTokenHolders)))
 
 	// v2 元数据：链/Dataset 选项来自服务端 registry。
 	r.Get("/meta/chains", s.require("explorer:read", s.handleUserChains))
 	r.Get("/meta/datasets", s.require("download:create", s.handleUserDatasets))
 	r.Get("/explorer/transactions/{chain}/{hash}", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransaction)))
+	r.Get("/explorer/transactions/{chain}/{hash}/analysis", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionAnalysis)))
+	r.Get("/explorer/transactions/{chain}/{hash}/bridge", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionBridge)))
+	r.Get("/explorer/transactions/{chain}/{hash}/context", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionContext)))
 	r.Get("/explorer/transactions/{chain}/{hash}/logs", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionLogs)))
 	r.Get("/explorer/transactions/{chain}/{hash}/trace", s.require("explorer:read", s.requireFlag("user.explorer_v2", "explorer:read", s.handleExplorerTransactionTrace)))
 
@@ -124,8 +136,10 @@ func (s *Server) registerUserV2(r chi.Router) {
 	r.Head("/exports/download/{ticket}", s.require("export:download", s.handleExportV2Download))
 	r.Get("/exports", s.require("export:list", s.handleExportsV2List))
 	r.Post("/exports", s.require("export:create", s.handleExportV2Create))
+	r.Post("/exports/prefetch", s.require("export:create", s.handleExportPrefetch))
 	r.Get("/exports/{id}", s.require("export:read", s.handleExportV2Detail))
 	r.Post("/exports/{id}/download-ticket", s.require("export:download", s.handleExportV2Ticket))
+	r.Post("/exports/{id}/files/{dataset}/download-ticket", s.require("export:download", s.handleExportFileTicket))
 
 	// Canvas v2：revision 冲突返回字段级 diff；跨案件 Evidence 引用在保存前拒绝。
 	r.Get("/investigations/{id}/canvases", s.require("canvas:list", s.handleInvestigationCanvasesV2))

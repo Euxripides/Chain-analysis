@@ -1,0 +1,322 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": false,
+  "final_wallet_state": "downstream_settlement_not_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v2",
+  "proof": {
+    "protocol": {
+      "protocol": "across",
+      "version": "across-v3",
+      "identifier": "across-v3/bsc/0x4e8e101924ede233c13e2d8622dc8aed2872d505/1159924/ethereum",
+      "source_chain": "bsc",
+      "destination_chain": "ethereum",
+      "payload_sha256": "433cbb3f54d0533d537daf8ee6d9d765d1657671e76bef7b444d3bbdbc543bb3",
+      "source": {
+        "chain": "bsc",
+        "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+        "event_index": 246,
+        "contract": {
+          "address": "0x4e8e101924ede233c13e2d8622dc8aed2872d505",
+          "verifier_address": "0x4e8e101924ede233c13e2d8622dc8aed2872d505",
+          "code_sha256": "3cc5e539eb61133fec38655ae3f55d8e1f944fce2cbc02e151972cf9c9880545",
+          "implementation": "0xc7b7029373f504949553106c9eb2dafdd48ef086",
+          "implementation_code_sha256": "ce46ff23b8e107c41c6feb3955e00a3aee5261d63f9f03a1e0832673d3902ed7",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/across-protocol/contracts/a634bea927668519c748e46036181c89c7bd9b40/broadcast/deployed-addresses.json"
+        },
+        "role": "source",
+        "identifier": "across-v3/bsc/0x4e8e101924ede233c13e2d8622dc8aed2872d505/1159924/ethereum",
+        "payload_sha256": "433cbb3f54d0533d537daf8ee6d9d765d1657671e76bef7b444d3bbdbc543bb3",
+        "raw_topics": [
+          "0x32ed1a409ef04c7b0227189c3a103dc5ac10e775a15b785dcc510201f7c25ad3",
+          "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "0x000000000000000000000000000000000000000000000000000000000011b2f4",
+          "0x000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e773619"
+        ],
+        "raw_data": "0x0000000000000000000000008ac76a51cc950d9822d68b83fe1ad97b32cd580d000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000001b4b48ae2058a58b00000000000000000000000000000000000000000000000000000000001d126e000000000000000000000000000000000000000000000000000000006ac2a307000000000000000000000000000000000000000000000000000000006ac2bf27000000000000000000000000000000000000000000000000000000006ac2a3a4000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e773619000000000000000000000000394311a6aaa0d8e3411d8b62de4578d41322d1bd00000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "destination": {
+        "chain": "ethereum",
+        "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+        "event_index": 345,
+        "contract": {
+          "address": "0x5c7bcd6e7de5423a257d81b442095a1a6ced35c5",
+          "verifier_address": "0x5c7bcd6e7de5423a257d81b442095a1a6ced35c5",
+          "code_sha256": "3cc5e539eb61133fec38655ae3f55d8e1f944fce2cbc02e151972cf9c9880545",
+          "implementation": "0x456ac26e5ec083ee9889eba0d1a0a582502b8e84",
+          "implementation_code_sha256": "cb071c76a6075be0da08107d9dea43a04d32641b0b3161c7bca0b70428120a63",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/across-protocol/contracts/a634bea927668519c748e46036181c89c7bd9b40/broadcast/deployed-addresses.json"
+        },
+        "role": "destination",
+        "identifier": "across-v3/bsc/0x4e8e101924ede233c13e2d8622dc8aed2872d505/1159924/ethereum",
+        "payload_sha256": "433cbb3f54d0533d537daf8ee6d9d765d1657671e76bef7b444d3bbdbc543bb3",
+        "raw_topics": [
+          "0x44b559f101f8fbcc8a0ea43fa91a05a729a5ea6e14a7c75aa750374690137208",
+          "0x0000000000000000000000000000000000000000000000000000000000000038",
+          "0x000000000000000000000000000000000000000000000000000000000011b2f4",
+          "0x000000000000000000000000394311a6aaa0d8e3411d8b62de4578d41322d1bd"
+        ],
+        "raw_data": "0x0000000000000000000000008ac76a51cc950d9822d68b83fe1ad97b32cd580d000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000001b4b48ae2058a58b00000000000000000000000000000000000000000000000000000000001d126e0000000000000000000000000000000000000000000000000000000000000038000000000000000000000000000000000000000000000000000000006ac2bf27000000000000000000000000000000000000000000000000000000006ac2a3a4000000000000000000000000394311a6aaa0d8e3411d8b62de4578d41322d1bd000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e773619000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e7736190000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e773619000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001d126e0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "protocol_party": "0xf6ab5997160e3bb2da15be5bb87fcc7a4e773619",
+        "source_call": {
+          "from": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+          "to": "0x4e8e101924ede233c13e2d8622dc8aed2872d505",
+          "input": "0xad5425c6000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e773619000000000000000000000000f6ab5997160e3bb2da15be5bb87fcc7a4e7736190000000000000000000000008ac76a51cc950d9822d68b83fe1ad97b32cd580d000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000001b4b48ae2058a58b00000000000000000000000000000000000000000000000000000000001d126e0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000394311a6aaa0d8e3411d8b62de4578d41322d1bd000000000000000000000000000000000000000000000000000000006ac2a307000000000000000000000000000000000000000000000000000000006ac2bf270000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000001dc0de0086",
+          "value": "0",
+          "block_timestamp": 1791140756
+        },
+        "role": "source",
+        "chain": "bsc",
+        "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+        "party": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+        "asset": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "amount_raw": "1966745574981543307",
+        "amount": "1.966745574981543307",
+        "decimals": 18,
+        "bridge_asset": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "bridge_amount_raw": "1966745574981543307",
+        "binding": "across:across-v3/bsc/0x4e8e101924ede233c13e2d8622dc8aed2872d505/1159924/ethereum:executed_deposit_caller_funding",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "bsc",
+            "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+            "dataset": "token_transfers",
+            "event_index": 244,
+            "timestamp": "2026-10-04T19:05:56Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+            "to_address": "0x4e8e101924ede233c13e2d8622dc8aed2872d505",
+            "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "1966745574981543307",
+            "amount": "1.966745574981543307",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": null,
+        "block": {
+          "chain": "bsc",
+          "network_id": "56",
+          "number": 125729298,
+          "hash": "0xcdeec1387d2ee75cc462047bf9dff90bf64024ebf4f4b380f8f4e58d927e8a26",
+          "finalized_number": 125826986,
+          "finalized_hash": "0x633104b4bcfe4d3169a790ca0d4c8c0f901bc11ccd04c556be5a0671901eae1a",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:50.416791646Z",
+          "source": "configured_rpc_gateway:aded17ae-6784-4946-b277-41e96ba337ca",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "64679a1c96a0cc5338dc5c47e4a3f30454256a16d9c529b3f9af93bdcbb416fc",
+        "trace_sha256": "642ad3dfc0eab9a431b2cd77e0a1f4ddd1f16e49ba75513e9bba72b35da5df48",
+        "read_gaps": [],
+        "truncated": false
+      },
+      {
+        "role": "destination",
+        "chain": "ethereum",
+        "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+        "party": "0xf6ab5997160e3bb2da15be5bb87fcc7a4e773619",
+        "asset": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "amount_raw": "1905262",
+        "amount": "1.905262",
+        "decimals": 6,
+        "bridge_asset": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "bridge_amount_raw": "1905262",
+        "binding": "across:across-v3/bsc/0x4e8e101924ede233c13e2d8622dc8aed2872d505/1159924/ethereum:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "ethereum",
+            "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+            "dataset": "token_transfers",
+            "event_index": 346,
+            "timestamp": "2026-10-04T19:05:59Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x394311a6aaa0d8e3411d8b62de4578d41322d1bd",
+            "to_address": "0xf6ab5997160e3bb2da15be5bb87fcc7a4e773619",
+            "token_contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "token": "",
+            "decimals": 6,
+            "amount_raw": "1905262",
+            "amount": "1.905262",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "ethereum",
+          "network_id": "1",
+          "number": 26120972,
+          "hash": "0xf61c9a64bbfe474c4d0816c239dbefffb178091329ca5e2bb5b599cc2e8e034e",
+          "finalized_number": 26124564,
+          "finalized_hash": "0x782cf76ed2ec76899c42e74c3b9fd02829b67e45312fc978cd861937f52f96da",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:55.266310975Z",
+          "source": "configured_rpc_gateway:aded17ae-6784-4946-b277-41e96ba337ca",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "f9101f94e3ef9212e05d726f8ebc7e7cfa13f13faca99db93ac571e21be1d8d6",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T07:18:44.629041959Z"
+  },
+  "bridge": "across",
+  "order_id": "1159924",
+  "status": "completed",
+  "raw_status": "filled",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "bsc",
+      "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+      "address": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+      "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+      "amount_raw": "1966745574981543307",
+      "amount": "1.966745574981543307",
+      "decimals": 18,
+      "timestamp": "2026-10-04T19:05:56.000Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "reported_address": "0xF6ab5997160E3Bb2DA15be5bB87FCc7A4E773619",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "ethereum",
+      "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+      "address": "0xf6ab5997160e3bb2da15be5bb87fcc7a4e773619",
+      "token_contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "amount_raw": "1905262",
+      "amount": "1.905262",
+      "decimals": 6,
+      "timestamp": "2026-10-04T19:05:59.000Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://across.to/api/deposit?depositTxnRef=0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+    "fetched_at": "2026-10-05T07:18:42.453497596Z",
+    "response_sha256": "0c387013878f40e68627ced5459d8e63c4aa7aec4e2655b1f41e6507d3cdc519",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": false,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "bsc",
+      "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+      "status": "not_available",
+      "amounts_matched": false,
+      "reason": "actual transaction read; no funding event matched the reported asset and beneficiary",
+      "observed_movements": [
+        {
+          "chain": "bsc",
+          "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+          "dataset": "token_transfers",
+          "event_index": 241,
+          "timestamp": "2026-10-04T19:05:56Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x4141325bac36affe9db165e854982230a14e6d48",
+          "to_address": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+          "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "1966745574981543307",
+          "amount": "1.966745574981543307",
+          "status": "success"
+        },
+        {
+          "chain": "bsc",
+          "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+          "dataset": "token_transfers",
+          "event_index": 242,
+          "timestamp": "2026-10-04T19:05:56Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x2d9d6e538bd3f22323932782aaf89446cacaf9d3",
+          "to_address": "0x4141325bac36affe9db165e854982230a14e6d48",
+          "token_contract": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "2492099416955000",
+          "amount": "0.002492099416955",
+          "status": "success"
+        },
+        {
+          "chain": "bsc",
+          "tx_hash": "0x46570d2cd8510134ba5ac0389c555de20afb4d8b87035ecac066ba5ecd4d1d4b",
+          "dataset": "token_transfers",
+          "event_index": 244,
+          "timestamp": "2026-10-04T19:05:56Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x8112979f19427d9e794f68ef7705a40c26d330ef",
+          "to_address": "0x4e8e101924ede233c13e2d8622dc8aed2872d505",
+          "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "1966745574981543307",
+          "amount": "1.966745574981543307",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    },
+    {
+      "leg_role": "destination",
+      "chain": "ethereum",
+      "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "ethereum",
+          "tx_hash": "0x5505adc84455a7c9384b0f32448bff50c1728f290f9cf31455bd7676460d0d8f",
+          "dataset": "token_transfers",
+          "event_index": 346,
+          "timestamp": "2026-10-04T19:05:59Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x394311a6aaa0d8e3411d8b62de4578d41322d1bd",
+          "to_address": "0xf6ab5997160e3bb2da15be5bb87fcc7a4e773619",
+          "token_contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "1905262",
+          "amount": "1.905262",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": false,
+  "message_only": false
+}

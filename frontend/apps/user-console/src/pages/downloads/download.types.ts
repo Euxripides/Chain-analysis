@@ -421,6 +421,43 @@ export function groupAddressesByChain(rows: ImportedAddress[], defaultChain: str
  * 以"预览指纹 + 链 + 地址集合"派生稳定幂等键：同一批地址重试时复用同一个 key，
  * 避免第一次部分成功后重试又创建一遍。
  */
+async function submissionStorageKey(scope: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(scope));
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `download-create:${hex}`;
+}
+
+const pendingSubmissionKeys = new Map<string, string>();
+
+// A retry of an unfinished submission keeps its key across page reloads.
+// Once every chain succeeds, the next deliberate submission gets a fresh key.
+export async function submissionIdempotencyKey(scope: string): Promise<string> {
+  const storageKey = await submissionStorageKey(scope);
+  const pending = pendingSubmissionKeys.get(storageKey);
+  if (pending) return pending;
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      const entry = JSON.parse(saved) as { key?: string; createdAt?: number };
+      if (entry.key && entry.createdAt && Date.now() - entry.createdAt < 7 * 24 * 60 * 60 * 1000) {
+        pendingSubmissionKeys.set(storageKey, entry.key);
+        return entry.key;
+      }
+    }
+  } catch { /* Private browsing can deny local storage. */ }
+  const key = crypto.randomUUID();
+  pendingSubmissionKeys.set(storageKey, key);
+  try { localStorage.setItem(storageKey, JSON.stringify({ key, createdAt: Date.now() })); } catch { /* Current page still retries with its key. */ }
+  return key;
+}
+
+export async function clearSubmissionIdempotencyKey(scope: string): Promise<void> {
+  const storageKey = await submissionStorageKey(scope);
+  pendingSubmissionKeys.delete(storageKey);
+  try { localStorage.removeItem(storageKey); } catch { /* Storage can be unavailable. */ }
+}
+
+
 export async function stableIdempotencyKey(scope: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(scope));
   const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");

@@ -1,0 +1,452 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": false,
+  "final_wallet_state": "downstream_settlement_not_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v2",
+  "proof": {
+    "protocol": {
+      "protocol": "across",
+      "version": "across-v3",
+      "identifier": "across-v3/base/0x09aea4b2242abc8bb4bb78d537a67a245a7bec64/6290781/optimism",
+      "source_chain": "base",
+      "destination_chain": "optimism",
+      "payload_sha256": "faff3c97ea6b571607db714d553893c2000db8705414a86aff59fb9f6a5ed21b",
+      "source": {
+        "chain": "base",
+        "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+        "event_index": 358,
+        "contract": {
+          "address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "verifier_address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "code_sha256": "3cc5e539eb61133fec38655ae3f55d8e1f944fce2cbc02e151972cf9c9880545",
+          "implementation": "0xf23c6c04a2b88e8651fe99bbdccbb5c9d306e6b0",
+          "implementation_code_sha256": "8cf9c1f5d25d46196624b0f0ede762387aac98e81a99e9add9e41987d9644a2f",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/across-protocol/contracts/a634bea927668519c748e46036181c89c7bd9b40/broadcast/deployed-addresses.json"
+        },
+        "role": "source",
+        "identifier": "across-v3/base/0x09aea4b2242abc8bb4bb78d537a67a245a7bec64/6290781/optimism",
+        "payload_sha256": "faff3c97ea6b571607db714d553893c2000db8705414a86aff59fb9f6a5ed21b",
+        "raw_topics": [
+          "0x32ed1a409ef04c7b0227189c3a103dc5ac10e775a15b785dcc510201f7c25ad3",
+          "0x000000000000000000000000000000000000000000000000000000000000000a",
+          "0x00000000000000000000000000000000000000000000000000000000005ffd5d",
+          "0x0000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a"
+        ],
+        "raw_data": "0x0000000000000000000000004200000000000000000000000000000000000006000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000038b389129d80000000000000000000000000000000000000000000000000000038adc51eee160000000000000000000000000000000000000000000000000000000006ac225eb000000000000000000000000000000000000000000000000000000006ac249f800000000000000000000000000000000000000000000000000000000000000000000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "destination": {
+        "chain": "optimism",
+        "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+        "event_index": 50,
+        "contract": {
+          "address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+          "verifier_address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+          "code_sha256": "3cc5e539eb61133fec38655ae3f55d8e1f944fce2cbc02e151972cf9c9880545",
+          "implementation": "0x60674c53a4cc4ed350659c95fb8020b5ac61ca1d",
+          "implementation_code_sha256": "a9ebedff3dcf814c85b5f45cb42fe7bac094bd49465e205b9dc23240d08f5bbd",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/across-protocol/contracts/a634bea927668519c748e46036181c89c7bd9b40/broadcast/deployed-addresses.json"
+        },
+        "role": "destination",
+        "identifier": "across-v3/base/0x09aea4b2242abc8bb4bb78d537a67a245a7bec64/6290781/optimism",
+        "payload_sha256": "faff3c97ea6b571607db714d553893c2000db8705414a86aff59fb9f6a5ed21b",
+        "raw_topics": [
+          "0x44b559f101f8fbcc8a0ea43fa91a05a729a5ea6e14a7c75aa750374690137208",
+          "0x0000000000000000000000000000000000000000000000000000000000002105",
+          "0x00000000000000000000000000000000000000000000000000000000005ffd5d",
+          "0x000000000000000000000000394311a6aaa0d8e3411d8b62de4578d41322d1bd"
+        ],
+        "raw_data": "0x0000000000000000000000004200000000000000000000000000000000000006000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000038b389129d80000000000000000000000000000000000000000000000000000038adc51eee1600000000000000000000000000000000000000000000000000000000000002105000000000000000000000000000000000000000000000000000000006ac249f8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a0000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000038adc51eee1600000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "protocol_party": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+        "source_call": {
+          "from": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "to": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "input": "0xad5425c60000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a0000000000000000000000007c591da943f98c9bf3bb78405ffd9d7091e35e2a0000000000000000000000004200000000000000000000000000000000000006000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000038b389129d80000000000000000000000000000000000000000000000000000038adc51eee160000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006ac225eb000000000000000000000000000000000000000000000000000000006ac249f8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001800000000000000000000000000000000000000000000000000000000000000000",
+          "value": "997500000000000",
+          "block_timestamp": 1791108829
+        },
+        "native_conversion": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "owner": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "pool": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "event_index": 357,
+          "raw_topics": [
+            "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c",
+            "0x00000000000000000000000009aea4b2242abc8bb4bb78d537a67a245a7bec64"
+          ],
+          "raw_data": "0x00000000000000000000000000000000000000000000000000038b389129d800",
+          "historical_getter": true,
+          "native_funding": [
+            {
+              "chain": "base",
+              "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+              "dataset": "internal_transactions",
+              "event_index": 7,
+              "timestamp": "2026-10-04T10:13:49Z",
+              "timestamp_source": "chain_rpc",
+              "from_address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+              "to_address": "0x4200000000000000000000000000000000000006",
+              "token_contract": "native",
+              "token": "",
+              "decimals": 18,
+              "amount_raw": "997500000000000",
+              "amount": "0.0009975",
+              "status": "success"
+            }
+          ],
+          "token_funding": null
+        },
+        "role": "source",
+        "chain": "base",
+        "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+        "party": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+        "asset": "native",
+        "amount_raw": "997500000000000",
+        "amount": "0.0009975",
+        "decimals": 18,
+        "bridge_asset": "0x4200000000000000000000000000000000000006",
+        "bridge_amount_raw": "997500000000000",
+        "binding": "across:across-v3/base/0x09aea4b2242abc8bb4bb78d537a67a245a7bec64/6290781/optimism:executed_deposit_caller_funding",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "base",
+            "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+            "dataset": "internal_transactions",
+            "event_index": 5,
+            "timestamp": "2026-10-04T10:13:49Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+            "to_address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "997500000000000",
+            "amount": "0.0009975",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": null,
+        "block": {
+          "chain": "base",
+          "network_id": "8453",
+          "number": 52159741,
+          "hash": "0x9dcca087b3250469cf2c686e42a63b8497c62c9e3f56336cf91a13040981facd",
+          "finalized_number": 52197075,
+          "finalized_hash": "0x793b398c6e35f733d4ee5b699ba8cc9c30be76669d68bb0b26988764e59c7ba6",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:50.762164201Z",
+          "source": "configured_rpc_gateway:27138f1c-543d-4256-8739-4637bbe9446b",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "c9023f6d3289b037fd70c7a8232c05ecc6ece8991810b6f99483107ae34b8320",
+        "trace_sha256": "291afc106f61de0c6cac686260544f9b0fb5f3206c4fb955e203e93196f2cd35",
+        "read_gaps": [],
+        "truncated": false
+      },
+      {
+        "native_conversion": {
+          "token": "0x4200000000000000000000000000000000000006",
+          "owner": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+          "pool": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+          "event_index": 52,
+          "raw_topics": [
+            "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65",
+            "0x0000000000000000000000006f26bf09b1c792e3228e5467807a900a503c0281"
+          ],
+          "raw_data": "0x00000000000000000000000000000000000000000000000000038adc51eee160",
+          "historical_getter": true,
+          "native_funding": [],
+          "token_funding": [
+            {
+              "chain": "optimism",
+              "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+              "dataset": "token_transfers",
+              "event_index": 51,
+              "timestamp": "2026-10-04T10:13:51Z",
+              "timestamp_source": "chain_rpc",
+              "from_address": "0x394311a6aaa0d8e3411d8b62de4578d41322d1bd",
+              "to_address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+              "token_contract": "0x4200000000000000000000000000000000000006",
+              "token": "",
+              "decimals": 18,
+              "amount_raw": "997103802179936",
+              "amount": "0.000997103802179936",
+              "status": "success"
+            }
+          ]
+        },
+        "role": "destination",
+        "chain": "optimism",
+        "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+        "party": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+        "asset": "native",
+        "amount_raw": "997103802179936",
+        "amount": "0.000997103802179936",
+        "decimals": 18,
+        "bridge_asset": "0x4200000000000000000000000000000000000006",
+        "bridge_amount_raw": "997103802179936",
+        "binding": "across:across-v3/base/0x09aea4b2242abc8bb4bb78d537a67a245a7bec64/6290781/optimism:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "optimism",
+            "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+            "dataset": "internal_transactions",
+            "event_index": 4,
+            "timestamp": "2026-10-04T10:13:51Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x4200000000000000000000000000000000000006",
+            "to_address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "997103802179936",
+            "amount": "0.000997103802179936",
+            "status": "success"
+          },
+          {
+            "chain": "optimism",
+            "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+            "dataset": "internal_transactions",
+            "event_index": 6,
+            "timestamp": "2026-10-04T10:13:51Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+            "to_address": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "997103802179936",
+            "amount": "0.000997103802179936",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "optimism",
+          "network_id": "10",
+          "number": 157755027,
+          "hash": "0xc0c09e4bf0c02c72185c0ac5ea2295c1320aea992ab5ed2fa3ad51bd998db69d",
+          "finalized_number": 157792388,
+          "finalized_hash": "0x434dd13ac16514a0554f10583de4c9437abe9b3ff8c6ac1466d552e271cf6b1a",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T07:18:55.973740843Z",
+          "source": "configured_rpc_gateway:27138f1c-543d-4256-8739-4637bbe9446b",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "748ae18f6bc085edef39c381ffe39ba883d4e831cc1b68dd8a666a975c7349de",
+        "trace_sha256": "3a1d6330f092ba20db07eec36d978ddcb1f5de224d5f0042b3bf29d466a7a684",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T07:18:46.354433922Z"
+  },
+  "bridge": "across",
+  "order_id": "6290781",
+  "status": "completed",
+  "raw_status": "filled",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "base",
+      "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+      "address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+      "token_contract": "native",
+      "amount_raw": "997500000000000",
+      "amount": "0.0009975",
+      "decimals": 18,
+      "timestamp": "2026-10-04T10:13:49.000Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "reported_address": "0x7c591DA943f98c9bF3bB78405ffd9D7091E35e2a",
+      "address_scope": "protocol_bound_bridge_funding_party",
+      "reported_token_contract": "0x4200000000000000000000000000000000000006"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "optimism",
+      "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+      "address": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+      "token_contract": "native",
+      "amount_raw": "997103802179936",
+      "amount": "0.000997103802179936",
+      "decimals": 18,
+      "timestamp": "2026-10-04T10:13:51.000Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "bridge_contract": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+      "address_scope": "protocol_bound_bridge_funding_party",
+      "reported_token_contract": "0x4200000000000000000000000000000000000006"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://across.to/api/deposit?depositTxnRef=0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+    "fetched_at": "2026-10-05T07:18:40.175027632Z",
+    "response_sha256": "cbbfa176221a3a4d958c716a94eea914ae3b9c8f29eb896f76b0f5b6f9f9b3c6",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": false,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "base",
+      "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+      "status": "not_available",
+      "amounts_matched": false,
+      "reason": "actual transaction read; no funding event matched the reported asset and beneficiary",
+      "observed_movements": [
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "transactions",
+          "event_index": 0,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+          "to_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "1000000000000000",
+          "amount": "0.001",
+          "status": "success"
+        },
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "internal_transactions",
+          "event_index": 2,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "to_address": "0xce40449b773a3e6e5e769adb4e567179d4828cbd",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "1000000000000000",
+          "amount": "0.001",
+          "status": "success"
+        },
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "internal_transactions",
+          "event_index": 3,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0xce40449b773a3e6e5e769adb4e567179d4828cbd",
+          "to_address": "0xc06ebbefd94032b85424d51906e2a335efae264b",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "2500000000000",
+          "amount": "0.0000025",
+          "status": "success"
+        },
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "internal_transactions",
+          "event_index": 4,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0xce40449b773a3e6e5e769adb4e567179d4828cbd",
+          "to_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "997500000000000",
+          "amount": "0.0009975",
+          "status": "success"
+        },
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "internal_transactions",
+          "event_index": 5,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+          "to_address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "997500000000000",
+          "amount": "0.0009975",
+          "status": "success"
+        },
+        {
+          "chain": "base",
+          "tx_hash": "0x1dbc77e7806d367c4acaf80505acefaf1f8f5a744bc7b69ea78e0e17bbe36285",
+          "dataset": "internal_transactions",
+          "event_index": 7,
+          "timestamp": "2026-10-04T10:13:49Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x09aea4b2242abc8bb4bb78d537a67a245a7bec64",
+          "to_address": "0x4200000000000000000000000000000000000006",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "997500000000000",
+          "amount": "0.0009975",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    },
+    {
+      "leg_role": "destination",
+      "chain": "optimism",
+      "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "optimism",
+          "tx_hash": "0xc8e3d4550be2e18cc6dae36f689855d8aa10ab217ad4f992feb0c9b75ef8ad30",
+          "dataset": "internal_transactions",
+          "event_index": 6,
+          "timestamp": "2026-10-04T10:13:51Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x6f26bf09b1c792e3228e5467807a900a503c0281",
+          "to_address": "0x7c591da943f98c9bf3bb78405ffd9d7091e35e2a",
+          "token_contract": "native",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "997103802179936",
+          "amount": "0.000997103802179936",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": false,
+  "message_only": false
+}

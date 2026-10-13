@@ -239,6 +239,10 @@ func (s *Server) serveExportObject(w http.ResponseWriter, r *http.Request, exp *
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=export-%s.zip", exp.ID[:8]))
 	}
 
+	if name, ok := extra["filename"].(string); ok && name != "" && !strings.ContainsAny(name, "/\\\r\n\"") {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", name))
+	}
+
 	// 单区间 Range：bytes=start-[end]
 	if rng := r.Header.Get("Range"); rng != "" {
 		var start, end int64 = -1, -1

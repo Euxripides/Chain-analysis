@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
+	"github.com/blockchain-platform/blockchain-platform/internal/assetidentity"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
+	"github.com/blockchain-platform/blockchain-platform/internal/fundtrace"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/go-chi/chi/v5"
@@ -67,11 +69,18 @@ type investigationRequest struct {
 	TimeWindow       int64            `json:"time_window"`
 	MaxNodes         int              `json:"max_nodes"`
 	MaxRecords       int              `json:"max_records"`
+	SourceAddress    string           `json:"source_address"`
+	SourceTxHash     string           `json:"source_tx_hash"`
+	MaxDepth         int              `json:"max_depth"`
+	AttributionModel string           `json:"attribution_model"`
+	Addresses        []string         `json:"addresses"`
+	MaxConcurrent    int              `json:"max_concurrent"`
 }
 
-var investigationOperations = []string{"get_native_balance", "get_token_balance", "get_all_token_balances", "get_balance_at", "get_balance_history", "read_rpc", "eth_call", "eth_getCode", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionReceipt", "eth_getLogs", "eth_getBalance", "eth_blockNumber", "eth_getBlockByNumber", "get_contract_abi", "decode_transaction_input", "decode_logs", "resolve_proxy_implementation", "read_contract", "aggregate_transfers", "get_export_file", "download_export", "trace_funds", "get_labels", "detect_exchange_deposit", "trace_to_exchange", "get_contract_control"}
+var investigationOperations = []string{"get_native_balance", "get_token_balance", "get_all_token_balances", "get_balance_at", "get_balance_history", "read_rpc", "rpc_call", "trace_fund_batch", "resolve_proxy", "batch_get_native_balances", "batch_get_token_balances", "eth_call", "eth_getCode", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionReceipt", "eth_getLogs", "eth_getBalance", "eth_blockNumber", "eth_getBlockByNumber", "get_contract_abi", "decode_transaction_input", "decode_logs", "resolve_proxy_implementation", "read_contract", "aggregate_transfers", "get_export_file", "download_export", "trace_funds", "get_labels", "detect_exchange_deposit", "trace_to_exchange", "get_contract_control"}
 
 func (s *Server) registerInvestigationRoutes(r chi.Router) {
+	s.registerNextInvestigationRoutes(r)
 	for _, name := range investigationOperations {
 		op := name
 		prefix := "/analysis/"
@@ -82,6 +91,18 @@ func (s *Server) registerInvestigationRoutes(r chi.Router) {
 	}
 }
 func investigationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		actionFail(w, 504, "QUERY_TIMEOUT", "Query budget expired; narrow the request and retry")
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		actionFail(w, 408, "QUERY_CANCELED", "Query canceled")
+		return
+	}
+	if errors.Is(err, fundtrace.ErrAllocationBudget) {
+		actionFail(w, 422, "ALLOCATION_BUDGET_EXCEEDED", "Allocation work budget reached; narrow time_window/max_records or use a single model")
+		return
+	}
 	var re *rpc.Error
 	if errors.As(err, &re) {
 		actionFail(w, 503, strings.ToUpper(string(re.Class)), re.Public())
@@ -117,6 +138,33 @@ func (s *Server) handleInvestigation(w http.ResponseWriter, r *http.Request, op 
 	if dec.Decode(&extra) != io.EOF {
 		actionFail(w, 400, "INVALID_QUERY", "Expected one JSON object")
 		return
+	}
+
+	if op == "trace_fund_batch" {
+		if req.Source != "" && req.SourceAddress != "" && req.Source != req.SourceAddress {
+			investigationError(w, fmt.Errorf("conflicting source/source_address"))
+			return
+		}
+		if req.SourceAddress != "" {
+			req.Source = req.SourceAddress
+		}
+		if req.SourceTx != "" && req.SourceTxHash != "" && req.SourceTx != req.SourceTxHash {
+			investigationError(w, fmt.Errorf("conflicting source transaction hashes"))
+			return
+		}
+		if req.SourceTxHash != "" {
+			req.SourceTx = req.SourceTxHash
+		}
+		if req.MaxHops != 0 && req.MaxDepth != 0 && req.MaxHops != req.MaxDepth {
+			investigationError(w, fmt.Errorf("conflicting max_hops/max_depth"))
+			return
+		}
+		if req.MaxDepth != 0 {
+			req.MaxHops = req.MaxDepth
+		}
+		if req.MaxHops == 0 {
+			req.MaxHops = 5
+		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 55*time.Second)
 	defer cancel()
@@ -161,6 +209,18 @@ func (s *Server) handleInvestigation(w http.ResponseWriter, r *http.Request, op 
 			*field = h.String()
 		}
 	}
+
+	if req.Token != "" || req.TokenContract != "" {
+		if req.TokenContract == "" && (op == "get_balance_at" || op == "get_balance_history") && strings.EqualFold(req.Token, mustChain(s, req.Chain).Native.Symbol) {
+			req.Token = ""
+		} else {
+			req.Token, req.TokenContract, err = resolveActionAsset(req.Chain, req.Token, req.TokenContract)
+			if err != nil {
+				investigationError(w, err)
+				return
+			}
+		}
+	}
 	if req.TokenContract == "" && strings.HasPrefix(req.Token, "0x") {
 		req.TokenContract = req.Token
 		req.Token = ""
@@ -193,6 +253,7 @@ func (s *Server) handleInvestigation(w http.ResponseWriter, r *http.Request, op 
 		actionFail(w, 500, "INTERNAL_ERROR", "Unable to encode investigation result")
 		return
 	}
+	decorateInvestigation(public, req.Chain)
 	actionOK(w, public, meta)
 }
 func investigationOptions() chainread.Options {
@@ -251,6 +312,19 @@ func (s *Server) statePoint(ctx context.Context, q investigationRequest) (chainr
 	return s.deps.ChainRead.ResolveState(ctx, q.Chain, ref, at, investigationOptions())
 }
 func (s *Server) investigationDispatch(ctx context.Context, q investigationRequest, op string) (any, map[string]any, error) {
+
+	if op == "rpc_call" {
+		op = "read_rpc"
+	}
+	if op == "resolve_proxy" {
+		op = "resolve_proxy_implementation"
+	}
+	if op == "batch_get_native_balances" || op == "batch_get_token_balances" {
+		return s.investigationBalanceBatch(ctx, q, op)
+	}
+	if op == "trace_fund_batch" && q.SourceTx == "" {
+		return s.investigationSelectSource(ctx, q)
+	}
 	if op == "read_rpc" || strings.HasPrefix(op, "eth_") {
 		method := op
 		params := q.Params
@@ -298,7 +372,7 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 	if op == "aggregate_transfers" {
 		return s.investigationAggregate(ctx, q)
 	}
-	if op == "trace_funds" {
+	if op == "trace_funds" || op == "trace_fund_batch" {
 		return s.investigationTrace(ctx, q)
 	}
 	if op == "get_labels" || op == "detect_exchange_deposit" || op == "trace_to_exchange" {
@@ -307,7 +381,21 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 	if op == "get_balance_history" {
 		return s.investigationHistory(ctx, q)
 	}
-	point, err := s.statePoint(ctx, q)
+	stateQuery := q
+	if op == "get_all_token_balances" && q.Cursor != "" {
+		saved, e := decodeExportSummaryCursor(q.Cursor, investigationFingerprint(q), "balances")
+		if e != nil {
+			return nil, nil, e
+		}
+		block, e := strconv.ParseUint(saved.After, 10, 64)
+		if e != nil {
+			return nil, nil, fmt.Errorf("invalid cursor block")
+		}
+		stateQuery.Timestamp = ""
+		stateQuery.Block = nil
+		stateQuery.BlockTag = strconv.FormatUint(block, 10)
+	}
+	point, err := s.statePoint(ctx, stateQuery)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -356,21 +444,20 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 			return nil, nil, err
 		}
 		if q.Cursor != "" {
-			block, e := strconv.ParseUint(cur.After, 10, 64)
-			if e != nil {
-				return nil, nil, fmt.Errorf("invalid cursor block")
-			}
-			qq := q
-			qq.Timestamp = ""
-			qq.BlockTag = strconv.FormatUint(block, 10)
-			qq.Block = nil
-			point, err = s.statePoint(ctx, qq)
-			if err != nil {
-				return nil, nil, err
-			}
 			point.Current = false
 			meta = investigationMeta(&point)
 		}
+		ingestedBefore := time.Now().UTC()
+		if q.Cursor != "" && len(q.Tokens) == 0 {
+			if cur.IngestedBefore == "" {
+				return nil, nil, summaryError(400, "INVALID_CURSOR", "Old discovery cursor has no ingestion snapshot; restart pagination")
+			}
+			ingestedBefore, err = time.Parse(time.RFC3339Nano, cur.IngestedBefore)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid discovery cursor watermark")
+			}
+		}
+
 		tokens := q.Tokens
 		more := false
 		if len(tokens) > 0 {
@@ -388,7 +475,7 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 			more = end < len(tokens)
 			tokens = tokens[offset:end]
 		} else {
-			tokens, more, err = s.query.InvestigationTokens(ctx, q.Chain, q.Address, point.Block, int(cur.Offset), q.PageSize)
+			tokens, more, err = s.query.InvestigationTokensPage(ctx, q.Chain, q.Address, point.Block, ingestedBefore, cur.TokenAfter, q.PageSize)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -422,7 +509,7 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 		}
 		var next any
 		if more {
-			next = encodeExportSummaryCursor(exportSummaryCursor{Version: 1, Query: fingerprint, Kind: "balances", After: strconv.FormatUint(point.Block, 10), Offset: cur.Offset + int64(len(tokens))})
+			next = encodeExportSummaryCursor(exportSummaryCursor{Version: 1, Query: fingerprint, Kind: "balances", After: strconv.FormatUint(point.Block, 10), Offset: cur.Offset + int64(len(tokens)), IngestedBefore: ingestedBefore.Format(time.RFC3339Nano), TokenAfter: tokens[len(tokens)-1]})
 		}
 		meta["coverage"] = map[string]any{"complete": false, "reason": "Token discovery uses indexed transfers or the explicit caller token list; tokens without observed activity may be absent"}
 		return map[string]any{"chain": q.Chain, "address": q.Address, "native_balance": native, "items": items, "as_of_block": point.Block, "balance_source": "rpc_state", "is_current_balance": point.Current, "discovery_source": func() string {
@@ -430,7 +517,7 @@ func (s *Server) investigationDispatch(ctx context.Context, q investigationReque
 				return "caller_token_list"
 			}
 			return "indexed_transfers"
-		}(), "discovery_complete": false, "has_more": more, "next_cursor": next}, meta, nil
+		}(), "discovery_complete": false, "discovery_ingested_before": ingestedBefore, "has_more": more, "next_cursor": next}, meta, nil
 	}
 	return nil, nil, fmt.Errorf("unsupported operation")
 }
@@ -644,7 +731,11 @@ func investigationReadScope(path string) bool {
 	}
 	name := strings.TrimPrefix(path, "/api/v1/analysis/")
 	switch name {
-	case "aggregate_transfers", "trace_funds", "detect_exchange_deposit", "trace_to_exchange":
+	case "get_investigation_capabilities", "get_analysis_status", "list_watch_rules", "get_watch_events":
+		return true
+	}
+	switch name {
+	case "aggregate_transfers", "trace_funds", "trace_fund_batch", "detect_exchange_deposit", "trace_to_exchange":
 		return false
 	}
 	for _, op := range investigationOperations {
@@ -653,4 +744,23 @@ func investigationReadScope(path string) bool {
 		}
 	}
 	return false
+}
+
+func decorateInvestigation(value any, c string) {
+	switch v := value.(type) {
+	case map[string]any:
+		if contract, ok := v["token_contract"].(string); ok && contract != "" {
+			symbol, _ := v["token_symbol"].(string)
+			for k, val := range assetidentity.Describe(c, contract, symbol) {
+				v[k] = val
+			}
+		}
+		for _, child := range v {
+			decorateInvestigation(child, c)
+		}
+	case []any:
+		for _, child := range v {
+			decorateInvestigation(child, c)
+		}
+	}
 }

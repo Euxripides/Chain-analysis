@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   BackLink,
   Button,
@@ -20,6 +20,7 @@ import {
   formatDuration,
   percent,
   type JobDetailData,
+  type JobProgress,
   type JobExport,
 } from "./jobs/detail/types";
 import { JobPrimaryProgress, jobStageText } from "./jobs/detail/JobPrimaryProgress";
@@ -45,7 +46,8 @@ import { JobTechnicalDetails } from "./jobs/detail/JobTechnicalDetails";
 
 export default function JobDetailPage() {
   const dialog = useDialog();
-  const { can } = useAuth();
+  const { can, session } = useAuth();
+  const progressScope = `${session?.organization_id ?? ""}:${session?.workspace_id ?? ""}`;
   const { jobId = "" } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { busy, run, client } = useS5Action();
@@ -65,28 +67,34 @@ export default function JobDetailPage() {
   const lastRevisionRef = useRef(0);
   const reloadTimerRef = useRef<number | null>(null);
   const notifiedErrorRef = useRef<string | null>(null);
+  const lastStreamAtRef = useRef(Date.now());
+  const [streamProgress, setStreamProgress] = useState<{ jobId: string; scope: string; value: JobProgress } | null>(null);
 
   const scheduleReload = useCallback(() => {
-    if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+    if (reloadTimerRef.current !== null) return;
     reloadTimerRef.current = window.setTimeout(() => {
-      void reload();
-    }, 400);
+      reloadTimerRef.current = null;
+      if (document.visibilityState === "visible") void reload();
+    }, 1000);
   }, [reload]);
 
   useEffect(
     () => () => {
       if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = null;
     },
-    [],
+    [reload],
   );
 
   useEffect(() => {
     setEvents([]);
+    setStreamProgress(null);
+    lastStreamAtRef.current = Date.now();
     setExpandAll(false);
     setTechnicalOpen(false);
     lastEventIdRef.current = 0;
     lastRevisionRef.current = 0;
-  }, [jobId]);
+  }, [jobId, progressScope]);
 
   const jobUpdatedAt = detail?.job.updated_at;
 
@@ -102,6 +110,7 @@ export default function JobDetailPage() {
    * 本次重构**没有**给页面加任何退出动画，避免延迟连接关闭。
    */
   const stream = useJobStream(jobId || null, (event) => {
+    if (event.job_id && event.job_id !== jobId) return;
     const id = Number(event.event_id ?? event._sse_id ?? 0);
     if (Number.isFinite(id) && id > 0) {
       if (id <= lastEventIdRef.current) return;
@@ -110,6 +119,14 @@ export default function JobDetailPage() {
     const rawAt = event.ts ?? event.updated_at;
     const at = typeof rawAt === "string" ? Date.parse(rawAt) : Number.NaN;
     if (Number.isFinite(at) && at < lastRevisionRef.current) return;
+    lastStreamAtRef.current = Date.now();
+    const isProgress = typeof event.progress === "number" && typeof event.downloaded_rows === "number";
+    if (isProgress) {
+      setStreamProgress({ jobId, scope: progressScope, value: event as unknown as JobProgress });
+      // Live counters come directly from SSE. Full detail calibration has a
+      // separate bounded timer, so every frame does not trigger a heavy GET.
+      if (event.status === detail?.job.status) return;
+    }
     if (event.event_type) {
       setEvents((prev) => [...prev, event].slice(-200));
     }
@@ -124,15 +141,56 @@ export default function JobDetailPage() {
   }, [detailError, dialog]);
 
   const job = detail?.job;
-  const progress = detail?.progress;
+  const liveProgress = streamProgress?.jobId === jobId && streamProgress.scope === progressScope ? streamProgress.value : null;
+  const progress = liveProgress && liveProgress.status === detail?.job.status &&
+    Date.parse(liveProgress.ts) >= Date.parse(detail.progress.ts) ? liveProgress : detail?.progress;
   const status = job?.status ?? "";
+  const [lookupParams] = useSearchParams();
+  const lookupChain = lookupParams.get("lookup_chain") ?? "";
+  const lookupAddress = lookupParams.get("lookup_address") ?? "";
+  const completionCoverage = useApi<{ items: Array<{ usable: boolean; history_complete: boolean; reason: string }> }>(
+    status === "COMPLETED" && lookupChain && lookupAddress && can("explorer:read")
+      ? `/api/v2/explorer/addresses/${encodeURIComponent(lookupChain)}/${encodeURIComponent(lookupAddress)}/history-coverage` : null,
+    [jobId, status, lookupChain, lookupAddress],
+  );
+  const completionShown = useRef("");
+  const completionErrorShown = useRef("");
+  useEffect(() => {
+    if (!completionCoverage.error || completionErrorShown.current === completionCoverage.error) return;
+    completionErrorShown.current = completionCoverage.error;
+    dialog.notify("error", "覆盖检查未完成", completionCoverage.error);
+  }, [completionCoverage.error, dialog]);
+  useEffect(() => {
+    const key = `${progressScope}/${jobId}/${lookupChain}/${lookupAddress}`;
+    if (!completionCoverage.data || completionShown.current === key) return;
+    completionShown.current = key;
+    const items = completionCoverage.data.items;
+    const complete = items.length > 0 && items.every(item => item.usable);
+    const review = dialog.openSession({ kind: complete ? "success" : "info", title: complete ? "地址数据补全完成" : "任务完成，覆盖仍需核对",
+      body: complete ? "已重新检查覆盖记录，可以返回地址查看数据。" : "下载任务已结束，当前记录尚未证明所有历史区间均已覆盖。",
+      details: [{ label: "链", value: lookupChain }, { label: "地址", value: lookupAddress }],
+      actions: [{ label: "查看地址数据", result: "view", variant: "primary" }, { label: "留在任务详情", result: "", variant: "default" }],
+    });
+    void review.result.then(answer => { if (answer === "view") navigate(`/addresses/${encodeURIComponent(lookupChain)}/${encodeURIComponent(lookupAddress)}`); });
+    return review.dismiss;
+  }, [completionCoverage.data, dialog, jobId, lookupChain, lookupAddress, navigate, progressScope]);
   const hasPendingExport = detail?.exports.some((item) => item.status === "PENDING" || item.status === "RUNNING") ?? false;
 
   useEffect(() => {
     if (!hasPendingExport) return;
-    const timer = window.setInterval(() => void reload(), 3000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void reload(); }, 3000);
     return () => window.clearInterval(timer);
   }, [hasPendingExport, reload]);
+
+  useEffect(() => {
+    if (!status || TERMINAL_STATUSES.has(status) || ["PAUSED", "WAITING_USER_CONFIRMATION", "PAUSED_FALLBACK_TOO_EXPENSIVE"].includes(status)) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void reload();
+    }, 15000);
+    const onVisible = () => { if (document.visibilityState === "visible") void reload(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [status, stream.connected, reload]);
 
   /**
    * 高频数值展示节流（蓝图 §9.3）：SSE 重连或高频 update 期间数值不抖动，
@@ -146,8 +204,8 @@ export default function JobDetailPage() {
   const canCancel = status !== "" && !TERMINAL_STATUSES.has(status) && status !== "CANCEL_REQUESTED";
   const canRetry = ["FAILED", "PARTIAL_FAILED", "PAUSED_FALLBACK_TOO_EXPENSIVE"].includes(status);
 
-  const rowsBasis = "downloaded_rows ÷ elapsed_seconds（服务端 wall-clock，含排队与空闲时间）";
-  const providerBasis = "当前 /api/v2/jobs/{id} 契约未返回 Provider rows/s，页面不推测该指标。";
+  const rowsBasis = "服务端实时 rows_per_sec（最近60秒下载记录增量；不足60秒使用已有采样时段）";
+  const providerBasis = "实时速率来自任务 SSE；未收到有效速率时显示 —。";
 
   const runCommand = useCallback(
     async (command: "pause" | "resume" | "cancel" | "retry") => {
@@ -323,13 +381,12 @@ export default function JobDetailPage() {
 
   /*
    * 主速度（§28.5 优先级）：
-   *   1. 服务端明确提供的 rate —— 当前契约未返回，故为 null；
-   *   2. 当前代码已有并确认口径的 downloaded_rows ÷ elapsed_seconds 作为展示派生；
-   *   3. provider rate 只放技术详情。
+   * 当前速度使用服务端 SSE 的实时增量速率。缺少有效样本时显示 —，
+   * 不把包含排队和尾部等待的全程平均速度标成当前速度。
    * 速度为 0 不自动解释为故障。
    */
-  const elapsedSeconds = progress.elapsed_seconds > 0 ? progress.elapsed_seconds : null;
-  const rowsPerSecond = elapsedSeconds !== null ? progress.downloaded_rows / elapsedSeconds : null;
+  const elapsedSeconds = shown.elapsed_seconds > 0 ? shown.elapsed_seconds : null;
+  const rowsPerSecond = typeof shown.rows_per_sec === "number" && Number.isFinite(shown.rows_per_sec) ? shown.rows_per_sec : null;
 
   const isFailed = ["FAILED", "PARTIAL_FAILED", "ABORTED_BY_USER"].includes(status);
   const isCompleted = status === "COMPLETED";
@@ -339,6 +396,10 @@ export default function JobDetailPage() {
     datasets: job.datasets ?? [],
     doneShards,
     totalShards,
+    fetchedShards: shown.fetched_shards,
+    fetchedRows: shown.fetched_rows,
+    ingestedRows: shown.ingested_rows,
+    downloadedRows: shown.downloaded_rows,
   });
 
   const headerActions = (
@@ -388,7 +449,7 @@ export default function JobDetailPage() {
         <JobCompletionPanel
           elapsedSeconds={elapsedSeconds}
           downloadedBytes={shown.downloaded_bytes ?? 0}
-          resolvedAt={job.resolved_at}
+          resolvedAt={job.updated_at}
           exports={detail.exports}
           busy={busy}
           canCreateExport={can("export:create")}
@@ -410,7 +471,7 @@ export default function JobDetailPage() {
           downloadedRows={shown.downloaded_rows ?? 0}
           downloadedBytes={shown.downloaded_bytes ?? 0}
           rowsPerSecond={rowsPerSecond}
-          etaSeconds={shown.eta_seconds ?? null}
+          etaSeconds={rowsPerSecond !== null && rowsPerSecond > 0 && shown.tail_eta_seconds && shown.tail_eta_seconds > 0 ? shown.tail_eta_seconds : null}
           elapsedSeconds={elapsedSeconds}
           doneShards={doneShards}
           totalShards={totalShards}

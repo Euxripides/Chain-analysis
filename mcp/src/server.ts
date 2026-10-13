@@ -12,7 +12,7 @@ import { registerTools, toolDefinitions } from "./tools.js";
 
 const instructions = "For current wealth use get_native_balance/get_token_balance/get_all_token_balances, which pin actual state and source. Use aggregate_transfers with full cursor pagination for all counterparties. Read completed exports with get_export_file and resources/read; verify SHA256. For fund lots use trace_funds and compare both FIFO and proportional assumptions. Labels, inferred exchange deposits and control analysis must retain confidence, provenance and coverage. Use batch_call_tools or dedicated batches for multiple addresses; preserve every independent cursor and monetary string.";
 
-export function createServer(config: Config): McpServer {
+export function createServer(config: Config, signal?: AbortSignal): McpServer {
   const server = new McpServer(
     { name: "aurore-blockchain-analysis", version: "1.0.0" },
     { instructions },
@@ -21,6 +21,7 @@ export function createServer(config: Config): McpServer {
     baseUrl: config.restBaseUrl,
     apiKey: config.restApiKey,
     timeoutMs: config.requestTimeoutMs,
+    signal,
   }));
   return server;
 }
@@ -87,22 +88,45 @@ export function createApp(config: Config) {
       return;
     }
     active += 1;
-    res.once("finish", () => { active -= 1; });
-    res.once("close", () => { if (!res.writableFinished) active -= 1; });
+    let released = false;
+    const release = () => { if (!released) { released = true; active -= 1; } };
+    res.once("finish", release);
+    res.once("close", release);
     next();
   });
 
   app.post("/mcp", async (req: Request, res: Response) => {
-    const server = createServer(config);
+    const controller = new AbortController();
+    const server = createServer(config, controller.signal);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    let closed = false;
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      req.removeListener("aborted", cleanup);
+      res.removeListener("finish", cleanup);
+      res.removeListener("close", cleanup);
+      if (!res.writableFinished) controller.abort(new Error("REQUEST_CANCELLED: MCP HTTP client disconnected"));
+      // McpServer.close closes its connected transport as well.
+      void server.close().catch(() => {});
+    };
+    // Register before the first await: a disconnect during connect/handleRequest
+    // must cancel in-flight REST calls and prevent further batch dispatch.
+    req.once("aborted", cleanup);
+    res.once("finish", cleanup);
+    res.once("close", cleanup);
+    if (req.aborted || res.destroyed) { cleanup(); return; }
     try {
       await server.connect(transport);
+      if (closed) return;
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
+      if (closed) return;
       console.error(JSON.stringify({ level: "error", event: "mcp_request_failed", error: error instanceof Error ? error.message : "unknown" }));
       if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      else if (!res.writableEnded) res.end();
     } finally {
-      res.once("close", () => { void transport.close(); void server.close(); });
+      if (res.destroyed || res.writableFinished) cleanup();
     }
   });
   app.get("/mcp", (_req, res) => res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed" }, id: null }));

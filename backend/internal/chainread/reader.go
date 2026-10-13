@@ -177,8 +177,13 @@ func (s *Service) BatchCallContract(ctx context.Context, calls []ContractCall, k
 
 // Transaction 单笔交易（§90）。
 func (s *Service) Transaction(ctx context.Context, chainSlug string, hash chain.Hash, opt Options) (*Transaction, error) {
-	response, err := s.call(ctx, opt.request(chainSlug, "eth_getTransactionByHash",
-		[]any{string(hash)}, rpc.ClassTransaction, chain.Latest(), rpc.PurposeTransactionVerify))
+	req := opt.request(chainSlug, "eth_getTransactionByHash",
+		[]any{string(hash)}, rpc.ClassTransaction, chain.Latest(), rpc.PurposeTransactionVerify)
+	// Interactive lookup may return null or pending; permit a timely retry.
+	if opt.TransactionTTL > 0 {
+		req.CachePolicy.TTLOverride = int64(opt.TransactionTTL)
+	}
+	response, err := s.call(ctx, req)
 	if err != nil {
 		return nil, err
 	}

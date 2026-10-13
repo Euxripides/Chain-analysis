@@ -377,6 +377,7 @@ function SubjectsTab({ caseId, version, onAdd, onRemove }: { caseId: string; ver
 }
 
 function CaseInvestigationsTab({ caseId }: { caseId: string }) {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const { data, loading, error, reload } = useAsync<InvestigationRow[]>("/api/v2/investigations", [caseId], { case_id: caseId, limit: 200 });
   const rows = data ?? [];
@@ -384,11 +385,11 @@ function CaseInvestigationsTab({ caseId }: { caseId: string }) {
     <PageSection
       title="案件调查"
       count={`${rows.length} 个`}
-      actions={
+      actions={can("investigation:create") ? (
         <Button size="sm" onClick={() => navigate(`/investigations/new?case_id=${caseId}`)}>
           发起调查
         </Button>
-      }
+      ) : null}
     >
       <Card flush>
         <DataTable<InvestigationRow>

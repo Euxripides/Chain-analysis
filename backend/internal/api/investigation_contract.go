@@ -21,7 +21,9 @@ import (
 
 type investigationABI struct {
 	ABI        json.RawMessage `json:"abi"`
-	Source     string          `json:"abi_source"`
+	Source     string          `json:"abi_origin"`
+	Kind       string          `json:"abi_source"`
+	Confidence *float64        `json:"confidence"`
 	Verified   bool            `json:"verified"`
 	Address    string          `json:"abi_address"`
 	Deployment json.RawMessage `json:"deployment,omitempty"`
@@ -43,10 +45,16 @@ var investigationABIHTTP = &http.Client{Timeout: 12 * time.Second, CheckRedirect
 func (s *Server) investigationABI(ctx context.Context, q investigationRequest, address string) (*method.ABI, investigationABI, error) {
 	if len(q.ABI) > 0 && string(q.ABI) != "null" {
 		a, e := method.ParseABI(q.ABI)
-		return a, investigationABI{ABI: q.ABI, Source: "caller_supplied", Verified: false, Address: address, Fetched: time.Now().UTC()}, e
+		return a, investigationABI{ABI: q.ABI, Source: "caller_supplied", Kind: "caller_supplied", Verified: false, Address: address, Fetched: time.Now().UTC()}, e
 	}
+	var localABI *method.ABI
+	var localRecord investigationABI
 	if a, rec, ok := s.deps.Registry.ABI(q.Chain, address); ok {
-		return a, investigationABI{ABI: rec.ABIJSON, Source: rec.Source, Verified: rec.Verified, Address: address, Fetched: rec.UpdatedAt}, nil
+		localABI = a
+		localRecord = investigationABI{ABI: rec.ABIJSON, Source: rec.Source, Kind: "local_cached_abi", Confidence: abiConfidence(rec.Verified), Verified: rec.Verified, Address: address, Fetched: rec.UpdatedAt}
+		if rec.Verified {
+			return a, localRecord, nil
+		}
 	}
 	cfg := mustChain(s, q.Chain)
 	key := fmt.Sprintf("%d:%s", cfg.ChainID, address)
@@ -94,7 +102,7 @@ func (s *Server) investigationABI(ctx context.Context, q investigationRequest, a
 		if _, e = method.ParseABI(doc.ABI); e != nil {
 			return nil, e
 		}
-		r := investigationABI{ABI: doc.ABI, Source: url, Verified: true, Address: address, Deployment: doc.Deployment, Fetched: time.Now().UTC()}
+		r := investigationABI{ABI: doc.ABI, Source: url, Kind: "verified_abi", Confidence: abiConfidence(true), Verified: true, Address: address, Deployment: doc.Deployment, Fetched: time.Now().UTC()}
 		investigationABICache.Lock()
 		if len(investigationABICache.Entries) >= 1000 {
 			investigationABICache.Entries = map[string]investigationABI{}
@@ -104,6 +112,9 @@ func (s *Server) investigationABI(ctx context.Context, q investigationRequest, a
 		return r, nil
 	})
 	if e != nil {
+		if localABI != nil {
+			return localABI, localRecord, nil
+		}
 		return nil, investigationABI{}, e
 	}
 	rec = result.(investigationABI)
@@ -169,6 +180,14 @@ func (s *Server) investigationProxy(ctx context.Context, q investigationRequest,
 		out["implementation"] = "0x" + hex.EncodeToString(code[10:30])
 		out["proxy_type"] = "eip1167"
 		evidence = append(evidence, map[string]any{"method": "eth_getCode", "code": "0x" + hex.EncodeToString(code), "block": p.Block})
+	}
+
+	for _, entry := range evidence {
+		ev := entry.(map[string]any)
+		ev["block_number"] = p.Block
+		ev["confidence"] = 1
+		ev["evidence_type"] = "chain_state"
+		ev["evidence_source"] = ev["method"]
 	}
 	out["evidence"] = evidence
 	out["probe_errors"] = failures
@@ -292,8 +311,11 @@ func (s *Server) investigationContract(ctx context.Context, q investigationReque
 						item["event"] = event.Name
 						item["signature"] = event.Signature
 						item["parameters"] = params
-						item["abi_source"] = rec.Source
+						item["abi_source"] = rec.Kind
+						item["abi_origin"] = rec.Source
 						item["verified"] = rec.Verified
+						item["confidence"] = abiConfidence(rec.Verified)
+						item["selector_source"] = rec.Kind
 					} else {
 						item["error"] = e.Error()
 					}
@@ -338,13 +360,15 @@ func (s *Server) investigationContract(ctx context.Context, q investigationReque
 				out["function"] = m.Name
 				out["signature"] = m.Signature
 				out["parameters"] = params
-				out["abi_source"] = rec.Source
+				out["abi_source"] = rec.Kind
+				out["abi_origin"] = rec.Source
 				out["verified"] = rec.Verified
+				out["confidence"] = abiConfidence(rec.Verified)
+				out["selector_source"] = rec.Kind
 				return out, nil
 			}
 		}
-		out["signature_candidates"] = s.deps.Registry.Signatures(selector)
-		out["reason"] = "No unique contract ABI match; selector candidates are not proof of a function"
+		s.selectorFallback(ctx, q, p, selector, out)
 		return out, nil
 	}
 	if op == "read_contract" {
@@ -369,7 +393,7 @@ func (s *Server) investigationContract(ctx context.Context, q investigationReque
 			if e != nil {
 				return nil, e
 			}
-			rec = investigationABI{Source: "caller_signature", Address: q.Address}
+			rec = investigationABI{Source: "caller_signature", Kind: "caller_signature", Address: q.Address}
 		}
 		if len(q.Args) > 1024 {
 			return nil, fmt.Errorf("too many arguments")
@@ -386,7 +410,7 @@ func (s *Server) investigationContract(ctx context.Context, q investigationReque
 		if json.Unmarshal(result.Result, &raw) != nil {
 			return nil, fmt.Errorf("invalid call result")
 		}
-		out := map[string]any{"address": q.Address, "signature": m.Signature, "input": input, "raw_output": raw, "as_of_block": p.Block, "abi_source": rec.Source, "verified": rec.Verified, "simulation": true}
+		out := map[string]any{"address": q.Address, "signature": m.Signature, "input": input, "raw_output": raw, "as_of_block": p.Block, "abi_source": rec.Kind, "abi_origin": rec.Source, "verified": rec.Verified, "simulation": true}
 		if len(m.Outputs) > 0 {
 			decoded, e := method.DecodeOutput(m, raw)
 			if e != nil {
@@ -410,7 +434,11 @@ func (s *Server) contractABIAt(ctx context.Context, q investigationRequest, p ch
 	if impl, ok := proxy["implementation"].(string); ok {
 		address = impl
 	}
-	return s.investigationABI(ctx, q, address)
+	a, rec, e := s.investigationABI(ctx, q, address)
+	if address != q.Address {
+		rec.Kind = "implementation_abi"
+	}
+	return a, rec, e
 }
 func (s *Server) investigationControl(ctx context.Context, q investigationRequest, p chainread.StatePoint) (map[string]any, error) {
 	proxy, e := s.investigationProxy(ctx, q, p)
@@ -449,7 +477,8 @@ func (s *Server) investigationControl(ctx context.Context, q investigationReques
 	}
 	a, rec, e := s.contractABIAt(ctx, q, p)
 	if e == nil {
-		out["abi_source"] = rec.Source
+		out["abi_source"] = rec.Kind
+		out["abi_origin"] = rec.Source
 		out["abi_verified"] = rec.Verified
 		capabilities := []any{}
 		roles := []any{}
@@ -458,8 +487,8 @@ func (s *Server) investigationControl(ctx context.Context, q investigationReques
 			for _, m := range list {
 				names = append(names, m.Signature)
 				lower := strings.ToLower(m.Name)
-				if strings.Contains(lower, "pause") || strings.Contains(lower, "withdraw") || strings.Contains(lower, "mint") || strings.Contains(lower, "upgrade") {
-					capabilities = append(capabilities, map[string]any{"function": m.Signature, "authorization": "unproven", "source": "contract_abi", "note": "Function existence does not establish who may call it"})
+				if strings.Contains(lower, "pause") || strings.Contains(lower, "withdraw") || strings.Contains(lower, "mint") || strings.Contains(lower, "upgrade") || strings.Contains(lower, "recover") || strings.Contains(lower, "rescue") {
+					capabilities = append(capabilities, map[string]any{"function": m.Signature, "authorization": "unproven", "source": "contract_abi", "evidence_source": rec.Source, "block_number": p.Block, "confidence": nil, "note": "Function existence does not establish who may call it"})
 				}
 				if strings.HasSuffix(m.Name, "_ROLE") && len(m.Inputs) == 0 && len(roles) < 32 {
 					raw, e := s.probeContract(ctx, q.Chain, q.Address, m.Signature, nil, p)
@@ -473,6 +502,21 @@ func (s *Server) investigationControl(ctx context.Context, q investigationReques
 		}
 		sort.Strings(names)
 		roles = append(roles, s.enumerableRole(ctx, q, p, "DEFAULT_ADMIN_ROLE", "0x"+strings.Repeat("0", 64)))
+
+		for _, roleName := range []string{"PAUSER_ROLE", "MINTER_ROLE", "UPGRADER_ROLE"} {
+			found := false
+			for _, r := range roles {
+				if r.(map[string]any)["name"] == roleName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				entry := s.enumerableRole(ctx, q, p, roleName, method.Topic0Of(roleName))
+				entry["role_id_source"] = "keccak256 naming convention; role use is unproven without contract evidence"
+				roles = append(roles, entry)
+			}
+		}
 		out["privileged_roles"] = roles
 		out["permission_candidates"] = capabilities
 		var deployment struct {
@@ -485,7 +529,7 @@ func (s *Server) investigationControl(ctx context.Context, q investigationReques
 				if e == nil && receipt != nil && receipt.ContractAddress != nil && strings.EqualFold(receipt.ContractAddress.String(), rec.Address) {
 					tx, e := s.deps.ChainRead.Transaction(ctx, q.Chain, h, investigationOptions())
 					if e == nil && tx != nil {
-						out["deployer"] = map[string]any{"address": tx.From, "contract": rec.Address, "tx_hash": deployment.TransactionHash, "source": rec.Source, "scope": "top_level_creation_sender"}
+						out["deployer"] = map[string]any{"address": tx.From, "contract": rec.Address, "tx_hash": deployment.TransactionHash, "source": rec.Source, "scope": "top_level_creation_sender", "block_number": receipt.BlockNumber, "evidence_source": "eth_getTransactionByHash + eth_getTransactionReceipt", "confidence": 1}
 					}
 				}
 			}
@@ -496,6 +540,19 @@ func (s *Server) investigationControl(ctx context.Context, q investigationReques
 		if e == nil {
 			out["proxy_admin_owner"] = nonzeroAddress(raw)
 			evidence = append(evidence, map[string]any{"address": admin, "function": "owner()", "raw": "0x" + hex.EncodeToString(raw), "block": p.Block})
+		}
+	}
+
+	for _, item := range evidence {
+		if ev, ok := item.(map[string]any); ok {
+			ev["block_number"] = p.Block
+			ev["confidence"] = 1
+			ev["evidence_type"] = "chain_state"
+			if _, ok := ev["function"]; ok {
+				ev["evidence_source"] = "eth_call"
+			} else {
+				ev["evidence_source"] = ev["method"]
+			}
 		}
 	}
 	out["probe_errors"] = errors
@@ -530,6 +587,11 @@ func (s *Server) enumerableRole(ctx context.Context, q investigationRequest, p c
 		}
 		members = append(members, a)
 	}
+
+	out["evidence_source"] = "eth_call"
+	out["block_number"] = p.Block
+	out["confidence"] = 1
+	out["evidence"] = map[string]any{"function": "getRoleMemberCount(bytes32)", "args": []any{role}, "member_count": count.String(), "member_function": "getRoleMember(bytes32,uint256)", "member_indices": "0..len(members)-1", "block_number": p.Block}
 	out["member_count"] = count.String()
 	out["members"] = members
 	out["enumeration_complete"] = uint64(len(members)) == n
@@ -537,3 +599,11 @@ func (s *Server) enumerableRole(ctx context.Context, q investigationRequest, p c
 	return out
 }
 func strconvUint(n uint64) string { return fmt.Sprintf("%d", n) }
+
+func abiConfidence(verified bool) *float64 {
+	if !verified {
+		return nil
+	}
+	v := float64(1)
+	return &v
+}

@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	downloadprovider "github.com/blockchain-platform/blockchain-platform/internal/provider"
 	"log/slog"
 	"strings"
 	"time"
@@ -318,6 +319,11 @@ func (g *Gateway) callProvider(ctx context.Context, req Request, spec MethodSpec
 		}
 		callCtx, cancel := context.WithTimeout(ctx, timeout)
 		started := time.Now()
+		if err := downloadprovider.ReserveDownloadRequest(callCtx, 1, g.pricing.CreditsPerCall, g.pricing.CostPerCallUSD); err != nil {
+			cancel()
+			release()
+			return Response{}, &Error{Class: ClassBudgetExceeded, Message: "download recovery budget exhausted", Cause: err}
+		}
 		response, callErr := candidate.Provider.Call(callCtx, req)
 		latency := time.Since(started)
 		cancel()
@@ -330,7 +336,7 @@ func (g *Gateway) callProvider(ctx context.Context, req Request, spec MethodSpec
 			perr.Message = Redact(perr.Message, g.secrets...)
 		}
 		g.observe(candidate.Name, req, spec, latency, response, perr, attempt)
-		g.breakers.Record(breakerKey, perr == nil)
+		g.breakers.Record(breakerKey, providerRespondedHealthy(perr))
 
 		if perr == nil {
 			g.rate.OnSuccess(key)

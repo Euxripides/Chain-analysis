@@ -83,6 +83,11 @@ func parseExportSummaryQuery(values url.Values, snapshot exportSummarySnapshot) 
 	if q.Token == "" && q.TokenContract == "" {
 		return q, summaryError(400, "INVALID_QUERY", "token or token_contract is required")
 	}
+	var selectionErr error
+	q.Token, q.TokenContract, selectionErr = resolveActionAsset(q.Chain, q.Token, q.TokenContract)
+	if selectionErr != nil {
+		return q, summaryError(400, "INVALID_QUERY", selectionErr.Error())
+	}
 	if q.Direction == "" {
 		q.Direction = "all"
 	}
@@ -119,11 +124,13 @@ func parseExportSummaryQuery(values url.Values, snapshot exportSummarySnapshot) 
 }
 
 type exportSummaryCursor struct {
-	Version int    `json:"v"`
-	Query   string `json:"q"`
-	Kind    string `json:"kind"`
-	After   string `json:"after,omitempty"`
-	Offset  int64  `json:"offset,omitempty"`
+	IngestedBefore string `json:"ingested_before,omitempty"`
+	TokenAfter     string `json:"token_after,omitempty"`
+	Version        int    `json:"v"`
+	Query          string `json:"q"`
+	Kind           string `json:"kind"`
+	After          string `json:"after,omitempty"`
+	Offset         int64  `json:"offset,omitempty"`
 }
 
 func encodeExportSummaryCursor(c exportSummaryCursor) string {

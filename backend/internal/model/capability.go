@@ -51,7 +51,7 @@ type DatasetCapability struct {
 }
 
 // ChainDatasetCapabilities 返回该链逐 Dataset 的能力表。
-// chain 为空或未登记时返回全量可下载（向后兼容既有调用方）。
+// chain 为空时返回全量可下载；未知链的所有数据集均为 unsupported。
 func ChainDatasetCapabilities(chain string) []DatasetCapability {
 	key := strings.ToLower(strings.TrimSpace(chain))
 	if key == "solana" {

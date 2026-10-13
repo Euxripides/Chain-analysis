@@ -29,6 +29,15 @@ func (s *Server) handleUserJobsV2(w http.ResponseWriter, r *http.Request) {
 	source := strings.TrimSpace(r.URL.Query().Get("source"))
 	scope := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("scope")))
 	workspaceScope := scope == "workspace" && p.Has("job:list:workspace")
+	search, filterErrors := parseJobListSearch(r)
+	if len(filterErrors) > 0 {
+		validationError(w, r, "任务筛选条件不合法", filterErrors)
+		return
+	}
+	var searchFilter any
+	if search.Query != "" {
+		searchFilter = search.Query
+	}
 	var cursor timeIDCursor
 	if err := decodeCursor(r.URL.Query().Get("cursor"), &cursor); err != nil {
 		validationError(w, r, "cursor 不合法", []fieldError{{Field: "cursor", Code: "invalid", Message: "请重新加载列表"}})
@@ -66,50 +75,101 @@ func (s *Server) handleUserJobsV2(w http.ResponseWriter, r *http.Request) {
 		sourceFilter = source
 	}
 	rows, err := s.deps.Store.Pool.Query(r.Context(), `
-		SELECT id::text FROM download_jobs
+		SELECT id::text, updated_at FROM download_jobs
 		WHERE organization_id=$1 AND workspace_id=$2
 		  AND ($4 OR created_by_identity::text=$3
 		       OR created_by = (SELECT legacy_user_id FROM identities WHERE id=NULLIF($3,'')::uuid))
-		  AND ($5::text IS NULL OR status=$5)
+		  AND ($5::text IS NULL OR ($5='ACTIVE' AND status NOT IN ('COMPLETED','CANCELLED','FAILED','PARTIAL_FAILED','ABORTED_BY_USER')) OR status=$5)
 		  AND ($6::text IS NULL OR chain=$6)
 		  AND ($7::text[] IS NULL OR datasets && $7::text[])
 		  AND ($8::text IS NULL OR source=$8)
 		  AND ($9::timestamptz IS NULL OR (updated_at,id) < ($9::timestamptz,$10::uuid))
+		  AND ($12::text IS NULL OR strpos(lower(job_no || ' ' || id::text || ' ' || array_to_string(datasets,' ') || ' ' || COALESCE(source,'')), lower($12::text)) > 0)
+		  AND ($13::timestamptz IS NULL OR created_at >= $13)
+		  AND ($14::timestamptz IS NULL OR created_at <= $14)
 		ORDER BY updated_at DESC, id DESC LIMIT $11`,
 		p.OrganizationID, p.WorkspaceID, p.IdentityID, workspaceScope,
-		statusFilter, chainFilter, datasetFilter, sourceFilter, cursorTS, cursor.ID, limit+1)
+		statusFilter, chainFilter, datasetFilter, sourceFilter, cursorTS, cursor.ID, limit+1,
+		searchFilter, search.From, search.To)
 	if err != nil {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务列表失败", nil)
 		return
 	}
-	ids := []string{}
+	type jobPageRow struct {
+		id        string
+		updatedAt time.Time
+	}
+	pageRows := []jobPageRow{}
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			continue
+		var entry jobPageRow
+		if err := rows.Scan(&entry.id, &entry.updatedAt); err != nil {
+			rows.Close()
+			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务列表失败", nil)
+			return
 		}
-		ids = append(ids, id)
+		pageRows = append(pageRows, entry)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务列表失败", nil)
+		return
 	}
 	rows.Close()
 	next := ""
-	if len(ids) > limit {
-		ids = ids[:limit]
-		if job, err := s.deps.Store.GetJob(r.Context(), ids[len(ids)-1]); err == nil && job != nil {
-			next = encodeCursor(timeIDCursor{TS: job.UpdatedAt.UTC().Format(time.RFC3339Nano), ID: job.ID})
-		}
+	if len(pageRows) > limit {
+		pageRows = pageRows[:limit]
+		last := pageRows[len(pageRows)-1]
+		next = encodeCursor(timeIDCursor{TS: last.updatedAt.UTC().Format(time.RFC3339Nano), ID: last.id})
 	}
-	items := make([]map[string]any, 0, len(ids))
-	for _, id := range ids {
-		job, err := s.deps.Store.GetJob(r.Context(), id)
+	items := make([]map[string]any, 0, len(pageRows))
+	for _, entry := range pageRows {
+		job, err := s.deps.Store.GetJob(r.Context(), entry.id)
 		if err != nil || job == nil {
-			continue
+			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务详情失败", nil)
+			return
 		}
 		items = append(items, s.jobListView(r, job))
 	}
+	statusCounts := map[string]int64{}
+	countRows, err := s.deps.Store.Pool.Query(r.Context(), `
+		SELECT status, count(*) FROM download_jobs
+		WHERE organization_id=$1 AND workspace_id=$2
+		  AND ($4 OR created_by_identity::text=$3
+		       OR created_by = (SELECT legacy_user_id FROM identities WHERE id=NULLIF($3,'')::uuid))
+		  AND ($5::text IS NULL OR chain=$5)
+		  AND ($6::text[] IS NULL OR datasets && $6::text[])
+		  AND ($7::text IS NULL OR source=$7)
+		  AND ($8::text IS NULL OR strpos(lower(job_no || ' ' || id::text || ' ' || array_to_string(datasets,' ') || ' ' || COALESCE(source,'')), lower($8::text)) > 0)
+		  AND ($9::timestamptz IS NULL OR created_at >= $9)
+		  AND ($10::timestamptz IS NULL OR created_at <= $10)
+		GROUP BY status`,
+		p.OrganizationID, p.WorkspaceID, p.IdentityID, workspaceScope,
+		chainFilter, datasetFilter, sourceFilter, searchFilter, search.From, search.To)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务统计失败", nil)
+		return
+	}
+	for countRows.Next() {
+		var state string
+		var count int64
+		if err := countRows.Scan(&state, &count); err != nil {
+			countRows.Close()
+			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务统计失败", nil)
+			return
+		}
+		statusCounts[state] = count
+	}
+	if err := countRows.Err(); err != nil {
+		countRows.Close()
+		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取任务统计失败", nil)
+		return
+	}
+	countRows.Close()
 	respondList(w, r, map[string]any{
-		"items":   items,
-		"scope":   map[string]any{"mode": map[bool]string{true: "workspace", false: "self"}[workspaceScope], "organization_id": p.OrganizationID, "workspace_id": p.WorkspaceID},
-		"filters": map[string]any{"status": status, "chain": chainSlug, "dataset": dataset, "source": source},
+		"items":         items,
+		"status_counts": statusCounts,
+		"scope":         map[string]any{"mode": map[bool]string{true: "workspace", false: "self"}[workspaceScope], "organization_id": p.OrganizationID, "workspace_id": p.WorkspaceID},
+		"filters":       map[string]any{"status": status, "chain": chainSlug, "dataset": dataset, "source": source, "q": search.Query, "created_from": search.From, "created_to": search.To},
 	}, len(items), &next)
 }
 

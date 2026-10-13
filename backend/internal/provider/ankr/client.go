@@ -312,13 +312,16 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 		},
 	}))
 
+	if err := provider.ReserveDownloadRequest(ctx, 1, c.credits, c.costUSD); err != nil {
+		return provider.FetchResult{}, err
+	}
 	observability.AnkrInflight.Inc()
 	observability.AnkrActualInflight.Inc()
 	defer observability.AnkrActualInflight.Dec()
 	res, err := c.http.Do(httpReq)
 	observability.AnkrInflight.Dec()
 	elapsed := time.Since(start)
-	observability.AnkrRequestDuration.Observe(elapsed.Seconds())
+	defer func() { observability.AnkrRequestDuration.Observe(time.Since(start).Seconds()) }()
 	// V1.2（§56/§57）：TTFB = headers 到达前；Body = readBody 分段。
 	headersAt := time.Now()
 	ttfbMs := headersAt.Sub(start).Milliseconds()
@@ -348,15 +351,22 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 	respBody, wireBytes, decodedBytes, exceeded, softExceeded, rerr := c.readBody(res)
 	observability.AnkrBodyInflightActual.Dec()
 	bodyMs := time.Since(headersAt).Milliseconds()
+	elapsed = time.Since(start)
 	if rerr != nil {
 		pe := &provider.Error{}
-		if pe2, ok := rerr.(*provider.Error); ok {
+		var timeout net.Error
+		if ctx.Err() != nil {
+			pe = c.classifyCtxErr(ctx, ctx.Err(), req.PageSize)
+		} else if errors.Is(rerr, context.DeadlineExceeded) || (errors.As(rerr, &timeout) && timeout.Timeout()) {
+			pe = provider.NewTimeout("Ankr response body timed out", req.PageSize, rerr)
+		} else if pe2, ok := rerr.(*provider.Error); ok {
 			pe = pe2
 		} else {
 			pe = &provider.Error{Provider: "ankr", Class: provider.ClassUpstream,
 				Message: "read response: " + rerr.Error(), Retryable: true}
 		}
 		pe.Provider = "ankr"
+		pe.BodyBytes = wireBytes
 		pe.HTTPStatus = res.StatusCode
 		pe.Duration = elapsed
 		c.recordFailureFor(req, pe)
@@ -386,6 +396,11 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 			pe := &provider.Error{Provider: "ankr", Class: provider.ClassInvalidJSON,
 				Message: "invalid json: " + err.Error(), Retryable: true,
 				BodyBytes: decodedBytes, Cause: err, Kind: provider.ErrTemporary}
+			if decodedBytes >= 1<<20 && err.Error() == "unexpected end of JSON input" {
+				pe = provider.NewBodyTruncated("JSON response ended before the document was complete", decodedBytes, err)
+				pe.Provider = "ankr"
+			}
+			pe.Duration = elapsed
 			c.recordFailureFor(req, pe)
 			c.recordUsage(ctx, req, method, "error", pe, elapsed, 0, wireBytes, decodedBytes, 0, ttfbMs, bodyMs)
 			return provider.FetchResult{}, pe
@@ -719,7 +734,7 @@ func (c *Client) recordUsage(ctx context.Context, req provider.FetchRequest, met
 		Status: status, Rows: rows, Bytes: int(respBytes),
 		WireBytes: wireBytes, DecodedBytes: decodedBytes,
 		PageSize: req.PageSize, ResponseBytes: int(respBytes), RetryAttempt: attempt,
-		Credits: c.credits, CostUSD: c.costUSD,
+		Credits: c.credits, CostUSD: c.costUSD, LogicalCalls: 1, HTTPRequests: 1, MethodCalls: 1, RequestID: req.RequestID,
 		TTFBMs: int(ttfbMs), BodyMs: int(bodyMs),
 	}
 	if pe != nil {

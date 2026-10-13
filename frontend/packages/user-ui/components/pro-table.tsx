@@ -58,6 +58,9 @@ export interface CsProTableProps<T> {
   /** <900px 的卡片形态；不传则退化成可横向滚动的表格。 */
   mobileCard?: (row: T) => React.ReactNode;
   pageSize?: number;
+  /** 接口已提供游标分页时关闭本地分页，避免同一列表出现两套页码。 */
+  pagination?: boolean;
+  expandedRowRender?: (row: T) => React.ReactNode;
   className?: string;
 }
 
@@ -76,6 +79,8 @@ export function CsProTable<T extends object>({
   keepPreviousData = true,
   mobileCard,
   pageSize = 20,
+  pagination = true,
+  expandedRowRender,
   className,
 }: CsProTableProps<T>) {
   /* 首次加载才用骨架；刷新时保留旧行（与 DataTable 同一语义，§17.5）。 */
@@ -130,6 +135,7 @@ export function CsProTable<T extends object>({
   return (
     <div className={cx("cs-protable", className)} data-refreshing={loading ? "true" : "false"}>
       <ProTable<T>
+        expandable={expandedRowRender ? { expandedRowRender, expandRowByClick: false } : undefined}
         rowKey={(row) => rowKey(row as T, 0)}
         dataSource={rows}
         columns={columns.map((column) => ({
@@ -144,7 +150,7 @@ export function CsProTable<T extends object>({
         /* 筛选由页面的 FilterBar 负责：只暴露服务端真正支持的参数（§33）。 */
         search={false}
         /* 分页在客户端做：这一层的行数上限由接口决定（limit ≤ 200），不是 L3 超大表。 */
-        pagination={{ pageSize, showSizeChanger: false, size: "small" }}
+        pagination={pagination ? { pageSize, showSizeChanger: false, size: "small" } : false}
         options={{ density: true, setting: true, reload: false, fullScreen: false }}
         size="small"
         cardProps={{ bordered: false }}

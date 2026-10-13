@@ -39,14 +39,17 @@ const prefetchTTL = time.Hour
 
 // prefetchRequest 是预生成请求体（与导出请求同形，便于前端复用同一份草稿）。
 type prefetchRequest struct {
-	Chain               string   `json:"chain"`
-	Addresses           []string `json:"addresses"`
-	Datasets            []string `json:"datasets"`
-	Format              string   `json:"format"`
-	ForceZip            bool     `json:"force_zip"`
-	IncludeMeta         bool     `json:"include_meta"`
-	IncludeDecodedInput bool     `json:"include_decoded_input"`
-	JobID               string   `json:"job_id"`
+	Chain               string          `json:"chain"`
+	Addresses           []string        `json:"addresses"`
+	Datasets            []string        `json:"datasets"`
+	Format              string          `json:"format"`
+	ForceZip            bool            `json:"force_zip"`
+	IncludeMeta         bool            `json:"include_meta"`
+	IncludeDecodedInput bool            `json:"include_decoded_input"`
+	JobID               string          `json:"job_id"`
+	FileLayout          string          `json:"file_layout"`
+	Content             string          `json:"content"`
+	Filters             json.RawMessage `json:"filters"`
 	// 与 POST /exports 同一套时间范围语义（闭区间，省略即全量）。
 	StartTime *time.Time `json:"start_time"`
 	EndTime   *time.Time `json:"end_time"`
@@ -100,6 +103,12 @@ func (s *Server) handleExportPrefetch(w http.ResponseWriter, r *http.Request) {
 	}
 	scope, ok := s.tenantScopeOr401(w, r)
 	if !ok {
+		return
+	}
+	// Legacy prefetch artifacts have no child-file manifest or filter snapshot.
+	// Do not scan a different specification or promote it into dataset exports.
+	if req.FileLayout != "" || len(req.Filters) > 0 && string(req.Filters) != "null" || req.Content != "" && req.Content != "details" {
+		writeJSON(w, http.StatusOK, map[string]any{"prefetched": false, "reason": "dataset layout and filtered exports use their own completed export artifacts"})
 		return
 	}
 	chain := strings.ToLower(strings.TrimSpace(req.Chain))

@@ -22,13 +22,22 @@ func (sc *Scheduler) finalizerLoop(ctx context.Context) {
 	// multi-second artificial tail. Poll faster and finalize with a bounded pool.
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	cursors := map[string]model.Shard{}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			for _, status := range []string{model.ShardFetched, model.ShardIngested} {
-				shards, err := sc.store.ListShardsByStatus(ctx, status, 64)
+				last := cursors[status]
+				shards, err := sc.store.ListFinalizingShardsAfter(ctx, status, last.UpdatedAt, last.ID, 64)
+				if err == nil && len(shards) == 0 && last.ID != "" {
+					delete(cursors, status)
+					shards, err = sc.store.ListFinalizingShardsAfter(ctx, status, time.Time{}, "", 64)
+				}
+				if len(shards) > 0 {
+					cursors[status] = shards[len(shards)-1]
+				}
 				if err != nil {
 					sc.log.Error("finalizer list failed", "status", status, "err", err)
 					continue
@@ -52,9 +61,11 @@ func (sc *Scheduler) finalizeShardBatch(ctx context.Context, shards []model.Shar
 		go func() {
 			defer wg.Done()
 			for sh := range jobs {
-				if sc.finalizeShard(ctx, sh) {
+				itemCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+				if sc.finalizeShard(itemCtx, sh) {
 					completed <- sh
 				}
+				cancel()
 			}
 		}()
 	}
@@ -62,13 +73,25 @@ func (sc *Scheduler) finalizeShardBatch(ctx context.Context, shards []model.Shar
 		jobs <- sh
 	}
 	close(jobs)
-	wg.Wait()
-	close(completed)
+	go func() { wg.Wait(); close(completed) }()
 	finalized := make([]model.Shard, 0, len(shards))
-	for sh := range completed {
-		finalized = append(finalized, sh)
+	flush := time.NewTicker(100 * time.Millisecond)
+	defer flush.Stop()
+	for {
+		select {
+		case sh, ok := <-completed:
+			if !ok {
+				sc.recomputeFinalizedBatch(ctx, finalized)
+				return
+			}
+			finalized = append(finalized, sh)
+		case <-flush.C:
+			if len(finalized) > 0 {
+				sc.recomputeFinalizedBatch(ctx, finalized)
+				finalized = finalized[:0]
+			}
+		}
 	}
-	sc.recomputeFinalizedBatch(ctx, finalized)
 }
 
 func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
@@ -94,7 +117,7 @@ func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
 						"error": reason, "ts": time.Now(),
 					})
 				}
-				return false
+				return true // Success and permanent failure both require parent aggregation.
 			}
 		}
 		// Fetch 未完成或仍有页面在 Ingest → 等待（§62）
@@ -121,9 +144,13 @@ func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
 		})
 		return false
 	}
-	_ = sc.store.MarkPagesValidated(ctx, sh.ID)
-
-	pages, _ := sc.store.PagesByShard(ctx, sh.ID)
+	if err := sc.store.MarkPagesValidated(ctx, sh.ID); err != nil {
+		return false
+	}
+	pages, err := sc.store.PagesByShard(ctx, sh.ID)
+	if err != nil {
+		return false
+	}
 	var minB, maxB int64
 	var wireBytes, decodedBytes int64
 	for _, p := range pages {
@@ -139,7 +166,7 @@ func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
 	_ = wireBytes
 
 	// 写对象存储 Shard Manifest（全部页面已上传时完整；否则尽力而为，§44）
-	manifestKey := sc.writeShardManifest(ctx, sh)
+	manifestKey := "" // Raw archive is completed independently of fact validation.
 
 	job, jerr := sc.store.GetJob(ctx, sh.JobID)
 	if jerr != nil {
@@ -152,7 +179,10 @@ func (sc *Scheduler) finalizeShard(ctx context.Context, sh model.Shard) bool {
 		ingestDuration = time.Since(*sh.FetchedAt).Milliseconds()
 	}
 	// Coverage Commit（§63）：Validation 通过后才提交
-	sc.commitCoverage(ctx, sh, job.Chain, address, minB, maxB, sh.DownloadedRows, sh.DownloadedBytes)
+	if err := sc.commitCoverage(ctx, sh, job.Chain, address, minB, maxB, sh.DownloadedRows, sh.DownloadedBytes); err != nil {
+		sc.log.Error("coverage commit deferred", "shard_id", sh.ID, "err", err)
+		return false
+	}
 	if err := sc.store.CompleteShardFinalized(ctx, sh.ID, manifestKey, sh.DownloadedRows, sh.DownloadedBytes, ingestDuration); err != nil {
 		sc.log.Error("complete shard finalized failed", "shard_id", sh.ID, "err", err)
 		return false
@@ -296,6 +326,8 @@ func (sc *Scheduler) writeShardManifest(ctx context.Context, sh model.Shard) str
 		if v, ok := sc.pipeline.uploads.Load(p.ID); ok {
 			u := v.(uploadInfo)
 			parts = append(parts, manifestPart{Key: u.key, SHA256: u.sha256, Rows: u.rows, BytesGz: u.bytesGz, PageToken: p.NextPageTokenHash})
+		} else if key, err := sc.store.PageArchiveKey(ctx, p.ID); err == nil && key != "" {
+			parts = append(parts, manifestPart{Key: key, SHA256: p.RawSHA256, Rows: p.RowsFetched, PageToken: p.NextPageTokenHash})
 		} else {
 			complete = false
 		}
@@ -330,8 +362,12 @@ func (sc *Scheduler) writeShardManifest(ctx context.Context, sh model.Shard) str
 	}
 	key := rawManifestKey(m.Provider, m.Chain, sh.Dataset, reqHash, started)
 	mb, _ := json.Marshal(m)
+	if !complete || sc.raw == nil {
+		return ""
+	}
 	if _, err := sc.raw.PutGzip(ctx, key, mb); err != nil {
 		sc.log.Warn("manifest write failed", "err", err)
+		return ""
 	}
 	return key
 }
@@ -347,7 +383,9 @@ func (sc *Scheduler) maybeCleanupSpool(ctx context.Context, sh model.Shard) {
 	}
 	for _, p := range pages {
 		if _, ok := sc.pipeline.uploads.Load(p.ID); !ok {
-			return // 有未上传页面 → 保留本地副本（MinIO 故障时安全）
+			if key, err := sc.store.PageArchiveKey(ctx, p.ID); err != nil || key == "" {
+				return
+			}
 		}
 	}
 	job, jerr := sc.store.GetJob(ctx, sh.JobID)
@@ -358,6 +396,11 @@ func (sc *Scheduler) maybeCleanupSpool(ctx context.Context, sh model.Shard) {
 		sc.log.Warn("spool cleanup failed", "shard_id", sh.ID, "err", err)
 	}
 	_ = job
+	for _, p := range pages {
+		sc.pipeline.uploads.Delete(p.ID)
+		sc.pipeline.ingested.Delete(p.ID)
+		pageFiles.Delete(p.ID)
+	}
 }
 
 // recordProfiles 写入 Shard / Page 画像（§12/§32）。

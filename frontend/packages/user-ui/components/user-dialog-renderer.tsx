@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal } from "antd";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import {
   useDialogRequestState,
   type DialogRendererProps,
@@ -46,10 +46,21 @@ export function UserDialogRenderer({ request, onResolve }: DialogRendererProps) 
    * 由本 renderer 独占焦点还原（同时关掉 antd 自己的还原，避免两个所有者打架），
    * 行为与 legacy renderer 的 `previouslyFocused` 完全一致。
    */
-  const previouslyFocused = React.useRef<Element | null>(null);
+  const previouslyFocused = React.useRef<Element | null>(document.activeElement);
+  const focusFrame = React.useRef<number | null>(null);
+  const setDialogBody = React.useCallback((body: HTMLDivElement | null) => {
+    if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
+    if (body) focusFrame.current = requestAnimationFrame(() => {
+      const modal = body.closest('[role="dialog"]');
+      if (document.contains(body) && modal && !modal.contains(document.activeElement)) {
+        const field = body.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)');
+        (field ?? body).focus();
+      }
+    });
+  }, []);
   React.useEffect(() => {
-    previouslyFocused.current = document.activeElement;
     return () => {
+      if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
       const element = previouslyFocused.current;
       if (element instanceof HTMLElement && document.contains(element)) {
         element.focus();
@@ -84,7 +95,32 @@ export function UserDialogRenderer({ request, onResolve }: DialogRendererProps) 
     meta,
   } = state;
 
-  const wide = Boolean(request.details && request.details.length > 4);
+  React.useEffect(() => {
+    // Modal may not have moved focus yet when Escape is pressed immediately.
+    // rc-dialog stops events it handles; nested selectors keep their own Escape.
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented && canCancel) { event.preventDefault(); cancel(); } };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [cancel, canCancel]);
+
+  const details = request.details ?? [];
+  const complex = needsFields || details.length > 6 || (request.body && typeof request.body !== "string");
+  const compact = !complex && details.length === 0 && !needsInput && !requiresWord && !requiresAck;
+  const layout = complex ? "detailed" : compact ? "compact" : "standard";
+  // 拒绝项、权限变化与风险需要直接可见；普通技术明细才折叠。
+  const collapseDetails = details.length > 6 && !["warning", "error", "confirm"].includes(request.kind);
+  const visibleDetails = collapseDetails ? details.slice(0, 4) : details;
+  const additionalDetails = collapseDetails ? details.slice(4) : [];
+  const renderDetails = (items: typeof details) => (
+    <dl className="dialog__kv cs-dialog__details">
+      {items.map((detail, index) => (
+        <div className="cs-dialog__detail" key={`${detail.label}:${index}`}>
+          <dt>{detail.label}</dt>
+          <dd>{detail.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 
   return (
     <Modal
@@ -97,24 +133,24 @@ export function UserDialogRenderer({ request, onResolve }: DialogRendererProps) 
       /* 关闭按钮自己渲染（见下），这样才能做到"可见但 disabled + title 说明原因"。 */
       closable={false}
       footer={null}
-      width={wide ? 720 : 520}
+      width={complex ? 720 : compact ? 440 : 560}
       transitionName="cs-dialog"
       maskTransitionName="cs-dialog-mask"
       onCancel={cancel}
       rootClassName="cs-dialog-root"
       className="cs-dialog"
       data-kind={request.kind}
+      data-layout={layout}
       aria-labelledby="cs-dialog-title"
     >
       <header className="cs-dialog__head">
         <span className={`cs-dialog__kind cs-dialog__kind--${meta.tone}`} aria-hidden="true">
           {meta.icon}
         </span>
-        {/* 类型同时以文字暴露给读屏：形状是给眼睛的，文字是给所有人的。 */}
-        <span className="visually-hidden">{meta.label}</span>
-        <h2 className="cs-dialog__title" id="cs-dialog-title">
-          {request.title}
-        </h2>
+        <div className="cs-dialog__heading">
+          <span className="cs-dialog__label">{meta.label}</span>
+          <h2 className="cs-dialog__title" id="cs-dialog-title">{request.title}</h2>
+        </div>
         <button
           type="button"
           className="cs-iconbtn cs-dialog__close"
@@ -127,18 +163,15 @@ export function UserDialogRenderer({ request, onResolve }: DialogRendererProps) 
         </button>
       </header>
 
-      <div className="cs-dialog__body">
-        {request.body ? <div>{request.body}</div> : null}
+      <div className="cs-dialog__body" ref={setDialogBody} tabIndex={-1}>
+        {request.body ? <div className="cs-dialog__message">{request.body}</div> : null}
 
-        {request.details && request.details.length > 0 ? (
-          <dl className="dialog__kv" style={{ marginTop: request.body ? "var(--sp-4)" : 0 }}>
-            {request.details.map((detail) => (
-              <React.Fragment key={detail.label}>
-                <dt>{detail.label}</dt>
-                <dd>{detail.value}</dd>
-              </React.Fragment>
-            ))}
-          </dl>
+        {visibleDetails.length > 0 ? renderDetails(visibleDetails) : null}
+        {additionalDetails.length > 0 ? (
+          <details className="cs-dialog__more">
+            <summary>更多详情（{additionalDetails.length} 项）<ChevronDown size={16} aria-hidden="true" /></summary>
+            {renderDetails(additionalDetails)}
+          </details>
         ) : null}
 
         {needsInput ? (

@@ -53,8 +53,13 @@ func TestLiveInvestigationFullPaging(t *testing.T) {
 			var key, asset, amount string
 			var txs, n, b, groups, records uint64
 			var first, last time.Time
-			if e = rows.Scan(&key, &asset, &amount, &txs, &n, &first, &last, &b, &groups, &records); e != nil {
+			var fullAmount string
+			var fullCutoff uint64
+			if e = rows.Scan(&key, &asset, &amount, &txs, &n, &first, &last, &b, &groups, &records, &fullAmount, &fullCutoff); e != nil {
 				t.Fatal(e)
+			}
+			if fullAmount != "501.000000000000000501" || fullCutoff != 123 {
+				t.Fatal(fullAmount, fullCutoff)
 			}
 			if groups != 501 || records != 501 || n != 1 || amount != "1.000000000000000001" {
 				t.Fatalf("dedup/precision lost groups=%d records=%d n=%d amount=%s", groups, records, n, amount)

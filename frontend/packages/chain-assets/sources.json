@@ -1,0 +1,160 @@
+[
+  {
+    "file": "ethereum.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/ethereum/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "c253d7c5d4203783e31bde1d33e143f6a9ce1defac24ab5e06948847696b80a1",
+    "bytes": 2984,
+    "mime": "image/png"
+  },
+  {
+    "file": "bsc.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/smartchain/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "1ceadd0447350643dd0828120b3768ffad23c857d3e127a730217a3a1a03dbcc",
+    "bytes": 16072,
+    "mime": "image/png"
+  },
+  {
+    "file": "arbitrum.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/arbitrum/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "a12644f04d8b8099dd5f0427a8189abcf1a60707efe68feee354587ec23ae403",
+    "bytes": 21628,
+    "mime": "image/png"
+  },
+  {
+    "file": "optimism.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/optimism/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "ac49f27e374a1f192a8a473ca00082294729410c1c02e6a538ce730681380d7d",
+    "bytes": 2506,
+    "mime": "image/png"
+  },
+  {
+    "file": "base.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/base/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "5a47cf1cb030398a2ba05f578573f3f3ed6b9d9f9a776a772049f05a57d60c6e",
+    "bytes": 3367,
+    "mime": "image/png"
+  },
+  {
+    "file": "polygon.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/polygon/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "ba495a374776ab6cfaecc15b3e3d0f9b04743cd0309f99575b8599fc0112e030",
+    "bytes": 10248,
+    "mime": "image/png"
+  },
+  {
+    "file": "solana.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/solana/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "b0fb83e48d1b455333436ae158cd9e547b7493ef4f5b2d5de3d678e93a994d4c",
+    "bytes": 54309,
+    "mime": "image/png"
+  },
+  {
+    "file": "avalanche.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/avalanchec/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "fde310a87a0c83345d8fd194b3a65edf6d73cdd6ef5c2f1aa9344e60ebc88589",
+    "bytes": 23229,
+    "mime": "image/png"
+  },
+  {
+    "file": "tron.png",
+    "source": "https://github.com/trustwallet/assets/tree/master/blockchains/tron/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "sha256": "53830c1f0b3c7654c7caa55df858d2967b7e55194d207162bf7cf9371323a1c6",
+    "bytes": 25773,
+    "mime": "image/png"
+  },
+  {
+    "name": "Bitcoin",
+    "file": "bitcoin.png",
+    "source": "https://static.oklink.com/cdn/explorer/admin/1686558172927.png",
+    "mime": "image/png",
+    "sha256": "634b91c0b4adb816eceb3814c2bc3ac4dd1b4aa01fe5406b90e10fea9f219cd8",
+    "bytes": 7251
+  },
+  {
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/bbe582d25a22a0367c25a5e7097ad3e0f75e2287/blockchains/fantom/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "file": "fantom.png",
+    "sha256": "682efebfb0145afab90f40636dd5c1a67f2f26e470ac3ae5226f7117d3224fab",
+    "bytes": 6050,
+    "mime": "image/png"
+  },
+  {
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/bbe582d25a22a0367c25a5e7097ad3e0f75e2287/blockchains/xdai/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "file": "gnosis.png",
+    "sha256": "05a882a3d6dbef94c78cd32f531cf9f7814581badd4de203ef7ce9baf81f2dac",
+    "bytes": 19942,
+    "mime": "image/png"
+  },
+  {
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/bbe582d25a22a0367c25a5e7097ad3e0f75e2287/blockchains/linea/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "file": "linea.png",
+    "sha256": "557e6310f4f1886ff354832749270abb9581ba286cf31b3c7b99d1d12077c400",
+    "bytes": 15785,
+    "mime": "image/png"
+  },
+  {
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/bbe582d25a22a0367c25a5e7097ad3e0f75e2287/blockchains/scroll/info/logo.png",
+    "license": "MIT; brand marks retain their respective owners",
+    "file": "scroll.png",
+    "sha256": "c3087d036cb4b31e3c92d326f6835136294cf3a55af206e8cf447161dac6bb9a",
+    "bytes": 14610,
+    "mime": "image/png"
+  },
+  {
+    "source": "https://flare.network/api/media/file/Flare.svg",
+    "file": "flare.svg",
+    "sha256": "b32962a5e4467193bb585ce81d604de083405dba639e7a32154dc39958b50cf1",
+    "bytes": 892,
+    "mime": "image/svg+xml"
+  },
+  {
+    "source": "https://somnia.network/favicon.ico",
+    "file": "somnia.ico",
+    "sha256": "472ea0426e64995788720aeda19fe0335a4064dc91cefbe727c292a3b564639e",
+    "bytes": 15406,
+    "mime": "image/vnd.microsoft.icon"
+  },
+  {
+    "source": "https://taiko.xyz/icon.svg",
+    "file": "taiko.svg",
+    "sha256": "02d91726aed9bda8d03f4d0391a425737893a2a21c4f5ee60993288c02c44fde",
+    "bytes": 2626,
+    "mime": "image/svg+xml"
+  },
+  {
+    "source": "https://telos.net/brand-assets/telos-branding-files/svg/telos-icon.svg",
+    "file": "telos.svg",
+    "sha256": "47e4c2b4048dd183d5fd8443413afd1b14e08aebcf9ca283c746b70e032c9157",
+    "bytes": 887,
+    "mime": "image/svg+xml"
+  },
+  {
+    "source": "https://gateway.pinata.cloud/ipfs/bafkreif4spxrmmnq6nymf6waxtr5ku4qjtbho3pvbhjke6td3ezyjzd4ay",
+    "registry": "https://github.com/ethereum-lists/chains/blob/43d6dea487d81b37939d6e0fc8fdea90be787faa/_data/icons/story.json",
+    "chain_id": 1514,
+    "file": "story.png",
+    "sha256": "bc93ef1631b0f370c2fac0bce3d553904cc2776df509d2a27a63d93384e47c06",
+    "bytes": 67990,
+    "mime": "image/png"
+  },
+  {
+    "source": "https://gateway.pinata.cloud/ipfs/QmSLkiAAr6VtJ6jEqEzz3QdZtVEHzR6Az7E4XD8qXwjuio",
+    "registry": "https://github.com/ethereum-lists/chains/blob/a4eba8b194640c6d4707a3e07c99ceb53cba12ec/_data/icons/xlayer.json",
+    "chain_id": 196,
+    "file": "xlayer.png",
+    "sha256": "6fbaf8061d202b6136ecfc81c8a1020489660bf40e36388f4ac35112cfe6782f",
+    "bytes": 276697,
+    "mime": "image/png"
+  }
+]

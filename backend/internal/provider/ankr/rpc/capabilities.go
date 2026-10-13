@@ -36,7 +36,15 @@ func (c *Client) Capabilities(ctx context.Context, chainSlug string) (rpc.Capabi
 	if caps, ok := c.opts.StaticCapabilities[slug]; ok {
 		return caps, nil
 	}
-	return DefaultCapabilities(), nil
+	caps := DefaultCapabilities()
+	switch slug {
+	case "bsc", "eth", "ethereum", "polygon", "arbitrum", "base", "optimism", "avalanche":
+	default:
+		// Download support does not establish trace/debug entitlement.
+		caps.Trace, caps.Debug = false, false
+		caps.MaxLogBlockRange = 2000
+	}
+	return caps, nil
 }
 
 // Probe 启动探测：只做低成本调用（§21）。

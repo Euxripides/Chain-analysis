@@ -58,8 +58,10 @@ func buildUsageRow(in usageInput, pricing Pricing) model.UsageRow {
 	}
 	credits := pricing.CreditsPerCall * float64(calls)
 	cost := pricing.CostPerCallUSD * float64(calls)
+	httpRequests := 1
 	if in.CacheHit || in.Singleflight {
 		credits, cost = 0, 0
+		httpRequests = 0
 	}
 	row := model.UsageRow{
 		Provider: in.Provider, Method: in.Method, Dataset: string(in.Class),
@@ -74,6 +76,8 @@ func buildUsageRow(in usageInput, pricing Pricing) model.UsageRow {
 		Chain:           in.Chain,
 		MethodClass:     string(in.Class),
 		MethodCalls:     calls,
+		LogicalCalls:    calls,
+		HTTPRequests:    httpRequests,
 		BatchSize:       in.BatchSize,
 		CacheHit:        in.CacheHit,
 		SingleflightHit: in.Singleflight,

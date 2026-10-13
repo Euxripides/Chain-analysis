@@ -1,0 +1,386 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": true,
+  "final_wallet_state": "direct_wallet_credit_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v3",
+  "proof": {
+    "wallet_settlement": {
+      "state": "direct_wallet_credit_verified",
+      "chain": "base",
+      "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+      "address": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+      "asset": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+      "amount_raw": "265554180000000000000",
+      "decimals": 18,
+      "block_number": 52198115,
+      "block_hash": "0xf28cfe0f82ebe683d13eabb587a1eff4366ade2579b24cce26226e5a37d2d1d3",
+      "historical_code": "0x",
+      "historical_code_read": true,
+      "receipt_sha256": "a1045949f6a1109fa0645f1aebac562c9abb5e579ec5c5020a36d81db94456f2",
+      "movement": {
+        "chain": "base",
+        "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+        "dataset": "token_transfers",
+        "event_index": 809,
+        "timestamp": "2026-10-05T07:32:57Z",
+        "timestamp_source": "chain_rpc",
+        "from_address": "0x0000000000000000000000000000000000000000",
+        "to_address": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+        "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+        "token": "",
+        "decimals": 18,
+        "amount_raw": "265554180000000000000",
+        "amount": "265.55418",
+        "status": "success"
+      },
+      "outgoing_same_asset": false
+    },
+    "protocol": {
+      "layerzero": {
+        "kind": "oft",
+        "delivery_call": {
+          "from": "0x2cca08ae69e0c44b18a57ab2a87644234daebae4",
+          "to": "0x1a44076050125825900e736c501f859c50fe728c",
+          "input": "0x0c0c389e000000000000000000000000000000000000000000000000000000000000759e000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c000000000000000000000000000000000000000000000000000000000000d34d000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca00000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000002800000000000000000000000095d1df1df78decebde3a7db3d42fe097e7e59c3a000000000fd409040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "value": "2500000",
+          "block_timestamp": 1791185577
+        },
+        "applications": [
+          {
+            "event": {
+              "chain": "arbitrum",
+              "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+              "event_index": 9,
+              "contract": {
+                "address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "source",
+              "identifier": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+              "payload_sha256": "20770d305a38a7be7a30b3b413c6c50d880d968041b946eba78516ff877e82f0",
+              "raw_topics": [
+                "0x85496b760a4b7f8d66384b9df21b381f5d1b1e79f229a47aaf4c232edc2fe59a",
+                "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+                "0x0000000000000000000000003a4f4962f1677c498b93bc300b8298990dccfb00"
+              ],
+              "raw_data": "0x00000000000000000000000000000000000000000000000000000000000075e800000000000000000000000000000000000000000000000e654df7be6024400000000000000000000000000000000000000000000000000e654df7be60244000"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "peers(uint32):30184": "0x000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "token()": "0x000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c"
+            }
+          },
+          {
+            "event": {
+              "chain": "base",
+              "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+              "event_index": 810,
+              "contract": {
+                "address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "destination",
+              "identifier": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+              "payload_sha256": "20770d305a38a7be7a30b3b413c6c50d880d968041b946eba78516ff877e82f0",
+              "raw_topics": [
+                "0xefed6d3500546b29533b128a29e3a94d70788727f0507505ac12eaf2e578fd9c",
+                "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+                "0x00000000000000000000000095d1df1df78decebde3a7db3d42fe097e7e59c3a"
+              ],
+              "raw_data": "0x000000000000000000000000000000000000000000000000000000000000759e00000000000000000000000000000000000000000000000e654df7be60244000"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "peers(uint32):30110": "0x000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "token()": "0x000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c"
+            }
+          }
+        ]
+      },
+      "protocol": "layerzero",
+      "version": "layerzero-v2-oft",
+      "identifier": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+      "source_chain": "arbitrum",
+      "destination_chain": "base",
+      "payload_sha256": "20770d305a38a7be7a30b3b413c6c50d880d968041b946eba78516ff877e82f0",
+      "source": {
+        "application_contract": {
+          "address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "verifier_address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "code_sha256": "e1083eb9e27ca3d628adf4abdc7e1e8c183947e7ee498a82f996e67c4ab2f2a9",
+          "historical_state": true,
+          "deployment_source": "https://docs.carv.io/carv-ecosystem/carv-play/smart-contracts-and-security"
+        },
+        "chain": "arbitrum",
+        "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+        "event_index": 8,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "317657e473ae6b0976c308e157b3791105d2fd19893df7259aa846ed2e7732ca",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "source",
+        "identifier": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+        "payload_sha256": "20770d305a38a7be7a30b3b413c6c50d880d968041b946eba78516ff877e82f0",
+        "raw_topics": [
+          "0x1ab700d4ced0c005b164c0f789fd09fcbb0156d4c2041b8a3bfbcd961cd1567f"
+        ],
+        "raw_data": "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000120000000000000000000000000975bcd720be66659e3eb3c0e4f1866a3020e493a000000000000000000000000000000000000000000000000000000000000009901000000000000d34d0000759e000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c000075e8000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca00000000000000000000000095d1df1df78decebde3a7db3d42fe097e7e59c3a000000000fd4090400000000000000000000000000000000000000000000000000000000000000000000000000002600030100210100000000000000000000000000030d40000000000000000000000000002625a00000000000000000000000000000000000000000000000000000"
+      },
+      "destination": {
+        "application_contract": {
+          "address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "verifier_address": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "code_sha256": "e1083eb9e27ca3d628adf4abdc7e1e8c183947e7ee498a82f996e67c4ab2f2a9",
+          "historical_state": true,
+          "deployment_source": "https://docs.carv.io/carv-ecosystem/carv-play/smart-contracts-and-security"
+        },
+        "chain": "base",
+        "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+        "event_index": 811,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "785be5e1e7011c7142c22a4c2094f47c28bb8507edf82472cf1c4f7526364411",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "destination",
+        "identifier": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+        "payload_sha256": "20770d305a38a7be7a30b3b413c6c50d880d968041b946eba78516ff877e82f0",
+        "raw_topics": [
+          "0x3cd5e48f9730b129dc7550f0fcea9c767b7be37837cd10e55eb35f734f4bca04"
+        ],
+        "raw_data": "0x000000000000000000000000000000000000000000000000000000000000759e000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c000000000000000000000000000000000000000000000000000000000000d34d000000000000000000000000c08cd26474722ce93f4d0c34d16201461c10aa8c"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "role": "source",
+        "chain": "arbitrum",
+        "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+        "party": "0x3a4f4962f1677c498b93bc300b8298990dccfb00",
+        "asset": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+        "amount_raw": "265554180000000000000",
+        "amount": "265.55418",
+        "decimals": 18,
+        "bridge_asset": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+        "bridge_amount_raw": "265554180000000000000",
+        "binding": "layerzero:0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "arbitrum",
+            "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+            "dataset": "token_transfers",
+            "event_index": 5,
+            "timestamp": "2026-10-05T07:32:40Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x3a4f4962f1677c498b93bc300b8298990dccfb00",
+            "to_address": "0x0000000000000000000000000000000000000000",
+            "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "265554180000000000000",
+            "amount": "265.55418",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "arbitrum",
+          "network_id": "42161",
+          "number": 511856734,
+          "hash": "0xf110844ab0bd251f33e4b41359848b0991c24850c337c63a635d294d62c9319e",
+          "finalized_number": 511887614,
+          "finalized_hash": "0x3ff6b28d94b4c90eae695a9548aeb8f4b7c099bc43753c0e6d4ff10988735619",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:07:25.769662477Z",
+          "source": "configured_rpc_gateway:9087b321-710a-4fc2-969b-ecf40ce90866",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "79a58a0df103928e0647bb9a783663b26a3f67fee735cda0bad1833eca5c8037",
+        "read_gaps": [],
+        "truncated": false
+      },
+      {
+        "role": "destination",
+        "chain": "base",
+        "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+        "party": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+        "asset": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+        "amount_raw": "265554180000000000000",
+        "amount": "265.55418",
+        "decimals": 18,
+        "bridge_asset": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+        "bridge_amount_raw": "265554180000000000000",
+        "binding": "layerzero:0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "base",
+            "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+            "dataset": "token_transfers",
+            "event_index": 809,
+            "timestamp": "2026-10-05T07:32:57Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x0000000000000000000000000000000000000000",
+            "to_address": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+            "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "265554180000000000000",
+            "amount": "265.55418",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "base",
+          "network_id": "8453",
+          "number": 52198115,
+          "hash": "0xf28cfe0f82ebe683d13eabb587a1eff4366ade2579b24cce26226e5a37d2d1d3",
+          "finalized_number": 52202073,
+          "finalized_hash": "0xac6d7fcc7d72a249c21c998342f36e44dffb935293cd22fa2bfc0c78e61c533f",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:07:31.264122944Z",
+          "source": "configured_rpc_gateway:9087b321-710a-4fc2-969b-ecf40ce90866",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "a1045949f6a1109fa0645f1aebac562c9abb5e579ec5c5020a36d81db94456f2",
+        "trace_sha256": "0e4248aae10eca1f3e304a68e79173db0631c555b876c57ff044ba473b249336",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T10:07:15.212606535Z"
+  },
+  "bridge": "layerzero",
+  "order_id": "0x199b51feadd8fed07c4598bc05f774081bfaf3b8da706ea6f23279b813a52eca",
+  "status": "completed",
+  "raw_status": "DELIVERED",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "arbitrum",
+      "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+      "address": "0x3a4f4962f1677c498b93bc300b8298990dccfb00",
+      "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+      "amount_raw": "265554180000000000000",
+      "amount": "265.55418",
+      "decimals": 18,
+      "timestamp": "2026-10-05T07:32:40Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "base",
+      "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+      "address": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+      "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+      "amount_raw": "265554180000000000000",
+      "amount": "265.55418",
+      "decimals": 18,
+      "timestamp": "2026-10-05T07:32:57Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://scan.layerzero-api.com/v1/messages/tx/0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+    "fetched_at": "2026-10-05T10:07:08.836283478Z",
+    "response_sha256": "5efdf564b7d563ba2ae29f21db5f78739155ca4c89d52653804d869e47e537d2",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": true,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "arbitrum",
+      "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "arbitrum",
+          "tx_hash": "0xb8c10e681bc11c8be2870534649403111e27751ba09419fa5c296536b43ee07c",
+          "dataset": "token_transfers",
+          "event_index": 5,
+          "timestamp": "2026-10-05T07:32:40Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x3a4f4962f1677c498b93bc300b8298990dccfb00",
+          "to_address": "0x0000000000000000000000000000000000000000",
+          "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "265554180000000000000",
+          "amount": "265.55418",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    },
+    {
+      "leg_role": "destination",
+      "chain": "base",
+      "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "base",
+          "tx_hash": "0xf808e9b7225548e61e640832410a1e2750b465a067ee20de2ae57b4b64d874b6",
+          "dataset": "token_transfers",
+          "event_index": 809,
+          "timestamp": "2026-10-05T07:32:57Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x0000000000000000000000000000000000000000",
+          "to_address": "0x95d1df1df78decebde3a7db3d42fe097e7e59c3a",
+          "token_contract": "0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "265554180000000000000",
+          "amount": "265.55418",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": true,
+  "message_only": false
+}

@@ -262,6 +262,19 @@ func (p *Planner) planDataset(ctx context.Context, job *model.DownloadJob, subj 
 	if job.Source == "benchmark" || strings.EqualFold(job.ReusePolicy, "refresh") {
 		covered = nil
 	}
+	if job.RangeType == "full" && job.Chain != "tron" && job.Chain != "solana" && job.Source != "benchmark" && !strings.EqualFold(job.ReusePolicy, "refresh") {
+		// Legacy coverage may omit empty prefix/tail intervals. Successful
+		// pagination of requested ranges proves those intervals without refetch.
+		history, _, err := p.store.ExplorerHistory(ctx, job.Chain, subj.Subject, []string{ds}, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		for _, item := range history {
+			for _, iv := range item.CoveredRanges {
+				covered = append(covered, model.CoverageRow{FromBlock: iv.From, ToBlock: iv.To})
+			}
+		}
+	}
 	if ds == "balances" {
 		if len(covered) > 0 {
 			observability.CoverageSavedRequests.Inc()
@@ -379,6 +392,9 @@ func tronTimeShardCount(job *model.DownloadJob) int {
 func tronTimeIntervals(job *model.DownloadJob, now time.Time) []timeInterval {
 	start, _ := time.Parse(time.RFC3339, tronMainnetGenesis)
 	end := now.UTC().Add(time.Minute)
+	if job.RangeType == "full" && job.ResolvedAt != nil {
+		end = job.ResolvedAt.UTC()
+	}
 	if job.FromTimestamp != nil {
 		start = job.FromTimestamp.UTC()
 	}
@@ -534,6 +550,17 @@ func (p *Planner) createTronTimeShards(ctx context.Context, job *model.DownloadJ
 			return err
 		}
 		if state != nil {
+			history, _, err := p.store.ExplorerHistory(ctx, job.Chain, subj.Subject, []string{item.Dataset}, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if len(history) == 0 || !history[0].HistoryComplete || history[0].CompleteThrough == nil {
+				state = nil // A watermark must never conceal an unknown prefix/middle gap.
+			} else {
+				state = &store.AddressDatasetSyncState{CompleteFrom: state.CompleteFrom, CompleteThrough: *history[0].CompleteThrough}
+			}
+		}
+		if state != nil {
 			incremental, alreadyCurrent := tronIncrementalPlanningJob(job, state, time.Now())
 			if alreadyCurrent {
 				observability.CoverageSavedRequests.Inc()
@@ -567,6 +594,9 @@ func tronIncrementalPlanningJob(job *model.DownloadJob, state *store.AddressData
 	}
 	from := state.CompleteThrough.UTC().Add(time.Millisecond)
 	to := now.UTC().Add(time.Minute)
+	if job.RangeType == "full" && job.ResolvedAt != nil {
+		to = job.ResolvedAt.UTC()
+	}
 	if from.After(to) {
 		return nil, true
 	}
@@ -710,6 +740,10 @@ func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob,
 			firstData = int64(v)
 		}
 	}
+	var localBoundaries []int64
+	if firstData < 0 {
+		firstData, localBoundaries, n = p.localRangeDensity(ctx, job, subj, item, gaps, n)
+	}
 	var prefixGaps, dataGaps []store.BlockInterval
 	for _, g := range gaps {
 		if firstData > 0 && firstData > g.From && firstData <= g.To {
@@ -736,7 +770,7 @@ func (p *Planner) createRangeShards(ctx context.Context, job *model.DownloadJob,
 		})
 	}
 	// 分位数边界（§17 工作量均衡）：把数据段切成等行量 Range，每段 1 个 Shard
-	var boundaries []int64
+	boundaries := localBoundaries
 	if job.Stats != nil {
 		if raw, ok := job.Stats["data_boundaries"].([]any); ok {
 			for _, v := range raw {
@@ -1039,6 +1073,11 @@ func (p *Planner) ResumeJob(ctx context.Context, job *model.DownloadJob) error {
 // requestedBlockInterval keeps a one-block request (including block 0) distinct
 // from the 0..0 sentinel used by full/time downloads.
 func requestedBlockInterval(job *model.DownloadJob) (store.BlockInterval, bool) {
+	// EVM full history is resolved once to [0, head]. Reuse that fixed range
+	// for gap planning instead of issuing a second unbounded full download.
+	if job.RangeType == "full" && job.Chain != "tron" && job.Chain != "solana" && job.HeadBlock > 0 {
+		return store.BlockInterval{From: 0, To: job.HeadBlock}, true
+	}
 	if job.RangeType == "block" && job.FromBlock != nil && job.ToBlock != nil && *job.ToBlock >= *job.FromBlock {
 		return store.BlockInterval{From: *job.FromBlock, To: *job.ToBlock}, true
 	}

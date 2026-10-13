@@ -10,7 +10,7 @@ func TestInvestigationReadScopesDoNotGrantAnalysisOrExport(t *testing.T) {
 		path := "/api/v1/analysis/" + op
 		want := "read"
 		switch op {
-		case "aggregate_transfers", "trace_funds", "detect_exchange_deposit", "trace_to_exchange":
+		case "aggregate_transfers", "trace_funds", "trace_fund_batch", "detect_exchange_deposit", "trace_to_exchange":
 			want = "analysis"
 		case "get_export_file", "download_export":
 			path = "/api/v1/export/" + op

@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 	"time"
+
+	chaincfg "github.com/blockchain-platform/blockchain-platform/internal/chain"
 )
 
 // DownloadJob 状态（必须持久化在 PostgreSQL）
@@ -66,20 +68,13 @@ var DefaultDatasets = []string{"transactions", "token_transfers", "nft_transfers
 // internal/provider/solana（标准 JSON-RPC：SPL 指令解码 + CPI 调用树）。
 // /api/v2/meta/datasets 与下载入参校验都读这里，杜绝两处白名单漂移。
 var chainDatasetsByChain = map[string][]string{
-	"bsc":       {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"eth":       {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"polygon":   {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"arbitrum":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"base":      {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"optimism":  {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"avalanche": {"transactions", "token_transfers", "nft_transfers", "logs", "balances"},
-	"tron":      {"transactions", "token_transfers", "internal_transactions"},
+	"tron": {"transactions", "token_transfers", "internal_transactions"},
 	// nft_transfers 的实现与单测已在位，但真链验收未通过（抽样的 NFT 转账解不出 transfer），
 	// 按 ADR-023 D9 暂不进白名单；验收通过后再加回这一项。
 	"solana": {"transactions", "token_transfers", "internal_transactions", "logs", "balances"},
 }
 
-// ChainDatasets 返回该链可下载的 Dataset；chain 为空或未登记时返回全量（向后兼容）。
+// ChainDatasets 返回该链可下载的 Dataset；chain 为空时返回全量；未知链不开放任何数据集。
 //
 // Solana 的白名单随实际通道变化：走 dRPC Data API 时 nft_transfers 有明确来源，
 // 走旧的 JSON-RPC 猜测路径时按 ADR-023 D9 排除（见 capability.go 的说明）。
@@ -91,10 +86,13 @@ func ChainDatasets(chain string) []string {
 	if key == "solana" {
 		return solanaDatasets()
 	}
+	if chaincfg.IsAnkrAdvancedMainnet(key) {
+		return []string{"transactions", "token_transfers", "nft_transfers", "logs", "balances"}
+	}
 	if list, ok := chainDatasetsByChain[key]; ok {
 		return list
 	}
-	return AllDatasets
+	return nil
 }
 
 // solanaDatasets 由 capability.go 的进程级能力开关决定。

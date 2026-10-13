@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
+import { createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import test, { type TestContext } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -36,6 +37,11 @@ async function harness(t: TestContext) {
         if (input.address === "bad" || input.job_id === "00000000-0000-4000-8000-000000000999") {
           res.statusCode = 400;
           res.end(JSON.stringify({ success: false, data: null, meta: {}, error: { code: "INVALID_ADDRESS", message: "Invalid complete address" } }));
+        } else if (["/api/v1/export/get_export_file", "/api/v1/export/download_export"].includes(url.pathname)) {
+          const bytes = Buffer.from("payer,amount\n" + a + "," + precise + "\n");
+          res.end(JSON.stringify({ success: true, error: null, meta: {}, data: { content_base64: bytes.toString("base64"),
+            chunk_bytes: bytes.length, chunk_sha256: createHash("sha256").update(bytes).digest("hex"),
+            resource_uri: `export://${input.job_id}/0/${input.chunk_size}`, mime_type: "text/csv" } }));
         } else {
           res.end(JSON.stringify({ success: true, error: null,
             data: { address: input.address, total_records: 3, total_amount: precise,
@@ -72,6 +78,19 @@ function data(result: Awaited<ReturnType<Client["callTool"]>>) {
   assert.equal(result.isError, undefined, JSON.stringify(result.content));
   return (result.structuredContent as any).data;
 }
+
+test("200 address batch executes every item with bounded concurrency and preserves a partial error", async t => {
+  const h = await harness(t);
+  const addresses = Array.from({ length: 199 }, (_, i) => `0x${(i + 100).toString(16).padStart(40, "0")}`);
+  addresses.push("bad");
+  const out = data(await h.client.callTool({ name: "batch_get_transactions", arguments: { chain: "bsc", addresses, max_concurrent: 4, page_size: 1 } }));
+  assert.deepEqual([out.requested, out.succeeded, out.failed], [200, 199, 1]);
+  assert.equal(h.received.length, 200);
+  assert.equal(h.peak(), 4);
+  assert.equal(out.results[199].address, "bad");
+  assert.equal(out.results[199].error.code, "INVALID_ADDRESS");
+  assert.deepEqual(out.results.map((item: any) => item.index), addresses.map((_, i) => i));
+});
 
 test("address batches bound concurrency, deduplicate EVM addresses and retain request order after partial failure", async t => {
   const h = await harness(t);
@@ -126,19 +145,23 @@ test("Solana batch cursors remain independent and address case is preserved", as
   assert.deepEqual(h.received.map(x => x.input.before), ["5eDPXxyeaHuK9YJKPXpXbWUne9At11oQzdJv6hLmuVqQqneiiYdAMFDn7CYn9Edc9RQWbULAnv33GK34mnoSinfZ", "6eDPXxyeaHuK9YJKPXpXbWUne9At11oQzdJv6hLmuVqQqneiiYdAMFDn7CYn9Edc9RQWbULAnv33GK34mnoSinfZ"]);
 });
 
-test("all ten address aliases advertise batch schemas and dispatch their original REST operation", async t => {
+test("all address/hash aliases advertise batch schemas and dispatch their original REST operation", async t => {
   const h = await harness(t);
   const listed = (await h.client.listTools()).tools;
   const aliases = toolDefinitions.filter(x => x.batch?.kind === "addresses");
-  assert.equal(aliases.length, 15);
+  assert.equal(aliases.length, 24);
   for (const alias of aliases) {
     const schema = listed.find(x => x.name === alias.name)!;
-    assert.equal(schema.annotations?.readOnlyHint, true);
-    assert.equal((schema.inputSchema.properties![alias.batch?.kind === "addresses" && alias.batch.key === "tx_hash" ? "tx_hashes" : "addresses"] as any).maxItems, 20);
-    const args = alias.batch?.kind === "addresses" && alias.batch.key === "tx_hash" ? { chain: "bsc", tx_hashes: ["0x" + "1".repeat(64)] } : ["batch_get_balances", "batch_get_contract_control", "batch_get_labels"].includes(alias.name) ? { chain: "bsc", addresses: [a] } : alias.name === "batch_get_export_address_summary"
+    assert.equal(schema.annotations?.readOnlyHint, alias.readOnly !== false);
+    assert.equal((schema.inputSchema.properties![alias.batch?.kind === "addresses" && alias.batch.key === "tx_hash" ? "tx_hashes" : "addresses"] as any).maxItems, 200);
+    let args: Record<string,unknown> = alias.batch?.kind === "addresses" && alias.batch.key === "tx_hash" ? { chain: "bsc", tx_hashes: ["0x" + "1".repeat(64)] } : ["batch_get_balances", "batch_get_contract_control", "batch_get_labels"].includes(alias.name) ? { chain: "bsc", addresses: [a] } : alias.name === "batch_get_export_address_summary"
       ? { addresses: [a], job_id: job, token: "USDT" }
       : alias.name === "batch_get_solana_address_signatures" ? { addresses: ["So11111111111111111111111111111111111111112"] }
       : { chain: "bsc", addresses: [a], token: "USDT" };
+    if (alias.name === "batch_reconcile_address_ledgers") args={chain:"bsc",addresses:[a],token_contract:b,from_block:1,to_block:2};
+    if (alias.name === "batch_get_token_allowances") args={chain:"bsc",addresses:[a],token_contract:b,spenders:[b]};
+    if (alias.name === "batch_get_control_history") args={chain:"bsc",addresses:[a],from_block:1,to_block:2};
+    if (alias.name === "batch_match_bridge_transfers") Object.assign(args,{destination_chain:"ethereum",destination_tx_hash:"0x"+"2".repeat(64),protocol:"cctp_v1"});
     const out = data(await h.client.callTool({ name: alias.name, arguments: args }));
     assert.equal(out.failed, 0, alias.name);
     assert.equal(h.received.at(-1)!.path, alias.path);
@@ -155,8 +178,10 @@ test("invalid batch inputs are rejected before any REST request including an ear
     { name: "batch_get_transactions", arguments: { chain: "bsc", addresses: [a], pagination: [{ address: a, page: 2 }, { address: a, page: 3 }] } },
     { name: "batch_get_transactions", arguments: { chain: "bsc", addresses: [a], pagination: [{ address: a, cursor: "unsupported" }] } },
     { name: "batch_get_transactions", arguments: { chain: "bsc", addresses: [" "] } },
-    { name: "batch_get_transactions", arguments: { chain: "bsc", addresses: Array(21).fill(a) } },
+    { name: "batch_get_transactions", arguments: { chain: "bsc", addresses: Array(201).fill(a) } },
     { name: "batch_call_tools", arguments: { requests: [{ tool: "create_large_export", arguments: validExport }, { tool: "find_fund_paths", arguments: { chain: "bsc", source: a } }] } },
+    { name: "batch_call_tools", arguments: { requests: [{ tool: "create_large_export", arguments: validExport }, { tool: "start_analysis", arguments: {operation:"get_token_allowances",arguments:{chain:"bsc",address:a,token_contract:b}} }] } },
+    { name: "batch_call_tools", arguments: { requests: [{ tool: "create_large_export", arguments: validExport }, { tool: "reconcile_address_ledger", arguments: {chain:"bsc",address:a,token_contract:b,from_block:5,to_block:1} }] } },
     { name: "batch_call_tools", arguments: { requests: [{ tool: "create_large_export", arguments: validExport }, { tool: "create_large_export", arguments: { ...validExport, addresses: [b] } }] } },
     { name: "batch_call_tools", arguments: { requests: [{ tool: "batch_get_transactions", arguments: { chain: "bsc", addresses: [a] } }] } },
     { name: "batch_call_tools", arguments: { requests: [{ tool: "get_transactions", arguments: { chain: "bsc", address: a, page_size: 501 } }] } },
@@ -172,7 +197,7 @@ test("generic batches dispatch every existing single operation with its original
   const h = await harness(t);
   const samples: Record<string, Record<string, unknown>> = {
     get_address_overview: { chain: "bsc", address: a }, get_address_assets: { chain: "bsc", address: a },
-    get_token_transfers: { chain: "bsc", address: a }, get_transactions: { chain: "bsc", address: a },
+    get_token_transfers: { chain: "bsc", address: a }, get_nft_transfers: { chain: "flare", address: a }, get_address_logs: { chain: "gnosis", address: a }, get_balance_snapshots: { chain: "linea", address: a }, get_transactions: { chain: "bsc", address: a },
     get_internal_transactions: { chain: "bsc", address: a }, get_counterparties: { chain: "bsc", address: a },
     get_flow_summary: { chain: "bsc", address: a }, get_top_flows: { chain: "bsc", address: a }, get_first_funding: { chain: "bsc", address: a },
     get_transaction_detail: { chain: "bsc", tx_hash: "hash" }, get_solana_address_signatures: { address: "So11111111111111111111111111111111111111112" },
@@ -185,12 +210,32 @@ test("generic batches dispatch every existing single operation with its original
     get_ai_download_status: { download_job_id: job }, retry_ai_download_failures: { download_job_id: job },
   };
   const ih = "0x" + "1".repeat(64);
+  Object.assign(samples, {
+    get_cross_chain_capabilities:{},
+    query_cross_chain_transfer:{bridge:"lifi",chain:"bsc",tx_hash:ih},
+    find_cross_chain_candidates:{anchor:{chain:"ethereum",tx_hash:ih,dataset:"transactions"},search_chain:"bsc",search_addresses:[a],search_direction:"out",direction:"forward",asset_kind:"native",asset_relation:"same_asset",start_time:"2026-09-29T00:00:00Z",end_time:"2026-09-29T01:00:00Z"},
+    get_investigation_capabilities:{chain:"bsc"},
+    reconcile_address_ledger:{chain:"bsc",address:a,token_contract:b,from_block:1,to_block:2},
+    trace_source_set:{chain:"bsc",token_contract:b,sources:[{tx_hash:ih,log_index:0}]},
+    explain_transaction:{chain:"bsc",tx_hash:ih},
+    match_bridge_transfer:{chain:"ethereum",tx_hash:ih,destination_chain:"base",destination_tx_hash:ih,protocol:"cctp_v1"},
+    get_token_allowances:{chain:"bsc",address:a,token_contract:b,spenders:[b]},
+    get_control_history:{chain:"bsc",address:a,from_block:1,to_block:2},
+    start_analysis:{operation:"explain_transaction",arguments:{chain:"bsc",tx_hash:ih},idempotency_key:"test"},
+    get_analysis_status:{analysis_id:job},get_analysis_results:{analysis_id:job},cancel_analysis:{analysis_id:job},resume_analysis:{analysis_id:job},
+    create_evidence_bundle:{analysis_id:job},get_evidence_bundle:{bundle_id:job},verify_evidence_bundle:{bundle_id:job},
+    create_watch_rule:{chain:"bsc",address:a,name:"test",rule_type:"balance_change"},
+    update_watch_rule:{chain:"bsc",address:a,name:"test",rule_type:"balance_change",rule_id:job,expected_revision:1},
+    set_watch_rule_state:{rule_id:job,expected_revision:1,state:"paused"},list_watch_rules:{},get_watch_events:{}
+  });
   for (const definition of toolDefinitions.filter(x => !x.batch && x.path.startsWith("/analysis/"))) {
     if (samples[definition.name]) continue;
     const base: Record<string, unknown> = { chain: "bsc" };
     const shape = definition.inputSchema as Record<string, any>;
     if (shape.address) base.address = a;
     if (shape.source) base.source = a;
+ if(shape.source_address) {base.source_address=a;base.source_tx_hash=ih;}
+ if(shape.addresses) continue;
     if (shape.token_contract) base.token_contract = b;
     if (shape.tx_hash) base.tx_hash = ih;
     if (shape.source_tx) base.source_tx = ih;
@@ -205,7 +250,7 @@ test("generic batches dispatch every existing single operation with its original
     samples[definition.name] = base;
   }
   samples.get_export_file = { job_id: job }; samples.download_export = { job_id: job };
-  const single = toolDefinitions.filter(x => !x.batch && !x.name.startsWith("batch_") && !x.name.endsWith("_batch"));
+  const single = toolDefinitions.filter(x => !x.batch && !x.name.startsWith("batch_") && (!x.name.endsWith("_batch") || x.name === "trace_fund_batch"));
   assert.deepEqual(Object.keys(samples).sort(), single.map(x => x.name).sort());
   for (let start = 0; start < single.length; start += 20) {
     const chunk = single.slice(start, start + 20);

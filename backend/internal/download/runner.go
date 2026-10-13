@@ -221,12 +221,19 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	started := time.Now()
 
 	address := sc.subjectAddress(ctx, sh.SubjectID)
+	// Existing-shard retries bypass the planner, which normally sets RUNNING.
+	// Preserve pause/cancel transitions while starting their progress stream.
+	if _, err := sc.store.Pool.Exec(ctx, "UPDATE download_jobs SET status='RUNNING',updated_at=now() WHERE id=$1 AND status='QUEUED'", sh.JobID); err != nil {
+		log.Error("start job fetching failed", "err", err)
+		return
+	}
 	job, err := sc.store.GetJob(ctx, sh.JobID)
 	if err != nil {
 		log.Error("get job failed", "err", err)
 		return
 	}
 	chain := job.Chain
+	ctx = sc.withRetryRequestBudget(ctx, sh.JobID, job.Stats)
 	// 任务请求模式随 context 下传：dRPC 等按通道解析档位的 Provider 需要它，
 	// 而 FetchRequest 是页级结构，不适合重复携带任务级属性。
 	ctx = provider.WithRequestedMode(ctx, requestedJobMode(job))
@@ -379,7 +386,12 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		// 全局内存预算（§47/§48）：按预测大小预留 decoded 内存，超预算阻塞 = 内存背压
 		estBytes := sc.predictPageBytes(chain, sh.Dataset, currentSize)
 		if sc.mem != nil {
-			sc.mem.Reserve(estBytes)
+			if err := sc.mem.ReserveContext(ctx, estBytes); err != nil {
+				if ctx.Err() == nil {
+					sc.failShard(ctx, sh, err.Error(), false)
+				}
+				return
+			}
 		}
 
 		// Page Gap（§35）：上一页 BODY_COMPLETE → 本页请求发出
@@ -472,6 +484,7 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			sc.publish("events.shards."+sh.JobID, map[string]any{
 				"type": "shard_status", "shard_id": sh.ID, "status": newStatus, "error": err.Error(), "ts": time.Now(),
 			})
+			sc.recompute(ctx, sh)
 			return
 		}
 		if chain == "tron" {
@@ -489,7 +502,10 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				currentSize = 200
 			}
 		} else {
-			currentSize = req.PageSize
+			currentSize = res.RequestPageSize
+			if currentSize <= 0 {
+				currentSize = req.PageSize
+			}
 		}
 		lastBodyCompleted = time.Now()
 		var invariant RangeInvariantResult
@@ -502,7 +518,10 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				if sc.spool != nil {
 					_, _ = sc.spool.WriteQuarantine(spool.QuarantineMeta{JobID: sh.JobID, ShardID: sh.ID, Dataset: sh.Dataset, PageNo: pageNo + 1, Attempt: res.AttemptNo, RequestID: res.RequestID, LeaseEpoch: sh.LeaseEpoch, RangeStart: envelope.Start, RangeEndExclusive: envelope.End, RequestFromBlock: *res.RequestFromBlock, RequestToBlock: *res.RequestToBlock, RequestPageSize: res.RequestPageSize, PageTokenHash: tokenHash(pageToken), ResponseRows: len(res.Rows), ResponseMinBlock: invariant.MinBlock, ResponseMaxBlock: invariant.MaxBlock, OutOfRangeRows: invariant.OutOfRangeRows, StartedAt: res.StartedAt, BodyCompleteAt: res.BodyCompleteAt}, res.RawResponseBody)
 				}
-				_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+				if sc.mem != nil {
+					sc.mem.Release(estBytes)
+				}
+				sc.failShard(ctx, sh, err.Error(), false)
 				return
 			}
 		}
@@ -510,7 +529,10 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			if res.NextPageToken != "" {
 				if _, seen := seenPageTokens[res.NextPageToken]; seen {
 					err := fmt.Errorf("[pagination_loop] TronGrid fingerprint repeated for address stream")
-					_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+					if sc.mem != nil {
+						sc.mem.Release(estBytes)
+					}
+					sc.failShard(ctx, sh, err.Error(), false)
 					return
 				}
 				seenPageTokens[res.NextPageToken] = struct{}{}
@@ -518,12 +540,15 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 		} else if chain != "tron" {
 			if err := sc.tokens.claim(res.NextPageToken, sh.ID, address, sh.Dataset, uint64(sh.FromBlock), uint64(sh.ToBlock)+1); err != nil {
 				observability.AnkrTokenCrossShard.WithLabelValues(chain, sh.Dataset).Inc()
-				_, _ = sc.store.FailShard(ctx, sh.ID, err.Error(), false)
+				if sc.mem != nil {
+					sc.mem.Release(estBytes)
+				}
+				sc.failShard(ctx, sh, err.Error(), false)
 				return
 			}
 		}
 
-		// 内存预算修正：实际 decoded 大于预估时补预留（可能阻塞）
+		// Account an already-decoded body; never wait while holding its reservation.
 		actualDecoded := res.DecodedBytes
 		// Release exactly what was reserved.  When the response is smaller than
 		// the prediction, releasing only actualDecoded leaks the prediction
@@ -605,7 +630,7 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 				QueryHash: reqHash, NextPageTokenHash: tokenHash(res.NextPageToken),
 				RequestStartedAt: pageStart, BodyCompletedAt: lastBodyCompleted, ReceivedAt: time.Now(),
 			}
-			rawPath, metaPath, werr := sc.spool.WritePage(meta, res.Rows)
+			durablePage, werr := sc.spool.WritePageWithMeta(meta, res.Rows)
 			if werr != nil {
 				if sc.mem != nil {
 					sc.mem.Release(reservedBytes)
@@ -616,6 +641,8 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 			if sc.mem != nil {
 				sc.mem.Release(reservedBytes)
 			}
+			rawPath, metaPath := durablePage.RawPath, durablePage.MetaPath
+			meta = durablePage.Meta
 			rowsTotal += int64(len(res.Rows))
 			bytesTotal += res.DecodedBytes
 			pg := model.Page{
@@ -794,11 +821,15 @@ func (sc *Scheduler) runShard(ctx context.Context, sh model.Shard) {
 	if _, err := sc.raw.PutGzip(ctx, manifestKey, mb); err != nil {
 		log.Warn("manifest write failed", "err", err)
 	}
+	if err := sc.commitCoverage(ctx, sh, chain, address, shardMinB, shardMaxB, rowsTotal, bytesTotal); err != nil {
+		_, _ = sc.store.FailShard(ctx, sh.ID, "coverage commit: "+err.Error(), true)
+		sc.recompute(ctx, sh)
+		return
+	}
 	if err := sc.store.CompleteShard(ctx, sh.ID, manifestKey, rowsTotal, bytesTotal); err != nil {
 		log.Error("complete shard failed", "err", err)
 		return
 	}
-	sc.commitCoverage(ctx, sh, chain, address, shardMinB, shardMaxB, rowsTotal, bytesTotal)
 	if err := sc.planner.ContinueShards(ctx, sh); err != nil {
 		log.Error("continue shards failed", "err", err)
 	}
@@ -919,6 +950,19 @@ func rawTransactionID(raw json.RawMessage) (string, bool) {
 }
 
 // predictPageBytes 响应大小预测（§49）：page_size × avg_bytes_per_row（画像缺省用经验值）。
+// failShard also converges parents after a page is rejected before ingest.
+func (sc *Scheduler) failShard(ctx context.Context, sh model.Shard, reason string, retryable bool) {
+	status, err := sc.store.FailShard(ctx, sh.ID, reason, retryable)
+	if err != nil {
+		sc.log.Error("fail shard failed", "shard_id", sh.ID, "err", err)
+		return
+	}
+	sc.recompute(ctx, sh)
+	sc.publish("events.shards."+sh.JobID, map[string]any{
+		"type": "shard_status", "shard_id": sh.ID, "status": status, "error": reason, "ts": time.Now(),
+	})
+}
+
 func (sc *Scheduler) predictPageBytes(chain, dataset string, pageSize int) int64 {
 	perRow := int64(1024)
 	if p, err := sc.store.GetPageProfile(context.Background(), chain, dataset, dataset); err == nil && p != nil && p.AvgDecodedBytes > 0 && p.PagesObserved > 3 {
@@ -1308,39 +1352,22 @@ func trackBlocks(minB, maxB *int64, b int64) {
 }
 
 // commitCoverage 数据全部持久化 + 校验之后才提交 Coverage（不允许提前标记 COMPLETE，§7）。
-func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, address string, minBlock, maxBlock, rows, bytes int64) {
-	if rows == 0 {
-		if from, to, ok := solanaEmptyCoverageBounds(sh, chain); ok {
-			// An exhausted finalized signature stream proves even a zero-row
-			// Solana dataset was checked through the pinned head. Persist its
-			// exact scope, otherwise future ensure calls redownload it and the
-			// coverage response has no as-of slot.
-			if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, 0, bytes, sh.ToBlock); err != nil {
-				sc.log.Error("Solana empty coverage commit failed", "shard_id", sh.ID, "err", err)
-			}
-			return
-		}
-		sc.log.Info("coverage skipped (zero rows)", "shard_id", sh.ID, "dataset", sh.Dataset)
-		return
-	}
+func (sc *Scheduler) commitCoverage(ctx context.Context, sh model.Shard, chain, address string, minBlock, maxBlock, rows, bytes int64) error {
 	if sh.Dataset == "balances" {
-		if err := sc.store.AddCoverage(ctx, chain, address, "balances", sc.sourceProviderForDataset(chain, sh.Dataset), 0, sh.ToBlock, rows, bytes, sh.ToBlock); err != nil {
-			sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)
-		}
-		return
+		return sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), 0, sh.ToBlock, rows, bytes, sh.ToBlock)
 	}
 	from, to := sh.FromBlock, sh.ToBlock
 	if from == 0 && to == 0 {
-		if maxBlock-minBlock >= 2 {
-			from, to = minBlock+1, maxBlock-1
-		} else {
-			sc.log.Info("coverage skipped (boundary only)", "shard_id", sh.ID, "min", minBlock, "max", maxBlock)
-			return
+		if rows == 0 {
+			return nil
 		}
+		if maxBlock-minBlock < 2 {
+			return nil
+		}
+		from, to = minBlock+1, maxBlock-1
 	}
-	if err := sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, rows, bytes, sh.ToBlock); err != nil {
-		sc.log.Error("coverage commit failed", "shard_id", sh.ID, "err", err)
-	}
+	// Exhausting a bounded stream also proves an empty interval.
+	return sc.store.AddCoverage(ctx, chain, address, sh.Dataset, sc.sourceProviderForDataset(chain, sh.Dataset), from, to, rows, bytes, sh.ToBlock)
 }
 
 func solanaEmptyCoverageBounds(sh model.Shard, chain string) (int64, int64, bool) {

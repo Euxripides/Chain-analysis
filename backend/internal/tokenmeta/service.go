@@ -309,14 +309,26 @@ func (s *Service) Search(ctx context.Context, chain, q string, limit int) ([]Met
 		}
 		keys = append(keys, k)
 	}
-	var out []Metadata
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close() // Release the search connection before the bounded batch read.
+	grouped := map[string][]string{}
 	for _, k := range keys {
-		m, e := s.Get(ctx, k.c, k.a)
-		if e != nil {
-			return nil, e
+		grouped[k.c] = append(grouped[k.c], k.a)
+	}
+	metadata := map[string]map[string]Metadata{}
+	for c, addresses := range grouped {
+		items, err := s.GetMany(ctx, c, addresses)
+		if err != nil {
+			return nil, err
 		}
-		if m != nil {
-			out = append(out, *m)
+		metadata[c] = items
+	}
+	out := []Metadata{}
+	for _, k := range keys {
+		if m, ok := metadata[k.c][normalizeAddressForChain(k.c, k.a)]; ok {
+			out = append(out, m)
 		}
 	}
 	return out, nil

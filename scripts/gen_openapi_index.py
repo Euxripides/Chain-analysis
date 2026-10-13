@@ -177,7 +177,12 @@ def render(name: str, title: str, routes) -> str:
             lines.append("          content:")
             lines.append("            application/json:")
             lines.append("              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }")
-    return "\n".join(lines) + "\n"
+    result = "\n".join(lines) + "\n"
+    if name == "user-v2":
+        import yaml
+        from openapi_redesign_contract import enrich
+        return yaml.safe_dump(enrich(yaml.safe_load(result)), allow_unicode=True, sort_keys=False)
+    return result
 
 
 def main() -> int:

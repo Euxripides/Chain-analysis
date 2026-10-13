@@ -10,6 +10,7 @@
  * 而不是复制三份——Tab 的 key 与顺序仍由 address-detail.types.ts 的 TABS 单一来源决定。
  */
 import { useState } from "react";
+import { TokenIcon } from "../../explorer/AssetIcon";
 import { Link } from "react-router-dom";
 import { CopyButton, DataTable, EmptyState, HashValue, StatusBadge, statusToneFor, Card, PageSection, KeyValueList, MetricCard } from "@chain/ui";
 
@@ -292,7 +293,7 @@ function UnverifiedMark({ reason, symbol }: { reason?: string; symbol?: string }
 }
 
 /** 代币单元格：图标 + 符号 +（代币全称 | NFT 的 #编号 · 标准）。 */
-function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
+function TokenCell({ row, nft, chain }: { row: ActivityRow; nft: boolean; chain: string }) {
   const fallback = row.token_address ? shortValue(row.token_address, 6, 4) : "原生代币";
   const primary = nft
     ? row.token_name || row.token_symbol || shortValue(row.contract_address ?? row.token_address ?? "", 6, 4) || "NFT"
@@ -305,7 +306,7 @@ function TokenCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
   const unverified = Boolean(suspicion);
   return (
     <span className="cs-oktoken" data-suspicious={unverified ? "true" : undefined}>
-      <TokenLogo logo={row.token_logo} symbol={row.token_symbol || primary} />
+      <Link to={`/tokens/${encodeURIComponent(chain)}/${encodeURIComponent(row.contract_address || row.token_address || "")}`} onClick={event => event.stopPropagation()}><TokenIcon chain={chain} contract={row.contract_address || row.token_address} symbol={row.token_symbol || primary} size={28} /></Link>
       <span className="cs-oktoken__text">
         <span className="cs-oktoken__symbol">
           <UnverifiedMark reason={suspicion} symbol={row.token_symbol || primary} />
@@ -343,7 +344,7 @@ function AmountCell({ row, nft }: { row: ActivityRow; nft: boolean }) {
 }
 
 
-export function CurrentBalanceTable({ items }: { items: Asset[] }) {
+export function CurrentBalanceTable({ items, chain }: { items: Asset[]; chain: string }) {
   return (
     <DataTable<Asset>
       rows={items}
@@ -356,7 +357,7 @@ export function CurrentBalanceTable({ items }: { items: Asset[] }) {
           width: "180px",
           render: (row) => (
             <div className="cs-balance-asset">
-              <TokenLogo symbol={row.token_symbol || row.token_name} size={32} />
+              <TokenIcon chain={chain} contract={row.token_address} symbol={row.token_symbol || row.token_name} size={28} />
               <div style={{ minWidth: 0 }}>
                 <div className="cs-balance-asset__symbol">{row.token_symbol || row.token_name || "未知资产"}</div>
                 <div className="s4-list__sub cs-balance-asset__name">
@@ -401,7 +402,7 @@ export function CurrentBalanceTable({ items }: { items: Asset[] }) {
   );
 }
 
-export function NetFlowTable({ items }: { items: NetFlowAsset[] }) {
+export function NetFlowTable({ items, chain }: { items: NetFlowAsset[]; chain: string }) {
   const rawCell = (raw?: string, decimals?: number, color?: string) => (
     <div style={{ minWidth: 0 }}>
       <div className="mono" style={color ? { color } : undefined}>
@@ -502,7 +503,6 @@ function TransferTable({
       rows={rows}
       loading={loading}
       keepPreviousData
-      hidePager={hidePager}
       rowKey={(row, index) =>
         (row.tx_hash ?? "tx") +
         "-" +
@@ -583,7 +583,7 @@ function TransferTable({
           },
         },
         { key: "amount", header: "数量", width: "15%", render: (row) => <AmountCell row={row} nft={nft} /> },
-        { key: "token", header: "代币", width: "15%", render: (row) => <TokenCell row={row} nft={nft} /> },
+        { key: "token", header: "代币", width: "15%", render: (row) => <TokenCell row={row} nft={nft} chain={chain} /> },
       ]}
     />
   );

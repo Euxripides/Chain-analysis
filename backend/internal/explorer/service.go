@@ -77,13 +77,15 @@ func (s *Service) WithAddressTypeResolver(resolver provider.AddressTypeResolver)
 }
 
 type Filter struct {
-	FromTime    *time.Time `json:"from_time"`
-	ToTime      *time.Time `json:"to_time"`
-	Direction   string     `json:"direction"`
-	Token       string     `json:"token"`
-	FromAddress string     `json:"from_address"`
-	ToAddress   string     `json:"to_address"`
-	MethodID    string     `json:"method_id"`
+	AsOf         *time.Time `json:"as_of,omitempty"`
+	FromTime     *time.Time `json:"from_time"`
+	ToTime       *time.Time `json:"to_time"`
+	Direction    string     `json:"direction"`
+	Counterparty string     `json:"counterparty"`
+	Token        string     `json:"token"`
+	FromAddress  string     `json:"from_address"`
+	ToAddress    string     `json:"to_address"`
+	MethodID     string     `json:"method_id"`
 	// V1.3 Method 搜索/筛选（§28）：名称、签名与统一搜索框
 	MethodName      string `json:"method_name"`
 	MethodSignature string `json:"method_signature"`
@@ -105,7 +107,8 @@ type QueryRequest struct {
 	Limit     int      `json:"limit"`
 	// Light 只跳过逐行 Contract/Case/Tag 富化，用于客户端“加载全部”性能路径；
 	// 不改变数据来源和行数，字段仍来自本地 ClickHouse（§30.1）。
-	Light bool `json:"-"`
+	Light     bool `json:"-"`
+	LocalOnly bool `json:"-"`
 
 	// OrgID / WSID 是**服务端注入**的租户作用域（json:"-"：客户端无法提交）。
 	//
@@ -147,7 +150,7 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (*Result, error) 
 		return nil, err
 	}
 	if !req.Light {
-		s.enrich(ctx, req.Chain, req.Addresses, rows, req.WSID)
+		s.enrich(ctx, req.Chain, req.Addresses, rows, req.WSID, req.LocalOnly)
 	}
 	next := ""
 	if len(rows) == req.Limit {
@@ -172,10 +175,10 @@ func validateFiltersForChain(chain string, f Filter) error {
 	if f.BlockFrom != nil && f.BlockTo != nil && *f.BlockFrom > *f.BlockTo {
 		return fmt.Errorf("%w: block_from is greater than block_to", ErrInvalidFilter)
 	}
-	if f.Direction != "" && f.Direction != "in" && f.Direction != "out" && f.Direction != "self" {
+	if f.Direction != "" && f.Direction != "in" && f.Direction != "out" && f.Direction != "self" && f.Direction != "internal" {
 		return fmt.Errorf("%w: unsupported direction", ErrInvalidFilter)
 	}
-	for name, value := range map[string]string{"from_address": f.FromAddress, "to_address": f.ToAddress} {
+	for name, value := range map[string]string{"from_address": f.FromAddress, "to_address": f.ToAddress, "counterparty": f.Counterparty} {
 		if value != "" {
 			if chain == "tron" {
 				if tron.ValidateTronAddress(value) != nil {
@@ -218,6 +221,14 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 	f := req.Filters
 	var conds []string
 	var args []any
+	if f.AsOf != nil {
+		column := "source_ingested_at"
+		if req.Dataset == "internal_transactions" {
+			column = "traced_at"
+		}
+		conds = append(conds, column+" <= ?")
+		args = append(args, f.AsOf.UTC())
+	}
 	if f.FromTime != nil {
 		conds = append(conds, "timestamp >= ?")
 		args = append(args, f.FromTime.UTC())
@@ -234,29 +245,22 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		conds = append(conds, "block_number <= ?")
 		args = append(args, *f.BlockTo)
 	}
-	single := len(req.Addresses) == 1
 	switch req.Dataset {
-	case "transactions":
-		appendPartyFilters(&conds, &args, req.Chain, f)
-		if single && f.Direction != "" {
-			if f.Direction == "out" {
-				conds = append(conds, "from_address = ?")
-			} else {
-				conds = append(conds, "to_address = ?")
-			}
-			args = append(args, req.Addresses[0])
+	case "transactions", "internal_transactions":
+		amountConditions, amountArgs, err := query.NativeAmountConditions(req.Chain, f.MinAmount, f.MaxAmount)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidFilter, err)
 		}
-		appendMethodFilters(&conds, &args, f)
+		conds = append(conds, amountConditions...)
+		args = append(args, amountArgs...)
+		appendPartyFilters(&conds, &args, req.Chain, f)
+		appendAddressDirection(&conds, &args, req.Addresses, f)
+		if req.Dataset == "transactions" {
+			appendMethodFilters(&conds, &args, f)
+		}
 	case "token_transfers":
 		appendPartyFilters(&conds, &args, req.Chain, f)
-		if single && f.Direction != "" {
-			if f.Direction == "out" {
-				conds = append(conds, "from_address = ?")
-			} else {
-				conds = append(conds, "to_address = ?")
-			}
-			args = append(args, req.Addresses[0])
-		}
+		appendAddressDirection(&conds, &args, req.Addresses, f)
 		if f.Token != "" {
 			appendTokenFilter(&conds, &args, f.Token, "token_symbol", "token_address")
 		}
@@ -280,6 +284,10 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 			appendTokenFilter(&conds, &args, f.Token, "address")
 		}
 	case "activity":
+		if f.Counterparty != "" {
+			conds = append(conds, "counterparty = ?")
+			args = append(args, f.Counterparty)
+		}
 		if f.FromAddress != "" {
 			from := addressnorm.NormalizeKey(req.Chain, f.FromAddress)
 			conds = append(conds, "((direction IN ('out','self') AND address = ?) OR (direction = 'in' AND counterparty = ?))")
@@ -321,6 +329,27 @@ func (s *Service) queryDataset(ctx context.Context, req QueryRequest) ([]map[str
 		}
 	}
 	return s.Q.Explorer(ctx, req.Dataset, req.Chain, req.Addresses, filterSQL, args, qCursor, req.Limit)
+}
+
+func appendAddressDirection(conds *[]string, args *[]any, addresses []string, f Filter) {
+	switch f.Direction {
+	case "in":
+		*conds = append(*conds, "to_address IN (?) AND from_address NOT IN (?)")
+		*args = append(*args, addresses, addresses)
+	case "out":
+		*conds = append(*conds, "from_address IN (?) AND to_address NOT IN (?)")
+		*args = append(*args, addresses, addresses)
+	case "self":
+		*conds = append(*conds, "from_address = to_address AND from_address IN (?)")
+		*args = append(*args, addresses)
+	case "internal":
+		*conds = append(*conds, "from_address != to_address AND from_address IN (?) AND to_address IN (?)")
+		*args = append(*args, addresses, addresses)
+	}
+	if f.Counterparty != "" {
+		*conds = append(*conds, "(from_address = ? OR to_address = ?)")
+		*args = append(*args, f.Counterparty, f.Counterparty)
+	}
 }
 
 func appendPartyFilters(conds *[]string, args *[]any, chain string, f Filter) {
@@ -526,7 +555,7 @@ func rowDecimals(row map[string]any) int64 {
 	}
 }
 
-func (s *Service) enrich(ctx context.Context, chain string, addresses []string, rows []map[string]any, wsID string) {
+func (s *Service) enrich(ctx context.Context, chain string, addresses []string, rows []map[string]any, wsID string, localOnly ...bool) {
 	set := map[string]bool{}
 	for _, a := range addresses {
 		set[a] = true
@@ -539,7 +568,10 @@ func (s *Service) enrich(ctx context.Context, chain string, addresses []string, 
 			contracts = append(contracts, ta)
 		}
 	}
-	addressTypes := s.resolveAddressTypes(ctx, chain, rows)
+	addressTypes := map[string]bool{}
+	if len(localOnly) == 0 || !localOnly[0] {
+		addressTypes = s.resolveAddressTypes(ctx, chain, rows)
+	}
 	metas := map[string]tokenmeta.Metadata{}
 	if s.Tokens != nil {
 		metas, _ = s.Tokens.GetMany(ctx, chain, contracts)

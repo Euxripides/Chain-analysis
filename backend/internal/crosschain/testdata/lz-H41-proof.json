@@ -1,0 +1,404 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": true,
+  "final_wallet_state": "direct_wallet_credit_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v2",
+  "proof": {
+    "wallet_settlement": {
+      "state": "direct_wallet_credit_verified",
+      "chain": "arbitrum",
+      "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+      "address": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+      "asset": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "amount_raw": "2198326",
+      "decimals": 6,
+      "block_number": 511697664,
+      "block_hash": "0xca6110469b1a506e0ba72075e6adacec82cf70c90ee1dff77000b6058e0fb43b",
+      "historical_code": "0x",
+      "historical_code_read": true,
+      "receipt_sha256": "995f1f7cf59ccfded1ce4a829d52c9e828231d14765181197e43cd6b758f43db",
+      "movement": {
+        "chain": "arbitrum",
+        "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+        "dataset": "token_transfers",
+        "event_index": 30,
+        "timestamp": "2026-10-04T19:04:43Z",
+        "timestamp_source": "chain_rpc",
+        "from_address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+        "to_address": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+        "token_contract": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        "token": "",
+        "decimals": 6,
+        "amount_raw": "2198326",
+        "amount": "2.198326",
+        "status": "success"
+      },
+      "outgoing_same_asset": false
+    },
+    "protocol": {
+      "layerzero": {
+        "kind": "stargate_taxi",
+        "delivery_call": {
+          "from": "0x31cae3b7fb82d847621859fb1585353c5720660d",
+          "to": "0x1a44076050125825900e736c501f859c50fe728c",
+          "input": "0x0c0c389e00000000000000000000000000000000000000000000000000000000000075960000000000000000000000006e3d884c96d640526f273c61dfcf08915ebd7e2b000000000000000000000000000000000000000000000000000000000002ab0700000000000000000000000019cfce47ed54a88614648dc3f19a5980097007dd7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce500000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000002b010001000000000000000000000000a482bdf30341a08b399371bdc1269e10bb4fa06d0000000000218b360000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "value": "0",
+          "block_timestamp": 1791140683
+        },
+        "applications": [
+          {
+            "event": {
+              "chain": "bsc",
+              "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+              "event_index": 70,
+              "contract": {
+                "address": "0x962bd449e630b0d928f308ce63f1a21f02576057",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "source",
+              "identifier": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+              "payload_sha256": "3698c206c09a33160f23db619347356af27675308cf63f2fe8e1ad1dcff7965d",
+              "raw_topics": [
+                "0x85496b760a4b7f8d66384b9df21b381f5d1b1e79f229a47aaf4c232edc2fe59a",
+                "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+                "0x00000000000000000000000085b0b03ed6fc421ca55aaa3a55723a70701908b8"
+              ],
+              "raw_data": "0x000000000000000000000000000000000000000000000000000000000000759e0000000000000000000000000000000000000000000000001e91ad155b62c0000000000000000000000000000000000000000000000000001e8205d98a816000"
+            },
+            "messaging_contract": {
+              "address": "0x6e3d884c96d640526f273c61dfcf08915ebd7e2b",
+              "verifier_address": "0x6e3d884c96d640526f273c61dfcf08915ebd7e2b",
+              "code_sha256": "9e2c73070432581cfea9020435d8d61e8167f7f7839452efdb8acbe2010d2b81",
+              "historical_state": true,
+              "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/bsc-mainnet/TokenMessaging.json"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "getAddressConfig()": "0x000000000000000000000000622244fff1328586d0754d67cc6ab77e7ab38b7d000000000000000000000000e37f7c80ced04c4f243c0fd04a5510d663cb88b50000000000000000000000000a6a15964fee494a881338d65940430797f0d97c0000000000000000000000006e3d884c96d640526f273c61dfcf08915ebd7e2b00000000000000000000000025bbf59ef9246dc65bfac8385d55c5e524a7b9ea0000000000000000000000000000000000000000000000000000000000000000",
+              "peers(uint32):30110": "0x00000000000000000000000019cfce47ed54a88614648dc3f19a5980097007dd",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "stargateImpls(uint16):1": "0x000000000000000000000000962bd449e630b0d928f308ce63f1a21f02576057",
+              "token()": "0x0000000000000000000000008ac76a51cc950d9822d68b83fe1ad97b32cd580d"
+            }
+          },
+          {
+            "event": {
+              "chain": "arbitrum",
+              "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+              "event_index": 31,
+              "contract": {
+                "address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "destination",
+              "identifier": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+              "payload_sha256": "3698c206c09a33160f23db619347356af27675308cf63f2fe8e1ad1dcff7965d",
+              "raw_topics": [
+                "0xefed6d3500546b29533b128a29e3a94d70788727f0507505ac12eaf2e578fd9c",
+                "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+                "0x000000000000000000000000a482bdf30341a08b399371bdc1269e10bb4fa06d"
+              ],
+              "raw_data": "0x00000000000000000000000000000000000000000000000000000000000075960000000000000000000000000000000000000000000000000000000000218b36"
+            },
+            "messaging_contract": {
+              "address": "0x19cfce47ed54a88614648dc3f19a5980097007dd",
+              "verifier_address": "0x19cfce47ed54a88614648dc3f19a5980097007dd",
+              "code_sha256": "32113a918b7f0f7f595e5ef976aae780b7865de7d310602511fbda16acef21e7",
+              "historical_state": true,
+              "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/arbitrum-mainnet/TokenMessaging.json"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "getAddressConfig()": "0x00000000000000000000000080f755e3091b2ad99c08da8d13e9c7635c1b8161000000000000000000000000e37f7c80ced04c4f243c0fd04a5510d663cb88b5000000000000000000000000146c8e409c113ed87c6183f4d25c50251dffbb3a00000000000000000000000019cfce47ed54a88614648dc3f19a5980097007dd000000000000000000000000f1fcb4cbd57b67d683972a59b6a7b1e2e8bf27e60000000000000000000000000000000000000000000000000000000000000000",
+              "peers(uint32):30102": "0x0000000000000000000000006e3d884c96d640526f273c61dfcf08915ebd7e2b",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "stargateImpls(uint16):1": "0x000000000000000000000000e8cdf27acd73a434d661c84887215f7598e7d0d3",
+              "token()": "0x000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831"
+            }
+          }
+        ]
+      },
+      "protocol": "layerzero",
+      "version": "layerzero-v2-stargate-taxi",
+      "identifier": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+      "source_chain": "bsc",
+      "destination_chain": "arbitrum",
+      "payload_sha256": "3698c206c09a33160f23db619347356af27675308cf63f2fe8e1ad1dcff7965d",
+      "source": {
+        "application_contract": {
+          "address": "0x962bd449e630b0d928f308ce63f1a21f02576057",
+          "verifier_address": "0x962bd449e630b0d928f308ce63f1a21f02576057",
+          "code_sha256": "0e9ca02e888873ac2a158f26684cabb0d09159b11009a4da69bfb4613116c03b",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/bsc-mainnet/StargatePoolUSDC.json"
+        },
+        "chain": "bsc",
+        "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+        "event_index": 69,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "c9f13bf2b27ee03740f83f4d52f1e6f65c2d930aa6fafb09358373edc7b2b039",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "source",
+        "identifier": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+        "payload_sha256": "3698c206c09a33160f23db619347356af27675308cf63f2fe8e1ad1dcff7965d",
+        "raw_topics": [
+          "0x1ab700d4ced0c005b164c0f789fd09fcbb0156d4c2041b8a3bfbcd961cd1567f"
+        ],
+        "raw_data": "0x000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001200000000000000000000000009f8c645f2d0b2159767bd6e0839de4be49e823de000000000000000000000000000000000000000000000000000000000000009c01000000000002ab07000075960000000000000000000000006e3d884c96d640526f273c61dfcf08915ebd7e2b0000759e00000000000000000000000019cfce47ed54a88614648dc3f19a5980097007dd7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5010001000000000000000000000000a482bdf30341a08b399371bdc1269e10bb4fa06d0000000000218b36000000000000000000000000000000000000000000000000000000000000000000000016000301001101000000000000000000000000000249f000000000000000000000"
+      },
+      "destination": {
+        "application_contract": {
+          "address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+          "verifier_address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+          "code_sha256": "dd66f9908e428bbc4a2b675d7c2b2410a3c8145ec880d0e3608300f48314f19f",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/arbitrum-mainnet/StargatePoolUSDC.json"
+        },
+        "chain": "arbitrum",
+        "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+        "event_index": 32,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "317657e473ae6b0976c308e157b3791105d2fd19893df7259aa846ed2e7732ca",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "destination",
+        "identifier": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+        "payload_sha256": "3698c206c09a33160f23db619347356af27675308cf63f2fe8e1ad1dcff7965d",
+        "raw_topics": [
+          "0x3cd5e48f9730b129dc7550f0fcea9c767b7be37837cd10e55eb35f734f4bca04"
+        ],
+        "raw_data": "0x00000000000000000000000000000000000000000000000000000000000075960000000000000000000000006e3d884c96d640526f273c61dfcf08915ebd7e2b000000000000000000000000000000000000000000000000000000000002ab0700000000000000000000000019cfce47ed54a88614648dc3f19a5980097007dd"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "role": "source",
+        "chain": "bsc",
+        "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+        "party": "0x85b0b03ed6fc421ca55aaa3a55723a70701908b8",
+        "asset": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "amount_raw": "2202732000000000000",
+        "amount": "2.202732",
+        "decimals": 18,
+        "bridge_asset": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "bridge_amount_raw": "2202732000000000000",
+        "binding": "layerzero:0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "bsc",
+            "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+            "dataset": "token_transfers",
+            "event_index": 65,
+            "timestamp": "2026-10-04T19:04:28Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x85b0b03ed6fc421ca55aaa3a55723a70701908b8",
+            "to_address": "0x962bd449e630b0d928f308ce63f1a21f02576057",
+            "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "2202732000000000000",
+            "amount": "2.202732",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "bsc",
+          "network_id": "56",
+          "number": 125729102,
+          "hash": "0xdd6579ce172fb7d1acdfe372079b13c7c316305d4b6108c0e2f2707c34824328",
+          "finalized_number": 125848555,
+          "finalized_hash": "0x49598ccc4b0a53ea440ab7816edd5326b9c8ca486a99709519f0fe97a8c4bf12",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:01:33.365473353Z",
+          "source": "configured_rpc_gateway:9658f7c3-70dd-4ecf-9631-f2b642020803",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "a418f763bb41d31107f37a5eeb36b36fdc1b0e4b8a7a0b2dbcf814588779ef4c",
+        "read_gaps": [],
+        "truncated": false
+      },
+      {
+        "role": "destination",
+        "chain": "arbitrum",
+        "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+        "party": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+        "asset": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        "amount_raw": "2198326",
+        "amount": "2.198326",
+        "decimals": 6,
+        "bridge_asset": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        "bridge_amount_raw": "2198326",
+        "binding": "layerzero:0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "arbitrum",
+            "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+            "dataset": "token_transfers",
+            "event_index": 30,
+            "timestamp": "2026-10-04T19:04:43Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+            "to_address": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+            "token_contract": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+            "token": "",
+            "decimals": 6,
+            "amount_raw": "2198326",
+            "amount": "2.198326",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "arbitrum",
+          "network_id": "42161",
+          "number": 511697664,
+          "hash": "0xca6110469b1a506e0ba72075e6adacec82cf70c90ee1dff77000b6058e0fb43b",
+          "finalized_number": 511885823,
+          "finalized_hash": "0xf37e22636e32a40db1172c759d654c84da1542fda02442084eb3f637cb8a2679",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:01:37.633992Z",
+          "source": "configured_rpc_gateway:9658f7c3-70dd-4ecf-9631-f2b642020803",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "995f1f7cf59ccfded1ce4a829d52c9e828231d14765181197e43cd6b758f43db",
+        "trace_sha256": "62111dfd3e886f65a23deebfd495e266c646215475042dad10839f07bbd58815",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T10:01:18.039582882Z"
+  },
+  "bridge": "layerzero",
+  "order_id": "0x7bb0c1546c8b8ffbdf31bb5c9b65582e5308fa2226ce4ae24803550dfbe14ce5",
+  "status": "completed",
+  "raw_status": "DELIVERED",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "bsc",
+      "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+      "address": "0x85b0b03ed6fc421ca55aaa3a55723a70701908b8",
+      "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+      "amount_raw": "2202732000000000000",
+      "amount": "2.202732",
+      "decimals": 18,
+      "timestamp": "2026-10-04T19:04:28Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "arbitrum",
+      "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+      "address": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+      "token_contract": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "amount_raw": "2198326",
+      "amount": "2.198326",
+      "decimals": 6,
+      "timestamp": "2026-10-04T19:04:43Z",
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://scan.layerzero-api.com/v1/messages/tx/0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+    "fetched_at": "2026-10-05T10:01:14.356058822Z",
+    "response_sha256": "a8d9a26da5063ccdca645d113f24b39a87a5a597e9467cf69ed91c7d4efcfd74",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": true,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "bsc",
+      "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "bsc",
+          "tx_hash": "0x8c1da6050735ece7dc3d0c88836889694442a2928c0f784805b814b83cf1e86d",
+          "dataset": "token_transfers",
+          "event_index": 65,
+          "timestamp": "2026-10-04T19:04:28Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0x85b0b03ed6fc421ca55aaa3a55723a70701908b8",
+          "to_address": "0x962bd449e630b0d928f308ce63f1a21f02576057",
+          "token_contract": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "token": "",
+          "decimals": 18,
+          "amount_raw": "2202732000000000000",
+          "amount": "2.202732",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    },
+    {
+      "leg_role": "destination",
+      "chain": "arbitrum",
+      "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+      "status": "verified",
+      "amounts_matched": true,
+      "reason": "successful chain events match the reported asset, raw amount and available address",
+      "observed_movements": [
+        {
+          "chain": "arbitrum",
+          "tx_hash": "0xf6031eb4730d7f7804bfdede5547e600ea4516b5692ef90d085db32d28917ea9",
+          "dataset": "token_transfers",
+          "event_index": 30,
+          "timestamp": "2026-10-04T19:04:43Z",
+          "timestamp_source": "chain_rpc",
+          "from_address": "0xe8cdf27acd73a434d661c84887215f7598e7d0d3",
+          "to_address": "0xa482bdf30341a08b399371bdc1269e10bb4fa06d",
+          "token_contract": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+          "token": "",
+          "decimals": 6,
+          "amount_raw": "2198326",
+          "amount": "2.198326",
+          "status": "success"
+        }
+      ],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": true,
+  "message_only": false
+}

@@ -1,0 +1,3 @@
+export declare const EVM_CHAIN_VALUES: readonly ["bsc", "ethereum", "eth", "polygon", "arbitrum", "optimism", "base", "avalanche", "fantom", "flare", "gnosis", "linea", "scroll", "somnia_mainnet", "story_mainnet", "taiko", "telos", "xlayer"];
+export declare const CHAIN_VALUES: readonly ["bsc", "ethereum", "eth", "polygon", "arbitrum", "optimism", "base", "avalanche", "fantom", "flare", "gnosis", "linea", "scroll", "somnia_mainnet", "story_mainnet", "taiko", "telos", "xlayer", "tron", "solana"];
+export declare const DATASET_VALUES: readonly ["transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "balances"];

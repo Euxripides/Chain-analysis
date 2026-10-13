@@ -47,13 +47,13 @@ export const chainSightTheme: ThemeConfig = {
     colorBgSpotlight: palette.textPrimary,
     colorBgTextHover: palette.primarySoft,
     colorBgTextActive: softColors.primary,
-    colorBgMask: "rgba(16, 26, 43, 0.38)",
+    colorBgMask: "rgba(16, 33, 61, 0.34)",
 
     /* --- 描边 --- */
     colorBorder: palette.border,
     colorBorderSecondary: palette.borderSubtle,
     colorSplit: palette.borderSubtle,
-    controlOutline: "rgba(37, 99, 235, 0.20)",
+    controlOutline: "rgba(52, 120, 246, 0.18)",
 
     /* --- 圆角（§4.3） --- */
     borderRadius: radius.control,
@@ -62,7 +62,7 @@ export const chainSightTheme: ThemeConfig = {
     borderRadiusXS: 6,
 
     /* --- 字体（§5.1 / §5.2） --- */
-    fontFamily: '"IBM Plex Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
     fontFamilyCode: '"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
     fontSize: 14,
     fontSizeSM: 12,
@@ -98,7 +98,7 @@ export const chainSightTheme: ThemeConfig = {
       controlHeightSM: 32,
       paddingInline: 16,
       fontWeight: 550,
-      primaryShadow: "0 1px 2px rgba(16, 26, 43, .10)",
+      primaryShadow: "0 1px 2px rgba(45, 80, 130, .10)",
       defaultShadow: "none",
       dangerShadow: "none",
       /* 动画所有权归 CsButton（Motion press），关闭 Ant 自带的 Wave 涟漪动画（§9.6）。 */
@@ -113,15 +113,15 @@ export const chainSightTheme: ThemeConfig = {
       paddingInline: 12,
       activeBorderColor: palette.primary,
       hoverBorderColor: palette.borderStrong,
-      activeShadow: "0 0 0 3px rgba(37, 99, 235, .20)",
-      errorActiveShadow: "0 0 0 3px rgba(183, 53, 53, .18)",
+      activeShadow: "0 0 0 3px rgba(52, 120, 246, .18)",
+      errorActiveShadow: "0 0 0 3px rgba(216, 74, 74, .16)",
       colorTextPlaceholder: palette.textMuted,
     },
     InputNumber: {
       controlHeight: 40,
       activeBorderColor: palette.primary,
       hoverBorderColor: palette.borderStrong,
-      activeShadow: "0 0 0 3px rgba(37, 99, 235, .20)",
+      activeShadow: "0 0 0 3px rgba(52, 120, 246, .18)",
     },
     Select: {
       controlHeight: 40,
@@ -140,7 +140,7 @@ export const chainSightTheme: ThemeConfig = {
       cellActiveWithRangeBg: palette.primarySoft,
     },
     Table: {
-      headerBg: palette.surfaceBlue,
+      headerBg: palette.canvasStrong,
       headerColor: palette.textSecondary,
       headerSplitColor: palette.border,
       rowHoverBg: palette.surfaceBlue,
@@ -203,7 +203,7 @@ export const chainSightTheme: ThemeConfig = {
     Tag: {
       defaultBg: palette.surfaceBlue,
       defaultColor: palette.textSecondary,
-      borderRadiusSM: 999,
+      borderRadiusSM: 4,
     },
     Segmented: {
       itemSelectedBg: palette.surface,
@@ -226,8 +226,7 @@ export const chainSightTheme: ThemeConfig = {
     },
     Layout: {
       bodyBg: palette.canvas,
-      /* 顶栏改成不透明实体面：玻璃拟态已整体退役（2026-09-20）。 */
-      headerBg: palette.surface,
+      headerBg: palette.surfaceGlass,
       siderBg: palette.railSurface,
     },
   },

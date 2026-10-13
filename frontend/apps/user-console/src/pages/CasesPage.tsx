@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@chain/api-client";
 import {
   Button,
   EmptyState,
@@ -52,6 +53,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function CasesPage() {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
@@ -81,11 +83,11 @@ export default function CasesPage() {
         title="案件中心"
         breadcrumb={[{ label: "工作台", to: "/home" }, { label: "案件中心" }]}
         meta={<MetaLine items={[{ label: "数据源", value: "postgres:cases" }]} />}
-        primaryAction={
+        primaryAction={can("case:create") ? (
           <Button variant="primary" size="sm" onClick={() => navigate("/cases/new")}>
             新建案件
           </Button>
-        }
+        ) : null}
         secondaryAction={
           <Button size="sm" onClick={() => void reload()} busy={loading} busyLabel="刷新中…">
             刷新

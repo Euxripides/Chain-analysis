@@ -27,6 +27,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
 	"github.com/blockchain-platform/blockchain-platform/internal/clickhouse"
 	"github.com/blockchain-platform/blockchain-platform/internal/config"
+	"github.com/blockchain-platform/blockchain-platform/internal/crosschain"
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/dbtx"
 	"github.com/blockchain-platform/blockchain-platform/internal/events"
@@ -92,6 +93,7 @@ type Deps struct {
 }
 
 type Server struct {
+	crossChain      *crosschain.Service
 	deps            Deps
 	router          chi.Router
 	hub             *SSEHub
@@ -103,6 +105,7 @@ type Server struct {
 	explorer        *explorer.Service
 	updates         *update.Service
 	detail          *method.DetailService
+	lookupProbes    explorerProbeCache
 	ankrMgmt        *ankrmgmt.Service
 	providerControl *providercontrol.Controller
 	capabilities    *capability.Registry
@@ -222,7 +225,9 @@ func (r chainAwareAddressTypeResolver) ResolveAddressTypes(ctx context.Context, 
 }
 
 func New(deps Deps) *Server {
+	bridgeEngine := crosschain.FromEnv()
 	s := &Server{deps: deps, hub: NewSSEHub(), query: query.NewWithLog(deps.CH, deps.Log), capabilities: deps.Capabilities, investigations: deps.Investigations, canvases: deps.Canvases}
+	s.crossChain = bridgeEngine
 	s.providerControl = deps.ProviderControl
 	s.legacyConsole = newLegacyConsoleAuth(deps.Cfg, deps.Log)
 	if deps.Store != nil && deps.Store.Pool != nil {
@@ -372,7 +377,7 @@ func (s *Server) recordDeepDecodeUsage(usage method.DeepDecodeUsage) {
 func (s *Server) buildRouter() {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(downloadRequestTimeout(60 * time.Second))
 	r.Use(s.corsMiddleware())
 	r.Use(s.requestMetaMiddleware)
 	r.Use(s.logMiddleware())

@@ -5,7 +5,10 @@ package download
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/spool"
@@ -24,14 +27,19 @@ func (sc *Scheduler) recoverSpool(ctx context.Context) error {
 	for _, sd := range shardDirs {
 		sh, err := sc.store.GetShard(ctx, sd.ShardID)
 		if err != nil {
-			// Shard 已不存在（job 删除等）→ 清理 spool 目录
-			_ = sc.spool.RemoveShard(sd.JobID, sd.Dataset, sd.ShardID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				_ = sc.spool.RemoveShard(sd.JobID, sd.Dataset, sd.ShardID)
+			} else {
+				sc.log.Error("spool recovery lookup failed; preserving raw pages", "shard_id", sd.ShardID, "err", err)
+			}
 			continue
 		}
 		switch sh.Status {
-		case model.ShardCompleted, model.ShardCancelled:
-			// 终态：spool 目录可安全清理
-			_ = sc.spool.RemoveShard(sd.JobID, sd.Dataset, sd.ShardID)
+		case model.ShardCompleted:
+			// Completed facts may still await durable raw archiving.
+			sc.maybeCleanupSpool(ctx, *sh)
+			continue
+		case model.ShardCancelled:
 			continue
 		case model.ShardFailedFinal:
 			continue
@@ -166,6 +174,9 @@ const incompleteReplayInterval = 5 * time.Second
 
 func spoolMetaPath(rawPath string) string {
 	// rawPath: .../page-000001.raw → .../page-000001.manifest.json
+	if len(rawPath) < 4 {
+		return rawPath + ".manifest.json"
+	}
 	return rawPath[:len(rawPath)-4] + ".manifest.json"
 }
 

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/chain"
+
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 )
 
@@ -64,25 +66,12 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// defaultChainPaths 平台 slug 与 Ankr 路径的差异集中在这里，避免业务层散落 switch（§247-27）。
-var defaultChainPaths = map[string]string{
-	"bsc":       "bsc",
-	"eth":       "eth",
-	"ethereum":  "eth",
-	"polygon":   "polygon",
-	"arbitrum":  "arbitrum",
-	"base":      "base",
-	"optimism":  "optimism",
-	"avalanche": "avalanche",
-}
-
 func (c *Client) chainPath(slug string) (string, bool) {
 	key := strings.ToLower(strings.TrimSpace(slug))
 	if path, ok := c.opts.ChainPaths[key]; ok && path != "" {
 		return path, true
 	}
-	path, ok := defaultChainPaths[key]
-	return path, ok
+	return chain.AnkrRPCPath(key)
 }
 
 // endpoint 运行时拼接（Secret 永不落入日志）。

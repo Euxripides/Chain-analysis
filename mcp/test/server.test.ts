@@ -1,4 +1,7 @@
 import { investigationTools } from "../src/investigation.js";
+import { nextInvestigationTools } from "../src/next-investigation.js";
+import { crossChainTools } from "../src/crosschain.js";
+import { toolDefinitions } from "../src/tools.js";
 import assert from "node:assert/strict";
 import { createServer as createHTTPServer, type Server } from "node:http";
 import { once } from "node:events";
@@ -82,7 +85,7 @@ test("health reports the actual registered tool count", async () => {
   const healthURL = new URL("/health", mcpUrl);
   const response = await fetch(healthURL);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ok", tools: 71 });
+  assert.deepEqual(await response.json(), { status: "ok", tools: toolDefinitions.length });
 });
 
 test("initialize, list tools and call a real REST-backed tool", async () => {
@@ -92,20 +95,23 @@ test("initialize, list tools and call a real REST-backed tool", async () => {
   });
   await client.connect(transport);
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 71);
+  assert.equal(listed.tools.length, toolDefinitions.length);
   assert.deepEqual(listed.tools.map((tool) => tool.name), [
-    "get_address_overview", "get_address_assets", "get_token_transfers", "get_transactions",
+    "get_address_overview", "get_address_assets", "get_token_transfers", "get_nft_transfers", "get_address_logs", "get_balance_snapshots", "get_transactions",
     "get_internal_transactions", "get_counterparties", "get_flow_summary", "get_top_flows",
     "get_first_funding", "get_transaction_detail", "get_solana_address_signatures", "get_solana_transaction", "get_bridge_source_transaction", "batch_get_address_overview",
     "batch_get_address_assets", "get_transaction_trace", "get_transaction_logs",
     "decode_transaction", "find_fund_paths", "build_address_network",
     "create_large_export", "get_export_status", "get_export_address_summary", "ensure_chain_data", "ensure_chain_data_batch", "get_ai_download_status", "retry_ai_download_failures",
+    ...crossChainTools.map(x => x.name),
     ...investigationTools.map(x => x.name),
-    "batch_get_token_transfers", "batch_get_transactions", "batch_get_internal_transactions", "batch_get_counterparties",
+    ...nextInvestigationTools.map(x => x.name),
+    "batch_reconcile_address_ledgers", "batch_get_token_allowances", "batch_get_control_history", "batch_explain_transactions", "batch_match_bridge_transfers",
+    "batch_get_token_transfers", "batch_get_nft_transfers", "batch_get_address_logs", "batch_get_balance_snapshots", "batch_get_transactions", "batch_get_internal_transactions", "batch_get_counterparties",
     "batch_get_flow_summary", "batch_get_top_flows", "batch_get_first_funding", "batch_get_solana_address_signatures",
-    "batch_get_export_address_summary", "batch_find_fund_paths", "batch_get_balances", "batch_get_contract_control", "batch_get_labels", "batch_get_receipts", "batch_get_transaction_details", "batch_call_tools",
+    "batch_get_export_address_summary", "batch_find_fund_paths", "batch_get_balances", "batch_get_contract_control", "batch_get_labels", "batch_get_receipts", "batch_get_transaction_details", "batch_decode_transactions", "batch_call_tools",
   ]);
-  assert.equal(listed.tools.filter((tool) => tool.annotations?.readOnlyHint === true).length, 66);
+  assert.equal(listed.tools.filter((tool) => tool.annotations?.readOnlyHint === true).length, toolDefinitions.filter(tool => tool.readOnly !== false).length);
   assert.equal(listed.tools.find((tool) => tool.name === "create_large_export")?.annotations?.readOnlyHint, false);
   const downloadChains = (listed.tools.find((tool) => tool.name === "ensure_chain_data")?.inputSchema as any).properties.chain.enum;
   const solanaQueryTools = [

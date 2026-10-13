@@ -15,6 +15,15 @@ import (
 )
 
 var ErrInvalidRange = errors.New("invalid object range")
+var ErrCorruptRawObject = errors.New("corrupt raw archive")
+
+func UnrecoverableObject(err error) bool {
+	if errors.Is(err, ErrCorruptRawObject) {
+		return true
+	}
+	var response minio.ErrorResponse
+	return errors.As(err, &response) && (response.Code == "NoSuchKey" || response.Code == "NoSuchObject")
+}
 
 type Store struct {
 	client *minio.Client
@@ -137,12 +146,12 @@ func (s *Store) GetGzip(ctx context.Context, key string) ([]byte, error) {
 	}
 	reader, err := gzip.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		return nil, fmt.Errorf("open gzip %s: %w", key, err)
+		return nil, fmt.Errorf("%w: open gzip %s: %v", ErrCorruptRawObject, key, err)
 	}
 	defer reader.Close()
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("read gzip %s: %w", key, err)
+		return nil, fmt.Errorf("%w: read gzip %s: %v", ErrCorruptRawObject, key, err)
 	}
 	return data, nil
 }

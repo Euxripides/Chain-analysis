@@ -2,6 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"github.com/blockchain-platform/blockchain-platform/internal/policy"
+	"github.com/jackc/pgx/v5"
 	"net/http"
 	"strings"
 	"time"
@@ -10,23 +14,27 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/model"
+	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
 )
 
 // ---- U-EXPORT-01 / S5-BE-03（§21.5 / §21.7）----
 
 type exportV2CreateRequest struct {
-	JobID               string   `json:"job_id"`
-	Chain               string   `json:"chain"`
-	Addresses           []string `json:"addresses"`
-	Datasets            []string `json:"datasets"`
-	Format              string   `json:"format"`
-	IncludeMeta         bool     `json:"include_meta"`
-	ForceZip            bool     `json:"force_zip"`
-	IncludeDecodedInput bool     `json:"include_decoded_input"`
-	// 用户指定的导出时间范围（闭区间）；两者都可省略，省略即全量。
-	StartTime *time.Time `json:"start_time"`
-	EndTime   *time.Time `json:"end_time"`
+	JobID               string                  `json:"job_id"`
+	Chain               string                  `json:"chain"`
+	Addresses           []string                `json:"addresses"`
+	Datasets            []string                `json:"datasets"`
+	Format              string                  `json:"format"`
+	IncludeMeta         bool                    `json:"include_meta"`
+	ForceZip            bool                    `json:"force_zip"`
+	IncludeDecodedInput bool                    `json:"include_decoded_input"`
+	StartTime           *time.Time              `json:"start_time,omitempty"`
+	EndTime             *time.Time              `json:"end_time,omitempty"`
+	RequireReady        bool                    `json:"require_ready"`
+	Content             string                  `json:"content,omitempty"`
+	Filters             *query.StatisticsFilter `json:"filters,omitempty"`
+	FileLayout          string                  `json:"file_layout,omitempty"`
 }
 
 func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +106,15 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	uniqueDatasets := make([]string, 0, len(datasets))
+	seenDatasets := map[string]bool{}
+	for _, d := range datasets {
+		if !seenDatasets[d] {
+			seenDatasets[d] = true
+			uniqueDatasets = append(uniqueDatasets, d)
+		}
+	}
+	datasets = uniqueDatasets
 	if len(addresses) > 100 {
 		validationError(w, r, "单次导出最多 100 个地址；更多地址请拆分任务", nil)
 		return
@@ -107,16 +124,71 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		validationError(w, r, boundsErr.Error(), []fieldError{{Field: "start_time", Code: "invalid", Message: boundsErr.Error()}})
 		return
 	}
+	if req.Content != "" && req.Content != "details" && req.Content != "statistics" && req.Content != "counterparties" {
+		validationError(w, r, "导出内容不合法", nil)
+		return
+	}
+	if req.FileLayout != "" && req.FileLayout != "dataset" {
+		validationError(w, r, "文件组织方式不合法", nil)
+		return
+	}
+	var filterSnapshot *query.StatisticsFilter
+	if req.Filters != nil || req.Content == "statistics" || req.Content == "counterparties" {
+		filter := query.StatisticsFilter{}
+		if req.Filters != nil {
+			filter = *req.Filters
+		}
+		filter.Chain, filter.Addresses, filter.Datasets = req.Chain, addresses, datasets
+		for _, value := range []*string{&filter.Counterparty, &filter.FromAddress, &filter.ToAddress} {
+			if *value == "" {
+				continue
+			}
+			values, err := dataset.NormalizeAndDedupeAddressesForChain(req.Chain, []string{*value})
+			if err != nil || len(values) != 1 {
+				validationError(w, r, "导出地址筛选不合法", nil)
+				return
+			}
+			*value = values[0]
+		}
+		if bounds.From != nil && (filter.FromTime == nil || filter.FromTime.Before(*bounds.From)) {
+			filter.FromTime = bounds.From
+		}
+		if bounds.To != nil && (filter.ToTime == nil || filter.ToTime.After(*bounds.To)) {
+			filter.ToTime = bounds.To
+		}
+		originalDatasets := filter.Datasets
+		if req.Content == "" || req.Content == "details" {
+			filter.Datasets = []string{"transactions"}
+		}
+		if err := filter.Normalize(); err != nil {
+			validationError(w, r, "导出筛选不合法", []fieldError{{Field: "filters", Code: "invalid", Message: err.Error()}})
+			return
+		}
+		filter.Datasets = originalDatasets
+		filterSnapshot = &filter
+	}
 	zipIt := req.ForceZip || len(addresses) > 3 || len(datasets) > 1
 	partial := job != nil && job.Status != model.JobCompleted
-	// 快照必须由 buildExportSnapshot 统一产出：预生成（handleExportPrefetch）用
-	// 同一份内容算规格哈希，任何字段/顺序差异都会让"预生成命中"永远失败——
-	// 而且不报错，只是用户每次都白等一遍完整生成。
 	snapshot := buildExportSnapshot(req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt,
 		req.IncludeDecodedInput, req.JobID, partial, statusOfJob(job), bounds)
-	// 预生成命中：同一份规格的产物已经算好了，直接提升成正式导出（实测 5 ms），
-	// 不再跑流水线。只在"单地址 + 无 job"时尝试——那正是预生成唯一支持的形态。
-	if job == nil && len(addresses) == 1 {
+	if req.FileLayout != "" || filterSnapshot != nil || (req.Content != "" && req.Content != "details") {
+		snapshotFields := map[string]any{}
+		if err := json.Unmarshal(snapshot, &snapshotFields); err != nil {
+			respondError(w, r, 500, "INTERNAL_ERROR", "保存导出筛选失败", nil)
+			return
+		}
+		if req.Content != "" && req.Content != "details" {
+			snapshotFields["content"] = req.Content
+		}
+		if filterSnapshot != nil {
+			snapshotFields["filters"] = filterSnapshot
+		}
+		if req.FileLayout != "" {
+			snapshotFields["file_layout"] = req.FileLayout
+		}
+		snapshot, _ = json.Marshal(snapshotFields)
+	}
+	if job == nil && len(addresses) == 1 && filterSnapshot == nil && req.FileLayout == "" {
 		if promoted, ok := s.tryPromotePrefetch(r.Context(), store.PrefetchSpecHash(snapshot),
 			p.OrganizationID, p.WorkspaceID, p.IdentityID, strings.Join(datasets, "+"), req.Format, zipIt, snapshot); ok {
 			respondOK(w, r, promoted)
@@ -128,7 +200,8 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		if err := s.deps.Store.Pool.QueryRow(r.Context(), `
 			SELECT id::text FROM exports
 			WHERE job_id=$1 AND status='COMPLETED' AND format=$2 AND zip=$3
-			  AND query_snapshot=$4::jsonb AND object_ref<>''
+			  AND (query_snapshot=$4::jsonb OR (query_snapshot-'file_layout'=$4::jsonb AND NOT ($4::jsonb ? 'file_layout'))) AND object_ref<>''
+			  AND (expires_at IS NULL OR expires_at > now())
 			  AND COALESCE(finished_at,updated_at) >= $5
 			  AND organization_id=$6 AND workspace_id=$7
 			ORDER BY updated_at DESC LIMIT 1`,
@@ -166,7 +239,11 @@ func (s *Server) handleExportV2Create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "创建导出失败", nil)
 		return
 	}
-	go s.runExportMulti(backgroundAuditCtx(r), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, bounds)
+	if req.FileLayout == "dataset" || filterSnapshot != nil {
+		go s.runDatasetExport(backgroundAuditCtx(r), exp, job, req, addresses, datasets, filterSnapshot, zipIt)
+	} else {
+		go s.runExportMulti(backgroundAuditCtx(r), exp, job, req.Chain, addresses, datasets, req.Format, req.IncludeMeta, zipIt, req.IncludeDecodedInput, bounds)
+	}
 	s.writeAuditNow(r, "export.create", "export", "export", exp.ID, map[string]any{
 		"job_id": req.JobID, "format": req.Format, "zip": zipIt, "addresses": len(addresses), "datasets": datasets,
 	})
@@ -206,6 +283,16 @@ func (s *Server) handleExportsV2List(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := parseLimit(r, 20, 100)
 	status := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("status")))
+	formatFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if formatFilter != "" && formatFilter != "csv" && formatFilter != "xlsx" && formatFilter != "jsonl" && formatFilter != "parquet" {
+		validationError(w, r, "文件格式不合法", nil)
+		return
+	}
+	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	if len(search) > 160 {
+		validationError(w, r, "搜索内容过长", nil)
+		return
+	}
 	var cursor timeIDCursor
 	if err := decodeCursor(r.URL.Query().Get("cursor"), &cursor); err != nil {
 		validationError(w, r, "cursor 不合法", nil)
@@ -230,8 +317,13 @@ func (s *Server) handleExportsV2List(w http.ResponseWriter, r *http.Request) {
 		WHERE organization_id=$1 AND workspace_id=$2
 		  AND ($3::text IS NULL OR status=$3)
 		  AND ($4::timestamptz IS NULL OR (created_at,id) < ($4::timestamptz,$5::uuid))
+		  AND ($7::text IS NULL OR format=$7)
+		  AND ($8::text = '' OR strpos(lower(concat(id::text,' ',job_id::text,' ',dataset)), $8)>0
+		    OR EXISTS (SELECT 1 FROM download_jobs j WHERE j.id=exports.job_id
+		      AND j.organization_id=exports.organization_id AND j.workspace_id=exports.workspace_id
+		      AND strpos(lower(j.job_no), $8)>0))
 		ORDER BY created_at DESC, id DESC LIMIT $6`,
-		p.OrganizationID, p.WorkspaceID, nullableString(status), cursorTS, cursor.ID, limit+1)
+		p.OrganizationID, p.WorkspaceID, nullableString(status), cursorTS, cursor.ID, limit+1, nullableString(formatFilter), search)
 	if err != nil {
 		respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取导出列表失败", nil)
 		return
@@ -247,21 +339,36 @@ func (s *Server) handleExportsV2List(w http.ResponseWriter, r *http.Request) {
 		var createdAt, updatedAt time.Time
 		var finishedAt, expiresAt *time.Time
 		if err := rows.Scan(&id, &jobID, &datasetName, &format, &zip, &statusValue, &rowCount, &sha, &errMsg, &objectRef, &createdAt, &updatedAt, &finishedAt, &expiresAt); err != nil {
-			continue
+			rows.Close()
+			respondError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "读取导出列表失败", nil)
+			return
+		}
+		var byteSize *int64
+		downloadAvailable := statusValue == "COMPLETED" && objectRef != "" &&
+			(expiresAt == nil || expiresAt.After(time.Now())) && s.deps.Raw != nil
+		if downloadAvailable {
+			size, _, statErr := s.statExportObject(r.Context(), objectRef)
+			if statErr == nil {
+				byteSize = &size
+			}
+			downloadAvailable = statErr == nil
 		}
 		lastTS, lastID = createdAt, id
 		items = append(items, map[string]any{
 			"id": id, "job_id": jobID, "dataset": datasetName, "format": format, "zip": zip,
-			"status": statusValue, "rows": rowCount, "sha256": sha, "error_safe": safeJobError(errMsg),
+			"status": statusValue, "rows": rowCount, "bytes": byteSize, "sha256": sha, "error_safe": safeJobError(errMsg),
 			"object_ref": objectRef, "created_at": createdAt, "updated_at": updatedAt,
 			"finished_at": finishedAt, "expires_at": expiresAt,
-			"download_available": statusValue == "COMPLETED" && (expiresAt == nil || expiresAt.After(time.Now())),
+			"download_available": downloadAvailable,
 		})
 	}
 	rows.Close()
 	next := ""
 	if len(items) > limit {
 		items = items[:limit]
+		last := items[len(items)-1]
+		lastTS = last["created_at"].(time.Time)
+		lastID = last["id"].(string)
 		next = encodeCursor(timeIDCursor{TS: lastTS.UTC().Format(time.RFC3339Nano), ID: lastID})
 	}
 	respondList(w, r, map[string]any{"items": items,
@@ -274,6 +381,15 @@ func (s *Server) handleExportV2Detail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "导出不存在或无权访问", nil)
 		return
+	}
+	files, err := s.exportFiles(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, r, 503, "DATA_UNAVAILABLE", "读取文件清单失败", nil)
+		return
+	}
+	item["files"] = s.safeDatasetManifest(r.Context(), files, item["download_available"] == true)
+	if size, _, e := s.statExportObject(r.Context(), objectString(item["object_ref"])); e == nil {
+		item["bytes"] = size
 	}
 	respondOK(w, r, item)
 }
@@ -321,24 +437,41 @@ func (s *Server) handleExportV2Ticket(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleExportV2Download(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
 	ticket := chi.URLParam(r, "ticket")
-	var exportID, orgID, wsID string
-	err := s.deps.Store.Pool.QueryRow(r.Context(), `
-		UPDATE export_tickets SET used_at=now(), used_by=$2
-		WHERE id=$1 AND used_at IS NULL AND expires_at > now()
-		RETURNING export_id::text, organization_id::text, workspace_id::text`,
-		ticket, p.IdentityID).Scan(&exportID, &orgID, &wsID)
+	exportID, err := s.redeemExportTicket(r.Context(), ticket, p, r.Method, r.Header.Get("Range"))
 	if err != nil {
 		s.writeAuditNow(r, "export.download_failed", "export", "export_ticket", ticket, map[string]any{"reason": "expired_or_used"})
 		respondError(w, r, http.StatusGone, "RESOURCE_TICKET_EXPIRED", "下载票据已过期或已使用", nil)
 		return
 	}
-	if orgID != p.OrganizationID || wsID != p.WorkspaceID {
-		respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "导出不存在或无权访问", nil)
-		return
-	}
 	routeCtx := chi.NewRouteContext()
 	routeCtx.URLParams.Add("id", exportID)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx))
+	var fileDataset string
+	if err := s.deps.Store.Pool.QueryRow(r.Context(), "SELECT file_dataset FROM export_tickets WHERE id=$1", ticket).Scan(&fileDataset); err != nil {
+		respondError(w, r, 500, "INTERNAL_ERROR", "读取下载票据失败", nil)
+		return
+	}
+	if fileDataset != "" {
+		files, err := s.exportFiles(r.Context(), exportID)
+		if err != nil {
+			respondError(w, r, 503, "DATA_UNAVAILABLE", "读取文件清单失败", nil)
+			return
+		}
+		for _, file := range files {
+			if file.Dataset == fileDataset {
+				exp, err := s.deps.Store.GetExport(r.Context(), exportID)
+				if err != nil || exp == nil {
+					respondError(w, r, 404, "RESOURCE_NOT_FOUND", "导出不存在", nil)
+					return
+				}
+				exp.ObjectRef, exp.SHA256, exp.Rows, exp.Zip = file.ObjectRef, file.SHA256, file.Rows, false
+				s.serveExportObject(w, r, exp, map[string]any{"ticket": true, "dataset": file.Dataset, "filename": file.Name})
+				return
+			}
+		}
+		respondError(w, r, 404, "RESOURCE_NOT_FOUND", "数据集文件不存在", nil)
+		return
+	}
 	// DATA-008：对象缺失时不得宣称下载成功，留下可操作的审计线索。
 	// F-R10-BUCKET：对象可能在旧桶（未迁移/已回滚）或新桶，DATA-008 检查必须双读。
 	if s.deps.Raw != nil {
@@ -357,4 +490,37 @@ func (s *Server) handleExportV2Download(w http.ResponseWriter, r *http.Request) 
 	// 同字段口径：object_bucket=真实 MinIO 桶名、object_bucket_role=逻辑角色、附 ticket=true），
 	// 这里不再单独写第二条 —— 避免同一动作出现两套不可统一查询的记录。
 	s.handleDownloadExportTicket(w, r)
+}
+
+func (s *Server) redeemExportTicket(ctx context.Context, ticket string, p policy.Principal, method, byteRange string) (string, error) {
+	var exportID string
+	var err error
+	if method == http.MethodHead {
+		err = s.deps.Store.Pool.QueryRow(ctx, `
+			SELECT e.id::text FROM export_tickets t JOIN exports e ON e.id=t.export_id
+			WHERE t.id=$1 AND t.user_id=$2 AND t.organization_id=$3 AND t.workspace_id=$4
+			  AND t.expires_at>now() AND (t.used_at IS NULL OR t.used_by=$2)
+			  AND e.status='COMPLETED' AND (e.expires_at IS NULL OR e.expires_at>now())`,
+			ticket, p.IdentityID, p.OrganizationID, p.WorkspaceID).Scan(&exportID)
+	} else {
+		err = s.deps.Store.Pool.QueryRow(ctx, `
+			UPDATE export_tickets AS t SET used_at=now(), used_by=$2,
+			  expires_at=LEAST(now()+interval '24 hours',COALESCE(e.expires_at,now()+interval '24 hours'))
+			FROM exports AS e WHERE t.id=$1 AND e.id=t.export_id
+			  AND t.user_id=$2 AND t.organization_id=$3 AND t.workspace_id=$4
+			  AND t.used_at IS NULL AND t.expires_at>now()
+			  AND e.status='COMPLETED' AND (e.expires_at IS NULL OR e.expires_at>now())
+			RETURNING e.id::text`,
+			ticket, p.IdentityID, p.OrganizationID, p.WorkspaceID).Scan(&exportID)
+		if errors.Is(err, pgx.ErrNoRows) && byteRange != "" {
+			err = s.deps.Store.Pool.QueryRow(ctx, `
+				SELECT e.id::text FROM export_tickets t JOIN exports e ON e.id=t.export_id
+				WHERE t.id=$1 AND t.user_id=$2 AND t.used_by=$2
+				  AND t.organization_id=$3 AND t.workspace_id=$4
+				  AND t.used_at IS NOT NULL AND t.expires_at>now()
+				  AND e.status='COMPLETED' AND (e.expires_at IS NULL OR e.expires_at>now())`,
+				ticket, p.IdentityID, p.OrganizationID, p.WorkspaceID).Scan(&exportID)
+		}
+	}
+	return exportID, err
 }

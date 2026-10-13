@@ -1,11 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ResourceLink } from "@modelcontextprotocol/sdk/types.js";
+import type { ResourceLink, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { crossChainTools, validateCrossChainTool } from "./crosschain.js";
 import { RESTClient, type RESTEnvelope } from "./rest-client.js";
 import { investigationTools, investigationFileResources, registerInvestigationResources } from "./investigation.js";
-import { createBatchTools, executeBatch, type ToolDefinition } from "./batch.js";
+import { nextInvestigationTools, validateNextTool } from "./next-investigation.js";
+import { createBatchTools, executeBatch, operationSchema, type ToolDefinition, type BatchItem } from "./batch.js";
+import { CHAIN_VALUES, DATASET_VALUES } from "./chains.js";
+export { CHAIN_VALUES } from "./chains.js";
 
-export const CHAIN_VALUES = ["bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"] as const;
 export const DOWNLOAD_CHAIN_VALUES = CHAIN_VALUES;
 const chain = z.enum(CHAIN_VALUES).describe("Blockchain network, including Solana. Use a lowercase chain value; preserve the case of Solana addresses and signatures.");
 const downloadChain = z.enum(DOWNLOAD_CHAIN_VALUES).describe("Download-capable blockchain network, including Solana through dRPC JSON-RPC history.");
@@ -36,7 +39,7 @@ const pathBase = { chain, source: address, max_depth: z.number().int().min(1).ma
 const pathInputSchema = { ...pathBase, token: z.string().min(1).optional().describe("Token symbol such as USDT; optional when token_contract is provided."), token_contract: z.string().min(1).optional().describe("Complete token contract address; optional when token is provided.") };
 const networkBase = { chain, seed_addresses: z.array(address).min(1).max(200), max_depth: z.number().int().min(1).max(5).default(3), min_total_amount: z.string().optional(), max_nodes: z.number().int().min(1).max(500).default(200), ...timeFilters };
 const networkInputSchema = { ...networkBase, token: z.string().min(1).optional().describe("Token symbol such as USDT; optional when token_contract is provided."), token_contract: z.string().min(1).optional().describe("Complete token contract address; optional when token is provided.") };
-const exportInputSchema = { chain, address: address.optional().describe("One address, or use addresses for a combined export; supply exactly one form."), addresses: z.array(address).min(1).max(100).optional().describe("1-100 addresses in one combined export; duplicates are normalized and removed by the server."), data_types: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs"])).min(1), ...tokenFilters, ...timeFilters, format: z.enum(["parquet", "csv"]), compression: z.enum(["zstd", "zip"]) };
+const exportInputSchema = { chain, address: address.optional().describe("One address, or use addresses for a combined export; supply exactly one form."), addresses: z.array(address).min(1).max(100).optional().describe("1-100 addresses in one combined export; duplicates are normalized and removed by the server."), data_types: z.array(z.enum(DATASET_VALUES)).min(1), ...tokenFilters, ...timeFilters, format: z.enum(["parquet", "csv"]), compression: z.enum(["zstd", "zip"]) };
 const ensureRange = z.object({
   type: z.enum(["full", "block", "time"]),
   from_block: z.number().int().min(0).optional(), to_block: z.number().int().min(0).optional(),
@@ -45,7 +48,7 @@ const ensureRange = z.object({
 const ensureRequest = z.object({
   chain: downloadChain,
   addresses: z.array(downloadAddress).min(1).max(200),
-  datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs", "balances"])).min(1),
+  datasets: z.array(z.enum(DATASET_VALUES)).min(1),
   range: ensureRange,
   performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
 });
@@ -76,6 +79,27 @@ export const toolDefinitions: ToolDefinition[] = [
     path: "/address/token-transfers",
     inputSchema: { ...listFilters, ...tokenFilters, min_amount: z.string().optional(), max_amount: z.string().optional(), status: z.enum(["success", "failed"]).optional() },
     summarize: (r) => `Token transfers retrieved (${String(r.meta?.page_size ?? "bounded page")}).`,
+  },
+  {
+    name: "get_nft_transfers", title: "List NFT transfers",
+    description: "Read indexed NFT transfers with complete hash, log_index, contract_address, token_id, token_standard and exact amount_raw. Each page retains its coverage; quantities are not native coin values.",
+    path: "/address/nft-transfers",
+    inputSchema: { ...listFilters, ...tokenFilters, token_id: z.string().optional(), from_address: address.optional(), to_address: address.optional() },
+    summarize: () => "NFT transfers retrieved as a bounded page.",
+  },
+  {
+    name: "get_address_logs", title: "List address logs",
+    description: "Read locally indexed logs emitted by the complete contract address. Preserves raw topics/data and event identity; does not trigger a provider request.",
+    path: "/address/logs",
+    inputSchema: { chain, address, ...timeFilters, page, page_size: pageSize, sort },
+    summarize: () => "Indexed contract logs retrieved as a bounded page.",
+  },
+  {
+    name: "get_balance_snapshots", title: "List stored balance snapshots",
+    description: "Read the latest stored observation per asset, with exact raw balance, decimals, source, as_of_time/block and is_current_balance=false. Time filters select latest observations by their timestamp; they do not reconstruct historical balances. Use get_native_balance/get_token_balance for pinned RPC state.",
+    path: "/address/balance-snapshots",
+    inputSchema: { chain, address, ...tokenFilters, ...timeFilters, page, page_size: pageSize, sort },
+    summarize: () => "Stored balance snapshots retrieved; retain their observation time and source.",
   },
   {
     name: "get_transactions",
@@ -213,8 +237,8 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "find_fund_paths",
-    title: "Find bounded fund paths",
-    description: "Use for multi-hop fund destinations. Provide either token or token_contract so amounts from different assets are never combined. Returns a context-safe graph capped at depth 5 and 500 nodes; use export for larger evidence sets.",
+    title: "Address downstream activity graph",
+    description: "Address downstream activity graph: complete hops for each address path, with historical transfer aggregates. This is not attribution of a source batch. Use trace_fund_batch/trace_funds for FIFO/proportional attribution. Token Contract defines asset identity; known symbols resolve through the curated registry. Capped at depth 5 and 500 nodes.",
     path: "/analysis/path", method: "POST",
     inputSchema: pathInputSchema,
     summarize: () => "Bounded multi-hop fund paths retrieved.",
@@ -271,7 +295,7 @@ export const toolDefinitions: ToolDefinition[] = [
     inputSchema: {
       chain: downloadChain,
       addresses: z.array(downloadAddress).min(1).max(200),
-      datasets: z.array(z.enum(["transactions", "token_transfers", "internal_transactions", "logs", "balances"])).min(1),
+      datasets: z.array(z.enum(DATASET_VALUES)).min(1),
       range: ensureRange,
       performance_mode: z.enum(["safe", "fast", "turbo"]).default("fast"),
     },
@@ -306,7 +330,9 @@ export const toolDefinitions: ToolDefinition[] = [
   },
 ];
 
+toolDefinitions.push(...crossChainTools);
 toolDefinitions.push(...investigationTools);
+toolDefinitions.push(...nextInvestigationTools);
 toolDefinitions.push(...createBatchTools(toolDefinitions.slice()));
 
 // Return an MCP file resource, rather than hiding the download URL in JSON.
@@ -332,7 +358,9 @@ export function exportFileResources(result: RESTEnvelope): ResourceLink[] {
 }
 
 export function validateToolInput(name: string, input: Record<string, unknown>): void {
-  if (["get_token_balance", "trace_funds", "aggregate_transfers"].includes(name) && !input.token && !input.token_contract) throw new Error("token or token_contract is required");
+	validateCrossChainTool(name, input);
+  validateNextTool(name, input);
+  if (["get_token_balance", "trace_funds", "trace_fund_batch", "aggregate_transfers"].includes(name) && !input.token && !input.token_contract) throw new Error("token or token_contract is required");
   if (input.timestamp && (input.block !== undefined || input.blockTag !== undefined)) throw new Error("timestamp and block/blockTag are mutually exclusive");
   if (input.block !== undefined && input.blockTag !== undefined) throw new Error("use block or blockTag");
   if(name==="read_contract") {
@@ -360,47 +388,63 @@ export function registerTools(server: McpServer, client: RESTClient): void {
       {
         title: definition.title,
         description: definition.description,
-        inputSchema: definition.inputSchema as any,
+        inputSchema: (definition.name === "query_cross_chain_transfer" || definition.name === "find_cross_chain_candidates" ? operationSchema(definition) : definition.inputSchema) as any,
         annotations: { readOnlyHint: definition.readOnly !== false, destructiveHint: false, openWorldHint: false },
       },
-      async (args: unknown) => {
+      async (args: unknown, extra: { signal: AbortSignal }) => {
         try {
           const input = args as Record<string, unknown>;
           if (definition.batch) {
-            const { envelope, items } = await executeBatch(client, definition.batch, input, validateToolInput);
-            const files = items.flatMap(item => item.success && item.response ? (item.tool === "get_export_status" ? exportFileResources(item.response) : investigationFileResources(item.response)) : []);
+            const byIndex = new Map<number, CallToolResult["content"]>();
+            const bytesByIndex = new Map<number, number>();
+            let resourceBytes = 0;
+            const processResult = (item: BatchItem) => {
+              const response = item.response!;
+              const data = response.data as Record<string, unknown> | null;
+              const embedded = item.tool === "get_export_file" || item.tool === "download_export";
+              if (embedded && (typeof data?.content_base64 !== "string" || typeof data.resource_uri !== "string")) throw new Error("EXPORT_RESOURCE_INVALID: Export chunk metadata is missing");
+              const bytes = embedded ? Buffer.byteLength(data!.content_base64 as string, "base64") : 0;
+              if (resourceBytes + bytes > (8 << 20)) throw new Error("BATCH_RESOURCE_LIMIT_EXCEEDED: Embedded export chunks exceed 8 MiB; retry this input separately or with a smaller chunk_size");
+              let files: CallToolResult["content"];
+              try { files = item.tool === "get_export_status" ? exportFileResources(response) : embedded ? investigationFileResources(response) : []; }
+              catch (error) {
+                if (error instanceof Error && /^[A-Z][A-Z0-9_]+:/.test(error.message)) throw error;
+                throw new Error(`EXPORT_RESOURCE_INVALID: ${error instanceof Error ? error.message : "Invalid export resource"}`);
+              }
+              resourceBytes += bytes;
+              byIndex.set(item.index, files);
+              bytesByIndex.set(item.index, bytes);
+            };
+            const discardResult = (item: BatchItem) => {
+              resourceBytes -= bytesByIndex.get(item.index) ?? 0;
+              bytesByIndex.delete(item.index);
+              byIndex.delete(item.index);
+            };
+            const { envelope, items } = await executeBatch(client, definition.batch, input, validateToolInput, { signal: extra.signal, processResult, discardResult });
+            const files = items.flatMap(item => item.success ? byIndex.get(item.index) ?? [] : []);
+            envelope.meta.embedded_resource_bytes = resourceBytes;
+            envelope.meta.embedded_resource_limit_bytes = 8 << 20;
             const counts = envelope.data as { succeeded: number; failed: number };
             return { structuredContent: envelope, content: [{ type: "text" as const, text: `${counts.succeeded} operation(s) succeeded; ${counts.failed} failed. Every result retains its own precision, evidence and pagination.` }, ...files] };
           }
           validateToolInput(definition.name, input);
           if (definition.name === "ensure_chain_data_batch") {
             const requests = input.requests as Array<Record<string, unknown>>;
-            const limit = Math.min(Number(input.max_concurrent) || 4, requests.length);
-            const results: Array<Record<string, unknown>> = new Array(requests.length);
-            let cursor = 0;
-            await Promise.all(Array.from({ length: limit }, async () => {
-              for (;;) {
-                const index = cursor++;
-                if (index >= requests.length) return;
-                try {
-                  const response = await client.post(definition.path, requests[index]);
-                  results[index] = { index, request: requests[index], success: true, response };
-                } catch (error) {
-                  results[index] = { index, request: requests[index], success: false, error: error instanceof Error ? error.message : "Unknown REST error" };
-                }
-              }
-            }));
+            const operation = toolDefinitions.find(item => item.name === "ensure_chain_data")!;
+            const { envelope, items } = await executeBatch(client, { kind: "calls", operations: new Map([[operation.name, operation]]) },
+              { requests: requests.map(arguments_ => ({ tool: operation.name, arguments: arguments_ })), max_concurrent: input.max_concurrent }, validateToolInput, { signal: extra.signal });
+            const results = items.map(({ index, input: request, success, started, response, error }) => ({ index, request, success, started, ...(response ? { response } : {}), ...(error ? { error } : {}) }));
             const started = results.filter((item) => item.success).length;
             const failed = results.length - started;
             const result: RESTEnvelope = {
               success: failed === 0,
               data: { results, started, failed },
-              meta: { requested: results.length, max_concurrent: limit },
+              meta: envelope.meta,
               error: failed ? { code: "BATCH_PARTIAL_FAILURE", message: `${failed} of ${results.length} requests failed` } : null,
             };
             return { structuredContent: result, content: [{ type: "text" as const, text: `${started} download request(s) started; ${failed} failed during submission.` }] };
           }
-          const result = definition.method === "POST" ? await client.post(definition.path, input) : await client.get(definition.path, input);
+          const result = definition.method === "POST" ? await client.post(definition.path, input, { signal: extra.signal }) : await client.get(definition.path, input, { signal: extra.signal });
           const files = definition.name === "get_export_status" ? exportFileResources(result) : investigationFileResources(result);
           return {
             structuredContent: result,

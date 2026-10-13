@@ -266,6 +266,7 @@ export function LegacyDialogRenderer({ request, onResolve }: DialogRendererProps
           {actions.map((action) => (
             <button
               key={action.label}
+              data-testid={action.testId}
               type="button"
               className={`btn${action.variant === "primary" ? " btn--primary" : action.variant === "danger" ? " btn--danger" : ""}`}
               title={action.disabled ? action.title : undefined}

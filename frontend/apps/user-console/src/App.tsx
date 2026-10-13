@@ -3,7 +3,6 @@ import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@chain/api-client";
 import { EmptyState, ErrorState } from "@chain/ui";
 import { CsSkeleton } from "@chain/user-ui";
-import { UserShell } from "./app/UserShell";
 import { ROUTE_PERMISSIONS } from "./app/navigation";
 import { CaseTabRoute } from "./app/CaseTabRoute";
 import { routeMetaFor } from "./app/route-meta";
@@ -20,6 +19,7 @@ import { RoutedContent } from "./app/route-transitions";
  */
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
+const UserShell = lazy(() => import("./app/UserShell").then(module => ({ default: module.UserShell })));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CasesPage = lazy(() => import("./pages/CasesPage"));
 const CaseNewPage = lazy(() => import("./pages/CaseNewPage"));
@@ -37,6 +37,8 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const ExplorerPage = lazy(() => import("./pages/ExplorerPage"));
 const AddressDetailPage = lazy(() => import("./pages/AddressDetailPage"));
 const TransactionDetailPage = lazy(() => import("./pages/TransactionDetailPage"));
+const BlockDetailPage = lazy(() => import("./pages/ExplorerObjectPages").then(module => ({ default: module.BlockDetailPage })));
+const TokenDetailPage = lazy(() => import("./pages/ExplorerObjectPages").then(module => ({ default: module.TokenDetailPage })));
 const DownloadNewPage = lazy(() => import("./pages/DownloadNewPage"));
 const JobsPage = lazy(() => import("./pages/JobsPage"));
 const JobDetailPage = lazy(() => import("./pages/JobDetailPage"));
@@ -109,7 +111,7 @@ function Shell() {
   const meta = routeMetaFor(location.pathname);
 
   return (
-    <UserShell>
+    <Suspense fallback={<CsSkeleton shape={meta.skeleton} />}><UserShell>
       <Suspense fallback={<CsSkeleton shape={meta.skeleton} />}>
         <RoutedContent
           pathname={location.pathname}
@@ -144,6 +146,8 @@ function Shell() {
           <Route path="/explorer" element={<Guard permission="explorer:read"><ExplorerPage /></Guard>} />
           <Route path="/addresses/:chain/:address" element={<Guard permission="explorer:read"><AddressDetailPage /></Guard>} />
           <Route path="/transactions/:chain/:hash" element={<Guard permission="explorer:read"><TransactionDetailPage /></Guard>} />
+          <Route path="/blocks/:chain/:block" element={<Guard permission="explorer:read"><BlockDetailPage /></Guard>} />
+          <Route path="/tokens/:chain/:contract" element={<Guard permission="explorer:read"><TokenDetailPage /></Guard>} />
           <Route path="/downloads" element={<Navigate to="/downloads/new" replace />} />
           <Route path="/downloads/new" element={<Guard permission="download:create"><DownloadNewPage /></Guard>} />
           <Route path="/jobs" element={<Guard permission="job:list:self"><JobsPage /></Guard>} />
@@ -153,7 +157,7 @@ function Shell() {
         </Routes>
         </RoutedContent>
       </Suspense>
-    </UserShell>
+    </UserShell></Suspense>
   );
 }
 

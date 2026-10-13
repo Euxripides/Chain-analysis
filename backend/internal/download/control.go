@@ -279,7 +279,9 @@ func (sc *Scheduler) finishSkippedJobs(ctx context.Context) {
 		_ = sc.store.Pool.QueryRow(ctx,
 			"SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('COMPLETED','SKIPPED')) FROM download_shards WHERE job_id=$1", j.ID).
 			Scan(&shards, &done)
-		_ = shards
+		if shards > 0 && done != shards {
+			continue
+		} // Stale parent statuses must not hide unfinished retry shards.
 		subjects, err := sc.store.SubjectsByJob(ctx, j.ID)
 		if err != nil {
 			continue

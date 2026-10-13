@@ -20,6 +20,31 @@ func testPolicy() *PagePolicy {
 	return NewPagePolicy(cfg)
 }
 
+func TestSlowLargeTruncationDowngradesWithoutChangingSmallFailures(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		bytes    int64
+		duration time.Duration
+		want     int
+	}{
+		{"large_slow", 20 << 20, 120 * time.Second, 2000},
+		{"small_slow", 1024, 120 * time.Second, 10000},
+		{"large_fast", 20 << 20, time.Second, 10000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			p := testPolicy()
+			key := p.Key("bsc", "transactions", "address", "0x1")
+			p.Current(key, "transactions")
+			pe := provider.NewBodyTruncated("incomplete", test.bytes, nil)
+			pe.Duration = test.duration
+			d := p.OnError(key, "transactions", pe, 10000)
+			if d.NextPageSize != test.want || p.Current(key, "transactions") != test.want {
+				t.Fatalf("decision %d, current %d, want %d", d.NextPageSize, p.Current(key, "transactions"), test.want)
+			}
+		})
+	}
+}
+
 // §42：初始 10000；连续 TooLarge → 10000→5000→2000→1000，最小不再降
 func TestDowngradeLadder(t *testing.T) {
 	p := testPolicy()

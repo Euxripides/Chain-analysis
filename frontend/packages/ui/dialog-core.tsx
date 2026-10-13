@@ -46,12 +46,6 @@ export interface DialogAction {
    */
   disabled?: boolean;
   title?: string;
-  /**
-   * 给自动化测试一个稳定锚点（可选，纯属性透传，不改变任何语义）。
-   *
-   * 需要它的原因：暗色/中文文案会随产品措辞调整，而"提交服务端校验"这类
-   * 关键安全路径必须能被稳定定位（见《全量整改实施规范》§15.2）。
-   */
   testId?: string;
 }
 
@@ -106,6 +100,12 @@ export interface DialogRequest {
 
 export interface DialogContextValue {
   open: (req: DialogRequest) => Promise<string | null>;
+  /** 更新同一次操作的弹窗，按独立请求标识定位，不会修改队列中的其他弹窗。 */
+  openSession: (req: DialogRequest) => {
+    result: Promise<string | null>;
+    update: (patch: Partial<Omit<DialogRequest, "onResolve">>) => void;
+    dismiss: () => void;
+  };
   notify: (kind: DialogKind, title: string, body?: React.ReactNode, details?: DialogRequest["details"]) => void;
   confirm: (req: Omit<DialogRequest, "kind"> & { kind?: DialogKind }) => Promise<string | null>;
   /** 单值输入弹窗；用户取消时 resolve(null)。 */
@@ -368,11 +368,22 @@ export function makeDialogProvider(LegacyRenderer: DialogRenderer) {
     const [queue, setQueue] = useState<DialogRequest[]>([]);
     const active = queue[0] ?? null;
 
-    const open = useCallback((req: DialogRequest) => {
-      return new Promise<string | null>((resolve) => {
-        setQueue((prev) => [...prev, { ...req, onResolve: resolve }]);
-      });
+    const openSession = useCallback((req: DialogRequest) => {
+      let resolve!: (value: string | null) => void;
+      const result = new Promise<string | null>((done) => { resolve = done; });
+      setQueue((prev) => [...prev, { ...req, onResolve: resolve }]);
+      return {
+        result,
+        update: (patch: Partial<Omit<DialogRequest, "onResolve">>) => {
+          setQueue((prev) => prev.map((item) => item.onResolve === resolve ? { ...item, ...patch, onResolve: resolve } : item));
+        },
+        dismiss: () => {
+          setQueue((prev) => prev.filter((item) => item.onResolve !== resolve));
+          resolve(null);
+        },
+      };
     }, []);
+    const open = useCallback((req: DialogRequest) => openSession(req).result, [openSession]);
 
     const resolveActive = useCallback((value: string | null) => {
       setQueue((prev) => {
@@ -385,6 +396,7 @@ export function makeDialogProvider(LegacyRenderer: DialogRenderer) {
     const value = useMemo<DialogContextValue>(
       () => ({
         open,
+        openSession,
         notify: (kind, title, body, details) => {
           void open({ kind, title, body, details, actions: [{ label: "知道了", variant: "primary", result: "ok" }] });
         },
@@ -402,7 +414,7 @@ export function makeDialogProvider(LegacyRenderer: DialogRenderer) {
           }),
         dismiss: () => resolveActive(null),
       }),
-      [open, resolveActive],
+      [open, openSession, resolveActive],
     );
 
     return (

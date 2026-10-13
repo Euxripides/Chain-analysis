@@ -409,6 +409,9 @@ func exportStreamSQLUnbounded(table, where string, limit int) string {
 }
 
 func exportStreamTable(dataset string) string {
+	if dataset == "balances" {
+		return "address_balances"
+	}
 	if dataset == "internal_transactions" {
 		return "internal_calls"
 	}
@@ -1169,6 +1172,7 @@ type parquetExportRow struct {
 	TokenAddress     string   `parquet:"token_address"`
 	ContractAddress  string   `parquet:"contract_address"`
 	TokenID          string   `parquet:"token_id"`
+	TokenStandard    string   `parquet:"token_standard"`
 	TokenSymbol      string   `parquet:"token_symbol"`
 	TokenName        string   `parquet:"token_name"`
 	TokenDecimals    uint64   `parquet:"token_decimals"`
@@ -1177,6 +1181,7 @@ type parquetExportRow struct {
 	ValueRaw         string   `parquet:"value_raw"`
 	BalanceRaw       string   `parquet:"balance_raw"`
 	Balance          string   `parquet:"balance"`
+	SnapshotBlock    uint64   `parquet:"snapshot_block"`
 	BalanceUSD       string   `parquet:"balance_usd"`
 	TokenPrice       string   `parquet:"token_price"`
 	MethodID         string   `parquet:"method_id"`
@@ -1225,9 +1230,9 @@ func toParquetExportRow(dataset string, row map[string]any) parquetExportRow {
 		BlockHash: exportString(row, "block_hash"), TxHash: exportString(row, "tx_hash"), Timestamp: exportString(row, "timestamp"),
 		FromAddress: exportString(row, "from_address"), ToAddress: exportString(row, "to_address"), Address: exportString(row, "address"),
 		LogIndex: exportUint64(row, "log_index"), TokenAddress: exportString(row, "token_address"), ContractAddress: exportString(row, "contract_address"),
-		TokenID: exportString(row, "token_id"), TokenSymbol: exportString(row, "token_symbol"), TokenName: exportString(row, "token_name"),
+		TokenID: exportString(row, "token_id"), TokenStandard: exportString(row, "token_standard"), TokenSymbol: exportString(row, "token_symbol"), TokenName: exportString(row, "token_name"),
 		TokenDecimals: exportUint64(row, "token_decimals"), AmountRaw: exportString(row, "amount_raw"), Amount: exportString(row, "amount"),
-		ValueRaw: exportString(row, "value_raw"), BalanceRaw: exportString(row, "balance_raw"), Balance: exportString(row, "balance"),
+		ValueRaw: exportString(row, "value_raw"), BalanceRaw: exportString(row, "balance_raw"), Balance: exportString(row, "balance"), SnapshotBlock: exportUint64(row, "snapshot_block"),
 		BalanceUSD: exportString(row, "balance_usd"), TokenPrice: exportString(row, "token_price"), MethodID: exportString(row, "method_id"),
 		MethodName: exportString(row, "method_name"), MethodSignature: exportString(row, "method_signature"),
 		MethodSource: exportString(row, "method_source"), MethodVerified: exportString(row, "method_verified"),
@@ -1256,6 +1261,13 @@ func exportUint64(row map[string]any, key string) uint64 {
 func exportStrings(row map[string]any, key string) []string {
 	if values, ok := row[key].([]string); ok {
 		return values
+	}
+	if values, ok := row[key].([]any); ok {
+		out := make([]string, len(values))
+		for i, value := range values {
+			out[i] = fmt.Sprint(value)
+		}
+		return out
 	}
 	return nil
 }

@@ -1,248 +1,174 @@
-/* The approved powder-blue data-tool treatment is scoped to its seven routes. */
-html[data-app="user"] .cs-shell:has(.cs-route:is(
-  [data-route="/explorer"],
-  [data-route="/downloads/new"],
-  [data-route="/jobs"],
-  [data-route^="/jobs/"],
-  [data-route="/exports"],
-  [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-)) {
-  --cs-canvas: #f1f8fc;
-  --cs-canvas-strong: #eaf4fb;
-  --cs-surface-rail: #f4f9fd;
-  --cs-surface-blue: #f7fbfe;
-  --cs-surface-sunken: #eef6fc;
-  --cs-border: #dce9f3;
-  --cs-border-strong: #bbd4e9;
-  --cs-border-subtle: #e9f0f6;
-  --cs-primary: #2875cf;
-  --cs-primary-hover: #2269bd;
-  --cs-primary-active: #1b5da9;
-  --cs-primary-text: #1b5da9;
-  --cs-primary-soft: #e5f2fe;
-  --cs-shadow-surface: 0 2px 12px rgba(23, 69, 111, .045);
-  --cs-shadow-surface-hover: 0 4px 18px rgba(23, 69, 111, .075);
-  --cs-shadow-rail-active: none;
+/* Blue-white Ant Design Pro surfaces, scoped to the user console. */
+html[data-app="user"] { --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+html[data-app="user"] [hidden] { display: none !important; }
+html[data-app="user"] .cs-shell__main { background: var(--cs-canvas); }
+html[data-app="user"] .cs-workspace-focus { display: flex; flex-direction: column; }
+html[data-app="user"] .cs-protable .ant-table-thead > tr > th { background: #fafafa; }
+html[data-app="user"] .cs-protable .ant-table { border: 0; }
+html[data-app="user"] .cs-pageheader { border-bottom: 0; }
+html[data-app="user"] .cs-nav__link:is([aria-current="page"], .active) { box-shadow: none; }
+html[data-app="user"] .cs-shell {
   --bg-canvas: var(--cs-canvas);
   --bg-rail: var(--cs-surface-rail);
-  --bg-surface-muted: var(--cs-surface-blue);
+  --bg-surface-muted: var(--cs-canvas-strong);
   --interactive: var(--cs-primary);
   --interactive-hover: var(--cs-primary-hover);
   --interactive-soft: var(--cs-primary-soft);
   --interactive-on-rail: var(--cs-primary);
   --border-default: var(--cs-border);
   --border-strong: var(--cs-border-strong);
-  background: var(--cs-canvas);
-  background-image: none;
 }
-
-html[data-app="user"] .cs-shell:has(.cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-)) .cs-shell__rail {
-  background: var(--cs-surface-rail);
-}
-
-html[data-app="user"] .cs-shell:has(.cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-)) .cs-shell__topbar {
-  background: rgba(255, 255, 255, .94);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-html[data-app="user"] .cs-shell:has(.cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-)) .cs-brand__mark {
-  background-color: var(--cs-primary);
-  background-image: linear-gradient(145deg, #82c1f0, #2875cf);
-  box-shadow: 0 3px 10px rgba(40, 117, 207, .18);
-}
-
-html[data-app="user"] .cs-shell:has(.cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-)) .cs-nav__link[aria-current="page"] {
-  background: var(--cs-primary-soft);
-  color: var(--cs-primary-text);
-  box-shadow: none;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) {
-  color: var(--cs-text-primary);
-  min-width: 0;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .cs-pageheader__title {
-  font-size: clamp(24px, 2.1vw, 30px);
-  font-weight: 700;
-  letter-spacing: -.025em;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) :is(.card, .cs-surface, .cs-inspector, .cs-export-editor__section, .cs-protable) {
-  border-color: var(--cs-border);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: var(--cs-shadow-surface);
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .card:hover {
-  transform: none;
-  border-color: var(--cs-border);
-  box-shadow: var(--cs-shadow-surface);
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .cs-section__head {
-  border-left: 0;
-  padding-left: 0;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .cs-section__title {
-  font-size: 17px;
-  font-weight: 650;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) :is(.input, .select, .textarea) {
-  border-color: var(--cs-border-strong);
-  background: #fff;
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .btn--primary {
-  background: var(--cs-primary);
-  border-color: var(--cs-primary);
-  box-shadow: 0 2px 7px rgba(40, 117, 207, .14);
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .btn--primary:hover:not(:disabled) {
-  background: var(--cs-primary-hover);
-  border-color: var(--cs-primary-hover);
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) :is(.table thead th, .cs-protable table thead th) {
-  background: #f5f9fd;
-  border-bottom-color: var(--cs-border);
-}
-
-html[data-app="user"] .cs-route:is(
-  [data-route="/explorer"], [data-route="/downloads/new"],
-  [data-route="/jobs"], [data-route^="/jobs/"],
-  [data-route="/exports"], [data-route^="/addresses/"],
-  [data-route^="/transactions/"]
-) .cs-workspace-focus {
-  --cs-border: #dce9f3;
-  --cs-border-strong: #bbd4e9;
-  --cs-border-subtle: #e9f0f6;
-  --cs-surface-blue: #f7fbfe;
-  --border-default: var(--cs-border);
-  --border-strong: var(--cs-border-strong);
-  --bg-surface-muted: var(--cs-surface-blue);
-  background: var(--cs-canvas);
+html[data-app="user"] .cs-route { min-width: 0; }
+html[data-app="user"] .cs-pageheader__title { font-size: 26px; font-weight: 600; letter-spacing: 0; }
+html[data-app="user"] :is(.card, .cs-surface, .cs-inspector, .cs-protable) { border-radius: 8px; box-shadow: none; }
+html[data-app="user"] .card:hover { transform: none; box-shadow: none; border-color: var(--cs-border); }
+html[data-app="user"] .cs-section__head { border-left: 0; padding-left: 0; }
+html[data-app="user"] .cs-section__title { font-size: 16px; font-weight: 600; }
+html[data-app="user"] .btn--primary { background: var(--cs-primary); border-color: var(--cs-primary); box-shadow: none; }
+html[data-app="user"] .btn--primary:hover:not(:disabled) { background: var(--cs-primary-hover); border-color: var(--cs-primary-hover); }
+html[data-app="user"] :is(.table thead th, .cs-protable table thead th) { background: #fafafa; border-bottom-color: var(--cs-border); }
+html[data-app="user"] .cs-workspace-focus {
+  --cs-border: #e8e8e8;
+  --cs-border-strong: #d9d9d9;
+  --cs-border-subtle: #f0f0f0;
+  --cs-surface-blue: #fafafa;
+  background: transparent;
   gap: 20px;
 }
-
-html[data-app="user"] .cs-route[data-route="/jobs"] .cs-jobs-status__item > .metric {
-  border-top-color: transparent;
+html[data-app="user"] .cs-download-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); align-items: start; gap: 16px; }
+html[data-app="user"] .cs-download-form { min-width: 0; }
+html[data-app="user"] .cs-download-form .ant-card-body { padding: 8px 24px 24px; }
+html[data-app="user"] .cs-download-form .ant-tabs { margin-bottom: 8px; }
+html[data-app="user"] .cs-form-section-title { margin: 8px 0 16px; font-size: 16px; font-weight: 600; }
+html[data-app="user"] .cs-download-object-toolbar { display: flex; align-items: end; gap: 12px; margin-bottom: 20px; }
+html[data-app="user"] .cs-download-object-toolbar .ant-form-item { flex: 1; margin-bottom: 0; min-width: 0; }
+html[data-app="user"] .cs-download-form .ant-input { font-family: inherit; }
+html[data-app="user"] .cs-download-import-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--cs-text-secondary); font-size: 13px; }
+html[data-app="user"] .cs-form-two-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+html[data-app="user"] .cs-download-form .ant-picker { width: 100%; }
+html[data-app="user"] .cs-download-form .ant-checkbox-group { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+html[data-app="user"] .cs-download-form .ant-divider { margin: 24px 0; }
+html[data-app="user"] .cs-download-advanced { margin: 0 -12px 12px; }
+html[data-app="user"] .cs-download-advanced .ant-collapse-header { padding-top: 0; }
+html[data-app="user"] .cs-download-summary { position: sticky; top: 84px; }
+html[data-app="user"] .cs-download-summary .ant-descriptions-item-label { width: 120px; }
+html[data-app="user"] .cs-download-summary .ant-descriptions-item-content { justify-content: flex-end; }
+html[data-app="user"] .cs-download-preview-group { border-top: 1px solid var(--cs-border-subtle); padding-top: 16px; }
+html[data-app="user"] .cs-download-preview-group h3 { font-size: 14px; margin: 0 0 12px; }
+html[data-app="user"] .cs-download-coverage-value { width: 128px; text-align: right; }
+html[data-app="user"] .cs-download-preview-empty { display: grid; grid-template-columns: 1fr auto; gap: 24px; padding: 20px 0; border-top: 1px solid var(--cs-border-subtle); color: var(--cs-text-secondary); }
+html[data-app="user"] .cs-download-preview-empty strong { font-weight: 400; color: var(--cs-text-primary); }
+html[data-app="user"] .cs-download-submit-actions { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 20px; }
+html[data-app="user"] .cs-export-filter-form { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+html[data-app="user"] .cs-export-filter-form .ant-form-item { margin-bottom: 0; }
+html[data-app="user"] .cs-export-filter-form .ant-select { min-width: 140px; }
+html[data-app="user"] .cs-export-list-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 4px 0 16px; }
+html[data-app="user"] .cs-export-list-toolbar h2 { margin: 0; font-size: 16px; font-weight: 600; }
+html[data-app="user"] .cs-export-list-card { min-width: 0; }
+html[data-app="user"] .cs-export-list-card .cs-protable { border: 0; border-radius: 0; }
+html[data-app="user"] .cs-export-list-card .cs-protable .ant-pro-table-list-toolbar { display: none; }
+html[data-app="user"] .cs-export-dialog .ant-form-item { margin-bottom: 20px; }
+html[data-app="user"] .cs-export-dialog .ant-select, html[data-app="user"] .cs-export-dialog .ant-picker { width: 100%; }
+html[data-app="user"] .cs-explorer-object-page, html[data-app="user"] .cs-statistics-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+html[data-app="user"] .cs-explorer-search { display: grid; grid-template-columns: 190px minmax(180px, 1fr); gap: 8px; width: 100%; }
+html[data-app="user"] .cs-explorer-search .ant-select { width: 100%; }
+html[data-app="user"] .cs-explorer-entry h2 { margin: 4px 0 24px; font-size: 22px; font-weight: 600; }
+html[data-app="user"] .cs-query-breadcrumb { display: flex; align-items: center; gap: 12px; color: var(--cs-text-secondary); font-size: 13px; }
+html[data-app="user"] .cs-query-object-title { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+html[data-app="user"] .cs-query-object-title h1 { font-size: 24px; margin: 0; font-weight: 600; }
+html[data-app="user"] .cs-query-address-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+html[data-app="user"] .cs-query-full-address { font-size: 15px; overflow-wrap: anywhere; }
+html[data-app="user"] .cs-query-object-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-left: auto; }
+html[data-app="user"] .cs-address-summary-grid { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 24px; padding: 24px 0 16px; }
+html[data-app="user"] .cs-address-summary-grid > div { display: flex; flex-direction: column; gap: 8px; padding-right: 24px; border-right: 1px solid var(--cs-border-subtle); }
+html[data-app="user"] .cs-address-summary-grid > div:last-child { border-right: 0; }
+html[data-app="user"] .cs-address-summary-grid span { color: var(--cs-text-secondary); font-size: 13px; }
+html[data-app="user"] .cs-address-summary-grid strong { font-size: 18px; font-weight: 500; }
+html[data-app="user"] .cs-query-data-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; color: var(--cs-text-secondary); font-size: 12px; }
+html[data-app="user"] .cs-query-results { min-width: 0; border: 1px solid var(--cs-border); border-radius: 8px; background: #fff; }
+html[data-app="user"] .cs-query-tabs { display: flex; gap: 28px; align-items: center; overflow-x: auto; padding: 0 24px; min-height: 56px; border-bottom: 1px solid var(--cs-border-subtle); }
+html[data-app="user"] .cs-query-tabs > a { display: flex; align-items: center; min-height: 56px; white-space: nowrap; color: var(--cs-text-secondary); border-bottom: 2px solid transparent; }
+html[data-app="user"] .cs-query-tabs > a[aria-current="page"] { border-bottom-color: var(--cs-primary); color: var(--cs-primary); font-weight: 500; }
+html[data-app="user"] .cs-query-results-content { padding: 20px 24px; min-width: 0; }
+html[data-app="user"] .cs-query-results-content .cs-section__head { margin-bottom: 16px; }
+html[data-app="user"] .cs-query-results-content .cs-section > .cs-surface { border: 0; }
+html[data-app="user"] .cs-query-filter-form { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+html[data-app="user"] .cs-activity-filters { padding: 0 0 20px; }
+html[data-app="user"] .cs-query-filter-form .ant-select { min-width: 120px; }
+html[data-app="user"] .cs-query-filter-form .ant-input-search { flex: 1 1 200px; max-width: 290px; }
+html[data-app="user"] .cs-query-filter-form .ant-form-item { margin-bottom: 0; }
+html[data-app="user"] .cs-query-export-link { margin-left: auto; white-space: nowrap; }
+html[data-app="user"] .cs-query-list-pagination { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 20px; }
+html[data-app="user"] .cs-asset-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; color: #8c8c8c; vertical-align: middle; }
+html[data-app="user"] .cs-asset-icon img { display: block; object-fit: contain; border-radius: 50%; }
+html[data-app="user"] .cs-query-asset { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+html[data-app="user"] .cs-query-qr { display: flex; flex-direction: column; align-items: center; gap: 20px; overflow-wrap: anywhere; }
+html[data-app="user"] .cs-statistics-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 20px 24px; border: 1px solid var(--cs-border); border-radius: 8px; background: #fff; gap: 20px; }
+html[data-app="user"] .cs-statistics-summary > div, html[data-app="user"] .cs-flow-totals > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+html[data-app="user"] .cs-statistics-summary span, html[data-app="user"] .cs-flow-totals span { color: var(--cs-text-secondary); font-size: 13px; }
+html[data-app="user"] .cs-statistics-summary strong { font-size: 20px; font-weight: 500; }
+html[data-app="user"] .cs-statistics-summary > div:nth-last-child(-n+2) strong { font-size: 14px; }
+html[data-app="user"] .cs-flow-totals { display: flex; flex-wrap: wrap; gap: 20px 48px; margin: 0 0 24px; }
+html[data-app="user"] .cs-flow-totals strong { font-size: 18px; font-weight: 500; }
+html[data-app="user"] .cs-flow-chart { width: 100%; height: 270px; }
+html[data-app="user"] .cs-ranking-controls { margin-bottom: 16px; }
+html[data-app="user"] .cs-ranking-controls .ant-select { min-width: 120px; }
+html[data-app="user"] .cs-token-search-results { display: flex; flex-direction: column; gap: 8px; }
+html[data-app="user"] .cs-token-search-results .ant-btn { height: auto; padding: 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+html[data-app="user"] .cs-dialog__kind { border-radius: 50%; width: 32px; height: 32px; box-shadow: none; }
+html[data-app="user"] .cs-dialog__label { display: none; }
+html[data-app="user"] .cs-dialog__head { background: #fff; padding: 20px 24px 16px; }
+html[data-app="user"] .cs-dialog__title { font-size: 18px; font-weight: 600; }
+html[data-app="user"] .cs-dialog .ant-modal-content { border-radius: 8px; box-shadow: 0 6px 32px rgba(0,0,0,.14); }
+@media (max-width: 1100px) {
+  html[data-app="user"] .cs-download-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+  html[data-app="user"] .cs-download-object-toolbar { flex-wrap: wrap; }
+  html[data-app="user"] .cs-download-object-toolbar .ant-form-item { flex-basis: 100%; }
 }
-
-html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress {
-  gap: 18px;
-  padding: 24px;
-}
-
-html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__facts {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__fact {
-  padding: 14px 16px;
-  border: 1px solid var(--cs-border-subtle);
-  border-radius: 10px;
-  background: #f8fbfe;
-}
-
-html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__factvalue {
-  font-size: 17px;
-}
-
-@media (max-width: 1099px) {
-  html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress__facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 899px) {
-  html[data-app="user"] .cs-shell:has(.cs-route:is(
-    [data-route="/explorer"], [data-route="/downloads/new"],
-    [data-route="/jobs"], [data-route^="/jobs/"],
-    [data-route="/exports"], [data-route^="/addresses/"],
-    [data-route^="/transactions/"]
-  )) .cs-shell__content {
-    padding-inline: 14px;
-  }
-
-  html[data-app="user"] .cs-route[data-route^="/jobs/"] .cs-jobprogress {
-    padding: 18px;
-  }
+  html[data-app="user"] .cs-explorer-search { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  html[data-app="user"] .cs-explorer-search .ant-input-search { grid-column: 1 / -1; }
+  html[data-app="user"] .cs-query-results-content { padding: 16px; }
+  html[data-app="user"] .cs-address-overview .ant-card-body { padding: 16px; }
+  html[data-app="user"] .cs-query-object-actions { width: 100%; margin: 8px 0 0; gap: 16px; }
+  html[data-app="user"] .cs-address-summary-grid { grid-template-columns: 1fr; padding: 20px 0; gap: 16px; }
+  html[data-app="user"] .cs-address-summary-grid > div { border: 0; padding: 0; }
+  html[data-app="user"] .cs-query-tabs { padding: 0 16px; gap: 24px; }
+  html[data-app="user"] .cs-query-filter-form { align-items: stretch; }
+  html[data-app="user"] .cs-query-filter-form .ant-picker { width: 100%; min-width: 0; }
+  html[data-app="user"] .cs-query-filter-form .ant-input-search { max-width: none; }
+  html[data-app="user"] .cs-statistics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; }
+  html[data-app="user"] .cs-statistics-panel .ant-card-head { padding: 0 16px; }
+  html[data-app="user"] .cs-statistics-panel .ant-card-head-wrapper { flex-wrap: wrap; gap: 12px; padding: 16px 0; }
+  html[data-app="user"] .cs-statistics-panel .ant-card-body { padding: 16px; }
+  html[data-app="user"] .cs-flow-totals { gap: 16px 24px; }
+  html[data-app="user"] .cs-flow-chart { height: 230px; }
+  html[data-app="user"] .cs-download-layout { grid-template-columns: minmax(0, 1fr); }
+  html[data-app="user"] .cs-download-summary { position: static; }
+  html[data-app="user"] .cs-download-form .ant-card-body { padding: 8px 16px 16px; }
+  html[data-app="user"] .cs-form-two-columns { grid-template-columns: 1fr; gap: 0; }
+  html[data-app="user"] .cs-download-import-actions { flex-wrap: wrap; }
+  html[data-app="user"] .cs-export-filter-form { flex-direction: column; align-items: stretch; }
+  html[data-app="user"] .cs-export-filter-form .ant-form-item-control { min-width: 0; }
+  html[data-app="user"] .cs-export-filter-form .ant-input-search { width: 100% !important; }
+  html[data-app="user"] .cs-download-page .ant-btn, html[data-app="user"] .cs-workspace-focus--exports .ant-btn { min-height: 44px; }
+}
+.cs-address-overview[data-compact="true"] .cs-address-summary-grid { display:none; }
+.cs-query-extra-filters { margin-top: 8px; }
+.cs-query-extra-filters > summary { cursor:pointer; color:#1677FF; }
+.cs-query-extra-filters[open] { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.cs-query-extra-filters .ant-input-search { max-width:420px; }
+.cs-oktoolbar .cs-oklist { min-width:0; }
+@media(max-width:600px) { .cs-oklist { overflow-x:auto; } .cs-oklist table { min-width:860px; } }
+html[data-app="user"] body { font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; }
+html[data-app="user"] .cs-statistics-panel > .ant-card:first-child .ant-card-body { padding:16px; }
+html[data-app="user"] .cs-statistics-summary { padding:14px 20px; }
+html[data-app="user"] .cs-address-overview[data-compact="true"] .ant-card-body { padding:16px 24px; }
+@media(max-width:600px) {
+  html[data-app="user"] .cs-query-filter-form { min-width:0; }
+  html[data-app="user"] .cs-query-filter-form .ant-form-item { width:100%; margin-inline-end:0; min-width:0; }
+  html[data-app="user"] .cs-query-filter-form .ant-form-item-control { min-width:0; }
+  html[data-app="user"] .cs-query-filter-form .ant-form-item-control-input-content > * { max-width:100%; }
+  html[data-app="user"] .cs-statistics-panel .ant-card-extra { margin-inline-start:0; min-width:0; max-width:100%; }
+  html[data-app="user"] .cs-statistics-panel .ant-card-extra > .ant-space { flex-wrap:wrap; max-width:100%; }
 }

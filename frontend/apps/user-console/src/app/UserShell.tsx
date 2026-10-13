@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { Command, ShieldCheck } from "lucide-react";
+import { Command, Search } from "lucide-react";
 import { AppShell } from "@chain/ui";
+import { ProLayout } from "@ant-design/pro-components";
 import { useAuth } from "@chain/api-client";
 import { navGroups, pageTitleFor } from "./navigation";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
@@ -81,6 +82,7 @@ export function UserShell({ children }: { children: React.ReactNode }) {
 
   return (
     <NotificationsProvider>
+      <ProLayout pure contentStyle={{ padding: 0, margin: 0, minHeight: "100dvh", background: "#F5F5F5" }}>
       <AppShell
         variant="user"
         productName="ChainSight"
@@ -94,12 +96,6 @@ export function UserShell({ children }: { children: React.ReactNode }) {
             : null
         }
         mobileTitle={pageTitleFor(location.pathname)}
-        railFooter={
-          <span className="cs-railfoot__scope">
-            <ShieldCheck size={13} aria-hidden="true" />
-            按当前角色权限裁剪
-          </span>
-        }
         commandTrigger={
           <button
             type="button"
@@ -108,8 +104,8 @@ export function UserShell({ children }: { children: React.ReactNode }) {
             aria-label="打开命令面板"
             aria-keyshortcuts="Control+K"
           >
-            <Command size={15} aria-hidden="true" />
-            <span className="cs-cmdtrigger__label">搜索或跳转…</span>
+            <Search size={16} aria-hidden="true" />
+            <span className="cs-cmdtrigger__label">输入地址、交易哈希或任务编号</span>
             <span className="cs-cmdtrigger__keys" aria-hidden="true">
               <span className="cs-kbd">Ctrl</span>
               <span className="cs-kbd">K</span>
@@ -128,6 +124,7 @@ export function UserShell({ children }: { children: React.ReactNode }) {
       >
         {children}
       </AppShell>
+      </ProLayout>
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
     </NotificationsProvider>
   );

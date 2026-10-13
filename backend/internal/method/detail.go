@@ -134,6 +134,10 @@ func NewDetailService(data TxDataStore, registry *Registry, deep *AnkrDeepResolv
 	return &DetailService{Data: data, Registry: registry, ABI: NewABIResolver(registry), Deep: deep, Usage: usage, Log: log}
 }
 
+func (s *DetailService) LocalTransaction(ctx context.Context, chain, hash string) (map[string]any, error) {
+	return s.Data.GetTransaction(ctx, chain, hash)
+}
+
 // Detail 返回交易详情。
 //
 //	local_only    → 只读本地（不产生任何 Provider 请求）
@@ -141,7 +145,10 @@ func NewDetailService(data TxDataStore, registry *Registry, deep *AnkrDeepResolv
 //	force_refresh → 跳过缓存强制重新深度解码
 func (s *DetailService) Detail(ctx context.Context, chain, txHash string, mode DecodeMode) (*TransactionDetail, error) {
 	chain = strings.ToLower(strings.TrimSpace(chain))
-	txHash = strings.ToLower(strings.TrimSpace(txHash))
+	txHash = strings.TrimSpace(txHash)
+	if chain != "solana" {
+		txHash = strings.ToLower(txHash)
+	}
 	if chain == "" || txHash == "" {
 		return nil, fmt.Errorf("chain and tx_hash are required")
 	}
@@ -149,6 +156,15 @@ func (s *DetailService) Detail(ctx context.Context, chain, txHash string, mode D
 	if err != nil {
 		return nil, err
 	}
+	if row == nil {
+		return nil, ErrTransactionNotFound
+	}
+	return s.DetailFromRow(ctx, chain, txHash, row, mode)
+}
+
+// DetailFromRow shares the established ABI/detail pipeline with a verified RPC
+// transaction. It never creates a download or inserts an unverified local row.
+func (s *DetailService) DetailFromRow(ctx context.Context, chain, txHash string, row map[string]any, mode DecodeMode) (*TransactionDetail, error) {
 	if row == nil {
 		return nil, ErrTransactionNotFound
 	}

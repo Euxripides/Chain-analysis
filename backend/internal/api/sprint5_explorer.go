@@ -15,8 +15,10 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
+	"github.com/blockchain-platform/blockchain-platform/internal/dataset"
 	"github.com/blockchain-platform/blockchain-platform/internal/explorer"
 	"github.com/blockchain-platform/blockchain-platform/internal/method"
+	"github.com/blockchain-platform/blockchain-platform/internal/query"
 	soladdr "github.com/blockchain-platform/blockchain-platform/internal/solana"
 	"github.com/blockchain-platform/blockchain-platform/internal/tron"
 )
@@ -27,7 +29,7 @@ var (
 	evmAddressRe = regexp.MustCompile(`^0x[0-9a-f]{40}$`)
 	// evmSearchChains 是 0x 地址可能出现的链。搜索必须带上 chain 谓词，
 	// 否则会退化成跨全部链的全表扫描（见 searchChainIndex 的注释）。
-	evmSearchChains = []string{"eth", "bsc"}
+	evmSearchChains = enabledEVMSearchChains()
 	evmTxHashRe     = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
 	hexHashRe       = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 )
@@ -374,18 +376,13 @@ func (s *Server) localHistoricalNetFlowHeavy(ctx context.Context, sub explorerSu
 }
 
 func nativeSymbol(chainSlug string) string {
-	switch chainSlug {
-	case "tron":
-		return "TRX"
-	case "bsc":
-		return "BNB"
-	case "ethereum":
-		return "ETH"
-	case "polygon":
-		return "POL"
-	default:
-		return "NATIVE"
+	if chainSlug == "ethereum" {
+		chainSlug = "eth"
 	}
+	if cfg, ok := chain.DefaultRegistry().Get(chainSlug); ok {
+		return cfg.Native.Symbol
+	}
+	return "NATIVE"
 }
 
 // nativeDecimals 返回链原生资产精度。
@@ -497,34 +494,57 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 		validationError(w, r, "limit 不合法", nil)
 		return
 	}
-	// asset_type=nft：同一入口读 NFT 转账（本地 nft_transfers 索引），游标/限额/过滤语义一致。
-	// 复用同一路径而不是新开 API，前端的契约冻结检查因此不受影响（ADR-024 前端参考实现）。
+	datasetName := strings.TrimSpace(r.URL.Query().Get("dataset"))
+	if datasetName != "" && datasetName != "transactions" && datasetName != "token_transfers" && datasetName != "internal_transactions" {
+		validationError(w, r, "数据集不合法", nil)
+		return
+	}
+	if datasetName == "" {
+		datasetName = "activity"
+	}
+	addresses := []string{sub.Normalized}
+	if raw := r.URL.Query().Get("addresses"); raw != "" {
+		addresses = nil
+		for _, v := range strings.Split(raw, ",") {
+			addresses = append(addresses, canonicalExplorerAddress(sub.Chain, v))
+		}
+		var e error
+		addresses, e = dataset.NormalizeAndDedupeAddressesForChain(sub.Chain, addresses)
+		if e != nil || len(addresses) > 100 {
+			validationError(w, r, "地址组不合法", nil)
+			return
+		}
+	}
+	f, filterErr := explorerStatisticsFilter(r, sub.Chain, addresses)
+	if filterErr != nil {
+		validationError(w, r, "查询筛选不合法", nil)
+		return
+	}
+	p := PrincipalFrom(r.Context())
 	assetType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("asset_type")))
-	dataset, sourceTable := "activity", "clickhouse:blockchain.address_activity"
-	caliberText := "blockchain.address_activity（地址 × 方向 × 对手方口径）"
 	if assetType == "nft" {
-		dataset, sourceTable = "nft_transfers", "clickhouse:blockchain.nft_transfers"
-		caliberText = "blockchain.nft_transfers（合约 / token_id / token_standard，来自本地索引）"
+		datasetName = "nft_transfers"
 	}
 	req := explorer.QueryRequest{
-		Chain: sub.Chain, Addresses: []string{sub.Normalized}, Dataset: dataset,
+		Chain: sub.Chain, Addresses: addresses, Dataset: datasetName, OrgID: p.OrganizationID, WSID: p.WorkspaceID, LocalOnly: true,
 		Cursor: strings.TrimSpace(r.URL.Query().Get("cursor")), Limit: limit,
 		// 地址详情列表可显式选择轻量读取，避免对本页所有对手方同步解析地址类型；
 		// 未传参数时仍保留原有完整富化响应，兼容其他 API 调用方。
 		Light: r.URL.Query().Get("full") == "1" || r.URL.Query().Get("light") == "1",
 		Filters: explorer.Filter{
-			Direction: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("direction"))),
-			Token:     strings.TrimSpace(r.URL.Query().Get("token")),
-			MinAmount: strings.TrimSpace(r.URL.Query().Get("min_amount")),
-			MaxAmount: strings.TrimSpace(r.URL.Query().Get("max_amount")),
-			// 发送方/接收方过滤（OKLink 式工具栏）：查询层早已支持，此前 handler 从不透传。
-			FromAddress: strings.TrimSpace(r.URL.Query().Get("from_address")),
-			ToAddress:   strings.TrimSpace(r.URL.Query().Get("to_address")),
+			Direction:    strings.ToLower(strings.TrimSpace(r.URL.Query().Get("direction"))),
+			Counterparty: canonicalExplorerAddress(sub.Chain, r.URL.Query().Get("counterparty")),
+			Token:        strings.TrimSpace(r.URL.Query().Get("token")),
+			MinAmount:    strings.TrimSpace(r.URL.Query().Get("min_amount")),
+			MaxAmount:    strings.TrimSpace(r.URL.Query().Get("max_amount")),
+			FromAddress:  canonicalExplorerAddress(sub.Chain, r.URL.Query().Get("from_address")),
+			ToAddress:    canonicalExplorerAddress(sub.Chain, r.URL.Query().Get("to_address")),
 			// P1-1 第 3 项：活动是长表路径（实测 8.09s @ limit=200，全量窗口）。服务层的
 			// Filter 早已支持时间窗（service.go 会把它写成 WHERE timestamp >=/<= ），
 			// 只是 handler 从来没有把这两个参数透传进来，前端也就只能全量拉。
-			FromTime: parseTimeQuery(r, "from_time"),
-			ToTime:   parseTimeQuery(r, "to_time"),
+			FromTime: f.FromTime,
+			ToTime:   f.ToTime,
+			AsOf:     f.AsOf,
 		},
 	}
 	// P1-1：活动读是长表路径（实测 8.09s @ limit=200），统一套交互扫描预算。
@@ -570,17 +590,30 @@ func (s *Server) handleExplorerActivity(w http.ResponseWriter, r *http.Request) 
 	if res.Rows == nil {
 		res.Rows = []map[string]any{}
 	}
+	if datasetName != "activity" && datasetName != "nft_transfers" {
+		for _, row := range res.Rows {
+			query.AsActivityRow(row, sub.Chain, sub.Normalized, datasetName)
+			query.AsGroupActivityRow(row, addresses)
+		}
+	}
 	subject := map[string]any{"type": "address", "chain": sub.Chain, "address": sub.Address, "normalized_address": sub.Normalized}
 	summary := map[string]any{"count": res.Count, "limit": limit}
 	caliber := map[string]any{
-		"dataset": caliberText,
+		"dataset": datasetName,
 		"amount":  "amount_raw 为原始整数；未知 decimals 不擅自换算。",
 	}
 	if assetType == "nft" {
 		caliber["token_standard"] = "ERC721 / ERC1155 / Solana SPL；缺失时为空，不默认成 ERC721。"
 	}
 	next := res.NextCursor
-	respondList(w, r, explorerEnvelope(subject, res.Rows, summary, nil, caliber, sourceTable), -1, &next)
+	table := datasetName
+	if table == "activity" {
+		table = "address_activity"
+	}
+	if table == "internal_transactions" {
+		table = "internal_calls"
+	}
+	respondList(w, r, explorerEnvelope(subject, res.Rows, summary, nil, caliber, "clickhouse:blockchain."+table), -1, &next)
 }
 
 func (s *Server) handleExplorerCounterparties(w http.ResponseWriter, r *http.Request) {
@@ -677,6 +710,13 @@ func (s *Server) resolveExplorerTx(w http.ResponseWriter, r *http.Request) (stri
 	// 也是用户端 /transactions/{chain}/{hash} 的既有路由形状 —— 见 ExplorerPage 的
 	// `value.replace(/^0x/i, "")`）。裸形式对所有链都补前缀，避免同一个 hash
 	// 在「查询框里能用、直接打开详情页却报 交易哈希不合法」之间摇摆。
+	if chainSlug == "solana" {
+		if decoded, err := soladdr.DecodeBase58(raw); err == nil && len(decoded) == 64 {
+			return chainSlug, raw, true
+		}
+		validationError(w, r, "Solana 交易签名不合法", nil)
+		return "", "", false
+	}
 	if hexHashRe.MatchString(raw) {
 		raw = "0x" + raw
 	}
@@ -704,23 +744,15 @@ func (s *Server) explorerDecodeMode(r *http.Request) (method.DecodeMode, bool) {
 	}
 }
 
-// explorerPartialTransactionDetail 在 transactions 行缺失时判断「还有没有本地证据」：
-// 逐笔或内部调用命中任意一条，就返回只含本地证据的详情骨架（transaction 为 null），
-// 让控制台交易页显示真实存在的逐笔/日志，而不是整页「交易数据不可用」。
-// 三个数据集都没有该 hash 时返回 false，调用方仍按 404 处理。
+// explorerPartialTransactionDetail uses the same indexed hash evidence as search.
+// NFT-only and log-only downloads remain navigable without a provider fetch;
+// the absent transaction record stays null while local analysis/logs are shown.
 func (s *Server) explorerPartialTransactionDetail(ctx context.Context, chain, hash string) (*method.TransactionDetail, bool) {
 	if s.query == nil || s.detail == nil {
 		return nil, false
 	}
-	transfers, err := s.query.ActionTransactionRows(ctx, "token_transfers", chain, hash)
-	if err != nil {
-		return nil, false
-	}
-	internal, err := s.query.ActionTransactionRows(ctx, "internal_transactions", chain, hash)
-	if err != nil {
-		return nil, false
-	}
-	if len(transfers) == 0 && len(internal) == 0 {
+	found, err := s.query.SearchLocalTransaction(ctx, []string{chain}, hash)
+	if err != nil || len(found) == 0 {
 		return nil, false
 	}
 	return s.detail.PartialDetail(ctx, chain, hash), true
@@ -745,21 +777,36 @@ func (s *Server) handleExplorerTransaction(w http.ResponseWriter, r *http.Reques
 		// 交易行缺失但逐笔/内部调用已入库：返回部分详情，而不是让整页报「交易数据不可用」。
 		partial, ok := s.explorerPartialTransactionDetail(r.Context(), subChain, hash)
 		if !ok {
-			respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
-			return
+			if r.URL.Query().Get("lookup") == "auto" {
+				ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+				defer cancel()
+				detail, err = s.explorerRPCDetail(ctx, subChain, hash, r.URL.Query().Get("receipt") == "1")
+				if errors.Is(err, method.ErrTransactionNotFound) {
+					respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "未找到该交易", nil)
+					return
+				}
+			} else {
+				respondError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "本地数据集中不存在该交易", nil)
+				return
+			}
+		} else {
+			detail = partial
+			err = nil
 		}
-		detail = partial
-		err = nil
 	}
 	if err != nil {
 		respondError(w, r, http.StatusBadGateway, "PROVIDER_UNAVAILABLE", "交易详情暂不可用", nil)
 		return
 	}
 	subject := map[string]any{"type": "transaction", "chain": subChain, "hash": hash}
-	respondOK(w, r, explorerEnvelope(subject, detail,
+	body := explorerEnvelope(subject, detail,
 		map[string]any{"decode_source": detail.DecodeSource, "decode_verified": detail.DecodeVerified}, nil,
 		map[string]any{"decode": "local_only 不产生 Provider 请求；auto 先本地 ABI，失败才向 Provider 补取"},
-		"clickhouse:blockchain.transactions", "clickhouse:blockchain.logs", "postgres:method_abi"))
+		"clickhouse:blockchain.transactions", "clickhouse:blockchain.logs", "postgres:method_abi")
+	if detail.Transaction != nil && detail.Transaction["source_provider"] == "rpc" {
+		body["source"] = map[string]any{"provider": "rpc", "as_of": time.Now().UTC()}
+	}
+	respondOK(w, r, body)
 }
 
 func (s *Server) handleExplorerTransactionLogs(w http.ResponseWriter, r *http.Request) {
@@ -953,7 +1000,13 @@ func (s *Server) handleUserSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if (want("address") || want("transaction")) && p.Has("explorer:read") {
-		s.searchChainIndex(ctx, q, want, &items, &scopes)
+		if err := s.searchChainIndex(ctx, q, want, &items, &scopes); err != nil {
+			if s.deps.Log != nil {
+				s.deps.Log.Error("local search failed", "err", err)
+			}
+			respondError(w, r, http.StatusServiceUnavailable, "SEARCH_UNAVAILABLE", "本地链上索引查询暂不可用，请重试", nil)
+			return
+		}
 	}
 	groups := map[string][]searchHit{}
 	for _, hit := range items {
@@ -968,82 +1021,60 @@ func (s *Server) handleUserSearch(w http.ResponseWriter, r *http.Request) {
 	}, len(items), nil)
 }
 
-func (s *Server) searchChainIndex(ctx context.Context, q string, want func(string) bool, items *[]searchHit, scopes *[]string) {
-	if s.deps.CH == nil {
-		return
+func enabledEVMSearchChains() []string {
+	chains := []string{}
+	for _, cfg := range chain.DefaultRegistry().List() {
+		if cfg.Enabled && cfg.Type == "evm" {
+			chains = append(chains, cfg.Slug)
+		}
 	}
+	return chains
+}
+
+func (s *Server) searchChainIndex(ctx context.Context, q string, want func(string) bool, items *[]searchHit, scopes *[]string) error {
 	lower := strings.ToLower(q)
-	if want("address") && (evmAddressRe.MatchString(lower) || tron.ValidateTronAddress(q) == nil) {
+	isAddress := evmAddressRe.MatchString(lower) || tron.ValidateTronAddress(q) == nil
+	isHash := evmTxHashRe.MatchString(lower) || hexHashRe.MatchString(q)
+	if !(want("address") && isAddress || want("transaction") && isHash) {
+		return nil
+	}
+	if s.deps.CH == nil {
+		return fmt.Errorf("local chain index unavailable")
+	}
+	if want("address") && isAddress {
 		*scopes = append(*scopes, "address")
-		addr := lower
-		// 按地址形态先确定**可能出现的链**：这既是语义正确性，也是性能前提——
-		// 少了 chain 谓词，ClickHouse 只能对全部链（含 3400 万行 bsc）做全表扫描，
-		// 实测 80 秒后超时并**静默返回空结果**（2026-09-16 的 USER-009 真实缺陷）。
-		chains := evmSearchChains
+		addr, chains := lower, evmSearchChains
 		if tron.ValidateTronAddress(q) == nil {
-			if n, err := tron.NormalizeTronAddress(q); err == nil {
-				addr = n
+			normalized, err := tron.NormalizeTronAddress(q)
+			if err != nil {
+				return err
 			}
-			chains = []string{"tron"}
+			addr, chains = normalized, []string{"tron"}
 		}
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chains)), ",")
-		args := make([]any, 0, 2*len(chains)+2)
-		for _, c := range chains {
-			args = append(args, c)
+		found, err := s.query.SearchLocalAddress(ctx, chains, addr)
+		if err != nil {
+			return err
 		}
-		// 每个 (from_address=? OR to_address=?) 需要两个绑定值。
-		args = append(args, addr, addr)
-		for _, c := range chains {
-			args = append(args, c)
-		}
-		args = append(args, addr, addr)
-		// 不用 FINAL：ReplacingMergeTree 的 FINAL 会强制合并去重，实测比不用的版本慢 30 倍；
-		// 去重改为在聚合层做（uniqExact(tx_hash)），口径是"涉及该地址的本地索引交易数"。
-		query := fmt.Sprintf(`
-			SELECT chain, uniqExact(tx_hash) AS c FROM (
-				SELECT chain, tx_hash FROM blockchain.transactions
-				 WHERE chain IN (%s) AND tx_hash != '' AND (from_address=? OR to_address=?)
-				UNION ALL
-				SELECT chain, tx_hash FROM blockchain.token_transfers
-				 WHERE chain IN (%s) AND tx_hash != '' AND (from_address=? OR to_address=?)
-			) GROUP BY chain ORDER BY c DESC LIMIT 5`, placeholders, placeholders)
-		rows, err := s.deps.CH.DB().Query(ctx, query, args...)
-		if err == nil {
-			for rows.Next() {
-				var chainSlug string
-				var count uint64
-				if rows.Scan(&chainSlug, &count) == nil {
-					*items = append(*items, searchHit{Type: "address", ID: chainSlug + ":" + addr,
-						Title: addr, Subtitle: chainSlug + " · " + fmt.Sprint(count) + " 笔本地索引交易",
-						Chain: chainSlug, URL: "/addresses/" + chainSlug + "/" + addr})
-				}
-			}
-			rows.Close()
+		for _, slug := range found {
+			*items = append(*items, searchHit{Type: "address", ID: slug + ":" + addr, Title: addr, Subtitle: slug + " · 本地记录", Chain: slug, URL: "/addresses/" + slug + "/" + addr})
 		}
 	}
-	if want("transaction") && (evmTxHashRe.MatchString(lower) || hexHashRe.MatchString(q)) {
+	if want("transaction") && isHash {
 		*scopes = append(*scopes, "transaction")
-		hash := strings.TrimPrefix(lower, "0x")
-		// 同样不用 FINAL：全链 FINAL 扫描实测 58 秒（无 FINAL 2 秒），
-		// 且慢查询会以"空结果"的形式被静默吞掉。这里只需要"哪些链有这个哈希"
-		// 的存在性，DISTINCT 已经保证结果正确。
-		rows, err := s.deps.CH.DB().Query(ctx, `
-			SELECT DISTINCT chain FROM (
-				SELECT chain FROM blockchain.transactions WHERE lower(tx_hash)=?
-				UNION ALL
-				SELECT chain FROM blockchain.token_transfers WHERE lower(tx_hash)=?
-				UNION ALL
-				SELECT chain FROM blockchain.logs WHERE lower(tx_hash)=?
-			) LIMIT 5`, hash, hash, hash)
-		if err == nil {
-			for rows.Next() {
-				var chainSlug string
-				if rows.Scan(&chainSlug) == nil {
-					*items = append(*items, searchHit{Type: "transaction", ID: chainSlug + ":" + hash,
-						Title: hash, Subtitle: chainSlug, Chain: chainSlug, URL: "/transactions/" + chainSlug + "/" + hash})
-				}
+		chains := append(append([]string{}, evmSearchChains...), "tron")
+		found, err := s.query.SearchLocalTransaction(ctx, chains, lower)
+		if err != nil {
+			return err
+		}
+		for _, slug := range found {
+			hash := lower
+			if slug != "tron" {
+				hash = "0x" + strings.TrimPrefix(lower, "0x")
+			} else {
+				hash = strings.TrimPrefix(lower, "0x")
 			}
-			rows.Close()
+			*items = append(*items, searchHit{Type: "transaction", ID: slug + ":" + hash, Title: hash, Subtitle: slug, Chain: slug, URL: "/transactions/" + slug + "/" + hash})
 		}
 	}
+	return nil
 }

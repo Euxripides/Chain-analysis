@@ -182,6 +182,9 @@ func (c *Client) call(ctx context.Context, method string, params any) (json.RawM
 		return nil, &provider.Error{Provider: "solana", Class: provider.ClassInvalidRequest, Message: err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if err := provider.ReserveDownloadRequest(ctx, 1, 200, 0.00002); err != nil {
+		return nil, err
+	}
 	res, err := c.http.Do(req)
 	if err != nil {
 		return nil, c.classifyTransport(ctx, err)

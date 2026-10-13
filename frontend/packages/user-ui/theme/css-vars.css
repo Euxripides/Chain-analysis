@@ -11,58 +11,28 @@
  */
 
 html[data-app="user"] {
-  /* ==========================================================================
-   * 0. 四级明度（2026-09-20「清晰度」修订，取代原规范 §4.1 的淡蓝四连白）
-   *
-   * 旧版把画布 / 侧栏 / 表格底 / 输入框底全部做成近似的淡蓝
-   * （#F4F8FF、#F8FBFF、#F7FAFF、#EEF4FD 之间只差 1–2 个亮度级），再叠加
-   * 半透明卡片与 backdrop-filter，于是整页糊成一层雾：卡片边界看不见、
-   * 输入框与背景连成一片、次级文字掉到 2.9:1。
-   *
-   * 本轮改为**冷白四级明度**，每一级只承担一个角色，禁止互相借用：
-   *   L1 页面底层  --cs-layer-page      #E9EDF3  冷白画布，比白色明显暗一档
-   *   L2 内容层    --cs-layer-content   #FFFFFF  纯白实体卡片 / 面板 / 弹窗（唯一最亮面）
-   *   L3 输入层    --cs-layer-field     #F4F7FA  卡片内的凹陷输入面（配 2.23:1 描边）
-   *   L4 选中层    --cs-layer-selected  #DEE9FD  当前项 / 当前步骤，蓝色只在这里出现
-   *
-   * 同时确立两条硬约束（本轮起生效）：
-   *   1) 蓝色只用于**交互与状态**（当前项、焦点、主按钮、进度、状态徽标），
-   *      不再用于大面积背景、卡片底色、表格底或页面装饰渐变；
-   *   2) **禁止玻璃拟态**。--cs-surface-glass 退化为不透明白、--cs-glass-blur 退化为
-   *      none，任何仍引用它们的规则都不会再产生模糊或半透明。
-   * ========================================================================== */
+  /* ---------------- 色板（规范 §4.1） ---------------- */
+  --cs-canvas: #F5F5F5;
+  --cs-canvas-strong: #FAFAFA;
+  --cs-surface: #FFFFFF;
+  --cs-surface-glass: #FFFFFF;
+  --cs-surface-blue: #FAFAFA;
+  --cs-surface-rail: #FFFFFF;
+  --cs-surface-sunken: #FAFAFA;
 
-  /* ---------------- 四级明度（本轮新增：组件应优先引用这四个） ---------------- */
-  --cs-layer-page: #E9EDF3;
-  --cs-layer-content: #FFFFFF;
-  --cs-layer-field: #F4F7FA;
-  --cs-layer-selected: #DEE9FD;
+  --cs-border: #E8E8E8;
+  --cs-border-strong: #D9D9D9;
+  --cs-border-subtle: #F0F0F0;
 
-  /* ---------------- 色板（沿用原变量名，取值改为冷白体系） ---------------- */
-  --cs-canvas: var(--cs-layer-page);
-  --cs-canvas-strong: #DFE4EC;
-  --cs-surface: var(--cs-layer-content);
-  --cs-surface-glass: #FFFFFF;      /* 兼容别名：已不透明；模糊由 --cs-glass-blur: none 关闭 */
-  --cs-surface-blue: #F1F4F8;       /* 表格头 / 悬停行 / 弹窗底：中性冷灰，不再带蓝 */
-  --cs-surface-rail: #FFFFFF;       /* 侧栏：纯白实体面，靠 1px 灰边界与画布分开 */
-  --cs-surface-sunken: #E4E9F0;
-  --cs-field: var(--cs-layer-field);
-
-  --cs-border: #CBD3DC;
-  --cs-border-strong: #A3AFBD;
-  --cs-border-subtle: #E0E5EB;
-  --cs-border-field: #A3AFBD;       /* 输入框边界：白底 2.23:1，清晰可辨 */
-  --cs-border-selected: #7FA9F5;    /* 选中层边界：白底 2.36:1 */
-
-  --cs-text-primary: #101A2B;
-  --cs-text-secondary: #48566B;
-  --cs-text-muted: #59667A;
+  --cs-text-primary: #141414;
+  --cs-text-secondary: #595959;
+  --cs-text-muted: #737373;
   --cs-text-inverse: #FFFFFF;
 
-  --cs-primary: #2563EB;
-  --cs-primary-hover: #1D55DE;
-  --cs-primary-active: #1A4AC4;
-  --cs-primary-soft: var(--cs-layer-selected);
+  --cs-primary: #1677FF;
+  --cs-primary-hover: #4096FF;
+  --cs-primary-active: #0958D9;
+  --cs-primary-soft: #E6F4FF;
 
   --cs-cyan: #1DB8E8;
   --cs-violet: #6A63FF;
@@ -71,55 +41,46 @@ html[data-app="user"] {
   --cs-danger: #D84A4A;
 
   /* ---------------- 文字安全变体（同色相压暗到 ≥4.5:1） ---------------- */
-  /* 括号：(白底, 画布 #E9EDF3, 自身浅底) —— 由 npm run check:tokens 强制校验 */
-  --cs-primary-text: #1F5ED6; /* 5.78 / 4.92 / 4.73 */
-  --cs-cyan-text: #0A7191; /*    5.59 / 4.72 / 5.01 */
-  --cs-violet-text: #5A52E8; /*  5.52 / 4.69 / 4.82 */
-  --cs-success-text: #0F7A4C; /* 5.37 / 4.57 / 4.86 */
-  --cs-warning-text: #8F5A08; /* 5.78 / 4.92 / 5.26（原 #9C6109 在新画布上只有 4.33） */
-  --cs-danger-text: #B73535; /*  5.88 / 5.00 / 5.14（原 #C43C3C 在新画布上只有 4.40） */
+  /* 括号：(白底, 画布 #F5F5F5, 自身浅底) —— 由 npm run check:tokens 强制校验 */
+  --cs-primary-text: #0958D9; /* 5.78 / 5.43 / 5.14 */
+  --cs-cyan-text: #0A7191; /*    5.59 / 5.25 / 4.97 */
+  --cs-violet-text: #5A52E8; /*  5.52 / 5.18 / 4.90 */
+  --cs-success-text: #0F7A4C; /* 5.37 / 5.04 / 4.77 */
+  --cs-warning-text: #9C6109; /* 5.09 / 4.78 / 4.52 */
+  --cs-danger-text: #C43C3C; /*  5.17 / 4.86 / 4.59 */
 
   /* ---------------- 状态浅底 ---------------- */
-  --cs-primary-soft-2: var(--cs-layer-selected);
+  --cs-primary-soft-2: #E6F4FF;
   --cs-cyan-soft: #E6F6FC;
   --cs-violet-soft: #EFEEFF;
   --cs-success-soft: #E8F7F0;
   --cs-warning-soft: #FDF3E4;
   --cs-danger-soft: #FDECEB;
-  --cs-neutral-soft: #E9EDF3;
+  --cs-neutral-soft: #EEF2F9;
 
   /* ---------------- 圆角（§4.3） ---------------- */
-  --cs-radius-control: 10px;
-  --cs-radius-card-sm: 12px;
-  --cs-radius-card: 16px;
-  --cs-radius-panel: 18px;
-  --cs-radius-modal: 18px;
-  --cs-radius-hero: 24px;
+  --cs-radius-control: 6px;
+  --cs-radius-card-sm: 6px;
+  --cs-radius-card: 8px;
+  --cs-radius-panel: 8px;
+  --cs-radius-modal: 8px;
+  --cs-radius-hero: 8px;
   --cs-radius-pill: 999px;
 
-  /* ---------------- 阴影（§4.4，2026-09-20 收紧） ----------------
-   * 旧阴影是大半径、带蓝的柔光（24px / 40px / 80px blur），在淡蓝底上会形成
-   * 一圈灰雾，正是"页面发糊"的第二来源。本轮改成**中性深色 + 短半径**：
-   * 边界靠 1px 描边表达，阴影只负责"离地 1–2px"的提示；只有弹窗/浮层保留
-   * 大半径（那是真实的层高差，不是装饰）。
-   */
-  --cs-shadow-surface: 0 1px 2px rgba(16, 26, 43, .06), 0 2px 6px rgba(16, 26, 43, .05);
-  --cs-shadow-surface-hover: 0 2px 6px rgba(16, 26, 43, .09), 0 10px 22px rgba(16, 26, 43, .08);
-  --cs-shadow-floating: 0 10px 28px rgba(16, 26, 43, .16), 0 28px 64px rgba(16, 26, 43, .18);
-  --cs-shadow-ring: 0 0 0 3px rgba(37, 99, 235, .20);
-  /* 当前导航项 = 明确描边 + 极轻投影，取代原来的蓝色柔光（避免"发光"式模糊）。 */
-  --cs-shadow-rail-active: inset 0 0 0 1px var(--cs-border-selected), 0 1px 2px rgba(16, 26, 43, .05);
+  /* ---------------- 阴影（§4.4） ---------------- */
+  --cs-shadow-surface: none;
+  --cs-shadow-surface-hover: 0 4px 12px rgba(45, 94, 180, .08), 0 16px 40px rgba(45, 94, 180, .10);
+  --cs-shadow-floating: 0 8px 30px rgba(20, 52, 100, .14), 0 30px 80px rgba(20, 52, 100, .18);
+  --cs-shadow-ring: 0 0 0 3px rgba(52, 120, 246, .18);
+  --cs-shadow-rail-active: 0 2px 8px rgba(52, 120, 246, .16);
 
-  /* ---------------- 玻璃（§4.5，本轮起**禁止使用**） ----------------
-   * 保留变量名只为兼容尚未迁移的引用：取值已退化为"不透明 + 无模糊"。
-   * 禁止再写出任何 backdrop-filter / 半透明卡片面 / 大面积渐变光晕。
-   */
-  --cs-glass-blur: none;
+  /* ---------------- 玻璃（§4.5） ---------------- */
+  --cs-glass-blur: blur(18px) saturate(130%);
 
   /* ---------------- 布局（§6.1 / §6.2 / §54） ---------------- */
-  --cs-rail-w: 248px;
+  --cs-rail-w: 208px;
   --cs-rail-w-collapsed: 72px;
-  --cs-topbar-h: 60px;
+  --cs-topbar-h: 64px;
   --cs-inspector-w: 340px;
   --cs-inspector-w-lg: 420px;
   --cs-form-max-w: 1040px;

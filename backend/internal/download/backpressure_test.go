@@ -90,3 +90,67 @@ func TestByteBudgetBlocking(t *testing.T) {
 		t.Fatalf("used must return to 0, got %d", b.Used())
 	}
 }
+
+// Responses are already allocated before their size is known. Waiting for more
+// admission capacity while holding the original reservation deadlocks all owners.
+func TestByteBudgetDecodedResponsesDoNotDeadlock(t *testing.T) {
+	b := newByteBudget(100)
+	b.Reserve(50)
+	b.Reserve(50)
+	done := make(chan struct{}, 2)
+	for range 2 {
+		go func() {
+			b.ReserveExtra(20)
+			b.Release(70)
+			done <- struct{}{}
+		}()
+	}
+	for range 2 {
+		select {
+		case <-done:
+		case <-time.After(200 * time.Millisecond):
+			b.Release(100) // Unblock baseline workers so failure leaves no goroutines.
+			<-done
+			<-done
+			t.Fatal("decoded responses deadlocked while holding their reservations")
+		}
+	}
+	if b.Used() != 0 {
+		t.Fatalf("all responses released but budget used=%d", b.Used())
+	}
+}
+
+func TestByteBudgetAdmissionCancellationAndOversizedPrediction(t *testing.T) {
+	b := newByteBudget(100)
+	b.Reserve(100)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- b.ReserveContext(ctx, 1) }()
+	cancel()
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("expected cancellation, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("memory admission ignored cancellation")
+	}
+	if b.Used() != 100 {
+		t.Fatalf("canceled admission charged %d", b.Used())
+	}
+	if err := b.ReserveContext(context.Background(), 101); err == nil {
+		t.Fatal("oversized prediction must fail before HTTP")
+	}
+	b.Release(100)
+	if err := b.ReserveContext(context.Background(), 100); err != nil {
+		t.Fatal(err)
+	}
+	b.ReserveExtra(30)
+	if b.Used() != 130 {
+		t.Fatalf("actual response not accounted: %d", b.Used())
+	}
+	b.Release(130)
+	if b.Used() != 0 {
+		t.Fatalf("response memory leaked: %d", b.Used())
+	}
+}

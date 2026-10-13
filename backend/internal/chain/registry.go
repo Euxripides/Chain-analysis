@@ -75,7 +75,7 @@ type Registry struct {
 // defaultChains 首期 BSC，其余 EVM 链预置以便后续开启（§8 目标链）。
 func defaultChains() []Config {
 	evmTags := []string{TagLatest, TagSafe, TagFinalized, TagPending, TagEarliest}
-	return []Config{
+	configs := []Config{
 		{Slug: "bsc", Type: "evm", Name: "BNB Smart Chain", ChainID: 56,
 			Native: NativeAsset{Symbol: "BNB", Decimals: 18}, ConfirmationDepth: 15,
 			SupportsTraceConcept: true, BlockTags: evmTags, MaxLogBlockRange: 5000,
@@ -124,6 +124,7 @@ func defaultChains() []Config {
 			DefaultProvider: "ankr", Enabled: true,
 			ExplorerTxURL: "https://tronscan.org/#/transaction/", ExplorerAddressURL: "https://tronscan.org/#/address/"},
 	}
+	return append(configs, additionalAnkrMainnets()...)
 }
 
 // NewRegistry 用给定配置构造（测试与显式装配用）。

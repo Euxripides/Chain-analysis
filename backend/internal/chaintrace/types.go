@@ -23,7 +23,9 @@ const (
 
 // CallFrame 规范化调用帧（§102）。数值一律字符串，禁止 float64（§155）。
 type CallFrame struct {
-	Type string `json:"type"`
+	// Persisted on the root so legacy incomplete normalized caches are not reused.
+	NormalizationVersion string `json:"normalization_version,omitempty"`
+	Type                 string `json:"type"`
 
 	From chain.Address  `json:"from"`
 	To   *chain.Address `json:"to,omitempty"`

@@ -1,0 +1,394 @@
+{
+  "funding_scope": "protocol_bound_bridge_participants",
+  "final_wallet_verified": true,
+  "final_wallet_state": "direct_wallet_credit_verified",
+  "funds_verified": true,
+  "verification_state": "verified",
+  "blocking_reasons": [],
+  "verification_rule_version": "crosschain-funds-v3",
+  "proof": {
+    "wallet_settlement": {
+      "state": "direct_wallet_credit_verified",
+      "chain": "base",
+      "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+      "address": "0xe9bcbad0233dc8e40a991ddad66d57a1093092c4",
+      "asset": "native",
+      "amount_raw": "399000000000000",
+      "decimals": 18,
+      "block_number": 52198190,
+      "block_hash": "0x9e8691b0a87ab09e8f6029938c8c2e2a22ed5ed334d38a294dcbce2e7846a051",
+      "historical_code": "0x",
+      "historical_code_read": true,
+      "receipt_sha256": "122683acd4cb2be7f28f274a02d944ed5e943de3e2af2932cbc62c846c3d0bf1",
+      "movement": {
+        "chain": "base",
+        "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+        "dataset": "internal_transactions",
+        "event_index": 5,
+        "timestamp": "2026-10-05T07:35:27Z",
+        "timestamp_source": "chain_rpc",
+        "from_address": "0xdc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+        "to_address": "0xe9bcbad0233dc8e40a991ddad66d57a1093092c4",
+        "token_contract": "native",
+        "token": "",
+        "decimals": 18,
+        "amount_raw": "399000000000000",
+        "amount": "0.000399",
+        "status": "success"
+      },
+      "outgoing_same_asset": false
+    },
+    "protocol": {
+      "layerzero": {
+        "kind": "stargate_taxi",
+        "delivery_call": {
+          "from": "0x2cca08ae69e0c44b18a57ab2a87644234daebae4",
+          "to": "0x1a44076050125825900e736c501f859c50fe728c",
+          "input": "0x0c0c389e00000000000000000000000000000000000000000000000000000000000075950000000000000000000000006d6620efa72948c5f68a3c8646d58c00d3f4a980000000000000000000000000000000000000000000000000000000000001a73b0000000000000000000000005634c4a5fed09819e3c46d86a965dd9447d86e476b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f6816629700000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000002b01000d000000000000000000000000e9bcbad0233dc8e40a991ddad66d57a1093092c4000000000000018f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "value": "0",
+          "block_timestamp": 1791185727
+        },
+        "applications": [
+          {
+            "event": {
+              "chain": "ethereum",
+              "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+              "event_index": 428,
+              "contract": {
+                "address": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "source",
+              "identifier": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+              "payload_sha256": "bbb0d4a26574a6e1d5e01163b952abb27f7f55f9d7cbded8bbcc34b7f9fb24d8",
+              "raw_topics": [
+                "0x85496b760a4b7f8d66384b9df21b381f5d1b1e79f229a47aaf4c232edc2fe59a",
+                "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+                "0x000000000000000000000000acddac6c77318b615f7f6fb9bb67c6833e9c05f1"
+              ],
+              "raw_data": "0x00000000000000000000000000000000000000000000000000000000000075e800000000000000000000000000000000000000000000000000016bcc41e9000000000000000000000000000000000000000000000000000000016ae36d43f000"
+            },
+            "messaging_contract": {
+              "address": "0x6d6620efa72948c5f68a3c8646d58c00d3f4a980",
+              "verifier_address": "0x6d6620efa72948c5f68a3c8646d58c00d3f4a980",
+              "code_sha256": "98b3c083e7014f267602eeee8196a386874db8d81a98f9e7b4ec17f075239781",
+              "historical_state": true,
+              "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/ethereum-mainnet/TokenMessaging.json"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "getAddressConfig()": "0x0000000000000000000000003e368b6c95c6fefb7a16dcc0d756389f3c658a06000000000000000000000000e37f7c80ced04c4f243c0fd04a5510d663cb88b50000000000000000000000001041d127b2d4bc700f0f563883bc6895026069180000000000000000000000006d6620efa72948c5f68a3c8646d58c00d3f4a9800000000000000000000000009b4d17b45d60b8173a5904b85a7baaec291e91730000000000000000000000000000000000000000000000000000000000000000",
+              "peers(uint32):30184": "0x0000000000000000000000005634c4a5fed09819e3c46d86a965dd9447d86e47",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "stargateImpls(uint16):13": "0x00000000000000000000000077b2043768d28e9c9ab44e1abfc95944bce57931",
+              "token()": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "native_send_call": {
+              "from": "0xacddac6c77318b615f7f6fb9bb67c6833e9c05f1",
+              "to": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+              "input": "0xc7c7f5b300000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000ae73c376c8590000000000000000000000000000000000000000000000000000000000000000000000000000000000000000acddac6c77318b615f7f6fb9bb67c6833e9c05f100000000000000000000000000000000000000000000000000000000000075e8000000000000000000000000e9bcbad0233dc8e40a991ddad66d57a1093092c400000000000000000000000000000000000000000000000000016bcc41e9000000000000000000000000000000000000000000000000000000016912edffc20000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000002000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+              "value": "591812223813721",
+              "block_timestamp": 1791185519
+            },
+            "native_fee_raw": "191812223813721"
+          },
+          {
+            "event": {
+              "chain": "base",
+              "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+              "event_index": 1015,
+              "contract": {
+                "address": "0xdc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+                "verifier_address": "",
+                "code_sha256": "",
+                "historical_state": false,
+                "deployment_source": ""
+              },
+              "role": "destination",
+              "identifier": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+              "payload_sha256": "bbb0d4a26574a6e1d5e01163b952abb27f7f55f9d7cbded8bbcc34b7f9fb24d8",
+              "raw_topics": [
+                "0xefed6d3500546b29533b128a29e3a94d70788727f0507505ac12eaf2e578fd9c",
+                "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+                "0x000000000000000000000000e9bcbad0233dc8e40a991ddad66d57a1093092c4"
+              ],
+              "raw_data": "0x000000000000000000000000000000000000000000000000000000000000759500000000000000000000000000000000000000000000000000016ae36d43f000"
+            },
+            "messaging_contract": {
+              "address": "0x5634c4a5fed09819e3c46d86a965dd9447d86e47",
+              "verifier_address": "0x5634c4a5fed09819e3c46d86a965dd9447d86e47",
+              "code_sha256": "684af96234abe8a2ebecf6bb4a2dc727cc4790fb823807ba6ba5d3eb6e98a6d1",
+              "historical_state": true,
+              "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/base-mainnet/TokenMessaging.json"
+            },
+            "historical_getters": {
+              "endpoint()": "0x0000000000000000000000001a44076050125825900e736c501f859c50fe728c",
+              "getAddressConfig()": "0x00000000000000000000000017e450be3ba9557f2378e20d64ad417e59ef9a34000000000000000000000000e37f7c80ced04c4f243c0fd04a5510d663cb88b5000000000000000000000000d47b03ee6d86cf251ee7860fb2acf9f91b9fd4d70000000000000000000000005634c4a5fed09819e3c46d86a965dd9447d86e4700000000000000000000000012dc9256acc9895b076f6638d628382881e62cee0000000000000000000000000000000000000000000000000000000000000000",
+              "peers(uint32):30101": "0x0000000000000000000000006d6620efa72948c5f68a3c8646d58c00d3f4a980",
+              "sharedDecimals()": "0x0000000000000000000000000000000000000000000000000000000000000006",
+              "stargateImpls(uint16):13": "0x000000000000000000000000dc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+              "token()": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        ]
+      },
+      "protocol": "layerzero",
+      "version": "layerzero-v2-stargate-taxi",
+      "identifier": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+      "source_chain": "ethereum",
+      "destination_chain": "base",
+      "payload_sha256": "bbb0d4a26574a6e1d5e01163b952abb27f7f55f9d7cbded8bbcc34b7f9fb24d8",
+      "source": {
+        "application_contract": {
+          "address": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+          "verifier_address": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+          "code_sha256": "813ed757ffb20d6fa1eae8b26b5834f80b7cf5d59b191f8f34d9855b82d7c9b3",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/ethereum-mainnet/StargatePoolNative.json"
+        },
+        "chain": "ethereum",
+        "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+        "event_index": 427,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "344d48a336f08651dc1a643b45d80c5197d6ed33ff49ce4b694dacb98d711fd0",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "source",
+        "identifier": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+        "payload_sha256": "bbb0d4a26574a6e1d5e01163b952abb27f7f55f9d7cbded8bbcc34b7f9fb24d8",
+        "raw_topics": [
+          "0x1ab700d4ced0c005b164c0f789fd09fcbb0156d4c2041b8a3bfbcd961cd1567f"
+        ],
+        "raw_data": "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000120000000000000000000000000bb2ea70c9e858123480642cf96acbcce1372dce1000000000000000000000000000000000000000000000000000000000000009c01000000000001a73b000075950000000000000000000000006d6620efa72948c5f68a3c8646d58c00d3f4a980000075e80000000000000000000000005634c4a5fed09819e3c46d86a965dd9447d86e476b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f6816629701000d000000000000000000000000e9bcbad0233dc8e40a991ddad66d57a1093092c4000000000000018f000000000000000000000000000000000000000000000000000000000000000000000016000301001101000000000000000000000000000249f000000000000000000000"
+      },
+      "destination": {
+        "application_contract": {
+          "address": "0xdc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+          "verifier_address": "0xdc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+          "code_sha256": "75cd648da65c12657aa6ef729b38d830a9f6ab8563c27b11ed64296564a56d2a",
+          "historical_state": true,
+          "deployment_source": "https://raw.githubusercontent.com/stargate-protocol/stargate-v2/9f4f5c0fc3e1df570415e441523c82fd94173588/packages/stg-evm-v2/deployments/base-mainnet/StargatePoolNative.json"
+        },
+        "chain": "base",
+        "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+        "event_index": 1016,
+        "contract": {
+          "address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "verifier_address": "0x1a44076050125825900e736c501f859c50fe728c",
+          "code_sha256": "785be5e1e7011c7142c22a4c2094f47c28bb8507edf82472cf1c4f7526364411",
+          "historical_state": true,
+          "deployment_source": "https://metadata.layerzero-api.com/v1/metadata"
+        },
+        "role": "destination",
+        "identifier": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+        "payload_sha256": "bbb0d4a26574a6e1d5e01163b952abb27f7f55f9d7cbded8bbcc34b7f9fb24d8",
+        "raw_topics": [
+          "0x3cd5e48f9730b129dc7550f0fcea9c767b7be37837cd10e55eb35f734f4bca04"
+        ],
+        "raw_data": "0x00000000000000000000000000000000000000000000000000000000000075950000000000000000000000006d6620efa72948c5f68a3c8646d58c00d3f4a980000000000000000000000000000000000000000000000000000000000001a73b0000000000000000000000005634c4a5fed09819e3c46d86a965dd9447d86e47"
+      },
+      "unique": true
+    },
+    "legs": [
+      {
+        "role": "source",
+        "chain": "ethereum",
+        "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+        "party": "0xacddac6c77318b615f7f6fb9bb67c6833e9c05f1",
+        "asset": "native",
+        "amount_raw": "591812223813721",
+        "amount": "0.000591812223813721",
+        "decimals": 18,
+        "bridge_asset": "native",
+        "bridge_amount_raw": "400000000000000",
+        "binding": "layerzero:0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297:native_principal_plus_executed_messaging_fee",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "ethereum",
+            "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+            "dataset": "internal_transactions",
+            "event_index": 1,
+            "timestamp": "2026-10-05T07:31:59Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0xacddac6c77318b615f7f6fb9bb67c6833e9c05f1",
+            "to_address": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "591812223813721",
+            "amount": "0.000591812223813721",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [
+          {
+            "chain": "ethereum",
+            "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+            "dataset": "internal_transactions",
+            "event_index": 3,
+            "timestamp": "2026-10-05T07:31:59Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0x77b2043768d28e9c9ab44e1abfc95944bce57931",
+            "to_address": "0x6d6620efa72948c5f68a3c8646d58c00d3f4a980",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "191812223813721",
+            "amount": "0.000191812223813721",
+            "status": "success"
+          }
+        ],
+        "block": {
+          "chain": "ethereum",
+          "network_id": "1",
+          "number": 26124693,
+          "hash": "0x24a0c248686d40ad141416e7d9dbbf64b85bc0bd0727929fd0a15a74e32a29ed",
+          "finalized_number": 26125392,
+          "finalized_hash": "0xabe7a2e0ad7b0d99bab3bc6552df937c9606f39d8a75737025700ee4c4fc2209",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:07:33.872620193Z",
+          "source": "configured_rpc_gateway:e7f29bd6-69e9-4c73-bd68-332d9c3f9c86",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "4c3ccf917ce4ab4c17daad478e783ad7b347c3f4e144d49485cf51c9c9618166",
+        "trace_sha256": "29a03df76793402cb8d70fecc176147167a580410228ca877dd57b399f4d9f70",
+        "read_gaps": null,
+        "truncated": false
+      },
+      {
+        "role": "destination",
+        "chain": "base",
+        "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+        "party": "0xe9bcbad0233dc8e40a991ddad66d57a1093092c4",
+        "asset": "native",
+        "amount_raw": "399000000000000",
+        "amount": "0.000399",
+        "decimals": 18,
+        "bridge_asset": "native",
+        "bridge_amount_raw": "399000000000000",
+        "binding": "layerzero:0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297:executed_asset_party_amount",
+        "message_bound": true,
+        "unique_path": true,
+        "movements": [
+          {
+            "chain": "base",
+            "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+            "dataset": "internal_transactions",
+            "event_index": 5,
+            "timestamp": "2026-10-05T07:35:27Z",
+            "timestamp_source": "chain_rpc",
+            "from_address": "0xdc181bd607330aeebef6ea62e03e5e1fb4b6f7c7",
+            "to_address": "0xe9bcbad0233dc8e40a991ddad66d57a1093092c4",
+            "token_contract": "native",
+            "token": "",
+            "decimals": 18,
+            "amount_raw": "399000000000000",
+            "amount": "0.000399",
+            "status": "success"
+          }
+        ],
+        "other_disbursements": [],
+        "block": {
+          "chain": "base",
+          "network_id": "8453",
+          "number": 52198190,
+          "hash": "0x9e8691b0a87ab09e8f6029938c8c2e2a22ed5ed334d38a294dcbce2e7846a051",
+          "finalized_number": 52202073,
+          "finalized_hash": "0xac6d7fcc7d72a249c21c998342f36e44dffb935293cd22fa2bfc0c78e61c533f",
+          "policy": "rpc_finalized_and_fresh_canonical_block",
+          "canonical": true,
+          "finalized": true,
+          "checked_at": "2026-10-05T10:07:37.889410263Z",
+          "source": "configured_rpc_gateway:e7f29bd6-69e9-4c73-bd68-332d9c3f9c86",
+          "corroboration": "not_available_gateway_does_not_select_independent_provider"
+        },
+        "receipt_sha256": "122683acd4cb2be7f28f274a02d944ed5e943de3e2af2932cbc62c846c3d0bf1",
+        "trace_sha256": "5c9e6f8c5dcb068ec8b47f33d477b6a13c82579a3ec5498a2dcfc9ff40fe3386",
+        "read_gaps": [],
+        "truncated": false
+      }
+    ],
+    "read_gaps": [],
+    "built_at": "2026-10-05T10:07:14.85419783Z"
+  },
+  "bridge": "layerzero",
+  "order_id": "0x6b6cf95998f2b09ec3bf1e88049f51d7afdcb944f249e0e0e94df62f68166297",
+  "status": "completed",
+  "raw_status": "DELIVERED",
+  "association": "protocol_linked",
+  "source": [
+    {
+      "chain": "ethereum",
+      "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+      "address": "0xacddac6c77318b615f7f6fb9bb67c6833e9c05f1",
+      "token_contract": "native",
+      "amount_raw": "591812223813721",
+      "amount": "0.000591812223813721",
+      "decimals": 18,
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "destination": [
+    {
+      "chain": "base",
+      "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+      "address": "0xe9bcbad0233dc8e40a991ddad66d57a1093092c4",
+      "token_contract": "native",
+      "amount_raw": "399000000000000",
+      "amount": "0.000399",
+      "decimals": 18,
+      "amounts_scope": "strict_chain_funding_evidence",
+      "address_scope": "protocol_bound_bridge_funding_party"
+    }
+  ],
+  "refund": [],
+  "evidence": {
+    "source": "https://scan.layerzero-api.com/v1/messages/tx/0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+    "fetched_at": "2026-10-05T10:07:09.936691105Z",
+    "response_sha256": "f3c4de242056a51b41aabd922681e5bafe783b8691a73b8662c609724352cc17",
+    "matched_identifiers": [
+      "chain+tx_hash"
+    ],
+    "page_truncated": false
+  },
+  "on_chain_verified": false,
+  "verification": [
+    {
+      "leg_role": "source",
+      "chain": "ethereum",
+      "tx_hash": "0x347966b57970139c39fe1f3decde56e6f02eac6d2ea5bfcc3918a15b95011e0d",
+      "status": "message_only",
+      "amounts_matched": false,
+      "reason": "message pairing has no decoded application asset and beneficiary",
+      "observed_movements": [],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    },
+    {
+      "leg_role": "destination",
+      "chain": "base",
+      "tx_hash": "0xa2f7442b862d712d81581e0cdfef8be90893852886f14356b83a53caebdd4af2",
+      "status": "message_only",
+      "amounts_matched": false,
+      "reason": "message pairing has no decoded application asset and beneficiary",
+      "observed_movements": [],
+      "source": "rpc_receipt_and_matching_block",
+      "truncated": false,
+      "identifier_matched": true
+    }
+  ],
+  "pairing_verified": false,
+  "message_only": true
+}

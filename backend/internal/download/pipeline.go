@@ -24,6 +24,7 @@ import (
 	"github.com/blockchain-platform/blockchain-platform/internal/rawstore"
 	"github.com/blockchain-platform/blockchain-platform/internal/spool"
 	"github.com/blockchain-platform/blockchain-platform/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 // pageRef 一页待 Ingest 工作单元（§80 下载页）。
@@ -98,7 +99,7 @@ func newIngestPipeline(cfg *config.Config, st *store.Store, sp *spool.Store, raw
 	return &ingestPipeline{
 		cfg: cfg, store: st, spool: sp, raw: raw, log: log,
 		queue:   make(chan pageRef, 2048),
-		uploadQ: make(chan pageRef, 2048),
+		uploadQ: make(chan pageRef, 16),
 		pending: map[string]*pagePending{},
 	}
 }
@@ -108,6 +109,7 @@ func (p *ingestPipeline) start(ctx context.Context) {
 	p.agg = newBatchAggregator(p.cfg, p.sc.writer, p.log)
 	p.agg.pipeline = p
 	go p.agg.run(ctx)
+	go p.archiveLoop(ctx)
 	for i := 0; i < p.cfg.Ankr.ParserSlots; i++ {
 		go p.parserWorker(ctx)
 	}
@@ -154,6 +156,8 @@ func (p *ingestPipeline) parserWorker(ctx context.Context) {
 }
 
 func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
+	ctx = context.WithValue(ctx, "job_id", pr.jobID)
+	ctx = context.WithValue(ctx, "shard_id", pr.shardID)
 	start := time.Now()
 	rows, err := p.spool.LoadRows(spool.PageFile{PageNo: pr.pageNo, RawPath: pr.rawPath, MetaPath: pr.metaPath, Meta: pr.meta})
 	if err != nil {
@@ -175,6 +179,18 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 				p.scheduled.Delete(pr.pageID)
 				return
 			}
+			if _, serr := p.store.PageStatus(ctx, pr.pageID); serr != nil {
+				p.failPage(ctx, pr, "page state lookup: "+serr.Error())
+				return
+			}
+			if _, ok := p.uploads.Load(pr.pageID); !ok {
+				if key, kerr := p.store.PageArchiveKey(ctx, pr.pageID); kerr == nil && key != "" {
+					p.uploads.Store(pr.pageID, uploadInfo{key: key})
+				} else if kerr != nil && !errors.Is(kerr, pgx.ErrNoRows) {
+					p.failPage(ctx, pr, "archive state lookup: "+kerr.Error())
+					return
+				}
+			}
 			// If the raw uploader won the race, MinIO is the durable second
 			// copy. Recover from it instead of losing an otherwise valid page.
 			if upload, ok := p.uploads.Load(pr.pageID); ok && p.raw != nil {
@@ -184,6 +200,13 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 						p.log.Warn("spool page recovered from raw object", "page_id", pr.pageID,
 							"shard_id", pr.shardID, "page_no", pr.pageNo)
 					}
+				} else {
+					if rawstore.UnrecoverableObject(rawErr) {
+						p.failPagePermanent(ctx, pr, "raw archive unrecoverable: "+rawErr.Error())
+					} else {
+						p.failPage(ctx, pr, "raw archive read: "+rawErr.Error())
+					}
+					return
 				}
 			}
 			if err != nil {
@@ -195,6 +218,12 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 			p.failPage(ctx, pr, "spool load: "+err.Error())
 			return
 		}
+	}
+	if job, jerr := p.store.GetJob(ctx, pr.jobID); jerr == nil {
+		ctx = p.sc.withRetryRequestBudget(ctx, pr.jobID, job.Stats)
+	} else {
+		p.failPage(ctx, pr, "job state lookup: "+jerr.Error())
+		return
 	}
 	batch, err := p.sc.buildRows(ctx, pr.dataset, rows, pr.chain, pr.address, pr.snapshotBlock)
 	if err != nil {
@@ -251,8 +280,12 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 	if len(kinds) == 0 {
 		// 空页（0 行）：直接 INGESTED，避免 finalizer 永远等待（§56 边界）。
 		ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_ = p.store.UpdatePageIngested(ctx2, pr.pageID, 0, 0, 0)
+		err := p.store.UpdatePageIngested(ctx2, pr.pageID, 0, 0, 0)
 		cancel()
+		if err != nil {
+			p.failPage(ctx, pr, "empty page acknowledgement: "+err.Error())
+			return
+		}
 		p.ingested.Store(pr.pageID, true)
 		p.scheduled.Delete(pr.pageID)
 		if _, ok := p.uploads.Load(pr.pageID); ok {
@@ -268,18 +301,9 @@ func (p *ingestPipeline) processPage(ctx context.Context, pr pageRef) {
 	}
 	observability.IngestLatencySeconds.Observe(time.Since(start).Seconds())
 
-	// 异步 Raw Upload（§44：不阻塞 Fetch/Ingest）
-	select {
-	case p.uploadQ <- pr:
-	default:
-		p.log.Warn("raw upload queue full, page upload deferred", "shard_id", pr.shardID, "page_no", pr.pageNo)
-		go func() { // 兜底：不丢上传任务（pipeline 停止时退出）
-			select {
-			case <-p.ctx.Done():
-			case p.uploadQ <- pr:
-			}
-		}()
-	}
+	// The persisted archive scanner owns retries; ingestion never blocks on a
+	// full upload queue or starts an unbounded per-page goroutine.
+
 }
 
 func decodeRawRows(data []byte, expectedSHA256 string) ([]json.RawMessage, error) {
@@ -353,41 +377,43 @@ func (p *ingestPipeline) failPagePermanent(ctx context.Context, pr pageRef, msg 
 
 // onChunksFlushed 聚合器 flush 成功后回调（每 chunk 一次）。
 func (p *ingestPipeline) onChunksFlushed(credits []pageCredit) {
+	var updates []store.PageIngestUpdate
+	p.mu.Lock()
 	for _, c := range credits {
-		p.mu.Lock()
 		pend := p.pending[c.pageID]
-		if pend != nil {
-			if c.fact {
-				pend.inserted += c.inserted
-			}
-			pend.remaining--
-			if pend.remaining > 0 {
-				p.mu.Unlock()
-				continue
-			}
-			delete(p.pending, c.pageID)
-		}
-		p.mu.Unlock()
 		if pend == nil {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if err := p.store.UpdatePageIngested(ctx, c.pageID, pend.parsed, pend.inserted, pend.inserted); err != nil {
-			p.log.Error("mark page ingested failed", "page_id", c.pageID, "err", err)
+		if c.fact {
+			pend.inserted += c.inserted
+		}
+		pend.remaining--
+		if pend.remaining == 0 {
+			updates = append(updates, store.PageIngestUpdate{PageID: c.pageID, Parsed: pend.parsed, Inserted: pend.inserted, Unique: pend.inserted})
+			delete(p.pending, c.pageID)
+		}
+	}
+	p.mu.Unlock()
+	if len(updates) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := p.store.UpdatePagesIngested(ctx, updates)
+	for _, u := range updates {
+		if err != nil {
+			p.log.Error("page acknowledgement deferred", "page_id", u.PageID, "err", err)
 		} else {
-			p.ingested.Store(c.pageID, true)
-			observability.IngestRowsTotal.Add(float64(pend.inserted))
-			// 若已上传 → 立即释放 spool 页面文件（§72 水位）
-			if _, ok := p.uploads.Load(c.pageID); ok {
-				if pr, ok2 := p.pageByID(c.pageID); ok2 {
+			p.ingested.Store(u.PageID, true)
+			observability.IngestRowsTotal.Add(float64(u.Inserted))
+			if _, ok := p.uploads.Load(u.PageID); ok {
+				if pr, exists := p.pageByID(u.PageID); exists {
 					p.spool.RemovePage(pr.rawPath, pr.metaPath)
+					pageFiles.Delete(u.PageID)
 				}
 			}
 		}
-		// A transient metadata write failure must be retryable. ClickHouse writes
-		// are idempotent on the stable row key, so replay is safe.
-		p.scheduled.Delete(c.pageID)
-		cancel()
+		p.scheduled.Delete(u.PageID)
 	}
 }
 
@@ -420,19 +446,60 @@ func (p *ingestPipeline) uploadWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case pr := <-p.uploadQ:
-			if err := p.uploadPage(ctx, pr); err != nil {
-				pr.uploadTries++
-				if pr.uploadTries < 10 {
-					backoff := time.Duration(1<<uint(minInt(pr.uploadTries, 6))) * time.Second
+			attemptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			err := p.uploadPage(attemptCtx, pr)
+			cancel()
+			if err != nil {
+				retryCtx, retryCancel := context.WithTimeout(ctx, 5*time.Second)
+				_ = p.store.RetryPageArchive(retryCtx, pr.pageID)
+				retryCancel()
+				p.log.Warn("raw archive deferred; spool retained", "page_id", pr.pageID, "err", err)
+			}
+		}
+	}
+}
+
+func (p *ingestPipeline) archiveLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if p.raw == nil {
+				continue
+			}
+			free := cap(p.uploadQ) - len(p.uploadQ)
+			if free > 64 {
+				free = 64
+			}
+			if free > 0 {
+				pages, err := p.store.ClaimPageArchives(ctx, free)
+				if err != nil {
+					p.log.Warn("archive scan failed", "err", err)
+					continue
+				}
+				for _, pg := range pages {
+					pr := pageRef{pageID: pg.ID, jobID: pg.JobID, shardID: pg.ShardID, dataset: pg.Dataset, pageNo: pg.PageNo, rawPath: pg.RawPath, metaPath: spoolMetaPath(pg.RawPath), reqHash: pg.QueryHash, meta: spool.PageMeta{SHA256: pg.RawSHA256, Rows: pg.RowsFetched}}
 					select {
 					case <-ctx.Done():
 						return
-					case <-time.After(backoff):
-						p.uploadQ <- pr
+					case p.uploadQ <- pr:
 					}
-				} else {
-					p.log.Error("raw upload permanently failed, keeping local spool copy",
-						"shard_id", pr.shardID, "page_no", pr.pageNo, "err", err)
+				}
+			}
+			// A small independent pass creates manifests only after every raw page is
+			// archived. Object-store latency never holds fact completion behind it.
+			ready, err := p.store.ListArchiveReadyShards(ctx, 8)
+			if err == nil {
+				for _, sh := range ready {
+					itemCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					if key := p.sc.writeShardManifest(itemCtx, sh); key != "" {
+						_, _ = p.store.Pool.Exec(itemCtx, "UPDATE download_shards SET raw_object=$2 WHERE id=$1 AND raw_object=''", sh.ID, key)
+						p.sc.maybeCleanupSpool(itemCtx, sh)
+					}
+					cancel()
 				}
 			}
 		}
@@ -444,15 +511,22 @@ func (p *ingestPipeline) uploadPage(ctx context.Context, pr pageRef) error {
 	if err != nil {
 		return fmt.Errorf("read raw: %w", err)
 	}
-	key := rawPartKey(p.sc.sourceProviderForDataset(pr.chain, pr.dataset), pr.chain, pr.dataset, pr.reqHash, pr.pageNo, pr.meta.ReceivedAt)
+	if _, err := decodeRawRows(data, pr.meta.SHA256); err != nil {
+		return err
+	}
+	key := fmt.Sprintf("raw/pages/%s/%s/%s-%s.json.gz", pr.jobID, pr.shardID, pr.pageID, pr.meta.SHA256)
 	n, err := p.raw.PutGzip(ctx, key, data)
 	if err != nil {
 		return err
 	}
 	info := uploadInfo{key: key, sha256: pr.meta.SHA256, bytesGz: n, rows: pr.meta.Rows, pageNo: pr.pageNo, tokenHash: pr.meta.NextPageTokenHash}
+	if err := p.store.CompletePageArchive(ctx, pr.pageID, key, pr.meta.SHA256); err != nil {
+		return err
+	}
 	p.uploads.Store(pr.pageID, info)
-	if _, ok := p.ingested.Load(pr.pageID); ok {
+	if status, err := p.store.PageStatus(ctx, pr.pageID); err == nil && (status == model.PageIngested || status == model.PageValidated) {
 		p.spool.RemovePage(pr.rawPath, pr.metaPath)
+		pageFiles.Delete(pr.pageID)
 	}
 	return nil
 }

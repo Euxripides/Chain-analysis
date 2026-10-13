@@ -145,7 +145,7 @@ func (sc *Scheduler) progressLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			jobs, err := sc.store.ListJobs(ctx, "", 200, 0)
+			jobs, err := sc.store.ListProgressJobs(ctx)
 			if err != nil {
 				continue
 			}
@@ -219,19 +219,14 @@ func (sc *Scheduler) buildSnapshot(ctx context.Context, job *model.DownloadJob) 
 			"COUNT(*) FILTER (WHERE status IN ('INGESTED','COMPLETED') AND "+store.EffectiveShardSQL("")+") "+
 			"FROM download_shards WHERE job_id=$1", job.ID).
 		Scan(&snap.DownloadedRows, &snap.DownloadedBytes, &snap.TotalShards, &snap.DoneShards, &snap.FetchedShards, &snap.IngestedShards)
-	// 页面级 Fetch/Ingest 行数（§61 双进度）
-	if fetched, err := sc.store.FetchedRowsByJob(ctx, job.ID); err == nil {
-		snap.FetchedRows = fetched
+		// One page scan supplies all fetch/ingest/validation counters.
+	if err := sc.store.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(rows_fetched),0),
+ COALESCE(SUM(rows_inserted) FILTER (WHERE status IN ('INGESTED','VALIDATED')),0),
+ COUNT(*) FILTER (WHERE status='VALIDATED'),COALESCE(SUM(rows_inserted) FILTER (WHERE status='VALIDATED'),0)
+ FROM download_pages WHERE job_id=$1`, job.ID).Scan(&snap.FetchedRows, &snap.IngestedRows, &snap.ValidatedPages, &snap.ValidatedRows); err != nil {
+		return snap, err
 	}
-	if ingested, err := sc.store.IngestedRowsByJob(ctx, job.ID); err == nil {
-		snap.IngestedRows = ingested
-	}
-	// V1.1 Validate 进度（§30）
-	if vp, vs, vr, err := sc.store.ValidatedStatsByJob(ctx, job.ID); err == nil {
-		snap.ValidatedPages = vp
-		snap.ValidatedShards = vs
-		snap.ValidatedRows = vr
-	}
+	snap.ValidatedShards = snap.DoneShards
 	if snap.TotalShards > 0 && snap.ValidatedShards == snap.TotalShards {
 		snap.ValidationStatus = "COMPLETE"
 	} else if snap.ValidatedPages > 0 || snap.ValidatedShards > 0 {
@@ -254,19 +249,17 @@ func (sc *Scheduler) buildSnapshot(ctx context.Context, job *model.DownloadJob) 
 			snap.TailEtaSeconds = v
 		}
 	}
-	// Retry Amplification（§61 Gate）
+	// Retry and cost counters share one provider-usage scan.
 	var attempts, requests int64
-	_ = sc.store.Pool.QueryRow(ctx, "SELECT COUNT(*), COUNT(*) FILTER (WHERE retry_attempt=0) FROM provider_usage WHERE job_id=$1 AND usage_type<>'trc20_enrichment_summary'", job.ID).Scan(&attempts, &requests)
+	_ = sc.store.Pool.QueryRow(ctx, `SELECT COUNT(*),COUNT(*) FILTER (WHERE retry_attempt=0),
+ COUNT(*),COALESCE(SUM(estimated_cost_usd),0),COUNT(*) FILTER (WHERE usage_type LIKE 'count_oracle%'),
+ COALESCE(SUM(estimated_cost_usd) FILTER (WHERE usage_type LIKE 'count_oracle%'),0)
+ FROM provider_usage WHERE job_id=$1 AND usage_type<>'trc20_enrichment_summary'`, job.ID).
+		Scan(&attempts, &requests, &snap.APIRequests, &snap.APICostUSD, &snap.PlanningAPIRequests, &snap.PlanningAPICostUSD)
 	if requests > 0 {
 		snap.RetryAmp = float64(attempts) / float64(requests)
 	}
 	_ = sc.store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM download_shards WHERE job_id=$1 AND status IN ('LEASED','RUNNING','FETCHED','INGESTED')", job.ID).Scan(&snap.ActiveShards)
-	_ = sc.store.Pool.QueryRow(ctx,
-		"SELECT COUNT(*), COALESCE(SUM(estimated_cost_usd),0), "+
-			"COUNT(*) FILTER (WHERE usage_type LIKE 'count_oracle%'), "+
-			"COALESCE(SUM(estimated_cost_usd) FILTER (WHERE usage_type LIKE 'count_oracle%'),0) "+
-			"FROM provider_usage WHERE job_id=$1 AND usage_type<>'trc20_enrichment_summary'", job.ID).
-		Scan(&snap.APIRequests, &snap.APICostUSD, &snap.PlanningAPIRequests, &snap.PlanningAPICostUSD)
 	snap.ProviderUsage60s = sc.providerUsageWindow(ctx, job.ID, time.Minute)
 	snap.ProviderUsage5m = sc.providerUsageWindow(ctx, job.ID, 5*time.Minute)
 	snap.TRC20Metrics = sc.trc20EnrichmentMetrics(ctx, job.ID)

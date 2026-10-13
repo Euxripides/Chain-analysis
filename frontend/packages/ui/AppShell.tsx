@@ -29,11 +29,13 @@ export interface NavItem {
   label: string;
   icon?: React.ReactNode;
   badge?: number;
+  activePrefixes?: string[];
 }
 
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  collapsible?: boolean;
 }
 
 export interface ShellUser {
@@ -363,16 +365,14 @@ function UserShellLayout({
         </div>
 
         <div className="cs-nav">
-          {navGroups.map((group, index) => (
-            <div className="cs-nav__group" key={group.label || index}>
-              {group.label ? <span className="cs-nav__label">{group.label}</span> : null}
-              {group.items.map((item) => (
+          {navGroups.map((group, index) => {
+            const links = <>{group.items.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.to === "/"}
                   title={item.label}
-                  className="cs-nav__link"
+                  className={({ isActive }) => `cs-nav__link${isActive || item.activePrefixes?.some((prefix) => location.pathname === prefix || location.pathname.startsWith(prefix + "/")) ? " active" : ""}`}
                 >
                   <span className="cs-nav__icon" aria-hidden="true">
                     {item.icon}
@@ -384,9 +384,19 @@ function UserShellLayout({
                   {/* 收起态没有文字，用 aria-label 补足可访问名称（图标本身不可读）。 */}
                   {collapsed ? <span className="visually-hidden">{item.label}</span> : null}
                 </NavLink>
-              ))}
-            </div>
-          ))}
+              ))}</>;
+            return group.collapsible && !collapsed ? (
+              <details className="cs-nav__group cs-nav__more" key={group.label || index} open={group.items.some((item) => location.pathname === item.to || location.pathname.startsWith(item.to + "/")) || undefined}>
+                <summary className="cs-nav__label">{group.label}</summary>
+                {links}
+              </details>
+            ) : (
+              <div className="cs-nav__group" key={group.label || index}>
+                {group.label && !group.collapsible ? <span className="cs-nav__label">{group.label}</span> : null}
+                {links}
+              </div>
+            );
+          })}
         </div>
 
         <div className="cs-railfoot">

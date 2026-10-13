@@ -77,7 +77,7 @@ func (t *HealthTracker) Observe(provider, chainSlug string, latency time.Duratio
 	if s.pos == 0 {
 		s.filled = true
 	}
-	if err == nil {
+	if providerRespondedHealthy(err) {
 		s.successes++
 		return
 	}
@@ -89,6 +89,22 @@ func (t *HealthTracker) Observe(provider, chainSlug string, latency time.Duratio
 		s.rateLimited++
 	case ClassUpstream:
 		s.serverError++
+	}
+}
+
+// A well-formed rejection is evidence that the provider is reachable. Contract
+// probes often revert because a selector is absent; that must not disable every
+// eth_call on the chain. The original error is still returned and metered.
+func providerRespondedHealthy(err *Error) bool {
+	if err == nil {
+		return true
+	}
+	switch err.Class {
+	case ClassExecutionReverted, ClassInvalidParams, ClassMethodUnsupported,
+		ClassTraceUnsupported, ClassArchiveRequired, ClassRequestTooLarge, ClassRangeTooLarge:
+		return true
+	default:
+		return false
 	}
 }
 

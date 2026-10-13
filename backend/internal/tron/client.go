@@ -655,6 +655,9 @@ func (c *Client) fetchPrefetchPage(parent context.Context, req provider.FetchReq
 		httpReq.Header.Set("TRON-PRO-API-KEY", c.apiKey)
 	}
 	resp, err := c.Do(ctx, httpReq)
+	if errors.Is(err, provider.ErrDownloadBudget) {
+		return tronPrefetchPage{}, err
+	}
 	status := 0
 	if resp != nil {
 		status = resp.StatusCode
@@ -763,6 +766,9 @@ func (c *Client) transactionEvents(ctx context.Context, req provider.FetchReques
 		httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		started := time.Now()
 		resp, err := c.Do(ctx, httpReq)
+		if errors.Is(err, provider.ErrDownloadBudget) {
+			return nil, err
+		}
 		status := 0
 		if resp != nil {
 			status = resp.StatusCode
@@ -800,7 +806,7 @@ func (c *Client) record(ctx context.Context, req provider.FetchRequest, usageTyp
 	if c.usage == nil {
 		return
 	}
-	c.usage(model.UsageRow{Provider: c.Name(), Method: "trongrid_" + usageType, Dataset: req.Dataset, JobID: contextValue(ctx, "job_id"), ShardID: contextValue(ctx, "shard_id"), RequestTime: started, DurationMs: int(time.Since(started).Milliseconds()), Status: outcome, HTTPStatus: status, Rows: rows, Bytes: bytes, WireBytes: int64(bytes), DecodedBytes: int64(bytes), ErrorClass: class, PageSize: req.PageSize, ReturnedRows: rows, ResponseBytes: bytes, RetryAttempt: attempt, RequestID: req.RequestID, UsageType: usageType, APIType: "indexer", Chain: "tron", MethodClass: usageType, MethodCalls: 1, Priority: req.Priority})
+	c.usage(model.UsageRow{Provider: c.Name(), Method: "trongrid_" + usageType, Dataset: req.Dataset, JobID: contextValue(ctx, "job_id"), ShardID: contextValue(ctx, "shard_id"), RequestTime: started, DurationMs: int(time.Since(started).Milliseconds()), Status: outcome, HTTPStatus: status, Rows: rows, Bytes: bytes, WireBytes: int64(bytes), DecodedBytes: int64(bytes), ErrorClass: class, PageSize: req.PageSize, ReturnedRows: rows, ResponseBytes: bytes, RetryAttempt: attempt, RequestID: req.RequestID, UsageType: usageType, LogicalCalls: 1, HTTPRequests: 1, APIType: "indexer", Chain: "tron", MethodClass: usageType, MethodCalls: 1, Priority: req.Priority})
 }
 
 func (c *Client) acquire(ctx context.Context) error {
@@ -889,6 +895,9 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*http.Response, err
 	}
 	if c.apiKey != "" {
 		req.Header.Set("TRON-PRO-API-KEY", c.apiKey)
+	}
+	if err := provider.ReserveDownloadRequest(ctx, 1, 0, 0); err != nil {
+		return nil, err
 	}
 	return c.http.Do(req)
 }

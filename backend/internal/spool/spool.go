@@ -135,41 +135,48 @@ func metaName(pageNo int) string { return fmt.Sprintf("page-%06d.manifest.json",
 // WritePage 写 raw + manifest 并 fsync（§40：只有全部完成才是 DURABLE）。
 // 返回 raw 与 manifest 的绝对路径。
 func (s *Store) WritePage(meta PageMeta, rows []json.RawMessage) (rawPath, metaPath string, err error) {
+	page, err := s.WritePageWithMeta(meta, rows)
+	return page.RawPath, page.MetaPath, err
+}
+
+// WritePageWithMeta returns the exact manifest persisted with the durable bytes.
+// Callers must use this SHA and row count for checkpoint and archive fencing.
+func (s *Store) WritePageWithMeta(meta PageMeta, rows []json.RawMessage) (PageFile, error) {
 	if meta.PageNo < 1 {
-		return "", "", fmt.Errorf("page_no must be >= 1")
+		return PageFile{}, fmt.Errorf("page_no must be >= 1")
 	}
 	dir := s.shardDir(meta.JobID, meta.Dataset, meta.ShardID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", "", err
+		return PageFile{}, err
 	}
 	if meta.ReceivedAt.IsZero() {
 		meta.ReceivedAt = time.Now()
 	}
 	raw, err := json.Marshal(rows)
 	if err != nil {
-		return "", "", err
+		return PageFile{}, err
 	}
 	sum := sha256.Sum256(raw)
 	meta.SHA256 = hex.EncodeToString(sum[:])
 	meta.Rows = len(rows)
 	meta.DecodedBytes = int64(len(raw))
 
-	rawPath = filepath.Join(dir, rawName(meta.PageNo))
-	metaPath = filepath.Join(dir, metaName(meta.PageNo))
+	rawPath := filepath.Join(dir, rawName(meta.PageNo))
+	metaPath := filepath.Join(dir, metaName(meta.PageNo))
 	if err := writeFileDurable(rawPath, raw); err != nil {
-		return "", "", fmt.Errorf("write raw page: %w", err)
+		return PageFile{}, fmt.Errorf("write raw page: %w", err)
 	}
 	mb, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
-		return "", "", err
+		return PageFile{}, err
 	}
 	if err := writeFileDurable(metaPath, mb); err != nil {
-		return "", "", fmt.Errorf("write page manifest: %w", err)
+		return PageFile{}, fmt.Errorf("write page manifest: %w", err)
 	}
 	if err := fsyncDir(dir); err != nil {
-		return "", "", fmt.Errorf("fsync shard dir: %w", err)
+		return PageFile{}, fmt.Errorf("fsync shard dir: %w", err)
 	}
-	return rawPath, metaPath, nil
+	return PageFile{PageNo: meta.PageNo, RawPath: rawPath, MetaPath: metaPath, Meta: meta}, nil
 }
 
 // writeFileDurable tmp + fsync + rename（崩溃安全：绝不留下半页）。

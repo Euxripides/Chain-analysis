@@ -16,14 +16,17 @@ func ExtractInternalActivity(result *TraceResult) []InternalActivity {
 		return nil
 	}
 	out := make([]InternalActivity, 0, result.FrameCount)
-	var walk func(frame *CallFrame, depth int, path []int)
+	var walk func(frame *CallFrame, depth int, path []int, ancestorFailed bool)
 	index := uint32(0)
-	walk = func(frame *CallFrame, depth int, path []int) {
+	walk = func(frame *CallFrame, depth int, path []int, ancestorFailed bool) {
 		item := InternalActivity{
 			Chain: result.Chain, TxHash: result.TxHash, Index: index, Depth: uint16(depth),
 			TracePath: pathKey(path), Type: frame.Type, From: frame.From,
 			Value: frame.Value, Gas: frame.Gas, GasUsed: frame.GasUsed,
-			Error: frame.Error, Success: frame.Error == "",
+			Error: frame.Error, Success: frame.Error == "" && !ancestorFailed,
+		}
+		if ancestorFailed && item.Error == "" {
+			item.Error = "ancestor_call_reverted"
 		}
 		if frame.To != nil {
 			item.To = *frame.To
@@ -35,10 +38,10 @@ func ExtractInternalActivity(result *TraceResult) []InternalActivity {
 		out = append(out, item)
 		index++
 		for i := range frame.Children {
-			walk(&frame.Children[i], depth+1, append(append([]int{}, path...), i))
+			walk(&frame.Children[i], depth+1, append(append([]int{}, path...), i), !item.Success)
 		}
 	}
-	walk(result.Root, 0, nil)
+	walk(result.Root, 0, nil, false)
 	return out
 }
 
@@ -73,7 +76,8 @@ func hasCalldata(input string) bool {
 func ValueTransfers(items []InternalActivity) []InternalActivity {
 	out := make([]InternalActivity, 0, len(items))
 	for _, item := range items {
-		if hasValue(item.Value) && item.Success {
+		movesValue := item.Type == CallTypeCall || item.Type == CallTypeCreate || item.Type == CallTypeCreate2 || item.Type == CallTypeSelfDestruct
+		if movesValue && hasValue(item.Value) && item.Success {
 			out = append(out, item)
 		}
 	}

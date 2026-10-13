@@ -1010,3 +1010,143 @@ func scanOne(dataset string, rows interface{ ScanStruct(dest any) error }) (map[
 	}
 	return m, nil
 }
+
+// StreamRowsForExportRange visits the entire exact FINAL result without a row
+// cap or an OFFSET. The callback must consume each row before the next one is
+// read; callers can batch bounded numbers of rows for metadata and encoding.
+func (s *Service) StreamRowsForExportRange(ctx context.Context, dataset, chain, subject string,
+	fromBlock, toBlock *int64, fromTime, toTime *time.Time, visit func(map[string]any) error) error {
+	release, err := acquireExportScanSlotFor(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	ctx = clickhouse.ExportScanContext(ctx)
+	q, args, err := blueExportRangeSQL(dataset, chain, subject, 0, 0, fromBlock, toBlock, fromTime, toTime)
+	if err != nil {
+		return err
+	}
+	rows, err := s.CH.DB().Query(ctx, q, args...)
+	if err != nil {
+		return clickhouse.DescribeScanError(err)
+	}
+	defer rows.Close()
+	scanner, err := newDatasetRowScanner(dataset, rows.Columns()...)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		row, err := scanner.scanColumns(rows)
+		if err != nil {
+			return fmt.Errorf("clickhouse [ScanRow]: %w", err)
+		}
+		normalizeStoredAmount(dataset, row)
+		if err := visit(row); err != nil {
+			return err
+		}
+	}
+	return clickhouse.DescribeScanError(rows.Err())
+}
+
+func (s *Service) StreamRowsForExportAddresses(ctx context.Context, dataset, chain string, addresses []string,
+	fromBlock, toBlock *int64, fromTime, toTime *time.Time, visit func(map[string]any) error) error {
+	if len(addresses) == 1 {
+		return s.StreamRowsForExportRange(ctx, dataset, chain, addresses[0], fromBlock, toBlock, fromTime, toTime, visit)
+	}
+	if len(addresses) == 0 {
+		return fmt.Errorf("addresses required")
+	}
+	release, err := acquireExportScanSlotFor(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	q, args, err := blueExportRangeSQL(dataset, chain, "", 0, 0, fromBlock, toBlock, fromTime, toTime)
+	if err != nil {
+		return err
+	}
+	condition := "(from_address IN (?) OR to_address IN (?))"
+	if dataset == "logs" || dataset == "balances" {
+		condition = "address IN (?)"
+		args = append(args, addresses)
+	} else {
+		args = append(args, addresses, addresses)
+	}
+	q = strings.Replace(q, " ORDER BY timestamp DESC", " AND "+condition+" ORDER BY timestamp DESC", 1)
+	rows, err := s.CH.DB().Query(clickhouse.ExportScanContext(ctx), q, args...)
+	if err != nil {
+		return clickhouse.DescribeScanError(err)
+	}
+	defer rows.Close()
+	scanner, err := newDatasetRowScanner(dataset, rows.Columns()...)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		row, err := scanner.scanColumns(rows)
+		if err != nil {
+			return err
+		}
+		normalizeStoredAmount(dataset, row)
+		if err := visit(row); err != nil {
+			return err
+		}
+	}
+	return clickhouse.DescribeScanError(rows.Err())
+}
+
+func blueExportRangeSQL(dataset, chain, subject string, limit, offset int,
+	fromBlock, toBlock *int64, fromTime, toTime *time.Time) (string, []any, error) {
+	switch dataset {
+	case "transactions", "token_transfers", "nft_transfers", "logs", "balances", "internal_transactions":
+	default:
+		return "", nil, fmt.Errorf("unknown dataset %s", dataset)
+	}
+	if chain != "tron" && chain != "solana" {
+		subject = strings.ToLower(subject)
+	}
+	var where string
+	var args []any
+	if subject != "" {
+		switch dataset {
+		case "transactions", "token_transfers", "nft_transfers", "internal_transactions":
+			where = "chain=? AND (from_address=? OR to_address=?)"
+			args = []any{chain, subject, subject}
+		case "logs", "balances":
+			where = "chain=? AND address=?"
+			args = []any{chain, subject}
+		}
+	} else {
+		where = "chain=?"
+		args = []any{chain}
+	}
+	if fromBlock != nil {
+		where += " AND block_number>=?"
+		args = append(args, *fromBlock)
+	}
+	if toBlock != nil {
+		where += " AND block_number<=?"
+		args = append(args, *toBlock)
+	}
+	if fromTime != nil {
+		where += " AND timestamp>=?"
+		args = append(args, *fromTime)
+	}
+	if toTime != nil {
+		where += " AND timestamp<=?"
+		args = append(args, *toTime)
+	}
+	if subject != "" {
+		where, args = exportIndexedFinalWhere(dataset, where, args)
+	}
+	q := "SELECT * FROM blockchain." + tableName(dataset) + " FINAL WHERE " + where + " ORDER BY timestamp DESC"
+	if limit > 0 {
+		q += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+	return q, args, nil
+}
+
+// RowsForExportRangeMulti scans ClickHouse once for all requested addresses.
+// Job ZIP export then fans the result into per-address files in memory, avoiding
+// one full FINAL table scan per address.

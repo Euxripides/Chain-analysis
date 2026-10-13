@@ -148,6 +148,20 @@ func ExportValue(holder any) any { return exportValue(holder) }
 // fmt.Sprint 的结果与 JSON 往返后的字符串一致（见文件头）。
 func exportValue(holder any) any {
 	switch v := holder.(type) {
+	case *[]string:
+		return append([]string(nil), (*v)...)
+	case *[]uint64:
+		return append([]uint64(nil), (*v)...)
+	case *[]uint32:
+		return append([]uint32(nil), (*v)...)
+	case *[]int64:
+		return append([]int64(nil), (*v)...)
+	case *[]int32:
+		return append([]int32(nil), (*v)...)
+	case *[]float64:
+		return append([]float64(nil), (*v)...)
+	case *[]any:
+		return append([]any(nil), (*v)...)
 	case *string:
 		return *v
 	case *time.Time:

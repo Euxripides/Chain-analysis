@@ -126,6 +126,8 @@ export interface ActivityRow {
 }
 
 export interface CounterpartyRow {
+  amount_state?: string;
+  assets?: { dataset: string; asset?: string; activity_count?: number; token_address: string; token_symbol: string; token_decimals: number; in_raw?: string | null; out_raw?: string | null; net_raw?: string | null; amount_state?: string; missing_amount_rows?: number }[];
   counterparty?: string;
   transaction_count?: number;
   in_raw?: string;
@@ -194,6 +196,7 @@ export const TABS = [
   { key: "transfers", label: "代币转账" },
   { key: "internal", label: "内部交易" },
   { key: "counterparties", label: "对手方" },
+  { key: "statistics", label: "统计分析" },
   { key: "semantic", label: "语义事件" },
   { key: "analysis", label: "分析" },
   { key: "coverage", label: "Coverage" },

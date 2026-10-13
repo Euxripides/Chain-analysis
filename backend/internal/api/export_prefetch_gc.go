@@ -39,6 +39,9 @@ func (s *Server) StartPrefetchGC(ctx context.Context) {
 			case <-timer.C:
 			}
 			s.sweepExpiredPrefetch(ctx)
+			if err := s.cleanupDatasetExports(ctx); err != nil && s.deps.Log != nil {
+				s.deps.Log.Warn("dataset export cleanup failed", "err", err)
+			}
 			timer.Reset(prefetchGCInterval)
 		}
 	}()

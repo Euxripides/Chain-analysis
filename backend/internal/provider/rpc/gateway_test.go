@@ -63,6 +63,34 @@ func headRequest() rpc.Request {
 		Budget: rpc.BudgetContext{Purpose: rpc.PurposeChainHead}}
 }
 
+func TestContractProbeRevertsDoNotDisableHealthyEthCall(t *testing.T) {
+	p := mockrpc.New("healthy-reverts")
+	p.Handle("eth_call", func(req rpc.Request) (json.RawMessage, *rpc.Error) {
+		if req.Params[0].(map[string]any)["data"] == "0x8da5cb5b" {
+			return nil, &rpc.Error{Class: rpc.ClassExecutionReverted, Message: "selector absent"}
+		}
+		return json.RawMessage(`"0x01"`), nil
+	})
+	h := newHarness(t, p)
+	req := rpc.Request{Chain: "bsc", Method: "eth_call",
+		Params: []any{map[string]any{"to": "0x" + strings.Repeat("1", 40), "data": "0x8da5cb5b"}, "latest"},
+		Budget: rpc.BudgetContext{Purpose: rpc.PurposeBalance}, CachePolicy: rpc.CachePolicy{Disabled: true}}
+	for i := 0; i < 40; i++ {
+		if _, err := h.gateway.Call(context.Background(), req); !rpc.IsClass(err, rpc.ClassExecutionReverted) {
+			t.Fatalf("probe %d must retain contract rejection, got %v", i, err)
+		}
+	}
+	req.Params[0] = map[string]any{"to": "0x" + strings.Repeat("1", 40), "data": "0x70a08231"}
+	if _, err := h.gateway.Call(context.Background(), req); err != nil {
+		t.Fatalf("healthy balance query after probes: %v", err)
+	}
+	health := rpc.NewHealthTracker()
+	health.Observe(p.Name(), "bsc", time.Millisecond, &rpc.Error{Class: rpc.ClassExecutionReverted})
+	if health.Snapshot(p.Name(), "bsc", rpc.CircuitClosed, 0).SuccessRate != 1 {
+		t.Fatal("contract rejection must not lower provider availability")
+	}
+}
+
 // §212 Router：Provider A 不支持 Trace，Provider B 支持 → 必须选 B。
 func TestRouterPicksTraceCapableProvider(t *testing.T) {
 	noTrace := mockrpc.New("no-trace")
@@ -360,8 +388,14 @@ func TestUsageAccounting(t *testing.T) {
 	if provider.Credits <= 0 {
 		t.Fatal("provider call must record credits")
 	}
+	if provider.HTTPRequests != 1 || provider.LogicalCalls != 1 {
+		t.Fatalf("provider request accounting = %+v", provider)
+	}
 	if !cached.CacheHit || cached.Credits != 0 || cached.CostUSD != 0 {
 		t.Fatalf("cache hit row must be free: %+v", cached)
+	}
+	if cached.HTTPRequests != 0 || cached.LogicalCalls != 1 {
+		t.Fatalf("cache hit must retain its logical call without a network request: %+v", cached)
 	}
 }
 

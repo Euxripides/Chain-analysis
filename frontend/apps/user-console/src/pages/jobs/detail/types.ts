@@ -93,6 +93,14 @@ export interface JobProgress {
   eta_seconds: number;
   ts: string;
   coverage_hit_ratio?: number;
+  rows_per_sec?: number;
+  fetched_rows?: number;
+  ingested_rows?: number;
+  validated_rows?: number;
+  fetched_shards?: number;
+  ingested_shards?: number;
+  validated_shards?: number;
+  tail_eta_seconds?: number;
 }
 
 export interface JobExport {

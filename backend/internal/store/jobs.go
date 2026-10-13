@@ -161,6 +161,25 @@ func (s *Store) FindReusableJob(ctx context.Context, fingerprint, chain, rangeTy
 	// bound to the request transaction both statements share one connection, so
 	// the UPDATE would fail with "conn busy".
 	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	// Legacy sync watermarks can hide unverified history. A completed full job
+	// may be reused only when its requested datasets have continuous landing
+	// evidence; active jobs keep their existing exact-request reuse behavior.
+	if job.Status == model.JobCompleted && job.RangeType == "full" {
+		for _, subject := range subjects {
+			coverage, _, coverageErr := s.ExplorerHistory(ctx, chain, subject, datasets, time.Now().UTC())
+			if coverageErr != nil {
+				return nil, coverageErr
+			}
+			for _, dataset := range coverage {
+				if !dataset.HistoryComplete {
+					return nil, nil
+				}
+			}
+		}
+	}
 	if err == nil && job.RequestFingerprint == "" {
 		_, _ = s.Pool.Exec(ctx, "UPDATE download_jobs SET request_fingerprint=$2 WHERE id=$1 AND request_fingerprint IS NULL", job.ID, fingerprint)
 		job.RequestFingerprint = fingerprint
@@ -175,6 +194,9 @@ func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, erro
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, pgx.ErrNoRows
 	}
 	return scanJob(rows)
@@ -187,6 +209,25 @@ func (s *Store) GetJob(ctx context.Context, id string) (*model.DownloadJob, erro
 // 是 P0 越权读取的一部分。
 func (s *Store) ListJobs(ctx context.Context, status string, limit, offset int) ([]model.DownloadJob, error) {
 	return s.listJobs(ctx, "", "", status, limit, offset)
+}
+
+// ListProgressJobs excludes historical terminal tasks before applying a limit.
+// A long-running task must not vanish when newer completed jobs fill the page.
+func (s *Store) ListProgressJobs(ctx context.Context) ([]model.DownloadJob, error) {
+	rows, err := s.Pool.Query(ctx, "SELECT "+jobCols+" FROM download_jobs WHERE status IN ('RUNNING','PAUSE_REQUESTED','RESUMING','CANCEL_REQUESTED') ORDER BY created_at,id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var jobs []model.DownloadJob
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, *j)
+	}
+	return jobs, rows.Err()
 }
 
 // ListJobsScoped 按租户作用域列出任务。wsID 为空表示该组织下全部工作区。
@@ -311,7 +352,11 @@ func (s *Store) SetJobStats(ctx context.Context, id string, stats map[string]any
 	if err != nil {
 		return err
 	}
-	_, err = s.Pool.Exec(ctx, "UPDATE download_jobs SET stats=$2::jsonb, updated_at=now() WHERE id=$1", id, b)
+	// Tail/progress writers use snapshots. Only the locked recovery-budget path
+	// may update its counters; a stale snapshot must never restore spent budget.
+	_, err = s.Pool.Exec(ctx, `UPDATE download_jobs SET stats=($2::jsonb-'download_retry') ||
+ CASE WHEN stats ? 'download_retry' THEN jsonb_build_object('download_retry',stats->'download_retry') ELSE '{}'::jsonb END,
+ updated_at=now() WHERE id=$1`, id, b)
 	return err
 }
 
@@ -415,6 +460,9 @@ func (s *Store) GetDataset(ctx context.Context, id string) (*model.DatasetItem, 
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, pgx.ErrNoRows
 	}
 	var r model.DatasetItem
@@ -662,6 +710,9 @@ func (s *Store) GetShard(ctx context.Context, id string) (*model.Shard, error) {
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, pgx.ErrNoRows
 	}
 	return scanShard(rows)
@@ -723,8 +774,8 @@ func (s *Store) FailShard(ctx context.Context, id, errMsg string, retryable bool
 	if retryable && retries+1 < maxRetries {
 		newStatus = model.ShardFailedRetry
 	}
-	_, err = tx.Exec(ctx, "UPDATE download_shards SET status=$2, retries=retries+1, error=$3, lease_owner='', updated_at=now() WHERE id=$1",
-		id, newStatus, errMsg)
+	_, err = tx.Exec(ctx, "UPDATE download_shards SET status=$2, retries=retries+1, error=$3, lease_owner='',leased_until=NULL, page_state=COALESCE(page_state,'{}')||jsonb_build_object('last_failure_retryable',$4::boolean), updated_at=now() WHERE id=$1 AND status NOT IN ('COMPLETED','CANCELLED')",
+		id, newStatus, errMsg, retryable)
 	if err != nil {
 		return "", err
 	}
@@ -835,6 +886,16 @@ func (s *Store) RecomputeDataset(ctx context.Context, datasetID string) error {
 		_ = s.Pool.QueryRow(ctx, "SELECT COALESCE(MAX(error),'') FROM download_shards WHERE dataset_id=$1 AND status IN ('FAILED_FINAL','CANCELLED')", datasetID).Scan(&reason)
 		extra["failure_reason"] = reason
 	}
+	if status == model.ItemCompleted {
+		var existing map[string]any
+		if err := s.Pool.QueryRow(ctx, "SELECT stats FROM download_datasets WHERE id=$1", datasetID).Scan(&existing); err != nil {
+			return err
+		}
+		if removedRangeRecovered(existing, status) {
+			extra["coverage"] = "COMPLETE"
+			extra["failure_reason"] = ""
+		}
+	}
 	stats, _ := json.Marshal(extra)
 	// V1.2：合并而不是覆盖 —— download_datasets.stats 同时承载 Count 预估/决策与 actuals 回写
 	_, err = s.Pool.Exec(ctx, "UPDATE download_datasets SET status=CASE WHEN status IN ('WAITING_USER_CONFIRMATION','ABORTED_BY_USER','SKIPPED') THEN status ELSE $2 END, progress=$3, "+
@@ -930,6 +991,26 @@ func (s *Store) RecomputeJob(ctx context.Context, jobID string) (float32, error)
 		progress = float32(sum / float64(n))
 	}
 	status := jobStatusForTerminal(all, done, terminal, anyFailed, n, progress)
+	// Parent snapshots can be stale after repair. The shard state is authoritative
+	// for unfinished or failed work and must prevent false COMPLETED/export admission.
+	if status == model.JobCompleted {
+		var unfinished, totalShards, completedShards int64
+		if err := s.Pool.QueryRow(ctx, "SELECT COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','FAILED_FINAL','CANCELLED')), COUNT(*), COUNT(*) FILTER (WHERE status='COMPLETED') FROM download_shards WHERE job_id=$1 AND "+EffectiveShardSQL(""), jobID).Scan(&unfinished, &totalShards, &completedShards); err != nil {
+			return 0, err
+		}
+		if totalShards > completedShards {
+			progress = float32(completedShards) / float32(totalShards)
+			switch {
+			case unfinished > 0:
+				status = model.JobRunning
+			case completedShards > 0:
+				status = model.JobPartialFailed
+			default:
+				status = model.JobFailed
+			}
+		}
+	}
+
 	var jobStatus string
 	err = s.Pool.QueryRow(ctx, "SELECT status FROM download_jobs WHERE id=$1", jobID).Scan(&jobStatus)
 	if err != nil {

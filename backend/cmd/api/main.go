@@ -76,6 +76,9 @@ func main() {
 	if !standby {
 		srv.StartProviderCenterSync(runCtx)
 	}
+	if !standby || os.Getenv("INVESTIGATION_WORKER_ENABLE") == "1" {
+		srv.StartInvestigationWorkers(runCtx)
+	}
 
 	server := &http.Server{
 		Addr:              ":" + itoa(cfg.HTTPPort),

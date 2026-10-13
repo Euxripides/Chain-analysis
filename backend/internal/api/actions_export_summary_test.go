@@ -240,7 +240,7 @@ func TestExportSummaryQueryBoundsAndSolanaCase(t *testing.T) {
 	snapshot := exportSummarySnapshot{Chain: "bsc", Addresses: []string{summarySubject}}
 	values := url.Values{"job_id": {"00000000-0000-4000-8000-000000000001"}, "token": {"usdt"}, "direction": {"in"}}
 	q, err := parseExportSummaryQuery(values, snapshot)
-	if err != nil || q.Address != summarySubject || q.Token != "USDT" || q.PageSize != 100 {
+	if err != nil || q.Address != summarySubject || q.Token != "" || q.TokenContract != "0x55d398326f99059ff775485246999027b3197955" || q.PageSize != 100 {
 		t.Fatalf("query defaults: %+v %v", q, err)
 	}
 	for _, field := range []string{"page_size", "detail_page_size"} {

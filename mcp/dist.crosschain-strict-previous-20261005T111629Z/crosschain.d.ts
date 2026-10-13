@@ -1,0 +1,186 @@
+import { z } from "zod";
+import type { ToolDefinition } from "./batch.js";
+export declare const bridgeQuerySchema: z.ZodEffects<z.ZodObject<{
+    verification_mode: z.ZodDefault<z.ZodEnum<["funds", "discovery"]>>;
+    bridge: z.ZodDefault<z.ZodEnum<["auto", "lifi", "near_intents", "bridgers", "layerzero", "cbridge", "across", "relay", "wormhole", "cctp"]>>;
+    chain: z.ZodOptional<z.ZodEnum<["ethereum", "bsc", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"]>>;
+    tx_hash: z.ZodOptional<z.ZodString>;
+    order_id: z.ZodOptional<z.ZodString>;
+    transfer_id: z.ZodOptional<z.ZodString>;
+    deposit_address: z.ZodOptional<z.ZodString>;
+    deposit_memo: z.ZodOptional<z.ZodString>;
+    max_results: z.ZodDefault<z.ZodNumber>;
+}, "strict", z.ZodTypeAny, {
+    verification_mode: "funds" | "discovery";
+    bridge: "auto" | "lifi" | "near_intents" | "bridgers" | "layerzero" | "cbridge" | "across" | "relay" | "wormhole" | "cctp";
+    max_results: number;
+    tx_hash?: string | undefined;
+    chain?: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche" | undefined;
+    order_id?: string | undefined;
+    transfer_id?: string | undefined;
+    deposit_address?: string | undefined;
+    deposit_memo?: string | undefined;
+}, {
+    tx_hash?: string | undefined;
+    chain?: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche" | undefined;
+    verification_mode?: "funds" | "discovery" | undefined;
+    bridge?: "auto" | "lifi" | "near_intents" | "bridgers" | "layerzero" | "cbridge" | "across" | "relay" | "wormhole" | "cctp" | undefined;
+    order_id?: string | undefined;
+    transfer_id?: string | undefined;
+    deposit_address?: string | undefined;
+    deposit_memo?: string | undefined;
+    max_results?: number | undefined;
+}>, {
+    verification_mode: "funds" | "discovery";
+    bridge: "auto" | "lifi" | "near_intents" | "bridgers" | "layerzero" | "cbridge" | "across" | "relay" | "wormhole" | "cctp";
+    max_results: number;
+    tx_hash?: string | undefined;
+    chain?: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche" | undefined;
+    order_id?: string | undefined;
+    transfer_id?: string | undefined;
+    deposit_address?: string | undefined;
+    deposit_memo?: string | undefined;
+}, {
+    tx_hash?: string | undefined;
+    chain?: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche" | undefined;
+    verification_mode?: "funds" | "discovery" | undefined;
+    bridge?: "auto" | "lifi" | "near_intents" | "bridgers" | "layerzero" | "cbridge" | "across" | "relay" | "wormhole" | "cctp" | undefined;
+    order_id?: string | undefined;
+    transfer_id?: string | undefined;
+    deposit_address?: string | undefined;
+    deposit_memo?: string | undefined;
+    max_results?: number | undefined;
+}>;
+export declare const collisionSchema: z.ZodEffects<z.ZodObject<{
+    anchor: z.ZodObject<{
+        chain: z.ZodEnum<["ethereum", "bsc", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"]>;
+        tx_hash: z.ZodString;
+        dataset: z.ZodEnum<["transactions", "token_transfers", "internal_transactions"]>;
+        event_index: z.ZodOptional<z.ZodNumber>;
+    }, "strict", z.ZodTypeAny, {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    }, {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    }>;
+    search_chain: z.ZodEnum<["ethereum", "bsc", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"]>;
+    search_addresses: z.ZodArray<z.ZodString, "many">;
+    search_direction: z.ZodEnum<["in", "out"]>;
+    direction: z.ZodEnum<["forward", "backward"]>;
+    asset_kind: z.ZodEnum<["native", "token"]>;
+    token_contract: z.ZodOptional<z.ZodString>;
+    asset_relation: z.ZodEnum<["same_asset", "swap"]>;
+    expected_amount: z.ZodOptional<z.ZodString>;
+    absolute_tolerance: z.ZodDefault<z.ZodString>;
+    relative_tolerance_bps: z.ZodDefault<z.ZodNumber>;
+    start_time: z.ZodString;
+    end_time: z.ZodString;
+    counterparty: z.ZodOptional<z.ZodString>;
+    max_parts: z.ZodDefault<z.ZodNumber>;
+    max_results: z.ZodDefault<z.ZodNumber>;
+    scan_limit: z.ZodDefault<z.ZodNumber>;
+    max_combinations: z.ZodDefault<z.ZodNumber>;
+}, "strict", z.ZodTypeAny, {
+    max_results: number;
+    anchor: {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    };
+    search_chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+    search_addresses: string[];
+    search_direction: "in" | "out";
+    direction: "forward" | "backward";
+    asset_kind: "native" | "token";
+    asset_relation: "same_asset" | "swap";
+    absolute_tolerance: string;
+    relative_tolerance_bps: number;
+    start_time: string;
+    end_time: string;
+    max_parts: number;
+    scan_limit: number;
+    max_combinations: number;
+    token_contract?: string | undefined;
+    expected_amount?: string | undefined;
+    counterparty?: string | undefined;
+}, {
+    anchor: {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    };
+    search_chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+    search_addresses: string[];
+    search_direction: "in" | "out";
+    direction: "forward" | "backward";
+    asset_kind: "native" | "token";
+    asset_relation: "same_asset" | "swap";
+    start_time: string;
+    end_time: string;
+    max_results?: number | undefined;
+    token_contract?: string | undefined;
+    expected_amount?: string | undefined;
+    absolute_tolerance?: string | undefined;
+    relative_tolerance_bps?: number | undefined;
+    counterparty?: string | undefined;
+    max_parts?: number | undefined;
+    scan_limit?: number | undefined;
+    max_combinations?: number | undefined;
+}>, {
+    max_results: number;
+    anchor: {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    };
+    search_chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+    search_addresses: string[];
+    search_direction: "in" | "out";
+    direction: "forward" | "backward";
+    asset_kind: "native" | "token";
+    asset_relation: "same_asset" | "swap";
+    absolute_tolerance: string;
+    relative_tolerance_bps: number;
+    start_time: string;
+    end_time: string;
+    max_parts: number;
+    scan_limit: number;
+    max_combinations: number;
+    token_contract?: string | undefined;
+    expected_amount?: string | undefined;
+    counterparty?: string | undefined;
+}, {
+    anchor: {
+        tx_hash: string;
+        chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+        dataset: "transactions" | "token_transfers" | "internal_transactions";
+        event_index?: number | undefined;
+    };
+    search_chain: "solana" | "tron" | "bsc" | "ethereum" | "polygon" | "arbitrum" | "optimism" | "base" | "avalanche";
+    search_addresses: string[];
+    search_direction: "in" | "out";
+    direction: "forward" | "backward";
+    asset_kind: "native" | "token";
+    asset_relation: "same_asset" | "swap";
+    start_time: string;
+    end_time: string;
+    max_results?: number | undefined;
+    token_contract?: string | undefined;
+    expected_amount?: string | undefined;
+    absolute_tolerance?: string | undefined;
+    relative_tolerance_bps?: number | undefined;
+    counterparty?: string | undefined;
+    max_parts?: number | undefined;
+    scan_limit?: number | undefined;
+    max_combinations?: number | undefined;
+}>;
+export declare function validateCrossChainTool(name: string, input: Record<string, unknown>): void;
+export declare const crossChainTools: ToolDefinition[];

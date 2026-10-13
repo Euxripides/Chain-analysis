@@ -89,17 +89,17 @@ func (s *Store) PageDurableCheckpointCAS(ctx context.Context, p model.Page, epoc
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
-	_, err = tx.Exec(ctx, "INSERT INTO download_pages "+
+	err = tx.QueryRow(ctx, "INSERT INTO download_pages "+
 		"(id, job_id, shard_id, dataset, page_no, query_hash, status, page_size, wire_bytes, decoded_bytes, raw_path, raw_sha256, "+
 		" rows_fetched, rows_parsed, rows_inserted, unique_rows, next_page_token_hash, from_block, to_block, "+
 		" fetch_started_at, body_completed_at, durable_at, ingested_at, validated_at, error) "+
 		"VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,0,0,$14,$15,$16,$17,$18,$19,NULL,NULL,$20) "+
-		"ON CONFLICT (shard_id, page_no) DO UPDATE SET status='DURABLE', page_size=$8, wire_bytes=$9, decoded_bytes=$10, "+
+		"ON CONFLICT (shard_id, page_no) DO UPDATE SET status='DURABLE', raw_archive_enabled=true, raw_object_key='', raw_uploaded_at=NULL, next_upload_at=now(), page_size=$8, wire_bytes=$9, decoded_bytes=$10, "+
 		"raw_path=$11, raw_sha256=$12, rows_fetched=$13, next_page_token_hash=$14, from_block=$15, to_block=$16, "+
-		"fetch_started_at=$17, body_completed_at=$18, durable_at=$19, error=$20, updated_at=now()",
+		"fetch_started_at=$17, body_completed_at=$18, durable_at=$19, error=$20, updated_at=now() RETURNING id",
 		p.ID, jobID, p.ShardID, p.Dataset, p.PageNo, p.QueryHash, model.PageDurable, p.PageSize, p.WireBytes, p.DecodedBytes,
 		p.RawPath, p.RawSHA256, p.RowsFetched, p.NextPageTokenHash, p.FromBlock, p.ToBlock,
-		p.FetchStartedAt, p.BodyCompletedAt, time.Now(), p.Error)
+		p.FetchStartedAt, p.BodyCompletedAt, time.Now(), p.Error).Scan(&p.ID)
 	if err != nil {
 		return "", err
 	}

@@ -425,7 +425,7 @@ func Bootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Infr
 				return nil, fmt.Errorf("Ankr TRON init: %w", tronErr)
 			}
 			var caps tron.AnkrCapabilities
-			if ankrState.Enabled && ankrState.RuntimeKey != "" {
+			if cfg.RPC.ProbeOnStart && ankrState.Enabled && ankrState.RuntimeKey != "" {
 				probeCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 				var probeErr error
 				caps, probeErr = client.Probe(probeCtx)

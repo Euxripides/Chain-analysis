@@ -26,6 +26,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/addressnorm"
+	"github.com/blockchain-platform/blockchain-platform/internal/assetidentity"
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	"github.com/blockchain-platform/blockchain-platform/internal/chaintrace"
@@ -376,9 +377,11 @@ func (a *actionAuth) middleware(next http.Handler) http.Handler {
 		}
 		sum := sha256.Sum256([]byte(strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))))
 		ok, keyID, limit := false, "", a.limit
+		bridgeAnalysisAllowed := false
 		for _, allowed := range a.hashes {
 			if subtle.ConstantTimeCompare(sum[:], allowed[:]) == 1 {
 				ok = true
+				bridgeAnalysisAllowed = true
 			}
 		}
 		if !ok && a.pool != nil {
@@ -386,6 +389,7 @@ func (a *actionAuth) middleware(next http.Handler) http.Handler {
 			err := a.pool.QueryRow(r.Context(), `SELECT id::text, scopes, rate_limit_per_minute, allowed_ips FROM gpt_action_api_keys WHERE key_hash=$1 AND disabled_at IS NULL AND (expires_at IS NULL OR expires_at>now())`, sum[:]).Scan(&keyID, &scopes, &limit, &allowedIPs)
 			if err == nil && actionScopeAllowed(scopes, actionScopeForPath(r.URL.Path)) && actionIPAllowed(allowedIPs, requestIP(r)) {
 				ok = true
+				bridgeAnalysisAllowed = actionScopeAllowed(scopes, "analysis")
 			}
 		}
 		if !ok {
@@ -408,6 +412,7 @@ func (a *actionAuth) middleware(next http.Handler) http.Handler {
 		}
 		started := time.Now()
 		recorder := &actionStatusWriter{ResponseWriter: w, status: http.StatusOK}
+		r = r.WithContext(context.WithValue(r.Context(), bridgeAnalysisPermission{}, bridgeAnalysisAllowed))
 		next.ServeHTTP(recorder, r)
 		if a.pool != nil {
 			requestID := r.Header.Get("X-Request-Id")
@@ -440,6 +445,9 @@ func (w *actionStatusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 func actionScopeForPath(path string) string {
+	if strings.HasSuffix(path, "/bridge/candidates") {
+		return "analysis"
+	}
 	if investigationReadScope(path) {
 		return "read"
 	}
@@ -523,10 +531,14 @@ func (s *Server) registerActionRoutes(api chi.Router) {
 		actions.Use(authn.middleware)
 		actions.Use(actionGzip)
 		s.registerInvestigationRoutes(actions)
+		s.registerCrossChainRoutes(actions)
 		actions.Get("/address/overview", s.handleActionOverview)
 		actions.Get("/address/assets", s.handleActionAssets)
 		actions.Get("/address/transactions", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "transactions") })
 		actions.Get("/address/token-transfers", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "token_transfers") })
+		actions.Get("/address/nft-transfers", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "nft_transfers") })
+		actions.Get("/address/logs", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "logs") })
+		actions.Get("/address/balance-snapshots", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "balances") })
 		actions.Get("/address/internal-transactions", func(w http.ResponseWriter, r *http.Request) { s.handleActionRows(w, r, "internal_transactions") })
 		actions.Get("/address/counterparties", s.handleActionCounterparties)
 		actions.Get("/address/flow-summary", s.handleActionFlowSummary)
@@ -897,9 +909,29 @@ func (s *Server) handleActionRequestLogs(w http.ResponseWriter, r *http.Request)
 	actionOK(w, out, map[string]any{"count": len(out)})
 }
 
-var actionChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true, "solana": true}
+var actionChains = actionChainAllowlist()
 
-var actionDownloadChains = map[string]bool{"bsc": true, "ethereum": true, "eth": true, "tron": true, "polygon": true, "arbitrum": true, "optimism": true, "base": true, "avalanche": true, "solana": true}
+var actionDownloadChains = actionChainAllowlist()
+
+func actionChainAllowlist() map[string]bool {
+	items := map[string]bool{"ethereum": true}
+	for _, cfg := range chain.DefaultRegistry().List() {
+		if cfg.Enabled {
+			items[cfg.Slug] = true
+		}
+	}
+	return items
+}
+
+func actionChainValues() []string {
+	items := []string{"ethereum"}
+	for _, cfg := range chain.DefaultRegistry().List() {
+		if cfg.Enabled {
+			items = append(items, cfg.Slug)
+		}
+	}
+	return items
+}
 
 func canonicalActionChain(v string) (string, error) {
 	v = strings.ToLower(strings.TrimSpace(v))
@@ -976,7 +1008,12 @@ func parseActionFilter(r *http.Request) (query.ActionFilter, error) {
 	if sort != "" && sort != "asc" && sort != "desc" {
 		return query.ActionFilter{}, fmt.Errorf("sort must be asc or desc")
 	}
-	return query.ActionFilter{Chain: chain, Address: address, Direction: direction, Token: q.Get("token"), TokenContract: q.Get("token_contract"), Counterparty: q.Get("counterparty"), FromAddress: q.Get("from_address"), ToAddress: q.Get("to_address"), Status: status, MethodID: q.Get("method_id"), Sort: sort, StartTime: start, EndTime: end, MinAmount: firstNonEmpty(q.Get("min_amount"), q.Get("min_value")), MaxAmount: firstNonEmpty(q.Get("max_amount"), q.Get("max_value")), Page: page, PageSize: size}, nil
+
+	token, contract, e := resolveActionAsset(chain, q.Get("token"), q.Get("token_contract"))
+	if e != nil {
+		return query.ActionFilter{}, e
+	}
+	return query.ActionFilter{Chain: chain, Address: address, Direction: direction, Token: token, TokenContract: contract, Counterparty: q.Get("counterparty"), FromAddress: q.Get("from_address"), ToAddress: q.Get("to_address"), Status: status, MethodID: q.Get("method_id"), Sort: sort, StartTime: start, EndTime: end, MinAmount: firstNonEmpty(q.Get("min_amount"), q.Get("min_value")), MaxAmount: firstNonEmpty(q.Get("max_amount"), q.Get("max_value")), Page: page, PageSize: size}, nil
 }
 func firstNonEmpty(v ...string) string {
 	for _, s := range v {
@@ -1101,6 +1138,11 @@ func (s *Server) handleActionAssets(w http.ResponseWriter, r *http.Request) {
 			meta["balance_snapshot_error"] = "Current provider balance unavailable; historical evidence returned"
 		}
 	}
+	for _, asset := range tokenAssets {
+		for key, value := range assetidentity.Describe(c, fmt.Sprint(asset["token_address"]), fmt.Sprint(asset["token_symbol"])) {
+			asset[key] = value
+		}
+	}
 	var estimatedUSD any
 	if total != "" && total != "unavailable" {
 		estimatedUSD = total
@@ -1164,6 +1206,11 @@ func (s *Server) handleActionRows(w http.ResponseWriter, r *http.Request, datase
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
 		return
 	}
+	f.TokenID = strings.TrimSpace(r.URL.Query().Get("token_id"))
+	if e = query.ValidateActionDatasetFilter(dataset, f); e != nil {
+		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
 	p, e := s.query.ActionRows(r.Context(), dataset, f)
 	if e != nil {
 		// The blanket 500 used to swallow the cause, so a strict ScanStruct
@@ -1182,6 +1229,17 @@ func (s *Server) handleActionRows(w http.ResponseWriter, r *http.Request, datase
 		nextPage = p.Page + 1
 	}
 	meta := s.actionCoverageMeta(r.Context(), f.Chain, []string{f.Address}, []string{dataset})
+	if dataset == "balances" {
+		meta["source"] = "local_balance_snapshot"
+		meta["balance_semantics"] = "latest_stored_observation"
+		var observed any
+		for _, row := range p.Items {
+			if observed == nil || fmt.Sprint(row["as_of_time"]) > fmt.Sprint(observed) {
+				observed = row["as_of_time"]
+			}
+		}
+		meta["freshness"] = map[string]any{"as_of_time": observed, "as_of_block": nil}
+	}
 	meta["pagination"] = map[string]any{"page": p.Page, "page_size": p.PageSize, "returned": len(p.Items), "total": p.Total, "has_more": p.HasMore, "next_page": nextPage}
 	actionOK(w, p.Items, meta)
 }
@@ -1200,6 +1258,10 @@ func (s *Server) handleActionCounterparties(w http.ResponseWriter, r *http.Reque
 	f, e := parseActionFilter(r)
 	if e != nil {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
+	if f.Token == "" && f.TokenContract == "" {
+		actionFail(w, 400, "INVALID_QUERY", "Select an exact token_contract; amounts from unrelated contracts must not be summed")
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -1226,6 +1288,10 @@ func (s *Server) handleActionFlowSummary(w http.ResponseWriter, r *http.Request)
 	f, e := parseActionFilter(r)
 	if e != nil {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
+	if f.Token == "" && f.TokenContract == "" {
+		actionFail(w, 400, "INVALID_QUERY", "Select an exact token_contract; amounts from unrelated contracts must not be summed")
 		return
 	}
 	o, e := s.query.ActionFlowSummary(r.Context(), f.Chain, f.Address, f.Token, f.TokenContract, f.StartTime, f.EndTime)
@@ -1261,6 +1327,10 @@ func (s *Server) handleActionTopFlows(w http.ResponseWriter, r *http.Request) {
 	f, e := parseActionFilter(r)
 	if e != nil {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
+	if f.Token == "" && f.TokenContract == "" {
+		actionFail(w, 400, "INVALID_QUERY", "Select an exact token_contract; amounts from unrelated contracts must not be summed")
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -1438,6 +1508,32 @@ func (s *Server) handleActionTransactionDecode(w http.ResponseWriter, r *http.Re
 		actionOK(w, map[string]any{"chain": c, "tx_hash": h, "message": transaction["message"], "inner_instructions": meta["innerInstructions"], "logs": meta["logMessages"]}, map[string]any{"decode_source": tx["rpc_source"], "chain_semantics": "solana_json_parsed"})
 		return
 	}
+	if c != "tron" && s.deps.ChainRead != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 55*time.Second)
+		defer cancel()
+		q := investigationRequest{Chain: c, TxHash: h}
+		point, e := s.statePoint(ctx, q)
+		if e != nil {
+			investigationError(w, e)
+			return
+		}
+		data, e := s.investigationContract(ctx, q, "decode_transaction_input", point)
+		if e != nil {
+			investigationError(w, e)
+			return
+		}
+		if out, ok := data.(map[string]any); ok {
+			out["chain"] = publicActionChain(c)
+			out["tx_hash"] = h
+			out["to_address"] = out["address"]
+			out["method_name"] = out["function"]
+			out["method_signature"] = out["signature"]
+			out["decoded_input"] = out["parameters"]
+			out["decoded_output"] = nil
+		}
+		actionOK(w, data, map[string]any{"source": "rpc_and_abi", "decode_provenance": "See abi_source, selector_source, verified and confidence"})
+		return
+	}
 	if s.detail == nil {
 		actionFail(w, 503, "INTERNAL_ERROR", "Transaction detail service is disabled")
 		return
@@ -1581,6 +1677,11 @@ func (s *Server) handleActionBatchAssets(w http.ResponseWriter, r *http.Request)
 		actionFail(w, 400, "INVALID_ADDRESS", e.Error())
 		return
 	}
+	req.Token, req.TokenContract, e = resolveActionAsset(c, req.Token, req.TokenContract)
+	if e != nil {
+		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
 	out := []map[string]any{}
 	for _, a := range addresses {
 		assets, total, e := s.query.ActionAssets(r.Context(), c, a)
@@ -1630,6 +1731,11 @@ func (s *Server) buildActionNetwork(ctx context.Context, req actionPathRequest) 
 	}
 	if strings.TrimSpace(req.Token) == "" && strings.TrimSpace(req.TokenContract) == "" {
 		return nil, nil, fmt.Errorf("token or token_contract is required; cross-asset amounts cannot be aggregated")
+	}
+
+	req.Token, req.TokenContract, e = resolveActionAsset(c, req.Token, req.TokenContract)
+	if e != nil {
+		return nil, nil, e
 	}
 	if req.MaxDepth <= 0 {
 		req.MaxDepth = 3
@@ -1707,21 +1813,9 @@ func (s *Server) handleActionPath(w http.ResponseWriter, r *http.Request) {
 		actionFail(w, 400, "INVALID_QUERY", e.Error())
 		return
 	}
-	pathByAddress := map[string][]string{addressnorm.NormalizeKey(req.Chain, req.Source): {req.Source}}
-	paths := make([]map[string]any, 0, len(edges))
-	for _, edge := range edges {
-		from, to := fmt.Sprint(edge["from"]), fmt.Sprint(edge["to"])
-		base := append([]string(nil), pathByAddress[addressnorm.NormalizeKey(req.Chain, from)]...)
-		if len(base) == 0 {
-			base = []string{from}
-		}
-		path := append(base, to)
-		if _, exists := pathByAddress[addressnorm.NormalizeKey(req.Chain, to)]; !exists {
-			pathByAddress[addressnorm.NormalizeKey(req.Chain, to)] = path
-		}
-		paths = append(paths, map[string]any{"path_id": fmt.Sprintf("path-%d", len(paths)+1), "addresses": path, "hop_count": len(path) - 1, "total_amount": edge["amount"], "hops": []any{edge}, "hop": edge})
-	}
-	data := map[string]any{"source": req.Source, "paths": paths, "nodes": nodes, "edges": edges}
+	root := fmt.Sprint(nodes[0]["address"])
+	paths := activityPaths(req.Chain, root, edges)
+	data := map[string]any{"source": root, "paths": paths, "nodes": nodes, "edges": edges, "interpretation": "Address downstream activity graph; aggregate address history is not source-batch attribution", "attribution_type": "address_activity", "is_source_fund_attribution": false}
 	for k, v := range actionTraversalMeta(nodes, edges, req.MaxDepth, req.MaxNodes) {
 		data[k] = v
 	}
@@ -1815,6 +1909,12 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 		actionFail(w, 400, "INVALID_QUERY", boundsErr.Error())
 		return
 	}
+
+	req.Token, req.TokenContract, e = resolveActionAsset(c, req.Token, req.TokenContract)
+	if e != nil {
+		actionFail(w, 400, "INVALID_QUERY", e.Error())
+		return
+	}
 	if req.TokenContract != "" {
 		contract, err := addressnorm.Normalize(c, req.TokenContract)
 		if err != nil {
@@ -1848,7 +1948,7 @@ func (s *Server) handleActionCreateExport(w http.ResponseWriter, r *http.Request
 	datasets := make([]string, 0, len(req.DataTypes))
 	seenDatasets := map[string]bool{}
 	for _, d := range req.DataTypes {
-		if d != "transactions" && d != "token_transfers" && d != "internal_transactions" && d != "logs" {
+		if !model.ValidDataset(d) {
 			actionFail(w, 400, "INVALID_QUERY", "unsupported data_type "+d)
 			return
 		}
@@ -1945,4 +2045,15 @@ func (s *Server) handleActionExportStatus(w http.ResponseWriter, r *http.Request
 		data["error"] = exp.Error
 	}
 	actionOK(w, data, nil)
+}
+
+func resolveActionAsset(c, token, contract string) (string, string, error) {
+	token, contract, e := assetidentity.Resolve(c, token, contract)
+	if e != nil {
+		return "", "", e
+	}
+	if contract != "" {
+		contract, e = addressnorm.Normalize(c, contract)
+	}
+	return token, contract, e
 }

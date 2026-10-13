@@ -14,11 +14,14 @@ import (
 
 // Options 每次调用的策略（用途、优先级、一致性、预算）。
 type Options struct {
-	Purpose     string
-	Priority    rpc.Priority
-	Consistency rpc.Consistency
-	Budget      rpc.BudgetContext
-	TraceID     string
+	// TransactionTTL only changes an explicitly requested interactive tx lookup.
+	// Other callers keep the central method registry's cache policy.
+	TransactionTTL time.Duration
+	Purpose        string
+	Priority       rpc.Priority
+	Consistency    rpc.Consistency
+	Budget         rpc.BudgetContext
+	TraceID        string
 }
 
 // WithPurpose 便捷构造。

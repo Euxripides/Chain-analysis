@@ -2210,6 +2210,9 @@ func (c *AnkrClient) call(ctx context.Context, fetchReq provider.FetchRequest, e
 			return nil, &provider.Error{Provider: c.Name(), Class: provider.ClassInvalidRequest, Message: "Ankr TRON endpoint is invalid"}
 		}
 		request.Header.Set("content-type", "application/json")
+		if err := provider.ReserveDownloadRequest(ctx, int64(methodCalls), float64(methodCalls)*200, float64(methodCalls)*0.00002); err != nil {
+			return nil, err
+		}
 		response, err := c.http.Do(request)
 		status := 0
 		if response != nil {
@@ -2246,7 +2249,7 @@ func (c *AnkrClient) recordAnkr(ctx context.Context, req provider.FetchRequest, 
 	if c.usage == nil {
 		return
 	}
-	c.usage(model.UsageRow{Provider: "ankr", Method: usageType, Dataset: req.Dataset, JobID: contextValue(ctx, "job_id"), ShardID: contextValue(ctx, "shard_id"), RequestTime: started, DurationMs: int(time.Since(started).Milliseconds()), Status: outcome, HTTPStatus: status, Rows: rows, Bytes: size, WireBytes: int64(size), DecodedBytes: int64(size), ErrorClass: class, PageSize: req.PageSize, ReturnedRows: rows, ResponseBytes: size, RetryAttempt: attempt, RequestID: req.RequestID, UsageType: usageType, APIType: "node", Chain: "tron", MethodClass: usageType, MethodCalls: methodCalls, BatchSize: batchSize, LogicalCalls: methodCalls, HTTPRequests: 1})
+	c.usage(model.UsageRow{Provider: "ankr", Method: usageType, Dataset: req.Dataset, JobID: contextValue(ctx, "job_id"), ShardID: contextValue(ctx, "shard_id"), RequestTime: started, DurationMs: int(time.Since(started).Milliseconds()), Status: outcome, HTTPStatus: status, Rows: rows, Bytes: size, WireBytes: int64(size), DecodedBytes: int64(size), ErrorClass: class, PageSize: req.PageSize, ReturnedRows: rows, ResponseBytes: size, RetryAttempt: attempt, RequestID: req.RequestID, UsageType: usageType, APIType: "node", Chain: "tron", MethodClass: usageType, MethodCalls: methodCalls, BatchSize: batchSize, LogicalCalls: methodCalls, HTTPRequests: 1, Credits: float64(methodCalls) * 200, CostUSD: float64(methodCalls) * 0.00002})
 }
 
 func (c *AnkrClient) setAnkrHealth(state provider.HealthState, message string) {

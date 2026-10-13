@@ -1,13 +1,11 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState } from "react";
-import { useParams,
+import { Link, useParams,
   useSearchParams } from "react-router-dom";
 import { ChevronDown,
   ChevronRight } from "lucide-react";
-import { Tabs } from "antd";
 import { ApiError,
   useAuth } from "@chain/api-client";
 import {
@@ -18,7 +16,6 @@ import {
   CopyButton,
   DataTable,
   EmptyState,
-  ErrorState,
   HashValue,
   IconButton,
   KeyValueList,
@@ -31,10 +28,13 @@ import {
   statusToneFor,
   useDialog,
 } from "@chain/ui";
+import { Card as AntCard, Button as AntButton, Descriptions, Space } from "antd";
+import { ExplorerSearch } from "./explorer/ExplorerSearch";
+import { ChainIcon } from "./explorer/AssetIcon";
 import { CsPageHeader } from "@chain/user-ui";
+import { TransactionAnalysis, preciseAmount, type Analysis } from "./transaction-analysis/TransactionAnalysis";
 import type { StatusTone } from "@chain/ui";
 import { formatBytes, formatRawAmount, formatTime, shortValue, useApi, useS5Action } from "../sprint5/common";
-import "./detail-polish.css";
 
 /**
  * U-EXP-03 交易详情。
@@ -101,6 +101,7 @@ interface TxRecord {
   input?: string;
   source_provider?: string;
   method_id?: string;
+	 receipt_error?: string;
   method_name?: string;
   method_signature?: string;
   method_source?: string;
@@ -152,12 +153,16 @@ interface TraceResult {
 
 const TABS = [
   { key: "overview", label: "概览" },
+  { key: "flows", label: "资产转移" },
+  { key: "internal", label: "内部交易" },
+  { key: "crosschain", label: "跨链关联" },
+  { key: "approvals", label: "授权" },
   { key: "logs", label: "Logs" },
   { key: "trace", label: "Trace" },
 ];
 
 function nativeDecimals(chain: string): number {
-  return chain === "tron" ? 6 : 18;
+  return chain === "tron" ? 6 : chain === "solana" ? 9 : 18;
 }
 
 function jsonText(value: unknown, max = 160): string {
@@ -220,7 +225,7 @@ function TraceFrameView({ frame, chain, depth, path }: { frame: TraceFrame; chai
         </span>
         {/* 金额保留服务端原始字符串精度：raw 值完整写在 title 与检查器里。 */}
         <span className="amount" title={"raw " + (frame.value ?? "0")}>
-          {formatRawAmount(frame.value ?? "0", decimals)}
+          {preciseAmount(frame.value, decimals)}
         </span>
         <StatusBadge tone={frame.error ? "danger" : "ok"}>{frame.error ? "失败" : "成功"}</StatusBadge>
       </div>
@@ -243,7 +248,7 @@ function TraceResultView({ trace, chain }: { trace: TraceResult; chain: string }
   return (
     <>
       <PageSection title="Trace 概要">
-        <div className="metric-grid cs-stagger cs-statistic-group cs-statistic-group--trace">
+        <div className="metric-grid cs-stagger">
           <MetricCard label="来源" value={trace.source ?? "—"} />
           <MetricCard label="帧数" value={trace.frame_count ?? "—"} />
           <MetricCard label="最大深度" value={trace.max_depth ?? "—"} />
@@ -375,19 +380,6 @@ function LogsTable({ rows }: { rows: LogRow[] }) {
   );
 }
 
-/**
- * 交易哈希路由参数 → API 可用的规范形式。
- *
- * 路由契约（不变）：/transactions/{chain}/{hash} 的 hash 可以带 0x，也可以是裸 64 hex
- * （ExplorerPage 跳转时统一 strip 掉前缀，explorer-visual-acceptance.mjs 冻结了该形状）。
- * 后端 /api/v2/explorer/transactions 按库内形式解析（0x + 64 hex），所以两处都不能少前缀。
- */
-export function normalizeTxHashParam(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed === "" || /^0x/i.test(trimmed)) return trimmed;
-  return "0x" + trimmed;
-}
-
 export default function TransactionDetailPage() {
   const { chain = "", hash = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -397,25 +389,22 @@ export default function TransactionDetailPage() {
   const requestedTab = searchParams.get("tab") ?? "overview";
   const tab = TABS.some((item) => item.key === requestedTab) ? requestedTab : "overview";
   const ready = Boolean(chain && hash);
-  /*
-   * 路由参数 hash 是**去 0x 前缀**的既有形状（ExplorerPage 跳转时 strip，
-   * 见 explorer-visual-acceptance.mjs 冻结的 URL 断言），而 /api/v2 的
-   * explorer 交易接口按库内形式（0x + 64 hex）解析。这里统一补回前缀，
-   * 否则详情页会拿裸 hash 去请求，被服务端判成「交易哈希不合法」。
-   */
-  const txHash = useMemo(() => normalizeTxHashParam(hash), [hash]);
   const base = ready
-    ? "/api/v2/explorer/transactions/" + encodeURIComponent(chain) + "/" + encodeURIComponent(txHash)
+    ? "/api/v2/explorer/transactions/" + encodeURIComponent(chain) + "/" + encodeURIComponent(hash)
     : null;
 
-  const detail = useApi<{ items: TxDetail | null }>(base, [chain, txHash]);
+  const detail = useApi<{ items: TxDetail | null }>(base, [chain, hash], { lookup: "auto" });
+  const analysis = useApi<{ items: Analysis }>(base ? base + "/analysis" : null, [chain, hash]);
+  useEffect(() => { if (analysis.error) dialog.notify("error", "资金分析读取失败", analysis.error); }, [analysis.error, dialog]);
+  const isRPC = detail.data?.items?.transaction?.source_provider === "rpc";
+  const receiptDetail = useApi<{ items: TxDetail | null }>(isRPC && base ? base : null, [chain, hash, isRPC], { lookup: "auto", receipt: 1 });
   const logs = useApi<{ items: LogRow[] }>(
-    tab === "logs" && base ? base + "/logs" : null,
-    [chain, txHash, tab],
+    tab === "logs" && base && !isRPC ? base + "/logs" : null,
+    [chain, hash, tab],
   );
   const localTrace = useApi<{ items: TraceResult | null }>(
     tab === "trace" && base ? base + "/trace" : null,
-    [chain, txHash, tab],
+    [chain, hash, tab],
     { mode: "local_only" },
   );
   const [providerTrace, setProviderTrace] = useState<TraceResult | null>(null);
@@ -424,9 +413,10 @@ export default function TransactionDetailPage() {
 
   useEffect(() => {
     setProviderTrace(null);
-  }, [chain, txHash]);
+  }, [chain, hash]);
 
-  const loadErrors = [detail.error, logs.error].filter((message): message is string => Boolean(message));
+  const traceError = localTrace.error && !localTrace.error.includes("本地没有 Trace") ? localTrace.error : null;
+  const loadErrors = [detail.error, receiptDetail.error, receiptDetail.data?.items?.transaction?.receipt_error, logs.error, traceError].filter((message): message is string => Boolean(message));
   const loadErrorsKey = loadErrors.join("|");
   useEffect(() => {
     if (loadErrors.length === 0) {
@@ -453,7 +443,7 @@ export default function TransactionDetailPage() {
     dialog.notify("warning", "解码未完成", decodeError);
   }, [decodeError, dialog]);
 
-  const tx = detail.data?.items ?? null;
+  const tx = receiptDetail.data?.items ?? detail.data?.items ?? null;
   const trace = providerTrace ?? localTrace.data?.items ?? null;
   const record = tx?.transaction;
   const rawInput = tx?.input ?? record?.input ?? "";
@@ -465,10 +455,6 @@ export default function TransactionDetailPage() {
       else params.set(key, value);
     }
     setSearchParams(params);
-  };
-
-  const selectTab = (nextTab: string) => {
-    updateParams({ tab: nextTab });
   };
 
   const copy = async (value: string, label: string) => {
@@ -500,7 +486,7 @@ export default function TransactionDetailPage() {
       body: "本地没有这笔交易的 Trace。继续将新增一次 Provider 请求，可能产生费用并占用供应商配额；只有确认后才会发出请求。",
       details: [
         { label: "链", value: chain },
-        { label: "交易", value: shortValue(txHash, 14, 10) },
+        { label: "交易", value: shortValue(hash, 14, 10) },
         { label: "模式", value: "auto" },
         { label: "所需权限", value: "explorer:fetch" },
       ],
@@ -526,6 +512,7 @@ export default function TransactionDetailPage() {
     });
     if (payload?.items) {
       setProviderTrace(payload.items);
+      void analysis.reload();
       dialog.notify("success", "Trace 已补取", "来源：" + (payload.items.source || "provider"));
     }
   };
@@ -544,7 +531,10 @@ export default function TransactionDetailPage() {
       return (
         <PageSection title="概览">
           <Card flush>
-            <ErrorState title="交易数据不可用" message="加载失败，请重试。" onRetry={() => void detail.reload()} />
+            <EmptyState
+              title="暂无交易数据"
+              action={<Button size="sm" onClick={() => void detail.reload()}>重新加载</Button>}
+            />
           </Card>
         </PageSection>
       );
@@ -554,52 +544,21 @@ export default function TransactionDetailPage() {
     const decodedParams = tx.decoded_params ?? [];
     return (
       <>
-        <PageSection title="交易字段">
-          <Card>
-            <KeyValueList
-              items={[
-                { label: "block_number", value: <span className="mono">{record?.block_number ?? "—"}</span> },
-                {
-                  label: "block_hash",
-                  value: record?.block_hash ? <HashValue value={record.block_hash} label="区块哈希" wrap /> : "—",
-                  wide: true,
-                },
-                { label: "timestamp", value: formatTime(record?.timestamp) },
-                { label: "nonce", value: <span className="mono">{record?.nonce ?? "—"}</span> },
-                { label: "tx_type", value: <span className="mono">{record?.tx_type ?? "—"}</span> },
-                { label: "status", value: <StatusBadge tone={statusToneOf(record)}>{statusLabel(record)}</StatusBadge> },
-                { label: "source_provider", value: record?.source_provider ?? "—" },
-                {
-                  label: "from",
-                  value: record?.from_address ? <HashValue value={record.from_address} label="from 地址" wrap /> : "—",
-                  wide: true,
-                },
-                {
-                  label: "to",
-                  value: record?.to_address ? <HashValue value={record.to_address} label="to 地址" wrap /> : "—",
-                  wide: true,
-                },
-                {
-                  label: "value_raw",
-                  value: (
-                    <span>
-                      {/* 转账金额直接用服务端 raw 字符串按 decimals 展示，不经过 JS number。 */}
-                      <Amount rawAmount={record?.value_raw} decimals={decimals} />
-                      <span className="s4-list__sub mono" style={{ display: "block" }}>
-                        raw {record?.value_raw ?? "—"}
-                      </span>
-                    </span>
-                  ),
-                  wide: true,
-                },
-                { label: "gas", value: <span className="mono">{record?.gas ?? "—"}</span> },
-                { label: "gas_used", value: <span className="mono">{record?.gas_used ?? "—"}</span> },
-                { label: "gas_price", value: <span className="mono">{record?.gas_price ?? "—"}</span>, wide: true },
-              ]}
-            />
-          </Card>
-        </PageSection>
-        <PageSection title="Method">
+        <AntCard title="交易概览"><Descriptions column={1} items={[
+          { key: "status", label: "交易状态", children: <StatusBadge tone={statusToneOf(record)}>{statusLabel(record)}</StatusBadge> },
+          { key: "block", label: "区块", children: record?.block_number != null ? <Link to={`/blocks/${chain}/${record.block_number}`}>{record.block_number}</Link> : "—" },
+          { key: "time", label: "时间", children: formatTime(record?.timestamp) },
+          { key: "from", label: "发送方", children: record?.from_address ? <Link to={`/addresses/${chain}/${record.from_address}`}><HashValue value={record.from_address} label="发送方" wrap /></Link> : "—" },
+          { key: "to", label: "接收方", children: record?.to_address ? <Link to={`/addresses/${chain}/${record.to_address}`}><HashValue value={record.to_address} label="接收方" wrap /></Link> : "—" },
+          { key: "amount", label: "外层原生币金额", children: <Space><ChainIcon chain={chain} /><Amount displayAmount={preciseAmount(record?.value_raw, decimals)} /></Space> },
+          { key: "raw", label: "原始金额", children: <span className="mono">{record?.value_raw ?? "—"}</span> },
+          { key: "gas", label: "Gas 上限", children: record?.gas ?? "—" },
+          { key: "used", label: "Gas 使用量", children: record?.gas_used ?? "—" },
+          { key: "price", label: "Gas 价格（原始整数）", children: record?.gas_price || "—" },
+          { key: "nonce", label: "Nonce", children: record?.nonce ?? "—" },
+          { key: "source", label: "数据来源", children: record?.source_provider || "—" },
+        ]} /></AntCard>
+        <PageSection title="合约方法">
           <Card>
             <KeyValueList
               items={[
@@ -612,7 +571,7 @@ export default function TransactionDetailPage() {
                 { label: "selector", value: <span className="mono">{tx.method?.id || record?.method_id || "—"}</span> },
                 { label: "source", value: <span className="mono">{tx.method?.source || tx.decode_source || "—"}</span> },
                 {
-                  label: "verified",
+                  label: "元数据验证",
                   value: (
                     <StatusBadge tone={tx.method?.verified ? "ok" : "neutral"}>
                       {tx.method?.verified ? "verified" : "unverified"}
@@ -701,7 +660,7 @@ export default function TransactionDetailPage() {
   };
 
   const renderLogs = () => {
-    if (logs.loading && !logs.data) {
+    if ((isRPC ? receiptDetail.loading : logs.loading) && !(isRPC ? receiptDetail.data : logs.data)) {
       return (
         <PageSection title="Logs">
           <Card flush>
@@ -710,16 +669,19 @@ export default function TransactionDetailPage() {
         </PageSection>
       );
     }
-    if (!logs.data) {
+    if (!(isRPC ? receiptDetail.data : logs.data)) {
       return (
         <PageSection title="Logs">
           <Card flush>
-            <ErrorState title="日志数据不可用" message="加载失败，请重试。" onRetry={() => void logs.reload()} />
+            <EmptyState
+              title="暂无日志数据"
+              action={<Button size="sm" onClick={() => void logs.reload()}>重新加载</Button>}
+            />
           </Card>
         </PageSection>
       );
     }
-    const rows = logs.data.items ?? [];
+    const rows = (isRPC ? tx?.logs : logs.data?.items) ?? [];
     return (
       <PageSection title="Logs" count={rows.length + " 条事件"}>
         <Card flush>
@@ -745,7 +707,10 @@ export default function TransactionDetailPage() {
       return (
         <PageSection title="Trace">
           <Card flush>
-            <ErrorState title="Trace 加载失败" message="加载失败，请重试。" onRetry={() => void localTrace.reload()} />
+            <EmptyState
+              title="暂无 Trace 数据"
+              action={<Button size="sm" onClick={() => void localTrace.reload()}>重新加载</Button>}
+            />
           </Card>
         </PageSection>
       );
@@ -770,68 +735,41 @@ export default function TransactionDetailPage() {
     );
   };
 
-  const content = tab === "logs" ? renderLogs() : tab === "trace" ? renderTrace() : renderOverview();
-
-  const detailTabs = TABS.map((item) => ({
-    key: item.key,
-    label: (
-      <a
-        className="cs-tab"
-        href={"?tab=" + item.key}
-        aria-current={item.key === tab ? "page" : undefined}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          selectTab(item.key);
-        }}
-      >
-        {item.label}
-      </a>
-    ),
-  }));
+  const funding = analysis.data?.items;
+  const content = tab === "logs" ? renderLogs() : tab === "trace" ? renderTrace() : <>
+    {funding && base ? <TransactionAnalysis data={funding} base={base} tab={tab} onTrace={() => updateParams({ tab: "trace" })} /> : analysis.loading ? <SkeletonRows rows={6} columns={3} /> : <EmptyState title="暂无资金分析数据" action={<Button size="sm" onClick={() => void analysis.reload()}>重新加载资金数据</Button>} />}
+    {tab === "overview" ? <details className="ta-technical"><summary>交易字段、合约方法与原始输入</summary>{renderOverview()}</details> : null}
+  </>;
 
   return (
-    <div className="cs-pro-page cs-pro-page--detail">
-      <BackLink to="/explorer" label="返回地址与交易查询" />
-      <CsPageHeader
-        className="cs-detail-header"
-        breadcrumb={[{ label: "地址与交易查询", to: "/explorer" }, { label: "交易详情" }]}
-        title="交易详情"
-        status={<StatusBadge tone={statusToneOf(record)}>{statusLabel(record)}</StatusBadge>}
-        subtitle={
-          <div className="cs-objecthead">
-            <div className="cs-objecthead__top">
-              <span className="cs-objecthead__kind">{chain || "链未知"}</span>
-              <span className="cs-objecthead__value">
-                <HashValue value={tx?.tx_hash || txHash} label="交易哈希" wrap />
-              </span>
-            </div>
-            <MetaLine
-              items={[
-                { label: "区块", value: record?.block_number ?? "—" },
-                { label: "时间", value: formatTime(record?.timestamp) },
-                { label: "方法", value: tx?.method?.signature || tx?.method?.name || "—" },
-                { label: "解码来源", value: tx?.decode_source || "—" },
-                { label: "来源 provider", value: record?.source_provider || "—" },
-              ]}
-            />
-          </div>
-        }
-        primaryAction={
-          <Button size="sm" variant="primary" onClick={() => void copy(tx?.tx_hash ?? txHash, "交易哈希")}>
-            复制哈希
-          </Button>
-        }
-      />
-      <Tabs
-        className="cs-detail-tabs"
-        aria-label="交易详情分区"
-        activeKey={tab}
-        animated={{ inkBar: true, tabPane: false }}
-        items={detailTabs}
-        onChange={selectTab}
-      />
-      <div className="cs-bento-stack cs-detail-content">{content}</div>
+    <div className="cs-explorer-object-page">
+      <ExplorerSearch initialChain={chain} />
+      <AntCard className="cs-transaction-overview">
+        <div className="cs-query-breadcrumb"><Link to="/explorer">区块链查询</Link><span>/</span><span>交易详情</span></div>
+        <div className="cs-query-object-title"><ChainIcon chain={chain} size={28} /><h1>交易详情</h1><StatusBadge tone={funding?.outcome === "success" ? "ok" : funding?.outcome === "failed" ? "danger" : statusToneOf(record)}>{funding ? ({success:"成功",failed:"失败",pending:"待确认",unknown:"状态待核实"}[funding.outcome] || funding.outcome) : statusLabel(record)}</StatusBadge></div>
+        <div className="cs-query-address-line"><span className="mono cs-query-full-address">{tx?.tx_hash || hash}</span><AntButton type="text" onClick={() => void copy(tx?.tx_hash ?? hash, "交易哈希")}>复制哈希</AntButton></div>
+      </AntCard>
+      {/*
+        Tab 保持链接语义（写进 URL、刷新可恢复、现有 E2E 按 role=link 定位）；
+        选中态由 .cs-tab[aria-current="page"] 表达，与按钮版 .cs-tab[aria-selected="true"] 同一套视觉。
+      */}
+      <div className="cs-query-results"><nav className="cs-query-tabs" aria-label="交易详情分区">
+        {TABS.map((item) => (
+          <a
+            key={item.key}
+            className="cs-tab"
+            href={"?" + "tab=" + item.key}
+            aria-current={item.key === tab ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              updateParams({ tab: item.key });
+            }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <div className="cs-query-results-content cs-bento-stack">{content}</div></div>
     </div>
   );
 }

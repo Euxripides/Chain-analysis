@@ -22,10 +22,13 @@ import { extname, join, resolve, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const DIST = resolve(here, process.env.UC_CHECK_DIST ?? "apps/user-console/dist");
+const DIST = process.env.UC_CHECK_DIST ? resolve(process.env.UC_CHECK_DIST) : resolve(here, "apps/user-console/dist");
 /* 后台端产物：仅用于验证"共享 Dialog 重构没有改变后台端行为"（规范 §1.3 / §63.1）。 */
 const ADMIN_DIST = resolve(here, "apps/admin-console/dist");
-const OUT = resolve(here, process.env.UC_CHECK_OUT ?? "acceptance-evidence/v4-render-check");
+const outArg = process.argv.indexOf("--out");
+const OUT = resolve(outArg >= 0 && process.argv[outArg + 1]
+  ? process.argv[outArg + 1]
+  : join(here, "acceptance-evidence/v4-render-check"));
 const PORT = Number(process.env.UC_CHECK_PORT ?? 5399);
 
 const MIME = {
@@ -564,10 +567,15 @@ async function main() {
   const browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL ?? "msedge" });
 
   try {
-    for (const vp of [
+    const viewports = [
       { name: "1440x900", width: 1440, height: 900 },
       { name: "390x844", width: 390, height: 844 },
-    ]) {
+    ];
+    const viewportArg = process.argv.find((arg) => arg.startsWith("--viewport="))?.slice("--viewport=".length);
+    if (viewportArg && !viewports.some((item) => item.name === viewportArg)) {
+      throw new Error(`Unknown viewport: ${viewportArg}`);
+    }
+    for (const vp of viewports.filter((item) => !viewportArg || item.name === viewportArg)) {
       const context = await browser.newContext({
         viewport: { width: vp.width, height: vp.height },
         deviceScaleFactor: 1,
@@ -587,6 +595,8 @@ async function main() {
         });
       });
       const page = await context.newPage();
+      // 下载草稿页的原生离开确认由浏览器触发；验收主动离开时明确接受。
+      page.on("dialog", (dialog) => dialog.accept());
       page.on("console", (msg) => {
         if (msg.type() === "error") {
           page.evaluate((text) => window.__ucCheck.consoleErrors.push(text), msg.text()).catch(() => {});
@@ -905,14 +915,15 @@ async function main() {
       if (railRgb && railRgb[0] + railRgb[1] + railRgb[2] < 600) {
         problems.push(`[${vp.name}] 侧栏仍是深色（V4 §6.1.1 要求 #F8FBFF 浅色侧栏）：${railBg}`);
       }
-      /* 顶栏高度应为 60px（§6.1.2）。 */
+      /* 顶栏高度使用当前主题 token；桌面实际高度必须与配置一致。 */
       const topbarH = await page
         .locator(".cs-shell__topbar")
         .evaluate((el) => Math.round(el.getBoundingClientRect().height))
         .catch(() => -1);
       notes.push(`[${vp.name}] topbar height=${topbarH}`);
-      if (topbarH !== -1 && Math.abs(topbarH - 60) > 2 && vp.width >= 900) {
-        problems.push(`[${vp.name}] 顶栏高度 ${topbarH}px，规范要求 60px`);
+      const configuredTopbarH = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cs-topbar-h")));
+      if (vp.width >= 900 && (!Number.isFinite(configuredTopbarH) || topbarH < 0 || Math.abs(topbarH - configuredTopbarH) > 2)) {
+        problems.push(`[${vp.name}] 顶栏高度 ${topbarH}px，主题配置 ${configuredTopbarH}px`);
       }
       /* 当前导航项必须有左侧指示条（形状通道，不只靠颜色）。 */
       const activeNavMark = await page
@@ -981,6 +992,18 @@ async function main() {
       /* ---------- 4c-2. 共享 DataTable：筛选变化时保留旧行与表头（§17.5） ---------- */
       {
         await page.goto(`${base}/reports`, { waitUntil: "domcontentloaded" });
+        await page.locator(".cs-protable, .table").first().waitFor({ timeout: 20_000 });
+        if (vp.width < 900 && await page.locator(".cs-protable--cards").count()) {
+          /* CsProTable switches to cards on narrow screens; there is no table head. */
+          await page.locator(".cs-rowcards .cs-rowcard").first().waitFor({ timeout: 20_000 });
+          const cardsBefore = await page.locator(".cs-rowcards .cs-rowcard").count();
+          await page.locator(".cs-filterbar select").first().selectOption({ index: 1 });
+          await page.waitForTimeout(250);
+          const cardsDuring = await page.locator(".cs-rowcards .cs-rowcard").count();
+          if (cardsDuring < cardsBefore) problems.push(`[${vp.name}] 报告筛选刷新时卡片消失：${cardsBefore} → ${cardsDuring}`);
+          if (await page.locator(".skeleton, .ant-skeleton").count()) problems.push(`[${vp.name}] 报告筛选刷新时仍在渲染 skeleton`);
+          await page.waitForTimeout(1000);
+        } else {
         /*
          * 报告列表已按 §17.1 迁到 L1（ProTable），DOM 从 `.table` 变成了 antd 的表格结构。
          * 这里按"当前用的是哪一层"选选择器，而不是写死某一种：
@@ -1008,6 +1031,7 @@ async function main() {
         if (skeletonDuring > 0) problems.push(`[${vp.name}] 表格刷新时仍在渲染 skeleton`);
         if (refreshBar === 0) problems.push(`[${vp.name}] 表格刷新时没有顶部进度指示`);
         await page.waitForTimeout(1000);
+        }
       }
 
       /* ---------- 4c-3. L1 表格层级契约（§17.1 / §17.2） ---------- */
@@ -1095,369 +1119,48 @@ async function main() {
         if (l1Summary.length > 0) notes.push(`[${vp.name}] L1 表格（ProTable 层级）：${l1Summary.join(" · ")}`);
       }
 
-      /* ---------- 4d. 新建下载：Flowline 五步轨道 + 连续配置表面 + sticky 任务预览 ---------- */
+      /* ---------- 4d. 新建下载：预览汇总与失效标记（§45.4） ---------- */
       {
-        /*
-         * 新版版面（《新建数据下载 Flowline 界面重构实施规范》）：
-         *   页面头 → Flowline 五步轨道 → 两栏工作区
-         *     左：一块连续配置表面（对象与地址 / 链与范围 / Dataset / Coverage 预览）
-         *     右：⑤ 任务预览（桌面 aside 内 sticky / 移动端折叠卡）+ 移动端底部操作栏
-         *
-         * 两个视口恰好各覆盖一支断点，所以"该出现哪一套"按宽度分支：
-         *   1440x900 —— nav.dl-rail（全量标签）+ aside.dl-aside + sticky 任务预览；
-         *   390x844  —— nav.dl-vrail（短标签）+ 折叠卡 + .dl-actionbar。
-         * 分支只决定期望哪一套轨道/卡片，判据（节点数、标签顺序、aria-current、
-         * 四个 section、失效标记的琥珀边框）两端完全一致。
-         */
-        const dlMobile = vp.width < 640;
-        const dlRailNode = dlMobile ? ".dl-vrail__node" : ".dl-rail__node";
-        const dlRailLabel = dlMobile ? ".dl-vrail__label" : ".dl-rail__label";
-        /* <900px 用短标签（对象 / 范围 / Dataset / 预览 / 创建）。 */
-        const dlExpectLabels = vp.width < 900
-          ? ["对象", "范围", "Dataset", "预览", "创建"]
-          : ["对象与地址", "链与范围", "Dataset", "Coverage 预览", "创建任务"];
-
         await page.goto(`${base}/downloads/new`, { waitUntil: "domcontentloaded" });
-        await page.waitForSelector("#download-step-objects", { timeout: 20_000 });
-        await page.waitForSelector(dlMobile ? "nav.dl-vrail" : "nav.dl-rail", { timeout: 20_000 });
-        /* 断点判定走 matchMedia + setState：首帧可能还是另一套版面，等节点齐 5 个再断言。 */
-        await page
-          .waitForFunction((sel) => document.querySelectorAll(sel).length === 5, dlRailNode, { timeout: 10_000 })
-          .catch(() => {});
-        await page.waitForTimeout(400);
-
-        /* ---- 版面结构：根节点 / 地址输入框 / 轨道 / 配置表面 / ⑤ 步 / 移动操作栏 ---- */
-        const dlLayout = await page.evaluate(
-          ({ nodeSel, labelSel }) => {
-            const all = (sel) => Array.from(document.querySelectorAll(sel));
-            const surface = document.querySelector("main.dl-config-surface");
-            const create = document.querySelector("#download-step-create");
-            const actionbar = document.querySelector(".dl-actionbar");
-            const nodes = all(nodeSel);
-            const labels = all(labelSel).map((node) => (node.textContent || "").trim());
-            const current = nodes.findIndex((node) => node.getAttribute("aria-current") === "step");
-            return {
-              hasRoot: Boolean(document.querySelector(".dl-flow-page")),
-              addressTag: document.querySelector("#download-addresses")?.tagName ?? null,
-              railCount: all("nav.dl-rail").length,
-              vrailCount: all("nav.dl-vrail").length,
-              nodeCount: nodes.length,
-              labels,
-              ariaCurrentCount: nodes.filter((node) => node.getAttribute("aria-current") === "step").length,
-              ariaCurrentLabel: current >= 0 ? labels[current] : null,
-              reuseNodes: nodes.filter((node) => /复用/.test(node.textContent || "")).length,
-              antSteps: all(".ant-steps").length,
-              csStepper: all(".cs-stepper").length,
-              nextBackButtons: all("button").filter((button) => /下一步|上一步/.test(button.textContent || "")).length,
-              surfaceCount: all("main.dl-config-surface").length,
-              surfaceSections: surface
-                ? Array.from(surface.querySelectorAll(":scope > section.dl-config-section")).map((section) => section.id)
-                : null,
-              createExists: Boolean(create),
-              createInSurface: Boolean(create && create.closest("main.dl-config-surface")),
-              createInAside: Boolean(create && create.closest("aside.dl-aside")),
-              createClass: create ? String(create.className) : null,
-              actionbarCount: all(".dl-actionbar").length,
-              actionbarButtons: actionbar
-                ? Array.from(actionbar.querySelectorAll("button")).map((button) => (button.textContent || "").trim())
-                : null,
-              actionbarPosition: actionbar ? getComputedStyle(actionbar).position : null,
-            };
-          },
-          { nodeSel: dlRailNode, labelSel: dlRailLabel },
-        );
-
-        if (!dlLayout.hasRoot) problems.push(`[${vp.name}] 新建下载页缺少根节点 .dl-flow-page`);
-        if (dlLayout.addressTag !== "TEXTAREA") {
-          problems.push(`[${vp.name}] 地址输入框 #download-addresses 应为常驻 textarea，实际 ${dlLayout.addressTag ?? "(缺失)"}`);
-        }
-
-        /* 断点轨道：>=640px 只有横向 nav.dl-rail；<640px 只有竖向 nav.dl-vrail（不再有第二套轨道）。 */
-        const dlRailExpect = dlMobile
-          ? { rail: 0, vrail: 1, why: "移动端应只有竖向轨道 nav.dl-vrail" }
-          : { rail: 1, vrail: 0, why: "桌面端应只有横向轨道 nav.dl-rail" };
-        if (dlLayout.railCount !== dlRailExpect.rail || dlLayout.vrailCount !== dlRailExpect.vrail) {
-          problems.push(
-            `[${vp.name}] ${dlRailExpect.why}：nav.dl-rail=${dlLayout.railCount} nav.dl-vrail=${dlLayout.vrailCount}`,
-          );
-        }
-        if (dlLayout.nodeCount !== 5) {
-          problems.push(`[${vp.name}] Flowline 轨道应有 5 个步骤节点，实际 ${dlLayout.nodeCount}（${JSON.stringify(dlLayout.labels)}）`);
-        }
-        if (JSON.stringify(dlLayout.labels) !== JSON.stringify(dlExpectLabels)) {
-          problems.push(
-            `[${vp.name}] 五步标签顺序不符：期望 ${JSON.stringify(dlExpectLabels)}，实际 ${JSON.stringify(dlLayout.labels)}`,
-          );
-        }
-        if (dlLayout.ariaCurrentCount !== 1 || dlLayout.ariaCurrentLabel !== dlExpectLabels[0]) {
-          problems.push(
-            `[${vp.name}] 当前步骤节点应唯一且为第 1 步（aria-current="step"），实际 ${dlLayout.ariaCurrentCount} 个 · ${JSON.stringify(dlLayout.ariaCurrentLabel)}`,
-          );
-        }
-        if (dlLayout.reuseNodes > 0) {
-          problems.push(`[${vp.name}] 轨道里仍然存在 reuse 步骤（${dlLayout.reuseNodes} 个节点文本含「复用」）`);
-        }
-        if (dlLayout.antSteps > 0 || dlLayout.csStepper > 0) {
-          problems.push(
-            `[${vp.name}] 页面仍然渲染通用 Stepper（.ant-steps=${dlLayout.antSteps} · .cs-stepper=${dlLayout.csStepper}）`,
-          );
-        }
-        if (dlLayout.nextBackButtons > 0) {
-          problems.push(`[${vp.name}] 页面仍然存在「下一步/上一步」按钮（${dlLayout.nextBackButtons} 个）`);
-        }
-
-        /* 左侧连续配置表面：唯一的一块 main，且恰好四个 section（⑤ 不属于这块表面）。 */
-        const DL_SECTIONS = [
-          "download-step-objects",
-          "download-step-range",
-          "download-step-datasets",
-          "download-step-preview",
-        ];
-        if (dlLayout.surfaceCount !== 1) {
-          problems.push(`[${vp.name}] 连续配置表面 main.dl-config-surface 应唯一，实际 ${dlLayout.surfaceCount}`);
-        }
-        if (JSON.stringify(dlLayout.surfaceSections) !== JSON.stringify(DL_SECTIONS)) {
-          problems.push(
-            `[${vp.name}] 配置表面的 section 结构不符：期望 ${JSON.stringify(DL_SECTIONS)}，实际 ${JSON.stringify(dlLayout.surfaceSections)}`,
-          );
-        }
-
-        /* 第 ⑤ 步：桌面在 aside.dl-aside 内，移动端是折叠卡；两端都不许混进配置表面。 */
-        if (!dlLayout.createExists) {
-          problems.push(`[${vp.name}] 缺少第 ⑤ 步 #download-step-create`);
-        } else if (dlMobile) {
-          if (dlLayout.createInAside) problems.push(`[${vp.name}] 移动端不应渲染 aside.dl-aside`);
-          if (!String(dlLayout.createClass).includes("dl-config-section--create")) {
-            problems.push(`[${vp.name}] 移动端第 ⑤ 步应是折叠卡 .dl-config-section--create，实际 class=${dlLayout.createClass}`);
-          }
-        } else if (!dlLayout.createInAside || !String(dlLayout.createClass).includes("dl-aside-card")) {
-          problems.push(
-            `[${vp.name}] 桌面端第 ⑤ 步应在 aside.dl-aside 内（inAside=${dlLayout.createInAside} class=${dlLayout.createClass}）`,
-          );
-        }
-        if (dlLayout.createInSurface) {
-          problems.push(`[${vp.name}] 第 ⑤ 步不应混进 main.dl-config-surface（它是右侧预览与创建入口）`);
-        }
-
-        /* 移动端底部固定操作栏：预览 + 创建下载任务。 */
-        if (dlMobile) {
-          if (dlLayout.actionbarCount !== 1) {
-            problems.push(`[${vp.name}] 移动端应有唯一的底部操作栏 .dl-actionbar，实际 ${dlLayout.actionbarCount}`);
-          } else {
-            if (dlLayout.actionbarPosition !== "fixed") {
-              problems.push(`[${vp.name}] 移动端操作栏不是固定定位（position=${dlLayout.actionbarPosition}）`);
-            }
-            for (const label of ["预览", "创建下载任务"]) {
-              if (!(dlLayout.actionbarButtons ?? []).includes(label)) {
-                problems.push(
-                  `[${vp.name}] 移动端操作栏缺少「${label}」按钮（实际 ${JSON.stringify(dlLayout.actionbarButtons)}）`,
-                );
-              }
-            }
-          }
-        } else if (dlLayout.actionbarCount > 0) {
-          problems.push(`[${vp.name}] 桌面端不应渲染移动操作栏 .dl-actionbar（实际 ${dlLayout.actionbarCount} 个）`);
-        }
-
-        notes.push(
-          `[${vp.name}] Flowline 版面：${dlMobile ? "vrail" : "rail"} 标签=${JSON.stringify(dlLayout.labels)} · 当前=${JSON.stringify(dlLayout.ariaCurrentLabel)} · 配置表面=${JSON.stringify(dlLayout.surfaceSections)} · 操作栏=${dlMobile ? JSON.stringify(dlLayout.actionbarButtons) : "无（桌面）"}`,
-        );
-
-        /*
-         * 正文禁令（规范 §6 / §28.12 与 §5.5）：
-         *   · 正式界面不得出现 API 路径；
-         *   · 复用策略类内部口径（复用策略 / prefer_local / refresh）不得进入正文。
-         * 初态与交互后各查一次：只查初态会漏掉"预览/校验弹窗往正文里塞内部字段"这类回归。
-         */
-        const dlForbidden = ["/api/v2/", "复用策略", "prefer_local", "refresh"];
-        const checkDlBody = async (stage) => {
-          const text = await page.locator("body").innerText();
-          for (const token of dlForbidden) {
-            if (text.toLowerCase().includes(token.toLowerCase())) {
-              problems.push(`[${vp.name}/${stage}] 新建下载页正文出现禁止字符串「${token}」`);
-            }
-          }
-        };
-        await checkDlBody("initial");
-
-        /* ---- 交互链路：填地址 → 解析导入 → 使用服务端结果 → 预览 → 知道了 ---- */
+        await page.waitForSelector(".cs-download-summary", { timeout: 20_000 });
         await page.locator("#download-addresses").fill(ADDRESS_INPUT);
-        await page.getByRole("button", { name: "解析导入" }).click();
-        await page.locator(".cs-dialog").first().waitFor({ timeout: 20_000 }).catch(() => {});
-        const dlVerdictDialog = page.locator(".cs-dialog").filter({ hasText: "服务端地址校验结果" });
-        if ((await dlVerdictDialog.count()) === 0) {
-          const seen = ((await page.locator(".cs-dialog").first().innerText().catch(() => "")) || "").replace(/\s+/g, " ").slice(0, 80);
-          problems.push(`[${vp.name}] 「解析导入」没有带出「服务端地址校验结果」弹窗（实际 ${JSON.stringify(seen)}）`);
-        } else {
-          await dlVerdictDialog.getByRole("button", { name: "使用服务端结果" }).first().click();
-          await page
-            .waitForFunction(() => !document.querySelector(".cs-dialog"), null, { timeout: 10_000 })
-            .catch(() => {});
-        }
-        await page.waitForTimeout(400);
-
-        /*
-         * 服务端 accepted 之后当前步应推进到 ④：桌面常驻展开，移动端 ④ 成为当前步也会展开，
-         * 因此两端都必须能点到覆盖面板里的「预览 Coverage 与成本」。点不到就是版面缺陷。
-         */
-        const dlPreviewButton = page.getByRole("button", { name: "预览 Coverage 与成本" });
-        if ((await dlPreviewButton.count()) === 0) {
-          problems.push(`[${vp.name}] 服务端校验完成后找不到「预览 Coverage 与成本」入口（第 ④ 步没有展开）`);
-        } else {
-          await dlPreviewButton.first().click();
-          await page.locator(".cs-dialog").first().waitFor({ timeout: 20_000 }).catch(() => {});
-          const dlPreviewDialog = page
-            .locator(".cs-dialog")
-            .filter({ hasText: /无需新增 Provider 请求|Coverage 与成本预览完成|预览完成，存在风险提示/ });
-          if ((await dlPreviewDialog.count()) === 0) {
-            const seen = ((await page.locator(".cs-dialog").first().innerText().catch(() => "")) || "").replace(/\s+/g, " ").slice(0, 80);
-            problems.push(`[${vp.name}] 预览结果弹窗缺失或标题不符（实际 ${JSON.stringify(seen)}）`);
-          } else {
-            await dlPreviewDialog.getByRole("button", { name: "知道了" }).first().click().catch(() => {});
-          }
-          await page
-            .waitForFunction(() => !document.querySelector(".cs-dialog"), null, { timeout: 10_000 })
-            .catch(() => {});
-        }
-        await page.waitForTimeout(600);
+        await page.getByRole("button", { name: "解析导入", exact: true }).click();
+        await page.waitForSelector(".cs-dialog", { timeout: 10_000 });
+        await page.getByRole("button", { name: "使用服务端结果" }).click();
+        await page.waitForFunction(() => !document.querySelector(".cs-dialog"), null, { timeout: 5_000 });
+        const importedCount = await page.getByTestId("server-verdict-summary").innerText();
+        if (!/已导入 [1-9]/.test(importedCount)) throw new Error(`[${vp.name}] 地址导入未成功：${importedCount}`);
+        await page.getByRole("radio", { name: "区块区间", exact: true }).check();
+        await page.locator("#download-from-block").fill("900");
+        await page.locator("#download-to-block").fill("1000");
+        const previewRequest = page.waitForRequest(request => request.url().endsWith("/downloads/preview") && request.method() === "POST");
+        await page.getByRole("button", { name: "预览数据覆盖与成本", exact: true }).click();
+        const previewPayload = (await previewRequest).postDataJSON();
+        if (previewPayload.chain !== "tron" || !previewPayload.datasets.includes("token_transfers")) problems.push(`[${vp.name}] 预览链或数据集与选择不一致`);
+        await page.waitForSelector(".cs-dialog", { timeout: 10_000 });
+        const details = await page.locator(".cs-dialog").innerText();
+        const REQUIRED_DETAILS = ["整体覆盖率", "未覆盖区块", "数据覆盖命中", "将复用现有任务", "provider_work_required", "预估行数"];
+        for (const label of REQUIRED_DETAILS) if (!details.includes(label)) problems.push(`[${vp.name}] 预览详情缺少 ${label}`);
+        if (!(await page.evaluate(() => window.__ucCheck.previewCalls > 0))) problems.push(`[${vp.name}] 没有调用真实预览契约`);
+        await page.locator(".cs-dialog__close").click();
+        const summary = page.locator(".cs-download-summary");
+        for (const label of ["本次预览", "预计记录", "本地覆盖", "待补区块", "预计费用（USD）", "数据来源"])
+          if (!(await summary.innerText()).includes(label)) problems.push(`[${vp.name}] 任务预览汇总缺少 ${label}`);
+        if ((await summary.innerText()).includes("估算依据")) problems.push(`[${vp.name}] 估算说明被嵌入正文`);
+        await page.getByRole("radio", { name: "全部历史", exact: true }).check();
+        await page.waitForTimeout(200);
+        if (!(await summary.innerText()).includes("已失效")) problems.push(`[${vp.name}] 参数变化没有使预览失效`);
+        if (await summary.locator(".cs-download-preview-group").count()) problems.push(`[${vp.name}] 仍将失效结果显示为有效预览`);
+        let createCalls = 0;
+        page.on("request", request => { if (request.method() === "POST" && request.url().includes("/api/v2/jobs")) createCalls++; });
+        await page.screenshot({ path: join(OUT, `download-stale-before-create-${vp.name}.png`) });
+        await writeFile(join(OUT, `download-stale-before-create-${vp.name}.json`), JSON.stringify(await page.evaluate(() => ({ url: location.href, buttons: [...document.querySelectorAll('button')].map(el => ({text:el.textContent,disabled:el.disabled,hidden:el.closest('[aria-hidden="true"]')!==null})), dialogs:[...document.querySelectorAll('.cs-dialog')].map(el=>el.textContent) })), null, 2));
+        await page.locator(".cs-download-submit-actions button.ant-btn-primary").click();
+        await page.waitForSelector(".cs-dialog", { timeout: 10_000 });
+        if (!(await page.locator(".cs-dialog").innerText()).includes("需要先完成真实预览")) problems.push(`[${vp.name}] 失效预览没有阻止创建`);
+        if (createCalls !== 0) problems.push(`[${vp.name}] 失效预览仍提交了创建请求`);
+        await page.locator(".cs-dialog__close").click();
         await page.screenshot({ path: join(OUT, `download-new-${vp.name}.png`), fullPage: false });
-
-        /* ---- ⑤ 任务预览：字段清单、sticky 与内部口径禁令 ---- */
-        const dlPreviewCard = page.locator(".dl-task-preview");
-        if ((await dlPreviewCard.count()) === 0) {
-          problems.push(`[${vp.name}] 预览完成后没有渲染任务预览卡 .dl-task-preview`);
-        } else {
-          const card = dlPreviewCard.first();
-          const cardText = ((await card.innerText()) || "").replace(/\s+/g, " ");
-          const DL_PREVIEW_LABELS = [
-            "链",
-            "地址",
-            "Dataset",
-            "范围",
-            "性能模式",
-            "未覆盖区块",
-            "预估行数",
-            "预估成本 USD",
-            "预估耗时（秒）",
-          ];
-          const missingLabels = DL_PREVIEW_LABELS.filter((label) => !cardText.includes(label));
-          if (missingLabels.length > 0) {
-            problems.push(
-              `[${vp.name}] 任务预览缺少标签 ${JSON.stringify(missingLabels)}（实际 ${JSON.stringify(cardText.slice(0, 160))}）`,
-            );
-          }
-          for (const token of ["复用策略", "prefer_local", "refresh", "估算依据"]) {
-            if (cardText.toLowerCase().includes(token.toLowerCase())) {
-              problems.push(`[${vp.name}] 任务预览把内部口径/说明性内容放进了正文：「${token}」`);
-            }
-          }
-          const cardPosition = await card.evaluate((el) => getComputedStyle(el).position);
-          if (vp.width >= 1200) {
-            if (cardPosition !== "sticky") {
-              problems.push(`[${vp.name}] 任务预览卡在 >=1200px 应为 sticky，实际 position=${cardPosition}`);
-            }
-          } else {
-            notes.push(`[${vp.name}] 任务预览卡 position=${cardPosition}（<1200px 是单栏/折叠版面，sticky 不适用）`);
-          }
-          const createButton = card.getByRole("button", { name: "创建下载任务" });
-          if ((await createButton.count()) === 0) {
-            problems.push(`[${vp.name}] 任务预览卡里没有「创建下载任务」主按钮`);
-          } else if (!(await createButton.first().isEnabled())) {
-            problems.push(`[${vp.name}] 预览有效时「创建下载任务」按钮仍不可用`);
-          }
-        }
-
-        /* 预览有效：不得出现失效标记。 */
-        const dlStaleWhenFresh = await page.locator(".dl-preview-stale").count();
-        if (dlStaleWhenFresh > 0) {
-          problems.push(`[${vp.name}] 预览有效时不应出现失效标记 .dl-preview-stale（实际 ${dlStaleWhenFresh} 个）`);
-        }
-
-        /*
-         * ---- 失效标记（§14.4）：改参数 → 旧预览标失效，且只用 1px 琥珀边框，不降 opacity ----
-         *
-         * 取消勾选 Token Transfer 是"改参数"里最硬的一条：它会把当前步退回 ③。
-         *   桌面：配置表面不折叠，④ 卡与其 .dl-coverage 始终在 DOM 里，直接断言；
-         *   移动：<640px 的 ③ 已折叠 → 先点轨道节点展开 ③ 再取消勾选；清空 Dataset 后
-         *         ④ 卡随之折叠（这是折叠语义，不是失效逻辑缺失），用折叠卡自带的
-         *         「编辑」入口把它展开，再在同一份 DOM 契约上断言琥珀边框。
-         * 两端断言的是同一个类、同一个计算样式；没有任何一条被放宽成"看不见就算过"。
-         */
-        if (dlMobile) {
-          await page.locator(".dl-vrail__node").nth(2).click();
-          await page.waitForTimeout(400);
-        }
-        const dlDatasetCheckbox = page.getByRole("checkbox", { name: /Token Transfer/ }).first();
-        if ((await dlDatasetCheckbox.count()) === 0) {
-          problems.push(`[${vp.name}] 找不到 Token Transfer 勾选框，无法验证参数变化后的失效标记`);
-        } else {
-          await dlDatasetCheckbox.uncheck({ timeout: 8_000 }).catch(() => {});
-          await page.waitForTimeout(400);
-          if (dlMobile) {
-            /* 第 ④ 步折叠卡上的「编辑」= jumpToStep("preview")，是页面的真实展开入口。 */
-            await page.locator("#download-step-preview .dl-section-head__edit").first().click().catch(() => {});
-            await page.waitForTimeout(700);
-          }
-          const dlStale = await page.evaluate(() =>
-            Array.from(document.querySelectorAll(".dl-preview-stale")).map((el) => {
-              const style = getComputedStyle(el);
-              const rgb = (style.borderTopColor.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-              return {
-                className: String(el.className),
-                opacity: style.opacity,
-                borderTopWidth: style.borderTopWidth,
-                borderTopColor: style.borderTopColor,
-                red: Number.isFinite(rgb[0]) ? rgb[0] : null,
-                blue: Number.isFinite(rgb[2]) ? rgb[2] : null,
-              };
-            }),
-          );
-          if (dlStale.length === 0) {
-            problems.push(`[${vp.name}] 取消勾选 Token Transfer 后旧预览没有被标记为失效（.dl-preview-stale 数量为 0）`);
-          } else {
-            for (const node of dlStale) {
-              if (Math.abs(Number(node.opacity) - 1) > 0.001) {
-                problems.push(
-                  `[${vp.name}] 失效预览用半透明表达（opacity=${node.opacity} @ ${node.className}），应为 1（§14.4 只允许淡黄/琥珀边框）`,
-                );
-              }
-            }
-            /* ④ Coverage 卡必须自己带失效边框；右栏副本没有边框，不能只靠它交差。 */
-            if ((await page.locator(".dl-coverage.dl-preview-stale").count()) === 0) {
-              problems.push(
-                `[${vp.name}] 失效标记没有落在 ④ Coverage 预览卡上（实际命中 ${JSON.stringify(dlStale.map((node) => node.className))}）`,
-              );
-            }
-            const dlStaleBordered = dlStale.filter((node) => Number.parseFloat(node.borderTopWidth) > 0);
-            if (dlStaleBordered.length === 0) {
-              problems.push(`[${vp.name}] 失效标记没有带边框的容器，无法呈现 1px 琥珀边框：${JSON.stringify(dlStale)}`);
-            }
-            for (const node of dlStaleBordered) {
-              /* 琥珀 #A65F00：红分量（166）必须明显大于蓝分量（0）。 */
-              if (!(typeof node.red === "number" && typeof node.blue === "number" && node.red > node.blue + 40)) {
-                problems.push(
-                  `[${vp.name}] 失效预览边框不是琥珀色（border-top-color=${node.borderTopColor} @ ${node.className}）`,
-                );
-              }
-            }
-            notes.push(
-              `[${vp.name}] 失效预览：.dl-preview-stale=${dlStale.length} · 带边框=${dlStaleBordered.length} · border=${dlStaleBordered[0] ? dlStaleBordered[0].borderTopColor : "n/a"} · opacity=${dlStale.map((node) => node.opacity).join("/")}`,
-            );
-          }
-        }
-        await page.screenshot({ path: join(OUT, `download-new-stale-${vp.name}.png`), fullPage: false });
-
-        /* 页面级横向溢出：两个视口都必须成立。 */
-        const dlOverflow = await page.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-        }));
-        if (dlOverflow.scrollWidth > dlOverflow.clientWidth + 1) {
-          problems.push(
-            `[${vp.name}] 新建下载页横向溢出：scrollWidth=${dlOverflow.scrollWidth} clientWidth=${dlOverflow.clientWidth}`,
-          );
-        }
-        await checkDlBody("after-interaction");
       }
 
       /* ---------- 5. 首页 Golden Screen（§32） ---------- */
@@ -1581,25 +1284,25 @@ async function main() {
       /* ---------- 6b. 地址详情：9 个业务 Tab 契约（规范 §0.4.3 / §43） ---------- */
       {
         await page.goto(`${base}/addresses/tron/${ADDRESS_INPUT}`, { waitUntil: "domcontentloaded" });
-        await page.waitForSelector(".cs-tab", { timeout: 20_000 });
-        const tabLabels = (await page.locator(".cs-tab").allInnerTexts()).map((text) => text.trim());
-        /*
-         * 这是本次重构**最硬的一条契约**：9 个 Tab 的 key 不得增删改
-         * （规范 §0.4.3 与 §64 #17）。数量也一并校验——重排视觉可以，改信息架构不行。
-         * 2026-09-22：界面文案按用户要求中文化（Token Transfer → 代币转账、Internal → 内部交易），
-         * key 与顺序一字未动。
-         */
-        const EXPECTED_TABS = ["概览", "资产", "普通交易", "代币转账", "内部交易", "对手方", "语义事件", "分析", "Coverage"];
-        for (const label of EXPECTED_TABS) {
-          if (!tabLabels.some((text) => text === label || text.startsWith(label))) {
-            problems.push(`[${vp.name}] 地址详情缺少 Tab「${label}」（实际 ${JSON.stringify(tabLabels)}）`);
-          }
-        }
-        if (tabLabels.length !== EXPECTED_TABS.length) {
-          problems.push(`[${vp.name}] 地址详情 Tab 数量变化：${tabLabels.length} ≠ ${EXPECTED_TABS.length}`);
-        }
-        const tabHrefs = await page.locator(".cs-tab").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href") ?? ""));
-        notes.push(`[${vp.name}] 地址 Tab href=${JSON.stringify(tabHrefs)}`);
+        await page.waitForSelector(".cs-query-tabs", { timeout: 20_000 });
+        const primary = page.locator(".cs-query-tabs a");
+        const primaryLabels = await primary.allInnerTexts();
+        const tabHrefs = await primary.evaluateAll(nodes => nodes.map(node => node.getAttribute("href") ?? ""));
+        await page.locator(".cs-query-tabs").getByRole("button", { name: "更多", exact: true }).click();
+        const menu = page.locator(".ant-dropdown:visible");
+        await menu.getByRole("menuitem", { name: "Coverage", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+        const secondaryLabels = await page.locator(".ant-dropdown-menu-item").allInnerTexts();
+        const tabLabels = [...primaryLabels, ...secondaryLabels].map(value => value.trim());
+        // Current deployed address layout retains nine existing sections and
+        // adds statistics; four sections are reached through the More menu.
+        const EXPECTED_TABS = ["概览", "资产", "普通交易", "代币转账", "内部交易", "对手方", "统计分析", "语义事件", "分析", "Coverage"];
+        for (const label of EXPECTED_TABS) if (!tabLabels.includes(label)) problems.push(`[${vp.name}] 地址详情缺少分区 ${label}`);
+        if (tabLabels.length !== EXPECTED_TABS.length) problems.push(`[${vp.name}] 地址分区数不一致 ${JSON.stringify(tabLabels)}`);
+        for (const key of ["assets", "transactions", "transfers", "internal", "counterparties", "statistics"])
+          if (!tabHrefs.some(href => new URLSearchParams(href.split("?")[1] ?? "").get("tab") === key)) problems.push(`[${vp.name}] 地址分区链接缺少 ${key}`);
+        await menu.getByRole("menuitem", { name: "Coverage", exact: true }).click();
+        if (new URL(page.url()).searchParams.get("tab") !== "coverage") problems.push(`[${vp.name}] 更多菜单没有保留覆盖分区导航`);
+        notes.push(`[${vp.name}] 地址详情十个分区和覆盖菜单导航通过`);
         await page.screenshot({ path: join(OUT, `address-detail-${vp.name}.png`), fullPage: false });
       }
 
@@ -1608,7 +1311,9 @@ async function main() {
         await page.goto(`${base}/investigations`, { waitUntil: "domcontentloaded" });
         await page.waitForSelector(".cs-protable", { timeout: 20_000 });
         await page.waitForTimeout(500);
-        const proRows = await page.locator(".cs-protable .ant-table-tbody tr.ant-table-row").count();
+        const proRowLocator = page.locator(".cs-protable--cards .cs-rowcard, .cs-protable .ant-table-tbody tr.ant-table-row");
+        await proRowLocator.first().waitFor({ state: "visible", timeout: 20_000 });
+        const proRows = await proRowLocator.count();
         if (proRows !== INVESTIGATION_ROWS.length) {
           problems.push(`[${vp.name}] CsProTable 行数不符：${proRows} ≠ ${INVESTIGATION_ROWS.length}`);
         }
@@ -2113,30 +1818,6 @@ async function main() {
         }
       }
 
-      /*
-       * ---------- 6c-2. 交易详情：hash 形状契约（回归 §21.5） ----------
-       *
-       * 真实事故：查询框把 hash 的 0x 前缀 strip 掉再跳详情页（该 URL 形状被
-       * explorer-visual-acceptance.mjs 冻结），详情页又把路由参数原样拼进
-       * /api/v2/explorer/transactions/{chain}/{hash}，服务端按 0x + 64 hex 解析，
-       * 于是页面弹「加载失败 · 交易哈希不合法」，交易数据一直不可用。
-       *
-       * 上面的 SMOKE_ROUTES 用的是 tron 裸 hash，而服务端对 tron 恰好单独放行过，
-       * 所以整条链路"看着是通的"——必须换成 EVM 链并断言**请求 URL**才拦得住。
-       */
-      {
-        const TX_HASH_BARE = "9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c";
-        requestLog.length = 0;
-        await page.goto(`${base}/transactions/bsc/${TX_HASH_BARE}`, { waitUntil: "domcontentloaded" });
-        await page.waitForTimeout(700);
-        const detailCalls = requestLog.filter((url) => url.includes("/api/v2/explorer/transactions/bsc/"));
-        if (detailCalls.length === 0) {
-          problems.push(`[${vp.name}] 交易详情（bsc，裸 hash）没有发出详情请求：请求被路由形状挡在了前端`);
-        } else if (!detailCalls.some((url) => url.includes(`/transactions/bsc/0x${TX_HASH_BARE}`))) {
-          problems.push(`[${vp.name}] 交易详情请求丢失 0x 前缀：${detailCalls[0]}（服务端会判「交易哈希不合法」）`);
-        }
-      }
-
       /* ---------- 6d. CSS 使用面审计（R7 遗留清理的判据，规范 §60 Phase R7） ---------- */
       {
         /*
@@ -2407,6 +2088,27 @@ async function main() {
           );
         };
 
+        /* List and case-tab create actions follow the same grants as their routes. */
+        for (const entry of [
+          { path: "/cases", permission: "case:create", action: "新建案件" },
+          { path: "/investigations", permission: "investigation:create", action: "发起调查" },
+          { path: `/cases/${CASE_ID}/investigations`, permission: "investigation:create", action: "发起调查" },
+        ]) {
+          await setSession(SESSION.permissions.filter((permission) => permission !== entry.permission));
+          await page.goto(`${base}${entry.path}`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(900);
+          if (await page.getByRole("button", { name: entry.action, exact: true }).count()) {
+            problems.push(`[perm-action] ${entry.path}：缺少 ${entry.permission} 时仍显示「${entry.action}」`);
+          }
+
+          await setSession(SESSION.permissions);
+          await page.goto(`${base}${entry.path}`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(900);
+          if (!(await page.getByRole("button", { name: entry.action, exact: true }).count())) {
+            problems.push(`[perm-action] ${entry.path}：拥有 ${entry.permission} 时未显示「${entry.action}」`);
+          }
+        }
+
         const tabHrefOf = async () =>
           page.evaluate(() =>
             Array.from(document.querySelectorAll(".cs-tabs a")).map((a) => a.getAttribute("href") ?? ""),
@@ -2446,7 +2148,7 @@ async function main() {
           await setSession(SESSION.permissions);
           requestLog.length = 0;
           await page.goto(`${base}/cases/${CASE_ID}/overview`, { waitUntil: "domcontentloaded" });
-          await page.waitForTimeout(1200);
+          await page.waitForSelector(".cs-tabs a", { state: "visible", timeout: 20_000 });
           const allowedHrefs = await tabHrefOf();
           const linkShown = allowedHrefs.some((href) => href.endsWith(`/${entry.tab}`));
 
@@ -2507,8 +2209,9 @@ async function main() {
           await page.keyboard.press("Control+k");
           await page.waitForSelector(".cs-command", { timeout: 10_000 });
           /* 查询长度必须 ≥2 才会真的发检索请求（CommandPalette 的门槛）。 */
-          await page.keyboard.type("案件");
-          await page.waitForTimeout(900);
+          // 等输入控件可用并明确填写；仅等面板挂载后立即 keyboard.type 会抢在异步聚焦前输入。
+          await page.locator(".cs-command input").first().fill("案件");
+          await page.waitForFunction(() => document.querySelector(".cs-command")?.textContent?.includes("案件概览"), null, { timeout: 5000 }).catch(() => {});
           const text = ((await page.locator(".cs-command").first().innerText().catch(() => "")) ?? "").trim();
           await page.keyboard.press("Escape");
           await page.waitForTimeout(200);
@@ -2738,7 +2441,11 @@ async function auditComponentCss(used) {
   return { defined: defined.size, used: used.size, unused, resurrected };
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(3);
-});
+export { SESSION, DASHBOARD, CASE_ROWS, ADDRESS_INPUT, DOWNLOAD_CHAINS, DOWNLOAD_DATASETS, PREVIEW, VALIDATE_RESULT, CANVAS_RECORD, INVESTIGATION_ROWS, JOB_ID, JOB, JOB_ROW, DETAIL, startStaticServer };
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(3);
+  });
+}

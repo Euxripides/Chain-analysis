@@ -7,7 +7,7 @@ import { formatBytes, formatRawAmount } from "../../../sprint5/common";
  *
  * 这是下载任务详情页的**首屏主角**，只回答普通用户的四个问题：
  *   1. 下载到多少了？（服务端真实 progress）
- *   2. 现在有多快？（服务端 rate，或已确认口径的 downloaded_rows ÷ elapsed_seconds）
+   *   2. 现在有多快？（服务端实时增量速率）
  *   3. 还要多久 / 预计几点完成？（服务端 eta_seconds 的显示换算）
  *   4. 现在是什么阶段？
  *
@@ -123,6 +123,10 @@ export function jobStageText(input: {
   datasets: string[];
   doneShards: number;
   totalShards: number;
+  fetchedShards?: number;
+  fetchedRows?: number;
+  ingestedRows?: number;
+  downloadedRows?: number;
 }): string {
   const { status, datasets, doneShards, totalShards } = input;
   const datasetText = datasets.length > 0 ? datasets.join("、") : "";
@@ -147,7 +151,10 @@ export function jobStageText(input: {
     case "FAILED":
       return "下载失败";
     case "RUNNING":
-      if (totalShards > 0 && doneShards === 0) return datasetText ? `正在准备 ${datasetText} 的分片` : "正在准备分片";
+      if (totalShards > 0 && input.fetchedShards === totalShards) {
+        return (input.ingestedRows ?? 0) >= (input.fetchedRows ?? 0) ? "正在校验下载数据" : "正在写入下载数据";
+      }
+      if (totalShards === 0) return datasetText ? `正在准备 ${datasetText} 的分片` : "正在准备分片";
       return datasetText ? `正在下载 ${datasetText}` : "正在下载";
     default:
       return status || "—";

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/model"
 	"github.com/blockchain-platform/blockchain-platform/internal/provider"
 )
 
@@ -32,6 +33,84 @@ func newGuardClient(t *testing.T, hardMB int64, softMB int64, bodyIdle time.Dura
 
 func jsonRPCBody(rows string) []byte {
 	return []byte("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"transactions\":" + rows + "}}")
+}
+
+func TestBodyDeadlineAndCancellationPreserveContextClass(t *testing.T) {
+	for _, mode := range []string{"context_deadline", "client_deadline", "cancel"} {
+		t.Run(mode, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Length", "100000")
+				_, _ = w.Write([]byte(`{"result":{"transactions":[`))
+				w.(http.Flusher).Flush()
+				<-r.Context().Done()
+			}))
+			defer srv.Close()
+			c := newGuardClient(t, 1, 0, time.Minute)
+			c.endpoint = srv.URL
+			ctx := context.Background()
+			cancel := func() {}
+			if mode == "context_deadline" {
+				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+			} else if mode == "client_deadline" {
+				c.http.Timeout = 100 * time.Millisecond
+			} else {
+				ctx, cancel = context.WithCancel(ctx)
+				time.AfterFunc(100*time.Millisecond, cancel)
+			}
+			defer cancel()
+			_, err := c.Fetch(ctx, provider.FetchRequest{Chain: "bsc", Dataset: "transactions", PageSize: 2000})
+			pe, ok := err.(*provider.Error)
+			if !ok {
+				t.Fatalf("expected classified body error, got %v", err)
+			}
+			if mode == "cancel" {
+				if pe.Class != provider.ClassCancelled || pe.Retryable {
+					t.Fatalf("cancel must stop retries: %#v", pe)
+				}
+			} else if pe.Class != provider.ClassRequestTimeout || !pe.ReducePageSize {
+				t.Fatalf("body deadline must downgrade page size: %#v", pe)
+			}
+		})
+	}
+}
+
+func TestUsageDurationIncludesBodyTransfer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write(jsonRPCBody(`[{"blockNumber":"0x1"}]`))
+	}))
+	defer srv.Close()
+	c := newGuardClient(t, 1, 0, time.Minute)
+	c.endpoint = srv.URL
+	var durationMs, bodyMs int
+	c.usageHook = func(u model.UsageRow) { durationMs, bodyMs = u.DurationMs, u.BodyMs }
+	_, err := c.Fetch(context.Background(), provider.FetchRequest{Chain: "bsc", Dataset: "transactions", PageSize: 2000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if durationMs < 90 || durationMs < bodyMs {
+		t.Fatalf("duration %dms must include body %dms", durationMs, bodyMs)
+	}
+}
+
+func TestLargeCompleteGzipWithIncompleteJSONIsTruncated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		_, _ = gz.Write([]byte(`{"jsonrpc":"2.0","result":{"transactions":[{"blockNumber":"0x1","input":"` + strings.Repeat("x", 1<<20) + `"}`))
+		_ = gz.Close()
+	}))
+	defer srv.Close()
+	c := newGuardClient(t, 2, 0, time.Minute)
+	c.endpoint = srv.URL
+	_, err := c.Fetch(context.Background(), provider.FetchRequest{Chain: "bsc", Dataset: "transactions", PageSize: 2000})
+	pe, ok := err.(*provider.Error)
+	if !ok || pe.Class != provider.ClassBodyTruncated || !pe.Retryable {
+		t.Fatalf("incomplete document is a truncated response: %v", err)
+	}
 }
 
 func TestResponseTooLargeNotInvalidJSON(t *testing.T) {

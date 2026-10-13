@@ -47,6 +47,8 @@ FieldError:
 
 # 本项目实际使用的错误码。新增端点必须复用其中之一，或在 common/errors.yaml 中登记。
 KnownErrorCodes:
+  DATA_UNAVAILABLE: 503
+  QUERY_SCAN_BUDGET: 422
   AUTHN_INVALID_CREDENTIALS: 401
   AUTHN_SESSION_MISSING: 401
   AUTHN_SESSION_INVALID: 401
@@ -93,18 +95,6 @@ KnownErrorCodes:
   # 拒绝与放行都会写入 feature_flag_evaluations（真实流量证据）。
   # 安全与恢复路径（Kill Switch 审批/执行/恢复）不受开关影响，见 ADR-021。
   FEATURE_DISABLED: 503
-  # Solana / dRPC 接入新增的业务错误码（《Solana dRPC 数据源接入开发文档》§18.3）。
-  # 用户端只看到这些稳定码与简洁可操作的中文提示；原始 Provider 响应留在管理员诊断与审计证据里。
-  SOLANA_ADDRESS_INVALID: 400
-  SOLANA_DATASET_UNSUPPORTED: 400
-  DRPC_NOT_CONFIGURED: 503
-  DRPC_AUTH_FAILED: 502
-  DRPC_QUOTA_EXHAUSTED: 429
-  DRPC_RATE_LIMITED: 429
-  DRPC_MANAGEMENT_STALE: 503
-  DRPC_PAGINATION_INVALID: 502
-  SOLANA_TRANSACTION_VERSION_UNSUPPORTED: 422
-  SOLANA_SLOT_TIME_UNAVAILABLE: 422
 
 # ---------------------------------------------------------------------------
 # Sprint 7 API-layer authorization guards.

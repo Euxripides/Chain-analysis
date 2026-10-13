@@ -27,46 +27,57 @@ export function useApi<T>(
   const queryKey = JSON.stringify({ org: session?.organization_id ?? "", ws: session?.workspace_id ?? "", path: path ?? "", query: query ?? {} });
   // 记录当前 data 属于哪个作用域：作用域一变立刻清空，避免闪现上一个工作区的数据。
   const dataScopeRef = useRef(scopeKey);
-  const abortRef = useRef<AbortController | null>(null);
+  const keyRef = useRef(queryKey);
+  keyRef.current = queryKey;
+  const dataKeyRef = useRef("");
+  const flightRef = useRef<{ key: string; controller: AbortController; promise: Promise<void>; dirty: boolean } | null>(null);
 
-  const load = useCallback(async () => {
-    if (!path) {
-      setData(null);
-      setLoading(false);
-      return;
+  const load = useCallback(async function loadSnapshot(): Promise<void> {
+    if (keyRef.current !== queryKey) return;
+    if (!path) { setData(null); setLoading(false); return; }
+    const current = flightRef.current;
+    if (current?.key === queryKey) {
+      current.dirty = true;
+      return current.promise;
     }
-    abortRef.current?.abort();
+    current?.controller.abort();
     const controller = new AbortController();
-    abortRef.current = controller;
-    // 作用域（组织/工作区）变化时先清空：新工作区在响应到达前不得显示旧数据。
-    if (dataScopeRef.current !== scopeKey) {
+    if (dataScopeRef.current !== scopeKey || dataKeyRef.current !== queryKey) {
       dataScopeRef.current = scopeKey;
-      setData(null);
-      setMeta({});
+      setData(null); setMeta({});
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await client.get<T>(path, query ? { query, signal: controller.signal } : { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      setData(res.data);
-      setMeta({ next_cursor: res.meta.next_cursor, total: res.meta.total, traceId: res.meta.trace_id });
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      if (err instanceof ApiError) setError(err.userMessage);
-      else if (!(err instanceof DOMException && err.name === "AbortError")) setError("加载失败");
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
+    setLoading(true); setError(null);
+    const flight = { key: queryKey, controller, dirty: false, promise: Promise.resolve() };
+    flightRef.current = flight;
+    flight.promise = (async () => {
+      try {
+        const res = await client.get<T>(path, query ? { query, signal: controller.signal } : { signal: controller.signal });
+        if (controller.signal.aborted || keyRef.current !== queryKey) return;
+        dataKeyRef.current = queryKey;
+        setData(res.data);
+        setMeta({ next_cursor: res.meta.next_cursor, total: res.meta.total, traceId: res.meta.trace_id });
+      } catch (err) {
+        if (controller.signal.aborted || keyRef.current !== queryKey) return;
+        if (err instanceof ApiError) setError(err.userMessage);
+        else if (!(err instanceof DOMException && err.name === "AbortError")) setError("加载失败");
+      } finally {
+        if (flightRef.current === flight) flightRef.current = null;
+        if (!controller.signal.aborted && keyRef.current === queryKey) {
+          setLoading(false);
+          if (flight.dirty) void loadSnapshot();
+        }
+      }
+    })();
+    return flight.promise;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, path, queryKey, scopeKey, ...deps]);
 
   useEffect(() => {
     void load();
-    return () => abortRef.current?.abort();
+    return () => { flightRef.current?.controller.abort(); flightRef.current = null; };
   }, [load]);
 
-  return { data, meta, loading, error, reload: load };
+  return { data: dataKeyRef.current === queryKey ? data : null, meta: dataKeyRef.current === queryKey ? meta : {}, loading, error, reload: load };
 }
 
 /** 统一的写操作 hook：错误与成功提示只走 Dialog（AGENTS.md）。 */
@@ -123,6 +134,8 @@ export interface JobEvent {
 export function useJobStream(jobID: string | null, onEvent: (event: JobEvent) => void) {
   const { session } = useAuth();
   const scope = `${session?.organization_id ?? ""}:${session?.workspace_id ?? ""}`;
+  const jobRef = useRef(jobID);
+  jobRef.current = jobID;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const [connected, setConnected] = useState(false);
@@ -135,17 +148,19 @@ export function useJobStream(jobID: string | null, onEvent: (event: JobEvent) =>
     setLastEventID("0");
     if (!jobID || scope === ":") return;
     const openedScope = scope;
+    const openedJob = jobID;
+    let disposed = false;
     const source = new EventSource(`/api/v2/jobs/${encodeURIComponent(jobID)}/events`, { withCredentials: true });
     const update = (message: MessageEvent<string>) => {
-      if (scopeRef.current !== openedScope) {
+      if (disposed || jobRef.current !== openedJob || scopeRef.current !== openedScope) {
         source.close();
-        setConnected(false);
         return;
       }
       if (message.lastEventId) setLastEventID(message.lastEventId);
       try {
         const parsed = JSON.parse(message.data) as JobEvent;
-        if (message.lastEventId && !parsed.event_id) parsed.event_id = Number(message.lastEventId);
+        // lastEventId is inherited on frames WITHOUT id. Only a payload's
+        // explicit event_id identifies a persisted event for deduplication.
         handlerRef.current(parsed);
       } catch {
         // 心跳/非法帧忽略，不把原始帧回显给用户。
@@ -154,9 +169,10 @@ export function useJobStream(jobID: string | null, onEvent: (event: JobEvent) =>
     const snapshot = (message: MessageEvent<string>) => update(message);
     source.addEventListener("update", update as EventListener);
     source.addEventListener("snapshot", snapshot as EventListener);
-    source.onopen = () => setConnected(true);
-    source.onerror = () => setConnected(false);
+    source.onopen = () => { if (!disposed && jobRef.current === openedJob && scopeRef.current === openedScope) setConnected(true); };
+    source.onerror = () => { if (!disposed && jobRef.current === openedJob && scopeRef.current === openedScope) setConnected(false); };
     return () => {
+      disposed = true;
       source.removeEventListener("update", update as EventListener);
       source.removeEventListener("snapshot", snapshot as EventListener);
       source.close();

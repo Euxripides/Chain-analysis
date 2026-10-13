@@ -2,1885 +2,3239 @@ openapi: 3.1.0
 info:
   title: 用户层系统 API（§21.5）
   version: 1.0.0
-  description: |
-    本文件由 scripts/gen_openapi_index.py 从后端路由表生成，请勿手工编辑。
+  description: '本文件由 scripts/gen_openapi_index.py 从后端路由表生成，请勿手工编辑。
+
 
     契约级别：**索引级（index-only）**。路径、方法、operationId、所需权限
+
     与错误码骨架均来自真实代码；业务响应体模型尚未定义（见 §21.1 的后续工作）。
+
     auth-v1.yaml 是完整级契约，可作为写法参考。
+
+    '
 x-contract-level: index-only
 x-generated-by: scripts/gen_openapi_index.py
 x-must-change-password-guard:
   refused_code: AUTHN_PASSWORD_CHANGE_REQUIRED
   refused_status: 403
-  see: './common/errors.yaml#/MustChangePasswordGuard'
+  see: ./common/errors.yaml#/MustChangePasswordGuard
 x-session-workspace-scope-guard:
   refused_code: AUTHZ_WORKSPACE_SCOPE_STALE
   refused_status: 409
-  see: './common/errors.yaml#/SessionWorkspaceScopeGuard'
+  see: ./common/errors.yaml#/SessionWorkspaceScopeGuard
 servers:
-  - url: /
+- url: /
 security:
-  - sessionCookie: []
+- sessionCookie: []
 components:
   securitySchemes:
     sessionCookie:
       type: apiKey
       in: cookie
       name: cs_user_session
+  schemas:
+    ExplorerFilter:
+      type: object
+      properties:
+        chain: &id001
+          type: string
+        addresses:
+          type: array
+          maxItems: 100
+          items: *id001
+        datasets:
+          type: array
+          items: *id001
+        token: &id005
+          type: string
+          description: Contract(s), or a case-insensitive partial symbol; chain and
+            contract remain asset identity.
+        direction: &id006
+          type: string
+          enum:
+          - ''
+          - in
+          - out
+          - self
+          - internal
+        counterparty: *id001
+        from_address: *id001
+        to_address: *id001
+        hide_zero:
+          type: boolean
+        from_time: &id002
+          type:
+          - string
+          - 'null'
+          format: date-time
+        to_time: *id002
+        as_of: *id002
+        min_amount: &id007
+          type: string
+          pattern: ^\d+(\.\d+)?$
+        max_amount: &id008
+          type: string
+          pattern: ^\d+(\.\d+)?$
+        block_from: &id003
+          type: integer
+          minimum: 0
+        block_to: *id003
+        interval: &id009
+          type: string
+          enum:
+          - day
+          - hour
+        timezone: &id010
+          type: string
+          description: IANA timezone, default Asia/Shanghai.
+    AssetFlowTotal:
+      type: object
+      properties:
+        in_raw: &id004
+          type: string
+          pattern: ^-?\d+$
+          description: Exact integer; never converted through floating point.
+        out_raw: *id004
+        net_raw: *id004
+        internal_raw: *id004
+        self_raw: *id004
+        token_decimals: *id003
+        event_count: *id003
+        transaction_count: *id003
+        missing_amount_rows: *id003
+        failed_event_count: *id003
+        dataset: *id001
+        token_address: *id001
+        token_symbol: *id001
+        first_seen: *id002
+        last_seen: *id002
+      required:
+      - in_raw
+      - out_raw
+      - net_raw
+      - internal_raw
+      - self_raw
+      - token_decimals
+      - event_count
+      - transaction_count
+      - missing_amount_rows
+      - failed_event_count
+      - dataset
+      - token_address
+      - token_symbol
+      - first_seen
+      - last_seen
+    StatisticsGroup:
+      type: object
+      properties:
+        key: *id001
+        total:
+          $ref: '#/components/schemas/AssetFlowTotal'
+        counterparty: *id001
+        address: *id001
+        bucket: *id001
+        common_addresses:
+          type: array
+          items: *id001
+        share_percent: *id001
+      required:
+      - key
+      - total
+    ExplorerStatistics:
+      type: object
+      properties:
+        filter:
+          $ref: '#/components/schemas/ExplorerFilter'
+        data_version: *id001
+        transaction_count: *id003
+        event_count: *id003
+        counterparty_count: *id003
+        first_seen: *id002
+        last_seen: *id002
+        top_transfers:
+          type: array
+          items:
+            type: object
+            properties:
+              dataset: *id001
+              tx_hash: *id001
+              event_index: *id003
+              token_address: *id001
+              token_symbol: *id001
+              token_decimals: *id003
+              timestamp: *id002
+              from_address: *id001
+              to_address: *id001
+              amount_raw: *id001
+              source_ingested_at: *id002
+              status: *id003
+              block_number: *id003
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+        distribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+        counterparties:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsGroup'
+      required:
+      - filter
+      - data_version
+      - transaction_count
+      - event_count
+      - counterparty_count
+      - first_seen
+      - last_seen
+      - top_transfers
+      - assets
+      - trend
+      - hours
+      - distribution
+      - counterparties
+      - addresses
+    DatasetFile:
+      type: object
+      properties:
+        dataset: *id001
+        name: *id001
+        rows: *id003
+        bytes: *id003
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        download_available:
+          type: boolean
+      required:
+      - dataset
+      - name
+      - rows
+      - bytes
+      - sha256
+      - download_available
+    ExportResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        job_id:
+          type:
+          - string
+          - 'null'
+        dataset: *id001
+        format:
+          type: string
+          enum:
+          - csv
+          - xlsx
+          - jsonl
+          - parquet
+        zip:
+          type: boolean
+        status: *id001
+        rows: *id003
+        bytes:
+          type:
+          - integer
+          - 'null'
+        sha256: *id001
+        created_at: *id002
+        finished_at: *id002
+        expires_at: *id002
+        download_available:
+          type: boolean
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetFile'
+    ExportRequest:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        chain: *id001
+        addresses:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: *id001
+        datasets:
+          type: array
+          items: *id001
+        format:
+          type: string
+          enum:
+          - csv
+          - xlsx
+          - jsonl
+          - parquet
+        content:
+          type: string
+          enum:
+          - details
+          - statistics
+          - counterparties
+        file_layout:
+          type: string
+          enum:
+          - dataset
+          description: Exactly one file per dataset; multiple datasets form a ZIP.
+        filters:
+          $ref: '#/components/schemas/ExplorerFilter'
+        start_time: *id002
+        end_time: *id002
+        include_meta:
+          type: boolean
+        include_decoded_input:
+          type: boolean
+        force_zip:
+          type: boolean
+      required:
+      - format
 paths:
   /api/v2/canvases/{id}:
     get:
       operationId: canvasV2Get
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     patch:
       operationId: canvasV2Update
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/canvases/{id}/branches:
     post:
       operationId: canvasV2Branch
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:branch
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/canvases/{id}/snapshots:
     get:
       operationId: canvasV2Snapshots
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:snapshot
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: canvasV2SnapshotsPost
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:snapshot:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases:
     get:
       operationId: userCases
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCreateCase
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}:
     get:
       operationId: userCaseDetail
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     patch:
       operationId: userUpdateCase
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/activity:
     get:
       operationId: userCaseActivity
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:activity:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/commands/{command}:
     post:
       operationId: userCaseCommand
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:state:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/comments:
     get:
       operationId: userCaseComments
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: comment:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCaseCommentAdd
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: comment:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/members:
     get:
       operationId: userCaseMembers
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:member:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCaseMemberAdd
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:member:manage
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/members/{identity_id}:
     delete:
       operationId: userCaseMemberRemove
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:member:manage
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/reports:
     get:
       operationId: userCaseReports
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCaseReportCreate
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/subjects:
     get:
       operationId: userCaseSubjects
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: subject:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCaseSubjectAdd
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: subject:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/cases/{id}/subjects/{subject_id}:
     delete:
       operationId: userCaseSubjectRemove
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: subject:remove
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/dashboard:
     get:
       operationId: userDashboard
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: dashboard:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/downloads:
     post:
       operationId: downloadCreate
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: download:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/downloads/preview:
     post:
       operationId: downloadPreview
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: download:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/downloads/validate-addresses:
     post:
       operationId: downloadValidateAddresses
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: download:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/evidence/{id}:
     get:
       operationId: userEvidenceDetail
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: evidence:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/evidence/{id}/commands/dispute:
     post:
       operationId: userEvidenceDispute
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: evidence:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/evidence/{id}/commands/supersede:
     post:
       operationId: userEvidenceSupersede
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: evidence:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/evidence/{id}/commands/verify:
     post:
       operationId: userEvidenceVerify
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: evidence:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/activity:
     get:
       operationId: explorerActivity
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/assets:
     get:
       operationId: explorerAssets
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/counterparties:
     get:
       operationId: explorerCounterparties
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/flow-profile:
     get:
       operationId: explorerFlowProfile
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/overview:
     get:
       operationId: explorerOverview
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/addresses/{chain}/{address}/semantic:
     get:
       operationId: explorerSemantic
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+  /api/v2/explorer/addresses/{chain}/{address}/statistics:
+    get:
+      operationId: explorerStatistics
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      statistics:
+                        $ref: '#/components/schemas/ExplorerStatistics'
+                      coverage:
+                        type: array
+                        items:
+                          type: object
+                      source:
+                        type: object
+                      calculation:
+                        type: object
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '422':
+          description: 'QUERY_SCAN_BUDGET: shorten range or specify contract; no partial
+            aggregates.'
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: 'DATA_UNAVAILABLE: local index or scan temporarily unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      description: Read-only local index aggregation, canonical event identity and
+        exact raw amounts. All chosen events are aggregated on the server. Group internal/self
+        transfers remain separate. Coverage accompanies results. Budget refusal returns
+        no partial success.
+      parameters:
+      - name: chain
+        in: path
+        required: true
+        schema: *id001
+      - name: address
+        in: path
+        required: true
+        schema: *id001
+      - name: token
+        in: query
+        required: false
+        schema: *id005
+      - name: direction
+        in: query
+        required: false
+        schema: *id006
+      - name: counterparty
+        in: query
+        required: false
+        schema: *id001
+      - name: from_address
+        in: query
+        required: false
+        schema: *id001
+      - name: to_address
+        in: query
+        required: false
+        schema: *id001
+      - name: hide_zero
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - '1'
+          - '0'
+      - name: from_time
+        in: query
+        required: false
+        schema: *id002
+      - name: to_time
+        in: query
+        required: false
+        schema: *id002
+      - name: as_of
+        in: query
+        required: false
+        schema: *id002
+      - name: min_amount
+        in: query
+        required: false
+        schema: *id007
+      - name: max_amount
+        in: query
+        required: false
+        schema: *id008
+      - name: interval
+        in: query
+        required: false
+        schema: *id009
+      - name: timezone
+        in: query
+        required: false
+        schema: *id010
+      - name: addresses
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comma separated address group, at most 100.
+      - name: datasets
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comma separated transactions, token_transfers, internal_transactions.
+      x-contract-level: typed
+  /api/v2/explorer/blocks/{chain}/{block}:
+    get:
+      operationId: explorerBlock
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                      summary:
+                        type: object
+                      source: *id001
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Local data unavailable; missing coverage is never represented
+            as a zero balance/supply.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: chain
+        in: path
+        required: true
+        schema: *id001
+      - name: block
+        in: path
+        required: true
+        schema: *id001
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: cursor
+        in: query
+        required: false
+        schema: *id001
+      x-contract-level: typed
+  /api/v2/explorer/tokens:
+    get:
+      operationId: explorerTokenSearch
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Local data unavailable; missing coverage is never represented
+            as a zero balance/supply.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: chain
+        in: query
+        required: true
+        schema: *id001
+      - name: q
+        in: query
+        required: false
+        schema: *id001
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      x-contract-level: typed
+  /api/v2/explorer/tokens/{chain}/{contract}:
+    get:
+      operationId: explorerToken
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      chain: *id001
+                      contract_address: *id001
+                      metadata:
+                        type:
+                        - object
+                        - 'null'
+                      source: *id001
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Local data unavailable; missing coverage is never represented
+            as a zero balance/supply.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: chain
+        in: path
+        required: true
+        schema: *id001
+      - name: contract
+        in: path
+        required: true
+        schema: *id001
+      x-contract-level: typed
+  /api/v2/explorer/tokens/{chain}/{contract}/holders:
+    get:
+      operationId: explorerTokenHolders
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+  /api/v2/explorer/tokens/{chain}/{contract}/logo:
+    get:
+      operationId: tokenLogo
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Verified chain + contract logo
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Local data unavailable; missing coverage is never represented
+            as a zero balance/supply.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '404':
+          description: No logo resource for this exact contract.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: chain
+        in: path
+        required: true
+        schema: *id001
+      - name: contract
+        in: path
+        required: true
+        schema: *id001
+  /api/v2/explorer/tokens/{chain}/{contract}/transfers:
+    get:
+      operationId: explorerTokenTransfers
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                      summary:
+                        type: object
+                      source: *id001
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Local data unavailable; missing coverage is never represented
+            as a zero balance/supply.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: chain
+        in: path
+        required: true
+        schema: *id001
+      - name: contract
+        in: path
+        required: true
+        schema: *id001
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: cursor
+        in: query
+        required: false
+        schema: *id001
+      x-contract-level: typed
   /api/v2/explorer/transactions/{chain}/{hash}:
     get:
       operationId: explorerTransaction
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/transactions/{chain}/{hash}/logs:
     get:
       operationId: explorerTransactionLogs
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/explorer/transactions/{chain}/{hash}/trace:
     get:
       operationId: explorerTransactionTrace
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/exports:
     get:
       operationId: exportsV2List
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: export:list
       responses:
         '200':
-          description: 成功（响应体模型待补充）
+          description: Success
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ExportResult'
+                      scope:
+                        type: object
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema: *id001
+      - name: status
+        in: query
+        required: false
+        schema: *id001
+      - name: format
+        in: query
+        required: false
+        schema: *id001
+      - name: cursor
+        in: query
+        required: false
+        schema: *id001
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      x-contract-level: typed
     post:
       operationId: exportV2Create
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: export:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+      parameters:
+      - name: X-CSRF-Token
+        in: header
+        required: true
+        schema: *id001
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      x-contract-level: typed
+      description: Asynchronous generation with a stored normalized filter snapshot.
+        Legacy requests preserve prefetch and bounded job exports. Dataset layout
+        exposes real per-file rows, bytes and SHA256. Aggregates use local canonical
+        source data.
   /api/v2/exports/download/{ticket}:
     get:
       operationId: exportV2Download
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: export:download
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/exports/{id}:
     get:
       operationId: exportV2Detail
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: export:read
       responses:
         '200':
-          description: 成功（响应体模型待补充）
+          description: Success
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    $ref: '#/components/schemas/ExportResult'
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      x-contract-level: typed
   /api/v2/exports/{id}/download-ticket:
     post:
       operationId: exportV2Ticket
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: export:download
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+  /api/v2/exports/{id}/files/{dataset}/download-ticket:
+    post:
+      operationId: exportFileTicket
+      tags:
+      - user-v2
+      x-required-permission: export:download
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      ticket_id:
+                        type: string
+                        format: uuid
+                      url: *id001
+                      expires_in_seconds:
+                        const: 60
+                      single_use:
+                        const: true
+                  meta:
+                    $ref: ./common/envelope.yaml#/Meta
+                required:
+                - success
+                - data
+                - meta
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '404':
+          description: Export/dataset outside caller scope.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '409':
+          description: File not available.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '503':
+          description: Object missing.
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: dataset
+        in: path
+        required: true
+        schema: *id001
+      - name: X-CSRF-Token
+        in: header
+        required: true
+        schema: *id001
+      x-contract-level: typed
+      description: Bound to identity, organization, workspace and this dataset. Created
+        on user action only. GET consumes; HEAD inspects without consuming. Same identity
+        may continue with Range until export expiry (maximum 24 hours).
   /api/v2/findings/{id}:
     get:
       operationId: userFindingDetail
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     patch:
       operationId: userFindingPatch
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/findings/{id}/commands/confirm:
     post:
       operationId: userFindingConfirm
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/findings/{id}/commands/reject:
     post:
       operationId: userFindingReject
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/findings/{id}/commands/supersede:
     post:
       operationId: userFindingSupersede
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/inbox:
     get:
       operationId: userInbox
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: inbox:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations:
     get:
       operationId: userInvestigationListV2
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: userCreateInvestigation
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/preview:
     post:
       operationId: userInvestigationPreview
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}:
     get:
       operationId: userInvestigationDetailV2
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/canvases:
     get:
       operationId: investigationCanvasesV2
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     post:
       operationId: investigationCanvasesV2Post
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: canvas:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/cancel:
     post:
       operationId: userInvestigationCancel
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:cancel
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/pause:
     post:
       operationId: userInvestigationPause
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:pause
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/resume:
     post:
       operationId: userInvestigationResume
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:resume
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/retry:
     post:
       operationId: userInvestigationRetry
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:retry
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/start:
     post:
       operationId: userInvestigationStart
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:start
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/commands/submit-review:
     post:
       operationId: userInvestigationSubmitReview
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:submit_review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/evidence:
     get:
       operationId: userInvestigationEvidence
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: evidence:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/findings:
     get:
       operationId: userInvestigationFindings
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: finding:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/investigations/{id}/runtime:
     get:
       operationId: userInvestigationRuntime
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: investigation:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/jobs:
     get:
       operationId: userJobsV2
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: job:list:self
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/jobs/{id}:
     get:
       operationId: userJobDetailV2
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: job:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/jobs/{id}/commands/{command}:
     post:
       operationId: userJobCommand
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: job:control
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/jobs/{id}/events:
     get:
       operationId: userJobEvents
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: job:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/me/preferences:
     get:
       operationId: userPreferences
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: profile:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     patch:
       operationId: userPreferencesUpdate
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: profile:update:self
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/me/profile:
     get:
       operationId: userProfile
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: profile:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
     patch:
       operationId: userProfileUpdate
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: profile:update:self
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/meta/chains:
     get:
       operationId: userChains
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: explorer:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/meta/datasets:
     get:
       operationId: userDatasets
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: download:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/notifications:
     get:
       operationId: userNotifications
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: notification:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/notifications/read-all:
     post:
       operationId: userNotificationsReadAll
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: notification:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/notifications/{id}/open:
     post:
       operationId: userNotificationOpen
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: notification:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/notifications/{id}/read:
     post:
       operationId: userNotificationRead
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: notification:update
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports:
     get:
       operationId: userReports
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/download/{ticket}:
     get:
       operationId: userReportDownload
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:download
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}:
     get:
       operationId: userReportDetail
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/commands/approve:
     post:
       operationId: userReportApprove
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/commands/archive:
     post:
       operationId: userReportArchive
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/commands/reject:
     post:
       operationId: userReportReject
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:review
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/commands/sign:
     post:
       operationId: userReportSign
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:sign
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/commands/submit:
     post:
       operationId: userReportSubmit
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:create
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/reports/{id}/download-ticket:
     post:
       operationId: userReportTicket
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: report:download
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/search:
     get:
       operationId: userSearch
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: search:read
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
   /api/v2/workspace-members:
     get:
       operationId: userWorkspaceMembers
-      tags: [user-v2]
+      tags:
+      - user-v2
       x-required-permission: case:member:list
       responses:
         '200':
           description: 成功（响应体模型待补充）
           content:
             application/json:
-              schema: { $ref: './common/envelope.yaml#/Envelope' }
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
         '401':
           description: 未认证或会话失效
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
         '403':
           description: 缺少所需权限
           content:
             application/json:
-              schema: { $ref: './common/errors.yaml#/ErrorEnvelope' }
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+  /api/v2/explorer/resolve:
+    get:
+      operationId: explorerResolve
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+  /api/v2/explorer/addresses/{chain}/{address}/history-coverage:
+    get:
+      operationId: explorerHistory
+      tags:
+      - user-v2
+      x-required-permission: explorer:read
+      responses:
+        '200':
+          description: 成功（响应体模型待补充）
+          content:
+            application/json:
+              schema:
+                $ref: ./common/envelope.yaml#/Envelope
+        '401':
+          description: 未认证或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+        '403':
+          description: 缺少所需权限
+          content:
+            application/json:
+              schema:
+                $ref: ./common/errors.yaml#/ErrorEnvelope
+x-typed-scope: Blue explorer statistics/object queries and dataset export operations;
+  other existing operations remain index-only.

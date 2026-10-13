@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ var allSignatures = []map[string]any{
 // fakeRPC 模拟标准 Solana JSON-RPC：按 method 返回预定结果，并记录调用次数。
 func fakeRPC(t *testing.T, calls map[string]int) *httptest.Server {
 	t.Helper()
+	var callsMu sync.Mutex
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Method string `json:"method"`
@@ -34,7 +36,9 @@ func fakeRPC(t *testing.T, calls map[string]int) *httptest.Server {
 			return
 		}
 		if calls != nil {
+			callsMu.Lock()
 			calls[req.Method]++
+			callsMu.Unlock()
 		}
 		w.Header().Set("Content-Type", "application/json")
 		var result string

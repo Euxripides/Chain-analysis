@@ -163,7 +163,7 @@ export interface ExportRow {
   created_at: string
 }
 
-export const CHAINS = ['bsc', 'eth', 'tron', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism']
+export const CHAINS = ['bsc', 'eth', 'tron', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism', 'fantom', 'flare', 'gnosis', 'linea', 'scroll', 'somnia_mainnet', 'story_mainnet', 'taiko', 'telos', 'xlayer']
 export const DATASETS = ['transactions', 'token_transfers', 'nft_transfers', 'logs', 'balances']
 
 export const STATUS_LABEL: Record<string, string> = {

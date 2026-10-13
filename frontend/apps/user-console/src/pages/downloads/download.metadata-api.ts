@@ -1,5 +1,5 @@
 import type { ApiClient } from "@chain/api-client";
-import type { DownloadMetadataOption } from "./DownloadMetadataPanel";
+export interface DownloadMetadataOption { id: string; name: string; }
 
 /**
  * 案件/标签目录仍由已上线的 v1 元数据接口提供（v2 没有 /tags）。

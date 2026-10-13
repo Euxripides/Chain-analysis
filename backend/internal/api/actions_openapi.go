@@ -13,10 +13,16 @@ type actionOperation struct {
 }
 
 var actionOperations = []actionOperation{
+	{"get", "/api/v1/bridge/capabilities", "getCrossChainCapabilities", "Get bridge capabilities", "Read implemented adapters, query identifiers and credential configuration.", false},
+	{"post", "/api/v1/bridge/transfer", "queryCrossChainTransfer", "Query a cross-chain transfer", "Read protocol association by hash or existing bridge identifier; inspect attempts and per-leg verification.", true},
+	{"post", "/api/v1/bridge/candidates", "findCrossChainCandidates", "Find cross-chain candidates", "Bounded exact-decimal candidate search with explicit addresses, time range and asset; candidates are not verified pairs.", true},
 	{"get", "/api/v1/address/overview", "getAddressOverview", "Get address overview", "Use first for a compact address summary. Do not use for raw history.", false},
 	{"get", "/api/v1/address/assets", "getAddressAssets", "Get address assets", "Use for current balance snapshots, not historical cash flow.", false},
 	{"get", "/api/v1/address/transactions", "getTransactions", "List normal transactions", "Use for filtered paginated transactions; use flow summary for totals.", false},
 	{"get", "/api/v1/address/token-transfers", "getTokenTransfers", "List token transfers", "Use for filtered paginated transfers; use export for millions of rows. status matches the transaction's outcome and only matches transfers whose transaction row is indexed too; transfers are derived from emitted logs, so failed transactions contribute none.", false},
+	{"get", "/api/v1/address/nft-transfers", "getNFTTransfers", "List NFT transfers", "Read paginated indexed NFT events; quantities and token IDs remain exact strings.", false},
+	{"get", "/api/v1/address/logs", "getAddressLogs", "List contract logs", "Read local indexed logs emitted by address, without provider requests.", false},
+	{"get", "/api/v1/address/balance-snapshots", "getBalanceSnapshots", "List stored balance snapshots", "Latest stored observation per asset; time filters select observation timestamps rather than reconstruct historical state.", false},
 	{"get", "/api/v1/address/internal-transactions", "getInternalTransactions", "List internal transactions", "Use for normalized internal calls, not raw traces.", false},
 	{"get", "/api/v1/address/counterparties", "getCounterparties", "Aggregate counterparties", "Rank counterparties without downloading complete history.", false},
 	{"get", "/api/v1/address/flow-summary", "getFlowSummary", "Get flow summary", "Return server-side incoming, outgoing, net flow, counts and time bounds.", false},
@@ -73,6 +79,9 @@ func actionParameters(id string) []any {
 		"getAddressOverview": {"chain", "address"}, "getAddressAssets": {"chain", "address"}, "getFirstFunding": {"chain", "address"},
 		"getTransactions":         {"chain", "address", "direction", "start_time", "end_time", "min_value", "max_value", "counterparty", "method_id", "status", "page", "page_size", "sort"},
 		"getTokenTransfers":       {"chain", "address", "direction", "token", "token_contract", "start_time", "end_time", "min_amount", "max_amount", "counterparty", "from_address", "to_address", "status", "page", "page_size", "sort"},
+		"getNFTTransfers":         {"chain", "address", "direction", "token", "token_contract", "token_id", "start_time", "end_time", "counterparty", "from_address", "to_address", "page", "page_size", "sort"},
+		"getAddressLogs":          {"chain", "address", "start_time", "end_time", "page", "page_size", "sort"},
+		"getBalanceSnapshots":     {"chain", "address", "token", "token_contract", "start_time", "end_time", "page", "page_size", "sort"},
 		"getInternalTransactions": {"chain", "address", "direction", "start_time", "end_time", "counterparty", "min_value", "max_value", "page", "page_size", "sort"},
 		"getCounterparties":       {"chain", "address", "token", "token_contract", "direction", "start_time", "end_time", "min_total_amount", "min_tx_count", "sort_by", "limit"},
 		"getFlowSummary":          {"chain", "address", "token", "token_contract", "start_time", "end_time"}, "getTopFlows": {"chain", "address", "direction", "token", "token_contract", "group_by", "limit", "start_time", "end_time"},
@@ -84,10 +93,10 @@ func actionParameters(id string) []any {
 	for _, name := range names {
 		schema := map[string]any{"type": "string"}
 		if name == "chain" {
-			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}
+			schema["enum"] = actionChainValues()
 		}
 		if name == "source_chain" {
-			schema["enum"] = []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}
+			schema["enum"] = actionChainValues()
 		}
 		switch name {
 		case "direction":
@@ -138,9 +147,12 @@ func actionParameters(id string) []any {
 }
 
 func actionRequestSchema(id string) map[string]any {
+	if schema := crossChainRequestSchema(id); schema != nil {
+		return schema
+	}
 	str := map[string]any{"type": "string"}
-	chainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}}
-	downloadChainSchema := map[string]any{"type": "string", "enum": []string{"bsc", "ethereum", "tron", "polygon", "arbitrum", "optimism", "base", "avalanche", "solana"}}
+	chainSchema := map[string]any{"type": "string", "enum": actionChainValues()}
+	downloadChainSchema := map[string]any{"type": "string", "enum": actionChainValues()}
 	addressArray := map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": str}
 	props := map[string]any{}
 	required := []string{}
@@ -158,13 +170,13 @@ func actionRequestSchema(id string) map[string]any {
 		props = map[string]any{"chain": chainSchema, "seed_addresses": addressArray, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 8, "default": 3}, "min_total_amount": str, "max_nodes": map[string]any{"type": "integer", "minimum": 1, "maximum": 2000, "default": 200}}
 		required = []string{"chain", "seed_addresses"}
 	case "createExport":
-		props = map[string]any{"chain": chainSchema, "address": str, "addresses": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": str}, "data_types": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs"}}}, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}, "default": "parquet"}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}, "default": "zstd"}}
+		props = map[string]any{"chain": chainSchema, "address": str, "addresses": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": str}, "data_types": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "balances"}}}, "token": str, "token_contract": str, "start_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "end_time": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "format": map[string]any{"type": "string", "enum": []string{"parquet", "csv"}, "default": "parquet"}, "compression": map[string]any{"type": "string", "enum": []string{"zstd", "zip"}, "default": "zstd"}}
 		required = []string{"chain", "data_types", "format", "compression"}
 	case "ensureChainData":
 		props = map[string]any{
 			"chain":     downloadChainSchema,
 			"addresses": addressArray,
-			"datasets":  map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "internal_transactions", "logs", "balances"}}},
+			"datasets":  map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "enum": []string{"transactions", "token_transfers", "nft_transfers", "internal_transactions", "logs", "balances"}}},
 			"range": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -206,8 +218,12 @@ func actionRequestSchema(id string) map[string]any {
 }
 
 func actionResponseSchemaName(id string) string {
+	if name := crossChainResponseName(id); name != "" {
+		return name
+	}
 	names := map[string]string{
 		"getAddressOverview": "AddressOverviewResponse", "getAddressAssets": "AddressAssetsResponse", "getTransactions": "TransactionListResponse",
+		"getNFTTransfers": "NFTTransferListResponse", "getAddressLogs": "AddressLogsResponse", "getBalanceSnapshots": "BalanceSnapshotListResponse",
 		"getTokenTransfers": "TokenTransferListResponse", "getInternalTransactions": "InternalTransactionListResponse", "getCounterparties": "CounterpartyListResponse",
 		"getFlowSummary": "FlowSummaryResponse", "getTopFlows": "TopFlowResponse", "getFirstFunding": "FirstFundingResponse", "getTransactionDetail": "TransactionDetailResponse",
 		"getTransactionTrace": "TransactionTraceResponse", "getTransactionLogs": "TransactionLogsResponse", "decodeTransaction": "DecodeTransactionResponse",
@@ -264,6 +280,9 @@ func actionSchemas() map[string]any {
 	schemas["AddressAssetsResponse"] = envelope(object(map[string]any{"address": str("Complete address."), "native_balance": decimal, "native_balance_source": map[string]any{"type": "string", "enum": []string{"balance_snapshot", "observed_net_flow", "unavailable"}}, "native_is_current_balance": map[string]any{"type": "boolean"}, "native_as_of_block": map[string]any{"type": []string{"integer", "null"}}, "native_as_of_time": timeValue, "assets": list(asset), "estimated_total_usd": map[string]any{"type": []string{"string", "null"}}}))
 	schemas["TransactionListResponse"] = envelope(list(transaction))
 	schemas["TokenTransferListResponse"] = envelope(list(tokenTransfer))
+	schemas["NFTTransferListResponse"] = envelope(list(object(map[string]any{"chain": str("Chain."), "tx_hash": str("Complete transaction hash."), "log_index": integer, "contract_address": str("NFT contract."), "token_id": str("Exact token ID."), "amount_raw": str("Exact integer quantity."), "token_standard": str("NFT token standard."), "from_address": str("Complete sender."), "to_address": str("Complete recipient."), "timestamp": timeValue, "block_number": integer, "direction": directionField})))
+	schemas["AddressLogsResponse"] = envelope(list(logItem))
+	schemas["BalanceSnapshotListResponse"] = envelope(list(object(map[string]any{"chain": str("Chain."), "address": str("Complete address."), "token_address": str("Asset contract, empty for native."), "balance_raw": str("Unscaled integer balance."), "balance": decimal, "token_decimals": integer, "snapshot_block": integer, "timestamp": timeValue, "as_of_block": integer, "as_of_time": timeValue, "balance_source": map[string]any{"const": "balance_snapshot"}, "is_current_balance": map[string]any{"const": false}, "source_provider": str("Snapshot provider.")})))
 	schemas["InternalTransactionListResponse"] = envelope(list(internalTx))
 	schemas["TransactionLogsResponse"] = envelope(list(logItem))
 	topByAddress := object(map[string]any{"counterparty": str("Complete counterparty."), "direction": directionField, "token_symbol": str("Token symbol."), "token_contract": str("Complete token contract."), "total_amount": decimal, "tx_count": integer, "percentage": str("Share of total flow in the requested direction and filter window."), "first_tx_time": timeValue, "last_tx_time": timeValue})
@@ -319,6 +338,7 @@ func actionSchemas() map[string]any {
 	schemas["AIDownloadStatusResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("Download job status."), "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}, "chain": str("Canonical chain key."), "datasets": map[string]any{"type": "array", "items": str("Dataset key.")}, "range": map[string]any{"type": "object", "additionalProperties": true}, "stats": map[string]any{"type": "object", "additionalProperties": true}, "error": map[string]any{"type": []string{"string", "null"}}, "failures": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": true}}}))
 	schemas["AIDownloadRetryResponse"] = envelope(object(map[string]any{"download_job_id": map[string]any{"type": "string", "format": "uuid"}, "job_no": str("Human-readable download job number."), "status": str("queued, an already-active state, or completed."), "reset_shards": integer, "preserved_completed_shards": integer, "already_active": map[string]any{"type": "boolean"}, "already_completed": map[string]any{"type": "boolean"}, "source": map[string]any{"type": "string", "const": "chatgpt_mcp"}, "ai_managed": map[string]any{"type": "boolean", "const": true}}))
 	addInvestigationSchemas(schemas)
+	addCrossChainSchemas(schemas)
 	return schemas
 }
 
