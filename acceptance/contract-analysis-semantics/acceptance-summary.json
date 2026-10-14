@@ -1,5 +1,5 @@
 {
-  "status": "QA_PASS",
+  "status": "DEPLOYED_PASS",
   "engine_digest": "sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6",
   "source_unit": {
     "passed": 29,
@@ -63,6 +63,18 @@
       "failed": 0,
       "image": "sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6",
       "runs": 0
+    },
+    "release/production-qa.json": {
+      "passed": 13,
+      "failed": 0
+    },
+    "release/production-render-qa.json": {
+      "passed": 10,
+      "failed": 0
+    },
+    "release/production-integrity-qa.json": {
+      "passed": 8,
+      "failed": 0
     }
   },
   "usage": {
@@ -113,5 +125,24 @@
       "log_sha256": "aa6085c30648536e2e55bcaf5dacfebdd045f2e4279c0d15ef2c6cfe860afbb8",
       "admin_assets": "unchanged deployed baseline copied for regression"
     }
-  }
+  },
+  "source_commit": "81287b4bfe5f62be25952e7e87fb272ac2d17453",
+  "production_analysis_id": "846120cb-1491-4f94-9c75-05e9c8cdfba8",
+  "production_usage": {
+    "rpc_http_requests": 11,
+    "credits": 2200,
+    "estimated_usd": 0.00022
+  },
+  "approved_cohort_known_requests": 210,
+  "mcp_client_sync": {
+    "server": "chain_data_platform",
+    "auth_status": "bearerToken",
+    "expected_tools": 120,
+    "loaded_tools": 120,
+    "missing_tools": [],
+    "extra_tools": [],
+    "schema_mismatches": [],
+    "description_mismatches": []
+  },
+  "legacy_rpc_control_calls": 2
 }
