@@ -2,8 +2,10 @@ import { createRequire } from 'node:module';
 import { hash, id, unique, makeMethod, evidence, claim } from './model.mjs';
 import { legacyLayout } from './layout.mjs';
 import { numericLiteral } from './literals.mjs';
+import { verifySolidityRuntime } from './source-match.mjs';
 const require = createRequire(import.meta.url);
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
+const compilationCache=new Map();let cachedBytes=0;
 
 export function compileSource(input, compilerVersion) {
   if(input?.language!=='Solidity')throw new Error('SOURCE_LANGUAGE_UNSUPPORTED');
@@ -14,10 +16,12 @@ export function compileSource(input, compilerVersion) {
   const settings = structuredClone(input.settings || {});
   settings.outputSelection = { '*': { '*': ['abi', 'evm.deployedBytecode', 'evm.methodIdentifiers', 'storageLayout'], '': ['ast', 'legacyAST'] } };
   const payload = JSON.stringify({ ...input, settings });
+  const cacheKey=hash(compilerVersion+'\n'+payload);if(compilationCache.has(cacheKey))return compilationCache.get(cacheKey).output;
   const compile = solc.compileStandardWrapper || solc.compile;
   const output = JSON.parse(compile.call(solc, payload));
   const errors = (output.errors || []).filter(e => e.severity === 'error');
   if (errors.length) throw new Error(`COMPILATION_FAILED:${errors.map(e => e.message).join('; ').slice(0, 500)}`);
+  const size=Buffer.byteLength(JSON.stringify(output));if(size<=32<<20){while(compilationCache.size>=8||cachedBytes+size>64<<20){const key=compilationCache.keys().next().value;cachedBytes-=compilationCache.get(key).size;compilationCache.delete(key)}compilationCache.set(cacheKey,{output,size});cachedBytes+=size}
   return output;
 }
 
@@ -29,12 +33,9 @@ export function analyzeSource(result, source, bytecode) {
   const file = fq.slice(0, split), contractName = fq.slice(split + 1);
   const compiled = output.contracts?.[file]?.[contractName];
   if (!compiled) throw new Error('COMPILED_CONTRACT_NOT_FOUND');
-  const compiledCode = compiled.evm?.deployedBytecode?.object;
-  const providedCode = source.runtimeBytecode?.recompiledBytecode?.replace(/^0x/, '').toLowerCase();
-  if (!compiledCode || compiledCode.toLowerCase() !== providedCode) throw new Error('RECOMPILATION_BYTECODE_MISMATCH');
-  if (source.runtimeBytecode?.onchainBytecode?.toLowerCase() !== bytecode.toLowerCase()) throw new Error('SOURCE_SNAPSHOT_CODE_MISMATCH');
-  // Transformations must be backed by Sourcify's recorded verification, never inferred locally.
-  if (!['match', 'exact_match'].includes(source.runtimeMatch) || !['match', 'exact_match'].includes(source.match)) throw new Error('SOURCE_NOT_VERIFIED');
+  const runtimeVerification=verifySolidityRuntime(compiled.evm?.deployedBytecode||{},source,bytecode,source.compilation.compilerVersion,
+    {isLibrary:output.sources?.[file]?.ast?.nodes?.some(n=>n.nodeType==='ContractDefinition'&&n.name===contractName&&n.contractKind==='library'),codeAddress:result.snapshot.code_address});
+  result.sections.source_verification=[{verification_id:id(result.snapshot.code_hash,'source-verification'),compiler:source.compilation.compilerVersion,...runtimeVerification}];
   const sources = source.stdJsonInput.sources;
   const nodes = new Map(), fileIDs = new Map();
   for (const [path, unit] of Object.entries(output.sources || {})) {
@@ -66,6 +67,45 @@ export function analyzeSource(result, source, bytecode) {
   const typeOf = node => node?.typeDescriptions?.typeString || sourceText(node?.typeName) || 'unresolved';
   const layout = compiled.storageLayout?.storage ? compiled.storageLayout : legacyLayout(orderedContracts,typeOf);
   const layoutByID = new Map((layout?.storage || []).map(v => [v.astId, v]));
+  const runtimeValue=(declaration)=>{
+    const binding=runtimeVerification.bindings[declaration?.id];if(!binding)return null;
+    const type=typeOf(declaration),word=BigInt(binding.word_hex),integer=/^(u?int)(\d*)$/.exec(type);
+    if(/^address|^contract /.test(type))return '0x'+(word&((1n<<160n)-1n)).toString(16).padStart(40,'0');
+    if(type==='bool')return word===0n?'false':'true';
+    if(integer){const bits=BigInt(integer[2]||256),mask=(1n<<bits)-1n;let n=word&mask;if(integer[1]==='int'&&(n&(1n<<(bits-1n))))n-=1n<<bits;return n.toString()}
+    if(/^bytes\d+$/.test(type))return binding.word_hex.slice(0,2+Number(type.slice(5))*2);
+    return null;
+  };
+  const resolveArgument=(node,context,seen=new Set())=>{
+    if(!node||seen.has(node.id))return node;seen.add(node.id);
+    const next=node.nodeType==='Identifier'?context.parameter_arguments?.[node.referencedDeclaration]:null;
+    return next&&next.id!==node.id?resolveArgument(next,context,seen):node;
+  };
+  const internalArguments=(target,callee,args)=>{
+    const parent=nodes.get(target?.scope),library=parent?.contractKind==='library';
+    const direct=callee?.nodeType==='Identifier'||callee?.expression?.name==='super';
+    const internal=target?.nodeType==='FunctionDefinition'&&target.body&&(direct||library&&['internal','private'].includes(target.visibility));
+    const receiver=library&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id;
+    return {internal,args:receiver?[callee.expression,...args]:args};
+  };
+  const projectStorage = (node,context={}) => {
+    if(node?.nodeType==='Identifier') {
+      const item=layoutByID.get(node.referencedDeclaration),type=layout.types?.[item?.type];
+      return item&&type?{base_slot:item.slot,type_id:item.type,offset:item.offset||0,path:[],scalar_type:type.label}:null;
+    }
+    const parent=projectStorage(node?.baseExpression||node?.expression,context);if(!parent)return null;
+    const type=layout.types?.[parent.type_id];if(!type)return null;
+    if(node.nodeType==='IndexAccess'&&type.encoding==='mapping') {
+      const child=layout.types?.[type.value];
+      const key=context.parameter_arguments?.[node.indexExpression?.referencedDeclaration]||node.indexExpression;
+      return {...parent,type_id:type.value,offset:0,scalar_type:child?.label,path:[...parent.path,{kind:'mapping',key_type:layout.types?.[type.key]?.label,key_ast_id:key?.id,key_referenced_declaration:key?.referencedDeclaration??null,key_text:sourceText(key),key_literal:key?.nodeType==='Literal'?String(key.value):null}]};
+    }
+    if(node.nodeType==='MemberAccess'&&type.members) {
+      const field=type.members.find(m=>m.astId===node.referencedDeclaration||m.label===node.memberName),child=layout.types?.[field?.type];
+      return field?{...parent,type_id:field.type,offset:field.offset||0,scalar_type:child?.label,path:[...parent.path,{kind:'member',name:field.label,relative_slot:field.slot,byte_offset:field.offset}]}:null;
+    }
+    return null;
+  };
   const methodByAST = new Map();
   const dispatchedSelectors = new Set();
   for (const fn of functions) {
@@ -103,15 +143,38 @@ export function analyzeSource(result, source, bytecode) {
     const operands = children(node).filter(n => !['TypeName', 'VariableDeclaration'].some(t => n.nodeType?.endsWith(t)))
       .map(n => expression(method, n, context)).filter(Boolean);
     const bound=node.nodeType==='Identifier'?context.parameter_arguments?.[node.referencedDeclaration]:null;
-    const binding_expression_id=bound&&bound.id!==node.id?expression(method,bound,context):null;
+    const binding_expression_id=node.nodeType==='Identifier'&&context.parameter_expression_bindings?.[node.referencedDeclaration]||
+      (bound&&bound.id!==node.id?expression(method,bound,context):null);
     if(binding_expression_id)operands.push(binding_expression_id);
     const row = { expression_id, method_id: method.method_id, op: node.operator || node.nodeType,
       text: sourceText(node).slice(0, 4096), type, width: integer ? Number(integer[2] || '256') : null,
       signed: integer ? integer[1] === 'int' : null,
       arithmetic: integer ? node.kind==='typeConversion'?'explicit_cast_truncation':(context.unchecked || Number(source.compilation.compilerVersion.split('.')[1]) < 8 ? 'wrap' : 'checked') : 'not_applicable',
       rounding: node.operator === '/' ? 'toward_zero' : null, operands, referenced_declaration: node.referencedDeclaration ?? null,
+      path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,
       evidence_ids: [getEvidence(method, node)] };
     if(binding_expression_id){row.binding_expression_id=binding_expression_id;row.bound_argument=sourceText(bound)}
+    if(node.nodeType==='FunctionCall'&&node.kind!=='typeConversion') {
+      const target=nodes.get(node.expression?.referencedDeclaration);
+      const {internal,args}=internalArguments(target,node.expression,node.arguments||[]);
+      if(internal) {
+        const returns=target.body.statements||[],stack=context.return_stack||[];
+        if(returns.length===1&&returns[0].nodeType==='Return'&&returns[0].expression&&stack.length<12&&!stack.includes(target.id)) {
+          row.binding_expression_id=expression(method,returns[0].expression,{...context,unchecked:false,path:context.path+'/return:'+node.id,
+            return_stack:[...stack,target.id],parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((target.parameters?.parameters||[]).map((p,i)=>[p.id,args[i]]))},
+            parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((target.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,args[i],context)]))}});
+          row.binding_kind='function_return';row.operands.push(row.binding_expression_id);
+        } else row.unresolved_return_value='INTERNAL_FUNCTION_RETURN_REQUIRES_CONTROL_FLOW';
+      } else if(target?.nodeType==='FunctionDefinition')row.unresolved_return_value='EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION';
+    }
+    if (node.nodeType === 'Identifier') {
+      const declaration = nodes.get(node.referencedDeclaration);
+      const immutable=runtimeValue(declaration);
+      if(immutable!==null){row.resolved_value=immutable;row.value_basis='compiler_immutable_reference_and_snapshot_bytes';row.runtime_ranges=runtimeVerification.bindings[declaration.id].ranges}
+      else if(declaration?.constant&&declaration.value){row.binding_expression_id=expression(method,declaration.value,context);row.binding_kind='constant_value';row.operands.push(row.binding_expression_id)}
+      row.unresolved_local_reference = declaration?.nodeType === 'VariableDeclaration' && !declaration.stateVariable &&
+        !method.parameters.some(p => p.source_ast_id === declaration.id) && !binding_expression_id;
+    }
     if (node.nodeType === 'Literal') {
       row.raw_literal=String(node.value??node.hexValue??'');row.literal_kind=node.kind;row.subdenomination=node.subdenomination||null;
       if(node.kind==='number')Object.assign(row,numericLiteral(row.raw_literal,row.subdenomination));else row.value=row.raw_literal;
@@ -134,7 +197,8 @@ export function analyzeSource(result, source, bytecode) {
       access, slot: slot?.slot ?? null, offset: slot?.offset ?? null, type: typeOf(node), variable_type: typeOf(variable),
       slot_role:baseOnly?'layout_base':'direct_slot',key_expression: accessText, key_expression_id: expression(method, node, context),
       value_expression: valueNode ? sourceText(valueNode) : null, value_expression_id: expression(method, valueNode, context), operation,
-      conditions: [...context.conditions], evidence_ids: [evidence_id], layout_status: slot ? slot.layout_basis || 'verified_compiler_layout' : 'layout_unavailable' };
+      conditions: [...context.conditions], evidence_ids: [evidence_id], layout_status: slot ? slot.layout_basis || 'verified_compiler_layout' : 'layout_unavailable',
+      storage_projection: projectStorage(node,context) };
     result.sections.storage.push(row);
     method.storage_ids.push(storage_id);
   };
@@ -164,14 +228,28 @@ export function analyzeSource(result, source, bytecode) {
     if (['require', 'assert'].includes(name)) { guard(method, node, node.arguments?.[0], context, name === 'assert' ? '触发 panic' : 'revert'); return; }
     if (name === 'revert') { const step = addStep(method, node, 'revert', `回滚：${sourceText(node)}`, context); method.failure_ids.push(step.step_id); return; }
     const targetNode = nodes.get(callee?.referencedDeclaration);
+    const library=nodes.get(targetNode?.scope)?.contractKind==='library';
     if (targetNode?.nodeType === 'EventDefinition') { eventStep(method,node,node,context,targetNode); return; }
-    if (targetNode?.nodeType === 'FunctionDefinition' && (callee?.nodeType === 'Identifier' || callee?.expression?.name === 'super')) {
-      const called = methodByAST.get(targetNode.id);
+    const internal=internalArguments(targetNode,callee,node.arguments||[]);
+    if (internal.internal) {
+      let called = methodByAST.get(targetNode.id);
+      if(!called) {
+        called=makeMethod(result.snapshot,'source-library:'+targetNode.id,'',targetNode.name);
+        Object.assign(called,{signature:targetNode.name+'('+(targetNode.parameters?.parameters||[]).map(typeOf).join(',')+')',visibility:'internal',entry_kind:'inlined_library_function',
+          dispatch_role:'source_definition',code_phase:'runtime_source',source_location:location(targetNode),state_mutability:targetNode.stateMutability,
+          parameters:(targetNode.parameters?.parameters||[]).map((p,index)=>({index,name:p.name,source_ast_id:p.id,type:typeOf(p),evidence_ids:[getEvidence(called,p)]})),
+          completeness:{complete:false,unresolved:[],basis:'source',scope:'inlined_library_body',execution_paths:'not_exhaustively_verified'}});
+        methodByAST.set(targetNode.id,called);result.sections.methods.push(called);
+      }
       if (called) {
         const callStep = addStep(method, node, 'internal_call', `调用内部方法 ${called.signature}`, context, { target_method_id: called.method_id });
         result.sections.flows.push({ edge_id: id(callStep.step_id, 'internal'), edge_type: 'calls', from: method.method_id, to: called.method_id, evidence_ids: callStep.evidence_ids });
         if (context.stack.length < 12 && !context.stack.includes(targetNode.id)) {
-          analyzeBlock(method, targetNode.body, { ...context, path: `${context.path}/call:${node.id}`, stack: [...context.stack, targetNode.id], parameter_bindings: Object.fromEntries((targetNode.parameters?.parameters || []).map((p, i) => [p.id, sourceText(node.arguments?.[i])])),parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((targetNode.parameters?.parameters || []).map((p,i)=>[p.id,node.arguments?.[i]]))} });
+          if((targetNode.parameters?.parameters||[]).some(p=>p.storageLocation==='storage'))method.completeness.unresolved.push({code:'LIBRARY_STORAGE_REFERENCE_REQUIRES_ALIAS_ANALYSIS',ast_id:node.id});
+          analyzeBlock(method, targetNode.body, { ...context, unchecked:false,function_frame:targetNode.id, path: `${context.path}/call:${node.id}`, stack: [...context.stack, targetNode.id],
+            parameter_bindings:Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,sourceText(internal.args[i])])),
+            parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,internal.args[i]]))},
+            parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,internal.args[i],context)]))} });
         } else method.completeness.unresolved.push({ code: 'RECURSIVE_OR_DEEP_INTERNAL_CALL', ast_id: node.id });
       }
       return;
@@ -188,20 +266,24 @@ export function analyzeSource(result, source, bytecode) {
     }
     if (callee?.nodeType !== 'MemberAccess') return;
     if (/\b(abi|type)\b/.test(baseType) || ['encode', 'encodePacked', 'encodeWithSelector', 'encodeWithSignature', 'decode', 'concat'].includes(name)) return;
-    const external = /\b(contract|address)\b/.test(baseType) || ['call', 'delegatecall', 'staticcall', 'callcode', 'send', 'transfer'].includes(name);
+    const external = library || /\b(contract|address)\b/.test(baseType) || ['call', 'delegatecall', 'staticcall', 'callcode', 'send', 'transfer'].includes(name);
     if (!external) return;
     let kind = name === 'delegatecall' ? 'DELEGATECALL' : name === 'staticcall' || targetNode?.stateMutability === 'view' || targetNode?.stateMutability === 'pure' ? 'STATICCALL' : 'CALL';
     if (name === 'callcode') kind = 'CALLCODE';
+    if(library)kind='DELEGATECALL';
     addExternal(kind, callee.expression);
     function addExternal(kind, target) {
       const call_id = id(method.method_id, node.id, context.path, 'external');
       const args = (node.arguments || []).map(n => sourceText(n));
-      const target_expression = sourceText(target);
+      const libraryName=library?nodes.get(targetNode.scope).name:null;
+      const libraryFile=library?fileIDs.get(Number(nodes.get(targetNode.scope).src.split(':')[2])):null;
+      const target_expression = library?runtimeVerification.libraries[libraryFile+':'+libraryName]||sourceText(target):sourceText(target);
       const target_signature = targetNode?.nodeType === 'FunctionDefinition' ? `${targetNode.name}(${(targetNode.parameters?.parameters || []).map(typeOf).join(',')})` : '';
       const call = { call_id, method_id: method.method_id, call_type: kind, target_expression,
         target_expression_id: expression(method, target, context), selector: targetNode?.functionSelector ? '0x' + targetNode.functionSelector : '',
         signature: target_signature, input_arguments: args, input_expression: sourceText(node),
         value_expression: options.value ? sourceText(options.value) : null, value_expression_id: expression(method, options.value, context),
+        input_expression_ids:(node.arguments||[]).map(n=>expression(method,n,context)),
         failure_propagation: ['call', 'send', 'delegatecall', 'staticcall', 'callcode'].includes(name) ? 'returns_success_flag' : 'reverts_on_failure',
         conditions: [...context.conditions], parameter_bindings: context.parameter_bindings || {}, evidence_ids: [getEvidence(method, node)] };
       result.sections.calls.push(call); method.call_ids.push(call_id);
@@ -211,16 +293,20 @@ export function analyzeSource(result, source, bytecode) {
       if ((isNative || options.value) && kind === 'CALL') {
         const amount = isNative ? node.arguments?.[0] : options.value;
         fund = { kind: 'native_payment', asset: 'native', from_expression: 'address(this)', to_expression: target_expression,
+          to_expression_id:expression(method,target,context),
           amount_expression: sourceText(amount), amount_expression_id: expression(method, amount, context), unit: 'wei' };
       } else if (targetNode?.nodeType === 'FunctionDefinition' && ['transfer', 'transferFrom', 'approve'].includes(name)) {
         const params = targetNode.parameters?.parameters || [];
         const paramTypes = params.map(typeOf);
         const compatible = name === 'transferFrom' ? paramTypes.length === 3 && paramTypes[0] === 'address' && paramTypes[1] === 'address' && paramTypes[2] === 'uint256' : paramTypes.length === 2 && paramTypes[0] === 'address' && paramTypes[1] === 'uint256';
         if (compatible && /contract/.test(baseType)) {
+          const returnsBool=(targetNode.returnParameters?.parameters||[]).some(p=>typeOf(p)==='bool');
           fund = { kind: name === 'transfer' ? 'token_transfer_intent' : name === 'transferFrom' ? 'token_transfer_from_intent' : 'token_approval',
             asset: target_expression, from_expression: name === 'transferFrom' ? args[0] : 'address(this)',
             to_expression: name === 'transferFrom' ? args[1] : args[0], amount_expression: args.at(-1),
-            amount_expression_id: expression(method, node.arguments?.at(-1), context), unit: 'token_raw',
+            amount_expression_id: expression(method, node.arguments?.at(-1), context), unit: returnsBool?'token_raw':'asset_quantity_or_token_id',
+            asset_expression_id:expression(method,target,context),from_expression_id:name==='transferFrom'?expression(method,node.arguments[0],context):null,
+            to_expression_id:expression(method,node.arguments[name==='transferFrom'?1:0],context),
             protocol: 'transfer_interface',unit_basis:'caller_declared_interface',asset_standard_verified:false, settlement: 'requires_execution_evidence' };
         }
       }
@@ -238,7 +324,13 @@ export function analyzeSource(result, source, bytecode) {
       scanExpression(method, node.leftHandSide, context, node.operator === '=' ? 'write' : 'readwrite');
       stateAccess(method, node.leftHandSide, 'write', context, node.rightHandSide, node.operator);
       scanExpression(method, node.rightHandSide, context);
-      addStep(method, node, 'assignment', `执行 ${sourceText(node)}`, context);
+      const assigned = addStep(method, node, 'assignment', `执行 ${sourceText(node)}`, context);
+      if (node.leftHandSide.nodeType === 'Identifier' && !nodes.get(node.leftHandSide.referencedDeclaration)?.stateVariable) {
+        result.sections.definitions.push({ definition_id: id(assigned.step_id, 'definition'), method_id: method.method_id,
+          declaration_id: node.leftHandSide.referencedDeclaration, name: node.leftHandSide.name,
+          value_expression_id: expression(method, node.rightHandSide, context), operation: node.operator,
+          order: assigned.order, conditions: [...context.conditions], path: context.path, evidence_ids: assigned.evidence_ids });
+      }
       return;
     }
     if (node.nodeType === 'UnaryOperation' && ['++', '--', 'delete'].includes(node.operator)) {
@@ -284,24 +376,64 @@ export function analyzeSource(result, source, bytecode) {
     }
     if (node.nodeType === 'Return') {
       scanExpression(method, node.expression, context);
-      const step = addStep(method, node, 'return', `返回 ${sourceText(node.expression) || '已声明的返回变量'}`, context);
+      const step = addStep(method, node, 'return', `返回 ${sourceText(node.expression) || '已声明的返回变量'}`, context,
+        {return_scope:context.function_frame===method.source_location?.ast_id?'entry':'internal',return_frame:context.function_frame});
       method.return_ids.push(step.step_id); return 'return';
     }
     if (node.nodeType === 'EmitStatement') { const callee=node.eventCall?.expression;eventStep(method,node,node.eventCall,context,nodes.get(callee?.referencedDeclaration)); return; }
     if (node.nodeType === 'RevertStatement') { const step = addStep(method, node, 'revert', `回滚 ${sourceText(node.errorCall)}`, context); method.failure_ids.push(step.step_id); return 'revert'; }
     if (node.nodeType === 'InlineAssembly' || node.nodeType === 'TryStatement') {
       addStep(method, node, node.nodeType === 'InlineAssembly' ? 'assembly' : 'try', sourceText(node).slice(0, 2048), context);
+      if(node.nodeType==='InlineAssembly')analyzeEncodedAssemblyCall(method,node,context);
       method.completeness.unresolved.push({ code: node.nodeType === 'InlineAssembly' ? 'ASSEMBLY_SEMANTICS_UNRESOLVED' : 'TRY_CATCH_PATHS_UNRESOLVED', ast_id: node.id });
       if (node.nodeType === 'TryStatement') for (const child of children(node)) analyzeBlock(method, child, context);
       return;
     }
     if (node.nodeType === 'VariableDeclarationStatement') {
-      scanExpression(method, node.initialValue, context); addStep(method, node, 'local', `计算局部变量：${sourceText(node)}`, context); return;
+      scanExpression(method, node.initialValue, context);
+      const declared = addStep(method, node, 'local', `计算局部变量：${sourceText(node)}`, context);
+      if (node.initialValue && node.declarations?.length === 1 && node.declarations[0]) {
+        result.sections.definitions.push({ definition_id: id(declared.step_id, 'definition'), method_id: method.method_id,
+          declaration_id: node.declarations[0].id, name: node.declarations[0].name,
+          value_expression_id: expression(method, node.initialValue, context), operation: '=',
+          order: declared.order, conditions: [...context.conditions], path: context.path, evidence_ids: declared.evidence_ids });
+      }
+      return;
     }
     if (node.nodeType === 'ExpressionStatement') { scanExpression(method, node.expression, context);const name=node.expression?.expression?.name;return name==='revert'?'revert':['selfdestruct','suicide'].includes(name)&&/t_function_(selfdestruct|suicide)_/.test(node.expression?.expression?.typeDescriptions?.typeIdentifier||'')?'jump':undefined; }
     if (['Break', 'Continue', 'PlaceholderStatement'].includes(node.nodeType)) { addStep(method, node, 'control', sourceText(node), context); return node.nodeType==='PlaceholderStatement'?undefined:'jump'; }
     for (const child of children(node)) scanExpression(method, child, context);
   };
+  function analyzeEncodedAssemblyCall(method,node,context) {
+    // Recognize a direct CALL of unmodified abi.encodeCall bytes. Other assembly
+    // paths stay unresolved; calldata construction alone never becomes a transfer.
+    const first=node.AST?.statements?.[0],call=first?.value;
+    if(call?.nodeType!=='YulFunctionCall'||call.functionName?.name!=='call'||call.arguments?.length!==7)return;
+    const a=call.arguments,zero=a[2]?.nodeType==='YulLiteral'&&BigInt(a[2].value||'0')===0n;
+    if(!zero||a[1]?.nodeType!=='YulIdentifier'||a[3]?.functionName?.name!=='add'||a[4]?.functionName?.name!=='mload')return;
+    const ptr=a[3].arguments,len=a[4].arguments;
+    if(ptr?.length!==2||len?.length!==1||ptr[0].nodeType!=='YulIdentifier'||len[0].name!==ptr[0].name||ptr[1]?.nodeType!=='YulLiteral'||BigInt(ptr[1].value||'0')!==32n)return;
+    const references=Array.isArray(node.externalReferences)?node.externalReferences:Object.entries(node.externalReferences||{}).map(([src,v])=>({src,...v}));
+    const external=y=>{const ref=references.find(r=>r.src===y.src);if(!ref||ref.isSlot||ref.isOffset)return null;
+      return resolveArgument({nodeType:'Identifier',id:'yul:'+y.src,src:y.src,name:y.name,referencedDeclaration:ref.declaration,typeDescriptions:nodes.get(ref.declaration)?.typeDescriptions},context)};
+    const target=external(a[1]),encoded=external(ptr[0]);
+    if(!target||encoded?.nodeType!=='FunctionCall'||encoded.expression?.memberName!=='encodeCall'||encoded.expression.expression?.name!=='abi')return;
+    const declared=nodes.get(encoded.arguments?.[0]?.referencedDeclaration),args=encoded.arguments?.[1]?.components;
+    const types=(declared?.parameters?.parameters||[]).map(typeOf),name=declared?.name;
+    const compatible=name==='transferFrom'?types.join(',')==='address,address,uint256':types.join(',')==='address,uint256';
+    if(!['transfer','transferFrom','approve'].includes(name)||!compatible||!Array.isArray(args)||args.length!==types.length)return;
+    const call_id=id(method.method_id,node.id,context.path,'encoded-assembly-call'),eid=getEvidence(method,node),encodingEvidence=getEvidence(method,encoded);
+    result.sections.calls.push({call_id,method_id:method.method_id,call_type:'CALL',target_expression:sourceText(target),target_expression_id:expression(method,target,context),
+      selector:'0x'+declared.functionSelector,signature:name+'('+types.join(',')+')',input_arguments:args.map(sourceText),input_expression_ids:args.map(n=>expression(method,n,context)),
+      calldata_basis:'typed_abi_encodeCall_bound_to_direct_assembly_call',failure_propagation:'assembly_paths_require_execution',conditions:[...context.conditions],evidence_ids:[eid,encodingEvidence]});
+    method.call_ids.push(call_id);
+    const fund_id=id(call_id,'fund');
+    result.sections.funds.push({fund_id,method_id:method.method_id,call_id,kind:name==='transfer'?'token_transfer_intent':name==='transferFrom'?'token_transfer_from_intent':'token_approval',
+      asset:sourceText(target),asset_expression_id:expression(method,target,context),from_expression:name==='transferFrom'?sourceText(args[0]):'address(this)',
+      from_expression_id:name==='transferFrom'?expression(method,args[0],context):null,to_expression:sourceText(args[name==='transferFrom'?1:0]),to_expression_id:expression(method,args[name==='transferFrom'?1:0],context),
+      amount_expression:sourceText(args.at(-1)),amount_expression_id:expression(method,args.at(-1),context),unit:'token_raw',unit_basis:'caller_declared_interface',asset_standard_verified:false,
+      settlement:'requires_execution_evidence',conditions:[...context.conditions],evidence_ids:[eid,encodingEvidence]});method.fund_ids.push(fund_id);
+  }
   function eventStep(method,node,call,context,definition) {
     const parameters=definition?.parameters?.parameters || [];
     const signature=definition ? `${definition.name}(${parameters.map(typeOf).join(',')})` : '';
@@ -312,7 +444,7 @@ export function analyzeSource(result, source, bytecode) {
   for (const fn of functions) {
     const method = methodByAST.get(fn.id);
     if (!method) continue;
-    const context = { path: 'entry', conditions: [], stack: [fn.id], unchecked: false };
+    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false };
     const modifiers = (fn.modifiers || []).map(m => ({ invocation: m, definition: nodes.get(m.modifierName?.referencedDeclaration) })).filter(m => m.definition);
     // Expand modifier wrappers at each placeholder, preserving post-body modifiers and conditional execution.
     const execute = (index, activeContext = context) => {

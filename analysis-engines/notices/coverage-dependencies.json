@@ -1,0 +1,59 @@
+[
+  {
+    "name": "gigahorse",
+    "repository": "https://github.com/nevillegrech/gigahorse-toolchain",
+    "commit": "1b06cef82f0a29790e87f576eba6d6d793170d70",
+    "licenses": [
+      {
+        "path": "notices/coverage/gigahorse-LICENSE",
+        "sha256": "2cdcdeaefded4d4ddc2714de1b72e049d01a66e1b71a85297c5cf6269535a477",
+        "upstream_path": "LICENSE"
+      },
+      {
+        "path": "notices/coverage/gigahorse-souffle-addon-LICENSE",
+        "sha256": "837a0e123e0c5e30667c33f82636c1cbf52b78e0f079eba7078a0bcf6a566f74",
+        "upstream_path": "souffle-addon/LICENSE"
+      }
+    ],
+    "role": "runtime"
+  },
+  {
+    "name": "slither",
+    "repository": "https://github.com/crytic/slither",
+    "commit": "eef5df948b8992eff85786b6b0bb4a193933e2c9",
+    "licenses": [
+      {
+        "path": "notices/coverage/slither-LICENSE",
+        "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+        "upstream_path": "LICENSE"
+      }
+    ],
+    "role": "runtime"
+  },
+  {
+    "name": "crytic-compile",
+    "repository": "https://github.com/crytic/crytic-compile",
+    "commit": "3d27afa70458b95c8660ba53b621ec6e72af08d4",
+    "licenses": [
+      {
+        "path": "notices/coverage/crytic-compile-LICENSE",
+        "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+        "upstream_path": "LICENSE"
+      }
+    ],
+    "role": "runtime"
+  },
+  {
+    "name": "openzeppelin-corpus",
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "commit": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0",
+    "licenses": [
+      {
+        "path": "notices/coverage/openzeppelin-corpus-LICENSE",
+        "sha256": "13cd784a6c31361f0e0c6aa3b410a1cb9a079868b7314c13e3eb8a75351746b9",
+        "upstream_path": "LICENSE"
+      }
+    ],
+    "role": "benchmark_only"
+  }
+]

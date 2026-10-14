@@ -1,8 +1,9 @@
+import os
 """Real HTTP, durable results, complete pagination and artifact verification."""
 import base64, hashlib, io, json, pathlib, time, urllib.parse, zipfile
 from qa_support import ROOT, PRIVATE, Client, fixture_clients
 
-OUT=ROOT/'acceptance/contract-analysis'
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis')
 OUT.mkdir(parents=True,exist_ok=True)
 results=[]
 def check(name, condition, evidence=None):
@@ -50,6 +51,9 @@ def artifact_bytes(client,analysis_id,artifact,chunk_size=65536):
 
 def main():
     clients=fixture_clients();investigator=clients['investigator'];viewer=clients['viewer'];other=clients['other']
+    capabilities=investigator.must('/api/v2/contract-analyses/capabilities')
+    check('actual_runtime_capabilities',capabilities['engine_digest']==(OUT/'engine-image.txt').read_text().strip() and all(any(e['name']==name and e['status']=='available' for e in capabilities['engines']) for name in ['slither','gigahorse','vyper-ast']),capabilities)
+    check('native_program_entry_disabled',investigator.call('/api/v2/contract-analyses/programs',{'vm_family':'solana_sbf','address':'11111111111111111111111111111111'})[0]==503)
     q={'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,
        'from_block':19000000,'to_block':19000000,'idempotency_key':'ca-live-api-qa-'+(OUT/'engine-image.txt').read_text().strip()[7:19],
        'budget':{'max_contracts':2,'max_rpc_requests':100,'max_state_reads':24}}
@@ -71,6 +75,9 @@ def main():
         sections[section]=all_pages(investigator,analysis_id,section)
         check('pagination_'+section,len(sections[section])==count,{'count':count})
     mids=[m['method_id'] for m in sections['methods']]
+    check('expanded_result_sections_saved',all(sections.get(s) for s in ['source_verification','method_details','operating_flows','dataflow','ir','ir_dataflow','ir_effects','control_flow']))
+    check('six_default_engines_actually_ran',all(any(e['engine']==name and e['status'] in ['completed','partial'] for e in sections['engines']) for name in ['whatsabi','sevm','solc-ast','heimdall','slither','gigahorse']),sections['engines'])
+    check('aggregate_rule_version_matches_runtime',job['metadata']['rule_version']=='funds-semantics-2')
     check('unique_method_identity',len(mids)==len(set(mids)))
     withdraw=next(m for m in sections['methods'] if m['signature']=='withdraw(uint256)' and m['verified_signature'])
     detail=investigator.must('/api/v2/contract-analyses/'+analysis_id+'/methods/'+withdraw['method_id'])

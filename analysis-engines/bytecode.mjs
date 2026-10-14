@@ -143,7 +143,8 @@ export function analyzeBytecode(result, bytecode, signatures = []) {
                 target_expression_id: expr(node.address, loc), value_expression: render(node.value), value_expression_id: expr(node.value, loc),
                 input_expression: render(node), failure_propagation: node.throwOnFail ? 'reverts_on_failure' : 'returns_success_flag', conditions: [], condition_status: 'symbolic_call_control_unresolved', evidence_ids: [evidence_id] });
               method.call_ids.push(call_id);
-              if (tag === 'Call' && !(node.value?.tag === 'Val' && node.value.val === 0n)) {
+              let evaluatedValue;try{evaluatedValue=node.value?.eval()}catch{}
+              if (tag === 'Call' && !(evaluatedValue?.tag === 'Val' && evaluatedValue.val === 0n)) {
                 const fund_id = id(call_id, 'native');
                 result.sections.funds.push({ fund_id, method_id: method.method_id, call_id, kind: 'native_payment', asset: 'native', unit: 'wei',
                   from_expression: 'address(this)', to_expression: render(node.address), amount_expression: render(node.value), amount_expression_id: expr(node.value, loc),

@@ -89,7 +89,7 @@ func (s *Server) contractReadArtifact(ctx context.Context, q ca.Request, preview
 }
 func (s *Server) contractAddArtifact(ctx context.Context, result *ca.Result, kind, filename, media string, data []byte) error {
 	if len(data) > 64<<20 {
-		return summaryError(422, "EXPORT_BUDGET_EXCEEDED", "Contract export exceeds 64 MiB")
+		return summaryError(422, "EXPORT_BUDGET_EXCEEDED", fmt.Sprintf("Contract export exceeds 64 MiB: file=%s bytes=%d", filename, len(data)))
 	}
 	obj, e := s.contractSaveObject(ctx, "artifact", data, media)
 	if e != nil {
@@ -154,10 +154,24 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 		mid := fmt.Sprint(m["method_id"])
 		title := fmt.Sprint(m["signature"])
 		if title == "" {
-			title = fmt.Sprint(m["selector"])
+			title = contractReportField(m, "selector", "name", "entry", "method_id")
 		}
 		fmt.Fprintf(&report, "## %s\n\n代码地址：%s\n\n状态地址：%s\n\n%s。\n\n", title, m["code_address"], m["storage_address"], m["purpose"])
-		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"storage", "状态读写"}, {"calls", "外部调用"}} {
+		for _, key := range []string{"parameters", "outputs"} {
+			var values []map[string]any
+			if nextDecode(ca.Row(m[key]), &values) == nil && len(values) > 0 {
+				label := "参数"
+				if key == "outputs" {
+					label = "返回字段"
+				}
+				fmt.Fprintf(&report, "### %s\n\n", label)
+				for _, p := range values {
+					fmt.Fprintf(&report, "- %s：%s；单位 %s。\n", contractReportField(p, "name", "index"), contractReportField(p, "type"), contractReportField(p, "unit", "unit_status"))
+				}
+				report.WriteString("\n")
+			}
+		}
+		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"calls", "外部调用"}} {
 			items := []map[string]any{}
 			for _, row := range result.Sections[part.section] {
 				item := rowMap(row)
@@ -172,13 +186,24 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 			for _, item := range items {
 				switch part.section {
 				case "permissions":
-					fmt.Fprintf(&report, "- %s\n", item["condition"])
+					fmt.Fprintf(&report, "- %s\n", contractReportField(item, "expanded_condition", "condition"))
 				case "steps":
 					fmt.Fprintf(&report, "- %s\n", item["text"])
 				case "funds":
-					fmt.Fprintf(&report, "- 资产 %s；从 %s 到 %s；金额表达式 %s；条件 %s。\n", item["asset"], item["from_expression"], item["to_expression"], item["amount_expression"], strings.Join(stringList(item["conditions"]), "，"))
+					fmt.Fprintf(&report, "- 资产 %s；从 %s 到 %s；金额表达式 %s；单位 %s；条件 %s。\n", contractReportField(item, "expanded_asset_expression", "asset"), contractReportField(item, "expanded_from_expression", "from_expression"), contractReportField(item, "expanded_to_expression", "to_expression"), contractReportField(item, "expanded_amount_expression", "amount_expression"), contractReportField(item, "unit"), strings.Join(stringList(item["conditions"]), "，"))
+					if item["token_id_expression"] != nil {
+						fmt.Fprintf(&report, "  资产编号：%s。\n", item["token_id_expression"])
+					}
+				case "dataflow":
+					fmt.Fprintf(&report, "- %s：%s；推导状态 %s。\n", item["kind"], item["symbolic_expression"], item["status"])
+					if gaps := stringList(item["unresolved"]); len(gaps) > 0 {
+						fmt.Fprintf(&report, "  待解析内容：%s。\n", strings.Join(gaps, "，"))
+					}
 				case "storage":
 					fmt.Fprintf(&report, "- %s %s；slot %v；表达式 %s。\n", item["access"], item["variable"], item["slot"], item["key_expression"])
+					if item["snapshot_value"] != nil {
+						fmt.Fprintf(&report, "  快照值：%v；状态槽类型：%v。\n", item["snapshot_value"], item["slot_role"])
+					}
 				case "calls":
 					fmt.Fprintf(&report, "- %s %s；%s。\n", item["call_type"], item["target_expression"], item["input_expression"])
 				}
@@ -187,10 +212,20 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 			report.WriteString("\n")
 		}
 	}
+	if report.Len() > 16<<20 {
+		report.Reset()
+		fmt.Fprintf(&report, "# %s %s 合约运行与方法分析\n\n区块：%d\n\n区块哈希：%s\n\n", result.Snapshot.Chain, result.Snapshot.EntryAddress, result.Snapshot.BlockNumber, result.Snapshot.BlockHash)
+		report.WriteString("## 方法与完整数据\n\n")
+		for _, raw := range result.Sections["methods"] {
+			m := rowMap(raw)
+			fmt.Fprintf(&report, "- %s；代码地址 %s；状态地址 %s；方法标识 %s。\n", contractReportField(m, "signature", "selector", "name", "entry"), m["code_address"], m["storage_address"], m["method_id"])
+		}
+		report.WriteString("\n## 数据文件\n\n完整条件、步骤、公式、状态及证据保存于结果分区文件；contract-analysis.json 列出全部文件、记录数及校验值。\n")
+	}
 	if e := s.contractAddArtifact(ctx, result, "analysis_report", "contract-analysis.md", "text/markdown; charset=utf-8", []byte(report.String())); e != nil {
 		return e
 	}
-	if e := s.contractAddArtifact(ctx, result, "machine_result", "contract-analysis.json", "application/json", ca.Row(result)); e != nil {
+	if e := s.contractMachineArtifact(ctx, result); e != nil {
 		return e
 	}
 	// A deterministic package includes every original artifact and a SHA256 manifest.
@@ -243,6 +278,60 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 	}
 	return s.contractAddArtifact(ctx, result, "evidence_bundle", "contract-evidence.zip", "application/zip", archive.Bytes())
 }
+
+func (s *Server) contractMachineArtifact(ctx context.Context, result *ca.Result) error {
+	raw := ca.Row(result)
+	if len(raw) <= 32<<20 {
+		return s.contractAddArtifact(ctx, result, "machine_result", "contract-analysis.json", "application/json", raw)
+	}
+	names := make([]string, 0, len(result.Sections))
+	for name := range result.Sections {
+		if name != "artifacts" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	index := map[string][]map[string]any{}
+	for _, name := range names {
+		rows := result.Sections[name]
+		part := 0
+		start := 0
+		for start < len(rows) {
+			end := start
+			size := 2
+			for end < len(rows) && size+len(rows[end])+1 <= 16<<20 {
+				size += len(rows[end]) + 1
+				end++
+			}
+			if end == start {
+				return fmt.Errorf("section export row exceeds chunk budget")
+			}
+			data := ca.Row(rows[start:end])
+			filename := fmt.Sprintf("sections/%s-%04d.json", name, part)
+			if err := s.contractAddArtifact(ctx, result, "result_section", filename, "application/json", data); err != nil {
+				return err
+			}
+			artifact := rowMap(result.Sections["artifacts"][len(result.Sections["artifacts"])-1])
+			index[name] = append(index[name], map[string]any{"artifact_id": artifact["artifact_id"], "filename": filename, "sha256": artifact["sha256"], "byte_size": len(data), "from_ordinal": start, "record_count": end - start})
+			part++
+			start = end
+		}
+		if len(rows) == 0 {
+			index[name] = []map[string]any{}
+		}
+	}
+	data := ca.Row(map[string]any{"version": result.Version, "rule_version": result.RuleVersion, "snapshot": result.Snapshot, "metrics": result.Metrics, "representation": "complete_section_artifacts_v1", "section_artifacts": index, "artifacts": result.Sections["artifacts"]})
+	return s.contractAddArtifact(ctx, result, "machine_result", "contract-analysis.json", "application/json", data)
+}
+
+func contractReportField(row map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := row[key]; value != nil && fmt.Sprint(value) != "" {
+			return fmt.Sprint(value)
+		}
+	}
+	return "未确定"
+}
 func (s *Server) contractCompare(ctx context.Context, q ca.Request) (any, error) {
 	left, e := s.contractJob(ctx, q.AnalysisID)
 	if e != nil {
@@ -264,7 +353,7 @@ func (s *Server) contractCompare(ctx context.Context, q ca.Request) (any, error)
 	if e = json.Unmarshal(right.Meta, &rm); e != nil {
 		return nil, e
 	}
-	if lm.Snapshot.ChainID != rm.Snapshot.ChainID || !strings.EqualFold(lm.Snapshot.EntryAddress, rm.Snapshot.EntryAddress) {
+	if lm.Snapshot.ChainID != rm.Snapshot.ChainID || lm.Snapshot.VMFamily != rm.Snapshot.VMFamily || (lm.Snapshot.Chain == "solana" && lm.Snapshot.EntryAddress != rm.Snapshot.EntryAddress) || (lm.Snapshot.Chain != "solana" && !strings.EqualFold(lm.Snapshot.EntryAddress, rm.Snapshot.EntryAddress)) {
 		return nil, fmt.Errorf("versions must name the same chain and entry address")
 	}
 	load := func(jobID string) (map[string]map[string]any, error) {

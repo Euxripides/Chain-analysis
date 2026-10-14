@@ -1,7 +1,7 @@
 import {chromium} from '@playwright/test';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-const root=new URL('../../',import.meta.url),out=new URL('acceptance/contract-analysis/release/',root),rows=[];
+const root=new URL('../../',import.meta.url),out=new URL((process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis/release')+'/',root),rows=[];
 function check(name,ok,evidence){rows.push({scenario:name,status:ok?'PASS':'FAIL',evidence});writeFileSync(new URL('production-render-qa.json',out),JSON.stringify(rows,null,2));console.log(name,rows.at(-1).status);if(!ok)throw new Error(name)}
 const expected=readFileSync(new URL('frontend/apps/user-console/dist/index.html',root)),base='https://aurore.online';
 const response=await fetch(base+'/app-v2/contract-analyses'),html=Buffer.from(await response.arrayBuffer());check('public-app-serves-frozen-candidate-index',response.ok&&createHash('sha256').update(html).digest('hex')===createHash('sha256').update(expected).digest('hex'));

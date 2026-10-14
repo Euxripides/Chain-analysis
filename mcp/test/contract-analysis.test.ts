@@ -2,14 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {z} from "zod";
-import {contractAnalysisTools,validateContractTool,contractArtifactResources} from "../src/contract-analysis.js";
+import {contractAnalysisTools,allContractAnalysisTools,validateContractTool,contractArtifactResources} from "../src/contract-analysis.js";
 import {nextInvestigationTools} from "../src/next-investigation.js";
 import {RESTClient} from "../src/rest-client.js";
 import {createServer} from "node:http";
 import {once} from "node:events";
 const address="0x"+"1".repeat(40),tx="0x"+"2".repeat(64),job="00000000-0000-4000-8000-000000000001";
 test("contract operation definitions constrain chains, budgets and exact identities",()=>{
- assert.equal(contractAnalysisTools.length,8);const tool=contractAnalysisTools.find(t=>t.name==="analyze_contract")!;
+ assert.equal(contractAnalysisTools.length,process.env.CONTRACT_PROGRAM_ANALYSIS_ENABLED==="1"?10:9);const tool=contractAnalysisTools.find(t=>t.name==="analyze_contract")!;
  const schema=z.object(tool.inputSchema as z.ZodRawShape).strict();const valid=schema.parse({chain:"ethereum",address,tx_hashes:[tx]});validateContractTool(tool.name,valid);
  for(const bad of [{chain:"solana",address},{chain:"tron",address},{chain:"ethereum",address:"0x123"},{chain:"ethereum",address,budget:{max_contracts:1000}}])assert.equal(schema.safeParse(bad).success,false);
  assert.throws(()=>validateContractTool(tool.name,{...valid,block:1,timestamp:"2026-01-01T00:00:00Z"}));
@@ -18,6 +18,18 @@ test("contract operation definitions constrain chains, budgets and exact identit
  assert.equal(contractAnalysisTools.find(t=>t.name==="get_contract_analysis_artifact")?.readOnly,true);
  assert.equal(tool.readOnly,false);
  const start=nextInvestigationTools.find(t=>t.name==="start_analysis")!;assert.ok((start.inputSchema as z.ZodType).safeParse({operation:"analyze_contract",arguments:{chain:"ethereum",address}}).success);
+});
+test("native program identities preserve their execution-family format",()=>{
+ const program=allContractAnalysisTools.find(t=>t.name==="analyze_program")!;
+ const schema=z.object(program.inputSchema as z.ZodRawShape).strict();
+ const solana=schema.parse({vm_family:"solana_sbf",address:"11111111111111111111111111111111"});
+ validateContractTool(program.name,solana);
+ validateContractTool(program.name,schema.parse({vm_family:"tron_tvm",address:"TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7"}));
+ assert.throws(()=>validateContractTool(program.name,{...solana,address:"1".repeat(33)}),/32-byte/);
+ assert.throws(()=>validateContractTool(program.name,{...solana,tx_hashes:["1".repeat(63)]}),/64-byte/);
+ assert.throws(()=>validateContractTool(program.name,{vm_family:"tron_tvm",address:"TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU8"}),/checksum/);
+ assert.equal(schema.safeParse({vm_family:"solana_sbf",address:solana.address,block:1}).success,false);
+ assert.equal(contractAnalysisTools.find(t=>t.name==="get_contract_analysis_capabilities")?.readOnly,true);
 });
 test("contract files expose verified embedded chunks and reject corrupt bytes",()=>{
  const bytes=Buffer.from("合约执行证据"),sha=createHash("sha256").update(bytes).digest("hex");

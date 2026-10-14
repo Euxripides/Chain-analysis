@@ -23,15 +23,21 @@ export const contractAnalysisInputShape = {
   chain, address, block: z.union([integer,z.enum(["latest","safe","finalized"])]).optional(),
   timestamp: z.string().datetime({ offset: true }).optional(), from_block: integer.optional(), to_block: integer.optional(),
   tx_hashes: z.array(tx).max(50).optional(), include_source: z.boolean().default(true),
-  engines: z.array(z.enum(["whatsabi","sevm","solc-ast","heimdall"])).min(2).max(4).default(["whatsabi","sevm","solc-ast","heimdall"]),
+  engines: z.array(z.enum(["whatsabi","sevm","solc-ast","heimdall","slither","gigahorse","vyper-ast"])).min(2).max(7).default(["whatsabi","sevm","solc-ast","heimdall","slither","gigahorse"]),
   budget, idempotency_key: z.string().max(128).optional(),
 };
 function tool(name:string,description:string,inputSchema:Record<string,z.ZodTypeAny>,readOnly=true):ToolDefinition {
   return { name,title:name,description,path:`/${name==="get_contract_analysis_artifact"?"export":"analysis"}/contracts/${name}`,method:"POST",readOnly,inputSchema,
     summarize: r => JSON.stringify(r.data) };
 }
-export const contractAnalysisTools:ToolDefinition[] = [
-  tool("analyze_contract","Queue comprehensive EVM contract analysis at an immutable block/hash. Digest-pinned offline WhatsABI, symbolic sevm, verified/recompiled Solidity AST and Heimdall artifacts; custom method semantics preserve guards, steps, exact amount expressions, storage, calls and evidence. Standard proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes by default for observed execution/prestate/diffs. Unsupported paths, provider failures and dependency frontier remain explicit. No on-chain writes or automatic full historical downloads.",contractAnalysisInputShape,false),
+export const allContractAnalysisTools:ToolDefinition[] = [
+  tool("analyze_program","Queue a separately versioned TRON TVM or Solana sBPF program analysis. Validate native address/signature formats, freeze observed program code and block/slot identity, preserve raw code/instructions and selected transaction metadata. Read resulting methods, sections and artifacts with the existing scoped contract-analysis tools. Historical program code, account prestate and VM replay availability remain explicit.",{
+    schema_version:z.literal("contract-program-request-v1").default("contract-program-request-v1"),
+    vm_family:z.enum(["tron_tvm","solana_sbf"]),address:z.string().min(32).max(128),
+    tx_hashes:z.array(z.string().min(64).max(100)).max(50).optional(),budget,idempotency_key:z.string().max(128).optional(),
+  },false),
+  tool("get_contract_analysis_capabilities","Read the capabilities observed from the configured digest-pinned runtime: installed engines, source compiler versions, supported execution families and precise historical replay restrictions. Availability is separate from protocol certification. No blockchain requests.",{}),
+  tool("analyze_contract","Queue detailed EVM analysis at an immutable block/hash. Default engines: WhatsABI, sevm, verified/recompiled Solidity AST (Vyper 0.4.3 for matching source), Heimdall, Slither and Gigahorse TAC. Read method_details, operating_flows, control_effects, protocols, dataflow, ir_dataflow, ir_effects, source_verification and existing sections for conditions, exact formulas, recipients, runtime immutables, configuration effects and evidence. Interface profiles do not certify economic behavior. Proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes for execution/prestate/diffs and ledger reconciliation. No on-chain writes or automatic full historical downloads.",contractAnalysisInputShape,false),
   tool("get_contract_analysis","Read scoped contract job status, immutable snapshot, exact section counts and completeness. With section, traverse every saved row using filter/snapshot-bound cursors; no top-200 truncation. Job completed and semantic coverage complete are independent.",{analysis_id,section:z.string().max(100).optional(),method_id:item.optional(),evidence_id:item.optional(),...page}),
   tool("list_contract_methods","List all discovered contract methods, stable method IDs, selectors, verified signatures versus candidates, body-derived Chinese purpose, behaviors and per-method coverage. Filter by text/selector or behavior and traverse all pages.",{analysis_id,search:z.string().max(200).optional(),behavior:z.string().max(100).optional(),...page}),
   tool("get_contract_method_analysis","Read the method model: parameters/outputs, conditions, ordered step references, storage/call/fund/expression/evidence IDs, formulas, dependencies and observed transaction links. Retrieve referenced sections with get_contract_analysis(method_id=...). Function names and comments do not prove behavior.",{analysis_id,method_id:item}),
@@ -40,8 +46,31 @@ export const contractAnalysisTools:ToolDefinition[] = [
   tool("compare_contract_versions","Compare two completed analyses of the same chain/entry within the authorized workspace. Paginated before/after code identities and method models preserve selector collisions; permission/fund details remain available via method IDs and sections.",{analysis_id,compare_analysis_id:analysis_id,...page}),
   tool("get_contract_analysis_artifact","Read authorized source, pseudocode, IR, runtime bytecode, method CSV, editable graph, full JSON, Markdown report or evidence ZIP as embedded resource chunks. Validate chunk SHA256 and whole artifact SHA256; offset must refer to the saved artifact. No client-selected storage paths or public download URL.",{analysis_id,artifact_id:item,offset:integer.default(0),chunk_size:z.number().int().min(1).max(4<<20).default(1<<20)}),
 ];
+export const contractAnalysisTools = allContractAnalysisTools.filter(t=>t.name!=="analyze_program"||process.env.CONTRACT_PROGRAM_ANALYSIS_ENABLED==="1");
 export function validateContractTool(name:string,input:Record<string,unknown>):void {
-  if (!contractAnalysisTools.some(t=>t.name===name)) return;
+  if (!allContractAnalysisTools.some(t=>t.name===name)) return;
+  if (name === "analyze_program") {
+    const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const decode=(value:string):Buffer=>{
+      if (!value || value.length > 100) throw new Error("Invalid native identifier");
+      let n=0n;
+      for(const c of value){const digit=alphabet.indexOf(c);if(digit<0)throw new Error("Invalid Base58 identifier");n=n*58n+BigInt(digit)}
+      const hex=n.toString(16),body=n===0n?Buffer.alloc(0):Buffer.from(hex.length%2?"0"+hex:hex,"hex");
+      return Buffer.concat([Buffer.alloc(value.match(/^1*/)?.[0].length??0),body]);
+    };
+    const native=String(input.address??"");
+    if(input.vm_family==="solana_sbf") {
+      if(decode(native).length!==32)throw new Error("Complete 32-byte Solana program identity required");
+      for(const signature of (input.tx_hashes as string[]|undefined)??[])if(decode(signature).length!==64)throw new Error("Complete 64-byte Solana signature required");
+    } else if(input.vm_family==="tron_tvm") {
+      if(!/^(0x)?41[0-9a-fA-F]{40}$/.test(native)) {
+        const bytes=decode(native),payload=bytes.subarray(0,21);
+        const checksum=createHash("sha256").update(createHash("sha256").update(payload).digest()).digest().subarray(0,4);
+        if(bytes.length!==25||bytes[0]!==0x41||!checksum.equals(bytes.subarray(21)))throw new Error("TRON address checksum mismatch");
+      }
+      for(const hash of (input.tx_hashes as string[]|undefined)??[])if(!/^(0x)?[0-9a-fA-F]{64}$/.test(hash))throw new Error("Complete TRON transaction hash required");
+    } else throw new Error("Unsupported program execution family");
+  }
   if (input.block!==undefined&&input.timestamp!==undefined) throw new Error("block and timestamp are mutually exclusive");
   if ((input.from_block===undefined)!==(input.to_block===undefined)) throw new Error("from_block and to_block must be supplied together");
   if (typeof input.from_block==="number"&&typeof input.to_block==="number"&&(input.from_block>input.to_block||input.to_block-input.from_block>100000)) throw new Error("history range must span at most 100000 blocks");

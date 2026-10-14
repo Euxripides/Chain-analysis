@@ -11,6 +11,9 @@ import (
 type contractFinalGuardKey struct{}
 
 func (s *Server) contractBudgetContext(ctx context.Context, scope tenantScope, id string, q ca.Request) (context.Context, error) {
+	// Existing provider usage hooks use these compatibility keys.
+	ctx = context.WithValue(ctx, "job_id", id)
+	ctx = context.WithValue(ctx, "tenant_id", scope.OrganizationID)
 	_, err := s.deps.Store.Pool.Exec(ctx, `INSERT INTO contract_analysis_budgets(analysis_id,organization_id,workspace_id,max_requests,max_credits,max_state_reads) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(analysis_id) DO NOTHING`, id, scope.OrganizationID, scope.WorkspaceID, q.Budget.MaxRPCRequests, q.Budget.MaxCredits, q.Budget.MaxStateReads)
 	if err != nil {
 		return ctx, err

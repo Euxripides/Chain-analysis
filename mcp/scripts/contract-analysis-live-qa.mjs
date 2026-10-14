@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-const root=new URL('../../',import.meta.url),out=new URL('acceptance/contract-analysis/',root);
+const root=new URL('../../',import.meta.url),out=new URL((process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis')+'/',root);
 const env=Object.fromEntries(readFileSync('/home/euripides/projects/blockchain-platform/deploy/.env','utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i),l.slice(i+1).trim().replace(/^["']|["']$/g,'')]}));
 const url=process.env.CONTRACT_QA_MCP||'http://127.0.0.1:18082/mcp';
 const client=new Client({name:'contract-analysis-real-qa',version:'1.0.0'}),rows=[];
@@ -12,8 +12,8 @@ function payload(result){const data=result.structuredContent||JSON.parse(result.
 try{
  await client.connect(new StreamableHTTPClientTransport(new URL(url),{requestInit:{headers:{Authorization:'Bearer '+env.MCP_API_KEY}}}));
  const names=(await client.listTools()).tools.map(t=>t.name);
- const required=['analyze_contract','get_contract_analysis','list_contract_methods','get_contract_method_analysis','get_contract_execution_flow','explain_contract_transaction','compare_contract_versions','get_contract_analysis_artifact'];
- check('discovery_119_unique_tools',names.length===119&&new Set(names).size===119&&required.every(n=>names.includes(n)),{count:names.length,added:required});
+ const required=['get_contract_analysis_capabilities','analyze_contract','get_contract_analysis','list_contract_methods','get_contract_method_analysis','get_contract_execution_flow','explain_contract_transaction','compare_contract_versions','get_contract_analysis_artifact'];
+ check('discovery_120_unique_tools',names.length===120&&new Set(names).size===120&&required.every(n=>names.includes(n)),{count:names.length,added:required});
  const templates=(await client.listResourceTemplates()).resourceTemplates;
  check('artifact_resource_discovered',templates.some(t=>t.uriTemplate==='contract-analysis://{analysis_id}/{artifact_id}/{offset}/{chunk_size}'));
  const before='c1ccd54b-71c7-4efa-97a0-b85077e1bdea';

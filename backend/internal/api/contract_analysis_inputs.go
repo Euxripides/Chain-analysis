@@ -122,6 +122,26 @@ func (s *Server) contractMaterialize(ctx context.Context, q ca.Request, boundary
 	if reused {
 		return frozen, nil
 	}
+	if q.Program != nil {
+		var manifest struct {
+			Input ca.Object `json:"program_input"`
+		}
+		if e = nextDecode(boundary, &manifest); e != nil {
+			return frozen, e
+		}
+		var raw []byte
+		raw, e = s.contractObject(ctx, manifest.Input, 24<<20)
+		if e != nil {
+			return frozen, e
+		}
+		var input ca.Input
+		if e = nextDecode(raw, &input); e != nil {
+			return frozen, e
+		}
+		frozen = ca.FrozenInput{Version: ca.Version, Request: q, Snapshot: input.Snapshot, Contracts: []ca.Input{input},
+			SourceObjects: map[string]ca.Object{}, Frontier: []map[string]any{}, Transactions: []json.RawMessage{}, Coverage: []map[string]any{}}
+		return frozen, s.nextSaveFrozen(ctx, frozen)
+	}
 	var b struct {
 		Chain  string               `json:"chain"`
 		Point  chainread.StatePoint `json:"point"`

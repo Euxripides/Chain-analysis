@@ -1,7 +1,7 @@
 import hashlib,io,json,os,pathlib,subprocess,urllib.parse,uuid,zipfile
 from qa_support import ROOT,Client,dotenv
 from live_api_qa import artifact_bytes
-OUT=ROOT/'acceptance/contract-analysis/release';rows=[]
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis/release');rows=[]
 def check(name,ok,evidence=None):
  rows.append({'scenario':name,'status':'PASS' if ok else 'FAIL','evidence':evidence});(OUT/'production-integrity-qa.json').write_text(json.dumps(rows,indent=2));print(name,rows[-1]['status'],flush=True)
  if not ok:raise AssertionError(name)

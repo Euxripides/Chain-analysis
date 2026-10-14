@@ -3,7 +3,7 @@
   "info": {
     "title": "合约运行与方法分析接口",
     "version": "1.0.0",
-    "description": "Eight typed Actions operations, generated from actual MCP tool discovery. Source, bytecode, static intents, observed execution, transaction-net token ledgers and replay results preserve independent evidence and coverage. Monetary uint256 values use exact decimal strings."
+    "description": "Nine typed Actions operations, generated from actual MCP tool discovery. Source, bytecode, static intents, observed execution, transaction-net token ledgers and replay results preserve independent evidence and coverage. Monetary uint256 values use exact decimal strings."
   },
   "servers": [
     {
@@ -16,10 +16,92 @@
     }
   ],
   "paths": {
+    "/api/v1/analysis/contracts/get_contract_analysis_capabilities": {
+      "post": {
+        "operationId": "get_contract_analysis_capabilities",
+        "description": "Read the capabilities observed from the configured digest-pinned runtime: installed engines, source compiler versions, supported execution families and precise historical replay restrictions. Availability is separate from protocol certification. No blockchain requests.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/analysis/contracts/analyze_contract": {
       "post": {
         "operationId": "analyze_contract",
-        "description": "Queue comprehensive EVM contract analysis at an immutable block/hash. Digest-pinned offline WhatsABI, symbolic sevm, verified/recompiled Solidity AST and Heimdall artifacts; custom method semantics preserve guards, steps, exact amount expressions, storage, calls and evidence. Standard proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes by default for observed execution/prestate/diffs. Unsupported paths, provider failures and dependency frontier remain explicit. No on-chain writes or automatic full historical downloads.",
+        "description": "Queue detailed EVM analysis at an immutable block/hash. Default engines: WhatsABI, sevm, verified/recompiled Solidity AST (Vyper 0.4.3 for matching source), Heimdall, Slither and Gigahorse TAC. Read method_details, operating_flows, control_effects, protocols, dataflow, ir_dataflow, ir_effects, source_verification and existing sections for conditions, exact formulas, recipients, runtime immutables, configuration effects and evidence. Interface profiles do not certify economic behavior. Proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes for execution/prestate/diffs and ledger reconciliation. No on-chain writes or automatic full historical downloads.",
         "x-mcp-read-only": false,
         "requestBody": {
           "required": true,
@@ -103,16 +185,21 @@
                         "whatsabi",
                         "sevm",
                         "solc-ast",
-                        "heimdall"
+                        "heimdall",
+                        "slither",
+                        "gigahorse",
+                        "vyper-ast"
                       ]
                     },
                     "minItems": 2,
-                    "maxItems": 4,
+                    "maxItems": 7,
                     "default": [
                       "whatsabi",
                       "sevm",
                       "solc-ast",
-                      "heimdall"
+                      "heimdall",
+                      "slither",
+                      "gigahorse"
                     ]
                   },
                   "budget": {

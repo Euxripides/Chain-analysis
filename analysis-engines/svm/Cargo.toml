@@ -1,0 +1,19 @@
+[package]
+name = "contract-svm-simulate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mollusk-svm = { git = "https://github.com/anza-xyz/mollusk", rev = "bd75dd7937a8e51fa3b655a39b76a9c6170f9d2c", features = ["inner-instructions"] }
+solana-account = "=4.7.0"
+solana-instruction = "=3.5.1"
+solana-pubkey = "=4.3.0"
+solana-transaction-context = { version = "=4.3.0", features = ["agave-unstable-api"] }
+solana-transaction-status-client-types = "=4.3.0"
+serde_json = "=1.0.154"
+base64 = "=0.22.1"
+sha2 = "=0.10.9"
+
+[profile.release]
+strip = true
+debug = 0

@@ -199,6 +199,7 @@ test("invalid batch inputs are rejected before any REST request including an ear
 test("generic batches dispatch every existing single operation with its original GET/POST semantics", async t => {
   const h = await harness(t);
   const samples: Record<string, Record<string, unknown>> = {
+    get_contract_analysis_capabilities: {},
     get_address_overview: { chain: "bsc", address: a }, get_address_assets: { chain: "bsc", address: a },
     get_token_transfers: { chain: "bsc", address: a }, get_nft_transfers: { chain: "flare", address: a }, get_address_logs: { chain: "gnosis", address: a }, get_balance_snapshots: { chain: "linea", address: a }, get_transactions: { chain: "bsc", address: a },
     get_internal_transactions: { chain: "bsc", address: a }, get_counterparties: { chain: "bsc", address: a },

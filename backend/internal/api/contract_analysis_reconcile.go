@@ -13,7 +13,7 @@ import (
 func contractLedgerSlot(result *ca.Result, asset string, pre map[string]ca.StateAccount) (string, []string, bool) {
 	for _, raw := range result.Sections["methods"] {
 		m := rowMap(raw)
-		if m["signature"] != "balanceOf(address)" || m["verified_signature"] != true || !strings.EqualFold(fmt.Sprint(m["storage_address"]), asset) || m["dispatch_role"] == "overridden_source_definition" {
+		if m["signature"] != "balanceOf(address)" || m["verified_signature"] != true || m["state_mutability"] != "view" && m["state_mutability"] != "pure" || !strings.EqualFold(fmt.Sprint(m["storage_address"]), asset) || m["dispatch_role"] == "overridden_source_definition" {
 			continue
 		}
 		code, _ := hex.DecodeString(strings.TrimPrefix(pre[fmt.Sprint(m["code_address"])].Code, "0x"))
@@ -152,6 +152,19 @@ func contractTokenReconciliation(result *ca.Result, txHash string, preRaw, diffR
 	sort.Strings(assets)
 	for _, asset := range assets {
 		slot, evidence, known := contractLedgerSlot(result, asset, pre)
+		projection := contractBalanceProjection(result, asset, pre)
+		balanceModel := contractComputedBalance(result, asset, pre)
+		basis := "verified_direct_balanceOf_mapping_and_transaction_diff"
+		if projection != nil {
+			known = true
+			evidence = projection.Evidence
+			basis = "verified_balanceOf_storage_projection_and_transaction_diff"
+		}
+		if balanceModel != nil {
+			known = true
+			evidence = balanceModel.Evidence
+			basis = "verified_typed_balanceOf_expression_and_transaction_diff"
+		}
 		status := "ledger_unavailable"
 		checked := 0
 		unknown := []string{}
@@ -163,7 +176,28 @@ func contractTokenReconciliation(result *ca.Result, txHash string, preRaw, diffR
 			}
 			sort.Strings(addresses)
 			for _, address := range addresses {
+				if balanceModel != nil {
+					before, be := balanceModel.evaluate(address, asset, pre, diff, false)
+					after, ae := balanceModel.evaluate(address, asset, pre, diff, true)
+					if be != nil || ae != nil {
+						unknown = append(unknown, address)
+						continue
+					}
+					bn, _ := new(big.Int).SetString(before, 10)
+					an, _ := new(big.Int).SetString(after, 10)
+					delta := new(big.Int).Sub(an, bn)
+					match := delta.Cmp(group[asset][address]) == 0
+					checked++
+					if !match {
+						mismatches = append(mismatches, address)
+					}
+					result.Sections["token_balance_changes"] = append(result.Sections["token_balance_changes"], ca.Row(map[string]any{"balance_change_id": ca.ID(txHash, asset, address), "tx_hash": txHash, "asset": asset, "address": address, "before_raw": before, "after_raw": after, "delta_raw": delta.String(), "event_net_delta_raw": group[asset][address].String(), "net_matched": match, "unit": "token_raw", "basis": basis, "evidence_ids": append(append([]string{}, evidence...), ca.ID(txHash, "state-diff"))}))
+					continue
+				}
 				key, e := contractMappingSlot(address, slot)
+				if projection != nil {
+					key, e = projection.key(address)
+				}
 				if e != nil {
 					unknown = append(unknown, address)
 					continue
@@ -191,11 +225,17 @@ func contractTokenReconciliation(result *ca.Result, txHash string, preRaw, diffR
 					after = "0x0"
 				}
 				b, err := ca.RawInteger(before)
+				if projection != nil {
+					b, err = projection.value(before)
+				}
 				if err != nil {
 					unknown = append(unknown, address)
 					continue
 				}
 				a, err := ca.RawInteger(after)
+				if projection != nil {
+					a, err = projection.value(after)
+				}
 				if err != nil {
 					unknown = append(unknown, address)
 					continue
@@ -208,7 +248,7 @@ func contractTokenReconciliation(result *ca.Result, txHash string, preRaw, diffR
 				if !match {
 					mismatches = append(mismatches, address)
 				}
-				result.Sections["token_balance_changes"] = append(result.Sections["token_balance_changes"], ca.Row(map[string]any{"balance_change_id": ca.ID(txHash, asset, address), "tx_hash": txHash, "asset": asset, "address": address, "slot": key, "before_raw": b, "after_raw": a, "delta_raw": delta.String(), "event_net_delta_raw": group[asset][address].String(), "net_matched": match, "unit": "token_raw", "basis": "verified_direct_balanceOf_mapping_and_transaction_diff", "evidence_ids": append(append([]string{}, evidence...), ca.ID(txHash, "state-diff"))}))
+				result.Sections["token_balance_changes"] = append(result.Sections["token_balance_changes"], ca.Row(map[string]any{"balance_change_id": ca.ID(txHash, asset, address), "tx_hash": txHash, "asset": asset, "address": address, "slot": key, "before_raw": b, "after_raw": a, "delta_raw": delta.String(), "event_net_delta_raw": group[asset][address].String(), "net_matched": match, "unit": "token_raw", "basis": basis, "evidence_ids": append(append([]string{}, evidence...), ca.ID(txHash, "state-diff"))}))
 			}
 			status = "transaction_net_ledger_matched"
 			if checked == 0 {

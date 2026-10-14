@@ -1,7 +1,7 @@
 import {chromium} from '@playwright/test';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 const base=process.env.CONTRACT_QA_CONSOLE||'http://127.0.0.1:18083/app-v2';
-const root=new URL('../../',import.meta.url),out=new URL('acceptance/contract-analysis/browser/',root);mkdirSync(out,{recursive:true});
+const root=new URL('../../',import.meta.url),out=new URL((process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis')+'/browser/',root);mkdirSync(out,{recursive:true});
 const id=readFileSync(new URL('../ui-analysis-id.txt',out),'utf8').trim(),rows=[];
 const state='/tmp/contract-analysis-private-20261014/investigator-browser.json';
 const browser=await chromium.launch({headless:true});

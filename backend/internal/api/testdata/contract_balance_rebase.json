@@ -1,0 +1,436 @@
+{
+  "bytecode": "0x608060405234801561000f575f5ffd5b5060043610610055575f3560e01c80632986c0e51461005957806340c10f191461007757806370a0823114610093578063a9059cbb146100c3578063bc4f2d6d146100f3575b5f5ffd5b61006161010f565b60405161006e91906103b0565b60405180910390f35b610091600480360381019061008c9190610451565b610115565b005b6100ad60048036038101906100a8919061048f565b6101f0565b6040516100ba91906103b0565b60405180910390f35b6100dd60048036038101906100d89190610451565b610255565b6040516100ea91906104d4565b60405180910390f35b61010d600480360381019061010891906104ed565b61038e565b005b60015481565b600154670de0b6b3a76400008261012c9190610545565b61013691906105b3565b5f5f8473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f82825461018091906105e3565b925050819055508173ffffffffffffffffffffffffffffffffffffffff165f73ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516101e491906103b0565b60405180910390a35050565b5f670de0b6b3a76400006001545f5f8573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f20546102449190610545565b61024e91906105b3565b9050919050565b5f5f600154670de0b6b3a76400008461026e9190610545565b61027891906105b3565b9050805f5f3373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f8282546102c59190610616565b92505081905550805f5f8673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f82825461031791906105e3565b925050819055508373ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef8560405161037b91906103b0565b60405180910390a3600191505092915050565b8060018190555050565b5f819050919050565b6103aa81610398565b82525050565b5f6020820190506103c35f8301846103a1565b92915050565b5f5ffd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6103f6826103cd565b9050919050565b610406816103ec565b8114610410575f5ffd5b50565b5f81359050610421816103fd565b92915050565b61043081610398565b811461043a575f5ffd5b50565b5f8135905061044b81610427565b92915050565b5f5f60408385031215610467576104666103c9565b5b5f61047485828601610413565b92505060206104858582860161043d565b9150509250929050565b5f602082840312156104a4576104a36103c9565b5b5f6104b184828501610413565b91505092915050565b5f8115159050919050565b6104ce816104ba565b82525050565b5f6020820190506104e75f8301846104c5565b92915050565b5f60208284031215610502576105016103c9565b5b5f61050f8482850161043d565b91505092915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f61054f82610398565b915061055a83610398565b925082820261056881610398565b9150828204841483151761057f5761057e610518565b5b5092915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601260045260245ffd5b5f6105bd82610398565b91506105c883610398565b9250826105d8576105d7610586565b5b828204905092915050565b5f6105ed82610398565b91506105f883610398565b92508282019050808211156106105761060f610518565b5b92915050565b5f61062082610398565b915061062b83610398565b925082820390508181111561064357610642610518565b5b9291505056fea2646970667358221220af49045cbbc1f0393a70c5b42fd6902dd26d501195811f675ef4614e5869647064736f6c634300081e0033",
+  "snapshot": {
+    "chain": "ethereum",
+    "chain_id": "1",
+    "block_number": 1,
+    "block_hash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "code_hash": "0x328a916345605fc9911cd68669ba1c81be32e41615c77e679103c54ee89a9a8b",
+    "code_address": "0x2222222222222222222222222222222222222222",
+    "storage_address": "0x2222222222222222222222222222222222222222",
+    "entry_address": "0x2222222222222222222222222222222222222222"
+  },
+  "result": {
+    "version": "contract-analysis-v1",
+    "sections": {
+      "methods": [
+        {
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "selector": "0x70a08231",
+          "name": "balanceOf",
+          "signature": "balanceOf(address)",
+          "signature_candidates": [],
+          "verified_signature": true,
+          "code_address": "0x2222222222222222222222222222222222222222",
+          "storage_address": "0x2222222222222222222222222222222222222222",
+          "code_hash": "0x328a916345605fc9911cd68669ba1c81be32e41615c77e679103c54ee89a9a8b",
+          "entry": "selector:0x70a08231",
+          "visibility": "external",
+          "parameters": [
+            {
+              "index": 0,
+              "source_ast_id": 526,
+              "name": "holder",
+              "type": "address",
+              "unit": null,
+              "unit_status": "not_inferred_from_name",
+              "constraints": [],
+              "evidence_ids": [
+                "d8e3336b93e28c1da1321686864094fbf1f091c6"
+              ]
+            }
+          ],
+          "outputs": [
+            {
+              "index": 0,
+              "name": "",
+              "type": "uint256",
+              "evidence_ids": [
+                "dfdd3a7fba363f48f5f0e375212c18472e5bebd4"
+              ]
+            }
+          ],
+          "proxy_route_status": null,
+          "purpose": "返回 units[holder]*index/1e18",
+          "behaviors": [
+            "读取合约状态",
+            "返回计算结果"
+          ],
+          "evidence_ids": [
+            "d8e3336b93e28c1da1321686864094fbf1f091c6",
+            "dfdd3a7fba363f48f5f0e375212c18472e5bebd4",
+            "69ee00a1c038ebd3eb69b139518a849eaa0b5b93",
+            "a0328611af6fd8e7341f2483e7cb3f3f056af0ae",
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122",
+            "2dfce86f58ff6fd7b19fd8977254a0b21f141a4c",
+            "5bf3e208314b7bb4bf71d45e3226a2efb8dba9de",
+            "12d67bf1b0367133d0fccbf9fc91af136b8859df",
+            "e0feb4af8f0aaf199237b8b2c01f2a7b788622a1",
+            "a54e112efa033096648c38cae56399a07be68c66",
+            "d9ce7ce3e7bf468c6b0443ca0e06ebcf8b28cfea"
+          ],
+          "step_ids": [
+            "028c5bb9af281a47f6a6adc4700cf8e4645ff6ea"
+          ],
+          "guard_ids": [],
+          "storage_ids": [
+            "6f24c60582fdf763ea8667ff9ba8d40ce6da52d1",
+            "11689131a6f870a4249a7a9630ff96d3b46e2a3e",
+            "832ab75528a1c4aa0f6e9e61b7a4f481bde6a93c"
+          ],
+          "call_ids": [],
+          "fund_ids": [],
+          "return_ids": [
+            "028c5bb9af281a47f6a6adc4700cf8e4645ff6ea"
+          ],
+          "failure_ids": [],
+          "dependency_methods": [
+            "e77bcd1ee3a8e65bf7950efb99638fe91323d3d9",
+            "74b3335ee2f9229a7490aa9e442a0512cc507029",
+            "c6c233a715d5ed8f02e3169a94a7764905e77fed"
+          ],
+          "historical_calls": {
+            "status": "not_requested",
+            "count": null
+          },
+          "observed_transactions": [],
+          "completeness": {
+            "complete": true,
+            "unresolved": [],
+            "basis": "source",
+            "scope": "syntactic_control_and_data_flow",
+            "execution_paths": "not_exhaustively_verified"
+          },
+          "dispatch_role": "external_dispatch",
+          "entry_kind": "function",
+          "code_phase": "runtime_source",
+          "state_mutability": "view",
+          "source_location": {
+            "artifact_id": "5905bb90ca788887fb6d290d76f3cbebdb44d03c",
+            "file": "Fixtures.sol",
+            "start": 3311,
+            "length": 99,
+            "line": 42,
+            "ast_id": 540
+          },
+          "return_derivation_ids": [
+            "76c2bc5e18b6e89181a9c107807378e79688b2d6"
+          ],
+          "amount_derivation_ids": [],
+          "condition_derivation_ids": [],
+          "business_rules": [
+            "e7ff4317392d622a95f3c6a874653753c103a9ce"
+          ]
+        }
+      ],
+      "expressions": [
+        {
+          "expression_id": "f24e703a8faf978d48fccbbcca49999e4e628262",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "Identifier",
+          "text": "units",
+          "type": "mapping(address => uint256)",
+          "width": 256,
+          "signed": false,
+          "arithmetic": "checked",
+          "rounding": null,
+          "operands": [],
+          "referenced_declaration": 513,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122"
+          ],
+          "unresolved_local_reference": false
+        },
+        {
+          "expression_id": "7532ddfee0f79302cd81b359cc2f5206af98fa76",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "Identifier",
+          "text": "holder",
+          "type": "address",
+          "width": null,
+          "signed": null,
+          "arithmetic": "not_applicable",
+          "rounding": null,
+          "operands": [],
+          "referenced_declaration": 526,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "2dfce86f58ff6fd7b19fd8977254a0b21f141a4c"
+          ],
+          "unresolved_local_reference": false
+        },
+        {
+          "expression_id": "540b38d2a3418f8341a7563a594c9a3d1aa17c06",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "IndexAccess",
+          "text": "units[holder]",
+          "type": "uint256",
+          "width": 256,
+          "signed": false,
+          "arithmetic": "checked",
+          "rounding": null,
+          "operands": [
+            "f24e703a8faf978d48fccbbcca49999e4e628262",
+            "7532ddfee0f79302cd81b359cc2f5206af98fa76"
+          ],
+          "referenced_declaration": null,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "a0328611af6fd8e7341f2483e7cb3f3f056af0ae",
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122",
+            "2dfce86f58ff6fd7b19fd8977254a0b21f141a4c"
+          ]
+        },
+        {
+          "expression_id": "be9f34b43d8c9735d02e9c0e22927836a422a50e",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "Identifier",
+          "text": "index",
+          "type": "uint256",
+          "width": 256,
+          "signed": false,
+          "arithmetic": "checked",
+          "rounding": null,
+          "operands": [],
+          "referenced_declaration": 516,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "5bf3e208314b7bb4bf71d45e3226a2efb8dba9de"
+          ],
+          "unresolved_local_reference": false
+        },
+        {
+          "expression_id": "67b5cafdb3c93b9d340efa16723430a6023427da",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "*",
+          "text": "units[holder]*index",
+          "type": "uint256",
+          "width": 256,
+          "signed": false,
+          "arithmetic": "checked",
+          "rounding": null,
+          "operands": [
+            "540b38d2a3418f8341a7563a594c9a3d1aa17c06",
+            "be9f34b43d8c9735d02e9c0e22927836a422a50e"
+          ],
+          "referenced_declaration": null,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "12d67bf1b0367133d0fccbf9fc91af136b8859df",
+            "a0328611af6fd8e7341f2483e7cb3f3f056af0ae",
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122",
+            "2dfce86f58ff6fd7b19fd8977254a0b21f141a4c",
+            "5bf3e208314b7bb4bf71d45e3226a2efb8dba9de"
+          ]
+        },
+        {
+          "expression_id": "8825e1f2c8474490fdc2e166b616209fe19d5703",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "Literal",
+          "text": "1e18",
+          "type": "int_const 1000000000000000000",
+          "width": null,
+          "signed": null,
+          "arithmetic": "not_applicable",
+          "rounding": null,
+          "operands": [],
+          "referenced_declaration": null,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "e0feb4af8f0aaf199237b8b2c01f2a7b788622a1"
+          ],
+          "raw_literal": "1e18",
+          "literal_kind": "number",
+          "subdenomination": null,
+          "value": "1000000000000000000",
+          "status": "exact_integer"
+        },
+        {
+          "expression_id": "7c674c982333d72c792fc7ff1eec8c03f33aadc0",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "/",
+          "text": "units[holder]*index/1e18",
+          "type": "uint256",
+          "width": 256,
+          "signed": false,
+          "arithmetic": "checked",
+          "rounding": "toward_zero",
+          "operands": [
+            "67b5cafdb3c93b9d340efa16723430a6023427da",
+            "8825e1f2c8474490fdc2e166b616209fe19d5703"
+          ],
+          "referenced_declaration": null,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "a54e112efa033096648c38cae56399a07be68c66",
+            "12d67bf1b0367133d0fccbf9fc91af136b8859df",
+            "a0328611af6fd8e7341f2483e7cb3f3f056af0ae",
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122",
+            "2dfce86f58ff6fd7b19fd8977254a0b21f141a4c",
+            "5bf3e208314b7bb4bf71d45e3226a2efb8dba9de",
+            "e0feb4af8f0aaf199237b8b2c01f2a7b788622a1"
+          ]
+        },
+        {
+          "expression_id": "50891b5f4369ea4f4192c56c9036d305338aef95",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "op": "Return",
+          "text": "return units[holder]*index/1e18",
+          "type": "unresolved",
+          "width": null,
+          "signed": null,
+          "arithmetic": "not_applicable",
+          "rounding": null,
+          "operands": [
+            "7c674c982333d72c792fc7ff1eec8c03f33aadc0"
+          ],
+          "referenced_declaration": null,
+          "path": "entry",
+          "conditions": [],
+          "step_order": 0,
+          "evidence_ids": [
+            "d9ce7ce3e7bf468c6b0443ca0e06ebcf8b28cfea"
+          ]
+        }
+      ],
+      "storage": [
+        {
+          "storage_id": "6f24c60582fdf763ea8667ff9ba8d40ce6da52d1",
+          "state_id": "db24525874d7b04d5c5f81174558d73d0df29f66",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "variable": "units",
+          "code_address": "0x2222222222222222222222222222222222222222",
+          "storage_address": "0x2222222222222222222222222222222222222222",
+          "access": "read",
+          "slot": "0",
+          "offset": 0,
+          "type": "uint256",
+          "variable_type": "mapping(address => uint256)",
+          "slot_role": "layout_base",
+          "key_expression": "units[holder]",
+          "key_expression_id": "540b38d2a3418f8341a7563a594c9a3d1aa17c06",
+          "value_expression": null,
+          "value_expression_id": null,
+          "operation": null,
+          "conditions": [],
+          "evidence_ids": [
+            "a0328611af6fd8e7341f2483e7cb3f3f056af0ae"
+          ],
+          "layout_status": "verified_compiler_layout",
+          "storage_projection": {
+            "base_slot": "0",
+            "type_id": "t_uint256",
+            "offset": 0,
+            "path": [
+              {
+                "kind": "mapping",
+                "key_type": "address",
+                "key_ast_id": 532,
+                "key_referenced_declaration": 526,
+                "key_text": "holder",
+                "key_literal": null
+              }
+            ],
+            "scalar_type": "uint256"
+          }
+        },
+        {
+          "storage_id": "11689131a6f870a4249a7a9630ff96d3b46e2a3e",
+          "state_id": "db24525874d7b04d5c5f81174558d73d0df29f66",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "variable": "units",
+          "code_address": "0x2222222222222222222222222222222222222222",
+          "storage_address": "0x2222222222222222222222222222222222222222",
+          "access": "read",
+          "slot": "0",
+          "offset": 0,
+          "type": "mapping(address => uint256)",
+          "variable_type": "mapping(address => uint256)",
+          "slot_role": "layout_base",
+          "key_expression": "units",
+          "key_expression_id": "f24e703a8faf978d48fccbbcca49999e4e628262",
+          "value_expression": null,
+          "value_expression_id": null,
+          "operation": null,
+          "conditions": [],
+          "evidence_ids": [
+            "f0250d92775114ad0cfb43285c02a5f76a6a0122"
+          ],
+          "layout_status": "verified_compiler_layout",
+          "storage_projection": {
+            "base_slot": "0",
+            "type_id": "t_mapping(t_address,t_uint256)",
+            "offset": 0,
+            "path": [],
+            "scalar_type": "mapping(address => uint256)"
+          }
+        },
+        {
+          "storage_id": "832ab75528a1c4aa0f6e9e61b7a4f481bde6a93c",
+          "state_id": "b9db4991f90f3321609331bb1549529fdbf9034f",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "variable": "index",
+          "code_address": "0x2222222222222222222222222222222222222222",
+          "storage_address": "0x2222222222222222222222222222222222222222",
+          "access": "read",
+          "slot": "1",
+          "offset": 0,
+          "type": "uint256",
+          "variable_type": "uint256",
+          "slot_role": "direct_slot",
+          "key_expression": "index",
+          "key_expression_id": "be9f34b43d8c9735d02e9c0e22927836a422a50e",
+          "value_expression": null,
+          "value_expression_id": null,
+          "operation": null,
+          "conditions": [],
+          "evidence_ids": [
+            "5bf3e208314b7bb4bf71d45e3226a2efb8dba9de"
+          ],
+          "layout_status": "verified_compiler_layout",
+          "storage_projection": {
+            "base_slot": "1",
+            "type_id": "t_uint256",
+            "offset": 0,
+            "path": [],
+            "scalar_type": "uint256"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "028c5bb9af281a47f6a6adc4700cf8e4645ff6ea",
+          "method_id": "85f5432172dce04c4ebd0d1209fc362ab72464ed",
+          "order": 0,
+          "kind": "return",
+          "text": "返回 units[holder]*index/1e18",
+          "expression_id": "50891b5f4369ea4f4192c56c9036d305338aef95",
+          "conditions": [],
+          "path": "entry",
+          "evidence_ids": [
+            "d9ce7ce3e7bf468c6b0443ca0e06ebcf8b28cfea"
+          ],
+          "return_scope": "entry",
+          "return_frame": 540
+        }
+      ],
+      "definitions": [],
+      "calls": []
+    }
+  }
+}

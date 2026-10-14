@@ -15,7 +15,7 @@ func TestTokenEventReconciliationUsesExactNetStateAndRejectsCounterfeitAmount(t 
 	keyTo, _ := contractMappingSlot(to, "3")
 	makeResult := func(amount string) ca.Result {
 		return ca.Result{Sections: map[string][]json.RawMessage{
-			"methods":      {ca.Row(map[string]any{"method_id": "getter", "signature": "balanceOf(address)", "verified_signature": true, "entry_kind": "generated_getter", "code_address": asset, "storage_address": asset, "code_hash": contractKeccak([]byte{0x60, 0})})},
+			"methods":      {ca.Row(map[string]any{"method_id": "getter", "signature": "balanceOf(address)", "state_mutability": "view", "verified_signature": true, "entry_kind": "generated_getter", "code_address": asset, "storage_address": asset, "code_hash": contractKeccak([]byte{0x60, 0})})},
 			"storage":      {ca.Row(map[string]any{"method_id": "getter", "access": "read", "state_id": "ledger", "slot": "3", "layout_status": "verified_compiler_layout", "variable_type": "mapping(address => uint256)", "evidence_ids": []string{"layout"}})},
 			"token_events": {ca.Row(map[string]any{"tx_hash": "tx", "asset": asset, "event": "Transfer", "from": from, "to": to, "amount_raw": amount})},
 		}}

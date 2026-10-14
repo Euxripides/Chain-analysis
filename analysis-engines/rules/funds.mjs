@@ -46,7 +46,7 @@ export function applyFundsRules(result) {
     if (addressMappings.length && funds.length) add('address-mapping-recipient', '关联地址参与结算', `读取 ${unique(addressMappings.map(s => s.key_expression)).join('、')}，收款对象和金额见资金表达式及局部变量计算`, [...addressMappings, ...funds]);
     const timeGuards = guards.filter(g => /block\.timestamp|block\.number/.test(g.condition || ''));
     if (timeGuards.length) add('time-gated-effects', '时间或区块条件', timeGuards.map(g => g.condition).join('；'), timeGuards);
-    const callerGuards = guards.filter(g => /msg\.sender|tx\.origin|ecrecover/.test(g.condition || ''));
+    const callerGuards = guards.filter(g => /msg\.sender|tx\.origin|ecrecover/.test(g.expanded_condition || g.condition || ''));
     const gatedWrites=stores.filter(s=>s.access==='write'&&callerGuards.some(g=>s.conditions?.includes(g.condition)));
     if (callerGuards.length && gatedWrites.length) add('caller-gated-configuration', '受调用者条件限制的状态修改', callerGuards.map(g => g.condition).join('；'), [...callerGuards, ...gatedWrites]);
     const constraints = guards.filter(g => stores.some(s => s.access === 'read' && g.condition?.includes(s.key_expression)));
@@ -56,10 +56,11 @@ export function applyFundsRules(result) {
 
     const descriptions = [];
     const primaryGuards = unique(guards.filter(g => !/transfer\(/.test(g.condition || '')).map(g => g.condition)).slice(0, 3);
-    if (primaryGuards.length) descriptions.push(`执行条件包括 ${primaryGuards.join('、')}`);
+    if (primaryGuards.length) descriptions.push(`执行条件包括 ${unique(guards.filter(g=>primaryGuards.includes(g.condition)).map(g=>g.expanded_condition||g.condition)).join('、')}`);
     const calculations = steps.filter(s => s.kind === 'local' && /[*/+-]/.test(s.text || '')).slice(0, 3);
     descriptions.push(...calculations.map(s => s.text.replace(/^计算局部变量：/, '计算 ')));
-    descriptions.push(...funds.filter(f => f.kind !== 'token_approval').slice(0, 4).map(f => `${f.asset === 'native' ? '原生币' : f.asset} 从 ${f.from_expression} 向 ${f.to_expression} 发送 ${f.amount_expression}`));
+    descriptions.push(...funds.filter(f => f.kind !== 'token_approval').slice(0, 4).map(f => f.kind==='nft_ownership_assignment'?`将资产 ${f.asset} 的编号 ${f.token_id_expression} 所有人写为 ${f.expanded_to_expression||f.to_expression}`:
+      `${f.asset === 'native' ? '原生币' : f.expanded_asset_expression||f.asset} 从 ${f.expanded_from_expression||f.from_expression} 向 ${f.expanded_to_expression||f.to_expression} 发送 ${f.expanded_amount_expression||f.amount_expression}`));
     const writes = steps.filter(s => s.kind === 'assignment').slice(0, 3);
     descriptions.push(...writes.map(s => s.text));
     if (!funds.length && !writes.length) {

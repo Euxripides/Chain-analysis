@@ -14,17 +14,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
 	ca "github.com/blockchain-platform/blockchain-platform/internal/contractanalysis"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-var contractOperations = []string{"analyze_contract", "get_contract_analysis", "list_contract_methods", "get_contract_method_analysis", "get_contract_execution_flow", "explain_contract_transaction", "compare_contract_versions", "get_contract_analysis_artifact"}
+var contractOperations = []string{"analyze_contract", "get_contract_analysis", "list_contract_methods", "get_contract_method_analysis", "get_contract_execution_flow", "explain_contract_transaction", "compare_contract_versions", "get_contract_analysis_artifact", "get_contract_analysis_capabilities", "analyze_program"}
 
 func (s *Server) registerContractActions(r chi.Router) {
 	for _, name := range contractOperations {
 		op := name
+		if op == "analyze_program" {
+			r.Post("/analysis/contracts/analyze_program", func(w http.ResponseWriter, r *http.Request) { s.handleAnalyzeProgram(w, r, false) })
+			continue
+		}
 		prefix := "/analysis/contracts/"
 		if op == "get_contract_analysis_artifact" {
 			prefix = "/export/contracts/"
@@ -33,6 +38,10 @@ func (s *Server) registerContractActions(r chi.Router) {
 	}
 }
 func (s *Server) registerContractUserRoutes(r chi.Router) {
+	r.Post("/contract-analyses/programs", s.require("investigation:run", func(w http.ResponseWriter, r *http.Request) { s.handleAnalyzeProgram(w, r, true) }))
+	r.Get("/contract-analyses/capabilities", s.require("explorer:read", func(w http.ResponseWriter, r *http.Request) {
+		s.handleContractAnalysis(w, r, "get_contract_analysis_capabilities", true)
+	}))
 	r.Get("/contract-analyses/{analysis_id}/artifacts/{artifact_id}/preview", s.require("evidence:read", func(w http.ResponseWriter, r *http.Request) {
 		s.handleContractAnalysis(w, r, "preview_contract_artifact", true)
 	}))
@@ -112,6 +121,9 @@ func (s *Server) handleContractAnalysis(w http.ResponseWriter, r *http.Request, 
 		if e == nil {
 			q, e = ca.Decode(b)
 		}
+		if e == nil && q.Program != nil {
+			e = fmt.Errorf("program requests require the independent analyze_program schema")
+		}
 	}
 	q.Defaults()
 	if e == nil {
@@ -149,7 +161,9 @@ func (s *Server) handleContractPrepared(w http.ResponseWriter, r *http.Request, 
 	var data any
 	var e error
 	switch op {
-	case "analyze_contract":
+	case "get_contract_analysis_capabilities":
+		data, e = s.contractCapabilities(bounded)
+	case "analyze_contract", "analyze_program":
 		data, e = s.contractSubmit(bounded, q)
 	case "cancel", "resume":
 		data, e = s.contractJobControl(bounded, q.AnalysisID, op)
@@ -218,15 +232,17 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 		return nil, e
 	}
 	cfg := mustChain(s, q.Chain)
-	if !cfg.IsEVM() {
+	if q.Program == nil && !cfg.IsEVM() {
 		return nil, fmt.Errorf("contract engine supports EVM chains only")
 	}
-	if !ca.CompleteAddress.MatchString(q.Address) {
+	if q.Program == nil && !ca.CompleteAddress.MatchString(q.Address) {
 		return nil, fmt.Errorf("complete EVM contract address required")
 	}
-	q.Address = strings.ToLower(q.Address)
-	for i := range q.TxHashes {
-		q.TxHashes[i] = strings.ToLower(q.TxHashes[i])
+	if q.Program == nil {
+		q.Address = strings.ToLower(q.Address)
+		for i := range q.TxHashes {
+			q.TxHashes[i] = strings.ToLower(q.TxHashes[i])
+		}
 	}
 	scope, e := s.nextTenant(ctx)
 	if e != nil {
@@ -257,7 +273,13 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	if e != nil {
 		return nil, e
 	}
-	point, e := s.deps.ChainRead.ResolveState(ctx, q.Chain, ref, at, contractOptions(ctx, q))
+	var point chainread.StatePoint
+	var programObject ca.Object
+	if q.Program != nil {
+		point, programObject, e = s.pinProgram(ctx, q, runner.Image)
+	} else {
+		point, e = s.deps.ChainRead.ResolveState(ctx, q.Chain, ref, at, contractOptions(ctx, q))
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -267,6 +289,9 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	q.Block = json.RawMessage(fmt.Sprint(point.Block))
 	q.Timestamp = ""
 	boundary := map[string]any{"chain": q.Chain, "point": point, "engine_digest": runner.Image}
+	if q.Program != nil {
+		boundary["program_input"] = programObject
+	}
 	tx, e := s.deps.Store.Pool.Begin(ctx)
 	if e != nil {
 		return nil, e

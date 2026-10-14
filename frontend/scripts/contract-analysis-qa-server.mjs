@@ -7,7 +7,7 @@ const root=resolve(fileURLToPath(new URL('../apps/user-console/dist/',import.met
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.json':'application/json'};
 const server=createServer(async(req,res)=>{
   if(req.url.startsWith('/api/')||req.url.startsWith('/health/')){
-    const upstream=request({host:'127.0.0.1',port:18081,path:req.url,method:req.method,headers:{...req.headers,host:'127.0.0.1:18081'}},response=>{res.writeHead(response.statusCode,response.headers);response.pipe(res)});
+    const upstream=request({host:'127.0.0.1',port:Number(process.env.CONTRACT_QA_API_PORT||18081),path:req.url,method:req.method,headers:{...req.headers,host:'127.0.0.1:18081'}},response=>{res.writeHead(response.statusCode,response.headers);response.pipe(res)});
     upstream.on('error',()=>{if(!res.headersSent)res.writeHead(502);res.end()});req.pipe(upstream);return;
   }
   try{
@@ -18,5 +18,5 @@ const server=createServer(async(req,res)=>{
     const body=await readFile(file);res.writeHead(200,{'content-type':mime[extname(file)]||'application/octet-stream','cache-control':'no-store'});res.end(body);
   }catch{res.writeHead(500);res.end()}
 });
-server.listen(18083,'127.0.0.1',()=>console.log('isolated contract QA console ready'));
+server.listen(Number(process.env.CONTRACT_QA_CONSOLE_PORT||18083),'127.0.0.1',()=>console.log('isolated contract QA console ready'));
 process.on('SIGTERM',()=>server.close());

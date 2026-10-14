@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -138,7 +139,7 @@ func (s *Server) contractWorkOne(parent context.Context, owner string) error {
 	if e == nil {
 		e = decodeErr
 	}
-	if e == nil && b.Engine != os.Getenv("CONTRACT_ENGINE_IMAGE") {
+	if e == nil && !contractEngineAllowed(b.Engine) {
 		e = summaryError(409, "ANALYSIS_VERSION_CHANGED", "The queued task requires its original engine digest")
 	}
 	var frozen ca.FrozenInput
@@ -155,7 +156,11 @@ func (s *Server) contractWorkOne(parent context.Context, owner string) error {
 		result, e = s.contractProcess(ctx, w, q, frozen, b.Engine)
 	}
 	if e == nil {
-		e = s.contractBlockGuard(ctx, q, b.Point, true)
+		if q.Program != nil {
+			e = s.programBlockGuard(ctx, q, b.Point)
+		} else {
+			e = s.contractBlockGuard(ctx, q, b.Point, true)
+		}
 	}
 	if e == nil {
 		e = accountTime(ctx)
@@ -189,6 +194,23 @@ func (s *Server) contractWorkOne(parent context.Context, owner string) error {
 		return err
 	}
 	return nil
+}
+
+// Persisted jobs retain their pinned image across a compatible processor release.
+// Only operator configured digests are accepted; request input cannot select one.
+func contractEngineAllowed(image string) bool {
+	if !(ca.Runner{Image: image}).Ready() {
+		return false
+	}
+	if image == os.Getenv("CONTRACT_ENGINE_IMAGE") {
+		return true
+	}
+	for _, allowed := range strings.Split(os.Getenv("CONTRACT_ENGINE_PREVIOUS_IMAGES"), ",") {
+		if image == strings.TrimSpace(allowed) {
+			return true
+		}
+	}
+	return false
 }
 func (s *Server) contractPhase(ctx context.Context, w nextWorkerState, phase string) error {
 	tag, e := s.deps.Store.Pool.Exec(ctx, `UPDATE investigation_analysis_jobs SET phase=$1,updated_at=now() WHERE id=$2 AND lease_owner=$3 AND fence=$4 AND status='running' AND lease_until>now()`, phase, w.JobID, w.Owner, w.Fence)
@@ -245,7 +267,7 @@ func (s *Server) contractCacheResult(ctx context.Context, result ca.Result) (con
 		}
 		for _, row := range rows {
 			if len(row) > 4<<20 {
-				return manifest, summaryError(422, "CONTRACT_ROW_BUDGET_EXCEEDED", "One analysis row exceeds 4 MiB")
+				return manifest, summaryError(422, "CONTRACT_ROW_BUDGET_EXCEEDED", fmt.Sprintf("One analysis row exceeds 4 MiB: section=%s bytes=%d", section, len(row)))
 			}
 			if size+len(row) > 16<<20 {
 				if e := save(); e != nil {
@@ -323,10 +345,15 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	if result.Snapshot.CodeHash != input.Snapshot.CodeHash || result.Snapshot.BlockHash != input.Snapshot.BlockHash || result.Snapshot.StorageAddress != input.Snapshot.StorageAddress || result.Snapshot.CodeAddress != input.Snapshot.CodeAddress || result.Snapshot.ChainID != input.Snapshot.ChainID || result.Snapshot.EntryAddress != input.Snapshot.EntryAddress || result.Snapshot.StateGranularity != input.Snapshot.StateGranularity {
 		return ca.Result{}, fmt.Errorf("engine snapshot identity mismatch")
 	}
+	if e = contractCompactMethodDetails(&result); e != nil {
+		return result, e
+	}
 	if e = s.contractSaveArtifacts(ctx, &result); e != nil {
 		return result, e
 	}
-	s.contractReadState(ctx, q, &result)
+	if q.Program == nil {
+		s.contractReadState(ctx, q, &result)
+	}
 	manifest, e := s.contractCacheResult(ctx, result)
 	if e != nil {
 		return result, e
@@ -356,6 +383,14 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 		artifact.ArtifactID = ca.ID(originalID, result.Snapshot.CodeAddress, result.Snapshot.StorageAddress, result.Snapshot.BlockHash)
 		remap[originalID] = artifact.ArtifactID
 		data := []byte(artifact.Text)
+		if artifact.ContentBase64 != "" {
+			var e error
+			data, e = base64.StdEncoding.DecodeString(artifact.ContentBase64)
+			if e != nil {
+				return fmt.Errorf("invalid binary artifact encoding")
+			}
+			artifact.ContentBase64 = ""
+		}
 		if len(data) > ca.ArtifactLimit {
 			return summaryError(422, "ARTIFACT_BUDGET_EXCEEDED", "One engine artifact exceeds 32 MiB")
 		}
@@ -386,6 +421,9 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 	return nil
 }
 func mergeContractResult(result *ca.Result, part ca.Result) {
+	if part.RuleVersion != "" {
+		result.RuleVersion = part.RuleVersion
+	}
 	for key, rows := range part.Sections {
 		result.Sections[key] = append(result.Sections[key], rows...)
 	}
@@ -396,6 +434,17 @@ func mergeContractResult(result *ca.Result, part ca.Result) {
 }
 func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Request, frozen ca.FrozenInput, engine string) (ca.Result, error) {
 	result := ca.Result{Version: ca.Version, RuleVersion: "funds-semantics-1", Snapshot: frozen.Snapshot, Sections: map[string][]json.RawMessage{}, Metrics: map[string]any{"engine_digest": engine, "rpc_usage_job_id": w.JobID, "credits": nil, "estimated_usd": nil}}
+	if q.Program != nil {
+		if len(frozen.Contracts) != 1 {
+			return result, fmt.Errorf("invalid frozen program input")
+		}
+		part, err := s.contractRunInput(ctx, w, q, frozen.Contracts[0], frozen, engine)
+		if err != nil {
+			return result, err
+		}
+		mergeContractResult(&result, part)
+		return result, nil
+	}
 	inputs := append([]ca.Input{}, frozen.Contracts...)
 	seen := map[string]bool{}
 	frontier := append([]map[string]any{}, frozen.Frontier...)

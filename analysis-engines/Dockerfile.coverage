@@ -1,0 +1,22 @@
+FROM ghcr.io/nevillegrech/gigahorse-toolchain-deps-souffle24@sha256:dc4af17909c572153eb3971d66e153a2e84b3ffd3797ed7cf949053a3a9f70a8 AS souffle
+FROM platform-contract-analysis:20261014@sha256:2b54082289b8ad8c487bacd86ed3227f0c3d4510243774439586f57f8805e37a
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv g++ make mcpp libffi-dev libncurses-dev libsqlite3-dev libboost-all-dev libz3-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=souffle /usr/local/bin/souffle /usr/local/bin/souffle
+COPY --from=souffle /usr/local/bin/souffle-compile.py /usr/local/bin/souffle-compile.py
+COPY --from=souffle /usr/local/include/ /usr/local/include/
+COPY vendor/gigahorse /opt/gigahorse/gigahorse-toolchain
+COPY vendor/crytic-compile /opt/contract-vendors/crytic-compile
+COPY vendor/slither /opt/contract-vendors/slither
+COPY requirements.lock /tmp/requirements.lock
+RUN python3 -m venv /opt/contract-python && /opt/contract-python/bin/pip install --index-url https://pypi.org/simple -r /tmp/requirements.lock /opt/contract-vendors/crytic-compile /opt/contract-vendors/slither
+COPY *.mjs /engine/
+COPY adapters /engine/adapters
+COPY rules /engine/rules
+COPY ir /engine/ir
+COPY notices /engine/notices
+ENV PATH=/opt/contract-python/bin:/usr/local/bin:/usr/bin:/bin CONTRACT_PYTHON=/opt/contract-python/bin/python GIGAHORSE_ROOT=/opt/gigahorse/gigahorse-toolchain PYTHONDONTWRITEBYTECODE=1
+RUN chmod 755 /engine/adapters/solc-shim.mjs && make -C /opt/gigahorse/gigahorse-toolchain/souffle-addon libsoufflenum.so && python3 /engine/adapters/precompile-gigahorse.py && chmod -R a+rX /opt/gigahorse /opt/contract-python
+WORKDIR /engine
+USER 65532:65532
+ENTRYPOINT ["node", "/engine/cli.mjs"]

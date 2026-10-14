@@ -8,12 +8,15 @@ export interface ContractStatus {
  error_code?:string;error_message?:string;result_sha256?:string;created_at:string;updated_at:string;
 }
 export interface ContractPage extends ContractStatus {section:string;items:ContractRow[];record_count:number;returned_records:number;has_more:boolean;next_cursor:string|null}
-export interface ContractSubmit {chain:string;address:string;block?:number|"latest"|"safe"|"finalized";timestamp?:string;from_block?:number;to_block?:number;tx_hashes?:string[];include_source?:boolean;budget?:Record<string,number>;idempotency_key?:string}
+export interface ContractSubmit {chain:string;address:string;block?:number|"latest"|"safe"|"finalized";timestamp?:string;from_block?:number;to_block?:number;tx_hashes?:string[];include_source?:boolean;engines?:string[];budget?:Record<string,number>;idempotency_key?:string}
+export interface ProgramSubmit {schema_version:"contract-program-request-v1";vm_family:"tron_tvm"|"solana_sbf";address:string;tx_hashes?:string[];budget?:Record<string,number>;idempotency_key?:string}
 export interface ContractArtifactChunk {artifact:ContractArtifact;offset:number;byte_length:number;sha256:string;chunk_sha256:string;content_base64:string;next_offset:number|null;complete:boolean}
 const base="/api/v2/contract-analyses";
 export const contractAnalysis = {
  list:(client:ApiClient,signal?:AbortSignal,cursor?:string)=>client.get<{items:ContractRow[];record_count:number;has_more:boolean;next_cursor:string|null}>(base,{signal,query:{cursor,page_size:50}}),
  submit:(client:ApiClient,request:ContractSubmit,signal?:AbortSignal)=>client.post<{analysis_id:string;status:string}>(base,request,{signal}),
+ submitProgram:(client:ApiClient,request:ProgramSubmit,signal?:AbortSignal)=>client.post<{analysis_id:string;status:string}>(`${base}/programs`,request,{signal}),
+ capabilities:(client:ApiClient,signal?:AbortSignal)=>client.get<ContractRow>(`${base}/capabilities`,{signal}),
  status:(client:ApiClient,id:string,signal?:AbortSignal)=>client.get<ContractStatus>(`${base}/${encodeURIComponent(id)}`,{signal}),
  page:(client:ApiClient,id:string,query:Record<string,string|number|undefined>,signal?:AbortSignal)=>client.get<ContractPage>(`${base}/${encodeURIComponent(id)}`,{query,signal}),
  method:(client:ApiClient,id:string,methodID:string,signal?:AbortSignal)=>client.get<ContractPage>(`${base}/${encodeURIComponent(id)}/methods/${encodeURIComponent(methodID)}`,{signal}),

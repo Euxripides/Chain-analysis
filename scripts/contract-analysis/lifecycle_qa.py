@@ -3,9 +3,9 @@ import json, os, pathlib, subprocess, time, urllib.parse, uuid
 from qa_support import ROOT, Client, dotenv, fixture_clients
 from live_api_qa import await_job
 
-OUT=ROOT/'acceptance/contract-analysis';rows=[]
-UNIT='blockchain-contract-qa-worker.service'
-env={**os.environ,**dotenv('/home/euripides/projects/blockchain-platform/deploy/.env'),**dotenv('/home/euripides/.config/blockchain-platform/contract-analysis-qa-20261014.env')}
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis');rows=[]
+UNIT=os.environ.get('CONTRACT_QA_WORKER','blockchain-contract-qa-worker.service')
+env={**os.environ,**dotenv('/home/euripides/projects/blockchain-platform/deploy/.env'),**dotenv(os.environ.get('CONTRACT_QA_ENV','/home/euripides/.config/blockchain-platform/contract-analysis-qa-20261014.env'))}
 db=urllib.parse.urlparse(env['MIGRATION_DATABASE_URL'])
 assert db.path=='/contract_analysis_qa_20261014'
 env['PGPASSWORD']=urllib.parse.unquote(db.password)

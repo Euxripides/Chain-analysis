@@ -2,6 +2,8 @@
 
 本功能以固定区块、区块哈希和代码哈希为分析身份，输出运行机制、方法作用、执行条件、有序步骤、金额公式、状态读写、权限、依赖关系、选定交易和证据文件。入口地址、实现代码地址和状态地址分别保存。方法名称、注释及候选 ABI 不替代函数体和交易证据。
 
+本轮 EVM 扩展的引擎、方法数据流、运行时源码核对及计算型余额见 [EVM 合约分析](contract-analysis-evm-coverage.md)。下文保留原发布基础能力的说明；新增结果与验收记录见该文及 acceptance/contract-analysis-coverage。
+
 ## 开源组件与自研部分
 
 | 组件 | 正式版本 | 实际用途 |
@@ -15,7 +17,7 @@
 
 编译器的实际身份与请求版本再次核对。npm 的 solc 0.8.1 包报告编译器 0.8.0，拒绝把它用于 0.8.1 源码。旧编译器缺少 storageLayout 时，只推导已实现并验收的 Solidity 存储规则；出现未知聚合类型后，后续槽位保留为未解析。
 
-Slither、Gigahorse、crytic-compile、evm-storage、Ethpector、Mythril、Halmos、Panoramix、NeverD 已纳入研究表。本次正式组合采用 AST、sevm 和自研模型；这些其他项目没有被安装成生产引擎，没有对应准确率或性能验收。项目资料见 [批准的开发计划](contract-analysis-development-plan.md)。
+Slither、Gigahorse、crytic-compile、evm-storage、Ethpector、Mythril、Halmos、Panoramix、NeverD 已纳入研究表。本次正式组合采用 AST、sevm 和自研模型；本轮新增 Slither、crytic-compile、Gigahorse 和 Vyper；其他研究项目按实际接入与验收状态记录。项目资料见 [批准的开发计划](contract-analysis-development-plan.md)。
 
 ## 方法分析
 
@@ -44,7 +46,7 @@ Slither、Gigahorse、crytic-compile、evm-storage、Ethpector、Mythril、Halmo
 
 `transaction_net_ledger_matched` 表示该笔交易内已观察地址的账本净额相符。逐条事件的独立结算另记为未验证。转账税、重基准、兑换及其他余额变化可以产生差异记录，不自动修改事件金额使账目相符。
 
-Ethereum 的受支持区块按执行规则选择 hardfork。精确重放核对 status、日志、Gas、账户余额/nonce/code 及取得的状态槽。未知账户、未知状态槽、缺失历史区块、环境不完整或结果差异均保留为具体状态。其他 EVM 链尚无正式重放规则时返回 `unsupported_chain_rules`。TRON、Solana 和 Vyper 不在当前引擎支持范围。
+Ethereum 的受支持区块按执行规则选择 hardfork。精确重放核对 status、日志、Gas、账户余额/nonce/code 及取得的状态槽。未知账户、未知状态槽、缺失历史区块、环境不完整或结果差异均保留为具体状态。其他 EVM 链尚无正式重放规则时返回 `unsupported_chain_rules`。TRON、Solana 入口保持关闭；Vyper 0.4.3 的 EVM 源码通道另行核对，其他 Vyper 编译版本返回明确缺失。
 
 ## 历史范围与版本
 

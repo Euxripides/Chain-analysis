@@ -18,7 +18,7 @@ function ContractAnalysisNewPage(){
    if(!Number.isInteger(maxContracts)||maxContracts<1||maxContracts>50||!Number.isInteger(maxRPC)||maxRPC<10||maxRPC>2000)throw new Error("关联合约预算为 1–50，RPC 请求预算为 10–2000");
    if(Boolean(from)!==Boolean(to))throw new Error("请同时填写起始区块和结束区块");
    const hashes=transactions.split(/[\s,;]+/).filter(Boolean);if(hashes.length>20||hashes.some(h=>!/^0x[0-9a-fA-F]{64}$/.test(h)))throw new Error("最多填写 20 个完整交易哈希");
-   const request:ContractSubmit={chain,address:address.trim(),block:parsedBlock as ContractSubmit["block"],tx_hashes:hashes,include_source:source,budget:{max_contracts:maxContracts,max_rpc_requests:maxRPC},idempotency_key:crypto.randomUUID()};
+   const request:ContractSubmit={chain,address:address.trim(),block:parsedBlock as ContractSubmit["block"],tx_hashes:hashes,include_source:source,engines:["whatsabi","sevm","solc-ast","heimdall","slither","gigahorse"],budget:{max_contracts:maxContracts,max_rpc_requests:maxRPC},idempotency_key:crypto.randomUUID()};
    if(from){const start=Number(from),end=Number(to);if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start||end-start>100000)throw new Error("历史范围须为有效区块，跨度不超过 100000");request.from_block=start;request.to_block=end}
    setBusy(true);const {data}=await contractAnalysis.submit(client,request);navigate(`/contract-analyses/${data.analysis_id}`);
   }catch(error){dialog.notify("error","提交分析失败",error instanceof Error?error.message:String(error))}finally{setBusy(false)}

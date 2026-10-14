@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const VERSION = 'contract-analysis-v1';
-export const RULE_VERSION = 'funds-semantics-1';
+export const RULE_VERSION = 'funds-semantics-2';
 export const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 export const id = (...parts) => hash(parts).slice(0, 40);
 export const stringify = value => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v);
@@ -9,7 +9,7 @@ export const unique = values => [...new Set(values)];
 export function emptyResult(snapshot) {
   return { version: VERSION, rule_version: RULE_VERSION, snapshot, sections: Object.fromEntries([
     'contracts', 'methods', 'steps', 'expressions', 'storage', 'calls', 'permissions', 'funds', 'flows',
-    'claims', 'evidence', 'coverage', 'conflicts', 'engines', 'transactions', 'versions', 'frontier', 'artifacts',
+    'claims', 'evidence', 'coverage', 'conflicts', 'engines', 'transactions', 'versions', 'frontier', 'artifacts', 'definitions', 'dataflow',
   ].map(key => [key, []])) };
 }
 export function makeMethod(snapshot, entry, selector = '', name = '') {

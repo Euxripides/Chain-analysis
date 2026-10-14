@@ -4,6 +4,12 @@ import { analyzeBytecode } from './bytecode.mjs';
 import { heimdall } from './external.mjs';
 import { applyFundsRules } from './rules/funds.mjs';
 import { applyLedgerRules } from './rules/ledger.mjs';
+import { analyzeSlither } from './adapters/python.mjs';
+import { analyzeVyperSource } from './source-vyper.mjs';
+import { applyDataflow } from './ir/dataflow.mjs';
+import { analyzeGigahorse } from './adapters/gigahorse.mjs';
+import { applyBusinessRules } from './rules/business.mjs';
+import { normalizeGigahorseDataflow } from './ir/gigahorse-dataflow.mjs';
 
 export function analyze(input) {
   if (!input?.snapshot || !/^0x(?:[0-9a-fA-F]{2}){1,49152}$/.test(input.bytecode || '')) throw new Error('INVALID_BYTECODE_INPUT');
@@ -13,24 +19,37 @@ export function analyze(input) {
     const original=JSON.stringify(input.source);
     result.sections.artifacts.push({artifact_id:id('source-provider',input.snapshot.code_hash),kind:'source_provider_document',filename:'source-provider.json',media_type:'application/json',text:original,sha256:hash(original)});
   }
-  if (input.source && (!input.engines || input.engines.includes('solc-ast'))) {
+  if (input.source && (!input.engines || input.engines.includes('solc-ast') || input.engines.includes('vyper-ast'))) {
     const sourceResult = emptyResult(input.snapshot);
-    try { analyzeSource(sourceResult, input.source, input.bytecode); for (const key of Object.keys(result.sections)) result.sections[key].push(...sourceResult.sections[key]); }
+    try {
+      if (input.source.stdJsonInput?.language === 'Vyper') analyzeVyperSource(sourceResult, input.source, input.bytecode);
+      else analyzeSource(sourceResult, input.source, input.bytecode);
+      for (const key of Object.keys(sourceResult.sections)) { result.sections[key] ||= []; result.sections[key].push(...sourceResult.sections[key]); }
+    }
     catch (error) {
-      result.sections.engines.push({ engine: 'solc-ast', status: 'failed', error_code: String(error.message).split(':')[0], error_message: String(error.message).slice(0, 500) });
+      result.sections.engines.push({ engine: input.source.stdJsonInput?.language === 'Vyper' ? 'vyper-ast' : 'solc-ast', status: 'failed', error_code: String(error.message).split(':')[0], error_message: String(error.message).slice(0, 500) });
       result.sections.coverage.push({ dimension: 'source', complete: false, reason: String(error.message).split(':')[0] });
       if (/MISMATCH|NOT_VERIFIED/.test(error.message)) result.sections.conflicts.push({ conflict_id: id(input.snapshot.code_hash, 'source_mismatch'), kind: 'source_mismatch', reason: String(error.message).split(':')[0] });
     }
   } else result.sections.coverage.push({ dimension: 'source', complete: false, reason: 'verified_source_unavailable' });
   analyzeBytecode(result, input.bytecode, input.signatures || []);
+  if (input.engines?.includes('slither')) {
+    if (input.source && result.sections.engines.some(e => ['solc-ast','vyper-ast'].includes(e.engine) && e.status === 'completed')) analyzeSlither(result, input.source);
+    else result.sections.engines.push({ engine: 'slither', status: 'skipped', reason: 'verified_recompiled_source_required' });
+  }
   if (input.engines?.includes('heimdall')) heimdall(result, input.bytecode);
+  if (input.engines?.includes('gigahorse')) analyzeGigahorse(result, input.bytecode);
+  normalizeGigahorseDataflow(result);
   result.sections.contracts.push({ ...input.snapshot, bytecode_bytes: (input.bytecode.length - 2) / 2,
-    method_count: result.sections.methods.length, source_status: result.sections.engines.some(e=>e.engine==='solc-ast'&&e.status==='completed') ? 'verified_and_recompiled' : 'bytecode_only' });
+    method_count: result.sections.methods.length, source_status: result.sections.engines.some(e=>['solc-ast','vyper-ast'].includes(e.engine)&&e.status==='completed') ? 'verified_and_recompiled' : 'bytecode_only' });
   result.sections.artifacts.push({ artifact_id: id('bytecode', input.snapshot.code_hash), kind: 'bytecode', filename: 'runtime-bytecode.hex', media_type: 'text/plain', text: input.bytecode, sha256: hash(input.bytecode) });
   result.metrics = { duration_ms: Math.round(performance.now() - started), peak_rss_bytes: process.resourceUsage().maxRSS * 1024,
     cpu_user_us: process.resourceUsage().userCPUTime, cpu_system_us: process.resourceUsage().systemCPUTime, input_bytes: Buffer.byteLength(JSON.stringify(input)) };
   applyLedgerRules(result);
+  if(input.snapshot.vm_family==='tron_tvm')for(const fund of result.sections.funds)if(fund.asset==='native')fund.unit='sun';
   finalize(result);
+  applyDataflow(result);
   applyFundsRules(result);
+  applyBusinessRules(result);
   return result;
 }

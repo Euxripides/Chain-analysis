@@ -29,6 +29,7 @@ type Budget struct {
 	TimeoutSeconds  int   `json:"timeout_seconds"`
 }
 type Request struct {
+	Program           *ProgramRequest `json:"program,omitempty"`
 	Chain             string          `json:"chain,omitempty"`
 	Address           string          `json:"address,omitempty"`
 	Block             json.RawMessage `json:"block,omitempty"`
@@ -103,7 +104,7 @@ func (q *Request) Defaults() {
 		q.IncludeSource = &v
 	}
 	if len(q.Engines) == 0 {
-		q.Engines = []string{"whatsabi", "sevm", "solc-ast", "heimdall"}
+		q.Engines = []string{"whatsabi", "sevm", "solc-ast", "heimdall", "slither", "gigahorse"}
 	}
 	sort.Strings(q.Engines)
 }
@@ -149,6 +150,9 @@ func (q Request) Validate() error {
 		return fmt.Errorf("selected transactions exceed max_transactions")
 	}
 	for _, v := range append(append([]string{}, q.TxHashes...), q.TxHash) {
+		if q.Program != nil {
+			continue
+		}
 		if v != "" && !CompleteHash.MatchString(v) {
 			return fmt.Errorf("complete EVM transaction hash required")
 		}
@@ -161,7 +165,7 @@ func (q Request) Validate() error {
 		}
 		seenTransactions[key] = true
 	}
-	engines := map[string]bool{"whatsabi": true, "sevm": true, "solc-ast": true, "heimdall": true}
+	engines := StructuralEngines
 	seen := map[string]bool{}
 	for _, e := range q.Engines {
 		if !engines[e] || seen[e] {
@@ -176,6 +180,9 @@ func (q Request) Validate() error {
 }
 
 type Snapshot struct {
+	VMFamily         string         `json:"vm_family,omitempty"`
+	Slot             *uint64        `json:"slot,omitempty"`
+	ProgramLoader    string         `json:"program_loader,omitempty"`
 	Chain            string         `json:"chain"`
 	ChainID          string         `json:"chain_id"`
 	BlockNumber      uint64         `json:"block_number"`
@@ -193,6 +200,7 @@ type Snapshot struct {
 	Proxy            map[string]any `json:"proxy,omitempty"`
 }
 type Input struct {
+	Program   json.RawMessage `json:"program,omitempty"`
 	Operation string          `json:"operation,omitempty"`
 	Witness   json.RawMessage `json:"witness,omitempty"`
 	Snapshot  Snapshot        `json:"snapshot"`
@@ -216,15 +224,16 @@ type Object struct {
 	Bytes  int64  `json:"byte_size"`
 }
 type Artifact struct {
-	ArtifactID string `json:"artifact_id"`
-	Kind       string `json:"kind"`
-	Filename   string `json:"filename"`
-	MediaType  string `json:"media_type"`
-	SHA256     string `json:"sha256"`
-	Bytes      int64  `json:"byte_size"`
-	ObjectKey  string `json:"object_key,omitempty"`
-	MethodID   string `json:"method_id,omitempty"`
-	Text       string `json:"text,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+	ArtifactID    string `json:"artifact_id"`
+	Kind          string `json:"kind"`
+	Filename      string `json:"filename"`
+	MediaType     string `json:"media_type"`
+	SHA256        string `json:"sha256"`
+	Bytes         int64  `json:"byte_size"`
+	ObjectKey     string `json:"object_key,omitempty"`
+	MethodID      string `json:"method_id,omitempty"`
+	Text          string `json:"text,omitempty"`
 }
 type Result struct {
 	Version     string                       `json:"version"`

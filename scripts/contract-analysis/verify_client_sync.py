@@ -1,11 +1,11 @@
-import json
+import json, os
 import pathlib
 import queue
 import subprocess
 import threading
 import time
 
-root = pathlib.Path(__file__).resolve().parents[2] / "acceptance/contract-analysis/release"
+root = pathlib.Path(__file__).resolve().parents[2] / os.environ.get("CONTRACT_QA_OUT", "acceptance/contract-analysis/release")
 exe = r'C:\Users\Euripides\AppData\Local\OpenAI\Codex\bin\2e5e00daee91c61d\codex.exe'
 proc = subprocess.Popen([exe, 'app-server', '--stdio'], stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -41,6 +41,7 @@ try:
             'title': 'MCP synchronization check', 'version': '1.0.0'},
             'capabilities': {'experimentalApi': True}})
     send({'jsonrpc': '2.0', 'method': 'initialized', 'params': {}})
+    request(11, "config/mcpServer/reload", {})
     result = request(2, 'mcpServerStatus/list', {'limit': 100})
     target = next((s for s in result.get('data', [])
                    if s['name'] == 'chain_data_platform'), None)
@@ -64,7 +65,7 @@ try:
     (root / 'mcp-sync-check.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps(summary, ensure_ascii=False))
-    assert summary["loaded_tools"] == 119 and not any(summary[k] for k in ["missing_tools","extra_tools","schema_mismatches","description_mismatches"])
+    assert summary["loaded_tools"] == 120 and not any(summary[k] for k in ["missing_tools","extra_tools","schema_mismatches","description_mismatches"])
 finally:
     proc.terminate()
     try:

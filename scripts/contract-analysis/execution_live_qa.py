@@ -2,7 +2,7 @@ import json
 from qa_support import ROOT,fixture_clients
 import os
 from live_api_qa import await_job,all_pages
-OUT=ROOT/'acceptance/contract-analysis';rows=[]
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis');rows=[]
 def check(name,ok,evidence=None):
  rows.append({'scenario':name,'status':'PASS' if ok else 'FAIL','evidence':evidence});(OUT/'execution-live-qa.json').write_text(json.dumps(rows,indent=2));print(name,rows[-1]['status'],flush=True)
  if not ok:raise AssertionError(name)

@@ -10,6 +10,16 @@ export function applyLedgerRules(result) {
   // rather than guessing that a variable named balances is a token balance.
   const getters = result.sections.methods.filter(m => m.verified_signature && m.signature === 'balanceOf(address)');
   const balanceIDs = new Set(result.sections.storage.filter(s => getters.some(m => m.method_id === s.method_id) && s.access === 'read' && /mapping.*address.*uint256/.test(s.variable_type || '')).map(s => s.state_id));
+  const ownerMethods=result.sections.methods.filter(m=>m.verified_signature&&m.signature==='ownerOf(uint256)'&&m.outputs?.length===1&&m.outputs[0].type==='address');
+  const ownershipReads=result.sections.storage.filter(s=>s.access==='read'&&ownerMethods.some(m=>m.method_id===s.method_id)&&/mapping\s*\(uint256\s*=>\s*address\)/.test(s.variable_type||''));
+  for(const write of result.sections.storage.filter(s=>s.access==='write'&&s.operation==='='&&ownershipReads.some(r=>r.state_id===s.state_id))) {
+    const method=result.sections.methods.find(m=>m.method_id===write.method_id);if(!method||method.entry_kind==='constructor')continue;
+    const key=write.storage_projection?.path?.findLast(p=>p.kind==='mapping');if(!key)continue;
+    const fund_id=id(write.storage_id,'ownership-write');result.sections.funds.push({fund_id,method_id:method.method_id,kind:'nft_ownership_assignment',asset:write.storage_address,
+      from_expression:'prestate ownership at '+write.key_expression,to_expression:write.value_expression,to_expression_id:write.value_expression_id,
+      token_id_expression:key.key_text,amount_expression:'1',unit:'nft_units',settlement:'static_ownership_storage_assignment',
+      ownership_storage_id:write.storage_id,conditions:write.conditions,evidence_ids:unique([...write.evidence_ids,...ownershipReads.filter(r=>r.state_id===write.state_id).flatMap(r=>r.evidence_ids)])});method.fund_ids.push(fund_id);
+  }
   if (!balanceIDs.size) return;
   for (const method of result.sections.methods) {
     const writes = result.sections.storage.filter(s => s.method_id === method.method_id && s.access === 'write' && balanceIDs.has(s.state_id));

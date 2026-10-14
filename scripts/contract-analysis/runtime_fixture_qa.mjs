@@ -9,7 +9,7 @@ const hash=bytes=>'0x'+Buffer.from(keccak_256(bytes)).toString('hex');
 const selector=sig=>hash(Buffer.from(sig)).slice(0,10);
 const word=v=>BigInt(v).toString(16).padStart(64,'0');
 const addressWord=v=>v.slice(2).padStart(64,'0');
-const out=new URL('../../acceptance/contract-analysis/runtime-fixtures/',import.meta.url);mkdirSync(out,{recursive:true});
+const out=new URL('../../'+(process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis')+'/runtime-fixtures/',import.meta.url);mkdirSync(out,{recursive:true});
 const image=readFileSync(new URL('../engine-image.txt',out),'utf8').trim();const checks=[];
 function check(name,ok,evidence){checks.push({scenario:name,status:ok?'PASS':'FAIL',evidence});writeFileSync(new URL('report.json',out),JSON.stringify(checks,null,2));console.log(name,ok?'PASS':'FAIL');if(!ok)throw new Error(name)}
 const binary=new URL('../../analysis-engines/bin/anvil',import.meta.url).pathname;
@@ -70,5 +70,28 @@ try{
   const tx=await invoke(kind,proxy,user,'put()',[],'0x3e7');const observed=await replayTx(kind+'-delegate',tx,proxy);const serialized=JSON.stringify(observed.witness.call_trace);check(kind+'-uses-implementation-code',serialized.includes('DELEGATECALL')&&serialized.toLowerCase().includes(ledger));
   const take=await invoke(kind,proxy,user,'take(uint256)',[word(500)]);check(kind+'-retains-proxy-owned-ledger',(await rpc('eth_getTransactionReceipt',[take])).status==='0x1');
  }
+ const rebased=await deploy('RebasedLedger');
+ await invoke('rebase-mint',rebased,admin,'mint(address,uint256)',[addressWord(user),word(amount*4n)]);
+ await invoke('rebase-index',rebased,admin,'rebase(uint256)',[word(2n*10n**18n)]);
+ check('rebase-computed-balance-exact',await balance(rebased,user)===amount*8n);
+ const rebasedBefore=await balance(rebased,user),rebasedRecipient=await balance(rebased,recipient),rebasedAmount=(amount/2n)*2n;
+ const rebaseTx=await invoke('rebase-transfer',rebased,user,'transfer(address,uint256)',[addressWord(recipient),word(rebasedAmount)]);
+ check('rebase-share-transfer-matches-both-balances',rebasedBefore-await balance(rebased,user)===rebasedAmount&&await balance(rebased,recipient)-rebasedRecipient===rebasedAmount);
+ await replayTx('rebase-share-transfer',rebaseTx,rebased);
+ const encoded=await deploy('EncodedTokenFlow',addressWord(token)+addressWord(recipient)+word(137));
+ await invoke('encoded-fund',token,admin,'mint(address,uint256)',[addressWord(encoded),word(amount)]);
+ const encodedBefore=await balance(token,recipient),encodedTx=await invoke('encoded-pay',encoded,user,'pay(uint256)',[word(amount)]);
+ check('encoded-library-actual-fee',await balance(token,recipient)-encodedBefore===amount*137n/10000n);
+ await replayTx('encoded-library-payment',encodedTx,encoded);
+ const code=await rpc('eth_getCode',[encoded,'latest']),block=await rpc('eth_getBlockByNumber',['latest',false]),source=structuredClone(rows.EncodedTokenFlow.fixture.source);
+ source.runtimeBytecode.onchainBytecode=code;
+ const staticInput={source,bytecode:code,snapshot:{chain:'ethereum',chain_id:'1',entry_address:encoded,code_address:encoded,storage_address:encoded,code_hash:hash(Buffer.from(code.slice(2),'hex')),block_number:Number(BigInt(block.number)),block_hash:block.hash},engines:['whatsabi','sevm','solc-ast','heimdall','slither','gigahorse']};
+ const analyzed=spawnSync('docker',['run','--rm','--pull','never','-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','65532:65532','--cpus','2','--memory','2g','--memory-swap','2g','--pids-limit','128','--tmpfs','/tmp:rw,nosuid,size=192m',image],{input:JSON.stringify(staticInput),encoding:'utf8',timeout:310000,maxBuffer:64<<20});
+ check('deployed-immutable-source-analysis-exit',analyzed.status===0,analyzed.stderr?.slice(-500));const model=JSON.parse(analyzed.stdout);writeFileSync(new URL('deployed-immutable-analysis.json',out),analyzed.stdout);
+ const pay=model.sections.methods.find(m=>m.signature==='pay(uint256)'),funds=model.sections.funds.filter(f=>f.method_id===pay?.method_id);
+ check('deployed-immutable-values-bind-actual-formula',funds.length===1&&funds[0].expanded_asset_expression===token&&funds[0].expanded_to_expression===recipient&&funds[0].expanded_amount_expression==='amount*137/10000',funds);
+ const nft=await deploy('OwnershipLedger'),tokenId=9007199254740993123456789n,nftTx=await invoke('ownership-assign',nft,user,'assign(uint256,address)',[word(tokenId),addressWord(recipient)]);
+ const observedOwner=await rpc('eth_call',[{to:nft,data:selector('ownerOf(uint256)')+word(tokenId)},'latest']);
+ check('actual-nft-owner-slot-matches-recipient',observedOwner.slice(-40)===recipient.slice(2));await replayTx('ownership-assignment',nftTx,nft);
  console.log('RUNTIME_FIXTURE_QA_PASS',checks.length);
 }finally{node.kill('SIGKILL');await once(node,'exit').catch(()=>{});}

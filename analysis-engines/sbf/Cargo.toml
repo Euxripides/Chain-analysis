@@ -1,0 +1,13 @@
+[package]
+name = "contract-sbf-analysis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+solana-sbpf = { git = "https://github.com/anza-xyz/sbpf", rev = "c2b66f1080eeec68a17747740d2d0ebee208a0a8", default-features = false }
+serde_json = "=1.0.150"
+base64 = "=0.22.1"
+
+[profile.release]
+debug = 0
+strip = true

@@ -1,5 +1,7 @@
-import solc from 'solc';
+import solc from 'solc-0.8.30';
+import { createRequire } from 'node:module';
 import { hash } from '../model.mjs';
+const {keccak_256}=createRequire(import.meta.url)('@noble/hashes/sha3.js');
 export const source = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 interface IERC20 { function transfer(address,uint256) external returns(bool); function transferFrom(address,address,uint256) external returns(bool); }
@@ -27,6 +29,58 @@ contract NativeLedger {
  function take(uint256 amount) external { require(balances[msg.sender]>=amount); balances[msg.sender]-=amount; (bool ok,)=msg.sender.call{value:amount}(""); require(ok); }
 }
 contract Misleading { uint256 x; function withdraw(uint256 amount) external { x=amount; } }
+contract DataflowPaths {
+ function reassigned(address payable target,uint256 amount) external {uint256 net=amount/2;net=net/3;target.transfer(net);}
+ function conditional(address payable target,uint256 amount,bool change) external {uint256 net=amount;if(change){net=amount/2;}target.transfer(net);}
+ function compound(address payable target,uint256 amount) external {uint256 net=amount;net-=1;target.transfer(net);}
+}
+contract PackedLedger {
+ struct Credit { uint128 reserved; uint128 amount; }
+ mapping(address=>mapping(uint256=>Credit)) private credit;
+ function balanceOf(address holder) external view returns(uint256){return credit[holder][7].amount;}
+ function computed(address holder) external view returns(uint256){return credit[holder][7].amount*2;}
+}
+contract RebasedLedger {
+ mapping(address=>uint256) private units;uint256 public index=1e18;
+ event Transfer(address indexed from,address indexed to,uint256 amount);
+ function balanceOf(address holder) external view returns(uint256){return units[holder]*index/1e18;}
+ function mint(address holder,uint256 amount) external {units[holder]+=amount*1e18/index;emit Transfer(address(0),holder,amount);}
+ function transfer(address recipient,uint256 amount) external returns(bool){uint256 scaled=amount*1e18/index;units[msg.sender]-=scaled;units[recipient]+=scaled;emit Transfer(msg.sender,recipient,amount);return true;}
+ function rebase(uint256 value) external {index=value;}
+}
+interface Collectible {function transferFrom(address from,address to,uint256 tokenId) external;}
+contract OwnershipLedger {
+ mapping(uint256=>address) private owners;
+ function ownerOf(uint256 tokenId) external view returns(address){return owners[tokenId];}
+ function assign(uint256 tokenId,address recipient) external {owners[tokenId]=recipient;}
+ function forward(Collectible asset,address from,address recipient,uint256 tokenId) external {asset.transferFrom(from,recipient,tokenId);}
+}
+library ArithmeticHelper {
+ function fee(uint256 quantity,uint16 bps) internal pure returns(uint256){return quantity*bps/10000;}
+ function increase(uint256 quantity) internal pure returns(uint256){return quantity+1;}
+}
+contract HelperFlow {
+ using ArithmeticHelper for uint256;
+ address private controller;uint16 private rate;
+ function sender() internal view returns(address){return msg.sender;}
+ function authority() internal view returns(address){return controller;}
+ function configure(uint16 value) external {require(sender()==authority());rate=value;}
+ function pay(address payable target,uint256 amount) external {target.transfer(amount-ArithmeticHelper.fee(amount,rate));}
+ function wrapped(address payable target,uint256 amount) external {unchecked{target.transfer((amount+1).increase()*2);}}
+}
+library SafeMini {
+ function safeTransfer(IERC20 token,address to,uint256 amount) internal {_invoke(token,abi.encodeCall(token.transfer,(to,amount)));}
+ function _invoke(IERC20 token,bytes memory data) private {
+   assembly {let ok:=call(gas(),token,0,add(data,32),mload(data),0,0) if iszero(ok){revert(0,0)}}
+ }
+}
+contract EncodedTokenFlow {
+ using SafeMini for IERC20;
+ IERC20 public immutable asset;address public immutable treasury;uint256 public immutable fee;
+ constructor(IERC20 token,address recipient,uint256 bps){asset=token;treasury=recipient;fee=bps;}
+ function pay(uint256 amount) external {asset.safeTransfer(treasury,amount*fee/10000);}
+ function encodeOnly(address recipient,uint256 amount) external view returns(bytes memory){return abi.encodeCall(asset.transfer,(recipient,amount));}
+}
 contract LedgerToken {
  mapping(address=>uint256) private credit; uint256 public supply;
  event Transfer(address indexed from,address indexed to,uint256 amount);
@@ -94,7 +148,7 @@ export function compileFixture(name = 'AnalystVault', optimizer = false, evmVers
   const compiled = output.contracts['Fixtures.sol'][name];
   const bytecode = '0x' + compiled.evm.deployedBytecode.object;
   return { bytecode, snapshot: { chain: 'ethereum', chain_id: '1', block_number: 1, block_hash: '0x' + '1'.repeat(64),
-    code_hash: hash(bytecode), code_address: '0x' + '2'.repeat(40), storage_address: '0x' + '2'.repeat(40), entry_address: '0x' + '2'.repeat(40) },
+    code_hash: '0x'+Buffer.from(keccak_256(Buffer.from(bytecode.slice(2),'hex'))).toString('hex'), code_address: '0x' + '2'.repeat(40), storage_address: '0x' + '2'.repeat(40), entry_address: '0x' + '2'.repeat(40) },
     source: { stdJsonInput: input, compilation: { compilerVersion: solc.version(), fullyQualifiedName: 'Fixtures.sol:' + name },
       runtimeMatch: 'exact_match', match: 'exact_match', runtimeBytecode: { onchainBytecode: bytecode, recompiledBytecode: bytecode },
       abi: compiled.abi, storageLayout: compiled.storageLayout }, compiled, output };
