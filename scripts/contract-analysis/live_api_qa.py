@@ -77,7 +77,7 @@ def main():
     mids=[m['method_id'] for m in sections['methods']]
     check('expanded_result_sections_saved',all(sections.get(s) for s in ['source_verification','method_details','operating_flows','dataflow','ir','ir_dataflow','ir_effects','control_flow']))
     check('six_default_engines_actually_ran',all(any(e['engine']==name and e['status'] in ['completed','partial'] for e in sections['engines']) for name in ['whatsabi','sevm','solc-ast','heimdall','slither','gigahorse']),sections['engines'])
-    check('aggregate_rule_version_matches_runtime',job['metadata']['rule_version']=='funds-semantics-2')
+    check('aggregate_rule_version_matches_runtime',job['metadata']['rule_version']==capabilities.get('semantic_rules_version','funds-semantics-2'))
     check('unique_method_identity',len(mids)==len(set(mids)))
     withdraw=next(m for m in sections['methods'] if m['signature']=='withdraw(uint256)' and m['verified_signature'])
     detail=investigator.must('/api/v2/contract-analyses/'+analysis_id+'/methods/'+withdraw['method_id'])

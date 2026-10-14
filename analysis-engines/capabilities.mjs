@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { emptyResult } from './model.mjs';
+import { emptyResult, RULE_VERSION } from './model.mjs';
 import { pythonOperation } from './adapters/python.mjs';
 
 export function capabilities(snapshot = {}) {
@@ -16,6 +16,12 @@ export function capabilities(snapshot = {}) {
     { vm_family: 'solana_sbf', code_analysis: 'not_certified', transaction_analysis: 'not_certified', exact_historical_replay: 'not_certified' },
   ];
   result.sections.capabilities = [{ schema_version: 'contract-capabilities-v1', programs,
+    semantic_rules_version:RULE_VERSION,
+    source_return_analysis:{language:'Solidity',scope:'bounded_scalar_readonly_return_paths',max_paths:32,
+      local_assignments:true,named_returns:true,early_returns:true,conditional_returns:true,
+      unsupported:['loops','assembly','storage_aliases','stateful_returns','tuple_returns','modifiers','dynamic_calls'],all_paths_proved:false},
+    funds_control_analysis:{configuration_impacts:['amount_formula','recipient','sender','asset_contract','execution_condition','caller_authorization'],
+      address_observation:'verified_layout_and_pinned_direct_slot',role_membership_enumerated:false,authorization_sufficiency_verified:false},
     engines: [{ name: 'solc-ast', status: 'available' }, { name: 'whatsabi', status: 'available' },
       { name: 'sevm', status: 'available' }, { name: 'heimdall', status: existsSync(process.env.HEIMDALL_BINARY || '/usr/local/bin/heimdall') ? 'available' : 'unavailable' },
       { name: 'slither', status: python['slither-analyzer'] ? 'available' : 'unavailable', version: python['slither-analyzer'] || null },

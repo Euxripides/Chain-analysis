@@ -1,0 +1,117 @@
+{
+  "status": "QA_PASS",
+  "engine_digest": "sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6",
+  "source_unit": {
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "authority-live-qa.json": {
+      "passed": 10,
+      "failed": 0,
+      "sha256": "bcdf8fc06172749c377ade064f5b3679f7847c90ccf492f6b6f41bbf279d089e"
+    },
+    "live-api-qa.json": {
+      "passed": 58,
+      "failed": 0,
+      "sha256": "67ce9958e28e5d2742a54a506e014a772b9b1fe9ced4a9d3d7ce175eb4a556a0"
+    },
+    "mcp-live-qa.json": {
+      "passed": 12,
+      "failed": 0,
+      "sha256": "fbf34e87b7aade7d4163262a7a90f6dd9d4bbea5c6ef87de43b50792931fc4a9"
+    },
+    "execution-live-qa.json": {
+      "passed": 17,
+      "failed": 0,
+      "sha256": "1331113d9a4c7ae8cd751b9a2aedebb807f3b00b5ee054de3ead3ace0adf4daa"
+    },
+    "browser/report.json": {
+      "passed": 68,
+      "failed": 0,
+      "sha256": "e3cd7c1514472c8e541afef5ba2e0edac2bccd2c9fcd66559a7707ffd85e80cf"
+    },
+    "authority-browser/report.json": {
+      "passed": 18,
+      "failed": 0,
+      "sha256": "35e31c86e38f827145bcbcc6bc3ef5c6dd0c9601f868f674eb5ed19067b832d7"
+    },
+    "lifecycle-qa.json": {
+      "passed": 21,
+      "failed": 0,
+      "sha256": "74eb4c97d39d70eb3bbd73b217ada705f0f60d0103102681b01116155512506b"
+    },
+    "resource-fault-qa.json": {
+      "passed": 4,
+      "failed": 0,
+      "sha256": "45961a953a91624a27330321bb07bbb97782e109494dccf36facf05c3ce1b517"
+    },
+    "runtime-fixtures/report.json": {
+      "passed": 68,
+      "failed": 0,
+      "sha256": "152402d5859ad3d0575d19feeca17bf235b37e382ad5b4e49877087844557bd0"
+    },
+    "gold/report.json": {
+      "passed": 168,
+      "failed": 0,
+      "image": "sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6",
+      "runs": 29
+    },
+    "return-runtime/report.json": {
+      "passed": 51,
+      "failed": 0,
+      "image": "sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6",
+      "runs": 0
+    }
+  },
+  "usage": {
+    "start_utc": "2026-10-14T05:33:05.139606+00:00",
+    "database": "contract_analysis_qa_20261014",
+    "limits": {
+      "http_requests": 2000,
+      "credits": 1000000,
+      "estimated_usd": 10
+    },
+    "actual": {
+      "http_requests": 188,
+      "credits": 37600,
+      "estimated_usd": 0.003759994
+    }
+  },
+  "retained_lifecycle_resource_image": "sha256:f5f2d5b17a26128378a0fec23430483dfc4eed59a968b9d1fdb3474c483b95c3",
+  "lifecycle_resource_scope": "same backend binaries; final image changes only verified NFT ledger classification; final API, execution, source, runtime, gold and authority browser rerun",
+  "build_gates": {
+    "engine-unit": {
+      "status": "PASS",
+      "log_sha256": "6c0fc9e0567f0e6936d117de66f957f9064336cd34e46dc7d8cd6df7a160a56d"
+    },
+    "go-test": {
+      "status": "PASS",
+      "log_sha256": "77fd0b4da48c14cb5b70d21934dc357ae0f444b11db50b5f10fba1bcbb14228e"
+    },
+    "qa-setup": {
+      "status": "PASS",
+      "log_sha256": "d98d2d7f91b193e66128f9f36260c597b0243c138191cf59ca1ce30aca089dc0"
+    },
+    "frontend-contract": {
+      "status": "PASS",
+      "log_sha256": "acc952b23c4058ca636a20e37aa8a656bd4f13ff09e47178bcccb9fe4bf3ebfe"
+    },
+    "frontend-typecheck-all": {
+      "status": "PASS",
+      "log_sha256": "1e7364545b505adc6ef70012ce70f69a90a7eb05ebb0a0886a63cceb701bcb27"
+    },
+    "contract_baseline": {
+      "commit": "32188168aa0ca92eb7087f3d9d3f2d5978895305",
+      "routes": 33,
+      "permission_mappings": 23,
+      "api_literals": 78
+    },
+    "frontend-render-all": {
+      "status": "PASS",
+      "log_sha256": "aa6085c30648536e2e55bcaf5dacfebdd045f2e4279c0d15ef2c6cfe860afbb8",
+      "admin_assets": "unchanged deployed baseline copied for regression"
+    }
+  }
+}

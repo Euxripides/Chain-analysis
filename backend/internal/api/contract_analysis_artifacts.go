@@ -171,7 +171,7 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				report.WriteString("\n")
 			}
 		}
-		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"calls", "外部调用"}} {
+		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}} {
 			items := []map[string]any{}
 			for _, row := range result.Sections[part.section] {
 				item := rowMap(row)
@@ -187,6 +187,12 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				switch part.section {
 				case "permissions":
 					fmt.Fprintf(&report, "- %s\n", contractReportField(item, "expanded_condition", "condition"))
+					var constraints []map[string]any
+					if nextDecode(ca.Row(item["caller_constraints"]), &constraints) == nil {
+						for _, c := range constraints {
+							fmt.Fprintf(&report, "  调用条件：%s 等于 %s；已取得地址 %s；条件范围 %s；状态 %s。\n", c["principal"], c["target_expression"], contractReportField(c, "snapshot_target_address"), c["condition_scope"], contractReportField(c, "snapshot_resolution_status", "target_value_resolution"))
+						}
+					}
 				case "steps":
 					fmt.Fprintf(&report, "- %s\n", item["text"])
 				case "funds":
@@ -199,6 +205,14 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					if gaps := stringList(item["unresolved"]); len(gaps) > 0 {
 						fmt.Fprintf(&report, "  待解析内容：%s。\n", strings.Join(gaps, "，"))
 					}
+					var paths []map[string]any
+					if nextDecode(ca.Row(item["successful_return_paths"]), &paths) == nil {
+						for _, p := range paths {
+							fmt.Fprintf(&report, "  返回路径：%s；表达式 %s。\n", strings.Join(stringList(p["conditions"]), "，"), p["value"])
+						}
+					}
+				case "control_effects":
+					fmt.Fprintf(&report, "- %s；修改 %s；新值 %s；影响类型 %s；受影响方法 %s。\n", item["interpretation"], item["configuration_key"], item["new_value_expression"], strings.Join(stringList(item["impact_types"]), "，"), strings.Join(stringList(item["affected_method_ids"]), "，"))
 				case "storage":
 					fmt.Fprintf(&report, "- %s %s；slot %v；表达式 %s。\n", item["access"], item["variable"], item["slot"], item["key_expression"])
 					if item["snapshot_value"] != nil {

@@ -1,4 +1,5 @@
 import { id, unique } from '../model.mjs';
+import { applyAuthorityRules } from './authority.mjs';
 
 // Business descriptions are assembled from represented operations. Each effect
 // keeps its own path conditions; branch guards never become universal claims.
@@ -37,7 +38,7 @@ export function applyBusinessRules(result) {
     const affected=unique(dependent.map(s=>s.method_id)).filter(mid=>sections.funds.some(f=>f.method_id===mid));
     if(!affected.length)continue;
     const author=methods.get(write.method_id),guards=sections.permissions.filter(g=>g.method_id===write.method_id&&(write.conditions||[]).includes(g.condition));
-    sections.control_effects.push({control_effect_id:id(write.storage_id,'funds-control'),method_id:write.method_id,state_id:write.state_id,
+    sections.control_effects.push({control_effect_id:id(write.storage_id,'funds-control'),write_storage_id:write.storage_id,method_id:write.method_id,state_id:write.state_id,
       configuration_key:write.key_expression,new_value_expression:write.value_expression,operation:write.operation,
       conditions:write.conditions||[],guard_ids:guards.map(g=>g.guard_id),affected_method_ids:affected,
       interpretation:'此方法修改的状态被资金方法读取',caller_condition_basis:guards.some(g=>/msg\.sender|tx\.origin|ecrecover/.test(g.expanded_condition||g.condition))?'represented_caller_condition':'caller_authorization_not_established',
@@ -61,4 +62,5 @@ export function applyBusinessRules(result) {
       economic_model_verified:false,deployed_protocol_identity_verified:false,
       evidence_ids:unique(matched.flatMap(m=>m.evidence_ids)),scope:'interface_and_analyzed_implementation_operations'});
   }
+  applyAuthorityRules(result);
 }

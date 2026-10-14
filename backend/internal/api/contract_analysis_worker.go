@@ -353,6 +353,7 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	}
 	if q.Program == nil {
 		s.contractReadState(ctx, q, &result)
+		contractEnrichAuthoritySnapshot(&result)
 	}
 	manifest, e := s.contractCacheResult(ctx, result)
 	if e != nil {

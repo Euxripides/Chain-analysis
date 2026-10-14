@@ -1,0 +1,6 @@
+FROM platform-contract-coverage:20261014@sha256:9e9f267fff20a1d9d8439197d1e685c9c3fe8e7f4178f0226880de320a535dec
+USER root
+COPY source.mjs model.mjs capabilities.mjs /engine/
+COPY ir /engine/ir
+COPY rules /engine/rules
+USER 65532:65532

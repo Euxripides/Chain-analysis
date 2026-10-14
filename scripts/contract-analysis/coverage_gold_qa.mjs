@@ -3,7 +3,7 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {resolve,dirname,relative} from 'node:path';
 import {compileFixture} from '../../analysis-engines/test/fixtures.mjs';
-const root=resolve(new URL('../..',import.meta.url).pathname),out=resolve(root,'acceptance/contract-analysis-coverage/gold');mkdirSync(out,{recursive:true});
+const root=resolve(new URL('../..',import.meta.url).pathname),out=resolve(root,process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis-coverage','gold');mkdirSync(out,{recursive:true});
 const require=createRequire(new URL('../../analysis-engines/package.json',import.meta.url)),{keccak_256}=require('@noble/hashes/sha3.js');
 const codeHash=code=>'0x'+Buffer.from(keccak_256(Buffer.from(code.slice(2),'hex'))).toString('hex');
 const image=readFileSync(resolve(out,'../engine-image.txt'),'utf8').trim(),checks=[],runs=[];

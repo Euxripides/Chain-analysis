@@ -1,5 +1,19 @@
 import { id, unique } from '../model.mjs';
 export function applyLedgerRules(result) {
+  const expressions=new Map(result.sections.expressions.map(e=>[e.expression_id,e]));
+  const peel=(key,seen=new Set())=>{if(seen.has(key))return null;seen.add(key);const e=expressions.get(key);if(!e||e.unresolved_return_value)return null;
+    if(e.binding_expression_id)return peel(e.binding_expression_id,seen);
+    if(e.symbolic_format==='return_cases'&&e.paths?.length===1)return peel(e.paths[0].expression_id,seen);
+    return e;
+  };
+  const normalized=text=>(text||'').replace(/\s/g,'');
+  const delta=write=>{
+    if(['+=','-='].includes(write.operation))return {operation:write.operation[0],value:peel(write.value_expression_id)};
+    if(write.operation!=='=')return null;
+    const value=peel(write.value_expression_id);if(!value||!['+','-'].includes(value.op)||value.operands?.length!==2)return null;
+    const left=peel(value.operands[0]),right=peel(value.operands[1]);
+    return normalized(left?.text)===normalized(write.key_expression)?{operation:value.op,value:right}:null;
+  };
   for(const method of result.sections.methods) {
     if(method.state_mutability!=='payable'||!['external','public'].includes(method.visibility)||method.entry_kind==='constructor'||method.dispatch_role==='overridden_source_definition')continue;
     const fund_id=id(method.method_id,'callvalue-context');
@@ -20,22 +34,27 @@ export function applyLedgerRules(result) {
       token_id_expression:key.key_text,amount_expression:'1',unit:'nft_units',settlement:'static_ownership_storage_assignment',
       ownership_storage_id:write.storage_id,conditions:write.conditions,evidence_ids:unique([...write.evidence_ids,...ownershipReads.filter(r=>r.state_id===write.state_id).flatMap(r=>r.evidence_ids)])});method.fund_ids.push(fund_id);
   }
-  if (!balanceIDs.size) return;
+  // An address balance counter accompanying a verified ownership ledger counts
+  // NFTs. A token ID of 1 must not turn a matching counter increment into ERC20.
+  if (!balanceIDs.size || ownershipReads.length) return;
   for (const method of result.sections.methods) {
     const writes = result.sections.storage.filter(s => s.method_id === method.method_id && s.access === 'write' && balanceIDs.has(s.state_id));
     const events = result.sections.steps.filter(s => s.method_id === method.method_id && s.kind === 'event' && s.event_signature === 'Transfer(address,address,uint256)' && JSON.stringify(s.event_indexed) === '[true,true,false]');
     for (const event of events) {
       const [from,to,amount] = event.event_arguments;
-      const compatible = writes.filter(w => w.value_expression === amount);
+      const eventAmount=peel(event.event_argument_ids?.[2]);
+      const compatible = writes.filter(w => {const d=delta(w);return d?.value&&normalized(d.value.text)===normalized(eventAmount?.text||amount)});
       if (!compatible.length) continue;
       let kind = 'token_ledger_effect';
-      if (/^address\(0\)$|^0x0{40}$/.test(from) && compatible.some(w => w.operation === '+=' && w.key_expression.includes(`[${to}]`))) kind = 'mint';
-      if (/^address\(0\)$|^0x0{40}$/.test(to) && compatible.some(w => w.operation === '-=' && w.key_expression.includes(`[${from}]`))) kind = 'burn';
+      if (/^address\(0\)$|^0x0{40}$/.test(from) && compatible.some(w => delta(w).operation === '+' && normalized(w.key_expression).includes(`[${normalized(to)}]`))) kind = 'mint';
+      if (/^address\(0\)$|^0x0{40}$/.test(to) && compatible.some(w => delta(w).operation === '-' && normalized(w.key_expression).includes(`[${normalized(from)}]`))) kind = 'burn';
       const fund_id = id(method.method_id,event.step_id,'ledger');
       const fund={fund_id,method_id:method.method_id,kind,asset:result.snapshot.storage_address,
         from_expression:from,to_expression:to,amount_expression:amount,amount_expression_id:event.event_argument_ids?.[2],
+        from_expression_id:event.event_argument_ids?.[0],to_expression_id:event.event_argument_ids?.[1],
         unit:'token_raw',settlement:'static_ledger_and_event',conditions:event.conditions,
-        ledger_effects:compatible.map(w=>({storage_id:w.storage_id,key_expression:w.key_expression,operation:w.operation,value_expression:w.value_expression,conditions:w.conditions})),
+        ledger_effects:compatible.map(w=>({storage_id:w.storage_id,key_expression:w.key_expression,operation:w.operation,value_expression:w.value_expression,conditions:w.conditions,
+          delta_operation:delta(w).operation,delta_expression:delta(w).value.text,delta_expression_id:delta(w).value.expression_id})),
         evidence_ids:unique([...event.evidence_ids,...compatible.flatMap(w=>w.evidence_ids)])};
       result.sections.funds.push(fund);method.fund_ids.push(fund_id);
     }

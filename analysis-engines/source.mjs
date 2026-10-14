@@ -3,6 +3,7 @@ import { hash, id, unique, makeMethod, evidence, claim } from './model.mjs';
 import { legacyLayout } from './layout.mjs';
 import { numericLiteral } from './literals.mjs';
 import { verifySolidityRuntime } from './source-match.mjs';
+import { summarizeInternalReturns } from './ir/internal-returns.mjs';
 const require = createRequire(import.meta.url);
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
 const compilationCache=new Map();let cachedBytes=0;
@@ -135,6 +136,18 @@ export function analyzeSource(result, source, bytecode) {
     methodByAST.set(fn.id, method);
   }
   let expressionNumber = 0;
+  let syntheticNumber = 0;
+  const synthetic = (method,node,format,operands,context,extra={}) => {
+    const expression_id=id(method.method_id,node.id,context.path,'return-model',syntheticNumber++);
+    const type=extra.type||typeOf(node),integer=/^(u?int)(\d*)$/.exec(type);
+    result.sections.expressions.push({expression_id,method_id:method.method_id,op:'InternalReturnModel',symbolic_format:format,
+      text:sourceText(node),operands,path:context.path,conditions:[...(context.conditions||[])],
+      width:integer?Number(integer[2]||256):null,signed:integer?integer[1]==='int':null,type,
+      arithmetic:context.unchecked||Number(source.compilation.compilerVersion.split('.')[1])<8?'wrap':'checked',
+      evidence_ids:[getEvidence(method,node)],...extra});
+    if (++expressionNumber>50000) throw new Error('EXPRESSION_BUDGET_EXCEEDED');
+    return expression_id;
+  };
   const expression = (method, node, context = {}) => {
     if (!node) return null;
     const type = typeOf(node), integer = /\b(u?int)(\d*)\b/.exec(type);
@@ -158,13 +171,12 @@ export function analyzeSource(result, source, bytecode) {
       const target=nodes.get(node.expression?.referencedDeclaration);
       const {internal,args}=internalArguments(target,node.expression,node.arguments||[]);
       if(internal) {
-        const returns=target.body.statements||[],stack=context.return_stack||[];
-        if(returns.length===1&&returns[0].nodeType==='Return'&&returns[0].expression&&stack.length<12&&!stack.includes(target.id)) {
-          row.binding_expression_id=expression(method,returns[0].expression,{...context,unchecked:false,path:context.path+'/return:'+node.id,
-            return_stack:[...stack,target.id],parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((target.parameters?.parameters||[]).map((p,i)=>[p.id,args[i]]))},
-            parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((target.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,args[i],context)]))}});
+        try {
+          const model=summarizeInternalReturns({target,call:node,context,args,nodes,typeOf,
+            build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
+          row.binding_expression_id=model.expression_id;row.internal_return_model=model;
           row.binding_kind='function_return';row.operands.push(row.binding_expression_id);
-        } else row.unresolved_return_value='INTERNAL_FUNCTION_RETURN_REQUIRES_CONTROL_FLOW';
+        } catch(error) { row.unresolved_return_value=String(error.message).startsWith('INTERNAL_RETURN_')?String(error.message):'INTERNAL_FUNCTION_RETURN_REQUIRES_CONTROL_FLOW'; }
       } else if(target?.nodeType==='FunctionDefinition')row.unresolved_return_value='EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION';
     }
     if (node.nodeType === 'Identifier') {
@@ -192,7 +204,7 @@ export function analyzeSource(result, source, bytecode) {
     const state_id = id(result.snapshot.code_hash, result.snapshot.storage_address, 'state', base);
     const accessText=node.nodeType==='Identifier'?node.name:sourceText(node);
     const baseOnly=accessText!==variable.name||/^(mapping|struct)/.test(typeOf(variable))||typeOf(variable).includes('[');
-    const row = { storage_id, state_id, method_id: method.method_id, variable: variable.name,
+    const row = { storage_id, state_id, state_ast_id:base, method_id: method.method_id, variable: variable.name,
       code_address: result.snapshot.code_address, storage_address: result.snapshot.storage_address,
       access, slot: slot?.slot ?? null, offset: slot?.offset ?? null, type: typeOf(node), variable_type: typeOf(variable),
       slot_role:baseOnly?'layout_base':'direct_slot',key_expression: accessText, key_expression_id: expression(method, node, context),
@@ -246,10 +258,13 @@ export function analyzeSource(result, source, bytecode) {
         result.sections.flows.push({ edge_id: id(callStep.step_id, 'internal'), edge_type: 'calls', from: method.method_id, to: called.method_id, evidence_ids: callStep.evidence_ids });
         if (context.stack.length < 12 && !context.stack.includes(targetNode.id)) {
           if((targetNode.parameters?.parameters||[]).some(p=>p.storageLocation==='storage'))method.completeness.unresolved.push({code:'LIBRARY_STORAGE_REFERENCE_REQUIRES_ALIAS_ANALYSIS',ast_id:node.id});
-          analyzeBlock(method, targetNode.body, { ...context, unchecked:false,function_frame:targetNode.id, path: `${context.path}/call:${node.id}`, stack: [...context.stack, targetNode.id],
+          const callContext={ ...context, conditions:[...context.conditions],unchecked:false,function_frame:targetNode.id, path: `${context.path}/call:${node.id}`, stack: [...context.stack, targetNode.id],
             parameter_bindings:Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,sourceText(internal.args[i])])),
             parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,internal.args[i]]))},
-            parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,internal.args[i],context)]))} });
+            parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,internal.args[i],context)]))} };
+          analyzeBlock(method,targetNode.body,callContext);
+          let branched=false;visit(targetNode.body,n=>{if(['IfStatement','ForStatement','WhileStatement','DoWhileStatement','TryStatement'].includes(n.nodeType))branched=true});
+          if(!branched)context.conditions.push(...callContext.conditions.filter(c=>!context.conditions.includes(c)));
         } else method.completeness.unresolved.push({ code: 'RECURSIVE_OR_DEEP_INTERNAL_CALL', ast_id: node.id });
       }
       return;
