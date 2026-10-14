@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,7 +38,8 @@ func main() {
 	// no handler and no readiness check; that is exactly what the standby negative
 	// calibration asserts. API_STARTUP_FAIL_INTERRUPTED_EXPORTS=0 disables only the
 	// export reconciliation, for a normal instance started while exports are quiet.
-	standby := os.Getenv("API_STANDBY_STARTUP") == "1"
+	featureOnly := os.Getenv("API_FEATURE_ONLY") == "1"
+	standby := os.Getenv("API_STANDBY_STARTUP") == "1" || featureOnly
 	switch {
 	case standby:
 		log.Warn("standby startup: skipping interrupted-export reconciliation and background loops")
@@ -70,9 +72,11 @@ func main() {
 		// 工作流 E：dRPC 后台管理（运行时路由注册表 / 分类密钥 / 管理同步 / dRPC 客户端）。
 		Routes: infra.Routes, Secrets: infra.Secrets, DRPCManagement: infra.DRPCManagement, DRPC: infra.DRPC,
 	})
-	srv.StartForwarder()
-	// 预生成产物的过期清理（投机产物，过一小时没人认领就连对象一起删）。
-	srv.StartPrefetchGC(runCtx)
+	if !featureOnly {
+		srv.StartForwarder()
+		// 预生成产物的过期清理（投机产物，过一小时没人认领就连对象一起删）。
+		srv.StartPrefetchGC(runCtx)
+	}
 	if !standby {
 		srv.StartProviderCenterSync(runCtx)
 	}
@@ -81,7 +85,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:              ":" + itoa(cfg.HTTPPort),
+		Addr:              net.JoinHostPort(os.Getenv("API_HTTP_BIND_HOST"), itoa(cfg.HTTPPort)),
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

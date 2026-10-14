@@ -79,6 +79,7 @@ const (
 	PurposeTokenMetadata          = "token_metadata"
 	PurposeBalance                = "balance"
 	PurposeContractClassification = "contract_classification"
+	PurposeContractAnalysis       = "contract_analysis"
 	PurposeTransactionVerify      = "transaction_verify"
 	PurposeReceipt                = "receipt"
 	PurposeLogsRepair             = "logs_repair"
@@ -91,7 +92,7 @@ const (
 
 var validPurposes = map[string]bool{
 	PurposeChainHead: true, PurposeTokenMetadata: true, PurposeBalance: true,
-	PurposeContractClassification: true, PurposeTransactionVerify: true, PurposeReceipt: true,
+	PurposeContractClassification: true, PurposeContractAnalysis: true, PurposeTransactionVerify: true, PurposeReceipt: true,
 	PurposeLogsRepair: true, PurposeTrace: true, PurposeDebugTrace: true,
 	PurposeInvestigation: true, PurposeAdmin: true, PurposeCanary: true,
 }

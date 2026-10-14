@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contractAnalysisInputShape, validateContractTool } from "./contract-analysis.js";
 import type { ToolDefinition } from "./batch.js";
 import { EVM_CHAIN_VALUES } from "./chains.js";
 
@@ -31,6 +32,7 @@ const descriptions:Record<string,string>={
 };
 const operationNames=Object.keys(readShape) as [string,...string[]];
 const choices=operationNames.map(name=>z.object({operation:z.literal(name),arguments:z.object(readShape[name]).strict(),idempotency_key:z.string().max(128).optional()}).strict());
+choices.push(z.object({operation:z.literal("analyze_contract"),arguments:z.object(contractAnalysisInputShape).strict(),idempotency_key:z.string().max(128).optional()}).strict());
 const rule={chain,address,token_contract:address.optional(),spenders:z.array(address).max(200).optional(),name:z.string().min(1).max(400).refine(v=>Array.from(v).length<=200,"name must contain at most 200 Unicode characters"),rule_type:z.enum(["balance_change","allowance_change","control_change"]),interval_seconds:z.number().int().min(60).max(86400).default(300),confirmations:integer.min(2).max(1000).default(12),state:z.enum(["active","paused","disabled"]).default("paused")};
 export const nextInvestigationTools:ToolDefinition[]=[
  tool("get_investigation_capabilities","Inspect installed investigation operations, EVM/bridge scope, exact balance sources, worker/record/page budgets and known limitations.",{chain}),
@@ -50,7 +52,7 @@ export const nextInvestigationTools:ToolDefinition[]=[
  tool("get_watch_events","Read workspace watch events, including explicit reorg baseline replacement. tail_cursor supports later polling; no external notification is sent.",{rule_id:z.string().uuid().optional(),...page}),
 ];
 export function validateNextTool(name:string,input:Record<string,unknown>):void {
- if(name==="start_analysis") {validateNextTool(String(input.operation),input.arguments as Record<string,unknown>);return}
+ if(name==="start_analysis") {if(input.operation==="analyze_contract")validateContractTool("analyze_contract",input.arguments as Record<string,unknown>);else validateNextTool(String(input.operation),input.arguments as Record<string,unknown>);return}
  if (typeof input.from_block==="number"&&typeof input.to_block==="number"&&input.from_block>input.to_block)throw new Error("from_block must not exceed to_block");
  if (["get_control_history","get_token_allowances"].includes(name)&&typeof input.from_block==="number"&&typeof input.to_block==="number"&&input.to_block-input.from_block>100000)throw new Error("history range exceeds 100000 blocks");
  if (name==="get_token_allowances"&&!(Array.isArray(input.spenders)&&input.spenders.length)&&!input.discover)throw new Error("Provide spenders or discover=true");

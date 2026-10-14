@@ -17,6 +17,7 @@ import (
 // 尚未实现的端点必须显式返回 501 + NOT_IMPLEMENTED，不得静默伪装成可用能力
 // （§32 约束 10：未实现标记 NOT_IMPLEMENTED）。
 func (s *Server) registerUserV2(r chi.Router) {
+	s.registerContractUserRoutes(r)
 	r.Get("/dashboard", s.require("dashboard:read", s.handleUserDashboard))
 	r.Get("/search", s.require("search:read", s.handleUserSearch))
 

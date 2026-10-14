@@ -80,6 +80,7 @@ type investigationRequest struct {
 var investigationOperations = []string{"get_native_balance", "get_token_balance", "get_all_token_balances", "get_balance_at", "get_balance_history", "read_rpc", "rpc_call", "trace_fund_batch", "resolve_proxy", "batch_get_native_balances", "batch_get_token_balances", "eth_call", "eth_getCode", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionReceipt", "eth_getLogs", "eth_getBalance", "eth_blockNumber", "eth_getBlockByNumber", "get_contract_abi", "decode_transaction_input", "decode_logs", "resolve_proxy_implementation", "read_contract", "aggregate_transfers", "get_export_file", "download_export", "trace_funds", "get_labels", "detect_exchange_deposit", "trace_to_exchange", "get_contract_control"}
 
 func (s *Server) registerInvestigationRoutes(r chi.Router) {
+	s.registerContractActions(r)
 	s.registerNextInvestigationRoutes(r)
 	for _, name := range investigationOperations {
 		op := name

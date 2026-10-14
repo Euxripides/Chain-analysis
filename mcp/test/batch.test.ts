@@ -42,6 +42,9 @@ async function harness(t: TestContext) {
           res.end(JSON.stringify({ success: true, error: null, meta: {}, data: { content_base64: bytes.toString("base64"),
             chunk_bytes: bytes.length, chunk_sha256: createHash("sha256").update(bytes).digest("hex"),
             resource_uri: `export://${input.job_id}/0/${input.chunk_size}`, mime_type: "text/csv" } }));
+        } else if(url.pathname==="/api/v1/export/contracts/get_contract_analysis_artifact") {
+          const bytes=Buffer.from("contract evidence\n"),digest=createHash("sha256").update(bytes).digest("hex");
+          res.end(JSON.stringify({success:true,error:null,meta:{},data:{content_base64:bytes.toString("base64"),byte_length:bytes.length,sha256:digest,chunk_sha256:digest,artifact:{media_type:"text/plain"},resource_uri:`contract-analysis://${input.analysis_id}/${input.artifact_id}/0/1048576`}}));
         } else {
           res.end(JSON.stringify({ success: true, error: null,
             data: { address: input.address, total_records: 3, total_amount: precise,
@@ -215,6 +218,14 @@ test("generic batches dispatch every existing single operation with its original
     query_cross_chain_transfer:{bridge:"lifi",chain:"bsc",tx_hash:ih},
     find_cross_chain_candidates:{anchor:{chain:"ethereum",tx_hash:ih,dataset:"transactions"},search_chain:"bsc",search_addresses:[a],search_direction:"out",direction:"forward",asset_kind:"native",asset_relation:"same_asset",start_time:"2026-09-29T00:00:00Z",end_time:"2026-09-29T01:00:00Z"},
     get_investigation_capabilities:{chain:"bsc"},
+    analyze_contract:{chain:"bsc",address:a},
+    get_contract_analysis:{analysis_id:job},
+    list_contract_methods:{analysis_id:job},
+    get_contract_method_analysis:{analysis_id:job,method_id:"1".repeat(40)},
+    get_contract_execution_flow:{analysis_id:job},
+    explain_contract_transaction:{analysis_id:job,tx_hash:ih},
+    compare_contract_versions:{analysis_id:job,compare_analysis_id:job},
+    get_contract_analysis_artifact:{analysis_id:job,artifact_id:"1".repeat(40)},
     reconcile_address_ledger:{chain:"bsc",address:a,token_contract:b,from_block:1,to_block:2},
     trace_source_set:{chain:"bsc",token_contract:b,sources:[{tx_hash:ih,log_index:0}]},
     explain_transaction:{chain:"bsc",tx_hash:ih},

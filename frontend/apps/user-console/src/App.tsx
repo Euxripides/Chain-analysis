@@ -36,6 +36,9 @@ const SearchPage = lazy(() => import("./pages/SearchPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const ExplorerPage = lazy(() => import("./pages/ExplorerPage"));
 const AddressDetailPage = lazy(() => import("./pages/AddressDetailPage"));
+const ContractAnalysisNewPage = lazy(() => import("./pages/contract-analysis/ContractAnalysisNewPage"));
+const ContractAnalysisListPage = lazy(() => import("./pages/contract-analysis/ContractAnalysisListPage"));
+const ContractAnalysisWorkbenchPage = lazy(() => import("./pages/contract-analysis/ContractAnalysisWorkbenchPage"));
 const TransactionDetailPage = lazy(() => import("./pages/TransactionDetailPage"));
 const BlockDetailPage = lazy(() => import("./pages/ExplorerObjectPages").then(module => ({ default: module.BlockDetailPage })));
 const TokenDetailPage = lazy(() => import("./pages/ExplorerObjectPages").then(module => ({ default: module.TokenDetailPage })));
@@ -132,6 +135,9 @@ function Shell() {
         */}
         <Route path="/cases/:caseId/:tab" element={<CaseTabRoute />} />
           <Route path="/investigations" element={<Guard permission="investigation:list"><InvestigationsPage /></Guard>} />
+          <Route path="/contract-analyses" element={<Guard permission="explorer:read"><ContractAnalysisListPage /></Guard>} />
+          <Route path="/contract-analyses/new" element={<Guard permission="investigation:run"><ContractAnalysisNewPage /></Guard>} />
+          <Route path="/contract-analyses/:analysisId" element={<Guard permission="explorer:read"><ContractAnalysisWorkbenchPage /></Guard>} />
           <Route path="/investigations/new" element={<Guard permission="investigation:create"><InvestigationNewPage /></Guard>} />
           <Route path="/investigations/:id/workbench" element={<Guard permission="investigation:read"><InvestigationWorkbenchPage /></Guard>} />
           <Route path="/investigations/:id/findings" element={<Guard permission="finding:list"><FindingsPage /></Guard>} />

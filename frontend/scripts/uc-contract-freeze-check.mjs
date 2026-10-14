@@ -27,8 +27,8 @@
 // Approved redesign begins at b6f0182; the earlier UI freeze remains in history.
 const BASELINE = process.env.UC_CONTRACT_BASELINE ?? "b6f0182864e65dd0d562283945d5521621f5285c";
 const APPROVED_ADDITIONS = {
-  "路由路径": ["/blocks/:chain/:block", "/tokens/:chain/:contract"],
-  "路由→权限映射": [["/blocks", "explorer:read"], ["/tokens", "explorer:read"]],
+  "路由路径": ["/blocks/:chain/:block", "/tokens/:chain/:contract", "/contract-analyses", "/contract-analyses/new", "/contract-analyses/:analysisId"],
+  "路由→权限映射": [["/blocks", "explorer:read"], ["/tokens", "explorer:read"], ["/contract-analyses","explorer:read"], ["/contract-analyses/new","investigation:run"]],
   // v1 case/tag paths preserve the deployed download metadata selectors.
   "/api 字面量": ["/api/v2/explorer/resolve", "/api/v2/explorer/addresses/{}/{}/history-coverage", "/api/v1/cases", "/api/v1/tags", "/api/v2/explorer/addresses/{}/{}/statistics", "/api/v2/explorer/blocks/{}/{}", "/api/v2/explorer/tokens", "/api/v2/explorer/tokens/{}/{}", "/api/v2/explorer/tokens/{}/{}/logo", "/api/v2/exports/{}", "/api/v2/exports/{}/files/{}/download-ticket"],
 };

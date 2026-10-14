@@ -5,6 +5,8 @@ export type Config = {
   allowedHosts: string[];
   port: number;
   restBaseUrl: string;
+  contractRestBaseUrl?: string;
+  legacyOAuthValidationUrl?: string;
   restApiKey: string;
   mcpKeyHashes: Buffer[];
   oauthAccessCodeHashes: Buffer[];
@@ -42,6 +44,8 @@ export function loadConfig(): Config {
     allowedHosts: (process.env.MCP_ALLOWED_HOSTS ?? "aurore.online,localhost,127.0.0.1").split(",").map((host) => host.trim()).filter(Boolean),
     port: integer("MCP_PORT", 8090, 1, 65535),
     restBaseUrl: (process.env.REST_API_BASE_URL ?? "http://127.0.0.1:8080/api/v1").replace(/\/$/, ""),
+    contractRestBaseUrl: process.env.CONTRACT_REST_API_BASE_URL?.replace(/\/$/, ""),
+    legacyOAuthValidationUrl: process.env.MCP_LEGACY_OAUTH_VALIDATION_URL,
     restApiKey,
     mcpKeyHashes: keys.map(sha256),
     oauthAccessCodeHashes: (oauthAccessCodes.length > 0 ? oauthAccessCodes : keys).map(sha256),

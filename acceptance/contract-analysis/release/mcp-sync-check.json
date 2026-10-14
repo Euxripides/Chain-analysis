@@ -1,0 +1,10 @@
+{
+  "server": "chain_data_platform",
+  "auth_status": "bearerToken",
+  "expected_tools": 119,
+  "loaded_tools": 119,
+  "missing_tools": [],
+  "extra_tools": [],
+  "schema_mismatches": [],
+  "description_mismatches": []
+}

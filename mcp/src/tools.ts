@@ -5,6 +5,7 @@ import { crossChainTools, validateCrossChainTool } from "./crosschain.js";
 import { RESTClient, type RESTEnvelope } from "./rest-client.js";
 import { investigationTools, investigationFileResources, registerInvestigationResources } from "./investigation.js";
 import { nextInvestigationTools, validateNextTool } from "./next-investigation.js";
+import { contractAnalysisTools, validateContractTool, contractArtifactResources, registerContractResources } from "./contract-analysis.js";
 import { createBatchTools, executeBatch, operationSchema, type ToolDefinition, type BatchItem } from "./batch.js";
 import { CHAIN_VALUES, DATASET_VALUES } from "./chains.js";
 export { CHAIN_VALUES } from "./chains.js";
@@ -333,6 +334,7 @@ export const toolDefinitions: ToolDefinition[] = [
 toolDefinitions.push(...crossChainTools);
 toolDefinitions.push(...investigationTools);
 toolDefinitions.push(...nextInvestigationTools);
+toolDefinitions.push(...contractAnalysisTools);
 toolDefinitions.push(...createBatchTools(toolDefinitions.slice()));
 
 // Return an MCP file resource, rather than hiding the download URL in JSON.
@@ -360,6 +362,7 @@ export function exportFileResources(result: RESTEnvelope): ResourceLink[] {
 export function validateToolInput(name: string, input: Record<string, unknown>): void {
 	validateCrossChainTool(name, input);
   validateNextTool(name, input);
+  validateContractTool(name, input);
   if (["get_token_balance", "trace_funds", "trace_fund_batch", "aggregate_transfers"].includes(name) && !input.token && !input.token_contract) throw new Error("token or token_contract is required");
   if (input.timestamp && (input.block !== undefined || input.blockTag !== undefined)) throw new Error("timestamp and block/blockTag are mutually exclusive");
   if (input.block !== undefined && input.blockTag !== undefined) throw new Error("use block or blockTag");
@@ -382,6 +385,7 @@ export function validateToolInput(name: string, input: Record<string, unknown>):
 
 export function registerTools(server: McpServer, client: RESTClient): void {
   registerInvestigationResources(server, client);
+  registerContractResources(server, client);
   for (const definition of toolDefinitions) {
     server.registerTool(
       definition.name,
@@ -401,12 +405,12 @@ export function registerTools(server: McpServer, client: RESTClient): void {
             const processResult = (item: BatchItem) => {
               const response = item.response!;
               const data = response.data as Record<string, unknown> | null;
-              const embedded = item.tool === "get_export_file" || item.tool === "download_export";
+              const embedded = item.tool === "get_export_file" || item.tool === "download_export" || item.tool === "get_contract_analysis_artifact";
               if (embedded && (typeof data?.content_base64 !== "string" || typeof data.resource_uri !== "string")) throw new Error("EXPORT_RESOURCE_INVALID: Export chunk metadata is missing");
               const bytes = embedded ? Buffer.byteLength(data!.content_base64 as string, "base64") : 0;
               if (resourceBytes + bytes > (8 << 20)) throw new Error("BATCH_RESOURCE_LIMIT_EXCEEDED: Embedded export chunks exceed 8 MiB; retry this input separately or with a smaller chunk_size");
               let files: CallToolResult["content"];
-              try { files = item.tool === "get_export_status" ? exportFileResources(response) : embedded ? investigationFileResources(response) : []; }
+              try { files = item.tool === "get_export_status" ? exportFileResources(response) : item.tool === "get_contract_analysis_artifact" ? contractArtifactResources(response) : embedded ? investigationFileResources(response) : []; }
               catch (error) {
                 if (error instanceof Error && /^[A-Z][A-Z0-9_]+:/.test(error.message)) throw error;
                 throw new Error(`EXPORT_RESOURCE_INVALID: ${error instanceof Error ? error.message : "Invalid export resource"}`);
@@ -445,7 +449,7 @@ export function registerTools(server: McpServer, client: RESTClient): void {
             return { structuredContent: result, content: [{ type: "text" as const, text: `${started} download request(s) started; ${failed} failed during submission.` }] };
           }
           const result = definition.method === "POST" ? await client.post(definition.path, input, { signal: extra.signal }) : await client.get(definition.path, input, { signal: extra.signal });
-          const files = definition.name === "get_export_status" ? exportFileResources(result) : investigationFileResources(result);
+          const files = definition.name === "get_export_status" ? exportFileResources(result) : definition.name === "get_contract_analysis_artifact" ? contractArtifactResources(result) : investigationFileResources(result);
           return {
             structuredContent: result,
             content: [{ type: "text" as const, text: definition.summarize(result) }, ...files],

@@ -1,5 +1,6 @@
 import { investigationTools } from "../src/investigation.js";
 import { nextInvestigationTools } from "../src/next-investigation.js";
+import { contractAnalysisTools } from "../src/contract-analysis.js";
 import { crossChainTools } from "../src/crosschain.js";
 import { toolDefinitions } from "../src/tools.js";
 import assert from "node:assert/strict";
@@ -106,6 +107,7 @@ test("initialize, list tools and call a real REST-backed tool", async () => {
     ...crossChainTools.map(x => x.name),
     ...investigationTools.map(x => x.name),
     ...nextInvestigationTools.map(x => x.name),
+    ...contractAnalysisTools.map(x=>x.name),
     "batch_reconcile_address_ledgers", "batch_get_token_allowances", "batch_get_control_history", "batch_explain_transactions", "batch_match_bridge_transfers",
     "batch_get_token_transfers", "batch_get_nft_transfers", "batch_get_address_logs", "batch_get_balance_snapshots", "batch_get_transactions", "batch_get_internal_transactions", "batch_get_counterparties",
     "batch_get_flow_summary", "batch_get_top_flows", "batch_get_first_funding", "batch_get_solana_address_signatures",

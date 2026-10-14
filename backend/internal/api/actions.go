@@ -445,6 +445,14 @@ func (w *actionStatusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 func actionScopeForPath(path string) string {
+	if strings.HasPrefix(path, "/api/v1/analysis/contracts/") {
+		switch strings.TrimPrefix(path, "/api/v1/analysis/contracts/") {
+		case "analyze_contract", "explain_contract_transaction":
+			return "analysis"
+		default:
+			return "read"
+		}
+	}
 	if strings.HasSuffix(path, "/bridge/candidates") {
 		return "analysis"
 	}

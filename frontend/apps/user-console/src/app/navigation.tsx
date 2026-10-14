@@ -55,6 +55,8 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   "/investigations/new": "investigation:create",
   "/graph": "canvas:list",
   "/explorer": "explorer:read",
+  "/contract-analyses": "explorer:read",
+  "/contract-analyses/new": "investigation:run",
   "/downloads": "download:create",
   "/downloads/new": "download:create",
   "/jobs": "job:list:self",

@@ -12,6 +12,7 @@ import (
 
 	"github.com/blockchain-platform/blockchain-platform/internal/chain"
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
+	ca "github.com/blockchain-platform/blockchain-platform/internal/contractanalysis"
 	"github.com/blockchain-platform/blockchain-platform/internal/fundtrace"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -324,6 +325,18 @@ func (s *Server) nextDispatch(ctx context.Context, q nextRequest, op string) (an
 	case "get_control_history":
 		return s.nextControlHistory(ctx, q)
 	case "start_analysis":
+		if q.Operation == ca.Operation {
+			request, e := ca.Decode(q.Arguments)
+			if e != nil {
+				return nil, e
+			}
+			request.Defaults()
+			if e = request.Validate(); e != nil {
+				return nil, e
+			}
+			request.IdempotencyKey = q.IdempotencyKey
+			return s.contractSubmit(ctx, request)
+		}
 		inner, e := decodeNext(q.Arguments)
 		if e != nil {
 			return nil, e

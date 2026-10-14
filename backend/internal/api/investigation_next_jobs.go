@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/blockchain-platform/blockchain-platform/internal/chainread"
+	ca "github.com/blockchain-platform/blockchain-platform/internal/contractanalysis"
 	"github.com/blockchain-platform/blockchain-platform/internal/fundtrace"
 	rpc "github.com/blockchain-platform/blockchain-platform/internal/provider/rpc"
 	"github.com/google/uuid"
@@ -279,6 +280,21 @@ func (s *Server) nextJobOperation(ctx context.Context, q nextRequest, op string)
 	job, e := s.nextGetJob(ctx, q.AnalysisID, includeMetadata)
 	if e != nil {
 		return nil, e
+	}
+	if job.Version == ca.Version {
+		switch op {
+		case "cancel_analysis":
+			return s.contractJobControl(ctx, q.AnalysisID, "cancel")
+		case "resume_analysis":
+			return s.contractJobControl(ctx, q.AnalysisID, "resume")
+		case "get_analysis_status":
+			return s.contractPage(ctx, ca.Request{AnalysisID: q.AnalysisID})
+		case "get_analysis_results":
+			if q.PageSize > 200 {
+				return nil, fmt.Errorf("contract analysis page_size must not exceed 200")
+			}
+			return s.contractPage(ctx, ca.Request{AnalysisID: q.AnalysisID, Section: q.Section, Cursor: q.Cursor, PageSize: q.PageSize})
+		}
 	}
 	scope, e := s.nextTenant(ctx)
 	if e != nil {

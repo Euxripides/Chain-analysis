@@ -61,9 +61,10 @@ func (i *Infra) initRPC(ctx context.Context, cfg *config.Config, log *slog.Logge
 
 	// 预算：Trace 与 Investigation 单独限额（§109/§112/§169）
 	budgets := rpc.NewBudgetManager(cfg.RPC.BudgetWindow, map[string]rpc.BudgetLimits{
-		rpc.PurposeTrace:         {MaxRequests: cfg.RPC.TraceMaxRequests, MaxTraceRequests: cfg.RPC.TraceMaxRequests},
-		rpc.PurposeDebugTrace:    {MaxRequests: cfg.RPC.TraceMaxRequests, MaxTraceRequests: cfg.RPC.TraceMaxRequests},
-		rpc.PurposeInvestigation: {MaxRequests: cfg.RPC.InvestigationMaxRequests, MaxCredits: cfg.RPC.InvestigationMaxCredits},
+		rpc.PurposeTrace:            {MaxRequests: cfg.RPC.TraceMaxRequests, MaxTraceRequests: cfg.RPC.TraceMaxRequests},
+		rpc.PurposeDebugTrace:       {MaxRequests: cfg.RPC.TraceMaxRequests, MaxTraceRequests: cfg.RPC.TraceMaxRequests},
+		rpc.PurposeInvestigation:    {MaxRequests: cfg.RPC.InvestigationMaxRequests, MaxCredits: cfg.RPC.InvestigationMaxCredits},
+		rpc.PurposeContractAnalysis: {MaxRequests: 2000, MaxCredits: 1000000, MaxTraceRequests: 150},
 	}, cfg.RPC.BudgetEnabled)
 
 	provider, secrets := buildRPCProvider(cfg, log, i.ProviderControl)

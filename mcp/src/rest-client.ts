@@ -7,6 +7,7 @@ export type RESTEnvelope = {
 
 export type RESTClientOptions = {
   baseUrl: string;
+  contractBaseUrl?: string;
   apiKey: string;
   timeoutMs: number;
   signal?: AbortSignal;
@@ -68,7 +69,14 @@ export class RESTClient {
     const timer = setTimeout(() => controller.abort(new Error("REST_TIMEOUT: REST request exceeded its timeout")), this.options.timeoutMs);
     try {
       controller.signal.throwIfAborted();
-      const response = await fetch(`${this.options.baseUrl}${path}`, { ...init, signal: controller.signal });
+      let contractPath = /^\/(analysis|export)\/contracts\//.test(path);
+      if (path === "/analysis/start_analysis" && typeof init.body === "string") {
+        contractPath = JSON.parse(init.body).operation === "analyze_contract";
+      }
+      // A separate feature API can share the durable store while legacy tools
+      // continue to use their deployed API. Only the new route family is sent.
+      const baseUrl = contractPath ? this.options.contractBaseUrl ?? this.options.baseUrl : this.options.baseUrl;
+      const response = await fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
       const body = await this.readBody(response);
       if (!response.ok || !body.success) {
         throw new Error(`${body.error?.code ?? `HTTP_${response.status}`}: ${body.error?.message ?? "REST request failed"}`);

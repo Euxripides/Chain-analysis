@@ -39,6 +39,7 @@ const ROUTE_META: Array<{ prefix: string; meta: RouteMeta }> = [
   { prefix: "/canvases", meta: { policy: "heavy", skeleton: "graph" } },
   { prefix: "/graph", meta: { policy: "heavy", skeleton: "graph" } },
   { prefix: "/investigations", meta: { policy: "heavy", skeleton: "workspace" } },
+  { prefix: "/contract-analyses", meta: { policy: "heavy", skeleton: "workspace" } },
 
   /* 实时流式页：即时挂载，先卸载再谈观感。 */
   { prefix: "/jobs", meta: { policy: "streaming", skeleton: "detail" } },

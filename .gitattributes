@@ -2,3 +2,4 @@
 # 未声明 -text 时，Windows 上的 core.autocrlf=true 会在检出时把 LF 换成 CRLF，
 # 导致证据哈希与记录不一致。这里对证据目录关闭任何 EOL 转换。
 acceptance-evidence/** -text
+analysis-engines/notices/*.txt whitespace=-blank-at-eof

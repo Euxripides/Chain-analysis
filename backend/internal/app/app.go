@@ -651,7 +651,7 @@ func UsageRecorder(st *store.Store, log *slog.Logger) provider.UsageHook {
 		// TRON's Ankr node client records the true logical call count but older
 		// call sites did not attach pricing. Normalize it here so every live
 		// request reaches provider_usage with an auditable estimate.
-		if u.Provider == "ankr" && u.UsageType != "trc20_enrichment_summary" && u.CostUSD <= 0 {
+		if u.Provider == "ankr" && !u.CacheHit && !u.SingleflightHit && u.UsageType != "trc20_enrichment_summary" && u.CostUSD <= 0 {
 			calls := u.MethodCalls
 			if calls <= 0 {
 				calls = 1
@@ -659,13 +659,20 @@ func UsageRecorder(st *store.Store, log *slog.Logger) provider.UsageHook {
 			u.Credits = 700 * float64(calls)
 			u.CostUSD = 0.00007 * float64(calls)
 		}
-		go func() {
+		write := func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if err := st.InsertUsage(ctx, u); err != nil {
 				log.Error("insert usage failed", "err", err)
 			}
-		}()
+		}
+		// Contract result publication includes these persisted costs. Complete
+		// this write before returning so the final ledger cannot race the worker.
+		if u.UsageType == "contract_analysis" {
+			write()
+		} else {
+			go write()
+		}
 	}
 }
 

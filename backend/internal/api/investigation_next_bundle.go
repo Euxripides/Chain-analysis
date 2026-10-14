@@ -180,6 +180,9 @@ func (s *Server) nextBundle(ctx context.Context, q nextRequest, op string) (any,
 		if job.Status != "completed" {
 			return nil, summaryError(409, "ANALYSIS_NOT_COMPLETED", "Bundle requires completed analysis")
 		}
+		if job.Version == "contract-analysis-v1" {
+			return nil, summaryError(422, "CONTRACT_ARTIFACT_TOOL_REQUIRED", "Read the saved contract evidence_bundle artifact with get_contract_analysis_artifact")
+		}
 		if reused, found, err := s.nextCachedBundle(ctx, scope, job.ID); err != nil || found {
 			return reused, err
 		}

@@ -1,0 +1,1117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "合约运行与方法分析接口",
+    "version": "1.0.0",
+    "description": "Eight typed Actions operations, generated from actual MCP tool discovery. Source, bytecode, static intents, observed execution, transaction-net token ledgers and replay results preserve independent evidence and coverage. Monetary uint256 values use exact decimal strings."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "actionsBearer": []
+    }
+  ],
+  "paths": {
+    "/api/v1/analysis/contracts/analyze_contract": {
+      "post": {
+        "operationId": "analyze_contract",
+        "description": "Queue comprehensive EVM contract analysis at an immutable block/hash. Digest-pinned offline WhatsABI, symbolic sevm, verified/recompiled Solidity AST and Heimdall artifacts; custom method semantics preserve guards, steps, exact amount expressions, storage, calls and evidence. Standard proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes by default for observed execution/prestate/diffs. Unsupported paths, provider failures and dependency frontier remain explicit. No on-chain writes or automatic full historical downloads.",
+        "x-mcp-read-only": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chain": {
+                    "type": "string",
+                    "enum": [
+                      "bsc",
+                      "ethereum",
+                      "eth",
+                      "polygon",
+                      "arbitrum",
+                      "optimism",
+                      "base",
+                      "avalanche",
+                      "fantom",
+                      "flare",
+                      "gnosis",
+                      "linea",
+                      "scroll",
+                      "somnia_mainnet",
+                      "story_mainnet",
+                      "taiko",
+                      "telos",
+                      "xlayer"
+                    ]
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{40}$",
+                    "description": "Complete EVM contract address"
+                  },
+                  "block": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "latest",
+                          "safe",
+                          "finalized"
+                        ]
+                      }
+                    ]
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "from_block": {
+                    "$ref": "#/properties/block/anyOf/0"
+                  },
+                  "to_block": {
+                    "$ref": "#/properties/block/anyOf/0"
+                  },
+                  "tx_hashes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-fA-F]{64}$"
+                    },
+                    "maxItems": 50
+                  },
+                  "include_source": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "engines": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "whatsabi",
+                        "sevm",
+                        "solc-ast",
+                        "heimdall"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 4,
+                    "default": [
+                      "whatsabi",
+                      "sevm",
+                      "solc-ast",
+                      "heimdall"
+                    ]
+                  },
+                  "budget": {
+                    "type": "object",
+                    "properties": {
+                      "max_contracts": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      },
+                      "max_transactions": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      },
+                      "max_state_reads": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 512
+                      },
+                      "max_records": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20000
+                      },
+                      "max_rpc_requests": {
+                        "type": "integer",
+                        "minimum": 10,
+                        "maximum": 2000
+                      },
+                      "max_credits": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 30,
+                        "maximum": 1800
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "chain",
+                  "address"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/get_contract_analysis": {
+      "post": {
+        "operationId": "get_contract_analysis",
+        "description": "Read scoped contract job status, immutable snapshot, exact section counts and completeness. With section, traverse every saved row using filter/snapshot-bound cursors; no top-200 truncation. Job completed and semantic coverage complete are independent.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "section": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "method_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "evidence_id": {
+                    "$ref": "#/properties/method_id"
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 100
+                  }
+                },
+                "required": [
+                  "analysis_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/list_contract_methods": {
+      "post": {
+        "operationId": "list_contract_methods",
+        "description": "List all discovered contract methods, stable method IDs, selectors, verified signatures versus candidates, body-derived Chinese purpose, behaviors and per-method coverage. Filter by text/selector or behavior and traverse all pages.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "search": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 100
+                  }
+                },
+                "required": [
+                  "analysis_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/get_contract_method_analysis": {
+      "post": {
+        "operationId": "get_contract_method_analysis",
+        "description": "Read the method model: parameters/outputs, conditions, ordered step references, storage/call/fund/expression/evidence IDs, formulas, dependencies and observed transaction links. Retrieve referenced sections with get_contract_analysis(method_id=...). Function names and comments do not prove behavior.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "method_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  }
+                },
+                "required": [
+                  "analysis_id",
+                  "method_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/get_contract_execution_flow": {
+      "post": {
+        "operationId": "get_contract_execution_flow",
+        "description": "Read paginated typed reads/writes/guards/calls/transfers/delegates and cross-method state-dependency edges. Static transfer intents remain separate from executed_funds/receipt token_events; every edge retains evidence references.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "method_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 100
+                  }
+                },
+                "required": [
+                  "analysis_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/explain_contract_transaction": {
+      "post": {
+        "operationId": "explain_contract_transaction",
+        "description": "Read a selected transaction's saved calldata, status, method links, exact native movements, receipt events, call tree, transaction prestate code and state diff. With chain/address/tx_hash and no analysis_id, queue a new analysis. Same-block historical code uses prestate; unavailable trace/archive is an explicit coverage gap.",
+        "x-mcp-read-only": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "chain": {
+                    "type": "string",
+                    "enum": [
+                      "bsc",
+                      "ethereum",
+                      "eth",
+                      "polygon",
+                      "arbitrum",
+                      "optimism",
+                      "base",
+                      "avalanche",
+                      "fantom",
+                      "flare",
+                      "gnosis",
+                      "linea",
+                      "scroll",
+                      "somnia_mainnet",
+                      "story_mainnet",
+                      "taiko",
+                      "telos",
+                      "xlayer"
+                    ]
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{40}$",
+                    "description": "Complete EVM contract address"
+                  },
+                  "tx_hash": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{64}$"
+                  },
+                  "budget": {
+                    "type": "object",
+                    "properties": {
+                      "max_contracts": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      },
+                      "max_transactions": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      },
+                      "max_state_reads": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 512
+                      },
+                      "max_records": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20000
+                      },
+                      "max_rpc_requests": {
+                        "type": "integer",
+                        "minimum": 10,
+                        "maximum": 2000
+                      },
+                      "max_credits": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 30,
+                        "maximum": 1800
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  }
+                },
+                "required": [
+                  "tx_hash"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/contracts/compare_contract_versions": {
+      "post": {
+        "operationId": "compare_contract_versions",
+        "description": "Compare two completed analyses of the same chain/entry within the authorized workspace. Paginated before/after code identities and method models preserve selector collisions; permission/fund details remain available via method IDs and sections.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "compare_analysis_id": {
+                    "$ref": "#/properties/analysis_id"
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "page_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 100
+                  }
+                },
+                "required": [
+                  "analysis_id",
+                  "compare_analysis_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/export/contracts/get_contract_analysis_artifact": {
+      "post": {
+        "operationId": "get_contract_analysis_artifact",
+        "description": "Read authorized source, pseudocode, IR, runtime bytecode, method CSV, editable graph, full JSON, Markdown report or evidence ZIP as embedded resource chunks. Validate chunk SHA256 and whole artifact SHA256; offset must refer to the saved artifact. No client-selected storage paths or public download URL.",
+        "x-mcp-read-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "analysis_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "artifact_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "default": 0
+                  },
+                  "chunk_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4194304,
+                    "default": 1048576
+                  }
+                },
+                "required": [
+                  "analysis_id",
+                  "artifact_id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable scoped result; inspect status, metadata.completeness and per-dimension coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid typed request or signed cursor"
+          },
+          "401": {
+            "description": "Missing authentication"
+          },
+          "403": {
+            "description": "Permission or export scope refused"
+          },
+          "404": {
+            "description": "Analysis or artifact is not in the authorized workspace"
+          },
+          "409": {
+            "description": "Idempotency, lifecycle, snapshot or engine-version conflict"
+          },
+          "422": {
+            "description": "Integrity or resource budget rejected"
+          },
+          "429": {
+            "description": "Queue or durable request budget exhausted"
+          },
+          "503": {
+            "description": "Feature, engine, audit or object store unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "actionsBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "meta",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "meta": {
+            "type": "object"
+          },
+          "error": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "x-mcp-resource-template": "contract-analysis://{analysis_id}/{artifact_id}/{offset}/{chunk_size}",
+  "x-user-v2-resources": {
+    "/api/v2/contract-analyses": [
+      "GET explorer:read (cursor/page_size)",
+      "POST investigation:run (CSRF)"
+    ],
+    "/{analysis_id}": [
+      "GET explorer:read (section/cursor/page_size/method_id/evidence_id/tx_hash/search/behavior)"
+    ],
+    "/{analysis_id}/methods/{method_id}": [
+      "GET explorer:read"
+    ],
+    "/{analysis_id}/flow": [
+      "GET explorer:read"
+    ],
+    "/{analysis_id}/transactions": [
+      "GET explorer:read"
+    ],
+    "/{analysis_id}/compare/{compare_id}": [
+      "GET explorer:read"
+    ],
+    "/{analysis_id}/artifacts/{artifact_id}": [
+      "GET export:download (offset/chunk_size <= 4 MiB)"
+    ],
+    "/{analysis_id}/artifacts/{artifact_id}/preview": [
+      "GET evidence:read (static-code kinds only, <= 64 KiB)"
+    ],
+    "/{analysis_id}/cancel": [
+      "POST investigation:run (CSRF)"
+    ],
+    "/{analysis_id}/resume": [
+      "POST investigation:run (CSRF, original input and engine)"
+    ]
+  },
+  "x-user-evidence-sections-permission": "evidence:read",
+  "x-processor-version": "contract-analysis-v1"
+}

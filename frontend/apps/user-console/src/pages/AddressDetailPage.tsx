@@ -866,6 +866,7 @@ export default function AddressDetailPage() {
           <AntButton type="text" aria-label="地址二维码" icon={<QrCode size={16} />} onClick={() => dialog.notify("info", "地址二维码", <div className="cs-query-qr"><QRCode value={fullAddress} size={220} /><span className="mono">{fullAddress}</span></div>)} />
           <AntButton type="text" aria-label="复制查询链接" icon={<Share2 size={16} />} onClick={() => void copy(window.location.href, "查询链接")} />
           <div className="cs-query-object-actions">{can("download:create") && <Link to={`/downloads/new?${downloadParams}`}>下载数据</Link>}
+            {can("investigation:run") && /^0x[0-9a-fA-F]{40}$/.test(fullAddress) && !["tron","solana"].includes(chain) && <Link to={`/contract-analyses/new?${new URLSearchParams({chain,address:fullAddress})}`}>合约分析</Link>}
             {can("investigation:create") && <Link to={`/investigations/new?${new URLSearchParams({ chain, address: fullAddress })}`}>发起调查</Link>}
             {can("canvas:list") && <Link to={`/graph?${new URLSearchParams({ chain, address: fullAddress })}`}>资金图谱</Link>}
             <AntButton type="text" aria-label="地址数据说明" disabled={!overview.data} onClick={showCaliber}>数据说明</AntButton></div>
