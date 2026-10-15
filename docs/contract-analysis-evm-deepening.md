@@ -30,7 +30,7 @@ CALLCODE 使用调用方存储，msg.sender 为当前调用合约；DELEGATECALL
 
 求解使用有类型的符号输入和状态，保存整数边界、checked/unchecked、显式截断和逐步除法。映射读取按存储身份和符号键表示，同一存储位置的相同键共享取值。证明前先检查成功条件是否可满足，防止把不可能成功的条件报告成有效证明。
 
-property_obligations 保存命题、假设、方法、代码和存储身份、证据以及求解结果。状态包括 proved_under_declared_model、counterexample、infeasible_assumptions、unknown、unsupported 和 solver_unavailable。每个已提交求解的命题另有 property_proof 文件，保存完整 SMT 查询、输入含义和反例取值。单次分析最多 24 项命题，每次求解检查限时 300 毫秒；引擎进程另有整体超时和容器资源限制。
+property_obligations 保存命题、假设、方法、代码和存储身份、证据以及求解结果。状态包括 proved_under_declared_model、counterexample、infeasible_assumptions、unknown、unsupported 和 solver_unavailable。每个已提交求解的命题另有 property_proof 文件，保存完整 SMT 查询、输入含义和反例取值。每次离线引擎执行最多 24 项命题，分析入口和依赖合约后汇总保存；每次求解检查限时 300 毫秒。引擎进程另有整体超时和容器资源限制。证明文件保存时同步转换内部文件标识，并按转换后的完整字节计算校验和，与 API 和导出记录保持一致。
 
 这些命题的范围保存在 proof_scope 和 assumptions 中。完整角色成员枚举、签名与多签有效性、可达状态转换、提现可达性及协议整体经济不变量仍需相应模型和证据。
 
