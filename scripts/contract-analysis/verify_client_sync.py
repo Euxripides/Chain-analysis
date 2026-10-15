@@ -1,15 +1,19 @@
 import json, os
 import pathlib
 import queue
+import shutil
 import subprocess
 import threading
 import time
 
 root = pathlib.Path(__file__).resolve().parents[2] / os.environ.get("CONTRACT_QA_OUT", "acceptance/contract-analysis/release")
-exe = r'C:\Users\Euripides\AppData\Local\OpenAI\Codex\bin\2e5e00daee91c61d\codex.exe'
-proc = subprocess.Popen([exe, 'app-server', '--stdio'], stdin=subprocess.PIPE,
+installed = list((pathlib.Path(os.environ.get('LOCALAPPDATA', pathlib.Path.home() / 'AppData/Local')) / 'OpenAI/Codex/bin').glob('*/codex.exe'))
+exe = os.environ.get('CONTRACT_CODEX_EXE') or (str(max(installed, key=lambda p: p.stat().st_mtime)) if installed else shutil.which('codex'))
+if not exe:
+    raise FileNotFoundError('Set CONTRACT_CODEX_EXE to the installed Codex CLI executable')
+proc = subprocess.Popen([exe, 'app-server', '--listen', 'stdio://'], stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
+                        text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 messages = queue.Queue()
 
 def read_messages():
@@ -42,7 +46,7 @@ try:
             'capabilities': {'experimentalApi': True}})
     send({'jsonrpc': '2.0', 'method': 'initialized', 'params': {}})
     request(11, "config/mcpServer/reload", {})
-    result = request(2, 'mcpServerStatus/list', {'limit': 100})
+    result = request(2, 'mcpServerStatus/list', {'limit': 100, 'detail': 'full', 'serverName': 'chain_data_platform'})
     target = next((s for s in result.get('data', [])
                    if s['name'] == 'chain_data_platform'), None)
     if target is None:

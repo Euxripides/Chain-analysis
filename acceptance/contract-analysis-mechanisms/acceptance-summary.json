@@ -1,0 +1,100 @@
+{
+  "qa": "PASS",
+  "rules": "funds-semantics-4",
+  "image": "sha256:ee6fae0108faa86ab7e091a4f1de1315848781066a74cd9b96e7bf4808737d0e",
+  "engine_tests": 39,
+  "gold_samples": 29,
+  "gold_checks": 168,
+  "local_execution": {
+    "new_checks": 113,
+    "return_regression_checks": 51,
+    "existing_execution_replay_checks": 68,
+    "simulation": true,
+    "all_paths_proved": false
+  },
+  "live_checks": {
+    "api": 58,
+    "mcp": 12,
+    "transaction": 17,
+    "lifecycle": 21,
+    "fault": 4,
+    "authority": 10,
+    "dependencies": 12,
+    "browser": 68,
+    "authority_browser": 18,
+    "mechanism_browser": 33,
+    "existing_runtime": 68,
+    "production_mcp": 13,
+    "production_browser": 10,
+    "production_integrity": 8
+  },
+  "gates": {
+    "engine-unit": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "go-test": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "qa-setup": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "frontend-contract": {
+      "status": "PASS"
+    },
+    "frontend-typecheck-all": {
+      "status": "PASS"
+    },
+    "frontend-render-all": {
+      "status": "PASS"
+    }
+  },
+  "usage": {
+    "start_utc": "2026-10-14T05:33:05.139606+00:00",
+    "database": "contract_analysis_qa_20261014",
+    "limits": {
+      "http_requests": 2000,
+      "credits": 1000000,
+      "estimated_usd": 10
+    },
+    "actual": {
+      "http_requests": 461,
+      "credits": 92200,
+      "estimated_usd": 0.009220034
+    }
+  },
+  "remaining": [
+    "dynamic_loop_bounds",
+    "complex_assembly",
+    "stateful_return_models",
+    "storage_aliases",
+    "dynamic_external_return_binding",
+    "complete_role_enumeration",
+    "complex_signature_and_multisig_authorization",
+    "general_protocol_economic_proofs",
+    "missing_historical_witnesses"
+  ],
+  "release": {
+    "status": "deployed",
+    "source_commit": "3dde2d01f06046c4c03e1dd14cf17451d3e5633d",
+    "image": "sha256:ee6fae0108faa86ab7e091a4f1de1315848781066a74cd9b96e7bf4808737d0e",
+    "original_pids": {
+      "blockchain-api.service": "3258429",
+      "blockchain-worker.service": "1971802",
+      "blockchain-mcp.service": "3258435",
+      "blockchain-user-console.service": "2384809"
+    }
+  },
+  "mcp_sync": {
+    "server": "chain_data_platform",
+    "auth_status": "bearerToken",
+    "expected_tools": 120,
+    "loaded_tools": 120,
+    "missing_tools": [],
+    "extra_tools": [],
+    "schema_mismatches": [],
+    "description_mismatches": []
+  }
+}

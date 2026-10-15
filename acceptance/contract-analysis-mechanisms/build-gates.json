@@ -1,0 +1,23 @@
+{
+  "engine-unit": {
+    "status": "PASS",
+    "exit_code": 0
+  },
+  "go-test": {
+    "status": "PASS",
+    "exit_code": 0
+  },
+  "qa-setup": {
+    "status": "PASS",
+    "exit_code": 0
+  },
+  "frontend-contract": {
+    "status": "PASS"
+  },
+  "frontend-typecheck-all": {
+    "status": "PASS"
+  },
+  "frontend-render-all": {
+    "status": "PASS"
+  }
+}

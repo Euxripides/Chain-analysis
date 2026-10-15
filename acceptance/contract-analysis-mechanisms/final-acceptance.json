@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "image": "sha256:ee6fae0108faa86ab7e091a4f1de1315848781066a74cd9b96e7bf4808737d0e",
+  "runtime_checks": 113,
+  "gold_checks": 168,
+  "all_paths_proved": false,
+  "console_index_sha256": "a57a5d2616e80172de19b2a27c1585cc24f768cffba35fc799e1359555925db0"
+}
