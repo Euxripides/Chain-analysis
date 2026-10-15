@@ -1,0 +1,18 @@
+{
+  "project": "Uniswap/v2-core",
+  "tag": "v1.0.1",
+  "commit": "4dd59067c76dea4a0e8e4bfdda41877a6b16dedc",
+  "purpose": "unmodified analysis and execution test fixture",
+  "files": [
+    {
+      "path": "SafeMath.sol",
+      "source_url": "https://raw.githubusercontent.com/Uniswap/v2-core/4dd59067c76dea4a0e8e4bfdda41877a6b16dedc/contracts/libraries/SafeMath.sol",
+      "sha256": "4b1c95ff75de7342e0fadff58064820a4eb7c2fcb422a75b4994980ce8e216ae"
+    },
+    {
+      "path": "LICENSE",
+      "source_url": "https://raw.githubusercontent.com/Uniswap/v2-core/4dd59067c76dea4a0e8e4bfdda41877a6b16dedc/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    }
+  ]
+}

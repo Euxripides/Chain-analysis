@@ -1,8 +1,7 @@
 import {numericLiteral} from '../literals.mjs';
 
-// Bounded symbolic execution of read-only scalar and scalar-tuple returns.
-// Compiler AST identities and per-path bindings prevent local variables from
-// leaking between calls or branches. Unsupported effects fail the whole model.
+// Bounded read-only execution. Local scalar writes use immutable expression
+// bindings; branch guards and evaluations retain their execution order.
 export function summarizeInternalReturns({target, call, context, args, build, synthetic, nodes, typeOf}) {
   const fail = code => { throw new Error(code); };
   const output = target.returnParameters?.parameters || [];
@@ -13,18 +12,16 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   const stack = context.return_stack || [];
   if (stack.length >= 12 || stack.includes(target.id)) fail('INTERNAL_RETURN_RECURSION_OR_DEPTH');
   let count = 0, serial = 0, loopIterations = 0;
-  const loops = new Map();
-  const results = [], root = `${context.path}/return:${call.id}`;
-  const bindings = {...context.parameter_expression_bindings};
-  for (const [i,p] of (target.parameters?.parameters || []).entries()) bindings[p.id] = build(args[i], context);
-  const initial = {...context, path:root, unchecked:false, return_stack:[...stack,target.id],
-    parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((target.parameters?.parameters || []).map((p,i)=>[p.id,args[i]]))},
-    parameter_expression_bindings:bindings, compiletime_bindings:{}, return_conditions:[]};
+  const loops = new Map(), results = [], effectCache = new WeakMap();
   const expressionChildren = n => Object.entries(n || {}).filter(([k]) => !['typeDescriptions','documentation'].includes(k))
     .flatMap(([,v]) => Array.isArray(v) ? v.filter(x=>x?.nodeType) : v?.nodeType ? [v] : []);
+  const fork = (s,suffix) => ({...s,path:s.path+'/'+suffix,parameter_arguments:{...s.parameter_arguments},
+    parameter_expression_bindings:{...s.parameter_expression_bindings},compiletime_bindings:{...s.compiletime_bindings},
+    return_conditions:[...s.return_conditions],execution_steps:[...s.execution_steps]});
+  const bounded = rows => {if(rows.length+results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');return rows;};
   function validate(n) {
     if (!n || ++count > 1024) fail('INTERNAL_RETURN_EXPRESSION_BUDGET');
-    if (['Assignment','NewExpression'].includes(n.nodeType) || n.nodeType === 'UnaryOperation' && ['++','--','delete'].includes(n.operator)) fail('INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT');
+    if (n.nodeType==='NewExpression' || n.nodeType==='UnaryOperation' && n.operator==='delete') fail('INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT');
     if (n.nodeType === 'FunctionCall' && n.kind !== 'typeConversion') {
       const called = nodes.get(n.expression?.referencedDeclaration);
       if (called?.nodeType === 'FunctionDefinition' && !['pure','view'].includes(called.stateMutability) && !called.constant ||
@@ -33,16 +30,23 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
     }
     for (const child of expressionChildren(n)) validate(child);
   }
-  const value = (n,s) => { validate(n); return build(n,{...s,path:s.path+'/expr:'+(serial++)}); };
-  const fork = (s,suffix) => ({...s,path:s.path+'/'+suffix,parameter_expression_bindings:{...s.parameter_expression_bindings},compiletime_bindings:{...s.compiletime_bindings},return_conditions:[...s.return_conditions]});
-  const defaultValue = (declaration,s) => {
-    const type=typeOf(declaration);
-    if (!scalar(declaration)) fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
-    return synthetic(declaration,'literal',[],s,{value:type==='bool'?'false':/^(address|contract )/.test(type)?'0x'+'0'.repeat(40):/^bytes/.test(type)?'0x'+'00'.repeat(Number(type.slice(5))):'0',type});
-  };
-  for (const d of output) if (d.name) {initial.parameter_expression_bindings[d.id]=defaultValue(d,initial);initial.compiletime_bindings[d.id]=0n;}
-  // This evaluator is used only to prove finite loop control. Unknown state or
-  // inputs never become a concrete bound. Values retain Solidity integer rules.
+  function effects(n) {
+    if(!n)return {reads:new Set(),writes:new Set()};
+    if(effectCache.has(n))return effectCache.get(n);
+    const parts=expressionChildren(n).map(effects),reads=new Set(parts.flatMap(p=>[...p.reads])),writes=new Set(parts.flatMap(p=>[...p.writes]));
+    if(n.nodeType==='Identifier')reads.add(n.referencedDeclaration);
+    if(n.nodeType==='Assignment')writes.add(n.leftHandSide?.referencedDeclaration??'unsupported_target');
+    if(n.nodeType==='UnaryOperation'&&['++','--'].includes(n.operator))writes.add(n.subExpression?.referencedDeclaration??'unsupported_target');
+    const found={reads,writes};effectCache.set(n,found);return found;
+  }
+  // Ordinary sibling order is unspecified. Source-order traversal is valid
+  // only when the siblings cannot observe each other's local writes.
+  function independent(list) {
+    const es=list.map(effects);
+    for(let i=0;i<es.length;i++)for(let j=i+1;j<es.length;j++)
+      if([...es[i].writes].some(k=>es[j].reads.has(k)||es[j].writes.has(k)) || [...es[j].writes].some(k=>es[i].reads.has(k)))
+        fail('INTERNAL_RETURN_EVALUATION_ORDER_UNSPECIFIED');
+  }
   function integerValue(v,n,s) {
     const integer=/^(u?int)(\d*)$/.exec(typeOf(n));if(!integer)return v;
     const bits=BigInt(integer[2]||256),signed=integer[1]==='int',mod=1n<<bits,min=signed?-(mod>>1n):0n,max=signed?(mod>>1n)-1n:mod-1n;
@@ -57,118 +61,174 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
       if(n.kind==='number'){try{const v=numericLiteral(String(n.value),n.subdenomination).value;return v===null?null:BigInt(v)}catch{return null}}
     }
     if(n.nodeType==='Identifier') {
-      if(Object.hasOwn(s.compiletime_bindings,n.referencedDeclaration))return s.compiletime_bindings[n.referencedDeclaration];
+      if(Object.hasOwn(s.compiletime_bindings||{},n.referencedDeclaration))return s.compiletime_bindings[n.referencedDeclaration];
+      if(Object.hasOwn(s.parameter_expression_bindings||{},n.referencedDeclaration))return null;
       const d=nodes.get(n.referencedDeclaration),bound=s.parameter_arguments?.[n.referencedDeclaration];
       return d?.constant&&d.value?constant(d.value,s,next):bound&&bound.id!==n.id?constant(bound,s,next):null;
     }
     if(n.nodeType==='TupleExpression'&&n.components?.length===1)return constant(n.components[0],s,next);
+    if(n.nodeType==='Conditional'){const c=constant(n.condition,s,next);return c===null?null:constant(c!==0n?n.trueExpression:n.falseExpression,s,next);}
     if(n.nodeType==='UnaryOperation') {const a=constant(n.subExpression,s,next);if(a===null)return null;return n.operator==='!'?(a===0n?1n:0n):n.operator==='-'?integerValue(-a,n,s):n.operator==='+'?a:null;}
     if(n.nodeType==='BinaryOperation') {
-      const a=constant(n.leftExpression,s,next),b=constant(n.rightExpression,s,next);if(a===null||b===null)return null;
-      switch(n.operator){case '+':return integerValue(a+b,n,s);case '-':return integerValue(a-b,n,s);case '*':return integerValue(a*b,n,s);case '/':return b===0n?null:integerValue(a/b,n,s);case '%':return b===0n?null:a%b;case '<':return a<b?1n:0n;case '<=':return a<=b?1n:0n;case '>':return a>b?1n:0n;case '>=':return a>=b?1n:0n;case '==':return a===b?1n:0n;case '!=':return a!==b?1n:0n;case '&&':return a!==0n&&b!==0n?1n:0n;case '||':return a!==0n||b!==0n?1n:0n;default:return null;}
+      const a=constant(n.leftExpression,s,next);if(a===null)return null;
+      if(n.operator==='&&'&&a===0n)return 0n;if(n.operator==='||'&&a!==0n)return 1n;
+      const b=constant(n.rightExpression,s,next);if(b===null)return null;
+      switch(n.operator){case '+':return integerValue(a+b,n,s);case '-':return integerValue(a-b,n,s);case '*':return integerValue(a*b,n,s);case '/':return b===0n?null:integerValue(a/b,n,s);case '%':return b===0n?null:a%b;case '<':return a<b?1n:0n;case '<=':return a<=b?1n:0n;case '>':return a>b?1n:0n;case '>=':return a>=b?1n:0n;case '==':return a===b?1n:0n;case '!=':return a!==b?1n:0n;case '&&':return b!==0n?1n:0n;case '||':return b!==0n?1n:0n;default:return null;}
     }
     return null;
   }
-  function keepConstant(d,n,s,operator='=') {
-    let v=constant(n,s);
-    const old=s.compiletime_bindings[d.id];
-    if(operator!=='='&&v!==null&&old!==undefined){v=operator==='+='?old+v:operator==='-='?old-v:operator==='*='?old*v:operator==='/='&&v!==0n?old/v:null;}
-    else if(operator!=='=')v=null;
-    const integer=/^(u?int)(\d*)$/.exec(typeOf(d));
-    if(v!==null&&integer){const bits=BigInt(integer[2]||256),signed=integer[1]==='int',min=signed?-(1n<<(bits-1n)):0n,max=signed?(1n<<(bits-1n))-1n:(1n<<bits)-1n;
-      if(v<min||v>max){if(!s.unchecked&&!context.legacy_arithmetic)fail('INTERNAL_RETURN_LOOP_CONTROL_OVERFLOW');const mod=1n<<bits;v=((v%mod)+mod)%mod;if(signed&&v>max)v-=mod;}
-    }
-    if(v===null)delete s.compiletime_bindings[d.id];else s.compiletime_bindings[d.id]=v;
+  const initial = {...context,path:context.path+'/return:'+call.id,unchecked:false,return_stack:[...stack,target.id],
+    parameter_arguments:{...context.parameter_arguments},parameter_expression_bindings:{...context.parameter_expression_bindings},
+    compiletime_bindings:{},return_conditions:[],execution_steps:[]};
+  for(const [i,p]of (target.parameters?.parameters||[]).entries()) {
+    initial.parameter_arguments[p.id]=args[i];initial.parameter_expression_bindings[p.id]=build(args[i],context);
+    const known=constant(args[i],context);if(known!==null)initial.compiletime_bindings[p.id]=known;
   }
-  const tupleValues=(n,length,s)=> {
-    if(length===1)return [value(n,s)];
-    if(n?.nodeType==='TupleExpression'&&n.components?.length===length&&n.components.every(Boolean))return n.components.map(c=>value(c,s));
-    const whole=value(n,s);return Array.from({length},(_,i)=>synthetic(n,'tuple_component',[whole],s,{component_index:i}));
-  };
-  function assign(n,s) {
-    if(n.leftHandSide?.nodeType==='TupleExpression') {
-      if(n.operator!=='=')fail('INTERNAL_RETURN_TUPLE_COMPOUND_ASSIGNMENT');
-      const lhs=n.leftHandSide.components,rhs=tupleValues(n.rightHandSide,lhs.length,s);
-      for(const [i,p]of lhs.entries()) {if(!p)continue;const d=nodes.get(p.referencedDeclaration);
-        if(p.nodeType!=='Identifier'||!d||d.stateVariable||!Object.hasOwn(s.parameter_expression_bindings,d.id))fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
-        s.parameter_expression_bindings[d.id]=rhs[i];delete s.compiletime_bindings[d.id];}
-      return [s];
+  function defaultValue(d,s) {
+    const type=typeOf(d);if(!scalar(d))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
+    return synthetic(d,'literal',[],s,{value:type==='bool'?'false':/^(address|contract )/.test(type)?'0x'+'0'.repeat(40):/^bytes/.test(type)?'0x'+'00'.repeat(Number(type.slice(5))):'0',type});
+  }
+  for(const d of output)if(d.name){initial.parameter_expression_bindings[d.id]=defaultValue(d,initial);initial.compiletime_bindings[d.id]=0n;}
+  function local(n,s) {
+    const d=nodes.get(n?.referencedDeclaration);
+    if(n?.nodeType!=='Identifier'||!d||d.stateVariable||!scalar(d)||!Object.hasOwn(s.parameter_expression_bindings,d.id))fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
+    return d;
+  }
+  function bind(d,key,known,s) {
+    s.parameter_expression_bindings[d.id]=key;
+    if(known===null)delete s.compiletime_bindings[d.id];else s.compiletime_bindings[d.id]=integerValue(known,d,s);
+  }
+  function guard(s,key,expected,failure) {
+    const condition={expression_id:key,expected,...(failure?{failure}:{})};
+    s.return_conditions.push(condition);s.execution_steps.push({kind:'guard',...condition});return s;
+  }
+  function choose(row,n,label) {
+    if(row.known!==null)return [{...row,expected:row.known!==0n}];
+    return [true,false].map(expected=>({...row,s:guard(fork(row.s,label+':'+n.id+':'+expected),row.key,expected),expected}));
+  }
+  function evaluate(n,s) {
+    if(++count>1024)fail('INTERNAL_RETURN_EXPRESSION_BUDGET');
+    if(!effects(n).writes.size)return [{s,key:build(n,{...s,path:s.path+'/expr:'+(serial++)}),known:constant(n,s)}];
+    if(n.nodeType==='Assignment') {
+      if(n.leftHandSide?.nodeType==='TupleExpression')fail('INTERNAL_RETURN_NESTED_TUPLE_ASSIGNMENT_UNSUPPORTED');
+      const d=local(n.leftHandSide,s),old=s.parameter_expression_bindings[d.id],oldKnown=s.compiletime_bindings[d.id]??null;
+      if(n.operator!=='='&&effects(n.rightHandSide).writes.has(d.id))fail('INTERNAL_RETURN_EVALUATION_ORDER_UNSPECIFIED');
+      return bounded(evaluate(n.rightHandSide,s).map(row=>{
+        const key=n.operator==='='?row.key:synthetic(n,'binary',[old,row.key],row.s,{operator:n.operator.slice(0,-1),type:typeOf(d)});
+        let known=n.operator==='='?row.known:null;
+        if(n.operator!=='='&&oldKnown!==null&&row.known!==null){const a=oldKnown,b=row.known;known=n.operator==='+='?a+b:n.operator==='-='?a-b:n.operator==='*='?a*b:n.operator==='/='&&b!==0n?a/b:n.operator==='%='&&b!==0n?a%b:null;}
+        const assigned=synthetic(n,'identity',[key],row.s,{type:typeOf(d),local_assignment:true});
+        bind(d,assigned,known,row.s);row.s.execution_steps.push({kind:'evaluate',expression_id:assigned});
+        return {s:row.s,key:assigned,known:row.s.compiletime_bindings[d.id]??null};
+      }));
     }
-    const lhs=n.leftHandSide,decl=nodes.get(lhs?.referencedDeclaration);
-    if (lhs?.nodeType !== 'Identifier' || !decl || decl.stateVariable || !Object.hasOwn(s.parameter_expression_bindings,decl.id)) fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
-    const rhs=value(n.rightHandSide,s);
-    keepConstant(decl,n.rightHandSide,s,n.operator);
-    s.parameter_expression_bindings[decl.id]=n.operator==='='?rhs:synthetic(n,'binary',[s.parameter_expression_bindings[decl.id],rhs],s,{operator:n.operator.slice(0,-1),type:typeOf(lhs)});
-    return [s];
+    if(n.nodeType==='UnaryOperation'&&['++','--'].includes(n.operator)) {
+      const d=local(n.subExpression,s),old=s.parameter_expression_bindings[d.id],oldKnown=s.compiletime_bindings[d.id]??null;
+      const one=synthetic(n,'literal',[],s,{value:'1',type:typeOf(d)}),key=synthetic(n,'binary',[old,one],s,{operator:n.operator==='++'?'+':'-',type:typeOf(d)});
+      bind(d,key,oldKnown===null?null:oldKnown+(n.operator==='++'?1n:-1n),s);s.execution_steps.push({kind:'evaluate',expression_id:key});
+      return [{s,key:n.prefix?key:old,known:n.prefix?s.compiletime_bindings[d.id]??null:oldKnown}];
+    }
+    if(n.nodeType==='BinaryOperation'&&['&&','||'].includes(n.operator)) {
+      return bounded(evaluate(n.leftExpression,s).flatMap(left=>choose(left,n,'short-circuit').flatMap(branch=>{
+        if(branch.expected===(n.operator==='&&'))return evaluate(n.rightExpression,branch.s);
+        return [{s:branch.s,key:synthetic(n,'literal',[],branch.s,{value:branch.expected?'true':'false',type:'bool'}),known:branch.expected?1n:0n}];
+      })));
+    }
+    if(n.nodeType==='Conditional')return bounded(evaluate(n.condition,s).flatMap(row=>choose(row,n,'conditional').flatMap(branch=>evaluate(branch.expected?n.trueExpression:n.falseExpression,branch.s))));
+    if(n.nodeType==='TupleExpression') {
+      if(n.components?.length===1)return evaluate(n.components[0],s);
+      return evaluateList(n.components,s).map(row=>({s:row.s,key:synthetic(n,'tuple',row.keys,row.s,{type:typeOf(n)}),known:null}));
+    }
+    if(n.nodeType==='BinaryOperation')return evaluateList([n.leftExpression,n.rightExpression],s).map(row=>({s:row.s,key:synthetic(n,'binary',row.keys,row.s,{operator:n.operator}),known:null}));
+    if(n.nodeType==='UnaryOperation')return evaluate(n.subExpression,s).map(row=>({s:row.s,key:synthetic(n,'unary',[row.key],row.s,{operator:n.operator}),known:null}));
+    if(n.nodeType==='FunctionCall') {
+      independent([n.expression,...n.arguments]);
+      if(effects(n.expression).writes.size)fail('INTERNAL_RETURN_CALLEE_SIDE_EFFECT_UNSUPPORTED');
+      return evaluateList(n.arguments,s).map(row=>{
+        const c=fork(row.s,'arguments:'+(serial++)),arguments_=n.arguments.map((a,i)=>{
+          const ref='return-argument:'+(serial++);c.parameter_expression_bindings[ref]=row.keys[i];
+          return {nodeType:'Identifier',id:ref,referencedDeclaration:ref,name:'bound_argument',src:a.src,typeDescriptions:a.typeDescriptions};
+        });
+        return {s:row.s,key:build({...n,arguments:arguments_},c),known:null};
+      });
+    }
+    fail('INTERNAL_RETURN_EXPRESSION_EFFECT_UNSUPPORTED:'+n.nodeType);
+  }
+  function evaluateList(list,s) {
+    independent(list);let pending=[{s,keys:[],known:[]}];
+    for(const n of list)pending=bounded(pending.flatMap(p=>evaluate(n,p.s).map(r=>({s:r.s,keys:[...p.keys,r.key],known:[...p.known,r.known]}))));
+    return pending;
+  }
+  function value(n,s) {
+    validate(n);return bounded(evaluate(n,s).map(row=>{row.s.execution_steps.push({kind:'evaluate',expression_id:row.key});return row;}));
+  }
+  function tupleValues(n,length,s) {
+    if(length===1)return value(n,s).map(r=>({s:r.s,keys:[r.key],known:[r.known]}));
+    if(n?.nodeType==='TupleExpression'&&n.components?.length===length&&n.components.every(Boolean)) {
+      validate(n);return evaluateList(n.components,s).map(r=>{for(const key of r.keys)r.s.execution_steps.push({kind:'evaluate',expression_id:key});return r;});
+    }
+    return value(n,s).map(r=>({s:r.s,keys:Array.from({length},(_,i)=>synthetic(n,'tuple_component',[r.key],r.s,{component_index:i})),known:Array(length).fill(null)}));
+  }
+  function returned(keys,s) {
+    if(keys.some(v=>!v))fail('INTERNAL_RETURN_VALUE_UNAVAILABLE');
+    results.push({expression_id:keys[0],expression_ids:keys,conditions:s.return_conditions,execution_steps:s.execution_steps});bounded([]);
   }
   function execute(n,s) {
-    if (++count > 1024 || results.length > 32) fail('INTERNAL_RETURN_PATH_BUDGET');
-    if (!n || s.control) return [s];
-    if (['Block','UncheckedBlock'].includes(n.nodeType)) {
-      const outer=s.unchecked;
-      let pending=[{...s,unchecked:s.unchecked || n.nodeType==='UncheckedBlock'}];
-      for (const stmt of n.statements || []) {
-        pending=pending.flatMap(p=>execute(stmt,p));
-        if (pending.length+results.length > 32) fail('INTERNAL_RETURN_PATH_BUDGET');
-        if (!pending.length) break;
-      }
+    if(++count>1024||results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');
+    if(!n||s.control)return [s];
+    if(['Block','UncheckedBlock'].includes(n.nodeType)) {
+      const outer=s.unchecked;let pending=[{...s,unchecked:s.unchecked||n.nodeType==='UncheckedBlock'}];
+      for(const stmt of n.statements||[]){pending=bounded(pending.flatMap(p=>execute(stmt,p)));if(!pending.length)break;}
       return pending.map(p=>({...p,unchecked:outer}));
     }
-    if (n.nodeType==='IfStatement') {
-      const known=constant(n.condition,s);
-      if(known!==null)return execute(known!==0n?n.trueBody:n.falseBody,fork(s,'if:'+n.id+':constant'));
-      const condition=value(n.condition,s),yes=fork(s,'if:'+n.id+':true'),no=fork(s,'if:'+n.id+':false');
-      yes.return_conditions.push({expression_id:condition,expected:true}); no.return_conditions.push({expression_id:condition,expected:false});
-      return [...execute(n.trueBody,yes),...execute(n.falseBody,no)];
-    }
-    if (n.nodeType==='VariableDeclarationStatement') {
+    if(n.nodeType==='IfStatement')return bounded(value(n.condition,s).flatMap(row=>choose(row,n,'if').flatMap(branch=>execute(branch.expected?n.trueBody:n.falseBody,branch.s))));
+    if(n.nodeType==='VariableDeclarationStatement') {
       const ds=n.declarations||[];
       if(!ds.length||ds.some(d=>d&&(d.storageLocation==='storage'||!scalar(d))))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
-      const rhs=n.initialValue?tupleValues(n.initialValue,ds.length,s):ds.map(d=>d?defaultValue(d,s):null);
-      for(const [i,d]of ds.entries())if(d){s.parameter_expression_bindings[d.id]=rhs[i];if(ds.length===1&&n.initialValue)keepConstant(d,n.initialValue,s);else if(!n.initialValue)s.compiletime_bindings[d.id]=0n;}
-      return [s];
+      const rows=n.initialValue?tupleValues(n.initialValue,ds.length,s):[{s,keys:ds.map(d=>d?defaultValue(d,s):null),known:ds.map(()=>0n)}];
+      return rows.map(row=>{for(const [i,d]of ds.entries())if(d)bind(d,row.keys[i],row.known[i],row.s);return row.s;});
     }
-    if (n.nodeType==='Return') {
-      const returned=n.expression?tupleValues(n.expression,output.length,s):output.map(d=>s.parameter_expression_bindings[d.id]);
-      if (returned.some(v=>!v)) fail('INTERNAL_RETURN_VALUE_UNAVAILABLE');
-      results.push({expression_id:returned[0],expression_ids:returned,conditions:s.return_conditions}); return [];
+    if(n.nodeType==='Return') {
+      const rows=n.expression?tupleValues(n.expression,output.length,s):[{s,keys:output.map(d=>s.parameter_expression_bindings[d.id])}];
+      for(const row of rows)returned(row.keys,row.s);return [];
     }
     if(['ForStatement','WhileStatement','DoWhileStatement'].includes(n.nodeType)) {
       let pending=n.initializationExpression?execute(n.initializationExpression,s):[s],finished=[],iteration=0;
       do {
         const active=[];
-        for(const p of pending){const test=n.nodeType==='DoWhileStatement'&&iteration===0?1n:n.condition?constant(n.condition,p):null;
-          if(test===null)fail('INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND');
-          if(test===0n)finished.push(p);else active.push(p);}
+        for(const p of pending) {
+          const tests=n.nodeType==='DoWhileStatement'&&iteration===0?[{s:p,known:1n}]:n.condition?value(n.condition,p):[{s:p,known:null}];
+          for(const t of tests){if(t.known===null)fail('INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND');if(t.known===0n)finished.push(t.s);else active.push(t.s);}
+        }
         if(!active.length)break;
         if(iteration>=16||++loopIterations>64)fail('INTERNAL_RETURN_LOOP_ITERATION_BUDGET');
         pending=[];
-        for(const p of active)for(const q of execute(n.body,fork(p,'loop:'+n.id+':'+iteration))){
+        for(const p of active)for(const q of execute(n.body,fork(p,'loop:'+n.id+':'+iteration))) {
           if(q.control==='break'){delete q.control;finished.push(q);continue;}
           if(q.control==='continue')delete q.control;
-          pending.push(...(n.loopExpression?execute(n.loopExpression,q):[q]));}
-        iteration++;if(pending.length+finished.length+results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');
+          pending.push(...(n.loopExpression?execute(n.loopExpression,q):[q]));
+        }
+        iteration++;bounded([...pending,...finished]);
       }while(pending.length);
-      loops.set(n.id,{ast_id:n.id,iterations:Math.max(loops.get(n.id)?.iterations||0,iteration),bound_basis:'compiletime_values_and_local_counter'});
-      return finished;
+      loops.set(n.id,{ast_id:n.id,iterations:Math.max(loops.get(n.id)?.iterations||0,iteration),bound_basis:'compiletime_values_and_local_counter'});return finished;
     }
     if(['Break','Continue'].includes(n.nodeType)){s.control=n.nodeType.toLowerCase();return [s];}
-    if (n.nodeType==='RevertStatement') return [];
-    if (n.nodeType==='ExpressionStatement') {
+    if(n.nodeType==='RevertStatement')return [];
+    if(n.nodeType==='ExpressionStatement') {
       const e=n.expression,name=e?.expression?.name;
-      if (e?.nodeType==='Assignment') return assign(e,s);
-      if(e?.nodeType==='UnaryOperation'&&['++','--'].includes(e.operator)) {
-        const d=nodes.get(e.subExpression?.referencedDeclaration);
-        if(e.subExpression?.nodeType!=='Identifier'||!d||d.stateVariable||!Object.hasOwn(s.parameter_expression_bindings,d.id))fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
-        const one={nodeType:'Literal',kind:'number',value:'1',id:'increment:'+e.id,src:e.src,typeDescriptions:e.subExpression.typeDescriptions};
-        keepConstant(d,one,s,e.operator==='++'?'+=':'-=');
-        s.parameter_expression_bindings[d.id]=synthetic(e,'binary',[s.parameter_expression_bindings[d.id],synthetic(e,'literal',[],s,{value:'1',type:typeOf(d)})],s,{operator:e.operator==='++'?'+':'-',type:typeOf(d)});
-        return [s];
+      if(e?.nodeType==='Assignment'&&e.leftHandSide?.nodeType==='TupleExpression') {
+        if(e.operator!=='=')fail('INTERNAL_RETURN_TUPLE_COMPOUND_ASSIGNMENT');
+        const lhs=e.leftHandSide.components,ds=lhs.map(p=>p?local(p,s):null);
+        if(new Set(ds.filter(Boolean).map(d=>d.id)).size!==ds.filter(Boolean).length)fail('INTERNAL_RETURN_DUPLICATE_TUPLE_TARGET');
+        return tupleValues(e.rightHandSide,lhs.length,s).map(row=>{for(const [i,d]of ds.entries())if(d)bind(d,row.keys[i],row.known[i],row.s);return row.s;});
       }
-      if (e?.nodeType==='FunctionCall' && ['require','assert'].includes(name)) {
-        s.return_conditions.push({expression_id:value(e.arguments[0],s),expected:true,failure:name==='assert'?'panic':'revert'}); return [s];
+      if(e?.nodeType==='FunctionCall'&&['require','assert'].includes(name)) {
+        independent(e.arguments);
+        if(e.arguments.slice(1).some(a=>a.nodeType!=='Literal'))fail('INTERNAL_RETURN_REQUIRE_MESSAGE_EFFECT_UNSUPPORTED');
+        return value(e.arguments[0],s).flatMap(row=>row.known===0n?[]:[guard(row.s,row.key,true,name==='assert'?'panic':'revert')]);
       }
-      if (e?.nodeType==='FunctionCall' && name==='revert') return [];
+      if(e?.nodeType==='FunctionCall'&&name==='revert')return [];
+      if(e?.nodeType)return value(e,s).map(row=>row.s);
     }
     fail('INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:'+n.nodeType);
   }
@@ -176,17 +236,22 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   for(const invocation of target.modifiers||[]) {
     const modifier=nodes.get(invocation.modifierName?.referencedDeclaration),statements=modifier?.body?.statements;
     if(!statements||statements.filter(n=>n.nodeType==='PlaceholderStatement').length!==1||statements.at(-1)?.nodeType!=='PlaceholderStatement')fail('INTERNAL_RETURN_MODIFIER_UNSUPPORTED');
-    for(const p of starts)for(const [i,d]of (modifier.parameters?.parameters||[]).entries()) {
-      p.parameter_expression_bindings[d.id]=value(invocation.arguments[i],p);p.parameter_arguments[d.id]=invocation.arguments[i];}
-    for(const stmt of statements.slice(0,-1)){starts=starts.flatMap(p=>execute(stmt,p));if(results.length)fail('INTERNAL_RETURN_MODIFIER_UNSUPPORTED');}
+    const parameters=modifier.parameters?.parameters||[];
+    independent(invocation.arguments||[]);
+    starts=starts.flatMap(p=>{
+      let pending=[{s:p,keys:[],known:[]}];
+      for(const a of invocation.arguments||[])pending=bounded(pending.flatMap(row=>value(a,row.s).map(r=>({s:r.s,keys:[...row.keys,r.key],known:[...row.known,r.known]}))));
+      return pending.map(row=>{for(const [i,d]of parameters.entries()){bind(d,row.keys[i],row.known[i],row.s);row.s.parameter_arguments[d.id]=invocation.arguments[i];}return row.s;});
+    });
+    for(const stmt of statements.slice(0,-1)){starts=bounded(starts.flatMap(p=>execute(stmt,p)));if(results.length)fail('INTERNAL_RETURN_MODIFIER_UNSUPPORTED');}
   }
   const remaining=starts.flatMap(p=>execute(target.body,p));
-  for (const s of remaining) {
-    if (output.some(d=>!d.name||!s.parameter_expression_bindings[d.id])) fail('INTERNAL_RETURN_FALLTHROUGH_UNSUPPORTED');
-    const values=output.map(d=>s.parameter_expression_bindings[d.id]);results.push({expression_id:values[0],expression_ids:values,conditions:s.return_conditions});
+  for(const s of remaining) {
+    if(output.some(d=>!d.name||!s.parameter_expression_bindings[d.id]))fail('INTERNAL_RETURN_FALLTHROUGH_UNSUPPORTED');
+    returned(output.map(d=>s.parameter_expression_bindings[d.id]),s);
   }
-  if (!results.length) fail('INTERNAL_RETURN_NO_SUCCESSFUL_PATH');
+  if(!results.length)fail('INTERNAL_RETURN_NO_SUCCESSFUL_PATH');
   const output_expression_ids=output.map((d,i)=>{const paths=results.map(r=>({...r,expression_id:r.expression_ids[i]}));return synthetic(call,'return_cases',paths.map(r=>r.expression_id),initial,{paths,type:typeOf(d)});});
   return {expression_id:output.length===1?output_expression_ids[0]:synthetic(call,'tuple',output_expression_ids,initial,{type:'tuple('+output.map(typeOf).join(',')+')'}),
-    output_expression_ids,paths:results,loops:[...loops.values()],scope:output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',all_execution_paths_verified:false};
+    output_expression_ids,paths:results,loops:[...loops.values()],scope:output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',ordered_evaluations_preserved:true,all_execution_paths_verified:false};
 }

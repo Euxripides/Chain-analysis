@@ -1,6 +1,6 @@
 import {chromium} from '@playwright/test';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
-const root=new URL('../../',import.meta.url),out=new URL('acceptance/contract-analysis-mechanisms/mechanism-browser/',root);mkdirSync(out,{recursive:true});
+const root=new URL('../../',import.meta.url),out=new URL((process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis-mechanisms')+'/mechanism-browser/',root);mkdirSync(out,{recursive:true});
 const dependency=readFileSync(new URL('../dependency-analysis-id.txt',out),'utf8').trim(),authority=readFileSync(new URL('../authority-analysis-id.txt',out),'utf8').trim(),checks=[];
 function check(scenario,ok,evidence){checks.push({scenario,status:ok?'PASS':'FAIL',evidence});writeFileSync(new URL('report.json',out),JSON.stringify(checks,null,2));console.log(scenario,ok?'PASS':'FAIL');if(!ok)throw new Error(scenario)}
 const browser=await chromium.launch({headless:true});

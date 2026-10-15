@@ -14,7 +14,7 @@ export function applyDataflow(result) {
     const expand = (key, seen = new Set(), budget = { count: 0 }, beforeOrder = Infinity) => {
       const e = expressions.get(key);
       if (!e) return { text: '', unresolved: ['EXPRESSION_UNAVAILABLE'], definitions: [], evidence: [] };
-      const own = { text: e.text, unresolved: e.unresolved_return_value?[e.unresolved_return_value]:[], definitions: [], evidence: [...(e.evidence_ids || [])] };
+      const own = { text: e.text, unresolved: [e.unresolved_return_value,e.unresolved_evaluation_effect].filter(Boolean), definitions: [], evidence: [...(e.evidence_ids || [])] };
       if (seen.has(key) || ++budget.count > 512) return { ...own, unresolved: ['DATAFLOW_BUDGET_OR_CYCLE'] };
       const next = new Set([...seen, key]);
       if(e.symbolic_format==='tuple_component') {
@@ -28,12 +28,15 @@ export function applyDataflow(result) {
         const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
         const merged={...own,unresolved:unique(values.flatMap(v=>v.unresolved)),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
+        if(e.symbolic_format==='identity')return {...merged,text:values[0].text};
+        if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+values[0].text+')'};
         if(e.symbolic_format==='binary')return {...merged,text:'('+values[0].text+' '+e.operator+' '+values[1].text+')'};
         if(e.symbolic_format==='tuple')return {...merged,text:'('+values.map(v=>v.text).join(', ')+')',
-          return_paths:values[0]?.return_paths?.map((p,i)=>({conditions:p.conditions,value:'('+values.map(v=>v.return_paths?.[i]?.value||v.text).join(', ')+')'}))||[]};
+          return_paths:values[0]?.return_paths?.map((p,i)=>({conditions:p.conditions,execution_steps:p.execution_steps||[],value:'('+values.map(v=>v.return_paths?.[i]?.value||v.text).join(', ')+')'}))||[]};
         if(e.symbolic_format==='return_cases') {
           const paths=(e.paths||[]).flatMap((p,i)=>{const conditions=p.conditions.map(c=>{const v=expand(c.expression_id,next,budget,beforeOrder);merged.unresolved.push(...v.unresolved);merged.evidence.push(...v.evidence);merged.definitions.push(...v.definitions);return (c.expected?'':'!')+'('+v.text+')'});
-            return values[i].return_paths?.length?values[i].return_paths.map(inner=>({value:inner.value,conditions:unique([...conditions,...inner.conditions])})):[{value:values[i].text,conditions}];});
+            const execution_steps=(p.execution_steps||[]).map(step=>{const v=expand(step.expression_id,next,{count:0},beforeOrder);merged.unresolved.push(...v.unresolved);merged.evidence.push(...v.evidence);merged.definitions.push(...v.definitions);return {...step,expression:v.text};});
+            return values[i].return_paths?.length?values[i].return_paths.map(inner=>({value:inner.value,conditions:unique([...conditions,...inner.conditions]),execution_steps:[...execution_steps,...(inner.execution_steps||[])]})):[{value:values[i].text,conditions,execution_steps}];});
           if(paths.length>32)return {...merged,unresolved:unique([...merged.unresolved,'COMPOSED_RETURN_PATH_BUDGET']),text:e.text};
           let text=paths.at(-1).value;
           for(let i=paths.length-2;i>=0;i--)text='('+paths[i].conditions.join(' && ')+' ? '+paths[i].value+' : '+text+')';

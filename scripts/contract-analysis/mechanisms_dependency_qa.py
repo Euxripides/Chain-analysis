@@ -2,13 +2,13 @@
 import json,os
 from qa_support import ROOT,fixture_clients
 from live_api_qa import await_job,all_pages,artifact_bytes
-OUT=ROOT/'acceptance/contract-analysis-mechanisms';rows=[]
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis-mechanisms');rows=[]
 def check(name,ok,evidence=None):
  rows.append({'scenario':name,'status':'PASS'if ok else'FAIL','evidence':evidence});(OUT/'dependency-live-qa.json').write_text(json.dumps(rows,indent=2));print(name,rows[-1]['status'],flush=True)
  if not ok:raise AssertionError(name)
 c=fixture_clients()['investigator'];image=(OUT/'engine-image.txt').read_text().strip()
 q={'chain':'ethereum','address':'0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11','block':19000000,'from_block':19000000,'to_block':19000000,
- 'idempotency_key':'ca-mechanism-dependency-'+image[7:19],'budget':{'max_contracts':4,'max_rpc_requests':100,'max_state_reads':24}}
+ 'idempotency_key':os.environ.get('CONTRACT_QA_DEPENDENCY_KEY','ca-mechanism-dependency-')+image[7:19],'budget':{'max_contracts':4,'max_rpc_requests':100,'max_state_reads':24}}
 aid=c.must('/api/v2/contract-analyses',q)['analysis_id'];job=await_job(c,aid);(OUT/'dependency-analysis-id.txt').write_text(aid)
 check('pinned-pair-analysis-completes',job['status']=='completed',{'analysis_id':aid,'status':job['status'],'error':job.get('error_code')})
 calls=all_pages(c,aid,'calls',100);contracts=all_pages(c,aid,'contracts',100);methods=all_pages(c,aid,'methods',100)
@@ -28,5 +28,6 @@ check('real-encoded-transfer-calldata-is-represented',any(f.get('protocol')=='en
 arts=all_pages(c,aid,'artifacts',100);machine=json.loads(artifact_bytes(c,aid,next(a for a in arts if a['kind']=='machine_result'),4<<20));report=artifact_bytes(c,aid,next(a for a in arts if a['kind']=='analysis_report'),4<<20).decode()
 check('exported-calls-match-real-api',machine['sections']['calls']==calls)
 check('report-preserves-resolved-targets-and-code-hashes',all(r['resolved_target_address']in report and r['dependency_code_hash']in report for r in resolved))
+if os.environ.get('CONTRACT_QA_ORDERED_REPORT')=='1':check('report-preserves-ordered-execution-domain','执行计算' in report and '检查' in report)
 check('dependency-budget-recorded',job['metadata']['metrics']['rpc_http_requests']<=100,job['metadata']['metrics'])
 print('DEPENDENCY_LIVE_PASS',len(rows),aid,flush=True)

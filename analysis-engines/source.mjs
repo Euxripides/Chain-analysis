@@ -167,6 +167,8 @@ export function analyzeSource(result, source, bytecode) {
       rounding: node.operator === '/' ? 'toward_zero' : null, operands, referenced_declaration: node.referencedDeclaration ?? null,call_kind:node.kind||null,
       path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,entry_return_summary:context.entry_return_summary||false,
       evidence_ids: [getEvidence(method, node)] };
+    if(node.nodeType==='Assignment'||node.nodeType==='UnaryOperation'&&['++','--'].includes(node.operator))
+      row.unresolved_evaluation_effect='LOCAL_EXPRESSION_EFFECT_REQUIRES_ORDERED_RETURN_MODEL';
     if(binding_expression_id){row.binding_expression_id=binding_expression_id;row.bound_argument=sourceText(bound)}
     if(node.nodeType==='FunctionCall') {row.argument_expression_ids=(node.arguments||[]).map(n=>expression(method,n,context));row.callee_expression_id=expression(method,node.expression,context);}
     if(node.nodeType==='FunctionCall'&&node.kind!=='typeConversion') {

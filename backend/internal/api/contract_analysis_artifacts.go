@@ -215,6 +215,16 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					if nextDecode(ca.Row(item["successful_return_paths"]), &paths) == nil {
 						for _, p := range paths {
 							fmt.Fprintf(&report, "  返回路径：%s；表达式 %s。\n", strings.Join(stringList(p["conditions"]), "，"), p["value"])
+							var evaluations []map[string]any
+							if nextDecode(ca.Row(p["execution_steps"]), &evaluations) == nil {
+								for index, step := range evaluations {
+									if step["kind"] == "guard" {
+										fmt.Fprintf(&report, "  顺序 %d：检查 %s；要求结果 %v。\n", index+1, step["expression"], step["expected"])
+									} else {
+										fmt.Fprintf(&report, "  顺序 %d：执行计算 %s。\n", index+1, step["expression"])
+									}
+								}
+							}
 						}
 					}
 					var loops []map[string]any

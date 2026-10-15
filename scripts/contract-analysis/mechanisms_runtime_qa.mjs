@@ -1,12 +1,13 @@
 import {spawn,spawnSync} from 'node:child_process';
 import {once} from 'node:events';
+import {evaluateReturn} from './expression_model_eval.mjs';
 import {fileURLToPath} from 'node:url';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {compileMechanismFixture} from '../../analysis-engines/test/mechanism-fixtures.mjs';
 const require=createRequire(new URL('../../analysis-engines/package.json',import.meta.url)),{keccak_256}=require('@noble/hashes/sha3.js');
 const hash=b=>'0x'+Buffer.from(keccak_256(b)).toString('hex'),selector=s=>hash(Buffer.from(s)).slice(0,10),word=n=>BigInt(n).toString(16).padStart(64,'0'),aw=a=>a.slice(2).padStart(64,'0');
-const out=new URL('../../acceptance/contract-analysis-mechanisms/mechanism-runtime/',import.meta.url);mkdirSync(out,{recursive:true});
+const out=new URL('../../'+(process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis-mechanisms')+'/mechanism-runtime/',import.meta.url);mkdirSync(out,{recursive:true});
 const image=readFileSync(new URL('../engine-image.txt',out),'utf8').trim(),checks=[],transactions=[],runs=[];
 function check(scenario,condition,evidence){checks.push({scenario,status:condition?'PASS':'FAIL',evidence});writeFileSync(new URL('report.json',out),JSON.stringify({image,checks,transactions,runs,complete:scenario==='mechanism-runtime-complete'&&condition,simulation:true,network:'local_anvil',all_paths_proved:false},null,2));console.log(scenario,condition?'PASS':'FAIL');if(!condition)throw new Error(scenario)}
 let sequence=0;
@@ -14,29 +15,7 @@ async function rpc(method,params=[]){const r=await fetch('http://127.0.0.1:18747
 const admin='0x'+'1'.repeat(40),user='0x'+'2'.repeat(40),recipient='0x'+'3'.repeat(40);
 async function send(from,to,data,value='0x0'){const tx=await rpc('eth_sendTransaction',[{from,...(to?{to}:{}),data,value,gas:'0x989680',gasPrice:'0x77359400'}]);await rpc('evm_mine');const receipt=await rpc('eth_getTransactionReceipt',[tx]);transactions.push({tx_hash:tx,block_hash:receipt.blockHash,status:receipt.status});return receipt}
 async function call(to,signature,args=[]){const raw=await rpc('eth_call',[{to,from:user,data:selector(signature)+args.map(word).join('')},'latest']);return raw.slice(2).match(/.{64}/g)?.map(x=>BigInt('0x'+x))||[]}
-function evaluate(model,name,values){const method=model.sections.methods.find(m=>m.name===name),expressions=new Map(model.sections.expressions.filter(e=>e.method_id===method.method_id).map(e=>[e.expression_id,e]));let count=0;
- const normalize=(v,e)=>{if(typeof v!=='bigint'||!e.width)return v;const bits=BigInt(e.width),mod=1n<<bits,min=e.signed?-(mod>>1n):0n,max=e.signed?(mod>>1n)-1n:mod-1n;if(v<min||v>max){if(e.arithmetic==='checked')throw new Error('MODEL_OVERFLOW');v=((v%mod)+mod)%mod;if(e.signed&&v>max)v-=mod;}return v;};
- const truth=v=>typeof v==='boolean'?v:v!==0n;
- function binary(op,a,b,e){let v;switch(op){case '+':v=a+b;break;case '-':v=a-b;break;case '*':v=a*b;break;case '/':if(b===0n)throw new Error('MODEL_DIV_ZERO');v=a/b;break;case '%':if(b===0n)throw new Error('MODEL_DIV_ZERO');v=a%b;break;case '==':return a===b;case '!=':return a!==b;case '<':return a<b;case '<=':return a<=b;case '>':return a>b;case '>=':return a>=b;default:throw new Error('MODEL_UNSUPPORTED_OPERATOR:'+op);}return normalize(v,e);}
- function walk(key){if(++count>10000)throw new Error('MODEL_EVALUATION_BUDGET');const e=expressions.get(key);if(!e)throw new Error('MODEL_EXPRESSION_MISSING');
-  if(e.binding_expression_id)return walk(e.binding_expression_id);
-  if(e.symbolic_format==='return_cases'){for(const p of e.paths)if(p.conditions.every(c=>truth(walk(c.expression_id))===c.expected))return walk(p.expression_id);throw new Error('MODEL_NO_SUCCESSFUL_PATH');}
-  if(e.symbolic_format==='tuple')return e.operands.map(walk);
-  if(e.op==='TupleExpression')return e.operands.length===1&&!e.type?.startsWith('tuple')?walk(e.operands[0]):e.operands.map(walk);
-  if(e.symbolic_format==='tuple_component')return walk(e.operands[0])[e.component_index];
-  if(e.symbolic_format==='literal'||e.op==='Literal'){const v=e.resolved_value??e.value;return v==='true'?true:v==='false'?false:BigInt(v);}
-  if(e.resolved_value!==undefined)return BigInt(e.resolved_value);
-  if(e.op==='Identifier'){if(Object.hasOwn(values,e.text))return values[e.text];throw new Error('MODEL_INPUT_MISSING:'+e.text);}
-  if(e.op==='FunctionCall'&&e.call_kind==='typeConversion')return normalize(walk(e.argument_expression_ids[0]),{...e,arithmetic:'explicit_cast_truncation'});
-  const op=e.operator||e.op;
-  if(op==='!')return !truth(walk(e.operands[0]));
-  if(op==='&&')return truth(walk(e.operands[0]))&&truth(walk(e.operands[1]));
-  if(op==='||')return truth(walk(e.operands[0]))||truth(walk(e.operands[1]));
-  if(e.operands.length===2)return binary(op,walk(e.operands[0]),walk(e.operands[1]),e);
-  throw new Error('MODEL_NODE_UNSUPPORTED:'+op);
- }
- const result=walk(method.entry_return_expression_id);return Array.isArray(result)?result:[result];
-}
+const evaluate=evaluateReturn;
 const anvil=spawn(fileURLToPath(new URL('../../analysis-engines/bin/anvil',import.meta.url)),['--host','127.0.0.1','--port','18747','--accounts','0','--chain-id','1','--hardfork','shanghai','--no-mining','--auto-impersonate','--silent','--disable-default-create2-deployer'],{stdio:['ignore','ignore','pipe']});
 async function deploy(name,constructor=''){const fixture=compileMechanismFixture(name,true),receipt=await send(admin,null,'0x'+fixture.compiled.evm.bytecode.object+constructor);check('deploy-'+name,receipt.status==='0x1');return {fixture,address:receipt.contractAddress};}
 async function analyze(deployed,name){const {fixture,address}=deployed,bytecode=await rpc('eth_getCode',[address,'latest']),block=await rpc('eth_getBlockByNumber',['latest',false]);

@@ -20,6 +20,8 @@ export function capabilities(snapshot = {}) {
     source_return_analysis:{language:'Solidity',scope:'bounded_scalar_and_scalar_tuple_readonly_return_paths',max_paths:32,max_tuple_components:8,max_loop_iterations:16,max_aggregate_loop_steps:64,
       local_assignments:true,named_returns:true,early_returns:true,conditional_returns:true,tuple_destructuring:true,guard_prefix_modifiers:true,
       constant_bound_for_while_do_loops:true,entry_return_models:true,
+      expression_local_assignments:true,prefix_and_postfix_local_updates:true,short_circuit_local_effects:true,conditional_local_effects:true,
+      ordered_evaluations_preserved:true,unspecified_sibling_read_write_order:'explicit_gap',
       unsupported:['dynamic_loop_bounds','assembly','storage_aliases','stateful_returns','dynamic_tuple_values','post_body_or_conditional_modifiers','dynamic_calls'],all_paths_proved:false},
     funds_control_analysis:{configuration_impacts:['amount_formula','recipient','sender','asset_contract','execution_condition','caller_authorization'],
       address_observation:'verified_layout_and_pinned_direct_slot',boolean_mapping_conditions:true,state_numeric_conditions:true,role_membership_enumerated:false,authorization_sufficiency_verified:false},

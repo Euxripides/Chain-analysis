@@ -1,0 +1,6 @@
+FROM platform-contract-mechanisms:20261015@sha256:ee6fae0108faa86ab7e091a4f1de1315848781066a74cd9b96e7bf4808737d0e
+USER root
+COPY source.mjs source-match.mjs model.mjs capabilities.mjs /engine/
+COPY ir /engine/ir
+COPY rules /engine/rules
+USER 65532:65532
