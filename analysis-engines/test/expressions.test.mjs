@@ -28,6 +28,6 @@ for(const legacy of [false,true])for(const optimizer of [false,true])test('local
   assert.ok(model('unusedOverflow').successful_return_paths[0].execution_steps.some(s=>s.expression.includes('+')));
   assert.ok(model('overwrittenDivision').successful_return_paths[0].execution_steps.some(s=>s.expression.includes('/')));
   assert.equal(method('dynamicBound').entry_return_model_status,'partial');
-  assert.equal(method('assemblyValue').entry_return_model_status,'partial');
+  assert.equal(method('assemblyValue').entry_return_model_status,'represented_source_dependencies_resolved');
  }
 });

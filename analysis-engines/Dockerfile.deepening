@@ -1,0 +1,7 @@
+FROM platform-contract-expressions:20261015@sha256:8d226da81212053a90c0d589d4cf845f31e0619605053f0ed9edee434a373d7f
+USER root
+COPY analyze.mjs source.mjs model.mjs capabilities.mjs /engine/
+COPY ir /engine/ir
+COPY properties /engine/properties
+COPY adapters/python-engine.py /engine/adapters/python-engine.py
+USER 65532:65532

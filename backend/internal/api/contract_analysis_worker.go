@@ -583,6 +583,7 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 	}
 	s.contractHistory(ctx, q, &result)
 	contractLinkDependencies(&result)
+	contractEnrichExternalReturns(&result)
 	result.Metrics["analyzed_codes"] = len(result.Sections["contracts"])
 	result.Metrics["method_count"] = len(result.Sections["methods"])
 	return result, nil

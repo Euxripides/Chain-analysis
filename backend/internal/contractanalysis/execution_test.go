@@ -2,9 +2,57 @@ package contractanalysis
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestContractCallcodeCallerContext(t *testing.T) {
+	raw := []byte(`{"type":"CALL","from":"user","to":"proxy","calls":[{"type":"CALLCODE","from":"proxy","to":"implementation"},{"type":"DELEGATECALL","from":"proxy","to":"implementation"}]}`)
+	rows, err := TraceRows(raw, "tx", true, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, expected := range []string{"proxy", "user"} {
+		var row map[string]any
+		_ = json.Unmarshal(rows["execution_calls"][i+1], &row)
+		if row["effective_caller"] != expected || row["storage_address"] != "proxy" {
+			t.Fatal("incorrect caller or storage context", row)
+		}
+	}
+}
+
+func TestContractCallcodeSavedRuntime(t *testing.T) {
+	path := os.Getenv("CONTRACT_CALLCODE_RUNTIME")
+	if path == "" {
+		t.Skip("requires local EVM context witnesses")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var records []struct {
+		Trace    json.RawMessage `json:"trace"`
+		TxHash   string          `json:"tx_hash"`
+		Caller   string          `json:"expected_caller"`
+		Storage  string          `json:"expected_storage"`
+		CallType string          `json:"call_type"`
+	}
+	if err := json.Unmarshal(raw, &records); err != nil || len(records) != 2 {
+		t.Fatalf("invalid context witnesses: %v", err)
+	}
+	for _, record := range records {
+		rows, err := TraceRows(record.Trace, record.TxHash, true, 10)
+		if err != nil || len(rows["execution_calls"]) != 2 {
+			t.Fatal("incomplete actual trace", err)
+		}
+		var child map[string]any
+		_ = json.Unmarshal(rows["execution_calls"][1], &child)
+		if child["call_type"] != record.CallType || child["effective_caller"] != record.Caller || child["storage_address"] != record.Storage || !strings.HasSuffix(strings.ToLower(child["output"].(string)), strings.TrimPrefix(record.Caller, "0x")) {
+			t.Fatal("caller disagrees with actual EVM return", child)
+		}
+	}
+}
 
 func TestExecutionRevertsDelegateAndCaughtFailure(t *testing.T) {
 	raw := []byte(`{"type":"CALL","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","value":"0x0","calls":[{"type":"CALL","from":"a","to":"b","value":"0xa","error":"execution reverted","calls":[{"type":"CALL","from":"b","to":"c","value":"0x9"}]},{"type":"DELEGATECALL","from":"a","to":"implementation","value":"0x20"},{"type":"STATICCALL","from":"a","to":"view","value":"0x20"},{"type":"CALL","from":"a","to":"recipient","value":"0x100000000000000000000000000000000"}]}`)

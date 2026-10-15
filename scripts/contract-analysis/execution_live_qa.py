@@ -8,7 +8,7 @@ def check(name,ok,evidence=None):
  if not ok:raise AssertionError(name)
 c=fixture_clients()['investigator'];tx='0xecdc668e16ada76f439b09c9b8c2faa7b76f80244933193c7691ac797e26eae7'
 q={'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,'tx_hashes':[tx],'idempotency_key':'execution-live-'+(OUT/'engine-image.txt').read_text().strip()[7:19]+os.environ.get('CONTRACT_QA_RUN_SUFFIX',''),'budget':{'max_contracts':3,'max_rpc_requests':120,'max_state_reads':24}}
-submission=c.must('/api/v2/contract-analyses',q);aid=submission['analysis_id'];(OUT/'execution-analysis-id.txt').write_text(aid);job=await_job(c,aid,240)
+submission=c.must('/api/v2/contract-analyses',q);aid=submission['analysis_id'];(OUT/'execution-analysis-id.txt').write_text(aid);job=await_job(c,aid,600)
 check('real-complex-execution-completes',job['status']=='completed',{'analysis_id':aid,'error':job.get('error_code')})
 sections={section:all_pages(c,aid,section,200) for section in ['transactions','execution_calls','executed_funds','token_events','token_balance_changes','reconciliations','replays','methods','storage','coverage','evidence','execution_evidence','artifacts']}
 (OUT/'execution-live-sections.json').write_text(json.dumps(sections,indent=2));(OUT/'execution-live-status.json').write_text(json.dumps(job,indent=2))

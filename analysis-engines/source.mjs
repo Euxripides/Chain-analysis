@@ -39,6 +39,8 @@ export function analyzeSource(result, source, bytecode) {
     {isLibrary:output.sources?.[file]?.ast?.nodes?.some(n=>n.nodeType==='ContractDefinition'&&n.name===contractName&&n.contractKind==='library'),codeAddress:result.snapshot.code_address});
   result.sections.source_verification=[{verification_id:id(result.snapshot.code_hash,'source-verification'),compiler:source.compilation.compilerVersion,...runtimeVerification}];
   const sources = source.stdJsonInput.sources;
+  const sourceBuffers=new Map(Object.entries(sources).map(([path,s])=>[path,Buffer.from(s.content||'')]));
+  const textCache=new Map(),locationCache=new Map(),evidenceCache=new Map();
   const nodes = new Map(), fileIDs = new Map();
   for (const [path, unit] of Object.entries(output.sources || {})) {
     const ast = unit.ast;
@@ -55,17 +57,20 @@ export function analyzeSource(result, source, bytecode) {
   const stateVars = [...nodes.values()].filter(n => n.nodeType === 'VariableDeclaration' && n.stateVariable && parents.has(n.scope));
   const sourceText = node => {
     if (!node?.src) return '';
+    if(textCache.has(node.src))return textCache.get(node.src);
     const [start, len, fileId] = node.src.split(':').map(Number);
     const path = fileIDs.get(fileId);
-    return Buffer.from(sources[path]?.content || '').subarray(start, start + len).toString('utf8');
+    const text=(sourceBuffers.get(path)||Buffer.alloc(0)).subarray(start,start+len).toString('utf8');textCache.set(node.src,text);return text;
   };
   const location = node => {
+    const key=node.id+':'+node.src;if(locationCache.has(key))return locationCache.get(key);
     const [start, length, fileId] = node.src.split(':').map(Number);
     const path = fileIDs.get(fileId), text = sources[path]?.content || '';
-    const line = Buffer.from(text).subarray(0, start).toString('utf8').split('\n').length;
-    return { artifact_id: id('source', path, hash(text)), file: path, start, length, line, ast_id: node.id };
+    const line = (sourceBuffers.get(path)||Buffer.alloc(0)).subarray(0,start).toString('utf8').split('\n').length;
+    const value={ artifact_id: id('source', path, hash(text)), file: path, start, length, line, ast_id: node.id };locationCache.set(key,value);return value;
   };
-  const getEvidence = (method, node) => evidence(result, method, 'source', location(node), sourceText(node).slice(0, 2048));
+  const getEvidence = (method, node) => {const key=method.method_id+':'+node.id+':'+node.src;if(evidenceCache.has(key))return evidenceCache.get(key);
+    const value=evidence(result,method,'source',location(node),sourceText(node).slice(0,2048));evidenceCache.set(key,value);return value;};
   const typeOf = node => node?.typeDescriptions?.typeString || sourceText(node?.typeName) || 'unresolved';
   const layout = compiled.storageLayout?.storage ? compiled.storageLayout : legacyLayout(orderedContracts,typeOf);
   const layoutByID = new Map((layout?.storage || []).map(v => [v.astId, v]));
@@ -112,7 +117,7 @@ export function analyzeSource(result, source, bytecode) {
   const dispatchedSelectors = new Set();
   for (const fn of functions) {
     if (!fn.implemented && !fn.body) continue;
-    const canonical = n => typeOf(n).replace(/ (memory|storage|calldata)( ref| pointer)?/g, '').replace(/^contract .+$/, 'address');
+    const canonical = n => typeOf(n).replace(/ (memory|storage|calldata)( ref| pointer)?/g, '').replace(/^contract [^\[\]\s]+/, 'address').replace(/^address payable/, 'address');
     const abiSignature = fn.name && ['external', 'public'].includes(fn.visibility) ? `${fn.name}(${(fn.parameters?.parameters || []).map(canonical).join(',')})` : '';
     const compiledSelector = compiled.evm?.methodIdentifiers?.[abiSignature];
     const selector = fn.functionSelector ? '0x' + fn.functionSelector : compiledSelector ? '0x' + compiledSelector : '';
@@ -138,6 +143,7 @@ export function analyzeSource(result, source, bytecode) {
   }
   let expressionNumber = 0;
   let syntheticNumber = 0;
+  const expressionByID=new Map();
   const synthetic = (method,node,format,operands,context,extra={}) => {
     const expression_id=id(method.method_id,node.id,context.path,'return-model',syntheticNumber++);
     const type=extra.type||typeOf(node),integer=/^(u?int)(\d*)$/.exec(type);
@@ -146,6 +152,7 @@ export function analyzeSource(result, source, bytecode) {
       width:integer?Number(integer[2]||256):null,signed:integer?integer[1]==='int':null,type,
       arithmetic:context.unchecked||Number(source.compilation.compilerVersion.split('.')[1])<8?'wrap':'checked',
       evidence_ids:[getEvidence(method,node)],...extra});
+    expressionByID.set(expression_id,result.sections.expressions.at(-1));
     if (++expressionNumber>50000) throw new Error('EXPRESSION_BUDGET_EXCEEDED');
     return expression_id;
   };
@@ -153,7 +160,7 @@ export function analyzeSource(result, source, bytecode) {
     if (!node) return null;
     const type = typeOf(node), integer = /\b(u?int)(\d*)\b/.exec(type);
     const expression_id = id(method.method_id, node.id, node.src, context.path, context.unchecked || false);
-    if (result.sections.expressions.some(e => e.expression_id === expression_id)) return expression_id;
+    if (expressionByID.has(expression_id)) return expression_id;
     const operands = children(node).filter(n => !['TypeName', 'VariableDeclaration'].some(t => n.nodeType?.endsWith(t)))
       .map(n => expression(method, n, context)).filter(Boolean);
     const bound=node.nodeType==='Identifier'?context.parameter_arguments?.[node.referencedDeclaration]:null;
@@ -169,6 +176,9 @@ export function analyzeSource(result, source, bytecode) {
       evidence_ids: [getEvidence(method, node)] };
     if(node.nodeType==='Assignment'||node.nodeType==='UnaryOperation'&&['++','--'].includes(node.operator))
       row.unresolved_evaluation_effect='LOCAL_EXPRESSION_EFFECT_REQUIRES_ORDERED_RETURN_MODEL';
+    if(node.nodeType==='YulBuiltin')Object.assign(row,{symbolic_format:'evm_word',operator:node.functionName.name,
+      width:256,signed:false,arithmetic:'evm_word_wrap',rounding:['div','sdiv'].includes(node.functionName.name)?'toward_zero_zero_divisor_returns_zero':null});
+    if(node.nodeType==='YulWordCast')Object.assign(row,{symbolic_format:'identity',arithmetic:'explicit_cast_truncation',yul_word_assignment:true});
     if(binding_expression_id){row.binding_expression_id=binding_expression_id;row.bound_argument=sourceText(bound)}
     if(node.nodeType==='FunctionCall') {row.argument_expression_ids=(node.arguments||[]).map(n=>expression(method,n,context));row.callee_expression_id=expression(method,node.expression,context);}
     if(node.nodeType==='FunctionCall'&&node.kind!=='typeConversion') {
@@ -180,8 +190,27 @@ export function analyzeSource(result, source, bytecode) {
             build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
           row.binding_expression_id=model.expression_id;row.internal_return_model=model;
           row.binding_kind='function_return';row.operands.push(row.binding_expression_id);
+          for(const missing of model.frontier||[])result.sections.frontier.push({frontier_id:id(method.method_id,'internal-loop-remainder',node.id,missing.ast_id,missing.conditions),method_id:method.method_id,
+            ...missing,evidence_ids:[getEvidence(method,node)]});
         } catch(error) { row.unresolved_return_value=String(error.message).startsWith('INTERNAL_RETURN_')?String(error.message):'INTERNAL_FUNCTION_RETURN_REQUIRES_CONTROL_FLOW'; }
-      } else if(target?.nodeType==='FunctionDefinition')row.unresolved_return_value='EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION';
+      } else if(target?.nodeType==='FunctionDefinition') {
+        row.unresolved_return_value='EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION';
+        const dependency_id=id(expression_id,'external-return'),callsite=location(node);
+        const delegate=nodes.get(target.scope)?.contractKind==='library';
+        const normalize=d=>typeOf(d).replace(/ (memory|storage|calldata)( ref| pointer)?/g,'').replace(/^contract [^\[\]\s]+/,'address').replace(/^address payable/,'address');
+        const signature=target.name+'('+(target.parameters?.parameters||[]).map(normalize).join(',')+')';
+        const dependency={dependency_id,method_id:method.method_id,expression_id,source_callsite:callsite,
+          target_expression_id:expression(method,node.expression?.expression,context),target_expression:sourceText(node.expression?.expression),
+          signature,selector:target.functionSelector?'0x'+target.functionSelector:null,
+          arguments:row.argument_expression_ids,return_types:(target.returnParameters?.parameters||[]).map(normalize),
+          caller_code_address:method.code_address,caller_storage_address:method.storage_address,
+          callee_msg_sender:delegate?'inherited_msg_sender':method.storage_address,callee_msg_value:delegate?'inherited_msg_value':'0',
+          callee_storage_context:delegate?method.storage_address:'resolved_target_address',
+          call_type:delegate?'DELEGATECALL':['pure','view'].includes(target.stateMutability)&&Number(source.compilation.compilerVersion.split('.')[1])>=5?'STATICCALL':'CALL',
+          conditions:[...(context.conditions||[])],path:context.path,state_scope:'call_execution_state',
+          status:'requires_target_identity_and_execution',evidence_ids:row.evidence_ids};
+        result.sections.external_returns||=[];result.sections.external_returns.push(dependency);row.external_return_dependency_id=dependency_id;
+      }
     }
     if (node.nodeType === 'Identifier') {
       const declaration = nodes.get(node.referencedDeclaration);
@@ -196,6 +225,7 @@ export function analyzeSource(result, source, bytecode) {
       if(node.kind==='number')Object.assign(row,numericLiteral(row.raw_literal,row.subdenomination));else row.value=row.raw_literal;
     }
     result.sections.expressions.push(row);
+    expressionByID.set(expression_id,row);
     if (++expressionNumber > 50000) throw new Error('EXPRESSION_BUDGET_EXCEEDED');
     return expression_id;
   };
@@ -563,6 +593,8 @@ export function analyzeSource(result, source, bytecode) {
           build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
         const row=result.sections.expressions.find(e=>e.expression_id===model.expression_id);
         row.entry_return_model=model;method.entry_return_expression_id=model.expression_id;
+        for(const missing of model.frontier||[])result.sections.frontier.push({frontier_id:id(method.method_id,'loop-remainder',missing.ast_id,missing.conditions),method_id:method.method_id,
+          ...missing,evidence_ids:[getEvidence(method,fn)]});
       }catch(error){method.entry_return_model_status='partial';method.entry_return_model_unresolved=[String(error.message)];}
     }
     method.completeness.complete = method.completeness.unresolved.length === 0;

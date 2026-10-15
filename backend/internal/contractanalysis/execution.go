@@ -57,6 +57,8 @@ func TraceRows(raw []byte, txHash string, success bool, limit int) (map[string][
 		if kind == "SELFDESTRUCT" {
 			code = parentCode
 			storage = strings.ToLower(frame.From)
+		} else if kind == "CALLCODE" {
+			caller = strings.ToLower(frame.From)
 		} else if kind != "DELEGATECALL" && kind != "CALLCODE" {
 			storage = code
 			caller = strings.ToLower(frame.From)

@@ -1,6 +1,6 @@
 """Run candidate services against the existing isolated contract QA database."""
 import json,os,pathlib,shutil,subprocess,sys,urllib.parse,urllib.request,time
-ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015']
+ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015','contract-deepening-20261015']
 sys.path.insert(0,str(ROOT/'scripts/contract-analysis'));from qa_support import dotenv
 OUT=ROOT/(os.environ.get('CONTRACT_QA_OUT') or 'acceptance/contract-analysis-coverage');OUT.mkdir(parents=True,exist_ok=True)
 NODE='/home/euripides/.nvm/versions/node/v24.20.0/bin/node'

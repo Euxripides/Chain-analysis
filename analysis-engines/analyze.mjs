@@ -10,6 +10,7 @@ import { applyDataflow } from './ir/dataflow.mjs';
 import { analyzeGigahorse } from './adapters/gigahorse.mjs';
 import { applyBusinessRules } from './rules/business.mjs';
 import { normalizeGigahorseDataflow } from './ir/gigahorse-dataflow.mjs';
+import { applyPropertyRules } from './properties/index.mjs';
 
 export function analyze(input) {
   if (!input?.snapshot || !/^0x(?:[0-9a-fA-F]{2}){1,49152}$/.test(input.bytecode || '')) throw new Error('INVALID_BYTECODE_INPUT');
@@ -51,5 +52,8 @@ export function analyze(input) {
   applyDataflow(result);
   applyFundsRules(result);
   applyBusinessRules(result);
+  applyPropertyRules(result);
+  result.metrics.duration_ms=Math.round(performance.now()-started);
+  result.metrics.peak_rss_bytes=process.resourceUsage().maxRSS*1024;
   return result;
 }

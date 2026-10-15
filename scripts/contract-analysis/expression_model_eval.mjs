@@ -20,7 +20,25 @@ export function evaluateReturn(model,name,inputs) {
     }if(matches)return walk(path.expression_id);
    }fail('revert');
   }
-  if(e.symbolic_format==='identity')return walk(e.operands[0]);
+  if(e.symbolic_format==='identity')return e.yul_word_assignment?normalize(walk(e.operands[0]),e):walk(e.operands[0]);
+  if(e.symbolic_format==='evm_word') {
+   const mod=1n<<256n,mask=mod-1n,values=e.operands.map(k=>BigInt(walk(k))&mask),[a,b,c]=values,sign=v=>v>=mod/2n?v-mod:v;
+   let v;
+   switch(e.operator){
+    case 'add':v=a+b;break;case 'sub':v=a-b;break;case 'mul':v=a*b;break;
+    case 'div':v=b===0n?0n:a/b;break;case 'mod':v=b===0n?0n:a%b;break;
+    case 'sdiv':v=b===0n?0n:sign(a)/sign(b);break;case 'smod':v=b===0n?0n:sign(a)%sign(b);break;
+    case 'addmod':v=c===0n?0n:(a+b)%c;break;case 'mulmod':v=c===0n?0n:a*b%c;break;
+    case 'not':v=~a;break;case 'and':v=a&b;break;case 'or':v=a|b;break;case 'xor':v=a^b;break;
+    case 'lt':v=a<b?1n:0n;break;case 'gt':v=a>b?1n:0n;break;case 'slt':v=sign(a)<sign(b)?1n:0n;break;case 'sgt':v=sign(a)>sign(b)?1n:0n;break;
+    case 'eq':v=a===b?1n:0n;break;case 'iszero':v=a===0n?1n:0n;break;
+    case 'shl':v=a<256n?b<<a:0n;break;case 'shr':v=a<256n?b>>a:0n;break;case 'sar':v=a<256n?sign(b)>>a:sign(b)<0n?-1n:0n;break;
+    case 'byte':v=a<32n?b>>((31n-a)*8n)&255n:0n;break;
+    case 'signextend':{if(a>=32n){v=b;break;}const width=8n*(a+1n),bits=1n<<width;v=b&(bits/2n)?b|~(bits-1n):b&(bits-1n);break;}
+    case 'exp':{let exponent=b,base=a;v=1n;while(exponent>0n){if(exponent%2n)v=v*base%mod;base=base*base%mod;exponent/=2n;}break;}
+    default:fail('MODEL_WORD_OPERATOR',e.operator);
+   }return v&mask;
+  }
   if(e.symbolic_format==='tuple'||e.op==='TupleExpression'&&(e.operands.length!==1||e.type?.startsWith('tuple')))return e.operands.map(walk);
   if(e.op==='TupleExpression')return walk(e.operands[0]);
   if(e.symbolic_format==='tuple_component')return walk(e.operands[0])[e.component_index];

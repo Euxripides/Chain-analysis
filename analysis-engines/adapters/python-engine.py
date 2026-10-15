@@ -2,6 +2,7 @@
 """Offline source-analysis bridge. No paths or commands are accepted from clients."""
 import hashlib
 import importlib.metadata
+import ctypes.util
 import json
 import os
 from pathlib import Path
@@ -124,6 +125,7 @@ def main():
     elif operation == 'slither': result = slither_analysis(payload)
     elif operation == 'versions':
         result = {name: version(name) for name in ['slither-analyzer', 'crytic-compile', 'vyper']}
+        result['z3_shared_library'] = ctypes.util.find_library('z3')
     else: raise ValueError('PYTHON_OPERATION_UNSUPPORTED')
     encoded = json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()
     if len(encoded) > LIMIT: raise ValueError('PYTHON_OUTPUT_BUDGET_EXCEEDED')

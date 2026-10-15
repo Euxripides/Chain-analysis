@@ -171,7 +171,7 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				report.WriteString("\n")
 			}
 		}
-		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}} {
+		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}, {"external_returns", "外部返回依赖"}, {"external_return_observations", "执行返回结果"}, {"property_obligations", "性质验证"}} {
 			items := []map[string]any{}
 			for _, row := range result.Sections[part.section] {
 				item := rowMap(row)
@@ -244,6 +244,15 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					fmt.Fprintf(&report, "- %s %s；%s。\n", item["call_type"], item["target_expression"], item["input_expression"])
 					if item["resolved_target_address"] != nil {
 						fmt.Fprintf(&report, "  解析目标：%s；状态地址 %s；代码哈希 %s；依赖状态 %s。\n", item["resolved_target_address"], contractReportField(item, "dependency_storage_address"), contractReportField(item, "dependency_code_hash"), contractReportField(item, "dependency_status"))
+					}
+				case "external_returns":
+					fmt.Fprintf(&report, "- %s；目标 %s；返回类型 %s；调用者 %s；状态 %s。\n", item["signature"], item["target_expression"], strings.Join(stringList(item["return_types"]), "，"), item["callee_msg_sender"], item["status"])
+				case "external_return_observations":
+					fmt.Fprintf(&report, "- 交易 %s；调用路径 %s；代码地址 %s；状态地址 %s；完整返回数据 %s；状态 %s。\n", item["tx_hash"], item["trace_path"], item["code_address"], item["storage_address"], item["return_data"], item["status"])
+				case "property_obligations":
+					fmt.Fprintf(&report, "- %s；命题 %s；状态 %s；假设 %s；证明文件 %s。\n", item["property"], contractReportField(item, "proposition", "amount_expression"), item["status"], strings.Join(stringList(item["assumptions"]), "，"), contractReportField(item, "proof_artifact_id"))
+					if item["counterexample"] != nil {
+						fmt.Fprintf(&report, "  反例：%s\n", ca.Row(item["counterexample"]))
 					}
 				}
 				fmt.Fprintf(&report, "  证据：%s\n", strings.Join(stringList(item["evidence_ids"]), "，"))

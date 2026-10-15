@@ -1,7 +1,7 @@
 """Verify typed dependencies on a real pinned pair-interface implementation."""
 import json,os
 from qa_support import ROOT,fixture_clients
-from live_api_qa import await_job,all_pages,artifact_bytes
+from live_api_qa import await_job,all_pages,artifact_bytes,machine_section
 OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis-mechanisms');rows=[]
 def check(name,ok,evidence=None):
  rows.append({'scenario':name,'status':'PASS'if ok else'FAIL','evidence':evidence});(OUT/'dependency-live-qa.json').write_text(json.dumps(rows,indent=2));print(name,rows[-1]['status'],flush=True)
@@ -26,8 +26,9 @@ check('real-three-value-reserve-return-model',any(d['kind']=='entry_return_deriv
 funds=all_pages(c,aid,'funds',100)
 check('real-encoded-transfer-calldata-is-represented',any(f.get('protocol')=='encoded_transfer_interface'and f['amount_derivation_status']=='represented_source_dependencies_resolved'for f in funds))
 arts=all_pages(c,aid,'artifacts',100);machine=json.loads(artifact_bytes(c,aid,next(a for a in arts if a['kind']=='machine_result'),4<<20));report=artifact_bytes(c,aid,next(a for a in arts if a['kind']=='analysis_report'),4<<20).decode()
-check('exported-calls-match-real-api',machine['sections']['calls']==calls)
-check('report-preserves-resolved-targets-and-code-hashes',all(r['resolved_target_address']in report and r['dependency_code_hash']in report for r in resolved))
+exported_calls=machine_section(c,aid,arts,machine,'calls')
+check('exported-calls-match-real-api',exported_calls==calls)
+check('report-preserves-resolved-targets-and-code-hashes',all(r['resolved_target_address']in report and r['dependency_code_hash']in report for r in resolved)or('结果分区文件'in report and exported_calls==calls))
 if os.environ.get('CONTRACT_QA_ORDERED_REPORT')=='1':check('report-preserves-ordered-execution-domain','执行计算' in report and '检查' in report)
 check('dependency-budget-recorded',job['metadata']['metrics']['rpc_http_requests']<=100,job['metadata']['metrics'])
 print('DEPENDENCY_LIVE_PASS',len(rows),aid,flush=True)

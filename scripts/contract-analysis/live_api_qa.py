@@ -49,6 +49,22 @@ def artifact_bytes(client,analysis_id,artifact,chunk_size=65536):
     assert len(out)==artifact['byte_size'] and hashlib.sha256(out).hexdigest()==artifact['sha256']
     return bytes(out)
 
+
+def machine_section(client, analysis_id, artifacts, machine, section):
+    if 'sections' in machine:
+        return machine['sections'].get(section, [])
+    assert machine.get('representation') == 'complete_section_artifacts_v1'
+    by_id = {a['artifact_id']: a for a in artifacts}
+    values = []
+    for part in machine['section_artifacts'].get(section, []):
+        assert part['from_ordinal'] == len(values)
+        data = artifact_bytes(client, analysis_id, by_id[part['artifact_id']], 4 << 20)
+        rows = json.loads(data)
+        assert len(data) == part['byte_size'] and hashlib.sha256(data).hexdigest() == part['sha256']
+        assert len(rows) == part['record_count']
+        values.extend(rows)
+    return values
+
 def main():
     clients=fixture_clients();investigator=clients['investigator'];viewer=clients['viewer'];other=clients['other']
     capabilities=investigator.must('/api/v2/contract-analyses/capabilities')

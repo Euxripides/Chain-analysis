@@ -8,14 +8,29 @@ export function applyDataflow(result) {
   for (const method of result.sections.methods) {
     const expressions = new Map(result.sections.expressions.filter(e => e.method_id === method.method_id).map(e => [e.expression_id, e]));
     const definitions = (result.sections.definitions || []).filter(d => d.method_id === method.method_id);
+    const expansionCache=new Map();
     const collectLoops=key=>{const seen=new Set(),pending=[key],loops=[];while(pending.length&&seen.size<4096){const k=pending.pop();if(seen.has(k))continue;seen.add(k);const e=expressions.get(k);if(!e)continue;
       loops.push(...(e.internal_return_model?.loops||e.entry_return_model?.loops||[]));pending.push(...(e.operands||[]));if(e.binding_expression_id)pending.push(e.binding_expression_id);}
       return [...new Map(loops.map(l=>[l.ast_id+':'+l.iterations,l])).values()];};
-    const expand = (key, seen = new Set(), budget = { count: 0 }, beforeOrder = Infinity) => {
+    const expand = (key,seen=new Set(),budget={count:0},beforeOrder=Infinity) => {
+      const e=expressions.get(key);
+      if(!e)return {text:'',unresolved:['EXPRESSION_UNAVAILABLE'],definitions:[],evidence:[]};
+      if(seen.has(key)||++budget.count>4096)return {text:e.text,unresolved:['DATAFLOW_BUDGET_OR_CYCLE'],definitions:[],evidence:[...(e.evidence_ids||[])]};
+      const cacheKey=key+':'+beforeOrder,cached=expansionCache.get(cacheKey);
+      if(cached)return {...cached,unresolved:[...cached.unresolved],definitions:[...cached.definitions],evidence:[...cached.evidence]};
+      const value=expandValue(key,seen,budget,beforeOrder);
+      // A budget/cycle result depends on its traversal context. Stable DAG
+      // expansions are reusable at the same dominance boundary.
+      if(!value.unresolved.includes('DATAFLOW_BUDGET_OR_CYCLE')){
+        if(expansionCache.size>=1024)expansionCache.delete(expansionCache.keys().next().value);
+        expansionCache.set(cacheKey,value);
+      }
+      return value;
+    };
+    const expandValue = (key, seen, budget, beforeOrder) => {
       const e = expressions.get(key);
       if (!e) return { text: '', unresolved: ['EXPRESSION_UNAVAILABLE'], definitions: [], evidence: [] };
-      const own = { text: e.text, unresolved: [e.unresolved_return_value,e.unresolved_evaluation_effect].filter(Boolean), definitions: [], evidence: [...(e.evidence_ids || [])] };
-      if (seen.has(key) || ++budget.count > 512) return { ...own, unresolved: ['DATAFLOW_BUDGET_OR_CYCLE'] };
+      const own = { text: e.text, unresolved: [e.unresolved_return_value,e.unresolved_evaluation_effect,...(e.unresolved_model_reasons||[])].filter(Boolean), definitions: [], evidence: [...(e.evidence_ids || [])] };
       const next = new Set([...seen, key]);
       if(e.symbolic_format==='tuple_component') {
         let whole=expressions.get(e.operands?.[0]),index=e.component_index,tupleSeen=new Set();
@@ -26,7 +41,8 @@ export function applyDataflow(result) {
       }
       if(e.symbolic_format) {
         const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
-        const merged={...own,unresolved:unique(values.flatMap(v=>v.unresolved)),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
+        const merged={...own,unresolved:unique([...own.unresolved,...values.flatMap(v=>v.unresolved)]),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
+        if(e.symbolic_format==='evm_word')return {...merged,text:e.operator+'('+values.map(v=>v.text).join(', ')+')'};
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
         if(e.symbolic_format==='identity')return {...merged,text:values[0].text};
         if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+values[0].text+')'};
