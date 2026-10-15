@@ -9,7 +9,7 @@ import (
 // Preserve the original view as an artifact and expose exact section references.
 // No executable row, amount, condition or source evidence is discarded.
 func contractCompactMethodDetails(result *ca.Result) error {
-	fields := map[string]string{"sequence": "steps", "conditions": "permissions", "asset_effects": "funds", "state_reads": "storage", "state_writes": "storage", "external_calls": "calls", "returned_values": "dataflow"}
+	fields := map[string]string{"sequence": "steps", "conditions": "permissions", "asset_effects": "funds", "state_reads": "storage", "state_writes": "storage", "external_calls": "calls", "returned_values": "dataflow", "calculation_rules": "expressions"}
 	for i, raw := range result.Sections["method_details"] {
 		if len(raw) <= 1<<20 {
 			continue

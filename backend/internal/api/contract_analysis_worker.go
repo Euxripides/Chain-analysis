@@ -354,6 +354,7 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	if q.Program == nil {
 		s.contractReadState(ctx, q, &result)
 		contractEnrichAuthoritySnapshot(&result)
+		contractEnrichCallTargets(&result)
 	}
 	manifest, e := s.contractCacheResult(ctx, result)
 	if e != nil {
@@ -502,37 +503,24 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 		}
 		// Dependencies are resolved only from literal addresses or type-checked
 		// snapshot address slots; unknown expressions remain a resumable frontier.
-		addresses := map[string]string{}
-		for _, row := range part.Sections["storage"] {
-			var st map[string]any
-			if nextDecode(row, &st) == nil {
-				variable, _ := st["variable"].(string)
-				address, _ := st["snapshot_address"].(string)
-				if variable != "" && address != "" {
-					addresses[variable] = address
-				}
-			}
-		}
 		for _, row := range part.Sections["calls"] {
 			var call map[string]any
 			if nextDecode(row, &call) != nil {
 				continue
 			}
 			target, _ := call["target_expression"].(string)
-			address := addresses[target]
-			if ca.CompleteAddress.MatchString(target) {
-				address = strings.ToLower(target)
-			}
+			address, _ := call["resolved_target_address"].(string)
 			if address == "" {
 				frontier = append(frontier, map[string]any{"kind": "external_expression", "expression": target, "call_id": call["call_id"], "reason": "dynamic_target"})
 				continue
 			}
-			if address == "0x0000000000000000000000000000000000000000" || address == input.Snapshot.CodeAddress {
+			storage := contractCallStorageContext(call, input.Snapshot, address)
+			if address == "0x0000000000000000000000000000000000000000" || address == input.Snapshot.CodeAddress && storage == input.Snapshot.StorageAddress {
 				continue
 			}
 			already := false
 			for _, known := range inputs {
-				if known.Snapshot.CodeAddress == address {
+				if known.Snapshot.CodeAddress == address && known.Snapshot.StorageAddress == storage {
 					already = true
 					break
 				}
@@ -545,7 +533,7 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 				continue
 			}
 			point := chainread.StatePoint{Block: input.Snapshot.BlockNumber, Hash: input.Snapshot.BlockHash, Time: input.Snapshot.BlockTime, Ref: chain.AtBlock(input.Snapshot.BlockNumber)}
-			next, e := s.contractCodeInput(ctx, q, point, address, address, q.Address, engine)
+			next, e := s.contractCodeInput(ctx, q, point, address, storage, q.Address, engine)
 			if e != nil {
 				frontier = append(frontier, map[string]any{"kind": "external_target", "address": address, "reason": "no_code_or_unavailable"})
 				continue
@@ -594,6 +582,7 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 		result.Sections["coverage"] = append(result.Sections["coverage"], ca.Row(map[string]any{"dimension": "observed_execution", "complete": false, "reason": "no_transactions_selected"}))
 	}
 	s.contractHistory(ctx, q, &result)
+	contractLinkDependencies(&result)
 	result.Metrics["analyzed_codes"] = len(result.Sections["contracts"])
 	result.Metrics["method_count"] = len(result.Sections["methods"])
 	return result, nil

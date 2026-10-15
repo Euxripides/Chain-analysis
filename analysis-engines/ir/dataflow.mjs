@@ -8,19 +8,33 @@ export function applyDataflow(result) {
   for (const method of result.sections.methods) {
     const expressions = new Map(result.sections.expressions.filter(e => e.method_id === method.method_id).map(e => [e.expression_id, e]));
     const definitions = (result.sections.definitions || []).filter(d => d.method_id === method.method_id);
+    const collectLoops=key=>{const seen=new Set(),pending=[key],loops=[];while(pending.length&&seen.size<4096){const k=pending.pop();if(seen.has(k))continue;seen.add(k);const e=expressions.get(k);if(!e)continue;
+      loops.push(...(e.internal_return_model?.loops||e.entry_return_model?.loops||[]));pending.push(...(e.operands||[]));if(e.binding_expression_id)pending.push(e.binding_expression_id);}
+      return [...new Map(loops.map(l=>[l.ast_id+':'+l.iterations,l])).values()];};
     const expand = (key, seen = new Set(), budget = { count: 0 }, beforeOrder = Infinity) => {
       const e = expressions.get(key);
       if (!e) return { text: '', unresolved: ['EXPRESSION_UNAVAILABLE'], definitions: [], evidence: [] };
-      const own = { text: e.text, unresolved: e.unresolved_return_value?[e.unresolved_return_value]:[], definitions: [], evidence: e.evidence_ids || [] };
+      const own = { text: e.text, unresolved: e.unresolved_return_value?[e.unresolved_return_value]:[], definitions: [], evidence: [...(e.evidence_ids || [])] };
       if (seen.has(key) || ++budget.count > 512) return { ...own, unresolved: ['DATAFLOW_BUDGET_OR_CYCLE'] };
       const next = new Set([...seen, key]);
+      if(e.symbolic_format==='tuple_component') {
+        let whole=expressions.get(e.operands?.[0]),index=e.component_index,tupleSeen=new Set();
+        while(whole?.binding_expression_id&&!tupleSeen.has(whole.expression_id)){tupleSeen.add(whole.expression_id);whole=expressions.get(whole.binding_expression_id);}
+        const component=(whole?.symbolic_format==='tuple'||whole?.op==='TupleExpression')?whole.operands?.[index]:null;
+        if(!component)return {...own,unresolved:['TUPLE_COMPONENT_UNAVAILABLE']};
+        const v=expand(component,next,budget,beforeOrder);return {...v,evidence:unique([...own.evidence,...v.evidence])};
+      }
       if(e.symbolic_format) {
         const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
         const merged={...own,unresolved:unique(values.flatMap(v=>v.unresolved)),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
         if(e.symbolic_format==='binary')return {...merged,text:'('+values[0].text+' '+e.operator+' '+values[1].text+')'};
+        if(e.symbolic_format==='tuple')return {...merged,text:'('+values.map(v=>v.text).join(', ')+')',
+          return_paths:values[0]?.return_paths?.map((p,i)=>({conditions:p.conditions,value:'('+values.map(v=>v.return_paths?.[i]?.value||v.text).join(', ')+')'}))||[]};
         if(e.symbolic_format==='return_cases') {
-          const paths=(e.paths||[]).map((p,i)=>({value:values[i].text,conditions:p.conditions.map(c=>{const v=expand(c.expression_id,next,budget,beforeOrder);merged.unresolved.push(...v.unresolved);merged.evidence.push(...v.evidence);merged.definitions.push(...v.definitions);return (c.expected?'':'!')+'('+v.text+')'})}));
+          const paths=(e.paths||[]).flatMap((p,i)=>{const conditions=p.conditions.map(c=>{const v=expand(c.expression_id,next,budget,beforeOrder);merged.unresolved.push(...v.unresolved);merged.evidence.push(...v.evidence);merged.definitions.push(...v.definitions);return (c.expected?'':'!')+'('+v.text+')'});
+            return values[i].return_paths?.length?values[i].return_paths.map(inner=>({value:inner.value,conditions:unique([...conditions,...inner.conditions])})):[{value:values[i].text,conditions}];});
+          if(paths.length>32)return {...merged,unresolved:unique([...merged.unresolved,'COMPOSED_RETURN_PATH_BUDGET']),text:e.text};
           let text=paths.at(-1).value;
           for(let i=paths.length-2;i>=0;i--)text='('+paths[i].conditions.join(' && ')+' ? '+paths[i].value+' : '+text+')';
           if(Buffer.byteLength(text)>16384)return {...merged,unresolved:unique([...merged.unresolved,'EXPANDED_EXPRESSION_TOO_LARGE']),return_paths:paths};
@@ -63,14 +77,30 @@ export function applyDataflow(result) {
       if (bytes.length > 16384) return { ...own, unresolved: [...own.unresolved,'EXPANDED_EXPRESSION_TOO_LARGE'] };
       return { ...own, text: bytes.toString('utf8'), definitions: unique(own.definitions), evidence: unique(own.evidence), unresolved: unique(own.unresolved) };
     };
-    for(const e of expressions.values())if(e.internal_return_model) {
+    for(const e of expressions.values())if(e.internal_return_model&&!e.entry_return_summary) {
       const value=expand(e.expression_id);
       result.sections.dataflow.push({dataflow_id:id(e.expression_id,'internal-return'),method_id:method.method_id,kind:'internal_return_derivation',
         expression_id:e.expression_id,original_expression:e.text,symbolic_expression:value.text,
-        successful_return_paths:value.return_paths||[],scope:e.internal_return_model.scope,
+        successful_return_paths:value.return_paths||[],scope:e.internal_return_model.scope,loops:collectLoops(e.expression_id),
         status:value.unresolved.length?'partial':'represented_source_dependencies_resolved',unresolved:value.unresolved,
         definition_ids:value.definitions,evidence_ids:value.evidence,all_execution_paths_verified:false});
     }
+    if(method.entry_return_expression_id) {
+      const e=expressions.get(method.entry_return_expression_id),value=expand(e.expression_id),dataflow_id=id(e.expression_id,'entry-return');
+      const status=value.unresolved.length?'partial':'represented_source_dependencies_resolved';
+      result.sections.dataflow.push({dataflow_id,method_id:method.method_id,kind:'entry_return_derivation',expression_id:e.expression_id,
+        original_expression:method.signature,symbolic_expression:value.text,successful_return_paths:value.return_paths||[],loops:collectLoops(e.expression_id),
+        scope:e.entry_return_model.scope,status,unresolved:value.unresolved,definition_ids:value.definitions,evidence_ids:value.evidence,all_execution_paths_verified:false});
+      method.entry_return_derivation_id=dataflow_id;method.entry_return_model_status=status;method.entry_return_model_unresolved=value.unresolved;
+    }
+    for(const call of result.sections.calls.filter(c=>c.method_id===method.method_id&&c.target_expression_id)) {
+      const target=expand(call.target_expression_id),dataflow_id=id(call.call_id,'target-dataflow');
+      result.sections.dataflow.push({dataflow_id,method_id:method.method_id,call_id:call.call_id,kind:'call_target_derivation',expression_id:call.target_expression_id,
+        original_expression:call.target_expression,symbolic_expression:target.text,status:target.unresolved.length?'partial':'represented_source_dependencies_resolved',unresolved:target.unresolved,
+        definition_ids:target.definitions,evidence_ids:target.evidence,all_execution_paths_verified:false});
+      call.expanded_target_expression=target.text;call.target_derivation_id=dataflow_id;call.target_derivation_status=target.unresolved.length?'partial':'represented_source_dependencies_resolved';
+    }
+    for(const storage of result.sections.storage.filter(r=>r.method_id===method.method_id))for(const p of storage.storage_projection?.path||[])if(p.key_expression_id){const v=expand(p.key_expression_id);p.expanded_key_expression=v.text;p.key_derivation_status=v.unresolved.length?'partial':'represented_source_dependencies_resolved';}
     for (const fund of result.sections.funds.filter(f => f.method_id === method.method_id && f.amount_expression_id)) {
       const amount = expand(fund.amount_expression_id);
       const flow_id = id(fund.fund_id, 'amount-dataflow');

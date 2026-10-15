@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {compileReturnFixture} from '../../analysis-engines/test/internal-return-fixtures.mjs';
 const require=createRequire(new URL('../../analysis-engines/package.json',import.meta.url)),{keccak_256}=require('@noble/hashes/sha3.js');
 const hash=b=>'0x'+Buffer.from(keccak_256(b)).toString('hex'),selector=s=>hash(Buffer.from(s)).slice(0,10),word=n=>BigInt(n).toString(16).padStart(64,'0'),addressWord=a=>a.slice(2).padStart(64,'0');
-const out=new URL('../../acceptance/contract-analysis-semantics/return-runtime/',import.meta.url);mkdirSync(out,{recursive:true});
+const out=new URL('../../'+(process.env.CONTRACT_QA_OUT||'acceptance/contract-analysis-semantics')+'/return-runtime/',import.meta.url);mkdirSync(out,{recursive:true});
 const image=readFileSync(new URL('../engine-image.txt',out),'utf8').trim(),checks=[],transactions=[];
 function check(scenario,condition,evidence){checks.push({scenario,status:condition?'PASS':'FAIL',evidence});writeFileSync(new URL('report.json',out),JSON.stringify({image,checks,transactions,simulation:true,network:'local_anvil',all_paths_proved:false},null,2));console.log(scenario,condition?'PASS':'FAIL');if(!condition)throw new Error(scenario)}
 const anvil=spawn(new URL('../../analysis-engines/bin/anvil',import.meta.url).pathname,['--host','127.0.0.1','--port','18746','--accounts','0','--chain-id','1','--hardfork','shanghai','--no-mining','--auto-impersonate','--silent','--disable-default-create2-deployer'],{stdio:['ignore','ignore','pipe']});

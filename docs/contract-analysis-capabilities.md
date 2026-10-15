@@ -2,7 +2,7 @@
 
 本功能以固定区块、区块哈希和代码哈希为分析身份，输出运行机制、方法作用、执行条件、有序步骤、金额公式、状态读写、权限、依赖关系、选定交易和证据文件。入口地址、实现代码地址和状态地址分别保存。方法名称、注释及候选 ABI 不替代函数体和交易证据。
 
-本轮 EVM 扩展的引擎、方法数据流、运行时源码核对及计算型余额见 [EVM 合约分析](contract-analysis-evm-coverage.md)。下文保留原发布基础能力的说明；新增结果与验收记录见该文及 acceptance/contract-analysis-coverage。
+当前 EVM 规则为 funds-semantics-4。引擎、运行时源码核对及计算型余额见 [EVM 合约分析](contract-analysis-evm-coverage.md)；资金参数和固定区块控制地址见 [资金公式与控制权限](contract-analysis-evm-semantics.md)；多返回值、循环、角色条件、跨合约上下文及协议公式见 [方法机制与资金依赖](contract-analysis-evm-mechanisms.md)。下文保留原发布基础能力的说明，各阶段验收记录保存在对应 acceptance 目录。
 
 ## 开源组件与自研部分
 
@@ -58,7 +58,7 @@ Ethereum 的受支持区块按执行规则选择 hardfork。精确重放核对 s
 
 用户端增加分析列表、新建页和工作台，地址详情提供合约分析入口。工作台覆盖方法、条件、步骤、金额、状态、真实交易、重放、资金核对、图、版本、原始证据和文件。method_id、evidence_id、分页和比较任务写入 URL。参数和条件按字段展示，完整机器字段在详情弹窗中读取。
 
-新增 8 个 MCP 工具：`analyze_contract`、`get_contract_analysis`、`list_contract_methods`、`get_contract_method_analysis`、`get_contract_execution_flow`、`explain_contract_transaction`、`compare_contract_versions`、`get_contract_analysis_artifact`。工件还提供受作用域保护的 `contract-analysis://` resource。所有查询支持有界分页，文件按片段和整体 SHA256 校验。
+合约分析提供 9 个 MCP 工具：`get_contract_analysis_capabilities`、`analyze_contract`、`get_contract_analysis`、`list_contract_methods`、`get_contract_method_analysis`、`get_contract_execution_flow`、`explain_contract_transaction`、`compare_contract_versions`、`get_contract_analysis_artifact`。工件还提供受作用域保护的 `contract-analysis://` resource。所有查询支持有界分页，文件按片段和整体 SHA256 校验。
 
 导出包括 JSON、方法 CSV、Markdown、DOT、可编辑图数据和包含原始工件的 ZIP。ZIP 内保存逐文件长度与 SHA256。单个保存工件当前上限 32 MiB，读取块最大 4 MiB。DOCX、XLSX 导出、人工批注保存界面及通用有界符号求解尚未实现。
 

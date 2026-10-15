@@ -24,7 +24,27 @@ export function applyAuthorityRules(result) {
   for(const guard of s.permissions) {
     const reads=s.storage.filter(r=>r.method_id===guard.method_id&&r.access==='read'),derivation=derivations.get(guard.condition_derivation_id),dep=dependencies([guard.expression_id],derivation);
     const states=reads.filter(r=>related(r,dep));guard.state_read_ids=states.map(r=>r.storage_id);guard.state_ids=unique(states.map(r=>r.state_id));
-    guard.caller_constraints=[];
+    guard.caller_constraints=[];guard.state_predicates=[];
+    function predicates(key,scope='whole_guard',expected=true,seen=new Set()) {
+      if(seen.has(key))return;const e=unwrap(key);if(!e)return;const next=new Set([...seen,key]);
+      if(e.op==='!'&&e.operands?.length===1)return predicates(e.operands[0],scope,!expected,next);
+      if(['&&','||'].includes(e.op)&&expected){for(const k of e.operands||[])predicates(k,e.op==='||'?'alternative_in_compound_condition':scope==='whole_guard'?'conjunct':scope,true,next);return;}
+      const dep=dependencies([e.expression_id],derivation),matches=reads.filter(r=>related(r,dep));
+      const exact=matches.filter(r=>r.key_expression===e.text),selected=exact.length?exact:matches;
+      if(e.type==='bool'&&['IndexAccess','MemberAccess','Identifier'].includes(e.op)&&selected.some(r=>r.type==='bool')) {
+        const booleanReads=selected.filter(r=>r.type==='bool');
+        guard.state_predicates.push({predicate_id:id(guard.guard_id,key,'boolean',expected),predicate_kind:'boolean_state_lookup',condition_scope:scope,expected,
+          expression:e.text,expression_id:e.expression_id,state_read_ids:booleanReads.map(r=>r.storage_id),state_ids:unique(booleanReads.map(r=>r.state_id)),
+          lookups:booleanReads.map(r=>({storage_id:r.storage_id,key_expression:r.key_expression,projection:r.storage_projection,layout_status:r.layout_status})),
+          subject_expressions:unique(booleanReads.flatMap(r=>(r.storage_projection?.path||[]).filter(p=>p.kind==='mapping'&&p.key_type==='address').map(p=>p.expanded_key_expression||p.key_text))),
+          membership_enumerated:false,authorization_sufficiency_verified:false,evidence_ids:unique([...(e.evidence_ids||[]),...booleanReads.flatMap(r=>r.evidence_ids||[])])});
+      }else if(['>=','>','<=','<'].includes(e.op)&&matches.length) {
+        guard.state_predicates.push({predicate_id:id(guard.guard_id,key,'comparison',expected),predicate_kind:'state_numeric_comparison',condition_scope:scope,expected,operator:e.op,
+          expression:e.text,expression_id:e.expression_id,operands:e.operands,state_read_ids:matches.map(r=>r.storage_id),state_ids:unique(matches.map(r=>r.state_id)),
+          signature_count_verified:false,authorization_sufficiency_verified:false,evidence_ids:unique([...(e.evidence_ids||[]),...matches.flatMap(r=>r.evidence_ids||[])])});
+      }
+    }
+    predicates(guard.expression_id);
     function inspect(key,scope='whole_guard',seen=new Set()) {
       if(seen.has(key))return;const e=unwrap(key);if(!e)return;const next=new Set([...seen,key]);
       if(e.op==='=='&&e.operands?.length===2) {
@@ -55,18 +75,23 @@ export function applyAuthorityRules(result) {
         effect.affected_operations.push({method_id:mid,fund_id:f.fund_id,impact:meaning,read_storage_ids:matched.map(r=>r.storage_id),expression:f['expanded_'+field+'_expression']||f[field+'_expression']||f[field],
           dependency_status:derivations.get(f[field+'_derivation_id'])?.status==='partial'?'possible_dependency_in_unresolved_definitions':'represented_expression_dependency'});
       }
-      for(const guard of guards)if(guard.state_ids?.includes(stateID))effect.affected_operations.push({method_id:mid,guard_id:guard.guard_id,impact:'execution_condition',read_storage_ids:guard.state_read_ids,expression:guard.expanded_condition||guard.condition});
+      for(const guard of guards)if(guard.state_ids?.includes(stateID)){
+        effect.affected_operations.push({method_id:mid,guard_id:guard.guard_id,impact:'execution_condition',read_storage_ids:guard.state_read_ids,expression:guard.expanded_condition||guard.condition});
+        const predicates=guard.state_predicates.filter(p=>p.state_ids.includes(stateID)&&p.subject_expressions?.some(t=>/msg\.sender|tx\.origin/.test(t)));
+        for(const p of predicates)effect.affected_operations.push({method_id:mid,guard_id:guard.guard_id,predicate_id:p.predicate_id,impact:'caller_authorization',
+          read_storage_ids:p.state_read_ids,expression:guard.expanded_condition||guard.condition,key_match_status:'symbolic_mapping_keys_require_identity',expected:p.expected});
+      }
     }
     effect.impact_types=unique(effect.affected_operations.map(o=>o.impact));
     effect.caller_constraints=unique(effect.guard_ids.flatMap(key=>s.permissions.find(g=>g.guard_id===key)?.caller_constraints||[]));
-    effect.interpretation=effect.impact_types.length?'此方法修改'+effect.impact_types.map(k=>({amount_formula:'资金计算参数',recipient:'收款对象',sender:'扣款对象',asset_contract:'资产合约',execution_condition:'执行条件'})[k]).join('、'):'此方法修改的状态被资金方法读取';
+    effect.interpretation=effect.impact_types.length?'此方法修改'+effect.impact_types.map(k=>({amount_formula:'资金计算参数',recipient:'收款对象',sender:'扣款对象',asset_contract:'资产合约',execution_condition:'执行条件',caller_authorization:'调用权限状态'})[k]).join('、'):'此方法修改的状态被资金方法读取';
     if(writer)effect.write_storage_id=writer.storage_id;
   }
   // Address-control setters affect the guarded configuration methods and then
   // their funds operations. Keep the intermediate guard and effect identities.
   const directEffects=[...s.control_effects];
   for(const write of s.storage.filter(r=>r.access==='write'&&r.state_id&&s.methods.find(m=>m.method_id===r.method_id)?.entry_kind!=='constructor')) {
-    const controlled=s.permissions.filter(g=>g.method_id!==write.method_id&&g.caller_constraints.some(c=>c.state_ids.includes(write.state_id)));
+    const controlled=s.permissions.filter(g=>g.method_id!==write.method_id&&(g.caller_constraints.some(c=>c.state_ids.includes(write.state_id))||g.state_predicates.some(p=>p.state_ids.includes(write.state_id)&&p.subject_expressions?.some(t=>/msg\.sender|tx\.origin/.test(t)))));
     const downstream=directEffects.filter(e=>controlled.some(g=>g.method_id===e.method_id));
     if(!downstream.length)continue;
     const key=id(write.storage_id,'funds-control'),existing=s.control_effects.find(e=>e.control_effect_id===key);
@@ -86,5 +111,6 @@ export function applyAuthorityRules(result) {
     detail.control_effect_ids=s.control_effects.filter(e=>e.method_id===detail.method_id).map(e=>e.control_effect_id);
     detail.configuration_dependency_ids=s.control_effects.filter(e=>e.affected_method_ids.includes(detail.method_id)).map(e=>e.control_effect_id);
     detail.caller_constraint_ids=s.permissions.filter(g=>g.method_id===detail.method_id).flatMap(g=>g.caller_constraints.map(c=>c.constraint_id));
+    detail.state_predicate_ids=s.permissions.filter(g=>g.method_id===detail.method_id).flatMap(g=>g.state_predicates.map(p=>p.predicate_id));
   }
 }

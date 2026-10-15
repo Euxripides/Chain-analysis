@@ -193,6 +193,12 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 							fmt.Fprintf(&report, "  调用条件：%s 等于 %s；已取得地址 %s；条件范围 %s；状态 %s。\n", c["principal"], c["target_expression"], contractReportField(c, "snapshot_target_address"), c["condition_scope"], contractReportField(c, "snapshot_resolution_status", "target_value_resolution"))
 						}
 					}
+					var predicates []map[string]any
+					if nextDecode(ca.Row(item["state_predicates"]), &predicates) == nil {
+						for _, p := range predicates {
+							fmt.Fprintf(&report, "  状态条件：%s；要求结果 %v；条件范围 %s；读取状态 %s。\n", p["expression"], p["expected"], p["condition_scope"], strings.Join(stringList(p["state_read_ids"]), "，"))
+						}
+					}
 				case "steps":
 					fmt.Fprintf(&report, "- %s\n", item["text"])
 				case "funds":
@@ -211,6 +217,12 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 							fmt.Fprintf(&report, "  返回路径：%s；表达式 %s。\n", strings.Join(stringList(p["conditions"]), "，"), p["value"])
 						}
 					}
+					var loops []map[string]any
+					if nextDecode(ca.Row(item["loops"]), &loops) == nil {
+						for _, loop := range loops {
+							fmt.Fprintf(&report, "  已展开循环：AST %v；执行 %v 次；边界依据 %s。\n", loop["ast_id"], loop["iterations"], loop["bound_basis"])
+						}
+					}
 				case "control_effects":
 					fmt.Fprintf(&report, "- %s；修改 %s；新值 %s；影响类型 %s；受影响方法 %s。\n", item["interpretation"], item["configuration_key"], item["new_value_expression"], strings.Join(stringList(item["impact_types"]), "，"), strings.Join(stringList(item["affected_method_ids"]), "，"))
 				case "storage":
@@ -220,8 +232,32 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					}
 				case "calls":
 					fmt.Fprintf(&report, "- %s %s；%s。\n", item["call_type"], item["target_expression"], item["input_expression"])
+					if item["resolved_target_address"] != nil {
+						fmt.Fprintf(&report, "  解析目标：%s；状态地址 %s；代码哈希 %s；依赖状态 %s。\n", item["resolved_target_address"], contractReportField(item, "dependency_storage_address"), contractReportField(item, "dependency_code_hash"), contractReportField(item, "dependency_status"))
+					}
 				}
 				fmt.Fprintf(&report, "  证据：%s\n", strings.Join(stringList(item["evidence_ids"]), "，"))
+			}
+			report.WriteString("\n")
+		}
+	}
+	if len(result.Sections["protocols"]) > 0 {
+		report.WriteString("## 协议方法计算\n\n")
+		for _, raw := range result.Sections["protocols"] {
+			p := rowMap(raw)
+			fmt.Fprintf(&report, "### %s\n\n计算分析状态：%s\n\n", p["profile"], contractReportField(p, "economic_model_status"))
+			var models []map[string]any
+			if nextDecode(ca.Row(p["method_models"]), &models) == nil {
+				for _, model := range models {
+					fmt.Fprintf(&report, "- %s；公式状态 %s。\n", model["signature"], model["formula_status"])
+					var formulas []map[string]any
+					if nextDecode(ca.Row(model["return_formulas"]), &formulas) == nil {
+						for _, f := range formulas {
+							fmt.Fprintf(&report, "  返回公式：%s；状态 %s。\n", f["expression"], f["status"])
+						}
+					}
+					fmt.Fprintf(&report, "  证据：%s\n", strings.Join(stringList(model["evidence_ids"]), "，"))
+				}
 			}
 			report.WriteString("\n")
 		}

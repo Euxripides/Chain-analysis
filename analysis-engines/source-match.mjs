@@ -1,8 +1,9 @@
-function metadataStart(bytes,compiler) {
+function metadataStart(bytes,compiler,compilerAuxdata=false) {
   if(bytes.length<4)return null;
   const size=bytes.readUInt16BE(bytes.length-2),start=bytes.length-size-2;
   const legacy=Number(compiler.split('.')[1])===4;
-  if(size<2||size>4096||start<1||!(bytes[start-1]===0xfe||legacy&&bytes[start-1]===0x00))return null;
+  const afterHalt=bytes[start-1]===0xfe||legacy&&bytes[start-1]===0x00;
+  if(size<2||size>4096||start<1||!(afterHalt||compilerAuxdata))return null;
   let at=start;
   const length=additional=>{if(additional<24)return additional;if(additional===24)return bytes[at++];if(additional===25){const n=bytes.readUInt16BE(at);at+=2;return n}throw new Error('CBOR_LENGTH_UNSUPPORTED')};
   const read=()=>{const header=bytes[at++],major=header>>5,low=header&31;
@@ -17,6 +18,7 @@ function metadataStart(bytes,compiler) {
     if(at!==bytes.length-2||!keys.length||keys.some(k=>!['ipfs','bzzr0','bzzr1','solc','experimental'].includes(k)))return null;
     if(value.solc){const expected=compiler.split('+')[0].split('.').map(Number);if(!Buffer.isBuffer(value.solc)||value.solc.length!==3||expected.some((v,i)=>v!==value.solc[i]))return null}
     if(!keys.some(k=>['ipfs','bzzr0','bzzr1'].includes(k)))return null;
+    if(compilerAuxdata&&!afterHalt&&!value.solc)return null;
     return start;
   }catch{return null}
 }
@@ -47,10 +49,20 @@ export function verifySolidityRuntime(compiled,source,bytecode,compiler,{isLibra
   }
   for(const r of mask){built.fill(0,r.start,r.start+r.length);actual.fill(0,r.start,r.start+r.length)}
   let basis='runtime_bytes_and_compiler_references_match';
+  const metadata_ranges=[];
   if(!built.equals(actual)) {
-    const a=metadataStart(built,compiler),b=metadataStart(actual,compiler);
+    if(source.stdJsonInput?.settings?.metadata?.appendCBOR===false)throw new Error('RECOMPILED_RUNTIME_SNAPSHOT_MISMATCH');
+    // Older compiler layouts can append strings/data before CBOR rather than an
+    // immediate INVALID. Accept that layout only when the published auxdata is
+    // exactly the locally recompiled trailing bytes, with a valid solc CBOR key.
+    const ranges=Object.values(source.runtimeBytecode?.cborAuxdata||{});
+    const compilerAuxdata=ranges.some(r=>Number.isInteger(r.offset)&&r.offset>0&&typeof r.value==='string'&&/^0x(?:[0-9a-f]{2})+$/i.test(r.value)&&
+      r.offset+r.value.slice(2).length/2===built.length&&built.subarray(r.offset).toString('hex')===r.value.slice(2).toLowerCase());
+    const a=metadataStart(built,compiler,compilerAuxdata),b=metadataStart(actual,compiler,compilerAuxdata);
     if(source.runtimeMatch!=='match'||a===null||b===null||a!==b||!built.subarray(0,a).equals(actual.subarray(0,b)))throw new Error('RECOMPILED_RUNTIME_SNAPSHOT_MISMATCH');
+    if(compilerAuxdata&&!ranges.some(r=>r.offset===a&&built.subarray(a).toString('hex')===r.value?.slice(2).toLowerCase()))throw new Error('COMPILER_AUXDATA_RANGE_MISMATCH');
+    metadata_ranges.push({start:a,length:built.length-a,basis:compilerAuxdata?'published_auxdata_checked_against_recompilation_and_valid_cbor':'valid_terminal_cbor_after_halt'});
     basis='runtime_code_match_with_valid_trailing_metadata_difference';
   }
-  return {basis,bindings,libraries,permitted_ranges:mask,metadata_exact:basis==='runtime_bytes_and_compiler_references_match'};
+  return {basis,bindings,libraries,permitted_ranges:mask,metadata_ranges,metadata_exact:basis==='runtime_bytes_and_compiler_references_match'};
 }

@@ -2,7 +2,7 @@
 import json,os,pathlib,subprocess,urllib.parse
 from qa_support import ROOT,fixture_clients,dotenv
 from live_api_qa import await_job,all_pages,artifact_bytes
-OUT=ROOT/'acceptance/contract-analysis-semantics';rows=[]
+OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis-semantics');rows=[]
 def check(name,ok,evidence=None):
  rows.append({'scenario':name,'status':'PASS' if ok else 'FAIL','evidence':evidence});(OUT/'authority-live-qa.json').write_text(json.dumps(rows,indent=2));print(name,rows[-1]['status'],flush=True)
  if not ok:raise AssertionError(name)
@@ -11,7 +11,8 @@ q={'chain':'ethereum','address':'0xdAC17F958D2ee523a2206206994597C13D831ec7','bl
  'idempotency_key':'ca-authority-'+image[7:19],'budget':{'max_contracts':1,'max_rpc_requests':100,'max_state_reads':24}}
 aid=c.must('/api/v2/contract-analyses',q)['analysis_id'];job=await_job(c,aid);(OUT/'authority-analysis-id.txt').write_text(aid)
 check('pinned-owner-contract-completes',job['status']=='completed',{'analysis_id':aid,'phase':job['phase'],'error':job.get('error_code')})
-check('saved-new-rule-version',job['metadata']['rule_version']=='funds-semantics-3')
+capabilities=c.must('/api/v2/contract-analyses/capabilities')
+check('saved-new-rule-version',job['metadata']['rule_version']==capabilities['semantic_rules_version'])
 permissions=all_pages(c,aid,'permissions',100);constraints=[x for g in permissions for x in g.get('caller_constraints',[])];observed=[x for x in constraints if x.get('snapshot_resolution_status')=='observed_direct_state_address']
 check('observed-source-owner-address',bool(observed),{'total_conditions':len(constraints),'observed':len(observed)})
 check('every-owner-observation-is-pinned',all(x['snapshot_observations'] and all(p['block_number']==19000000 and p['block_hash']==job['metadata']['snapshot']['block_hash'] and p['storage_address'].lower()==q['address'].lower() for p in x['snapshot_observations']) for x in observed))

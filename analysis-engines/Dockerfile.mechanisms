@@ -1,0 +1,6 @@
+FROM platform-contract-semantics:20261014@sha256:34268c9fae217a193d69a6326915daaf22cc647d88f34a558123e3c01379d5b6
+USER root
+COPY source.mjs source-match.mjs model.mjs capabilities.mjs /engine/
+COPY ir /engine/ir
+COPY rules /engine/rules
+USER 65532:65532

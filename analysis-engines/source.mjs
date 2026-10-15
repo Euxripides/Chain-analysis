@@ -5,6 +5,7 @@ import { numericLiteral } from './literals.mjs';
 import { verifySolidityRuntime } from './source-match.mjs';
 import { summarizeInternalReturns } from './ir/internal-returns.mjs';
 const require = createRequire(import.meta.url);
+const {keccak_256}=require('@noble/hashes/sha3.js');
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
 const compilationCache=new Map();let cachedBytes=0;
 
@@ -89,17 +90,17 @@ export function analyzeSource(result, source, bytecode) {
     const receiver=library&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id;
     return {internal,args:receiver?[callee.expression,...args]:args};
   };
-  const projectStorage = (node,context={}) => {
+  const projectStorage = (node,context={},method) => {
     if(node?.nodeType==='Identifier') {
       const item=layoutByID.get(node.referencedDeclaration),type=layout.types?.[item?.type];
       return item&&type?{base_slot:item.slot,type_id:item.type,offset:item.offset||0,path:[],scalar_type:type.label}:null;
     }
-    const parent=projectStorage(node?.baseExpression||node?.expression,context);if(!parent)return null;
+    const parent=projectStorage(node?.baseExpression||node?.expression,context,method);if(!parent)return null;
     const type=layout.types?.[parent.type_id];if(!type)return null;
     if(node.nodeType==='IndexAccess'&&type.encoding==='mapping') {
       const child=layout.types?.[type.value];
-      const key=context.parameter_arguments?.[node.indexExpression?.referencedDeclaration]||node.indexExpression;
-      return {...parent,type_id:type.value,offset:0,scalar_type:child?.label,path:[...parent.path,{kind:'mapping',key_type:layout.types?.[type.key]?.label,key_ast_id:key?.id,key_referenced_declaration:key?.referencedDeclaration??null,key_text:sourceText(key),key_literal:key?.nodeType==='Literal'?String(key.value):null}]};
+      const key=resolveArgument(node.indexExpression,context);
+      return {...parent,type_id:type.value,offset:0,scalar_type:child?.label,path:[...parent.path,{kind:'mapping',key_type:layout.types?.[type.key]?.label,key_ast_id:key?.id,key_referenced_declaration:key?.referencedDeclaration??null,key_text:sourceText(key),key_expression_id:expression(method,key,context),key_literal:key?.nodeType==='Literal'?String(key.value):null}]};
     }
     if(node.nodeType==='MemberAccess'&&type.members) {
       const field=type.members.find(m=>m.astId===node.referencedDeclaration||m.label===node.memberName),child=layout.types?.[field?.type];
@@ -160,13 +161,14 @@ export function analyzeSource(result, source, bytecode) {
       (bound&&bound.id!==node.id?expression(method,bound,context):null);
     if(binding_expression_id)operands.push(binding_expression_id);
     const row = { expression_id, method_id: method.method_id, op: node.operator || node.nodeType,
-      text: sourceText(node).slice(0, 4096), type, width: integer ? Number(integer[2] || '256') : null,
+      text: node.entry_argument?node.name:sourceText(node).slice(0, 4096), type, width: integer ? Number(integer[2] || '256') : null,
       signed: integer ? integer[1] === 'int' : null,
       arithmetic: integer ? node.kind==='typeConversion'?'explicit_cast_truncation':(context.unchecked || Number(source.compilation.compilerVersion.split('.')[1]) < 8 ? 'wrap' : 'checked') : 'not_applicable',
-      rounding: node.operator === '/' ? 'toward_zero' : null, operands, referenced_declaration: node.referencedDeclaration ?? null,
-      path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,
+      rounding: node.operator === '/' ? 'toward_zero' : null, operands, referenced_declaration: node.referencedDeclaration ?? null,call_kind:node.kind||null,
+      path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,entry_return_summary:context.entry_return_summary||false,
       evidence_ids: [getEvidence(method, node)] };
     if(binding_expression_id){row.binding_expression_id=binding_expression_id;row.bound_argument=sourceText(bound)}
+    if(node.nodeType==='FunctionCall') {row.argument_expression_ids=(node.arguments||[]).map(n=>expression(method,n,context));row.callee_expression_id=expression(method,node.expression,context);}
     if(node.nodeType==='FunctionCall'&&node.kind!=='typeConversion') {
       const target=nodes.get(node.expression?.referencedDeclaration);
       const {internal,args}=internalArguments(target,node.expression,node.arguments||[]);
@@ -210,7 +212,7 @@ export function analyzeSource(result, source, bytecode) {
       slot_role:baseOnly?'layout_base':'direct_slot',key_expression: accessText, key_expression_id: expression(method, node, context),
       value_expression: valueNode ? sourceText(valueNode) : null, value_expression_id: expression(method, valueNode, context), operation,
       conditions: [...context.conditions], evidence_ids: [evidence_id], layout_status: slot ? slot.layout_basis || 'verified_compiler_layout' : 'layout_unavailable',
-      storage_projection: projectStorage(node,context) };
+      storage_projection: projectStorage(node,context,method) };
     result.sections.storage.push(row);
     method.storage_ids.push(storage_id);
   };
@@ -231,6 +233,41 @@ export function analyzeSource(result, source, bytecode) {
     method.guard_ids.push(guard_id);
     addStep(method, node, 'guard', `检查 ${sourceText(condition)}；不满足时 ${reason}`, context, { guard_id });
     context.conditions.push(sourceText(condition));
+  };
+  const decodeEncodedTransfer=(encoded,context)=>{
+    encoded=resolveArgument(encoded,context);
+    if(encoded?.nodeType!=='FunctionCall'||encoded.expression?.expression?.name!=='abi')return null;
+    const stringValue=(n,seen=new Set())=>{
+      if(!n||seen.has(n.id)||seen.size>16)return null;const next=new Set([...seen,n.id]);
+      if(n.nodeType==='Literal'&&n.kind==='string')return n.value;
+      if(n.nodeType==='Identifier'){const d=nodes.get(n.referencedDeclaration);return d?.constant?stringValue(d.value,next):null;}
+      if(n.nodeType==='FunctionCall'&&n.kind==='typeConversion'&&/^bytes(?: memory)?$/.test(typeOf(n)))return stringValue(n.arguments?.[0],next);
+      return null;
+    };
+    const selectorValue=(n,seen=new Set())=>{
+      if(!n||seen.has(n.id)||seen.size>16)return null;const next=new Set([...seen,n.id]);
+      if(n.nodeType==='Identifier'){const d=nodes.get(n.referencedDeclaration);return d?.constant?selectorValue(d.value,next):null;}
+      if(n.nodeType==='Literal'&&n.kind==='number'){try{const v=BigInt(numericLiteral(String(n.value),n.subdenomination).value);return v>=0n&&v<1n<<32n?'0x'+v.toString(16).padStart(8,'0'):null}catch{return null}}
+      if(n.nodeType==='Literal'&&n.kind==='hexString'&&n.hexValue?.length===8)return '0x'+n.hexValue.toLowerCase();
+      if(n.nodeType==='FunctionCall'&&n.kind==='typeConversion'&&typeOf(n)==='bytes4')return selectorValue(n.arguments?.[0],next);
+      if(n.nodeType==='FunctionCall'&&n.expression?.name==='keccak256'){const value=stringValue(n.arguments?.[0]);return value===null?null:'0x'+Buffer.from(keccak_256(Buffer.from(value))).toString('hex').slice(0,8);}
+      return null;
+    };
+    let selector,args;
+    const encoding=encoded.expression.memberName;
+    if(encoding==='encodeWithSelector'){selector=selectorValue(encoded.arguments?.[0]);args=encoded.arguments?.slice(1);}
+    else if(encoding==='encodeWithSignature'){const signature=stringValue(encoded.arguments?.[0]);if(signature===null)return null;selector='0x'+Buffer.from(keccak_256(Buffer.from(signature))).toString('hex').slice(0,8);args=encoded.arguments.slice(1);}
+    else if(encoding==='encodeCall'){
+      const fn=nodes.get(encoded.arguments?.[0]?.referencedDeclaration);args=encoded.arguments?.[1]?.components;
+      if(fn?.nodeType!=='FunctionDefinition'||!Array.isArray(args))return null;
+      const signature=fn.name+'('+(fn.parameters?.parameters||[]).map(typeOf).join(',')+')';selector='0x'+Buffer.from(keccak_256(Buffer.from(signature))).toString('hex').slice(0,8);
+    }else return null;
+    const signatures={'0xa9059cbb':'transfer(address,uint256)','0x23b872dd':'transferFrom(address,address,uint256)','0x095ea7b3':'approve(address,uint256)'},signature=signatures[selector];
+    if(!signature||args?.length!==(selector==='0x23b872dd'?3:2)||args.some(n=>!n))return null;
+    if(args.slice(0,-1).some(n=>!/^(?:address(?: payable)?|contract .+)$/.test(typeOf(n))))return null;
+    const amount=args.at(-1),literal=amount.nodeType==='Literal'&&amount.kind==='number'?numericLiteral(String(amount.value),amount.subdenomination).value:null;
+    if(!/^uint\d+$/.test(typeOf(amount))&&!(literal!==null&&BigInt(literal)>=0n&&BigInt(literal)<1n<<256n))return null;
+    return {selector,signature,args,name:signature.split('(')[0],encoding,node:encoded};
   };
   const analyzeCall = (method, node, context) => {
     let callee = node.expression, options = {};
@@ -262,8 +299,8 @@ export function analyzeSource(result, source, bytecode) {
             parameter_bindings:Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,sourceText(internal.args[i])])),
             parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,internal.args[i]]))},
             parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,internal.args[i],context)]))} };
-          analyzeBlock(method,targetNode.body,callContext);
-          let branched=false;visit(targetNode.body,n=>{if(['IfStatement','ForStatement','WhileStatement','DoWhileStatement','TryStatement'].includes(n.nodeType))branched=true});
+          analyzeFunctionWithModifiers(method,targetNode,callContext);
+          let branched=false;for(const body of [targetNode.body,...(targetNode.modifiers||[]).map(m=>nodes.get(m.modifierName?.referencedDeclaration)?.body)])visit(body,n=>{if(['IfStatement','ForStatement','WhileStatement','DoWhileStatement','TryStatement'].includes(n.nodeType))branched=true});
           if(!branched)context.conditions.push(...callContext.conditions.filter(c=>!context.conditions.includes(c)));
         } else method.completeness.unresolved.push({ code: 'RECURSIVE_OR_DEEP_INTERNAL_CALL', ast_id: node.id });
       }
@@ -293,9 +330,11 @@ export function analyzeSource(result, source, bytecode) {
       const libraryName=library?nodes.get(targetNode.scope).name:null;
       const libraryFile=library?fileIDs.get(Number(nodes.get(targetNode.scope).src.split(':')[2])):null;
       const target_expression = library?runtimeVerification.libraries[libraryFile+':'+libraryName]||sourceText(target):sourceText(target);
-      const target_signature = targetNode?.nodeType === 'FunctionDefinition' ? `${targetNode.name}(${(targetNode.parameters?.parameters || []).map(typeOf).join(',')})` : '';
+      const canonicalTypes=(targetNode?.parameters?.parameters||[]).map(p=>typeOf(p).replace(/ (memory|storage|calldata)( ref| pointer)?/g,'').replace(/^contract .+$/,'address').replace(/^address payable$/,'address'));
+      const target_signature = targetNode?.nodeType === 'FunctionDefinition' ? `${targetNode.name}(${canonicalTypes.join(',')})` : '';
+      const derivedSelector=target_signature&&canonicalTypes.every(t=>/^(?:u?int(?:8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)|address|bool|string|bytes(?:[1-9]|[12]\d|3[0-2])?)(?:\[\d*\])*$/.test(t))?'0x'+Buffer.from(keccak_256(Buffer.from(target_signature))).toString('hex').slice(0,8):'';
       const call = { call_id, method_id: method.method_id, call_type: kind, target_expression,
-        target_expression_id: expression(method, target, context), selector: targetNode?.functionSelector ? '0x' + targetNode.functionSelector : '',
+        target_expression_id: expression(method, target, context), selector: targetNode?.functionSelector ? '0x' + targetNode.functionSelector : derivedSelector,
         signature: target_signature, input_arguments: args, input_expression: sourceText(node),
         value_expression: options.value ? sourceText(options.value) : null, value_expression_id: expression(method, options.value, context),
         input_expression_ids:(node.arguments||[]).map(n=>expression(method,n,context)),
@@ -304,6 +343,7 @@ export function analyzeSource(result, source, bytecode) {
       result.sections.calls.push(call); method.call_ids.push(call_id);
       addStep(method, node, 'external_call', `${kind} 调用 ${target_expression || '新合约'}：${sourceText(node)}`, context, { call_id });
       let fund;
+      const decoded=name==='call'&&kind==='CALL'?decodeEncodedTransfer(node.arguments?.[0],context):null;
       const isNative = /address/.test(baseType) && ['transfer', 'send'].includes(name);
       if ((isNative || options.value) && kind === 'CALL') {
         const amount = isNative ? node.arguments?.[0] : options.value;
@@ -324,6 +364,15 @@ export function analyzeSource(result, source, bytecode) {
             to_expression_id:expression(method,node.arguments[name==='transferFrom'?1:0],context),
             protocol: 'transfer_interface',unit_basis:'caller_declared_interface',asset_standard_verified:false, settlement: 'requires_execution_evidence' };
         }
+      } else if(decoded) {
+        call.selector=decoded.selector;call.signature=decoded.signature;call.calldata_basis='verified_source_abi_'+decoded.encoding;
+        call.input_arguments=decoded.args.map(sourceText);call.input_expression_ids=decoded.args.map(n=>expression(method,n,context));
+        call.evidence_ids=unique([...call.evidence_ids,getEvidence(method,decoded.node)]);
+        fund={kind:decoded.name==='transferFrom'?'token_transfer_from_intent':decoded.name==='approve'?'token_approval':'token_transfer_intent',
+          asset:target_expression,asset_expression_id:expression(method,target,context),from_expression:decoded.name==='transferFrom'?sourceText(decoded.args[0]):'address(this)',
+          from_expression_id:decoded.name==='transferFrom'?expression(method,decoded.args[0],context):null,to_expression:sourceText(decoded.args[decoded.name==='transferFrom'?1:0]),
+          to_expression_id:expression(method,decoded.args[decoded.name==='transferFrom'?1:0],context),amount_expression:sourceText(decoded.args.at(-1)),amount_expression_id:expression(method,decoded.args.at(-1),context),
+          unit:'asset_quantity_or_token_id',unit_basis:'verified_source_encoding_with_unverified_asset_standard',asset_standard_verified:false,settlement:'requires_execution_evidence',protocol:'encoded_transfer_interface'};
       }
       if (fund) {
         const fund_id = id(call_id, 'fund');
@@ -345,6 +394,12 @@ export function analyzeSource(result, source, bytecode) {
           declaration_id: node.leftHandSide.referencedDeclaration, name: node.leftHandSide.name,
           value_expression_id: expression(method, node.rightHandSide, context), operation: node.operator,
           order: assigned.order, conditions: [...context.conditions], path: context.path, evidence_ids: assigned.evidence_ids });
+      } else if(node.leftHandSide.nodeType==='TupleExpression'&&node.operator==='=') {
+        const rhs=expression(method,node.rightHandSide,context);
+        for(const [i,p]of (node.leftHandSide.components||[]).entries())if(p?.nodeType==='Identifier'&&!nodes.get(p.referencedDeclaration)?.stateVariable) {
+          result.sections.definitions.push({definition_id:id(assigned.step_id,'tuple-definition',i),method_id:method.method_id,declaration_id:p.referencedDeclaration,name:p.name,
+            value_expression_id:synthetic(method,node,'tuple_component',[rhs],context,{component_index:i,type:typeOf(p)}),operation:'=',
+            order:assigned.order,conditions:[...context.conditions],path:context.path,evidence_ids:assigned.evidence_ids});}
       }
       return;
     }
@@ -412,6 +467,11 @@ export function analyzeSource(result, source, bytecode) {
           declaration_id: node.declarations[0].id, name: node.declarations[0].name,
           value_expression_id: expression(method, node.initialValue, context), operation: '=',
           order: declared.order, conditions: [...context.conditions], path: context.path, evidence_ids: declared.evidence_ids });
+      } else if(node.initialValue&&node.declarations?.length>1) {
+        const whole=expression(method,node.initialValue,context);
+        for(const [i,p]of node.declarations.entries())if(p)result.sections.definitions.push({definition_id:id(declared.step_id,'tuple-definition',i),method_id:method.method_id,declaration_id:p.id,name:p.name,
+          value_expression_id:synthetic(method,node.initialValue,'tuple_component',[whole],context,{component_index:i,type:typeOf(p)}),operation:'=',
+          order:declared.order,conditions:[...context.conditions],path:context.path,evidence_ids:declared.evidence_ids});
       }
       return;
     }
@@ -456,10 +516,7 @@ export function analyzeSource(result, source, bytecode) {
       event_arguments:(call?.arguments || []).map(sourceText),event_argument_ids:(call?.arguments || []).map(n=>expression(method,n,context)),
       event_indexed:parameters.map(p=>Boolean(p.indexed))});
   }
-  for (const fn of functions) {
-    const method = methodByAST.get(fn.id);
-    if (!method) continue;
-    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false };
+  function analyzeFunctionWithModifiers(method,fn,context) {
     const modifiers = (fn.modifiers || []).map(m => ({ invocation: m, definition: nodes.get(m.modifierName?.referencedDeclaration) })).filter(m => m.definition);
     // Expand modifier wrappers at each placeholder, preserving post-body modifiers and conditional execution.
     const execute = (index, activeContext = context) => {
@@ -489,7 +546,23 @@ export function analyzeSource(result, source, bytecode) {
       };
       return expand(body, { ...activeContext, path: `${activeContext.path}/modifier:${definition.id}`, parameter_bindings: { ...activeContext.parameter_bindings, ...Object.fromEntries((definition.parameters?.parameters || []).map((p, i) => [p.id, sourceText(invocation.arguments?.[i])])) },parameter_arguments:{...activeContext.parameter_arguments,...Object.fromEntries((definition.parameters?.parameters || []).map((p,i)=>[p.id,invocation.arguments?.[i]]))} });
     };
-    execute(0);
+    return execute(0);
+  }
+  for (const fn of functions) {
+    const method = methodByAST.get(fn.id);
+    if (!method) continue;
+    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false,legacy_arithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8 };
+    analyzeFunctionWithModifiers(method,fn,context);
+    if(['view','pure'].includes(method.state_mutability)&&(fn.returnParameters?.parameters||[]).length) {
+      try {
+        const args=(fn.parameters?.parameters||[]).map(p=>({...p,nodeType:'Identifier',id:'entry-argument:'+p.id,referencedDeclaration:p.id,entry_argument:true}));
+        const call={...fn,id:'entry-return:'+fn.id};
+        const model=summarizeInternalReturns({target:fn,call,context:{...context,entry_return_summary:true},args,nodes,typeOf,
+          build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
+        const row=result.sections.expressions.find(e=>e.expression_id===model.expression_id);
+        row.entry_return_model=model;method.entry_return_expression_id=model.expression_id;
+      }catch(error){method.entry_return_model_status='partial';method.entry_return_model_unresolved=[String(error.message)];}
+    }
     method.completeness.complete = method.completeness.unresolved.length === 0;
   }
   for (const [signature, value] of Object.entries(compiled.evm?.methodIdentifiers || {})) {

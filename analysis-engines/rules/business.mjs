@@ -17,7 +17,9 @@ export function applyBusinessRules(result) {
     sections.method_details.push({detail_id:id(m.method_id,'business-details'),method_id:m.method_id,
       schema_version:'contract-method-details-v1',signature:m.signature,code_address:m.code_address,storage_address:m.storage_address,
       inputs:m.parameters,outputs:m.outputs,conditions:guards.map(g=>({guard_id:g.guard_id,condition:g.expanded_condition||g.condition,original_condition:g.condition,path:g.path,parent_conditions:g.conditions,evidence_ids:g.evidence_ids})),
-      returned_values:sections.dataflow.filter(d=>d.method_id===m.method_id&&d.kind==='return_derivation').map(d=>({dataflow_id:d.dataflow_id,expression:d.symbolic_expression,status:d.status,unresolved:d.unresolved})),
+      returned_values:sections.dataflow.filter(d=>d.method_id===m.method_id&&(m.entry_return_derivation_id?d.kind==='entry_return_derivation':d.kind==='return_derivation')).map(d=>({dataflow_id:d.dataflow_id,expression:d.symbolic_expression,status:d.status,unresolved:d.unresolved,successful_return_paths:d.successful_return_paths||[],loops:d.loops||[]})),
+      return_model_status:m.entry_return_model_status||'represented_return_statements',return_model_unresolved:m.entry_return_model_unresolved||[],
+      calculation_rules:rows('expressions').filter(e=>e.symbolic_format==='binary'||['/','%','*','+','-'].includes(e.op)||e.arithmetic==='explicit_cast_truncation').map(e=>({expression_id:e.expression_id,expression:e.text,operator:e.operator||e.op,width:e.width,signed:e.signed,arithmetic:e.arithmetic,rounding:e.rounding||(e.operator==='/'?'toward_zero':null),evidence_ids:e.evidence_ids})),
       state_reads:rows('storage').filter(s=>s.access==='read').map(s=>({storage_id:s.storage_id,key:s.key_expression,slot:s.slot,offset:s.offset,type:s.type,evidence_ids:s.evidence_ids})),
       external_calls:rows('calls').map(c=>({call_id:c.call_id,type:c.call_type,target:c.target_expression,signature:c.signature,arguments:c.input_arguments,failure:c.failure_propagation,conditions:c.conditions,evidence_ids:c.evidence_ids})),
       sequence:steps.map(s=>({step_id:s.step_id,order:s.order,kind:s.kind,operation:s.text,path:s.path,conditions:s.conditions,evidence_ids:s.evidence_ids})),
@@ -57,9 +59,22 @@ export function applyBusinessRules(result) {
   for(const [profile,required] of profiles) {
     const matched=required.map(signature=>dispatch.find(m=>m.signature===signature));if(matched.some(m=>!m))continue;
     const method_ids=matched.map(m=>m.method_id),effects=sections.funds.filter(f=>method_ids.includes(f.method_id));
-    sections.protocols.push({protocol_id:id(result.snapshot.code_hash,result.snapshot.code_address,result.snapshot.storage_address,profile),profile,status:'verified_source_interface_with_represented_code',
+    const extra=profile==='erc4626'?['previewDeposit(uint256)','previewMint(uint256)','previewWithdraw(uint256)','previewRedeem(uint256)','mint(uint256,address)','withdraw(uint256,address,address)','maxDeposit(address)','maxMint(address)','maxWithdraw(address)','maxRedeem(address)']:[];
+    const represented=[...matched,...extra.map(signature=>dispatch.find(m=>m.signature===signature)).filter(Boolean)];
+    const method_models=represented.map(m=>{const detail=sections.method_details.find(d=>d.method_id===m.method_id);return {method_id:m.method_id,signature:m.signature,
+      return_formulas:detail.returned_values,state_inputs:detail.state_reads,asset_operations:detail.asset_effects,execution_conditions:detail.conditions,arithmetic_rules:detail.calculation_rules,
+      formula_status:m.entry_return_model_status||'represented_asset_operations',unresolved:m.entry_return_model_unresolved||m.completeness.unresolved,evidence_ids:detail.evidence_ids};});
+    const protocol_id=id(result.snapshot.code_hash,result.snapshot.code_address,result.snapshot.storage_address,profile);
+    if(profile==='erc4626')for(const [preview,actual,relation,property]of [['previewDeposit(uint256)','deposit(uint256,address)','preview <= actual','erc4626_deposit_preview_bound'],['previewMint(uint256)','mint(uint256,address)','preview >= actual','erc4626_mint_preview_bound'],['previewWithdraw(uint256)','withdraw(uint256,address,address)','preview >= actual','erc4626_withdraw_preview_bound'],['previewRedeem(uint256)','redeem(uint256,address,address)','preview <= actual','erc4626_redeem_preview_bound']]) {
+      const p=represented.find(m=>m.signature===preview),a=represented.find(m=>m.signature===actual);if(!p||!a)continue;
+      sections.property_obligations.push({property_id:id(protocol_id,property),protocol_id,property,preview_method_id:p.method_id,actual_method_id:a.method_id,relation,
+        assumptions:['same_execution_prestate','same_input_amount','successful_actual_operation','underlying_asset_and_share_units_verified'],
+        status:'requires_execution_with_declared_state',requirement_source:'https://eips.ethereum.org/EIPS/eip-4626',all_paths_proved:false,evidence_ids:unique([...p.evidence_ids,...a.evidence_ids])});
+    }
+    sections.protocols.push({protocol_id,profile,status:'verified_source_interface_with_represented_code',
       interface_methods:method_ids,asset_effect_ids:effects.map(f=>f.fund_id),
-      economic_model_verified:false,deployed_protocol_identity_verified:false,
+      economic_model_verified:false,deployed_protocol_identity_verified:false,method_models,
+      economic_model_status:method_models.some(m=>m.return_formulas.length)?'code_derived_formulas_with_execution_obligations':'represented_operations_with_unresolved_formulas',
       evidence_ids:unique(matched.flatMap(m=>m.evidence_ids)),scope:'interface_and_analyzed_implementation_operations'});
   }
   applyAuthorityRules(result);
