@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "image": "sha256:8d226da81212053a90c0d589d4cf845f31e0619605053f0ed9edee434a373d7f",
+  "source_commit": "e86b124612c9b246fcdd18171fb483ce9703f27d",
+  "frozen_binaries_assets": 797,
+  "frozen_source_files": 1548,
+  "feature_units": {
+    "blockchain-contract-api.service": "active",
+    "blockchain-contract-worker.service": "active",
+    "blockchain-contract-mcp.service": "active",
+    "blockchain-contract-console.service": "active"
+  },
+  "original_pids": {
+    "blockchain-api.service": "3258429",
+    "blockchain-worker.service": "1971802",
+    "blockchain-mcp.service": "3258435",
+    "blockchain-user-console.service": "2384809"
+  },
+  "isolated_qa_units": "inactive",
+  "qa_cumulative_usage": {
+    "http_requests": 569,
+    "credits": 113800,
+    "estimated_usd": 0.01138005
+  },
+  "current_session_capabilities_verified": true,
+  "mcp_tool_definitions_match": true
+}

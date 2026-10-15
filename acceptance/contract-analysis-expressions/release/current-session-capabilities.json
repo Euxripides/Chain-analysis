@@ -1,0 +1,74 @@
+{
+  "success": true,
+  "image": "sha256:8d226da81212053a90c0d589d4cf845f31e0619605053f0ed9edee434a373d7f",
+  "rules": "funds-semantics-5",
+  "source_return_analysis": {
+    "all_paths_proved": false,
+    "conditional_local_effects": true,
+    "conditional_returns": true,
+    "constant_bound_for_while_do_loops": true,
+    "early_returns": true,
+    "entry_return_models": true,
+    "expression_local_assignments": true,
+    "guard_prefix_modifiers": true,
+    "language": "Solidity",
+    "local_assignments": true,
+    "max_aggregate_loop_steps": 64,
+    "max_loop_iterations": 16,
+    "max_paths": 32,
+    "max_tuple_components": 8,
+    "named_returns": true,
+    "ordered_evaluations_preserved": true,
+    "prefix_and_postfix_local_updates": true,
+    "scope": "bounded_scalar_and_scalar_tuple_readonly_return_paths",
+    "short_circuit_local_effects": true,
+    "tuple_destructuring": true,
+    "unspecified_sibling_read_write_order": "explicit_gap",
+    "unsupported": [
+      "dynamic_loop_bounds",
+      "assembly",
+      "storage_aliases",
+      "stateful_returns",
+      "dynamic_tuple_values",
+      "post_body_or_conditional_modifiers",
+      "dynamic_calls"
+    ]
+  },
+  "engine_statuses": [
+    {
+      "name": "solc-ast",
+      "status": "available"
+    },
+    {
+      "name": "whatsabi",
+      "status": "available"
+    },
+    {
+      "name": "sevm",
+      "status": "available"
+    },
+    {
+      "name": "heimdall",
+      "status": "available"
+    },
+    {
+      "name": "slither",
+      "status": "available",
+      "version": "0.11.6"
+    },
+    {
+      "compiler_versions": [
+        "0.4.3"
+      ],
+      "name": "vyper-ast",
+      "status": "available"
+    },
+    {
+      "all_paths_verified": false,
+      "name": "gigahorse",
+      "scope": "tac_cfg_and_bounded_symbolic_word_dataflow",
+      "source_commit": "1b06cef82f0a29790e87f576eba6d6d793170d70",
+      "status": "available"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "image": "sha256:8d226da81212053a90c0d589d4cf845f31e0619605053f0ed9edee434a373d7f",
+  "expression_checks": 402,
+  "all_paths_proved": false
+}

@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "image": "sha256:8d226da81212053a90c0d589d4cf845f31e0619605053f0ed9edee434a373d7f",
+  "files": [
+    {
+      "path": "analysis-engines/source.mjs",
+      "sha256": "6a27ed5370c62f6c8140838e612bc0d0ad5ec38949073eade31b2066c5152aef"
+    },
+    {
+      "path": "analysis-engines/source-match.mjs",
+      "sha256": "dbfc1ca837ae6bb70de5a97e6ba88ffd6d3e36acbd7a5f2e19862e72f978ab4e"
+    },
+    {
+      "path": "analysis-engines/model.mjs",
+      "sha256": "90376167056f2bcb5a78fb729fcfeca93eefc43bacd4efe9a54fe2f1abd95834"
+    },
+    {
+      "path": "analysis-engines/capabilities.mjs",
+      "sha256": "ab99363b5777ff410f9be30fe9748b62837c5313221d58b23200e1b79c98aaad"
+    },
+    {
+      "path": "analysis-engines/ir/dataflow.mjs",
+      "sha256": "cd124cac1e046292f16312188cfc5a439d6e202a0819734a804043df1adf2840"
+    },
+    {
+      "path": "analysis-engines/ir/gigahorse-dataflow.mjs",
+      "sha256": "42d60a264196c06938ffa10dca496ab2200da8e6d784f2db0e4fac8453ae4161"
+    },
+    {
+      "path": "analysis-engines/ir/internal-returns.mjs",
+      "sha256": "6dea85c4853958e66efe3e94a095092f92af0c872033e09bf72699f71e3d3ced"
+    },
+    {
+      "path": "analysis-engines/rules/authority.mjs",
+      "sha256": "d7e6a3257bf8a1dc2ca73476745b106086fd1c4b08733cc092cf674f5a05b097"
+    },
+    {
+      "path": "analysis-engines/rules/business.mjs",
+      "sha256": "4f2ab788b550104582dd82c5af7522d2a2cd0b7622d6a8c7895d3df938b80d43"
+    },
+    {
+      "path": "analysis-engines/rules/funds.mjs",
+      "sha256": "4ac1e114f623b76fbfd09fee038f2b7100674d51fe23d275ecf0312a7154d67d"
+    },
+    {
+      "path": "analysis-engines/rules/ledger.mjs",
+      "sha256": "d9271dd3e9f7ad8ae88eb5732a8893a2d3f6e505bbf0f232c885c45c9c9a0c54"
+    }
+  ]
+}

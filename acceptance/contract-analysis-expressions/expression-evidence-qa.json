@@ -1,0 +1,596 @@
+[
+  {
+    "scenario": "same-public-code-and-pinned-block",
+    "status": "PASS",
+    "evidence": {
+      "current": "140ac8a2-60a1-459d-b173-f292cbede8ad",
+      "previous": "8adbf00f-cbe2-4abe-b88b-419001915887",
+      "code_hash": "0x5b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5",
+      "block_hash": "0xcf384012b91b081230cdf17a3f7dd370d8e67056058af6b272b3d54aa2714fac"
+    }
+  },
+  {
+    "scenario": "real-safemath-assignment-gaps-closed",
+    "status": "PASS",
+    "evidence": [
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "uint(_reserve0).mul(_reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "rootK.sub(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "totalSupply.mul(rootK.sub(rootKLast))",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "rootK.mul(5)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "rootK.mul(5).add(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mintFee(uint112,uint112)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION",
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "balance0.sub(_reserve0)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "balance1.sub(_reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "uint(_reserve0).mul(_reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "rootK.sub(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "totalSupply.mul(rootK.sub(rootKLast))",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "rootK.mul(5)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "rootK.mul(5).add(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION",
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "amount0.mul(amount1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "Math.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "amount0.mul(_totalSupply)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "amount1.mul(_totalSupply)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "DEFINITION_DOES_NOT_DOMINATE_USE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "DEFINITION_DOES_NOT_DOMINATE_USE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "mint(address)",
+        "call": "uint(reserve0).mul(reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "uint(_reserve0).mul(_reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "rootK.sub(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "totalSupply.mul(rootK.sub(rootKLast))",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "rootK.mul(5)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "rootK.mul(5).add(rootKLast)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION",
+          "INTERNAL_RETURN_CONTROL_FLOW_UNSUPPORTED:LOOP_DYNAMIC_BOUND",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "liquidity.mul(balance0)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "liquidity.mul(balance1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "balanceOf[from].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "totalSupply.sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "burn(address)",
+        "call": "uint(reserve0).mul(reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "amount0In.mul(3)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "balance0.mul(1000)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "balance0.mul(1000).sub(amount0In.mul(3))",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "amount1In.mul(3)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "balance1.mul(1000)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "balance1.mul(1000).sub(amount1In.mul(3))",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "balance0Adjusted.mul(balance1Adjusted)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION",
+          "DATAFLOW_BUDGET_OR_CYCLE"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "uint(_reserve0).mul(_reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "swap(uint256,uint256,address,bytes)",
+        "call": "uint(_reserve0).mul(_reserve1).mul(1000**2)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "skim(address)",
+        "call": "IERC20(_token0).balanceOf(address(this)).sub(reserve0)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "skim(address)",
+        "call": "IERC20(_token1).balanceOf(address(this)).sub(reserve1)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "partial",
+        "remaining": [
+          "EXTERNAL_FUNCTION_RETURN_NOT_BOUND_TO_EXECUTION"
+        ]
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mint(address,uint256)",
+        "call": "totalSupply.add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_mint(address,uint256)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_burn(address,uint256)",
+        "call": "balanceOf[from].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_burn(address,uint256)",
+        "call": "totalSupply.sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_transfer(address,address,uint256)",
+        "call": "balanceOf[from].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "_transfer(address,address,uint256)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "transfer(address,uint256)",
+        "call": "balanceOf[from].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "transfer(address,uint256)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "transferFrom(address,address,uint256)",
+        "call": "allowance[from][msg.sender].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "transferFrom(address,address,uint256)",
+        "call": "balanceOf[from].sub(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      },
+      {
+        "code_address": "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
+        "method": "transferFrom(address,address,uint256)",
+        "call": "balanceOf[to].add(value)",
+        "previous_gap": "INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT",
+        "current_status": "represented_source_dependencies_resolved",
+        "remaining": []
+      }
+    ]
+  },
+  {
+    "scenario": "ordered-calculations-persist-in-real-artifact",
+    "status": "PASS",
+    "evidence": {
+      "methods": 4,
+      "evaluation_steps": 13
+    }
+  },
+  {
+    "scenario": "method-details-persist-calculation-domain",
+    "status": "PASS",
+    "evidence": {
+      "method_details": 109
+    }
+  }
+]
