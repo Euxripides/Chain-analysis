@@ -373,6 +373,17 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) error {
 	rows := []json.RawMessage{}
 	remap := map[string]string{}
+	// Build the entire identity map before rewriting embedded proof references.
+	for _, raw := range result.Sections["artifacts"] {
+		var artifact ca.Artifact
+		if e := json.Unmarshal(raw, &artifact); e != nil {
+			return e
+		}
+		if !ca.Identifier.MatchString(artifact.ArtifactID) {
+			return fmt.Errorf("invalid engine artifact ID")
+		}
+		remap[artifact.ArtifactID] = ca.ID(artifact.ArtifactID, result.Snapshot.CodeAddress, result.Snapshot.StorageAddress, result.Snapshot.BlockHash)
+	}
 	for _, raw := range result.Sections["artifacts"] {
 		var artifact ca.Artifact
 		if e := json.Unmarshal(raw, &artifact); e != nil {
@@ -382,8 +393,7 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 			return fmt.Errorf("invalid engine artifact ID")
 		}
 		originalID := artifact.ArtifactID
-		artifact.ArtifactID = ca.ID(originalID, result.Snapshot.CodeAddress, result.Snapshot.StorageAddress, result.Snapshot.BlockHash)
-		remap[originalID] = artifact.ArtifactID
+		artifact.ArtifactID = remap[originalID]
 		data := []byte(artifact.Text)
 		if artifact.ContentBase64 != "" {
 			var e error
@@ -399,11 +409,19 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 		if ca.SHA256(data) != artifact.SHA256 {
 			return fmt.Errorf("engine artifact checksum mismatch")
 		}
+		if artifact.Kind == "property_proof" {
+			var e error
+			data, e = contractScopePropertyProof(data, originalID, remap)
+			if e != nil {
+				return e
+			}
+		}
 		object, e := s.contractSaveObject(ctx, "artifact", data, artifact.MediaType)
 		if e != nil {
 			return e
 		}
 		artifact.Text = ""
+		artifact.SHA256 = object.SHA256
 		artifact.Bytes = object.Bytes
 		artifact.ObjectKey = object.Key
 		rows = append(rows, ca.Row(artifact))

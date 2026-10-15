@@ -104,6 +104,28 @@ func rowMap(raw json.RawMessage) map[string]any {
 	_ = nextDecode(raw, &m)
 	return m
 }
+
+func contractScopePropertyProof(data []byte, originalID string, remap map[string]string) ([]byte, error) {
+	var proof map[string]any
+	if err := nextDecode(data, &proof); err != nil {
+		return nil, fmt.Errorf("invalid property proof: %w", err)
+	}
+	property, propertyOK := proof["property"].(map[string]any)
+	query, queryOK := proof["query"].(map[string]any)
+	propertyID, propertyIDOK := property["property_id"].(string)
+	queryID, queryIDOK := query["property_id"].(string)
+	if proof["schema_version"] != "contract-property-proof-v1" || !propertyOK || !queryOK ||
+		property["proof_artifact_id"] != originalID || remap[originalID] == "" ||
+		!propertyIDOK || !queryIDOK || propertyID == "" || propertyID != queryID {
+		return nil, fmt.Errorf("property proof identity mismatch")
+	}
+	// Apply the same scoped references as the published rows, after checking the
+	// engine's original bytes. Source files and other opaque artifacts stay intact.
+	for oldID, newID := range remap {
+		data = bytes.ReplaceAll(data, []byte(`"`+oldID+`"`), []byte(`"`+newID+`"`))
+	}
+	return data, nil
+}
 func stringList(v any) []string {
 	values := []string{}
 	if a, ok := v.([]any); ok {

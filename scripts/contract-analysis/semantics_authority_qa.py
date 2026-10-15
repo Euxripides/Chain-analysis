@@ -8,7 +8,7 @@ def check(name,ok,evidence=None):
  if not ok:raise AssertionError(name)
 c=fixture_clients()['investigator'];image=(OUT/'engine-image.txt').read_text().strip()
 q={'chain':'ethereum','address':'0xdAC17F958D2ee523a2206206994597C13D831ec7','block':19000000,'from_block':19000000,'to_block':19000000,
- 'idempotency_key':'ca-authority-'+image[7:19],'budget':{'max_contracts':1,'max_rpc_requests':100,'max_state_reads':24}}
+ 'idempotency_key':'ca-authority-'+image[7:19]+os.environ.get('CONTRACT_QA_RUN_SUFFIX',''),'budget':{'max_contracts':1,'max_rpc_requests':100,'max_state_reads':24}}
 aid=c.must('/api/v2/contract-analyses',q)['analysis_id'];job=await_job(c,aid);(OUT/'authority-analysis-id.txt').write_text(aid)
 check('pinned-owner-contract-completes',job['status']=='completed',{'analysis_id':aid,'phase':job['phase'],'error':job.get('error_code')})
 capabilities=c.must('/api/v2/contract-analyses/capabilities')
