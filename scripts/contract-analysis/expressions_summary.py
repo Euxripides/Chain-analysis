@@ -5,7 +5,7 @@ read=lambda p:json.loads((OUT/p).read_text())
 image=(OUT/'engine-image.txt').read_text().strip()
 assert read('final-acceptance.json')['status']=='PASS'and read('final-acceptance.json')['image']==image
 groups={}
-for name,path in {'api':'live-api-qa.json','mcp':'mcp-live-qa.json','transaction':'execution-live-qa.json','lifecycle':'lifecycle-qa.json','fault':'resource-fault-qa.json','authority':'authority-live-qa.json','dependencies':'dependency-live-qa.json','browser':'browser/report.json','authority_browser':'authority-browser/report.json','mechanism_browser':'mechanism-browser/report.json','existing_runtime':'runtime-fixtures/report.json','expression_evidence':'expression-evidence-qa.json'}.items():
+for name,path in {'api':'live-api-qa.json','mcp':'mcp-live-qa.json','transaction':'execution-live-qa.json','lifecycle':'lifecycle-qa.json','fault':'resource-fault-qa.json','authority':'authority-live-qa.json','dependencies':'dependency-live-qa.json','browser':'browser/report.json','authority_browser':'authority-browser/report.json','mechanism_browser':'mechanism-browser/report.json','existing_runtime':'runtime-fixtures/report.json','expression_evidence':'expression-evidence-qa.json','expression_browser':'expression-browser/report.json'}.items():
  rows=read(path);assert rows and all(r['status']=='PASS'for r in rows),path;groups[name]=len(rows)
 gold=read('gold/report.json');assert gold['image']==image and len(gold['runs'])==29 and all(r['status']=='PASS'for r in gold['checks'])
 runtime=read('mechanism-runtime/report.json');assert runtime['image']==image and runtime['complete']and all(r['status']=='PASS'for r in runtime['checks'])
