@@ -21,6 +21,7 @@ try{
   await page.keyboard.press('Tab');check(profile.name+'-focus-contained',await modal.evaluate(e=>e.contains(document.activeElement)));await page.keyboard.press('Escape');await modal.waitFor({state:'hidden'});check(profile.name+'-dialog-closes',true);
   await page.goto('http://127.0.0.1:18093/app-v2/contract-analyses/'+dependency+'?tab=runtime&section=protocols',{waitUntil:'domcontentloaded'});await page.getByRole('columnheader',{name:'协议方法公式',exact:true}).waitFor();await page.locator('.ca-table tbody tr').first().waitFor();
   check(profile.name+'-real-protocol-return-model',/getReserves\(\)/.test(await page.locator('.ca-table tbody').innerText()));
+  check(profile.name+'-formula-column-is-readable',(await page.locator('.ca-table-protocols th').nth(2).boundingBox()).width>=360);
   check(profile.name+'-formula-table-has-no-page-overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:new URL(profile.name+'.png',out).pathname,fullPage:true});check(profile.name+'-no-script-errors',errors.length===0,errors);await context.close();
  }
