@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { emptyResult, id, hash, stringify } from './model.mjs';
 import {buildOpcodeWitness,callTraceShape} from './opcode-witness.mjs';
+import {prepareReplayAccounts} from './replay-system-state.mjs';
+import {compareTransactionDiffs} from './replay-state-diff.mjs';
 const quantity = v => '0x' + BigInt(v || 0).toString(16);
 const normalizeWord = v => BigInt(v || '0x0').toString(16).padStart(64,'0');
 const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
@@ -11,8 +13,8 @@ export async function replay(input) {
   if (!w?.raw_transaction||!w.raw_receipt||!w.raw_block||!w.parent_block||!w.prestate) throw new Error('REPLAY_WITNESS_REQUIRED');
   const tx=w.raw_transaction,original=w.raw_receipt,header=w.raw_block;
   const txHash=tx.hash,started=performance.now(),gaps=[],reads=[],optionalMethods=[];
-  const accounts=Object.fromEntries(Object.entries(w.prestate).map(([a,state])=>[a.toLowerCase(),state]));
   const parent=w.parent_block,blockNumber=BigInt(header.number),fork=w.hardfork||'chain_rules_unavailable';
+  const prepared=prepareReplayAccounts(w.prestate,w.block_system_prestate,parent,header,fork),accounts=prepared.accounts;gaps.push(...prepared.gaps);
   const row={replay_id:id(txHash,'foundry-witness'),tx_hash:txHash,block_hash:header.hash,chain_id:String(input.snapshot.chain_id),engine:'foundry/anvil',version:'1.8.5',
     binary_digest:'sha256:00f97668e1ae0fcca118fd7d2d1b6d25c0496447a523ca6bc2dfd10958c99604',
     mode:'transaction_prestate_witness',state_granularity:'transaction_prestate',transaction_index:tx.transactionIndex,
@@ -98,6 +100,10 @@ export async function replay(input) {
     const replayHash=await rpc('eth_sendTransaction',[transaction]);await rpc('evm_mine');const receipt=await rpc('eth_getTransactionReceipt',[replayHash]);
     if(!receipt)throw new Error('REPLAY_RECEIPT_UNAVAILABLE');
     row.replay_tx_hash=replayHash;
+    const executedHeader=await rpc('eth_getBlockByHash',[receipt.blockHash,false]);
+    for(const field of ['number','timestamp','gasLimit','baseFeePerGas','excessBlobGas'])if(header[field]!=null&&
+      (executedHeader?.[field]==null||BigInt(executedHeader[field])!==BigInt(header[field])))row.differences.push('block_environment:'+field);
+    for(const field of ['miner','mixHash'])if(header[field]!=null&&String(executedHeader?.[field]).toLowerCase()!==String(header[field]).toLowerCase())row.differences.push('block_environment:'+field);
     const logShape=logs=>(logs||[]).map(l=>({address:l.address.toLowerCase(),topics:l.topics.map(t=>t.toLowerCase()),data:l.data.toLowerCase()}));
     row.observed={status:original.status,gas_used:BigInt(original.gasUsed).toString(),logs:logShape(original.logs),contract_address:original.contractAddress?.toLowerCase()||null};
     row.replayed={status:receipt.status,gas_used:BigInt(receipt.gasUsed).toString(),logs:logShape(receipt.logs),contract_address:receipt.contractAddress?.toLowerCase()||null};
@@ -105,21 +111,23 @@ export async function replay(input) {
     if(BigInt(receipt.gasUsed)!==BigInt(original.gasUsed))row.differences.push('gas_used');
     if(JSON.stringify(row.observed.logs)!==JSON.stringify(row.replayed.logs))row.differences.push('logs');
     if(row.observed.contract_address!==row.replayed.contract_address)row.differences.push('contract_address');
-    const changed=w.state_diff?.post||{},pre=w.state_diff?.pre||{};let checked=0;
-    for(const address of new Set([...Object.keys(changed),...Object.keys(pre)])){
-      const slots=new Set([...Object.keys(changed[address]?.storage||{}),...Object.keys(pre[address]?.storage||{})]);
-      for(const slot of slots){const expected=changed[address]?.storage?.[slot]||'0x0';const actual=await rpc('eth_getStorageAt',[address,slot,'latest']);checked++;if(BigInt(actual)!==BigInt(expected))row.differences.push('storage:'+address+':'+slot)}
-      for(const [field,method]of [['balance','eth_getBalance'],['nonce','eth_getTransactionCount'],['code','eth_getCode']]) {
-        const before=pre[address]?.[field],after=changed[address]?.[field];if(before==null&&after==null)continue;
-        const expected=after??(changed[address]?before:field==='code'?'0x':0);
-        const actual=await rpc(method,[address,'latest']);
-        if(field==='code'?actual.toLowerCase()!==String(expected).toLowerCase():BigInt(actual)!==BigInt(expected))row.differences.push(field+':'+address);
-      }
-    }
-    row.state_slots_checked=checked;row.state_diff_complete=Boolean(w.state_diff);
+    const replayPrestate=await rpc('debug_traceTransaction',[replayHash,{tracer:'prestateTracer',tracerConfig:{includeEmpty:true}}],16<<20),
+      replayDiff=await rpc('debug_traceTransaction',[replayHash,{tracer:'prestateTracer',tracerConfig:{diffMode:true}}],16<<20),
+      comparison=compareTransactionDiffs(w.state_diff,w.prestate,replayDiff,replayPrestate);
+    row.differences.push(...comparison.differences);gaps.push(...comparison.gaps);
+    row.state_slots_checked=comparison.expected.storage_words_checked;row.state_diff_complete=comparison.complete;
+    row.state_diff_scope='complete_transaction_changes_including_additional_replay_effects';
+    const stateText=stringify({schema_version:'contract-transaction-state-diff-v1',tx_hash:txHash,replay_tx_hash:replayHash,
+      original:w.state_diff,replayed:replayDiff,replayed_prestate:replayPrestate,comparison});
+    if(Buffer.byteLength(stateText)>32<<20)throw new Error('STATE_DIFF_ARTIFACT_BYTE_BUDGET');
+    result.sections.artifacts.push({artifact_id:id(txHash,'transaction-state-diff'),kind:'transaction_state_diff',filename:txHash+'-state-diff.json',
+      media_type:'application/json',text:stateText,sha256:hash(stateText)});
     row.status=gaps.length?'witness_gap':row.differences.length?'replay_mismatch':row.environment_gap?'environment_gap':'matched_observations';
-    row.complete=row.status==='matched_observations'&&Boolean(w.state_diff)&&!row.environment_gap;
-    row.environment={block_number:header.number,block_timestamp:header.timestamp,base_fee:header.baseFeePerGas,coinbase:header.miner,prev_randao:header.mixHash,prestate_includes_prior_same_block_execution:true};
+    row.complete=row.status==='matched_observations'&&comparison.matched&&!row.environment_gap;
+    row.environment={block_number:header.number,block_timestamp:header.timestamp,base_fee:header.baseFeePerGas,coinbase:header.miner,prev_randao:header.mixHash,prestate_includes_prior_same_block_execution:true,
+      block_system_state_required:prepared.block_system_state_required,block_system_parent_state_observed:prepared.block_system_state_required&&prepared.gaps.length===0,
+      executed_header_matches:!row.differences.some(d=>d.startsWith('block_environment:')),
+      auxiliary_state_origins:Object.fromEntries(Object.entries(prepared.origins).filter(([,origin])=>origin!=='transaction_prestate_tracer')),whole_block_execution_verified:false};
     const trace=await rpc('debug_traceTransaction',[replayHash,{tracer:'callTracer'}]);row.call_trace=trace;
     row.original_call_trace_matches=Boolean(w.call_trace)&&JSON.stringify(callTraceShape(trace))===JSON.stringify(callTraceShape(w.call_trace));
     if(row.complete&&row.original_call_trace_matches) {

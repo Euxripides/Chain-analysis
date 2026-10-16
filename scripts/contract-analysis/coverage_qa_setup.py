@@ -1,6 +1,6 @@
 """Run candidate services against the existing isolated contract QA database."""
 import hashlib,json,os,pathlib,shutil,subprocess,sys,urllib.parse,urllib.request,time
-ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015','contract-deepening-20261015','contract-verification-20261015','contract-model-closure-20261016','contract-dependency-models-20261016']
+ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015','contract-deepening-20261015','contract-verification-20261015','contract-model-closure-20261016','contract-dependency-models-20261016','contract-transaction-history-20261016']
 sys.path.insert(0,str(ROOT/'scripts/contract-analysis'));from qa_support import dotenv
 OUT=ROOT/(os.environ.get('CONTRACT_QA_OUT') or 'acceptance/contract-analysis-coverage');OUT.mkdir(parents=True,exist_ok=True)
 NODE='/home/euripides/.nvm/versions/node/v24.20.0/bin/node'
@@ -16,9 +16,11 @@ if ROOT.name=='contract-verification-20261015':
 if ROOT.name=='contract-model-closure-20261016':
  previous=dotenv('/home/euripides/.config/blockchain-platform/contract-verification-release-20261015.env')
  values['CONTRACT_ENGINE_PREVIOUS_IMAGES']=','.join(dict.fromkeys([previous['CONTRACT_ENGINE_IMAGE'],*previous.get('CONTRACT_ENGINE_PREVIOUS_IMAGES','').split(',')]))
-if ROOT.name=='contract-dependency-models-20261016':
+if ROOT.name in ['contract-dependency-models-20261016','contract-transaction-history-20261016']:
  previous=dotenv('/home/euripides/.config/blockchain-platform/contract-model-closure-release-20261016.env')
  values['CONTRACT_ENGINE_PREVIOUS_IMAGES']=','.join(dict.fromkeys([previous['CONTRACT_ENGINE_IMAGE'],*previous.get('CONTRACT_ENGINE_PREVIOUS_IMAGES','').split(',')]))
+if ROOT.name=='contract-transaction-history-20261016':
+ values['CONTRACT_ENGINE_PREVIOUS_IMAGES']=','.join(dict.fromkeys(['sha256:d8eba4d2f1fa7fdc3266ef8ea005bea5990c2de2be44769a17ebbd3a5dea33a7',*values['CONTRACT_ENGINE_PREVIOUS_IMAGES'].split(',')]))
 envfile=pathlib.Path(os.environ.get('CONTRACT_QA_ENV','/home/euripides/.config/blockchain-platform/contract-semantics-qa-20261014.env'));envfile.write_text('\n'.join(k+'='+v for k,v in values.items())+'\n');envfile.chmod(0o600)
 env['npm_config_verify_deps_before_run']='false'
 for name,command,cwd in [('api-build',['go','build','-o','bin/contract-analysis-api','./cmd/api'],ROOT/'backend'),('worker-build',['go','build','-o','bin/contract-analysis-worker','./cmd/contract-worker'],ROOT/'backend'),('mcp-build',['npm','run','build'],ROOT/'mcp'),('mcp-unit',['npm','test'],ROOT/'mcp'),('frontend-typecheck',[NODE,'node_modules/typescript/bin/tsc','--noEmit','-p','apps/user-console/tsconfig.json'],ROOT/'frontend'),('frontend-build',['npm','run','build:user'],ROOT/'frontend')]:

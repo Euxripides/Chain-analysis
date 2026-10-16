@@ -303,20 +303,7 @@ func (s *Server) contractResolveProxy(ctx context.Context, q ca.Request, p chain
 	return proxy, errors
 }
 func (s *Server) contractRPCTrace(ctx context.Context, q ca.Request, txHash, tracer string, diff bool) (json.RawMessage, map[string]any, error) {
-	opt := contractOptions(ctx, q)
-	config := map[string]any{"tracer": tracer, "timeout": "30s"}
-	if tracer == "prestateTracer" {
-		config["tracerConfig"] = map[string]any{"diffMode": diff}
-	}
-	response, e := s.deps.RPCGateway.Call(ctx, rpc.Request{Chain: q.Chain, Method: "debug_traceTransaction", Params: []any{txHash, config}, Class: rpc.ClassDebugTrace, Priority: rpc.PriorityBackground, Budget: opt.Budget})
-	meta := map[string]any{"tracer": tracer, "diff_mode": diff, "provider": response.Provider, "cache_hit": response.CacheHit, "attempts": response.Attempts, "bytes": response.Bytes}
-	if e != nil {
-		return nil, meta, e
-	}
-	if len(response.Result) > ca.ArtifactLimit {
-		return nil, meta, fmt.Errorf("TRACE_RESPONSE_TOO_LARGE")
-	}
-	return response.Result, meta, nil
+	return contractReadTrace(ctx, s.deps.RPCGateway.Call, q.Chain, txHash, tracer, diff, contractOptions(ctx, q).Budget)
 }
 func (s *Server) contractTransactionInput(ctx context.Context, q ca.Request, txHash string) (map[string]any, error) {
 	h, _ := chain.ParseHash(txHash)
@@ -352,6 +339,9 @@ func (s *Server) contractTransactionInput(ctx context.Context, q ca.Request, txH
 			coverage = append(coverage, map[string]any{"dimension": probe.key, "complete": true, "basis": "transaction_tracer"})
 		}
 	}
+	trace, _ := record["call_trace"].(json.RawMessage)
+	prestate, _ := record["prestate"].(json.RawMessage)
+	coverage = append(coverage, contractCreationPrestateCoverage(trace, prestate))
 	record["coverage"] = coverage
 	record["provider_reads"] = reads
 	price, ok := new(big.Int).SetString(receipt.EffectiveGasPrice, 10)
@@ -418,6 +408,16 @@ func (s *Server) contractTransactionInput(ctx context.Context, q ca.Request, txH
 			}
 			record["network_fee_components"] = components
 		}
+	}
+	rawBlock, _ := record["raw_block"].(json.RawMessage)
+	rawParent, _ := record["parent_block"].(json.RawMessage)
+	if len(rawBlock) > 0 && len(rawParent) > 0 {
+		fork := ca.EthereumHardfork(strconv.FormatUint(mustChain(s, q.Chain).ChainID, 10), block.Number, block.Timestamp)
+		environment, additionalReads := contractReadBlockSystemState(ctx, contractSystemStateGateway(s.deps.RPCGateway.Call, s.contractReserveState), q.Chain, fork, rowMap(rawBlock), rowMap(rawParent), q.Budget.MaxStateReads, opt.Budget)
+		record["block_system_prestate"] = environment
+		reads = append(reads, additionalReads...)
+		coverage = append(coverage, map[string]any{"dimension": "block_system_parent_state", "complete": environment["complete"], "required": environment["required"], "reason": environment["reason"], "scope": environment["scope"]})
+		record["provider_reads"], record["coverage"] = reads, coverage
 	}
 	if len(ca.Row(record)) > 32<<20 {
 		return nil, fmt.Errorf("TRANSACTION_EVIDENCE_EXCEEDS_32_MIB")

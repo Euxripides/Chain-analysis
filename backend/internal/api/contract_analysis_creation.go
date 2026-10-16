@@ -122,6 +122,9 @@ func contractCreationBinding(snapshot ca.Snapshot, model map[string]any, witness
 	if snapshot.VMFamily != "" && snapshot.VMFamily != "evm" {
 		return nil, fmt.Errorf("CREATION_VM_FAMILY_UNSUPPORTED")
 	}
+	if coverage := contractCreationPrestateCoverage(ca.Row(w["call_trace"]), ca.Row(w["prestate"])); coverage["complete"] != true {
+		return nil, fmt.Errorf("CREATION_TRANSACTION_PRESTATE_INCOMPLETE")
+	}
 	if tx["to"] != nil && contractCreationText(tx["to"]) != "" || !contractCreationEqual(model["storage_address"], receipt["contractAddress"]) {
 		return contractFactoryCreationBinding(snapshot, model, witness, replayed)
 	}

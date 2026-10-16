@@ -28,6 +28,7 @@ func contractCreationTestFixture(t *testing.T) (ca.Snapshot, map[string]any, map
 	witness := rowMap(ca.Row(map[string]any{
 		"raw_transaction": map[string]any{"hash": tx, "from": from, "to": nil, "nonce": "0x7", "chainId": "0x1", "input": input, "blockHash": block, "blockNumber": "0xa", "transactionIndex": "0x0"},
 		"raw_receipt":     map[string]any{"transactionHash": tx, "contractAddress": address, "status": "0x1", "blockHash": block, "blockNumber": "0xa", "transactionIndex": "0x0"},
+		"prestate":        map[string]any{address: map[string]any{"balance": "0x0"}},
 		"raw_block":       map[string]any{"number": "0xa", "hash": block, "parentHash": parent}, "parent_block": map[string]any{"number": "0x9", "hash": parent},
 		"call_trace": map[string]any{"type": "CREATE", "from": from, "to": address, "input": input, "output": code}, "state_diff": map[string]any{"post": map[string]any{address: map[string]any{"code": code}}},
 	}))

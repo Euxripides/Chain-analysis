@@ -76,6 +76,7 @@ func contractFactoryTestFixture(t *testing.T, kind string) (ca.Snapshot, map[str
 	receipt["contractAddress"] = nil
 	child := map[string]any{"type": kind, "from": factory, "to": target, "input": init, "output": "0x6000", "value": "0x0"}
 	w["call_trace"] = map[string]any{"type": "CALL", "from": tx["from"], "to": factory, "input": tx["input"], "output": "0x", "calls": []any{child}}
+	w["prestate"] = map[string]any{target: map[string]any{"balance": "0x0"}}
 	w["state_diff"] = map[string]any{"post": map[string]any{target: map[string]any{"code": "0x6000"}}}
 	proof := rowMap(replayed.Sections["replays"][0])
 	proof["observed"], proof["replayed"] = map[string]any{"contract_address": nil}, map[string]any{"contract_address": nil}
