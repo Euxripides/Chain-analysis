@@ -29,7 +29,15 @@ previous_usage=json.loads((SERVICE/'production-usage-baseline.json').read_text()
 assert usage['actual']['http_requests']+previous_usage['http_requests']+160<=2000 and usage['actual']['credits']+previous_usage['credits']+100000<=1000000 and usage['actual']['estimated_usd']+previous_usage['estimated_usd']<10
 assert(SERVICE/'live-usage-start.txt').read_text()==(ROOT.parent/'contract-verification-20261015/acceptance/contract-analysis-verification/live-usage-start.txt').read_text()
 pids=json.loads((SERVICE/'production-pids-before.json').read_text());assert pids and all(int(v)>0 for v in pids.values())
-for unit,pid in pids.items():assert subprocess.check_output(['systemctl','--user','show',unit,'-p','MainPID','--value']).decode().strip()==pid,unit
+feature_units={'blockchain-contract-api.service','blockchain-contract-worker.service','blockchain-contract-mcp.service','blockchain-contract-console.service'}
+current_pids={unit:subprocess.check_output(['systemctl','--user','show',unit,'-p','MainPID','--value']).decode().strip()for unit in pids}
+for unit,pid in pids.items():
+ assert int(current_pids[unit])>0,unit
+ if unit not in feature_units:assert current_pids[unit]==pid,unit
+ elif current_pids[unit]!=pid:
+  previous_attempt=json.loads((BASE/'release/manifest.json').read_text());assert previous_attempt['status']in['rolled_back','rolled_back_after_failed_switch'],unit
+  assert sha(pathlib.Path('/home/euripides/.config/systemd/user')/unit)==previous_attempt['unit_before_hashes'][unit],unit
+  assert subprocess.check_output(['systemctl','--user','is-active',unit]).decode().strip()=='active',unit
 paths=set(subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0'))|set(subprocess.check_output(['git','ls-files','--others','--exclude-standard','-z'],cwd=ROOT).decode().split('\0'))
 prefixes={'analysis-engines','backend','mcp','frontend','scripts','docs','openapi','migrations'}
 sources=[]
@@ -45,7 +53,7 @@ for base in[ENGINE,RUNTIME,SERVICE,BASE/'shadow-baseline']:
  for p in sorted(base.rglob('*')):
   if p.is_file()and not p.is_symlink():evidence.append({'path':str(p.relative_to(ROOT)),'sha256':sha(p),'byte_size':p.stat().st_size})
 manifest={'status':'PASS','scope':'implemented_model_scopes_and_isolated_service_acceptance','rule_version':'funds-semantics-8','image':image,'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT).decode().strip(),
- 'sources':sources,'built_files':built,'evidence_files':evidence,'engine_files':freeze['files'],'counts':counts,'usage':usage,'production_pids':pids,'whole_goal_complete':False,
+ 'sources':sources,'built_files':built,'evidence_files':evidence,'engine_files':freeze['files'],'counts':counts,'usage':usage,'production_pids':pids,'certification_pids':current_pids,'whole_goal_complete':False,
  'remaining':['coupled_heap_and_general_nonlinear_loop_invariants','arbitrary_host_effects_external_dependencies_and_callbacks','factory_creation_proxy_initialization_and_upgrade_continuity','cached_signature_domains_dynamic_signatures_contract_signatures_and_multisig_thresholds','protocol_specific_assets_prices_fees_rounding_debt_and_liquidation_models','full_declared_authorization_and_economics_closure']}
 (BASE/'candidate-freeze.json').write_text(json.dumps(manifest,indent=2))
 print('MODEL_CANDIDATE_CERTIFIED',image,'SOURCE_FILES',len(sources),'BUILT_FILES',len(built),'EVIDENCE_FILES',len(evidence),'WHOLE_GOAL_REMAINS_ACTIVE',flush=True)

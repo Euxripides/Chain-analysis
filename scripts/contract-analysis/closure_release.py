@@ -35,7 +35,7 @@ def prepare():
   raw=(UNITDIR/unit).read_text();assert str(PRIOR)in raw and str(OLDENV)in raw,unit
   (OUT/(unit+'.before')).write_text(raw);(OUT/unit).write_text(raw.replace(str(PRIOR),str(ROOT)).replace(str(OLDENV),str(ENVFILE)))
  (OUT/'openapi-before.json').write_bytes(PUBLIC_API.read_bytes())
- manifest={'status':'prepared','image':candidate['image'],'previous_image':previous['CONTRACT_ENGINE_IMAGE'],'source_commit':candidate['source_commit'],'candidate_freeze_sha256':sha(BASE/'candidate-freeze.json'),
+ manifest={'status':'prepared','image':candidate['image'],'previous_image':previous['CONTRACT_ENGINE_IMAGE'],'source_commit':candidate['source_commit'],'candidate_freeze_sha256':sha(BASE/'candidate-freeze.json'),'files':candidate['built_files'],
   'environment_sha256':sha(ENVFILE),'previous_environment_sha256':sha(OLDENV),'nginx_sha256':sha(NGINX),'public_openapi_before_sha256':sha(OUT/'openapi-before.json'),'source_openapi_sha256':sha(ROOT/'openapi/contract-analysis-v1.json'),'unit_before_hashes':{unit:sha(OUT/(unit+'.before'))for unit in UNITS},'unit_after_hashes':{unit:sha(OUT/unit)for unit in UNITS},'original_pids':original_pids()}
  (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2));print('MODEL_RELEASE_PREPARED',manifest['image'],flush=True)
 def verify():
