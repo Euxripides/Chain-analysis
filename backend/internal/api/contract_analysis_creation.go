@@ -122,8 +122,8 @@ func contractCreationBinding(snapshot ca.Snapshot, model map[string]any, witness
 	if snapshot.VMFamily != "" && snapshot.VMFamily != "evm" {
 		return nil, fmt.Errorf("CREATION_VM_FAMILY_UNSUPPORTED")
 	}
-	if tx["to"] != nil && contractCreationText(tx["to"]) != "" {
-		return nil, fmt.Errorf("CREATION_FACTORY_CONTEXT_REQUIRES_MODEL")
+	if tx["to"] != nil && contractCreationText(tx["to"]) != "" || !contractCreationEqual(model["storage_address"], receipt["contractAddress"]) {
+		return contractFactoryCreationBinding(snapshot, model, witness, replayed)
 	}
 	txHash, address := contractCreationText(tx["hash"]), contractCreationText(receipt["contractAddress"])
 	if !ca.CompleteHash.MatchString(txHash) || !ca.CompleteAddress.MatchString(address) || !ca.CompleteHash.MatchString(contractCreationText(block["hash"])) || !ca.CompleteHash.MatchString(contractCreationText(parent["hash"])) || !contractCreationEqual(tx["hash"], receipt["transactionHash"]) || !contractCreationEqual(receipt["blockHash"], block["hash"]) || !contractCreationEqual(tx["blockHash"], block["hash"]) {
@@ -198,14 +198,20 @@ func contractCreationBinding(snapshot ca.Snapshot, model map[string]any, witness
 
 func (s *Server) contractBindCreation(ctx context.Context, result *ca.Result, witness []byte, replayed ca.Result, witnessArtifact string) error {
 	w := rowMap(witness)
-	receipt := contractCreationMap(w["raw_receipt"])
-	address := contractCreationText(receipt["contractAddress"])
-	if !ca.CompleteAddress.MatchString(address) {
+	frames, e := contractCreationFrames(contractCreationMap(w["call_trace"]))
+	if e != nil {
+		result.Sections["coverage"] = append(result.Sections["coverage"], ca.Row(map[string]any{"dimension": "historical_creation_identity", "complete": false, "reason": e.Error()}))
 		return nil
+	}
+	targets := map[string]bool{}
+	for _, frame := range frames {
+		if frame.settled {
+			targets[strings.ToLower(contractCreationText(frame.frame["to"]))] = true
+		}
 	}
 	for i, raw := range result.Sections["initial_state_models"] {
 		model := rowMap(raw)
-		if !contractCreationEqual(model["storage_address"], address) {
+		if !targets[strings.ToLower(contractCreationText(model["storage_address"]))] {
 			continue
 		}
 		binding, e := contractCreationBinding(result.Snapshot, model, witness, replayed)
@@ -232,7 +238,12 @@ func (s *Server) contractBindCreation(ctx context.Context, result *ca.Result, wi
 
 func contractApplyCreationBinding(result *ca.Result, index int, binding map[string]any, artifactID string) {
 	model := rowMap(result.Sections["initial_state_models"][index])
-	model["deployment_identity_verified"], model["deployment_identity_status"], model["deployment_binding"] = true, "recompiled_and_replayed_direct_creation", binding
+	status := "recompiled_and_replayed_direct_creation"
+	if binding["scope"] == "one_recompiled_and_replayed_factory_creation_frame" {
+		status = "recompiled_and_replayed_factory_creation_frame"
+	}
+	model["deployment_identity_verified"], model["deployment_identity_status"], model["deployment_binding"] = true, status, binding
+	model["snapshot_lifecycle_continuity_verified"] = false
 	result.Sections["initial_state_models"][index] = ca.Row(model)
 	for i, row := range result.Sections["protocol_invariants"] {
 		initial := rowMap(row)

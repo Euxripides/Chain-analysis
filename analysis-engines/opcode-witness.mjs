@@ -12,6 +12,10 @@ const word=(log,index)=>{const v=log.stack?.at(-index);if(typeof v!=='string'||!
 const address=value=>'0x'+(value&((1n<<160n)-1n)).toString(16).padStart(40,'0');
 const digest=code=>'0x'+Buffer.from(keccak_256(code)).toString('hex');
 const slotWord=value=>'0x'+value.toString(16).padStart(64,'0');
+export function deriveCreate2Address(creator,salt,input){
+ if(!/^0x[0-9a-fA-F]{40}$/.test(creator)||BigInt(salt)<0n||BigInt(salt)>=MOD)throw new Error('CREATE2_ADDRESS_INPUT_INVALID');
+ return '0x'+digest(Buffer.from('ff'+creator.slice(2)+BigInt(salt).toString(16).padStart(64,'0')+digest(input).slice(2),'hex')).slice(-40);
+}
 
 export function callTraceShape(frame) {
  return {type:frame.type?.toUpperCase(),from:frame.from?.toLowerCase(),to:frame.to?.toLowerCase(),input:(frame.input||'0x').toLowerCase(),
@@ -20,7 +24,7 @@ export function callTraceShape(frame) {
 
 export function buildOpcodeWitness(trace,root,{txHash,prestate={},maxSteps=20000,maxMemoryBytes=65536}={}) {
  const gaps=[],memoryGaps=[],storageGaps=[],calls=[],storage=[],memory=[],accounts=new Map(Object.entries(prestate).map(([a,v])=>[a.toLowerCase(),v])),
-  persistent=new Map(),transient=new Map(),journal=[],frames=new Map();
+  persistent=new Map(),transient=new Map(),deployedCode=new Map(),journal=[],frames=new Map();
  const proof={schema_version:'contract-opcode-witness-v1',witness_id:id(txHash,'opcodes'),tx_hash:txHash,
   calls,storage_effects:storage,memory_effects:memory,gaps,memory_gaps:memoryGaps,storage_gaps:storageGaps,
   calls_complete:false,storage_complete:false,memory_complete:false,complete:false,scope:'one_exact_transaction_execution'};
@@ -43,8 +47,8 @@ export function buildOpcodeWitness(trace,root,{txHash,prestate={},maxSteps=20000
  function context(frame,path,parent=null) {
   const type=frame.type?.toUpperCase(),codeAddress=frame.to?.toLowerCase(),storageAddress=parent&&['DELEGATECALL','CALLCODE'].includes(type)?parent.storageAddress:codeAddress;
   const phase=['CREATE','CREATE2'].includes(type)?'creation':'runtime';
-  const rawCode=phase==='creation'?frame.input:accounts.get(codeAddress)?.code;
-  const code=rawCode!==undefined?bytes(rawCode):null;
+  const rawCode=phase==='creation'?frame.input:deployedCode.has(codeAddress)?deployedCode.get(codeAddress):accounts.get(codeAddress)?.code;
+  const code=Buffer.isBuffer(rawCode)?rawCode:rawCode!==undefined?bytes(rawCode):null;
   return {frame,path,parent,type,codeAddress,storageAddress,phase,code,codeHash:code?digest(code):null,nextChild:0,
    effectiveCaller:parent?(type==='DELEGATECALL'?parent.effectiveCaller:parent.storageAddress):frame.from?.toLowerCase(),
    callValue:parent&&type==='DELEGATECALL'?parent.callValue:integer(frame.value),
@@ -53,7 +57,13 @@ export function buildOpcodeWitness(trace,root,{txHash,prestate={},maxSteps=20000
  function close(ctx) {
   if(ctx.nextChild!==(ctx.frame.calls||[]).length)fail('CALL_TREE_HAS_UNVISITED_CHILDREN:'+ctx.path);
   if(!ctx.terminal)fail('OPCODE_TRACE_MISSING_FRAME_TERMINATION:'+ctx.path);
-  if(ctx.frame.error){for(let i=journal.length-1;i>=ctx.checkpoint;i--){const e=journal[i];e.table.set(e.key,e.before);}journal.length=ctx.checkpoint;}
+  if(ctx.frame.error){for(let i=journal.length-1;i>=ctx.checkpoint;i--){const e=journal[i];if(e.absent)e.table.delete(e.key);else e.table.set(e.key,e.before);}journal.length=ctx.checkpoint;}
+  else if(['CREATE','CREATE2'].includes(ctx.type)){
+   // RETURN bytes were checked against this frame's reconstructed memory.
+   // Install code at the actual creation boundary, and undo it with its parent.
+   const key=ctx.codeAddress;journal.push({table:deployedCode,key,before:deployedCode.get(key),absent:!deployedCode.has(key)});
+   deployedCode.set(key,bytes(ctx.frame.output||'0x'));
+  }
  }
  function range(ctx,offset,length) {
   if(length===0n)return true;
@@ -126,7 +136,13 @@ export function buildOpcodeWitness(trace,root,{txHash,prestate={},maxSteps=20000
      caller_code_address:ctx.codeAddress,caller_storage_address:ctx.storageAddress,caller_code_hash:ctx.codeHash,caller_code_phase:ctx.phase,
      target:child.to?.toLowerCase(),input:'0x'+input.toString('hex'),return_data:'0x'+output.toString('hex'),value_raw:childCtx.callValue.toString(),effective_caller:childCtx.effectiveCaller,
      input_memory_matches:inputMatches,bytecode_opcode_matches:opcodeMatches,settled:childCtx.settled,
+     execution_opcode_identity_verified:inputMatches&&opcodeMatches,
      verified:inputMatches&&opcodeMatches&&ctx.phase==='runtime'};
+    if(log.op==='CREATE2'){
+     row.create2_salt_raw=word(log,4).toString();
+     row.derived_create2_address=deriveCreate2Address(ctx.storageAddress,word(log,4),input);
+     if(row.derived_create2_address!==row.target)fail('OPCODE_CREATE2_DERIVED_ADDRESS_MISMATCH');
+    }
     calls.push(row);if(!row.verified)gap(gaps,'CALL_PC_OR_INPUT_NOT_VERIFIED:'+path);
     if(log.op==='SELFDESTRUCT')ctx.terminal=true;
     ctx.returnData=output;
@@ -164,6 +180,7 @@ export function buildOpcodeWitness(trace,root,{txHash,prestate={},maxSteps=20000
       if(log.op==='MCOPY')data=readMemory(ctx,source,length);
       else{
        const raw=log.op==='CALLDATACOPY'?bytes(ctx.frame.input||'0x'):log.op==='CODECOPY'?ctx.code:log.op==='RETURNDATACOPY'?ctx.returnData:
+        deployedCode.has(address(word(log,1)))?deployedCode.get(address(word(log,1))):
         accounts.get(address(word(log,1)))?.code!==undefined?bytes(accounts.get(address(word(log,1))).code):null;
        if(raw){data=Buffer.alloc(Number(length));for(let i=0;i<data.length;i++)data[i]=source+BigInt(i)<BigInt(raw.length)?raw[Number(source)+i]:0;}
       }

@@ -1,0 +1,8 @@
+FROM platform-contract-model-closure:20261016-symbols@sha256:466f29f2075bc9c087e4fb7e00f2fc6cb11197abff3883823b4da33961b781b6
+USER root
+COPY analyze.mjs source.mjs source-vyper.mjs model.mjs capabilities.mjs replay.mjs source-pc.mjs opcode-witness.mjs /engine/
+COPY ir /engine/ir
+COPY properties /engine/properties
+COPY verification /engine/verification
+COPY rules /engine/rules
+USER 65532:65532

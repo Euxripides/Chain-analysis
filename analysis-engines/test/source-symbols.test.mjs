@@ -18,11 +18,13 @@ test('a state struct named msg retains its storage identity instead of the EVM c
  assert.equal(result.sections.state_transitions.find(t=>t.method_id===take.method_id).complete,true);
  const fields=result.sections.expressions.filter(e=>e.method_id===take.method_id&&e.text==='msg.sender');assert.ok(fields.length);assert.ok(fields.every(e=>e.builtin_global===null));
  assert.ok(result.sections.permissions.every(p=>!(p.caller_constraints||[]).length));
+ assert.ok(!take.behaviors.includes('调用者条件'));
  if(actualSolver)assert.equal(result.sections.authorization_models.find(m=>m.kind==='owner_identity_integrity').status,'counterexample');
 });
 test('parentheses preserve the actual compiler-provided caller identity',()=>{
  const source='pragma solidity ^0.8.24;contract Verification{address public owner;constructor(){owner=(msg).sender;}function take(address next)external{require((msg).sender==owner);owner=next;}}';
  const result=analyze(compileVerificationFixture(true,source));assert.ok(result.sections.state_transitions.every(t=>t.complete));
  assert.ok(result.sections.permissions.some(p=>p.caller_constraints.some(c=>c.principal==='msg.sender')));
+ assert.ok(result.sections.methods.find(m=>m.name==='take').behaviors.includes('调用者条件'));
  if(actualSolver)assert.equal(result.sections.authorization_models[0].complete,true,JSON.stringify(result.sections.authorization_models));
 });

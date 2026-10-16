@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const VERSION = 'contract-analysis-v1';
-export const RULE_VERSION = 'funds-semantics-8';
+export const RULE_VERSION = 'funds-semantics-9';
 export const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 export const id = (...parts) => hash(parts).slice(0, 40);
 export const stringify = value => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v);
@@ -41,6 +41,16 @@ export function claim(result, method, kind, text, evidence_ids, rule_id = RULE_V
 }
 export function finalize(result) {
   const { methods, steps, storage, calls, permissions, funds, flows } = result.sections;
+  const expressions=new Map((result.sections.expressions||[]).map(e=>[e.expression_id,e]));
+  const usesEnvironment=(guard,names,fallback)=>{
+    const root=expressions.get(guard.expression_id);
+    if(!root)return fallback;
+    const pending=[root.expression_id],seen=new Set();
+    while(pending.length&&seen.size<4096){const key=pending.pop();if(seen.has(key))continue;seen.add(key);const e=expressions.get(key);if(!e)continue;
+      if(names.includes(e.builtin_global)||e.symbolic_format==='evm_word'&&names.includes({caller:'msg.sender',origin:'tx.origin',timestamp:'block.timestamp'}[e.operator]))return true;
+      pending.push(...(e.operands||[]));if(e.binding_expression_id)pending.push(e.binding_expression_id);
+    }return false;
+  };
   for (const method of methods) {
     const ms = steps.filter(s => s.method_id === method.method_id);
     method.evidence_ids = unique(method.evidence_ids);
@@ -60,8 +70,8 @@ export function finalize(result) {
     if (mf.some(f => f.kind === 'burn')) behaviors.push('销毁');
     if (mw.length) behaviors.push('修改合约状态');
     if (mr.length && !mw.length && !mf.length) behaviors.push('读取合约状态');
-    if (mp.some(p => p.condition?.includes('block.timestamp'))) behaviors.push('时间条件');
-    if (mp.some(p => p.condition?.includes('msg.sender'))) behaviors.push('调用者条件');
+    if (mp.some(p => usesEnvironment(p,['block.timestamp'],method.completeness.basis!=='source'&&p.condition?.includes('block.timestamp')))) behaviors.push('时间条件');
+    if (mp.some(p => usesEnvironment(p,['msg.sender','tx.origin'],method.completeness.basis!=='source'&&p.condition?.includes('msg.sender')))) behaviors.push('调用者条件');
     if (mc.some(c => c.call_type === 'DELEGATECALL')) behaviors.push('委托执行');
     if (mc.some(c => c.call_type === 'CREATE' || c.call_type === 'CREATE2')) behaviors.push('创建合约');
     if (mc.length && !mf.length) behaviors.push('外部合约交互');
