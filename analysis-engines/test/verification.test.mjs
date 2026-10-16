@@ -21,7 +21,7 @@ test('induction records all obligations and only substitutes discharged loop sum
   loops=name=>result.sections.loop_invariants.filter(m=>m.method_id===method(name).method_id);
  assert.equal(result.sections.engines.find(e=>e.engine==='solc-ast')?.status,'completed',JSON.stringify(result.sections.engines));
  assert.equal(loops('affine')[0].obligations.length,7);
- assert.equal(loops('triangular')[0].complete,false);assert.match(loops('triangular')[0].unresolved.join(','),/ITERATION_INDEPENDENT/);
+ assert.equal(loops('triangular')[0].polynomial_certificates[0].terms[0].degree,1);
  assert.ok(result.sections.source_pc_maps.some(m=>m.status==='unique_source_callsite'));
  for(const p of [128n,129n,159n,256n,1024n])assert.deepEqual(evaluateReturn(result,'memoryWord',{p,v:(1n<<255n)+7n}),[(1n<<255n)+7n]);
  assert.deepEqual(evaluateReturn(result,'memoryByte',{v:(1n<<256n)-1n}),[(1n<<256n)-85n]);
@@ -32,6 +32,8 @@ test('induction records all obligations and only substitutes discharged loop sum
  assert.equal(result.sections.dataflow.find(d=>d.dataflow_id===method('unsafeMemory').entry_return_derivation_id).status,'partial');
  if(actualSolver) {
   for(const name of ['affine','wrapped','subtract'])assert.equal(loops(name)[0].complete,true,JSON.stringify(loops(name)));
+  assert.equal(loops('triangular')[0].complete,true,JSON.stringify(loops('triangular')));
+  assert.deepEqual(evaluateReturn(result,'triangular',{n:10000n}),[49995000n]);
   assert.equal(loops('counterOverflow')[0].complete,false);
   assert.equal(loops('counterOverflow')[0].status,'counterexample');
   for(const n of [0n,1n,17n,128n,10000n])assert.deepEqual(evaluateReturn(result,'affine',{n,c:3n}),[n*3n]);

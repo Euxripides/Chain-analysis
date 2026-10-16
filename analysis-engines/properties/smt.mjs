@@ -1,4 +1,6 @@
 import {id} from '../model.mjs';
+import {powerSumScaledSMT} from '../verification/polynomials.mjs';
+import {fixedBytesTerm} from '../ir/scalar-casts.mjs';
 const and=xs=>xs.length?'(and '+xs.join(' ')+')':'true',or=xs=>xs.length?'(or '+xs.join(' ')+')':'false';
 const numeral=n=>{n=BigInt(n);return n<0n?'(- '+(-n)+')':n.toString();};
 
@@ -24,7 +26,7 @@ export function propertyTranslator(result,method,definitionIDs=[]) {
     return {term,kind:t.kind,ok};
   }
   function variable(e) {
-    const t=type(e),identity=e.op==='Identifier'?'declaration:'+e.referenced_declaration:'environment:'+e.text;
+    const t=type(e),identity=e.op==='Identifier'?'declaration:'+e.referenced_declaration:'environment:'+(e.builtin_global||e.text);
     const key='v_'+id(method.code_hash,method.storage_address,identity),prior=variables.get(key);
     if(prior&&prior.kind!==t.kind)fail('SMT_VARIABLE_TYPE_CONFLICT');
     if(!prior){variables.set(key,{name:key,expression:e.text,type:e.type,kind:t.kind});
@@ -80,9 +82,10 @@ export function propertyTranslator(result,method,definitionIDs=[]) {
       }
       return variable(e);
     }
-    if(e.op==='MemberAccess'&&['msg.sender','tx.origin','block.timestamp','block.number','msg.value'].includes(e.text.replace(/\s/g,'')))return variable(e);
+    if(e.op==='MemberAccess'&&['msg.sender','tx.origin','block.timestamp','block.number','msg.value'].includes(e.builtin_global))return variable(e);
     if(['IndexAccess','MemberAccess'].includes(e.op))return storageValue(e);
     if(e.symbolic_format==='identity'){const v=walk(e.operands[0]);return e.yul_word_assignment?normalized(v.term,{...e,arithmetic:'wrap'},v.ok):v;}
+    if(e.symbolic_format==='scalar_cast'){const v=walk(e.operands[0]);return normalized(fixedBytesTerm(v.term,e.cast_source_type,e.type),{...e,arithmetic:'wrap'},v.ok);}
     if(['yul_memory_access','yul_memory_read'].includes(e.symbolic_format)) {
       const args=e.operands.map(walk),limit=1n<<256n,checks=args.map(a=>a.ok),offset=args[0].term;
       const range=(p,size)=>checks.push('(and (<= 0 '+p+') (<= (+ '+p+' '+size+') '+limit+'))');
@@ -105,11 +108,25 @@ export function propertyTranslator(result,method,definitionIDs=[]) {
     if(e.symbolic_format==='inductive_affine_loop') {
       const [a,n,c]=e.operands.map(walk);return normalized('('+e.operator+' '+a.term+' (* '+n.term+' '+c.term+'))',e,and([a.ok,n.ok,c.ok]));
     }
-    if(e.op==='FunctionCall'&&e.call_kind==='typeConversion'){const v=walk(e.argument_expression_ids[0]);return normalized(v.term,{...e,arithmetic:'wrap'},v.ok);}
+    if(e.symbolic_format==='inductive_polynomial_loop') {
+      const a=walk(e.operands[0]),n=walk(e.operands[1]);
+      const coefficients=new Map();for(const t of e.summation_terms)for(const k of t.factor_operands)if(!coefficients.has(k))coefficients.set(k,walk(e.operands[k]));
+      const terms=e.summation_terms.map(t=>'(* '+[numeral(t.coefficient),...t.factor_operands.map(k=>coefficients.get(k).term),powerSumScaledSMT(t.degree,n.term)].join(' ')+')');
+      const sum='(div '+(terms.length?'(+ '+terms.join(' ')+')':'0')+' '+e.summation_scale+')';
+      const checks=[...coefficients.values()].map(v=>v.ok);
+      if(e.arithmetic==='checked')checks.push(walk(e.operands[e.last_increment_operand]).ok);
+      return normalized('('+e.operator+' '+a.term+' '+sum+')',e,and([a.ok,n.ok,'(ite (= '+n.term+' 0) true '+and(checks)+')']));
+    }
+    if(e.op==='FunctionCall'&&e.call_kind==='typeConversion'){const key=e.argument_expression_ids[0],v=walk(key);return normalized(fixedBytesTerm(v.term,exprs.get(key)?.type,e.type),{...e,arithmetic:'wrap'},v.ok);}
+    if(e.op==='Conditional'&&e.operands.length===3){
+      const keys=[e.condition_expression_id,e.true_expression_id,e.false_expression_id];if(keys.some(k=>!k))fail('SMT_CONDITIONAL_LAYOUT_UNAVAILABLE');
+      const [condition,yes,no]=keys.map(walk),terms=[yes,no].map((v,i)=>fixedBytesTerm(v.term,exprs.get(keys[i+1])?.type,e.type));
+      return {term:'(ite '+bool(condition)+' '+terms[0]+' '+terms[1]+')',kind:type(e).kind,ok:and([condition.ok,'(ite '+bool(condition)+' '+yes.ok+' '+no.ok+')'])};
+    }
     if(e.op==='TupleExpression'&&e.operands.length===1)return walk(e.operands[0]);
     const op=e.operator||e.op;
     if(e.symbolic_format==='evm_word')fail('SMT_YUL_PROPERTY_UNSUPPORTED');
-    const values=(e.operands||[]).map(walk),[a,b]=values,ok=and(values.map(v=>v.ok));
+    const values=(e.operands||[]).map((key)=>{const v=walk(key);return /^bytes\d+$/.test(e.common_type||'')?{...v,term:fixedBytesTerm(v.term,exprs.get(key)?.type,e.common_type)}:v;}),[a,b]=values,ok=and(values.map(v=>v.ok));
     if(op==='&&'||op==='||')return {term:'('+ (op==='&&'?'and':'or')+' '+bool(a)+' '+bool(b)+')',kind:'Bool',
       ok:and([a.ok,'(ite '+bool(a)+' '+(op==='&&'?b.ok:'true')+' '+(op==='||'?b.ok:'true')+')'])};
     if(op==='!')return {term:'(not '+bool(a)+')',kind:'Bool',ok};

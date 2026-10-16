@@ -40,11 +40,15 @@ export class Terms {
   if(this.reserved.has(slot))return;this.reserved.add(slot);
   for(const prior of this.hashes)this.constraints.add('(distinct '+prior.term+' '+slot+')');
  }
- hash(parts,staticSlots=[]) {
-  const known=this.hashes.find(h=>h.parts.length===parts.length&&h.parts.every((p,i)=>p===parts[i]));if(known)return known.term;
+ digestWords(parts) {
   const arity=parts.length,name='keccak_'+arity;
   if(!this.declarations.has(name))this.declarations.set(name,{function:true,args:parts.map(()=>'Int'),result:'Int'});
   const term=this.define('('+name+' '+parts.join(' ')+')');this.constraints.add('(and (<= 0 '+term+') (<= '+term+' '+MAX_WORD+'))');
+  return term;
+ }
+ hash(parts,staticSlots=[]) {
+  const known=this.hashes.find(h=>h.parts.length===parts.length&&h.parts.every((p,i)=>p===parts[i]));if(known)return known.term;
+  const term=this.digestWords(parts);
   for(const prior of this.hashes) {
    const distinct=prior.parts.length===parts.length?'(or '+parts.map((p,i)=>'(distinct '+p+' '+prior.parts[i]+')').join(' ')+')':'true';
    this.constraints.add('(=> '+distinct+' (distinct '+term+' '+prior.term+'))');

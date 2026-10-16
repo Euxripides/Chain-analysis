@@ -13,7 +13,7 @@ export async function replay(input) {
   const txHash=tx.hash,started=performance.now(),gaps=[],reads=[],optionalMethods=[];
   const accounts=Object.fromEntries(Object.entries(w.prestate).map(([a,state])=>[a.toLowerCase(),state]));
   const parent=w.parent_block,blockNumber=BigInt(header.number),fork=w.hardfork||'chain_rules_unavailable';
-  const row={replay_id:id(txHash,'foundry-witness'),tx_hash:txHash,engine:'foundry/anvil',version:'1.8.5',
+  const row={replay_id:id(txHash,'foundry-witness'),tx_hash:txHash,block_hash:header.hash,chain_id:String(input.snapshot.chain_id),engine:'foundry/anvil',version:'1.8.5',
     binary_digest:'sha256:00f97668e1ae0fcca118fd7d2d1b6d25c0496447a523ca6bc2dfd10958c99604',
     mode:'transaction_prestate_witness',state_granularity:'transaction_prestate',transaction_index:tx.transactionIndex,
     hardfork:fork,status:'not_verified',kind:'replayed_execution',differences:[],witness_gaps:gaps,
@@ -99,11 +99,12 @@ export async function replay(input) {
     if(!receipt)throw new Error('REPLAY_RECEIPT_UNAVAILABLE');
     row.replay_tx_hash=replayHash;
     const logShape=logs=>(logs||[]).map(l=>({address:l.address.toLowerCase(),topics:l.topics.map(t=>t.toLowerCase()),data:l.data.toLowerCase()}));
-    row.observed={status:original.status,gas_used:BigInt(original.gasUsed).toString(),logs:logShape(original.logs)};
-    row.replayed={status:receipt.status,gas_used:BigInt(receipt.gasUsed).toString(),logs:logShape(receipt.logs)};
+    row.observed={status:original.status,gas_used:BigInt(original.gasUsed).toString(),logs:logShape(original.logs),contract_address:original.contractAddress?.toLowerCase()||null};
+    row.replayed={status:receipt.status,gas_used:BigInt(receipt.gasUsed).toString(),logs:logShape(receipt.logs),contract_address:receipt.contractAddress?.toLowerCase()||null};
     if(BigInt(receipt.status)!==BigInt(original.status))row.differences.push('status');
     if(BigInt(receipt.gasUsed)!==BigInt(original.gasUsed))row.differences.push('gas_used');
     if(JSON.stringify(row.observed.logs)!==JSON.stringify(row.replayed.logs))row.differences.push('logs');
+    if(row.observed.contract_address!==row.replayed.contract_address)row.differences.push('contract_address');
     const changed=w.state_diff?.post||{},pre=w.state_diff?.pre||{};let checked=0;
     for(const address of new Set([...Object.keys(changed),...Object.keys(pre)])){
       const slots=new Set([...Object.keys(changed[address]?.storage||{}),...Object.keys(pre[address]?.storage||{})]);

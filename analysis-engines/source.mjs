@@ -6,9 +6,10 @@ import { verifySolidityRuntime } from './source-match.mjs';
 import { summarizeInternalReturns } from './ir/internal-returns.mjs';
 import { addSourcePCMap } from './source-pc.mjs';
 import { analyzeLoopInvariants } from './verification/loops.mjs';
-import { analyzeStateModels } from './verification/state.mjs';
+import { analyzeStateModels,buildCreationTransition } from './verification/state.mjs';
 import { analyzePolicies } from './verification/policies.mjs';
 import { executeAssembly } from './verification/assembly.mjs';
+import {builtin,builtinMember,internalDispatch} from './ir/source-symbols.mjs';
 const require = createRequire(import.meta.url);
 const {keccak_256}=require('@noble/hashes/sha3.js');
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
@@ -21,7 +22,7 @@ export function compileSource(input, compilerVersion) {
   const solc = require(`solc-${version}`);
   if (!solc.version().startsWith(compilerVersion)) throw new Error('COMPILER_IDENTITY_MISMATCH');
   const settings = structuredClone(input.settings || {});
-  settings.outputSelection = { '*': { '*': ['abi', 'evm.deployedBytecode', 'evm.methodIdentifiers', 'storageLayout'], '': ['ast', 'legacyAST'] } };
+  settings.outputSelection = { '*': { '*': ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'evm.methodIdentifiers', 'storageLayout'], '': ['ast', 'legacyAST'] } };
   const payload = JSON.stringify({ ...input, settings });
   const cacheKey=hash(compilerVersion+'\n'+payload);if(compilationCache.has(cacheKey))return compilationCache.get(cacheKey).output;
   const compile = solc.compileStandardWrapper || solc.compile;
@@ -95,8 +96,7 @@ export function analyzeSource(result, source, bytecode) {
   };
   const internalArguments=(target,callee,args)=>{
     const parent=nodes.get(target?.scope),library=parent?.contractKind==='library';
-    const direct=callee?.nodeType==='Identifier'||callee?.expression?.name==='super';
-    const internal=target?.nodeType==='FunctionDefinition'&&target.body&&(direct||library&&['internal','private'].includes(target.visibility));
+    const internal=internalDispatch(target,callee,nodes);
     const receiver=library&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id;
     return {internal,args:receiver?[callee.expression,...args]:args};
   };
@@ -176,8 +176,9 @@ export function analyzeSource(result, source, bytecode) {
       text: node.entry_argument?node.name:sourceText(node).slice(0, 4096), type, width: integer ? Number(integer[2] || '256') : null,
       signed: integer ? integer[1] === 'int' : null,
       arithmetic: integer ? node.kind==='typeConversion'?'explicit_cast_truncation':(context.unchecked || Number(source.compilation.compilerVersion.split('.')[1]) < 8 ? 'wrap' : 'checked') : 'not_applicable',
-      rounding: node.operator === '/' ? 'toward_zero' : null, operands, referenced_declaration: node.referencedDeclaration ?? null,call_kind:node.kind||null,
-      path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,entry_return_summary:context.entry_return_summary||false,
+      rounding: node.operator === '/' ? 'toward_zero' : null, operands,common_type:node.commonType?.typeString||null, referenced_declaration: node.referencedDeclaration ?? null,call_kind:node.kind||null,
+      builtin_global:builtinMember(node,nodes),
+      path: context.path, conditions: [...(context.conditions || [])], step_order: method.step_ids.length,entry_argument:node.entry_argument===true,entry_return_summary:context.entry_return_summary||false,
       evidence_ids: [getEvidence(method, node)] };
     if(node.nodeType==='Assignment'||node.nodeType==='UnaryOperation'&&['++','--'].includes(node.operator))
       row.unresolved_evaluation_effect='LOCAL_EXPRESSION_EFFECT_REQUIRES_ORDERED_RETURN_MODEL';
@@ -186,13 +187,14 @@ export function analyzeSource(result, source, bytecode) {
     if(node.nodeType==='YulWordCast')Object.assign(row,{symbolic_format:'identity',arithmetic:'explicit_cast_truncation',yul_word_assignment:true});
     if(binding_expression_id){row.binding_expression_id=binding_expression_id;row.bound_argument=sourceText(bound)}
     if(node.nodeType==='FunctionCall') {row.argument_expression_ids=(node.arguments||[]).map(n=>expression(method,n,context));row.callee_expression_id=expression(method,node.expression,context);}
+    if(node.nodeType==='Conditional')Object.assign(row,{condition_expression_id:expression(method,node.condition,context),true_expression_id:expression(method,node.trueExpression,context),false_expression_id:expression(method,node.falseExpression,context)});
     if(node.nodeType==='FunctionCall'&&node.kind!=='typeConversion') {
       const target=nodes.get(node.expression?.referencedDeclaration);
       const {internal,args}=internalArguments(target,node.expression,node.arguments||[]);
       if(internal) {
         try {
           const model=summarizeInternalReturns({target,call:node,context,args,nodes,typeOf,
-            build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
+            build:(n,c)=>expression(method,n,c),expressionType:key=>expressionByID.get(key)?.type,synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
           row.binding_expression_id=model.expression_id;row.internal_return_model=model;
           row.binding_kind='function_return';row.operands.push(row.binding_expression_id);
           for(const missing of model.frontier||[])result.sections.frontier.push({frontier_id:id(method.method_id,'internal-loop-remainder',node.id,missing.ast_id,missing.conditions),method_id:method.method_id,
@@ -292,7 +294,7 @@ export function analyzeSource(result, source, bytecode) {
   };
   const decodeEncodedTransfer=(encoded,context)=>{
     encoded=resolveArgument(encoded,context);
-    if(encoded?.nodeType!=='FunctionCall'||encoded.expression?.expression?.name!=='abi')return null;
+    if(encoded?.nodeType!=='FunctionCall'||!builtin(encoded.expression?.expression,'abi',nodes))return null;
     const stringValue=(n,seen=new Set())=>{
       if(!n||seen.has(n.id)||seen.size>16)return null;const next=new Set([...seen,n.id]);
       if(n.nodeType==='Literal'&&n.kind==='string')return n.value;
@@ -306,7 +308,7 @@ export function analyzeSource(result, source, bytecode) {
       if(n.nodeType==='Literal'&&n.kind==='number'){try{const v=BigInt(numericLiteral(String(n.value),n.subdenomination).value);return v>=0n&&v<1n<<32n?'0x'+v.toString(16).padStart(8,'0'):null}catch{return null}}
       if(n.nodeType==='Literal'&&n.kind==='hexString'&&n.hexValue?.length===8)return '0x'+n.hexValue.toLowerCase();
       if(n.nodeType==='FunctionCall'&&n.kind==='typeConversion'&&typeOf(n)==='bytes4')return selectorValue(n.arguments?.[0],next);
-      if(n.nodeType==='FunctionCall'&&n.expression?.name==='keccak256'){const value=stringValue(n.arguments?.[0]);return value===null?null:'0x'+Buffer.from(keccak_256(Buffer.from(value))).toString('hex').slice(0,8);}
+      if(n.nodeType==='FunctionCall'&&builtin(n.expression,'keccak256',nodes)){const value=stringValue(n.arguments?.[0]);return value===null?null:'0x'+Buffer.from(keccak_256(Buffer.from(value))).toString('hex').slice(0,8);}
       return null;
     };
     let selector,args;
@@ -330,8 +332,8 @@ export function analyzeSource(result, source, bytecode) {
     if (callee?.nodeType === 'FunctionCallOptions') { options = Object.fromEntries((callee.names || []).map((n, i) => [n, callee.options[i]])); callee = callee.expression; }
     const name = callee?.name || callee?.memberName;
     const baseType = typeOf(callee?.expression);
-    if (['require', 'assert'].includes(name)) { guard(method, node, node.arguments?.[0], context, name === 'assert' ? '触发 panic' : 'revert'); return; }
-    if (name === 'revert') { const step = addStep(method, node, 'revert', `回滚：${sourceText(node)}`, context); method.failure_ids.push(step.step_id); return; }
+    if (['require', 'assert'].some(n=>builtin(callee,n,nodes))) { guard(method, node, node.arguments?.[0], context, name === 'assert' ? '触发 panic' : 'revert'); return; }
+    if (builtin(callee,'revert',nodes)) { const step = addStep(method, node, 'revert', `回滚：${sourceText(node)}`, context); method.failure_ids.push(step.step_id); return; }
     const targetNode = nodes.get(callee?.referencedDeclaration);
     const library=nodes.get(targetNode?.scope)?.contractKind==='library';
     if (targetNode?.nodeType === 'EventDefinition') { eventStep(method,node,node,context,targetNode); return; }
@@ -568,7 +570,7 @@ export function analyzeSource(result, source, bytecode) {
     const external=y=>{const ref=references.find(r=>r.src===y.src);if(!ref||ref.isSlot||ref.isOffset)return null;
       return resolveArgument({nodeType:'Identifier',id:'yul:'+y.src,src:y.src,name:y.name,referencedDeclaration:ref.declaration,typeDescriptions:nodes.get(ref.declaration)?.typeDescriptions},context)};
     const target=external(a[1]),encoded=external(ptr[0]);
-    if(!target||encoded?.nodeType!=='FunctionCall'||encoded.expression?.memberName!=='encodeCall'||encoded.expression.expression?.name!=='abi')return;
+    if(!target||encoded?.nodeType!=='FunctionCall'||encoded.expression?.memberName!=='encodeCall'||!builtin(encoded.expression.expression,'abi',nodes))return;
     const declared=nodes.get(encoded.arguments?.[0]?.referencedDeclaration),args=encoded.arguments?.[1]?.components;
     const types=(declared?.parameters?.parameters||[]).map(typeOf),name=declared?.name;
     const compatible=name==='transferFrom'?types.join(',')==='address,address,uint256':types.join(',')==='address,uint256';
@@ -635,7 +637,7 @@ export function analyzeSource(result, source, bytecode) {
         const args=(fn.parameters?.parameters||[]).map(p=>({...p,nodeType:'Identifier',id:'entry-argument:'+p.id,referencedDeclaration:p.id,entry_argument:true}));
         const call={...fn,id:'entry-return:'+fn.id};
         const model=summarizeInternalReturns({target:fn,call,context:{...context,entry_return_summary:true},args,nodes,typeOf,
-          build:(n,c)=>expression(method,n,c),synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
+          build:(n,c)=>expression(method,n,c),expressionType:key=>expressionByID.get(key)?.type,synthetic:(n,f,o,c,x)=>synthetic(method,n,f,o,c,x)});
         const row=result.sections.expressions.find(e=>e.expression_id===model.expression_id);
         row.entry_return_model=model;method.entry_return_expression_id=model.expression_id;
         for(const missing of model.frontier||[])result.sections.frontier.push({frontier_id:id(method.method_id,'loop-remainder',missing.ast_id,missing.conditions),method_id:method.method_id,
@@ -661,7 +663,16 @@ export function analyzeSource(result, source, bytecode) {
     const step = addStep(method, variable, 'return', `读取并返回 ${name}${method.parameters.length ? ' 对应键值' : ''}`, context);
     method.return_ids.push(step.step_id); result.sections.methods.push(method);
   }
-  const verificationContext={functions,nodes,methodByAST,location,getEvidence,layout,stateVars,mainContract,sourceText,assembly:executeAssembly,evmRules:result.snapshot.evm_rules,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8};
+  const verificationContext={functions,nodes,methodByAST,location,getEvidence,layout,stateVars,mainContract,sourceText,loopSummaries,runtimeValue,chainID:result.snapshot.chain_id,compilerVersion:source.compilation.compilerVersion,viaIR:source.stdJsonInput.settings?.viaIR===true,assembly:executeAssembly,evmRules:result.snapshot.evm_rules,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8};
+  verificationContext.creationTransition=buildCreationTransition(result,verificationContext);
+  const creation=verificationContext.creationTransition.model;
+  if(creation){
+    const constructor=functions.find(f=>f.scope===mainContract.id&&(f.kind==='constructor'||f.isConstructor));
+    creation.creation_identity={compiler:source.compilation.compilerVersion,via_ir:source.stdJsonInput.settings?.viaIR===true,
+      initcode:/^(?:[0-9a-fA-F]{2})+$/.test(compiled.evm?.bytecode?.object||'')?'0x'+compiled.evm.bytecode.object:null,
+      constructor_parameters:(constructor?.parameters?.parameters||[]).map(p=>({source_ast_id:p.id,name:p.name,type:typeOf(p)})),
+      scope:'recompiled_initcode_and_static_constructor_arguments',historical_execution_required:true};
+  }
   analyzePolicies(result,verificationContext,analyzeStateModels(result,verificationContext));
   addSourcePCMap(result,{compiled,bytecode,output,compiler:source.compilation.compilerVersion});
   for (const [path, value] of Object.entries(sources)) result.sections.artifacts.push({ artifact_id: id('source', path, hash(value.content)),

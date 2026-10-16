@@ -49,7 +49,7 @@ export function applyAuthorityRules(result) {
       if(seen.has(key))return;const e=unwrap(key);if(!e)return;const next=new Set([...seen,key]);
       if(e.op==='=='&&e.operands?.length===2) {
         for(const [callerKey,targetKey] of [[e.operands[0],e.operands[1]],[e.operands[1],e.operands[0]]]) {
-          const caller=unwrap(callerKey),principal=caller?.text?.replace(/\s/g,'');
+          const caller=unwrap(callerKey),principal=caller?.builtin_global;
           if(!['msg.sender','tx.origin'].includes(principal))continue;
           const target=unwrap(targetKey),targetDep=dependencies([targetKey],derivation),stateReads=reads.filter(r=>related(r,targetDep));
           guard.caller_constraints.push({constraint_id:id(guard.guard_id,key,principal),principal,relation:'equals',condition_scope:scope,

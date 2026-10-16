@@ -20,7 +20,7 @@ export function applyPropertyRules(result) {
       proposition:c.principal+' == '+c.target_expression,assumptions:['represented_guard_succeeds','typed_symbolic_state_and_environment'],
       evidence_ids:unique([...guard.evidence_ids,...c.evidence_ids])},()=>{
       const t=propertyTranslator(result,m,derivation?.definition_ids),condition=t.walk(guard.expression_id),target=t.walk(c.target_expression_id);
-      const caller=[...t.exprs.values()].find(e=>e.text.replace(/\s/g,'')===c.principal);
+      const caller=[...t.exprs.values()].find(e=>e.builtin_global===c.principal);
       if(!caller)throw new Error('SMT_CALLER_UNAVAILABLE');const principal=t.walk(caller.expression_id);
       return t.query(t.and([condition.ok,target.ok,principal.ok,t.bool(condition)]),'(not (= '+principal.term+' '+target.term+'))');
     });

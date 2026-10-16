@@ -47,8 +47,11 @@ export function applyDataflow(result) {
         if(e.symbolic_format==='yul_memory_read')return {...merged,text:'mload_after_ordered_writes('+values.map(v=>v.text).join(', ')+')'};
         if(e.symbolic_format==='inductive_affine_loop')return {...merged,text:'('+values[0].text+' '+e.operator+' integer_product('+values[1].text+', '+values[2].text+'))',
           induction_model_id:e.loop_model_id,proof_obligation_ids:e.proof_obligation_ids};
+        if(e.symbolic_format==='inductive_polynomial_loop')return {...merged,text:'('+values[0].text+' '+e.operator+' sum_{i=0}^{'+values[1].text+'-1} ('+e.summation_terms.map(t=>t.coefficient+' * '+t.factor_operands.map(k=>values[k].text).concat(['i^'+t.degree]).join(' * ')).join(' + ')+'))',
+          induction_model_id:e.loop_model_id,proof_obligation_ids:e.proof_obligation_ids,polynomial_certificate:e.polynomial_certificate};
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
         if(e.symbolic_format==='identity')return {...merged,text:values[0].text};
+        if(e.symbolic_format==='scalar_cast')return {...merged,text:e.type+'('+values[0].text+')'};
         if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+values[0].text+')'};
         if(e.symbolic_format==='binary')return {...merged,text:'('+values[0].text+' '+e.operator+' '+values[1].text+')'};
         if(e.symbolic_format==='tuple')return {...merged,text:'('+values.map(v=>v.text).join(', ')+')',
@@ -67,6 +70,9 @@ export function applyDataflow(result) {
       }
       if(e.resolved_value!==undefined)return {...own,text:e.resolved_value};
       if (e.binding_expression_id) {const bound=expand(e.binding_expression_id,next,budget,beforeOrder);return {...bound,text:e.binding_kind==='function_return'?'('+bound.text+')':bound.text,evidence:unique([...own.evidence,...bound.evidence])}}
+      // The synthetic entry argument captures the value before any body
+      // assignment. Branch-local reassignments cannot redefine that input.
+      if(e.entry_argument)return own;
       const local = definitions.filter(d => d.declaration_id === e.referenced_declaration);
       if (!local.length && e.unresolved_local_reference) return { ...own, unresolved: ['LOCAL_DEFINITION_UNAVAILABLE'] };
       if (local.length && ['Identifier','Name'].includes(e.op)) {

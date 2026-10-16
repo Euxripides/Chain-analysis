@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const VERSION = 'contract-analysis-v1';
-export const RULE_VERSION = 'funds-semantics-7';
+export const RULE_VERSION = 'funds-semantics-8';
 export const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 export const id = (...parts) => hash(parts).slice(0, 40);
 export const stringify = value => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v);

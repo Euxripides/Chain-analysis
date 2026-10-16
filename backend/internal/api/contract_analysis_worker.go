@@ -816,6 +816,9 @@ func (s *Server) contractExecutionRows(ctx context.Context, q ca.Request, result
 			if err != nil {
 				result.Sections["coverage"] = append(result.Sections["coverage"], ca.Row(map[string]any{"dimension": "replay", "tx_hash": txHash, "complete": false, "reason": "isolated_replay_unavailable"}))
 			} else {
+				if err = s.contractBindCreation(ctx, result, raw, part, artifactID); err != nil {
+					return err
+				}
 				for _, raw := range part.Sections["replays"] {
 					for _, eid := range stringList(rowMap(raw)["evidence_ids"]) {
 						part.Sections["execution_evidence"] = append(part.Sections["execution_evidence"], ca.Row(map[string]any{"evidence_id": eid, "tx_hash": txHash, "kind": "replay_witness", "artifact_id": artifactID, "execution_rules": fork, "source": "original_transaction_receipt_blocks_prestate_and_diff"}))

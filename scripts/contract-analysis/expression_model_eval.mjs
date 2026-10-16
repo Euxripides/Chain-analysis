@@ -1,5 +1,7 @@
 // Acceptance-only evaluator of saved expression graphs, independent of the AST
 // interpreter. It evaluates guards in order and checks exact Solidity integers.
+import {exactPowerSum} from '../../analysis-engines/verification/polynomials.mjs';
+import {fixedBytesValue} from '../../analysis-engines/ir/scalar-casts.mjs';
 export function evaluateReturn(model,name,inputs) {
  const method=model.sections.methods.find(m=>m.name===name);
  if(!method?.entry_return_expression_id)throw new Error('MODEL_UNAVAILABLE:'+name);
@@ -21,6 +23,7 @@ export function evaluateReturn(model,name,inputs) {
    }fail('revert');
   }
   if(e.symbolic_format==='identity')return e.yul_word_assignment?normalize(walk(e.operands[0]),e):walk(e.operands[0]);
+  if(e.symbolic_format==='scalar_cast')return fixedBytesValue(walk(e.operands[0]),e.cast_source_type,e.type);
   if(['yul_memory_access','yul_memory_read'].includes(e.symbolic_format)) {
    const args=e.operands.map(walk),mod=1n<<256n,offset=args[0],valid=(p,size)=>{if(p<0n||p+BigInt(size)>mod)fail('memory_range_overflow');};
    valid(offset,e.memory_width||32);if(e.symbolic_format==='yul_memory_access')return 0n;
@@ -34,6 +37,12 @@ export function evaluateReturn(model,name,inputs) {
   }
   if(e.symbolic_format==='inductive_affine_loop') {
    const [a,n,c]=e.operands.map(walk);return normalize(e.operator==='+'?a+n*c:a-n*c,e);
+  }
+  if(e.symbolic_format==='inductive_polynomial_loop') {
+   const a=walk(e.operands[0]),n=walk(e.operands[1]);if(n===0n)return a;
+   if(e.arithmetic==='checked')walk(e.operands[e.last_increment_operand]);
+   const total=e.summation_terms.reduce((sum,t)=>sum+BigInt(t.coefficient)*t.factor_operands.reduce((v,k)=>v*walk(e.operands[k]),1n)*exactPowerSum(t.degree,n),0n);
+   return normalize(e.operator==='+'?a+total:a-total,e);
   }
   if(e.symbolic_format==='evm_word') {
    const mod=1n<<256n,mask=mod-1n,values=e.operands.map(k=>BigInt(walk(k))&mask),[a,b,c]=values,sign=v=>v>=mod/2n?v-mod:v;
@@ -59,13 +68,14 @@ export function evaluateReturn(model,name,inputs) {
   if(e.symbolic_format==='literal'||e.op==='Literal'){const v=e.resolved_value??e.value;return v==='true'?true:v==='false'?false:BigInt(v);}
   if(e.resolved_value!==undefined)return BigInt(e.resolved_value);
   if(e.op==='Identifier'){if(Object.hasOwn(inputs,e.text))return inputs[e.text];fail('MODEL_INPUT',e.text);}
-  if(e.op==='FunctionCall'&&e.call_kind==='typeConversion')return normalize(walk(e.argument_expression_ids[0]),{...e,arithmetic:'explicit_cast_truncation'});
+  if(e.op==='FunctionCall'&&e.call_kind==='typeConversion'){const key=e.argument_expression_ids[0];return normalize(fixedBytesValue(walk(key),expressions.get(key)?.type,e.type),{...e,arithmetic:'explicit_cast_truncation'});}
+  if(e.op==='Conditional'&&e.operands.length===3){if(!e.condition_expression_id||!e.true_expression_id||!e.false_expression_id)fail('MODEL_CONDITIONAL_LAYOUT_UNAVAILABLE');const key=truth(walk(e.condition_expression_id))?e.true_expression_id:e.false_expression_id;return fixedBytesValue(walk(key),expressions.get(key)?.type,e.type);}
   const op=e.operator||e.op;
   if(op==='&&')return truth(walk(e.operands[0]))&&truth(walk(e.operands[1]));
   if(op==='||')return truth(walk(e.operands[0]))||truth(walk(e.operands[1]));
   if(e.symbolic_format==='unary'||e.operands.length===1){const v=walk(e.operands[0]);if(op==='!')return !truth(v);if(op==='-')return normalize(-v,e);if(op==='~')return normalize(~v,{...e,arithmetic:'wrap'});if(op==='+')return v;}
   if(e.operands.length!==2)fail('MODEL_NODE',op);
-  const a=walk(e.operands[0]),b=walk(e.operands[1]);let v;
+  const values=e.operands.map(key=>/^bytes\d+$/.test(e.common_type||'')?fixedBytesValue(walk(key),expressions.get(key)?.type,e.common_type):walk(key)),[a,b]=values;let v;
   switch(op){case '+':v=a+b;break;case '-':v=a-b;break;case '*':v=a*b;break;case '/':if(b===0n)fail('panic_0x12');v=a/b;break;case '%':if(b===0n)fail('panic_0x12');v=a%b;break;case '==':return a===b;case '!=':return a!==b;case '<':return a<b;case '<=':return a<=b;case '>':return a>b;case '>=':return a>=b;case '&':v=a&b;break;case '|':v=a|b;break;case '^':v=a^b;break;default:fail('MODEL_OPERATOR',op);}
   return normalize(v,e);
  }

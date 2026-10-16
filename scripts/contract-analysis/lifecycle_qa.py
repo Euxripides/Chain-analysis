@@ -25,7 +25,8 @@ def wait_container(aid):
     raise RuntimeError('owned workload not observed')
 
 client=fixture_clients()['investigator'];prefix='lifecycle-'+uuid.uuid4().hex
-def submit(suffix,timeout=1800):return client.must('/api/v2/contract-analyses',{'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,'idempotency_key':prefix+suffix,'budget':{'max_contracts':2,'max_rpc_requests':100,'max_state_reads':24,'timeout_seconds':timeout}})
+max_rpc=int(os.environ.get('CONTRACT_QA_LIFECYCLE_MAX_RPC','100'));assert 40<=max_rpc<=100
+def submit(suffix,timeout=1800):return client.must('/api/v2/contract-analyses',{'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,'idempotency_key':prefix+suffix,'budget':{'max_contracts':2,'max_rpc_requests':max_rpc,'max_state_reads':24,'timeout_seconds':timeout}})
 def budget(aid):return json.loads(sql("SELECT json_build_object('requests',reserved_requests,'credits',reserved_credits,'processing_ms',processing_ms) FROM contract_analysis_budgets WHERE analysis_id='"+aid+"'"))
 
 try:

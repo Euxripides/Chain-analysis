@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyze} from '../analyze.mjs';
 import {compileMechanismFixture} from './mechanism-fixtures.mjs';
+import {evaluateReturn} from '../../scripts/contract-analysis/expression_model_eval.mjs';
+const actualSolver=Boolean(process.env.CONTRACT_TEST_IMAGE||process.env.CONTRACT_TEST_SOLVER==='1');
 
 for(const optimized of [false,true])test('tuple formulas, constant loops and guard modifiers '+optimized,()=>{
  const r=analyze(compileMechanismFixture('Mechanisms',optimized));
@@ -14,7 +16,10 @@ for(const optimized of [false,true])test('tuple formulas, constant loops and gua
  for(const name of ['constantLoop','fixedWhile','fixedDo','flowControl','descending']){assert.equal(entry(name).status,'represented_source_dependencies_resolved',name);assert.ok(entry(name).loops.length,name);}
  assert.equal(entry('constantLoop').loops[0].iterations,3);assert.equal(entry('fixedWhile').loops[0].iterations,3);assert.equal(entry('fixedDo').loops[0].iterations,2);
  assert.equal(m('loopLimit').entry_return_model_status,'partial');assert.ok(m('loopLimit').entry_return_model_unresolved.some(x=>x.includes('ITERATION_BUDGET')));
- assert.equal(m('dynamic').entry_return_model_status,'partial');assert.ok(m('dynamic').entry_return_model_unresolved.some(x=>x.includes('LOOP_DYNAMIC_BOUND')));
+ if(actualSolver){
+  assert.equal(m('dynamic').entry_return_model_status,'represented_source_dependencies_resolved');
+  assert.deepEqual(evaluateReturn(r,'dynamic',{amount:10000n}),[49995000n]);
+ }else{assert.equal(m('dynamic').entry_return_model_status,'partial');assert.ok(m('dynamic').entry_return_model_unresolved.some(x=>x.includes('LOOP_DYNAMIC_BOUND')));}
  const check=entry('modified');assert.equal(check.status,'represented_source_dependencies_resolved');assert.ok(check.successful_return_paths[0].conditions.some(c=>c.includes('amount>0')));
  assert.ok(r.sections.funds.filter(f=>f.method_id===m('guardedPayment').method_id).every(f=>f.conditions.includes('value>0')));
  assert.ok(r.sections.permissions.some(g=>g.method_id===m('guardedPayment').method_id&&g.expanded_condition?.includes('amount')&&g.expanded_condition.includes('>0')));

@@ -1,5 +1,6 @@
 import {id,unique} from '../model.mjs';
 import {and,number,obligation,solveObligations,closeModels} from './solver.mjs';
+import {counterPolynomial,addPolynomialObligations} from './polynomials.mjs';
 
 const children=n=>Object.entries(n||{}).filter(([k])=>!['typeDescriptions','documentation'].includes(k)).flatMap(([,v])=>Array.isArray(v)?v.filter(x=>x?.nodeType):v?.nodeType?[v]:[]);
 const uint=n=>{const m=/^uint(\d*)$/.exec(n?.typeDescriptions?.typeString||'');return m?Number(m[1]||256):null;};
@@ -9,7 +10,7 @@ const expression=n=>n?.nodeType==='ExpressionStatement'?n.expression:n;
 const literal=n=>{try{return n?.nodeType==='Literal'&&n.kind==='number'?BigInt(n.value):null;}catch{return null;}};
 const same=(n,key)=>n?.nodeType==='Identifier'&&n.referencedDeclaration===key;
 
-export function detectAffineLoop(loop,nodes,{unchecked=false,bindings=new Map()}={}) {
+export function detectLoopRecurrences(loop,nodes,{unchecked=false,bindings=new Map()}={}) {
  const fail=reason=>{throw new Error(reason);};
  let initial=loop.initializationExpression,counter,start;
  if(initial?.nodeType==='VariableDeclarationStatement'&&initial.declarations.length===1){counter=initial.declarations[0];start=initial.initialValue?literal(initial.initialValue):0n;}
@@ -30,23 +31,36 @@ export function detectAffineLoop(loop,nodes,{unchecked=false,bindings=new Map()}
   const d=nodes.get(n.leftHandSide?.referencedDeclaration);
   if(n.leftHandSide?.nodeType!=='Identifier'||!d||d.stateVariable||!uint(d)||d.id===counter.id||d.id===bound.referencedDeclaration)fail('LOOP_NONLOCAL_OR_CONTROL_WRITE');
   const visited=[];function valid(x){
+   if(x.nodeType==='TupleExpression'&&x.components?.length===1&&x.components[0]){valid(x.components[0]);return;}
    if(x.nodeType==='Literal'&&x.kind==='number')return;
-   if(x.nodeType==='Identifier'&&x.referencedDeclaration!==counter.id&&uint(nodes.get(x.referencedDeclaration)||x)){visited.push(x.referencedDeclaration);return;}
+   if(x.nodeType==='Identifier'&&uint(nodes.get(x.referencedDeclaration)||x)){visited.push(x.referencedDeclaration);return;}
+   if(x.nodeType==='MemberAccess'&&uint(x)&&['block','msg'].includes(x.expression?.name))return;
    if(x.nodeType==='BinaryOperation'&&['+','-','*','/','%'].includes(x.operator)){valid(x.leftExpression);valid(x.rightExpression);return;}
+   if(x.nodeType==='UnaryOperation'&&x.operator==='-'){valid(x.subExpression);return;}
    throw new Error('LOOP_INCREMENT_NOT_ITERATION_INDEPENDENT');
   }valid(n.rightHandSide);
+  let polynomial;try{polynomial=counterPolynomial(n.rightHandSide,counter.id,nodes,{unchecked:body[index].unchecked,wordBits:uint(d)});}catch(error){
+   if(visited.includes(counter.id))throw error;
+  }
+  const total_increment=['Identifier','Literal'].includes(n.rightHandSide.nodeType);
   recurrences.push({declaration:d.id,name:d.name,width:uint(d),operator:n.operator[0],increment:n.rightHandSide,reads:visited,unchecked:body[index].unchecked,
-   total_increment:['Identifier','Literal'].includes(n.rightHandSide.nodeType)});
+   total_increment,polynomial,polynomial_summary:Boolean(polynomial&&(polynomial.degree>0||!total_increment))});
  }
  const changed=new Set(recurrences.map(r=>r.declaration));
  if(changed.size!==recurrences.length||recurrences.some(r=>r.reads.some(k=>changed.has(k))))fail('LOOP_RECURRENCE_DEPENDENCY_UNSUPPORTED');
  return {counter:counter.id,counter_name:counter.name,counter_width:uint(counter),bound,bound_width:uint(nodes.get(bound.referencedDeclaration)||bound),recurrences,unchecked};
 }
 
+export function detectAffineLoop(loop,nodes,options){
+ const descriptor=detectLoopRecurrences(loop,nodes,options);
+ if(descriptor.recurrences.some(r=>r.polynomial_summary))throw new Error('LOOP_INCREMENT_NOT_ITERATION_INDEPENDENT');
+ return descriptor;
+}
+
 export function analyzeLoopInvariants(result,{functions,nodes,methodByAST,location,getEvidence,legacyArithmetic=false}) {
  const models=[],queries=[];
  for(const fn of functions) {
-  const method=methodByAST.get(fn.id);if(!method||method.code_phase!=='runtime_source')continue;
+  const method=methodByAST.get(fn.id);if(!method||!['runtime_source','creation_source_not_verified_against_deployment'].includes(method.code_phase))continue;
   function scan(n,unchecked=false,bindings=new Map()) {
    if(!n)return;
    if(n.nodeType==='VariableDeclarationStatement'&&n.declarations?.length===1)bindings.set(n.declarations[0]?.id,n.initialValue?literal(n.initialValue):0n);
@@ -59,11 +73,12 @@ export function analyzeLoopInvariants(result,{functions,nodes,methodByAST,locati
      evidence_ids:[getEvidence(method,n)],unresolved:[],obligations:[],complete:false};models.push(model);
     try {
      if(n.nodeType==='DoWhileStatement')throw new Error('LOOP_DO_WHILE_INDUCTION_PENDING');
-     const d=detectAffineLoop(n,nodes,{unchecked,bindings});
+     const d=detectLoopRecurrences(n,nodes,{unchecked,bindings});
      model.counter_ast_id=d.counter;model.bound_ast_id=d.bound.id;model.counter=d.counter_name;
-     model.bound=d.bound.name;model.recurrences=d.recurrences.map(r=>({declaration:r.declaration,name:r.name,width:r.width,operator:r.operator,increment_ast_id:r.increment.id,arithmetic:r.unchecked?'wrap':'checked'}));
+     model.bound=d.bound.name;model.recurrences=d.recurrences.map(r=>({declaration:r.declaration,name:r.name,width:r.width,operator:r.operator,increment_ast_id:r.increment.id,arithmetic:r.unchecked?'wrap':'checked',
+      recurrence_kind:r.polynomial_summary?'counter_polynomial':'iteration_independent',polynomial_degree:r.polynomial_summary?r.polynomial.degree:0}));
      model.summary={iteration_count:d.bound.name,counter_exit:d.bound.name,values:d.recurrences.map(r=>({declaration:r.declaration,
-      mathematical_expression:r.name+'@entry '+r.operator+' '+d.bound.name+' * increment@'+r.increment.id,word_bits:r.width,arithmetic:r.unchecked?'wrap':'checked'}))};
+      mathematical_expression:r.name+'@entry '+r.operator+' '+(r.polynomial_summary?'sum_counter_polynomial('+d.bound.name+', increment@'+r.increment.id+')':d.bound.name+' * increment@'+r.increment.id),word_bits:r.width,arithmetic:r.unchecked?'wrap':'checked'}))};
      const maxN=(1n<<BigInt(d.bound_width))-1n,maxI=(1n<<BigInt(d.counter_width))-1n;
      const declarations='(declare-const n Int)\n(declare-const i Int)';
      const domain=and(['(<= 0 n)','(<= n '+maxN+')','(<= 0 i)','(<= i n)','(<= i '+maxI+')']);
@@ -77,6 +92,7 @@ export function analyzeLoopInvariants(result,{functions,nodes,methodByAST,locati
      queries.push(obligation(model,'loop_exit_counter_equals_bound',declarations,and([domain,'(not (< i n))']),
       '(not (= i n))',inputs));
      for(const r of d.recurrences) {
+      if(r.polynomial_summary){addPolynomialObligations(model,d,r,queries,domain,declarations,inputs);continue;}
       // The increment denotes the exact, iteration-independent value evaluated
       // by the source expression. Body expression validity remains a separate
       // successful-arithmetic condition; no arbitrary unknown node is admitted.

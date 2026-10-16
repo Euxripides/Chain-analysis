@@ -3,15 +3,26 @@ import assert from 'node:assert/strict';
 import {analyze} from '../analyze.mjs';
 import {compileDeepeningFixture} from './deepening-fixtures.mjs';
 import {evaluateReturn} from '../../scripts/contract-analysis/expression_model_eval.mjs';
+const actualSolver=Boolean(process.env.CONTRACT_TEST_IMAGE||process.env.CONTRACT_TEST_SOLVER==='1');
 
 for(const optimizer of [false,true])test('symbolic loop domains and structured Yul '+optimizer,()=>{
  const r=analyze(compileDeepeningFixture(optimizer));
  assert.equal(r.sections.engines.find(e=>e.engine==='solc-ast').status,'completed',JSON.stringify(r.sections.engines));
  const m=name=>r.sections.methods.find(m=>m.name===name),entry=name=>r.sections.dataflow.find(d=>d.dataflow_id===m(name).entry_return_derivation_id);
  for(const name of ['finite','finiteWhile','finiteDo','boundedBreak','decrement','localBound','wordMath','wordBranch','wordLoop','wordTuple','wordSigned','wordShift','wordMod','wordSignExtend','wordByte','wordRevert'])assert.equal(entry(name)?.status,'represented_source_dependencies_resolved',name+':'+JSON.stringify(m(name)));
- assert.equal(entry('dynamic').status,'partial');assert.ok(entry('dynamic').successful_return_paths.length>=16);
- assert.ok(r.sections.frontier.some(f=>f.method_id===m('dynamic').method_id&&f.kind==='dynamic_loop_remainder'));
- assert.equal(entry('mixedLoop').status,'partial');assert.ok(entry('mixedLoop').loops.some(l=>l.complete===false&&l.remaining_paths>0));
+ if(actualSolver){
+  assert.equal(entry('dynamic').status,'represented_source_dependencies_resolved');
+  assert.equal(r.sections.loop_invariants.find(l=>l.method_id===m('dynamic').method_id)?.complete,true);
+  assert.deepEqual(evaluateReturn(r,'dynamic',{n:10000n}),[49995000n]);
+ }else{
+  assert.equal(entry('dynamic').status,'partial');assert.ok(entry('dynamic').successful_return_paths.length>=16);
+  assert.ok(r.sections.frontier.some(f=>f.method_id===m('dynamic').method_id&&f.kind==='dynamic_loop_remainder'));
+ }
+ if(actualSolver){
+  assert.equal(entry('mixedLoop').status,'represented_source_dependencies_resolved');assert.ok(entry('mixedLoop').loops.every(l=>l.complete));
+  assert.deepEqual(evaluateReturn(r,'mixedLoop',{bypass:true,n:10000n}),[49995000n]);
+  assert.deepEqual(evaluateReturn(r,'mixedLoop',{bypass:false,n:10000n}),[0n]);
+ }else{assert.equal(entry('mixedLoop').status,'partial');assert.ok(entry('mixedLoop').loops.some(l=>l.complete===false&&l.remaining_paths>0));}
  for(let n=0n;n<=8n;n++)assert.deepEqual(evaluateReturn(r,'finite',{n,x:10n}),[n*3n+n*(n-1n)/2n]);
  for(let n=0n;n<=5n;n++)assert.deepEqual(evaluateReturn(r,'finiteDo',{n}),[n*(n-1n)/2n]);
  for(const x of [0n,1n,9n,(1n<<256n)-1n])assert.deepEqual(evaluateReturn(r,'wordLoop',{x}),[x*16n% (1n<<256n)]);

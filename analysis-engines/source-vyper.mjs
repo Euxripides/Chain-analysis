@@ -83,6 +83,7 @@ export function analyzeVyperSource(result, source, bytecode) {
         operands: [], path: expressionContext.path, conditions: [...expressionContext.conditions], step_order: method.step_ids.length,
         evidence_ids: [evidence(result, method, 'source', location(node), text(node).slice(0, 2048))] };
       refs.set(expression_id, row); row.operands = childNodes(node).filter(n => n.src).map(expr).filter(Boolean);
+      if(node.ast_type==='Attribute'&&node.value?.ast_type==='Name'&&['msg','tx','block'].includes(node.value.id)&&!locals.has(node.value.id)&&!method.parameters.some(p=>p.name===node.value.id)&&!declarations.has(node.value.id))row.builtin_global=node.value.id+'.'+node.attr;
       if (node.ast_type === 'Int') row.value = String(node.value);
       if (node.ast_type === 'Name') {
         const parameter = method.parameters.find(p => p.name === node.id);

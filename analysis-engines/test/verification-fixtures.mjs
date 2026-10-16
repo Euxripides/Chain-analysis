@@ -37,8 +37,8 @@ contract Verification {
  function renounceRole(bytes32 role,address account)external{require(account==msg.sender);roles[role].members[account]=false;}
 }`;
 
-export function compileVerificationFixture(optimized=true,source=verificationSource,evmVersion='shanghai') {
- const input={language:'Solidity',sources:{'Verification.sol':{content:source}},settings:{optimizer:{enabled:optimized,runs:200},evmVersion,outputSelection:{'*':{'*':['abi','evm.bytecode','evm.deployedBytecode','evm.methodIdentifiers'],'':['ast']}}}};
+export function compileVerificationFixture(optimized=true,source=verificationSource,evmVersion='shanghai',extraSettings={}) {
+ const input={language:'Solidity',sources:{'Verification.sol':{content:source}},settings:{...extraSettings,optimizer:{enabled:optimized,runs:200},evmVersion,outputSelection:{'*':{'*':['abi','evm.bytecode','evm.deployedBytecode','evm.methodIdentifiers'],'':['ast']}}}};
  const output=JSON.parse(solc.compile(JSON.stringify(input))),errors=(output.errors||[]).filter(e=>e.severity==='error');
  if(errors.length)throw new Error(JSON.stringify(errors));const compiled=output.contracts['Verification.sol'].Verification,bytecode='0x'+compiled.evm.deployedBytecode.object;
  return {compiled,output,engines:['whatsabi','sevm','solc-ast'],bytecode,snapshot:{vm_family:'evm',chain:'ethereum',chain_id:'1',entry_address:'0x'+'1'.repeat(40),code_address:'0x'+'1'.repeat(40),storage_address:'0x'+'1'.repeat(40),code_hash:'0x'+hash(bytecode),block_number:1,block_hash:'0x'+'2'.repeat(64)},

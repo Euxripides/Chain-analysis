@@ -2,6 +2,7 @@ import {id,unique} from '../model.mjs';
 import {asBool,asInt,scalarType,MAX_WORD} from './terms.mjs';
 import {and,or,obligation,solveObligations,closeModels} from './solver.mjs';
 import {buildCreationTransition} from './state.mjs';
+import {signaturePolicies} from './signatures.mjs';
 
 const returnNode=fn=>fn?.body?.statements?.length===1&&fn.body.statements[0].nodeType==='Return'?fn.body.statements[0].expression:null;
 const identifier=d=>({...d,nodeType:'Identifier',referencedDeclaration:d.id});
@@ -41,9 +42,9 @@ export function analyzePolicies(result,ctx,transitions) {
   for(const t of transitions) {
    if(!t.model.complete)continue;
    try{
-    const state=t.initialState(),loc=t.locate(owner.node,state),before=t.readLocation(loc,state);
+    const state=t.initialState(),before=t.expr(owner.node,state);
     const violations=t.model.paths.map(p=>and([p.condition,'(distinct '+t.caller.term+' '+asInt(before)+')',
-     '(distinct '+asInt(t.readLocation(loc,{...state,storage:p.storage_after}))+' '+asInt(before)+')']));
+     '(distinct '+asInt(t.expr(owner.node,{...state,storage:p.storage_after}))+' '+asInt(before)+')']));
     add(m,t,'unauthorized_caller_cannot_change_owner',or(violations));
    }catch(e){m.unresolved.push(String(e.message)+':'+t.model.method_id);}
   }
@@ -91,10 +92,10 @@ export function analyzePolicies(result,ctx,transitions) {
    const m=model('erc20_ledger_conservation','inductive_preservation_of_declared_supply_equals_account_sum');
    m.proposition='sum(account balance changes) == totalSupply@exit - totalSupply@entry';
    m.balance_state_ast_id=balanceRoot;m.supply_state_ast_id=supplyRoot;m.initial_invariant_basis='declared_precondition';
-   const creation=buildCreationTransition(result,ctx),initial={model_id:id(m.model_id,'source-initialization'),kind:'erc20_source_initialization',
+   const creation=ctx.creationTransition||buildCreationTransition(result,ctx),initial={model_id:id(m.model_id,'source-initialization'),kind:'erc20_source_initialization',
     scope:'source_constructor_establishes_supply_equals_account_sum_from_zero_storage',proposition:'totalSupply@creation_exit == sum(account balances@creation_exit)',code_hash:m.code_hash,code_address:m.code_address,storage_address:m.storage_address,
     assumptions:['creation_storage_starts_zero','source_constructor_and_state_initializers','keccak_storage_layout_collision_free','historical_deployment_identity_not_verified'],
-    evidence_ids:creation.model?.evidence_ids||[],obligations:[],unresolved:[],entry_coverage:[],deployment_identity_verified:false};
+    evidence_ids:creation.model?.evidence_ids||[],obligations:[],unresolved:[],entry_coverage:[],source_transition_model_id:creation.model?.model_id,deployment_identity_verified:false};
    models.push(initial);m.source_initialization_model_id=initial.model_id;
    if(!creation.model?.complete)initial.unresolved.push(creation.reason||creation.model.unresolved.join(','));
    else try{
@@ -121,6 +122,7 @@ export function analyzePolicies(result,ctx,transitions) {
    }
   }
  }
+ const signatures=signaturePolicies(result,ctx,transitions,getter);models.push(...signatures.models);queries.push(...signatures.queries);
  for(const item of queries){item.query.declarations='(set-option :timeout 300)\n(set-option :rlimit 1000000)\n'+item.transition.terms.smt();item.query.domain=item.transition.terms.domain();item.query.variables=item.transition.terms.inputs.map(i=>i.name);item.query.inputs=item.transition.terms.inputs;}
  const solved=solveObligations(result,queries);closeModels(models,solved);
  result.sections.authorization_models||=[];result.sections.protocol_invariants||=[];

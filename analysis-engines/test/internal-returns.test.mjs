@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyze} from '../analyze.mjs';
 import {compileReturnFixture} from './internal-return-fixtures.mjs';
+import {evaluateReturn} from '../../scripts/contract-analysis/expression_model_eval.mjs';
+const actualSolver=Boolean(process.env.CONTRACT_TEST_IMAGE||process.env.CONTRACT_TEST_SOLVER==='1');
 for(const optimized of [false,true])test('scalar return paths retain amount bindings, domain and arithmetic '+optimized,()=>{
  const result=analyze(compileReturnFixture(optimized));
  assert.equal(result.sections.engines.find(e=>e.engine==='solc-ast').status,'completed',JSON.stringify(result.sections.engines));
@@ -18,7 +20,10 @@ for(const optimized of [false,true])test('scalar return paths retain amount bind
  const positive=returns('reject')[0];assert.equal(positive.successful_return_paths.length,1);assert.ok(positive.successful_return_paths[0].conditions.includes('(amount>0)'));assert.ok(positive.successful_return_paths[0].conditions.includes('!(amount==2)'));
  const wrapped=result.sections.expressions.filter(e=>e.method_id===method('wrapped').method_id&&e.symbolic_format==='binary');assert.ok(wrapped.some(e=>e.arithmetic==='wrap'&&e.operator==='+'));
  const checked=result.sections.expressions.filter(e=>e.method_id===method('callerUnchecked').method_id&&e.symbolic_format==='binary');assert.ok(checked.some(e=>e.arithmetic==='checked'&&e.operator==='+'));
- assert.ok(result.sections.dataflow.some(d=>d.method_id===method('loop').method_id&&d.unresolved.some(x=>x.includes('CONTROL_FLOW_UNSUPPORTED'))));
+ if(actualSolver){
+  assert.equal(method('loop').entry_return_model_status,'represented_source_dependencies_resolved');
+  assert.deepEqual(evaluateReturn(result,'loop',{amount:10000n}),[49995000n]);
+ }else assert.ok(result.sections.dataflow.some(d=>d.method_id===method('loop').method_id&&d.unresolved.some(x=>x.includes('CONTROL_FLOW_UNSUPPORTED'))));
  assert.ok(result.sections.dataflow.some(d=>d.method_id===method('effects').method_id&&d.unresolved.includes('INTERNAL_RETURN_STATE_EFFECT_UNSUPPORTED')));
  const calls=returns('two').filter(d=>d.original_expression.startsWith('stages('));assert.equal(calls.length,2);assert.ok(calls[0].symbolic_expression!==calls[1].symbolic_expression);
  const funds=result.sections.funds.filter(f=>f.method_id===method('withdraw').method_id);assert.equal(funds.length,2);assert.ok(funds.every(f=>f.amount_derivation_status==='represented_source_dependencies_resolved'&&f.expanded_amount_expression.includes('?')));
