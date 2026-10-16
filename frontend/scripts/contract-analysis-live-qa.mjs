@@ -27,8 +27,12 @@ try{
   await page.goto(base+'/contract-analyses/'+id+'?tab=methods',{waitUntil:'domcontentloaded'});await page.locator('.ca-method-action').first().waitFor();
   const withdraw=page.getByRole('button',{name:'withdraw(uint256)',exact:true});await withdraw.click();await page.locator('aside .ca-body-text').first().waitFor();
   check(profile.name+'-method-deeplink',new URL(page.url()).searchParams.has('method_id'));
-  await page.getByRole('tab',{name:'执行步骤',exact:true}).click();await page.locator('.ca-table tbody tr').first().waitFor();
-  check(profile.name+'-withdraw-step-facts',(await page.locator('.ca-table tbody').innerText()).includes('balanceOf[msg.sender]'));
+  const selectedMethod=new URL(page.url()).searchParams.get('method_id'),stepsResponse=page.waitForResponse(response=>{
+   const url=new URL(response.url());return url.pathname.endsWith('/contract-analyses/'+id)&&url.searchParams.get('section')==='steps'&&url.searchParams.get('method_id')===selectedMethod&&response.status()===200;
+  });
+  await page.getByRole('tab',{name:'执行步骤',exact:true}).click();const stepsPayload=await(await stepsResponse).json();
+  await page.locator('.ca-table tbody tr').filter({hasText:'检查 balanceOf[msg.sender] >= wad'}).first().waitFor({state:'visible'});
+  check(profile.name+'-withdraw-step-facts',stepsPayload.data.items.length>0&&stepsPayload.data.items.every(step=>step.method_id===selectedMethod)&&(await page.locator('.ca-table tbody').innerText()).includes('balanceOf[msg.sender]'));
   await page.getByRole('button',{name:/^查看证据 /}).first().click();await page.getByTestId('contract-source').waitFor({timeout:20000});
   check(profile.name+'-source-evidence',await page.getByTestId('contract-source').innerText().then(t=>t.includes('balanceOf')));
   const link=page.url();await page.reload({waitUntil:'domcontentloaded'});await page.getByTestId('contract-source').waitFor();check(profile.name+'-evidence-deeplink-reload',page.url()===link);

@@ -17,6 +17,9 @@ export function executeAssembly(assembly,state,api) {
  function external(n,s,write=false) {
   const ref=refs.find(r=>r.src===n.src),d=nodes.get(ref?.declaration);
   if(!d)fail('YUL_EXTERNAL_REFERENCE_UNAVAILABLE');
+  if(d.constant&&['uint256','bytes32'].includes(d.typeDescriptions?.typeString)&&d.value?.nodeType==='Literal'&&d.value.kind==='number'&&!d.value.subdenomination){
+   if(write)fail('YUL_CONSTANT_ASSIGNMENT');const v=api.expr({...d,nodeType:'Identifier',referencedDeclaration:d.id},s);return word(v.term,/^\d+$/.test(v.term)?BigInt(v.term):null);
+  }
   const suffix=ref.suffix||(ref.isSlot?'slot':ref.isOffset?'offset':null);
   if(suffix){if(write)fail('YUL_STORAGE_POINTER_ASSIGNMENT_UNSUPPORTED');const loc=api.locate({...d,nodeType:'Identifier',referencedDeclaration:d.id},s),text=suffix==='slot'?loc.slot:String(loc.offset);return word(text,/^\d+$/.test(text)?BigInt(text):null,suffix==='slot'?{storage_location:loc}:{});}
   const type=scalarType(d);if(!type.bits||(/^bytes\d+$/.test(type.type)&&type.bits!==256))fail('YUL_EXTERNAL_DIRTY_BITS_UNSUPPORTED');
@@ -123,7 +126,10 @@ export function executeAssembly(assembly,state,api) {
   else{
    s.storage=terms.define('(store '+s.storage+' '+slot.term+' '+v.term+')',ARRAY);
    const matched=[],locations=[];
-   if(slot.known!==null){for(const item of api.layout.storage||[])if(BigInt(item.slot)===slot.known)locations.push(...scalarLocations({root:item.astId,slot:slot.term,offset:item.offset||0,type_id:item.type,scalar_type:api.layout.types[item.type].label,keys:[],fields:[]}));}
+   if(slot.known!==null){
+    for(const item of api.layout.storage||[])if(!item.namespace_id&&BigInt(item.slot)===slot.known)locations.push(...scalarLocations({root:item.astId,slot:slot.term,offset:item.offset||0,type_id:item.type,scalar_type:api.layout.types[item.type].label,keys:[],fields:[]}));
+    for(const loc of api.layout.namespace_static_locations||[])if(BigInt(loc.slot)===slot.known)locations.push(loc);
+   }
    else if(slot.storage_location){const loc=slot.storage_location;locations.push(...(loc.word_fields||[loc]).flatMap(l=>scalarLocations(l)));}
    for(const declared of locations){
     const loc={...declared,slot:slot.term},scalar=scalarType({type:loc.scalar_type});

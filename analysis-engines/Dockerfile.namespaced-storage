@@ -1,0 +1,8 @@
+FROM platform-contract-coupled-invariants:20261016@sha256:bc78e04257bf8c15e4b2449f64e6125b613dea22032abc28bd021f15eef2b740
+USER root
+COPY analyze.mjs source.mjs source-vyper.mjs model.mjs capabilities.mjs replay.mjs replay-system-state.mjs replay-state-diff.mjs source-pc.mjs opcode-witness.mjs namespace-layout.mjs /engine/
+COPY ir /engine/ir
+COPY properties /engine/properties
+COPY verification /engine/verification
+COPY rules /engine/rules
+USER 65532:65532

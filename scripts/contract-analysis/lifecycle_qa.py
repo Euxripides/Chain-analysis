@@ -1,6 +1,6 @@
 """Fault injection restricted to the isolated QA database and worker unit."""
 import json, os, pathlib, subprocess, time, urllib.parse, uuid
-from qa_support import ROOT, Client, dotenv, fixture_clients
+from qa_support import ROOT, Client, dotenv, fixture_clients, LIFECYCLE_JOB_SCENARIOS
 from live_api_qa import await_job
 
 OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis');rows=[]
@@ -26,7 +26,11 @@ def wait_container(aid):
 
 client=fixture_clients()['investigator'];prefix='lifecycle-'+uuid.uuid4().hex
 max_rpc=int(os.environ.get('CONTRACT_QA_LIFECYCLE_MAX_RPC','100'));assert 40<=max_rpc<=100
-def submit(suffix,timeout=1800):return client.must('/api/v2/contract-analyses',{'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,'idempotency_key':prefix+suffix,'budget':{'max_contracts':2,'max_rpc_requests':max_rpc,'max_state_reads':24,'timeout_seconds':timeout}})
+submitted={}
+def submit(suffix,timeout=1800):
+    scenario=suffix.lstrip('-');assert scenario in LIFECYCLE_JOB_SCENARIOS and scenario not in submitted
+    job=client.must('/api/v2/contract-analyses',{'chain':'ethereum','address':'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2','block':19000000,'idempotency_key':prefix+suffix,'budget':{'max_contracts':2,'max_rpc_requests':max_rpc,'max_state_reads':24,'timeout_seconds':timeout}})
+    submitted[scenario]=job['analysis_id'];return job
 def budget(aid):return json.loads(sql("SELECT json_build_object('requests',reserved_requests,'credits',reserved_credits,'processing_ms',processing_ms) FROM contract_analysis_budgets WHERE analysis_id='"+aid+"'"))
 
 try:
@@ -74,6 +78,7 @@ try:
     client.must('/api/v2/contract-analyses/'+tid+'/resume',{});unit('start');finished=await_job(client,tid,60)
     check('exhausted-processing-budget-fails-before-work',finished['status']=='failed' and finished['error_code']=='CONTRACT_ANALYSIS_TIMEOUT')
     check('timeout-does-not-leave-container',not containers(tid))
+    check('lifecycle-scenarios-stay-within-reserved-job-count',set(submitted)==set(LIFECYCLE_JOB_SCENARIOS)and len(set(submitted.values()))==len(LIFECYCLE_JOB_SCENARIOS),{'jobs':submitted,'max_rpc_per_job':max_rpc,'reserved_requests':len(LIFECYCLE_JOB_SCENARIOS)*max_rpc})
     print('LIFECYCLE_QA_PASS',len(rows),flush=True)
 finally:
     unit('start')

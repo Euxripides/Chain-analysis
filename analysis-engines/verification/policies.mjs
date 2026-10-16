@@ -3,22 +3,33 @@ import {asBool,asInt,scalarType,MAX_WORD} from './terms.mjs';
 import {and,or,obligation,solveObligations,closeModels} from './solver.mjs';
 import {buildCreationTransition} from './state.mjs';
 import {signaturePolicies} from './signatures.mjs';
+import {namespaceAccessPath,namespaceCalleeID,namespaceGetterPath} from '../namespace-layout.mjs';
 
 const returnNode=fn=>fn?.body?.statements?.length===1&&fn.body.statements[0].nodeType==='Return'?fn.body.statements[0].expression:null;
 const identifier=d=>({...d,nodeType:'Identifier',referencedDeclaration:d.id});
 function getter(ctx,name,inputs) {
  const fn=ctx.functions.find(f=>f.name===name&&f.parameters?.parameters?.length===inputs&&['public','external'].includes(f.visibility)&&ctx.methodByAST.get(f.id)?.dispatch_role!=='overridden_source_definition');
- if(fn)return {fn,node:returnNode(fn)};
+ if(fn)return {fn,...(namespaceGetterPath(fn,ctx.namespace_registry,ctx.nodes,ctx.functions)||{node:returnNode(fn)})};
  const d=ctx.stateVars.find(v=>v.name===name&&v.visibility==='public');
  return d?{node:identifier(d),declaration:d}:null;
 }
 function root(node,ctx) {
+ const ns=namespaceAccessPath(node,ctx.namespace_registry,{resolveFunction:n=>namespaceCalleeID(n,ctx.nodes,ctx.functions)});if(ns&&!ns.namespace_root)return ns.root;
  if(node?.nodeType==='Identifier')return ctx.nodes.get(node.referencedDeclaration)?.stateVariable?node.referencedDeclaration:null;
  return node?root(node.baseExpression||node.expression,ctx):null;
 }
 
 export function analyzePolicies(result,ctx,transitions) {
  const models=[],queries=[];
+ const getterRoot=g=>g?.namespace_path?.root??root(g?.node,ctx);
+ function getterValue(t,g,state){
+  if(g.namespace_path&&g.fn){const rows=t.call(g.fn,[],state);if(rows.length!==1||rows[0].values.length!==1||rows[0].state.storage!==state.storage)throw Error('NAMESPACE_GETTER_VALUE_NOT_SINGLE_READ');return rows[0].values[0];}
+  return t.expr(g.node,state);
+ }
+ function getterLocation(t,g,state){
+  const p=g.namespace_path;if(!p)return t.locate(g.node,state);
+  if(p.static_slot===null||p.keys.length)throw Error('NAMESPACE_GETTER_REQUIRES_KEY_MODEL');return{...p,slot:p.static_slot};
+ }
  function model(kind,scope,extra={}) {
   const m={model_id:id(result.snapshot.code_hash,result.snapshot.storage_address,kind),kind,scope,code_hash:result.snapshot.code_hash,
    code_address:result.snapshot.code_address,storage_address:result.snapshot.storage_address,
@@ -35,26 +46,26 @@ export function analyzePolicies(result,ctx,transitions) {
   query.transition=t;queries.push(query);
  }
  const owner=getter(ctx,'owner',0);
- if(owner?.node&&root(owner.node,ctx)!==null&&/^address(?: payable)?$/.test(owner.node.typeDescriptions?.typeString||owner.declaration?.typeDescriptions?.typeString||'')) {
+ if(owner?.node&&getterRoot(owner)!==null&&/^address(?: payable)?$/.test(owner.node.typeDescriptions?.typeString||owner.declaration?.typeDescriptions?.typeString||'')) {
   const m=model('owner_identity_integrity','all_mutating_entries_preserve_owner_for_unauthorized_callers');
   m.proposition='caller != owner@entry implies owner@exit == owner@entry';
-  m.owner_state_ast_id=root(owner.node,ctx);
+  m.owner_state_ast_id=getterRoot(owner);
   for(const t of transitions) {
    if(!t.model.complete)continue;
    try{
-    const state=t.initialState(),before=t.expr(owner.node,state);
+    const state=t.initialState(),before=getterValue(t,owner,state);
     const violations=t.model.paths.map(p=>and([p.condition,'(distinct '+t.caller.term+' '+asInt(before)+')',
-     '(distinct '+asInt(t.expr(owner.node,{...state,storage:p.storage_after}))+' '+asInt(before)+')']));
+     '(distinct '+asInt(getterValue(t,owner,{...state,storage:p.storage_after}))+' '+asInt(before)+')']));
     add(m,t,'unauthorized_caller_cannot_change_owner',or(violations));
    }catch(e){m.unresolved.push(String(e.message)+':'+t.model.method_id);}
   }
  }
  const hasRole=getter(ctx,'hasRole',2),roleAdmin=getter(ctx,'getRoleAdmin',1);
- if(hasRole?.fn&&hasRole.node?.nodeType==='IndexAccess'&&roleAdmin?.fn&&root(hasRole.node,ctx)===root(roleAdmin.node,ctx)&&
+ if(hasRole?.fn&&hasRole.node?.nodeType==='IndexAccess'&&roleAdmin?.fn&&getterRoot(hasRole)!==null&&getterRoot(hasRole)===getterRoot(roleAdmin)&&
   hasRole.node.indexExpression?.referencedDeclaration===hasRole.fn.parameters.parameters[1].id&&
   hasRole.node.baseExpression?.expression?.indexExpression?.referencedDeclaration===hasRole.fn.parameters.parameters[0].id&&
   roleAdmin.node?.expression?.indexExpression?.referencedDeclaration===roleAdmin.fn.parameters.parameters[0].id) {
-  const roleRoot=root(hasRole.node,ctx),member=hasRole.node.baseExpression,memberField=member?.nodeType==='MemberAccess'?member.referencedDeclaration:null;
+  const roleRoot=getterRoot(hasRole),member=hasRole.node.baseExpression,memberField=member?.nodeType==='MemberAccess'?member.referencedDeclaration:null;
   const adminField=roleAdmin.node?.nodeType==='MemberAccess'?roleAdmin.node.referencedDeclaration:null;
   if(memberField&&adminField) {
    const m=model('access_control_admin_integrity','all_mutating_entries_under_declared_role_admin_policy');
@@ -86,8 +97,8 @@ export function analyzePolicies(result,ctx,transitions) {
  const balance=getter(ctx,'balanceOf',1),supply=getter(ctx,'totalSupply',0);
  const balanceGetterValid=balance?.declaration||balance?.fn&&balance.node?.nodeType==='IndexAccess'&&balance.node.indexExpression?.referencedDeclaration===balance.fn.parameters.parameters[0].id;
  if(balanceGetterValid&&
-  supply?.node?.nodeType==='Identifier'&&root(balance.node,ctx)!==null&&root(supply.node,ctx)!==null&&/^uint/.test(supply.node.typeDescriptions?.typeString||supply.declaration?.typeDescriptions?.typeString||'')) {
-  const balanceRoot=root(balance.node,ctx),supplyRoot=root(supply.node,ctx),layoutItem=ctx.layout.storage.find(r=>r.astId===balanceRoot),balanceType=ctx.layout.types?.[layoutItem?.type];
+  (supply?.node?.nodeType==='Identifier'||supply?.namespace_path?.static_slot!==undefined)&&getterRoot(balance)!==null&&getterRoot(supply)!==null&&/^uint/.test(supply.node.typeDescriptions?.typeString||supply.declaration?.typeDescriptions?.typeString||'')) {
+  const balanceRoot=getterRoot(balance),supplyRoot=getterRoot(supply),layoutItem=ctx.layout.storage.find(r=>r.astId===balanceRoot),balanceType=ctx.layout.types?.[layoutItem?.type];
   if(balanceType?.encoding==='mapping'&&/^address/.test(ctx.layout.types[balanceType.key]?.label||'')&&/^uint/.test(ctx.layout.types[balanceType.value]?.label||'')){
    const m=model('erc20_ledger_conservation','inductive_preservation_of_declared_supply_equals_account_sum');
    m.proposition='sum(account balance changes) == totalSupply@exit - totalSupply@entry';
@@ -99,7 +110,7 @@ export function analyzePolicies(result,ctx,transitions) {
    models.push(initial);m.source_initialization_model_id=initial.model_id;
    if(!creation.model?.complete)initial.unresolved.push(creation.reason||creation.model.unresolved.join(','));
    else try{
-    const state=creation.initialState(),loc=creation.locate(supply.node,state),violations=[];
+    const state=creation.initialState(),loc=getterLocation(creation,supply,state),violations=[];
     for(const p of creation.model.paths){
      if(p.writes.some(w=>w.root_ast_id===null||w.root_ast_id===undefined))throw new Error('UNCLASSIFIED_CREATION_STORAGE_WRITE');
      const deltas=p.writes.filter(w=>w.root_ast_id===balanceRoot).map(w=>'(- '+w.new_value+' '+w.old_value+')');
@@ -110,7 +121,7 @@ export function analyzePolicies(result,ctx,transitions) {
    }catch(error){initial.unresolved.push(String(error.message));}
    for(const t of transitions){if(!t.model.complete)continue;
     try{
-     const state=t.initialState(),loc=t.locate(supply.node,state),before=t.readLocation(loc,state),violations=[];
+     const state=t.initialState(),loc=getterLocation(t,supply,state),before=t.readLocation(loc,state),violations=[];
      for(const p of t.model.paths){
       if(p.writes.some(w=>w.root_ast_id===null||w.root_ast_id===undefined))throw new Error('UNCLASSIFIED_RAW_STORAGE_WRITE');
       const deltas=p.writes.filter(w=>w.root_ast_id===balanceRoot).map(w=>'(- '+w.new_value+' '+w.old_value+')');

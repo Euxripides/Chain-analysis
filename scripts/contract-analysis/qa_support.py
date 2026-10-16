@@ -4,6 +4,7 @@ import json, os, pathlib, secrets, http.cookiejar, urllib.request, urllib.error
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PRIVATE = pathlib.Path('/tmp/contract-analysis-private-20261014')
 BASE = os.environ.get('CONTRACT_QA_API', 'http://127.0.0.1:18081')
+LIFECYCLE_JOB_SCENARIOS = ('queued', 'running', 'crash', 'timeout')
 
 def dotenv(path):
     values = {}

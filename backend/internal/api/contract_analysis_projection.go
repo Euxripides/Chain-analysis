@@ -61,10 +61,13 @@ func contractBalanceProjection(result *ca.Result, asset string, pre map[string]c
 		}
 		for _, raw := range result.Sections["storage"] {
 			storage := rowMap(raw)
-			if storage["method_id"] != method["method_id"] || storage["access"] != "read" || storage["key_expression"] != returned["text"] || storage["layout_status"] != "verified_compiler_layout" {
+			if storage["method_id"] != method["method_id"] || storage["access"] != "read" || storage["key_expression"] != returned["text"] {
 				continue
 			}
 			projection, _ := storage["storage_projection"].(map[string]any)
+			if storage["layout_status"] != "verified_compiler_layout" && !contractNamespaceProjection(storage, projection) {
+				continue
+			}
 			scalar := fmt.Sprint(projection["scalar_type"])
 			if !strings.HasPrefix(scalar, "uint") {
 				continue
@@ -108,6 +111,31 @@ func contractBalanceProjection(result *ca.Result, asset string, pre map[string]c
 		}
 	}
 	return nil
+}
+
+// The engine validates the original source pointer assignment. Recompute its
+// declared namespace root before allowing the projected path into settlement.
+func contractNamespaceProjection(storage, projection map[string]any) bool {
+	if storage["layout_status"] != "erc7201_ast_layout_with_verified_source_pointer_assignment" || storage["state_ast_id"] == nil {
+		return false
+	}
+	name, ok := storage["namespace_id"].(string)
+	if !ok || name == "" || len(name) > 256 || strings.ContainsAny(name, " \t\r\n") || projection["namespace_id"] != name || storage["namespace_root_slot"] != projection["base_slot"] {
+		return false
+	}
+	first, ok := new(big.Int).SetString(strings.TrimPrefix(contractKeccak([]byte(name)), "0x"), 16)
+	if !ok || first.Sign() == 0 {
+		return false
+	}
+	first.Sub(first, big.NewInt(1))
+	encoded := make([]byte, 32)
+	first.FillBytes(encoded)
+	root, ok := new(big.Int).SetString(strings.TrimPrefix(contractKeccak(encoded), "0x"), 16)
+	if !ok {
+		return false
+	}
+	root.Rsh(root, 8).Lsh(root, 8)
+	return root.String() == fmt.Sprint(projection["base_slot"])
 }
 
 func (p contractLedgerProjection) key(address string) (string, error) {

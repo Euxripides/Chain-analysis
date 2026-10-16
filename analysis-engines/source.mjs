@@ -10,6 +10,7 @@ import { analyzeStateModels,buildCreationTransition } from './verification/state
 import { analyzePolicies } from './verification/policies.mjs';
 import { executeAssembly } from './verification/assembly.mjs';
 import {builtin,builtinMember,internalDispatch} from './ir/source-symbols.mjs';
+import {collectNamespaces,bindNamespaceAccessors,activateNamespaceLayout,namespaceAccessPath,namespaceCalleeID,namespacePointerType} from './namespace-layout.mjs';
 const require = createRequire(import.meta.url);
 const {keccak_256}=require('@noble/hashes/sha3.js');
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
@@ -78,7 +79,9 @@ export function analyzeSource(result, source, bytecode) {
   const getEvidence = (method, node) => {const key=method.method_id+':'+node.id+':'+node.src;if(evidenceCache.has(key))return evidenceCache.get(key);
     const value=evidence(result,method,'source',location(node),sourceText(node).slice(0,2048));evidenceCache.set(key,value);return value;};
   const typeOf = node => node?.typeDescriptions?.typeString || sourceText(node?.typeName) || 'unresolved';
-  const layout = compiled.storageLayout?.storage ? compiled.storageLayout : legacyLayout(orderedContracts,typeOf);
+  const baseLayout = compiled.storageLayout?.storage ? compiled.storageLayout : legacyLayout(orderedContracts,typeOf);
+  const namespaces=collectNamespaces({nodes,orderedContracts,layout:baseLayout}),namespaceAccessors=bindNamespaceAccessors({functions,nodes,namespaces});
+  const namespaceRegistry=activateNamespaceLayout(baseLayout,namespaces,namespaceAccessors),layout=namespaceRegistry.layout;
   const layoutByID = new Map((layout?.storage || []).map(v => [v.astId, v]));
   const runtimeValue=(declaration)=>{
     const binding=runtimeVerification.bindings[declaration?.id];if(!binding)return null;
@@ -100,7 +103,18 @@ export function analyzeSource(result, source, bytecode) {
     const receiver=library&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id;
     return {internal,args:receiver?[callee.expression,...args]:args};
   };
+  const namespacePath=(node,context={})=>namespaceAccessPath(node,namespaceRegistry,{
+    aliases:new Map([...Object.entries(context.parameter_arguments||{}).map(([key,value])=>[Number(key),value]),...(context.namespace_aliases||[])]),
+    resolveFunction:n=>namespaceCalleeID(n,nodes,functions)
+  });
   const projectStorage = (node,context={},method) => {
+    const ns=namespacePath(node,context);
+    if(ns&&!ns.namespace_root)return{base_slot:ns.base_slot,type_id:ns.type_id,offset:ns.offset,scalar_type:ns.scalar_type,
+      namespace_id:ns.namespace_id,static_slot:ns.static_slot,path:ns.path.map(part=>{
+        if(part.kind!=='mapping')return part;const key=resolveArgument(part.key_node,context);
+        return{kind:'mapping',key_type:part.key_type,key_ast_id:key?.id,key_referenced_declaration:key?.referencedDeclaration??null,
+          key_text:sourceText(key),key_expression_id:expression(method,key,context),key_literal:key?.nodeType==='Literal'?String(key.value):null};
+      })};
     if(node?.nodeType==='Identifier') {
       const item=layoutByID.get(node.referencedDeclaration),type=layout.types?.[item?.type];
       return item&&type?{base_slot:item.slot,type_id:item.type,offset:item.offset||0,path:[],scalar_type:type.label}:null;
@@ -145,6 +159,18 @@ export function analyzeSource(result, source, bytecode) {
     getEvidence(method, fn);
     result.sections.methods.push(method);
     methodByAST.set(fn.id, method);
+  }
+  if(layout.namespace_storage){
+    const metadata=layout.namespace_storage;
+    for(const row of metadata.accessors){
+      const method=methodByAST.get(row.function_ast_id);
+      row.evidence_ids=method?unique([row.function_ast_id,row.namespace_struct_ast_id,row.assembly_ast_id,row.constant_ast_id]
+        .filter(key=>key!==null&&key!==undefined&&nodes.has(key)).map(key=>getEvidence(method,nodes.get(key)))):[];
+    }
+    for(const row of metadata.namespaces)row.evidence_ids=unique(metadata.accessors.filter(a=>a.namespace_struct_ast_id===row.struct_ast_id).flatMap(a=>a.evidence_ids));
+    metadata.unresolved=unique([...metadata.namespaces.flatMap(n=>[...n.unresolved,...(!n.pointer_assignment_verified?['NAMESPACE_POINTER_IDENTITY_UNVERIFIED:'+n.struct_ast_id]:[])]),
+      ...metadata.accessors.flatMap(a=>a.unresolved.map(code=>code+':'+a.function_ast_id))]);
+    metadata.complete=metadata.namespaces.every(n=>n.complete)&&metadata.accessors.every(a=>a.complete);
   }
   let expressionNumber = 0;
   let syntheticNumber = 0;
@@ -256,21 +282,25 @@ export function analyzeSource(result, source, bytecode) {
     return expression_id;
   };
   const stateAccess = (method, node, access, context, valueNode, operation = null) => {
-    const base = rootDeclaration(node), variable = nodes.get(base);
-    if (!variable?.stateVariable || variable.constant || variable.mutability === 'immutable') return;
+    if(node?.nodeType==='Identifier'&&namespacePointerType(nodes.get(node.referencedDeclaration),namespaceRegistry))return;
+    const ns=namespacePath(node,context),namespaceField=ns&&!ns.namespace_root&&namespaceRegistry.byField.has(ns.root)?ns:null;
+    const base = namespaceField?.root??rootDeclaration(node), variable = nodes.get(base);
+    if ((!variable?.stateVariable&&!namespaceField) || variable.constant || variable.mutability === 'immutable') return;
     const evidence_id = getEvidence(method, node), slot = layoutByID.get(base);
     const storage_id = id(method.method_id, node.id, access, context.path);
     if (result.sections.storage.some(s => s.storage_id === storage_id)) return;
     const state_id = id(result.snapshot.code_hash, result.snapshot.storage_address, 'state', base);
     const accessText=node.nodeType==='Identifier'?node.name:sourceText(node);
-    const baseOnly=accessText!==variable.name||/^(mapping|struct)/.test(typeOf(variable))||typeOf(variable).includes('[');
+    const baseOnly=namespaceField?namespaceField.static_slot===null||layout.types?.[namespaceField.type_id]?.encoding!=='inplace'||Boolean(layout.types?.[namespaceField.type_id]?.members||layout.types?.[namespaceField.type_id]?.base):
+      accessText!==variable.name||/^(mapping|struct)/.test(typeOf(variable))||typeOf(variable).includes('[');
     const row = { storage_id, state_id, state_ast_id:base, method_id: method.method_id, variable: variable.name,
       code_address: result.snapshot.code_address, storage_address: result.snapshot.storage_address,
-      access, slot: slot?.slot ?? null, offset: slot?.offset ?? null, type: typeOf(node), variable_type: typeOf(variable),
+      access, slot: namespaceField?.static_slot??slot?.slot??null, offset: namespaceField?.offset??slot?.offset??null, type: typeOf(node), variable_type: typeOf(variable),
       slot_role:baseOnly?'layout_base':'direct_slot',key_expression: accessText, key_expression_id: expression(method, node, context),
       value_expression: valueNode ? sourceText(valueNode) : null, value_expression_id: expression(method, valueNode, context), operation,
       conditions: [...context.conditions], evidence_ids: [evidence_id], layout_status: slot ? slot.layout_basis || 'verified_compiler_layout' : 'layout_unavailable',
-      storage_projection: projectStorage(node,context,method) };
+      storage_projection: projectStorage(node,context,method),...(namespaceField?{namespace_id:namespaceField.namespace_id,
+        namespace_struct_ast_id:namespaceField.namespace_struct_ast_id,namespace_root_slot:namespaceField.base_slot}:{} ) };
     result.sections.storage.push(row);
     method.storage_ids.push(storage_id);
   };
@@ -334,7 +364,7 @@ export function analyzeSource(result, source, bytecode) {
     const baseType = typeOf(callee?.expression);
     if (['require', 'assert'].some(n=>builtin(callee,n,nodes))) { guard(method, node, node.arguments?.[0], context, name === 'assert' ? '触发 panic' : 'revert'); return; }
     if (builtin(callee,'revert',nodes)) { const step = addStep(method, node, 'revert', `回滚：${sourceText(node)}`, context); method.failure_ids.push(step.step_id); return; }
-    const targetNode = nodes.get(callee?.referencedDeclaration);
+    const targetNode = nodes.get(namespaceCalleeID(node,nodes,functions)??callee?.referencedDeclaration);
     const library=nodes.get(targetNode?.scope)?.contractKind==='library';
     if (targetNode?.nodeType === 'EventDefinition') { eventStep(method,node,node,context,targetNode); return; }
     const internal=internalArguments(targetNode,callee,node.arguments||[]);
@@ -352,8 +382,9 @@ export function analyzeSource(result, source, bytecode) {
         const callStep = addStep(method, node, 'internal_call', `调用内部方法 ${called.signature}`, context, { target_method_id: called.method_id });
         result.sections.flows.push({ edge_id: id(callStep.step_id, 'internal'), edge_type: 'calls', from: method.method_id, to: called.method_id, evidence_ids: callStep.evidence_ids });
         if (context.stack.length < 12 && !context.stack.includes(targetNode.id)) {
-          if((targetNode.parameters?.parameters||[]).some(p=>p.storageLocation==='storage'))method.completeness.unresolved.push({code:'LIBRARY_STORAGE_REFERENCE_REQUIRES_ALIAS_ANALYSIS',ast_id:node.id});
+          if((targetNode.parameters?.parameters||[]).some((p,i)=>p.storageLocation==='storage'&&(!namespacePointerType(p,namespaceRegistry)||!namespacePath(internal.args[i],context))))method.completeness.unresolved.push({code:'LIBRARY_STORAGE_REFERENCE_REQUIRES_ALIAS_ANALYSIS',ast_id:node.id});
           const callContext={ ...context, conditions:[...context.conditions],unchecked:false,function_frame:targetNode.id, path: `${context.path}/call:${node.id}`, stack: [...context.stack, targetNode.id],
+            namespace_aliases:new Map(context.namespace_aliases||[]),
             parameter_bindings:Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,sourceText(internal.args[i])])),
             parameter_arguments:{...context.parameter_arguments,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,internal.args[i]]))},
             parameter_expression_bindings:{...context.parameter_expression_bindings,...Object.fromEntries((targetNode.parameters?.parameters||[]).map((p,i)=>[p.id,expression(method,internal.args[i],context)]))} };
@@ -440,6 +471,14 @@ export function analyzeSource(result, source, bytecode) {
       }
     }
   };
+  const bindNamespaceAlias=(method,context,declaration,value)=>{
+    if(!namespacePointerType(declaration,namespaceRegistry))return;
+    const path=namespacePath(value,context);
+    // Dynamic keys are evaluated when a pointer is assigned. The formal state
+    // model captures that value; source projections do not reconstruct it later.
+    context.namespace_aliases?.set(declaration.id,path&&!path.keys.length?value:null);
+    if(path?.keys.length)method.completeness.unresolved.push({code:'NAMESPACE_POINTER_KEY_CAPTURE_REQUIRES_STATE_MODEL',ast_id:declaration.id});
+  };
   const scanExpression = (method, node, context, access = 'read') => {
     if (!node) return;
     if (node.nodeType === 'Assignment') {
@@ -452,6 +491,7 @@ export function analyzeSource(result, source, bytecode) {
           declaration_id: node.leftHandSide.referencedDeclaration, name: node.leftHandSide.name,
           value_expression_id: expression(method, node.rightHandSide, context), operation: node.operator,
           order: assigned.order, conditions: [...context.conditions], path: context.path, evidence_ids: assigned.evidence_ids });
+        bindNamespaceAlias(method,context,nodes.get(node.leftHandSide.referencedDeclaration),node.operator==='='?node.rightHandSide:null);
       } else if(node.leftHandSide.nodeType==='TupleExpression'&&node.operator==='=') {
         const rhs=expression(method,node.rightHandSide,context);
         for(const [i,p]of (node.leftHandSide.components||[]).entries())if(p?.nodeType==='Identifier'&&!nodes.get(p.referencedDeclaration)?.stateVariable) {
@@ -491,8 +531,11 @@ export function analyzeSource(result, source, bytecode) {
       const condition = sourceText(node.condition);
       scanExpression(method, node.condition, context);
       addStep(method, node.condition, 'branch', `按条件 ${condition} 选择分支`, context);
-      const yes=analyzeBlock(method, node.trueBody, { ...context, path: `${context.path}/if:${node.id}:true`, conditions: [...context.conditions, condition] });
-      const no=analyzeBlock(method, node.falseBody, { ...context, path: `${context.path}/if:${node.id}:false`, conditions: [...context.conditions, `!(${condition})`] });
+      const yesContext={...context,namespace_aliases:new Map(context.namespace_aliases||[]),path:`${context.path}/if:${node.id}:true`,conditions:[...context.conditions,condition]},
+        noContext={...context,namespace_aliases:new Map(context.namespace_aliases||[]),path:`${context.path}/if:${node.id}:false`,conditions:[...context.conditions,`!(${condition})`]};
+      const yes=analyzeBlock(method,node.trueBody,yesContext),no=analyzeBlock(method,node.falseBody,noContext);
+      for(const key of context.namespace_aliases?.keys()||[]){const a=yesContext.namespace_aliases.get(key),b=noContext.namespace_aliases.get(key);
+        context.namespace_aliases.set(key,yes&&!no?b:no&&!yes?a:a?.id===b?.id?a:null);}
       if(yes&&no)return yes===no?yes:'terminated';
       if(yes)context.conditions.push(`!(${condition})`);
       if(no)context.conditions.push(condition);
@@ -503,8 +546,10 @@ export function analyzeSource(result, source, bytecode) {
       addStep(method, node, 'loop', `循环条件 ${condition || '无显式条件'}`, context);
       scanExpression(method, node.initializationExpression, context);
       scanExpression(method, node.condition, context);
-      analyzeBlock(method, node.body, { ...context, path: `${context.path}/loop:${node.id}`, conditions: [...context.conditions, `循环：${condition}`] });
-      scanExpression(method, node.loopExpression, context);
+      const loopContext={...context,namespace_aliases:new Map(context.namespace_aliases||[]),path:`${context.path}/loop:${node.id}`,conditions:[...context.conditions,`循环：${condition}`]};
+      analyzeBlock(method,node.body,loopContext);
+      scanExpression(method,node.loopExpression,loopContext);
+      for(const[key,value]of context.namespace_aliases||[])if(loopContext.namespace_aliases.get(key)?.id!==value?.id)context.namespace_aliases.set(key,null);
       return;
     }
     if (node.nodeType === 'Return') {
@@ -516,10 +561,17 @@ export function analyzeSource(result, source, bytecode) {
     if (node.nodeType === 'EmitStatement') { const callee=node.eventCall?.expression;eventStep(method,node,node.eventCall,context,nodes.get(callee?.referencedDeclaration)); return; }
     if (node.nodeType === 'RevertStatement') { const step = addStep(method, node, 'revert', `回滚 ${sourceText(node.errorCall)}`, context); method.failure_ids.push(step.step_id); return 'revert'; }
     if (node.nodeType === 'InlineAssembly' || node.nodeType === 'TryStatement') {
+      const pointer=namespaceRegistry.accessors.get(context.function_frame);
+      if(node.nodeType==='InlineAssembly'&&pointer?.assembly_ast_id===node.id){
+        addStep(method,node,'storage_pointer_assignment',sourceText(node),context,{namespace_id:pointer.namespace_id,root_slot:pointer.root_slot,root_assignment_verified:true});return;
+      }
       addStep(method, node, node.nodeType === 'InlineAssembly' ? 'assembly' : 'try', sourceText(node).slice(0, 2048), context);
       if(node.nodeType==='InlineAssembly'){analyzeAssemblyReturnCallsites(method,node,context);analyzeEncodedAssemblyCall(method,node,context);}
       method.completeness.unresolved.push({ code: node.nodeType === 'InlineAssembly' ? 'ASSEMBLY_SEMANTICS_UNRESOLVED' : 'TRY_CATCH_PATHS_UNRESOLVED', ast_id: node.id });
-      if (node.nodeType === 'TryStatement') for (const child of children(node)) analyzeBlock(method, child, context);
+      if (node.nodeType === 'TryStatement') {
+        for (const child of children(node)) analyzeBlock(method,child,{...context,namespace_aliases:new Map(context.namespace_aliases||[])});
+        for(const key of context.namespace_aliases?.keys()||[])context.namespace_aliases.set(key,null);
+      }
       return;
     }
     if (node.nodeType === 'VariableDeclarationStatement') {
@@ -536,6 +588,7 @@ export function analyzeSource(result, source, bytecode) {
           value_expression_id:synthetic(method,node.initialValue,'tuple_component',[whole],context,{component_index:i,type:typeOf(p)}),operation:'=',
           order:declared.order,conditions:[...context.conditions],path:context.path,evidence_ids:declared.evidence_ids});
       }
+      if(node.declarations?.length===1&&node.declarations[0])bindNamespaceAlias(method,context,node.declarations[0],node.initialValue);
       return;
     }
     if (node.nodeType === 'ExpressionStatement') { scanExpression(method, node.expression, context);const name=node.expression?.expression?.name;return name==='revert'?'revert':['selfdestruct','suicide'].includes(name)&&/t_function_(selfdestruct|suicide)_/.test(node.expression?.expression?.typeDescriptions?.typeIdentifier||'')?'jump':undefined; }
@@ -630,7 +683,7 @@ export function analyzeSource(result, source, bytecode) {
   for (const fn of functions) {
     const method = methodByAST.get(fn.id);
     if (!method) continue;
-    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false,loop_summaries:loopSummaries,legacy_arithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8 };
+    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false,namespace_aliases:new Map(),loop_summaries:loopSummaries,legacy_arithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8 };
     analyzeFunctionWithModifiers(method,fn,context);
     if(['view','pure'].includes(method.state_mutability)&&(fn.returnParameters?.parameters||[]).length) {
       try {
@@ -663,7 +716,7 @@ export function analyzeSource(result, source, bytecode) {
     const step = addStep(method, variable, 'return', `读取并返回 ${name}${method.parameters.length ? ' 对应键值' : ''}`, context);
     method.return_ids.push(step.step_id); result.sections.methods.push(method);
   }
-  const verificationContext={functions,nodes,methodByAST,location,getEvidence,layout,stateVars,mainContract,sourceText,loopSummaries,runtimeValue,chainID:result.snapshot.chain_id,compilerVersion:source.compilation.compilerVersion,viaIR:source.stdJsonInput.settings?.viaIR===true,assembly:executeAssembly,evmRules:result.snapshot.evm_rules,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8};
+  const verificationContext={functions,nodes,methodByAST,location,getEvidence,layout,namespace_registry:namespaceRegistry,stateVars,mainContract,sourceText,loopSummaries,runtimeValue,chainID:result.snapshot.chain_id,compilerVersion:source.compilation.compilerVersion,viaIR:source.stdJsonInput.settings?.viaIR===true,assembly:executeAssembly,evmRules:result.snapshot.evm_rules,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8};
   verificationContext.creationTransition=buildCreationTransition(result,verificationContext);
   const creation=verificationContext.creationTransition.model;
   if(creation){
@@ -682,6 +735,9 @@ export function analyzeSource(result, source, bytecode) {
     status: 'completed', duration_ms: Math.round(performance.now() - started), methods: methodByAST.size, source_verification: 'recompiled_and_snapshot_matched' });
   result.sections.coverage.push({ dimension: 'source', complete: true, basis: 'recompiled_runtime_and_verified_snapshot', methods: methodByAST.size });
   if(layout.basis)result.sections.coverage.push({dimension:'storage_layout',basis:layout.basis,complete:layout.unresolved.length===0,unresolved:layout.unresolved});
+  if(layout.namespace_storage)result.sections.coverage.push({dimension:'namespaced_storage',basis:layout.namespace_storage.scope,complete:layout.namespace_storage.complete,
+    namespaces:layout.namespace_storage.namespaces.length,accessors:layout.namespace_storage.accessors.length,unresolved:layout.namespace_storage.unresolved,
+    execution_operations_scope:'see_individual_state_transitions',historical_initialization_verified:false});
 }
 
 function children(node) {
