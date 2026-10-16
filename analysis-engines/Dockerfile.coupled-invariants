@@ -1,0 +1,8 @@
+FROM platform-contract-transaction-history:20261016@sha256:20b3be3b6e5a93cdec112787bdfcbd29fcfbbe94df7733fc2c5c98c43e85fe02
+USER root
+COPY analyze.mjs source.mjs source-vyper.mjs model.mjs capabilities.mjs replay.mjs replay-system-state.mjs replay-state-diff.mjs source-pc.mjs opcode-witness.mjs /engine/
+COPY ir /engine/ir
+COPY properties /engine/properties
+COPY verification /engine/verification
+COPY rules /engine/rules
+USER 65532:65532

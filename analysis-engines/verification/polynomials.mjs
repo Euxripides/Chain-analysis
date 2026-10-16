@@ -68,7 +68,7 @@ export function exactPowerSum(degree,n){
 }
 
 export function addPolynomialObligations(model,descriptor,recurrence,queries,counterDomain,counterDeclarations,counterInputs){
- const p=recurrence.polynomial,tag=recurrence.declaration,M=1n<<BigInt(recurrence.width),D=String(SUM_SCALE),max=String(M-1n);
+ const p=recurrence.polynomial,tag=recurrence.declaration,M=1n<<BigInt(recurrence.width),D=p.scale,max=String(M-1n);
  const symbols=new Map(p.leaves.map((leaf,i)=>[leaf.key,'c_'+i]));
  const inputs=[...counterInputs,...p.leaves.map(leaf=>({name:symbols.get(leaf.key),expression:leaf.node.name||leaf.key,type:'uint'+leaf.width}))];
  const declarations=counterDeclarations+'\n'+p.leaves.map(l=>'(declare-const '+symbols.get(l.key)+' Int)').join('\n');
@@ -77,7 +77,7 @@ export function addPolynomialObligations(model,descriptor,recurrence,queries,cou
  const addQuery=(kind,decl,scope,violation,args=inputs)=>{const item=obligation(model,kind+'_'+tag,decl,scope,violation,args);queries.push(item);return item.property.property_id;};
  const ids=[];
  ids.push(addQuery('polynomial_sum_initialization',declarations,domain,'(distinct '+sum('0')+' 0)'));
- ids.push(addQuery('polynomial_discrete_difference',declarations,domain,'(distinct (- '+sum('(+ i 1)')+' '+sum('i')+') (* '+D+' '+source('i')+'))'));
+ ids.push(addQuery('polynomial_discrete_difference',declarations,domain,'(distinct (- '+sum('(+ i 1)')+' '+sum('i')+') (* '+SUM_SCALE+' '+source('i')+'))'));
  const ghostInputs=['a0','a','p','s','q','k','x','y','u','v'].map(name=>({name,kind:'proof_ghost_integer',expression:name}));
  const ghosts=ghostInputs.map(v=>'(declare-const '+v.name+' Int)').join('\n');
  ids.push(addQuery('polynomial_integrality_preservation',ghosts,'(= (mod s '+D+') 0)','(distinct (mod (+ s (* '+D+' p)) '+D+') 0)',ghostInputs));
@@ -109,7 +109,7 @@ export function addPolynomialObligations(model,descriptor,recurrence,queries,cou
  }
  model.polynomial_certificates||=[];model.polynomial_certificates.push({schema_version:'polynomial-loop-certificate-v1',accumulator_ast_id:tag,
   counter_ast_id:descriptor.counter,increment_ast_id:recurrence.increment.id,operator:sign,word_bits:recurrence.width,
-  terms:p.terms,leaves:p.leaves.map(l=>({key:l.key,ast_id:l.node.id,width:l.width})),operations:p.operations,scaled_power_sums:SUMS,scale:D,
+  terms:p.terms,leaves:p.leaves.map(l=>({key:l.key,ast_id:l.node.id,width:l.width,entry_declaration:l.entry_declaration})),operations:p.operations,scaled_power_sums:SUMS,scale:D,coefficient_scale:p.coefficient_scale||'1',
   arithmetic:recurrence.unchecked?'word_ring':'checked_monotone',proof_obligation_ids:ids,
   derivation:['exact_source_polynomial_normalization','scaled_discrete_antiderivative','integrality_induction','accumulator_induction','typed_exit_value',...(recurrence.unchecked?['word_ring_projection']:['monotone_checked_increment_maximum'])]});
  return ids;

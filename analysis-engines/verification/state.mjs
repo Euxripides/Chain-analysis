@@ -3,6 +3,7 @@ import {numericLiteral} from '../literals.mjs';
 import {Terms,scalarType,asBool,asInt,mod,WORD,MAX_WORD,ARRAY} from './terms.mjs';
 import {and,or,number,obligation,solveObligations,closeModels} from './solver.mjs';
 import {detectLoopRecurrences} from './loops.mjs';
+import {coupledPolynomialSMT} from './coupled-polynomials.mjs';
 import {polynomialSMT} from './polynomials.mjs';
 import {fixedBytesTerm} from '../ir/scalar-casts.mjs';
 import {localType,literalBytes,coerceBytes,encodeABI,hashBytes,recoverSigner,byteSequence} from './bytes.mjs';
@@ -213,6 +214,21 @@ export function buildStateTransition(fn,method,ctx) {
   const rows=n.initializationExpression?statement(n.initializationExpression,s,placeholder):[s];
   return rows.map(state=>{
    const bound=expr(descriptor.bound,state),count=asInt(bound),counter=nodes.get(descriptor.counter);
+   if(descriptor.coupled){
+    const entry=clone(state),at=(r,index)=>coupledPolynomialSMT(r.coupled_state_polynomial,index,key=>{
+     const leaf=r.coupled_state_polynomial.leaves.find(l=>l.key===key),value=leaf.entry_declaration?entry.locals.get(leaf.entry_declaration):expr(leaf.node,entry);
+     if(!value)fail('STATE_COUPLED_LOOP_ENTRY_UNBOUND');return asInt(value);
+    });
+    const last=clone(entry);last.conditions.push('(> '+count+' 0)');last.locals.set(counter.id,terms.value('(- '+count+' 1)',scalarType(counter)));
+    for(const r of descriptor.recurrences)last.locals.set(r.declaration,typed(nodes.get(r.declaration),at(r,'(- '+count+' 1)'),last));
+    let final=statement(n.body,last,placeholder);if(n.loopExpression)final=final.flatMap(row=>statement(n.loopExpression,row,placeholder));
+    if(final.length!==1||final[0].storage!==state.storage||final[0].halt)fail('STATE_COUPLED_LOOP_LAST_ITERATION_EFFECT');
+    state.conditions.push('(or (= '+count+' 0) '+and(final[0].conditions)+')');
+    for(const r of descriptor.recurrences)state.locals.set(r.declaration,typed(nodes.get(r.declaration),at(r,count),state));
+    state.locals.set(counter.id,terms.value(count,scalarType(counter)));
+    effects.push({kind:'inductive_coupled_loop',ast_id:n.id,loop_model_id:proof.model_id,proof_obligation_ids:proof.obligations,scope:'all_successful_loop_iterations',source_update_order:descriptor.recurrences.map(r=>r.declaration)});
+    return state;
+   }
    for(const r of descriptor.recurrences){
     const d=nodes.get(r.declaration),before=state.locals.get(d.id);if(!before)fail('STATE_LOOP_ACCUMULATOR_UNINITIALIZED');
     let delta;

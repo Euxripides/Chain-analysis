@@ -60,11 +60,11 @@ test('while loops use proved summaries and unsupported recurrence dependencies r
  if(actualSolver)assert.deepEqual(evaluateReturn(result,'calc',{n:10000n}),[333283335000n]);
  const invalid=analyze(compileVerificationFixture(true,'pragma solidity ^0.8.24;contract Verification{'+
   'function narrow(uint8 n)external pure returns(uint256 a){unchecked{for(uint8 i;i<n;i++)a+=i*i;}}'+
-  'function coupled(uint256 n)external pure returns(uint256 a){uint256 b;for(uint256 i;i<n;i++){a+=i;b+=a;}}'+
+  'function coupled(uint256 n)external pure returns(uint256 a){uint256 b;for(uint256 i;i<n;i++){a+=b;b+=a;}}'+
   'function divide(uint256 n)external pure returns(uint256 a){for(uint256 i;i<n;i++)a+=i/2;}}'));
  for(const loop of invalid.sections.loop_invariants)assert.equal(loop.complete,false);
  assert.ok(invalid.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('NARROW_INTERMEDIATE'))));
- assert.ok(invalid.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('RECURRENCE_DEPENDENCY'))));
+ assert.ok(invalid.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('COUPLED_CYCLIC_RECURRENCE'))));
  assert.ok(invalid.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('NOT_POLYNOMIAL'))));
 });
 

@@ -117,6 +117,15 @@ export function propertyTranslator(result,method,definitionIDs=[]) {
       if(e.arithmetic==='checked')checks.push(walk(e.operands[e.last_increment_operand]).ok);
       return normalized('('+e.operator+' '+a.term+' '+sum+')',e,and([a.ok,n.ok,'(ite (= '+n.term+' 0) true '+and(checks)+')']));
     }
+    if(e.symbolic_format==='coupled_polynomial_value') {
+      const n=walk(e.operands[0]),factors=new Map();for(const t of e.polynomial_terms)for(const k of t.factor_operands)if(!factors.has(k))factors.set(k,walk(e.operands[k]));
+      const power=k=>k?'(* '+Array(k).fill(n.term).join(' ')+')':'1',parts=e.polynomial_terms.map(t=>'(* '+[numeral(t.coefficient),power(t.degree),...t.factor_operands.map(k=>factors.get(k).term)].join(' ')+')'),numerator=parts.length?'(+ '+parts.join(' ')+')':'0',d=e.coefficient_scale;
+      const checks=[...factors.values()].map(v=>v.ok);checks.push('(= (mod '+numerator+' '+d+') 0)');
+      checks.push(...(e.last_iteration_check_operands||[]).map(k=>walk(e.operands[k]).ok));
+      const value='(div '+numerator+' '+d+')',body=normalized(value,e,and([n.ok,...checks]));
+      if(!e.empty_loop_is_entry)return body;
+      const entry=walk(e.operands[e.entry_value_operand]);return{term:'(ite (= '+n.term+' 0) '+entry.term+' '+body.term+')',kind:'Int',ok:and([n.ok,entry.ok,'(ite (= '+n.term+' 0) true '+body.ok+')'])};
+    }
     if(e.op==='FunctionCall'&&e.call_kind==='typeConversion'){const key=e.argument_expression_ids[0],v=walk(key);return normalized(fixedBytesTerm(v.term,exprs.get(key)?.type,e.type),{...e,arithmetic:'wrap'},v.ok);}
     if(e.op==='Conditional'&&e.operands.length===3){
       const keys=[e.condition_expression_id,e.true_expression_id,e.false_expression_id];if(keys.some(k=>!k))fail('SMT_CONDITIONAL_LAYOUT_UNAVAILABLE');

@@ -305,6 +305,29 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
           let rows=n.initializationExpression?execute(n.initializationExpression,s):[s];
           rows=rows.flatMap(p=>value(descriptor.bound,p).map(bound=>{
             const state=bound.s;
+            if(descriptor.coupled){
+              const entry=fork(state,'coupled-entry'),makeValue=(r,countKey,context,checks=[])=>{
+                const poly=r.coupled_state_polynomial,operands=[countKey],indices=new Map();
+                for(const leaf of poly.leaves){
+                  const key=leaf.entry_declaration?entry.parameter_expression_bindings[leaf.entry_declaration]:build(leaf.node,entry);
+                  if(!key)fail('INTERNAL_RETURN_COUPLED_ENTRY_UNBOUND');indices.set(leaf.key,operands.length);operands.push(key);
+                }
+                const checkIndices=checks.map(key=>{const i=operands.length;operands.push(key);return i;}),before=entry.parameter_expression_bindings[r.declaration];
+                const beforeIndex=operands.length;operands.push(before);
+                return synthetic(nodes.get(r.declaration),'coupled_polynomial_value',operands,context,{type:'uint'+r.width,width:r.width,signed:false,arithmetic:'checked',
+                  polynomial_terms:poly.terms.map(t=>({...t,factor_operands:t.factors.map(f=>indices.get(f))})),coefficient_scale:poly.coefficient_scale,
+                  last_iteration_check_operands:checkIndices,entry_value_operand:beforeIndex,empty_loop_is_entry:checks.length>0,
+                  loop_model_id:proved.model_id,proof_obligation_ids:proved.obligations,scope:'all_successful_loop_iterations'});
+              };
+              const one=synthetic(n,'literal',[],entry,{value:'1',type:'uint'+descriptor.counter_width}),lastCount=synthetic(n,'binary',[bound.key,one],entry,{operator:'-',type:'uint'+descriptor.counter_width}),last=fork(entry,'coupled-last-iteration');
+              bind(nodes.get(descriptor.counter),lastCount,null,last);
+              for(const r of descriptor.recurrences)bind(nodes.get(r.declaration),makeValue(r,lastCount,last),null,last);
+              const firstStep=last.execution_steps.length;let final=execute(n.body,last);if(n.loopExpression)final=final.flatMap(row=>execute(n.loopExpression,row));
+              if(final.length!==1||final[0].control||final[0].execution_steps.slice(firstStep).some(s=>s.kind!=='evaluate'))fail('INTERNAL_RETURN_COUPLED_LAST_ITERATION_CONTROL');
+              const checks=final[0].execution_steps.slice(firstStep).map(s=>s.expression_id);if(!checks.length)fail('INTERNAL_RETURN_COUPLED_LAST_ITERATION_EMPTY');
+              for(const r of descriptor.recurrences){const key=makeValue(r,bound.key,state,checks);state.execution_steps.push({kind:'evaluate',expression_id:key});bind(nodes.get(r.declaration),key,null,state);}
+              bind(nodes.get(descriptor.counter),bound.key,bound.known,state);return state;
+            }
             for(const r of descriptor.recurrences) {
               const d=nodes.get(r.declaration),before=state.parameter_expression_bindings[r.declaration];
               if(!before)fail('INTERNAL_RETURN_INDUCTION_INITIAL_VALUE');

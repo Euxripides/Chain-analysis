@@ -1,6 +1,7 @@
 import {id,unique} from '../model.mjs';
 import {and,number,obligation,solveObligations,closeModels} from './solver.mjs';
 import {counterPolynomial,addPolynomialObligations} from './polynomials.mjs';
+import {deriveCoupledRecurrences,addCoupledRefinementObligations} from './coupled-polynomials.mjs';
 
 const children=n=>Object.entries(n||{}).filter(([k])=>!['typeDescriptions','documentation'].includes(k)).flatMap(([,v])=>Array.isArray(v)?v.filter(x=>x?.nodeType):v?.nodeType?[v]:[]);
 const uint=n=>{const m=/^uint(\d*)$/.exec(n?.typeDescriptions?.typeString||'');return m?Number(m[1]||256):null;};
@@ -47,8 +48,9 @@ export function detectLoopRecurrences(loop,nodes,{unchecked=false,bindings=new M
    total_increment,polynomial,polynomial_summary:Boolean(polynomial&&(polynomial.degree>0||!total_increment))});
  }
  const changed=new Set(recurrences.map(r=>r.declaration));
- if(changed.size!==recurrences.length||recurrences.some(r=>r.reads.some(k=>changed.has(k))))fail('LOOP_RECURRENCE_DEPENDENCY_UNSUPPORTED');
- return {counter:counter.id,counter_name:counter.name,counter_width:uint(counter),bound,bound_width:uint(nodes.get(bound.referencedDeclaration)||bound),recurrences,unchecked};
+ if(changed.size!==recurrences.length)fail('LOOP_RECURRENCE_REPEATED_TARGET');
+ const coupled=recurrences.some(r=>r.reads.some(k=>changed.has(k)))?deriveCoupledRecurrences(recurrences):null;
+ return {counter:counter.id,counter_name:counter.name,counter_width:uint(counter),bound,bound_width:uint(nodes.get(bound.referencedDeclaration)||bound),recurrences:coupled?.recurrences||recurrences,coupled,unchecked};
 }
 
 export function detectAffineLoop(loop,nodes,options){
@@ -76,13 +78,14 @@ export function analyzeLoopInvariants(result,{functions,nodes,methodByAST,locati
      const d=detectLoopRecurrences(n,nodes,{unchecked,bindings});
      model.counter_ast_id=d.counter;model.bound_ast_id=d.bound.id;model.counter=d.counter_name;
      model.bound=d.bound.name;model.recurrences=d.recurrences.map(r=>({declaration:r.declaration,name:r.name,width:r.width,operator:r.operator,increment_ast_id:r.increment.id,arithmetic:r.unchecked?'wrap':'checked',
-      recurrence_kind:r.polynomial_summary?'counter_polynomial':'iteration_independent',polynomial_degree:r.polynomial_summary?r.polynomial.degree:0}));
+      recurrence_kind:r.coupled?'coupled_polynomial':r.polynomial_summary?'counter_polynomial':'iteration_independent',polynomial_degree:r.polynomial_summary?r.polynomial.degree:0}));
      model.summary={iteration_count:d.bound.name,counter_exit:d.bound.name,values:d.recurrences.map(r=>({declaration:r.declaration,
       mathematical_expression:r.name+'@entry '+r.operator+' '+(r.polynomial_summary?'sum_counter_polynomial('+d.bound.name+', increment@'+r.increment.id+')':d.bound.name+' * increment@'+r.increment.id),word_bits:r.width,arithmetic:r.unchecked?'wrap':'checked'}))};
      const maxN=(1n<<BigInt(d.bound_width))-1n,maxI=(1n<<BigInt(d.counter_width))-1n;
      const declarations='(declare-const n Int)\n(declare-const i Int)';
      const domain=and(['(<= 0 n)','(<= n '+maxN+')','(<= 0 i)','(<= i n)','(<= i '+maxI+')']);
      const inputs=[{name:'n',expression:d.bound.name,type:'uint'+d.bound_width},{name:'i',expression:d.counter_name,type:'uint'+d.counter_width}];
+     if(d.coupled)addCoupledRefinementObligations(model,d,queries,domain,declarations,inputs);
      queries.push(obligation(model,'loop_initialization',declarations,and(['(<= 0 n)','(<= n '+maxN+')']),
       '(not (and (<= 0 n) (<= 0 '+maxI+')))',inputs));
      queries.push(obligation(model,'loop_counter_preservation_and_no_wrap',declarations,and([domain,'(< i n)']),

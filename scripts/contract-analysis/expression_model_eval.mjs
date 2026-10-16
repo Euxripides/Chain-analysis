@@ -44,6 +44,12 @@ export function evaluateReturn(model,name,inputs) {
    const total=e.summation_terms.reduce((sum,t)=>sum+BigInt(t.coefficient)*t.factor_operands.reduce((v,k)=>v*walk(e.operands[k]),1n)*exactPowerSum(t.degree,n),0n);
    return normalize(e.operator==='+'?a+total:a-total,e);
   }
+  if(e.symbolic_format==='coupled_polynomial_value') {
+   const n=walk(e.operands[0]);if(n===0n&&e.empty_loop_is_entry)return walk(e.operands[e.entry_value_operand]);
+   for(const index of e.last_iteration_check_operands||[])walk(e.operands[index]);
+   const numerator=e.polynomial_terms.reduce((sum,t)=>sum+BigInt(t.coefficient)*n**BigInt(t.degree)*t.factor_operands.reduce((v,k)=>v*walk(e.operands[k]),1n),0n),d=BigInt(e.coefficient_scale);
+   if(numerator%d!==0n)fail('MODEL_NONINTEGRAL_COUPLED_SUMMARY');return normalize(numerator/d,e);
+  }
   if(e.symbolic_format==='evm_word') {
    const mod=1n<<256n,mask=mod-1n,values=e.operands.map(k=>BigInt(walk(k))&mask),[a,b,c]=values,sign=v=>v>=mod/2n?v-mod:v;
    let v;
