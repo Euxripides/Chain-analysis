@@ -1,8 +1,14 @@
 """Verify the deployed candidate, public proofs, old tasks and aggregate QA cost."""
 import base64,hashlib,json,os,pathlib,subprocess,sys,time,uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name=='contract-model-closure-20261016'
+os.environ['CONTRACT_QA_API']='https://aurore.online'
 sys.path.insert(0,str(ROOT/'scripts/contract-analysis'));import closure_release
 from qa_support import Client,dotenv
+import qa_support
+assert qa_support.BASE=='https://aurore.online','production client must never inherit an isolated API target'
+if sys.argv[1:]==['--preflight']:
+ values=dotenv('/home/euripides/projects/blockchain-platform/deploy/.env');cap=Client(values['GPT_ACTIONS_API_KEY']).must('/api/v1/analysis/contracts/get_contract_analysis_capabilities',{})
+ print('PUBLIC_CLIENT_PREFLIGHT_PASS',qa_support.BASE,cap['semantic_rules_version'],cap['engine_digest'],flush=True);raise SystemExit(0)
 BASE=ROOT/'acceptance/contract-analysis-model-closure';OUT=BASE/'release';OUT.mkdir(parents=True,exist_ok=True)
 manifest=closure_release.verify();assert manifest['status']=='deployed';image=manifest['image']
 env={**os.environ,'PATH':'/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/go/bin:'+os.environ['PATH'],'GOMAXPROCS':'2','CONTRACT_QA_API':'https://aurore.online','CONTRACT_QA_OUT':str(OUT.relative_to(ROOT)),'CONTRACT_PRODUCTION_MAX_RPC':'80','E2E_BROWSER_CHANNEL':'chromium'}
