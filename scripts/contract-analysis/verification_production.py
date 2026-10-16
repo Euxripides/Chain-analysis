@@ -61,7 +61,7 @@ import verification_release
 uuid.UUID(aid)
 durable=json.loads(verification_release.sql("SELECT json_object_agg(section,n) FROM(SELECT section,count(*) n FROM investigation_analysis_rows WHERE analysis_id='"+aid+"' GROUP BY section)x"))
 check('public-state-models-match-durable-rows',all(durable.get(s,0)==len(v)for s,v in models.items()),durable)
-usage=json.loads(verification_release.sql("SELECT json_build_object('http_requests',coalesce(sum(http_requests),0),'credits',coalesce(sum(credits) FILTER(WHERE NOT cache_hit AND NOT singleflight_hit),0),'estimated_usd',coalesce(sum(estimated_cost_usd) FILTER(WHERE NOT cache_hit AND NOT singleflight_hit),0)) FROM provider_usage WHERE job_id='"+aid+"' AND usage_type='contract_analysis'"))
+usage=json.loads(verification_release.sql("SELECT json_build_object('http_requests',coalesce(sum(http_requests),0),'credits',coalesce(sum(credits) FILTER(WHERE NOT cache_hit AND NOT singleflight_hit),0),'estimated_usd',coalesce(sum(estimated_cost_usd) FILTER(WHERE NOT cache_hit AND NOT singleflight_hit),0)::numeric) FROM provider_usage WHERE job_id='"+aid+"' AND usage_type='contract_analysis'"))
 metrics=status['metadata']['metrics']
 check('public-state-proof-costs-match-provider-usage',usage['http_requests']==metrics['rpc_http_requests']and usage['credits']==metrics['credits']and abs(usage['estimated_usd']-metrics['estimated_usd'])<1e-12,usage)
 audit=json.loads(verification_release.sql("SELECT json_build_object('n',count(*),'first',min(seq),'last',max(seq),'failures',count(*) FILTER(WHERE result!='success')) FROM audit_events_v2 WHERE action LIKE 'contract_analysis.%' AND resource_id='"+aid+"'"))
