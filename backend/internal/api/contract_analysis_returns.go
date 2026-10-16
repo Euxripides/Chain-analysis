@@ -41,6 +41,12 @@ func contractEnrichExternalReturns(result *ca.Result) {
 			"block_number": tx["block_number"], "block_hash": tx["block_hash"], "transaction_index": tx["transaction_index"],
 			"settled": c["settled"], "evidence_ids": c["evidence_ids"], "scope": "execution_frame_only", "status": "raw_return_without_verified_output_schema",
 			"source_binding_status": "requires_program_counter_witness", "candidate_dependency_ids": []string{}}
+		// Geth may omit empty byte strings from callTracer frames.
+		for _, key := range []string{"input", "return_data"} {
+			if value, ok := observation[key].(string); ok && value == "" {
+				observation[key] = "0x"
+			}
+		}
 		path := fmt.Sprint(c["trace_path"])
 		if pos := strings.LastIndex(path, "."); pos >= 0 {
 			parent := frames[fmt.Sprint(c["tx_hash"])+":"+path[:pos]]

@@ -21,6 +21,20 @@ export function evaluateReturn(model,name,inputs) {
    }fail('revert');
   }
   if(e.symbolic_format==='identity')return e.yul_word_assignment?normalize(walk(e.operands[0]),e):walk(e.operands[0]);
+  if(['yul_memory_access','yul_memory_read'].includes(e.symbolic_format)) {
+   const args=e.operands.map(walk),mod=1n<<256n,offset=args[0],valid=(p,size)=>{if(p<0n||p+BigInt(size)>mod)fail('memory_range_overflow');};
+   valid(offset,e.memory_width||32);if(e.symbolic_format==='yul_memory_access')return 0n;
+   for(const w of e.memory_writes)valid(args[w.offset_operand],w.width);
+   let output=0n;for(let i=0n;i<32n;i++){
+    const address=offset+i,w=[...e.memory_writes].reverse().find(w=>address>=args[w.offset_operand]&&address<args[w.offset_operand]+BigInt(w.width));
+    if(!w)fail('YUL_MEMORY_ENTRY_BYTES_UNKNOWN');
+    const value=(args[w.value_operand]%mod+mod)%mod,shift=w.width===1?0n:8n*(31n-(address-args[w.offset_operand]));
+    output=(output<<8n)|((value>>shift)&255n);
+   }return output;
+  }
+  if(e.symbolic_format==='inductive_affine_loop') {
+   const [a,n,c]=e.operands.map(walk);return normalize(e.operator==='+'?a+n*c:a-n*c,e);
+  }
   if(e.symbolic_format==='evm_word') {
    const mod=1n<<256n,mask=mod-1n,values=e.operands.map(k=>BigInt(walk(k))&mask),[a,b,c]=values,sign=v=>v>=mod/2n?v-mod:v;
    let v;

@@ -19,7 +19,8 @@ for(const optimizer of [false,true])test('symbolic loop domains and structured Y
  assert.deepEqual(evaluateReturn(r,'wordTuple',{x:10n}),[3n,1n]);
  assert.deepEqual(evaluateReturn(r,'wordBranch',{x:(1n<<256n)-1n}),[(1n<<256n)-1n]);
  assert.match(m('dirty').entry_return_model_unresolved.join(','),/DIRTY_BITS/);
- assert.match(m('memoryValue').entry_return_model_unresolved.join(','),/BUILTIN_UNSUPPORTED:mstore/);
+ assert.equal(entry('memoryValue').status,'represented_source_dependencies_resolved');
+ for(const x of [0n,7n,(1n<<256n)-1n])assert.deepEqual(evaluateReturn(r,'memoryValue',{x}),[x]);
  assert.ok(r.sections.external_returns.some(d=>d.method_id===m('quote').method_id&&d.signature==='quote(address,uint256)'&&d.callee_msg_sender===r.snapshot.storage_address));
  assert.ok(r.sections.external_returns.some(d=>d.return_types.includes('uint256[]')));
  assert.ok(r.sections.external_returns.some(d=>d.return_types.includes('address[]')));

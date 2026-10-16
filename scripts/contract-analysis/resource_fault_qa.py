@@ -1,5 +1,5 @@
 """Real Docker timeout/OOM checks, with explicit fixture budgets."""
-import json, pathlib, subprocess, urllib.request, os
+import json, pathlib, subprocess, urllib.request, os, time
 ROOT=pathlib.Path(__file__).resolve().parents[2];OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis');rows=[]
 image=(OUT/'engine-image.txt').read_text().strip();assert image.startswith('sha256:')
 def check(name,condition,evidence=None):
@@ -17,8 +17,12 @@ try:
  check('runner-timeout-and-fenced-orphan-cleanup',run.returncode==0,run.stdout[-1800:]+run.stderr[-500:])
  name='contract-analysis-qa-oom-20261014'
  try:
-  run=subprocess.run(['docker','run','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','65532:65532','--cpus','2','--memory','64m','--memory-swap','64m','--pids-limit','32','--entrypoint','node',image,'-e','const allocations=[];for(;;)allocations.push(Buffer.alloc(8<<20,1));'],capture_output=True,text=True,timeout=30)
+  # Let the container runtime attach its OOM monitor before applying pressure.
+  run=subprocess.run(['docker','run','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','65532:65532','--cpus','2','--memory','64m','--memory-swap','64m','--pids-limit','32','--entrypoint','node',image,'-e','setTimeout(()=>{const allocations=[];setInterval(()=>allocations.push(Buffer.alloc(8<<20,1)),25)},500)'],capture_output=True,text=True,timeout=30)
   state=json.loads(subprocess.check_output(['docker','inspect',name,'--format','{{json .State}}']).decode())
+  deadline=time.monotonic()+3
+  while not state['OOMKilled']and time.monotonic()<deadline:
+   time.sleep(.1);state=json.loads(subprocess.check_output(['docker','inspect',name,'--format','{{json .State}}']).decode())
   check('isolated-memory-limit-kills-workload',state['OOMKilled'] and state['ExitCode']==137,{'memory_budget_bytes':64<<20,'state':state})
  finally:subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
  with urllib.request.urlopen(os.environ.get('CONTRACT_QA_API','http://127.0.0.1:18081')+'/health/ready') as response:data=json.load(response)

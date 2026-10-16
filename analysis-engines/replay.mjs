@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { emptyResult, id, hash, stringify } from './model.mjs';
+import {buildOpcodeWitness,callTraceShape} from './opcode-witness.mjs';
 const quantity = v => '0x' + BigInt(v || 0).toString(16);
 const normalizeWord = v => BigInt(v || '0x0').toString(16).padStart(64,'0');
 const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
@@ -65,14 +66,20 @@ export async function replay(input) {
   });
   rpcServer.listen(19000,'127.0.0.1');await once(rpcServer,'listening');
   const args=['--host','127.0.0.1','--port','19001','--accounts','0','--threads','2','--fork-url','http://127.0.0.1:19000','--fork-block-number',String(blockNumber-1n),
-    '--chain-id',String(input.snapshot.chain_id),'--no-mining','--auto-impersonate','--no-fork-node-info','--no-bal','--disable-default-create2-deployer','--disable-console-log','--timeout','2000','--retries','0','--memory-limit','134217728','--silent'];
+    '--chain-id',String(input.snapshot.chain_id),'--no-mining','--auto-impersonate','--steps-tracing','--no-fork-node-info','--no-bal','--disable-default-create2-deployer','--disable-console-log','--timeout','2000','--retries','0','--memory-limit','134217728','--silent'];
   if(fork!=='engine_default')args.push('--hardfork',fork);
   const binary=process.env.ANVIL_BINARY||'/usr/local/bin/anvil';const child=spawn(binary,args,{stdio:['ignore','ignore','pipe'],env:{PATH:'/usr/bin:/bin',HOME:'/tmp'}});
   let diagnostics='';child.stderr.on('data',b=>{if(diagnostics.length<8192)diagnostics+=b.toString()});
   let sequence=0;
-  const rpc=async(method,params=[])=>{
+  const rpc=async(method,params=[],byteLimit=0)=>{
     const response=await fetch('http://127.0.0.1:19001',{method:'POST',headers:{'content-type':'application/json'},body:stringify({jsonrpc:'2.0',id:++sequence,method,params}),signal:AbortSignal.timeout(15000)});
-    const body=await response.json();if(body.error)throw new Error(`${method}:${body.error.message}`);return body.result;
+    let body;
+    if(byteLimit){
+      const reader=response.body.getReader(),parts=[];let size=0;
+      while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>byteLimit){await reader.cancel();throw new Error('OPCODE_TRACE_BYTE_BUDGET');}parts.push(value);}
+      body=JSON.parse(Buffer.concat(parts).toString('utf8'));
+    }else body=await response.json();
+    if(body.error)throw new Error(`${method}:${body.error.message}`);return body.result;
   };
   try{
     let ready=false;for(let i=0;i<80;i++){if(child.exitCode!==null)throw new Error('ANVIL_STARTUP_FAILED:'+diagnostics);try{await rpc('eth_chainId');ready=true;break}catch{await sleep(100)}}
@@ -113,6 +120,33 @@ export async function replay(input) {
     row.complete=row.status==='matched_observations'&&Boolean(w.state_diff)&&!row.environment_gap;
     row.environment={block_number:header.number,block_timestamp:header.timestamp,base_fee:header.baseFeePerGas,coinbase:header.miner,prev_randao:header.mixHash,prestate_includes_prior_same_block_execution:true};
     const trace=await rpc('debug_traceTransaction',[replayHash,{tracer:'callTracer'}]);row.call_trace=trace;
+    row.original_call_trace_matches=Boolean(w.call_trace)&&JSON.stringify(callTraceShape(trace))===JSON.stringify(callTraceShape(w.call_trace));
+    if(row.complete&&row.original_call_trace_matches) {
+      try {
+        const steps=await rpc('debug_traceTransaction',[replayHash,{disableStorage:true,enableMemory:false,disableStack:false,enableReturnData:false,limit:20001}],8<<20);
+        const proof=buildOpcodeWitness(steps,trace,{txHash,prestate:w.prestate,maxSteps:20000});
+        const artifact_id=id(txHash,'opcode-witness'),text=stringify({schema_version:'contract-opcode-evidence-v1',tx_hash:txHash,replay_tx_hash:replayHash,
+          block_hash:header.hash,transaction_index:tx.transactionIndex,complete_replay:row.complete,original_call_trace_matches:row.original_call_trace_matches,
+          opcode_trace:steps,call_trace:trace,normalized:proof});
+        if(Buffer.byteLength(text)>16<<20)throw new Error('OPCODE_ARTIFACT_BYTE_BUDGET');
+        result.sections.artifacts.push({artifact_id,kind:'opcode_witness',filename:txHash+'-opcode-witness.json',media_type:'application/json',text,sha256:hash(text)});
+        result.sections.opcode_witnesses=[{witness_id:proof.witness_id,tx_hash:txHash,artifact_id,steps:proof.steps,calls_complete:proof.calls_complete,
+          memory_complete:proof.memory_complete,storage_complete:proof.storage_complete,complete:proof.complete,gaps:proof.gaps,memory_gaps:proof.memory_gaps,storage_gaps:proof.storage_gaps,
+          raw_trace_sha256:proof.raw_trace_sha256,execution_identity_verified:true,block_hash:header.hash,transaction_index:tx.transactionIndex}];
+        const evidence_id=id(txHash,'opcode-witness-evidence');
+        result.sections.execution_evidence=[{evidence_id,tx_hash:txHash,kind:'opcode_witness',artifact_id,witness_id:proof.witness_id,complete:proof.complete}];
+        result.sections.execution_callsite_witnesses=proof.calls.map(c=>({...c,tx_hash:txHash,witness_id:proof.witness_id,artifact_id,evidence_ids:[evidence_id],
+          execution_identity_verified:proof.calls_complete,block_hash:header.hash,transaction_index:tx.transactionIndex}));
+        result.sections.execution_memory_effects=proof.memory_effects.map(e=>({...e,tx_hash:txHash,witness_id:proof.witness_id,artifact_id,evidence_ids:[evidence_id],complete:proof.memory_complete}));
+        result.sections.execution_storage_effects=proof.storage_effects.map(e=>({...e,tx_hash:txHash,witness_id:proof.witness_id,artifact_id,evidence_ids:[evidence_id],complete:proof.storage_complete}));
+        row.opcode_witness_status=proof.complete?'complete':'explicit_witness_gaps';row.opcode_witness_id=proof.witness_id;
+        result.sections.coverage.push({dimension:'opcode_witness',tx_hash:txHash,complete:proof.complete,calls_complete:proof.calls_complete,
+          memory_complete:proof.memory_complete,storage_complete:proof.storage_complete,artifact_id});
+      }catch(error){row.opcode_witness_status=String(error.message).slice(0,300);result.sections.coverage.push({dimension:'opcode_witness',tx_hash:txHash,complete:false,reason:row.opcode_witness_status});}
+    }else{
+      row.opcode_witness_status=!row.complete?'complete_replay_required':'original_call_trace_mismatch_or_unavailable';
+      result.sections.coverage.push({dimension:'opcode_witness',tx_hash:txHash,complete:false,reason:row.opcode_witness_status});
+    }
   }catch(error){row.status=gaps.length?'witness_gap':'replay_failed';row.error=String(error.message).slice(0,1000);row.complete=false}
   finally{child.kill('SIGKILL');rpcServer.closeAllConnections();await new Promise(resolve=>rpcServer.close(resolve));}
   row.duration_ms=Math.round(performance.now()-started);row.witness_rpc_reads=reads.length;

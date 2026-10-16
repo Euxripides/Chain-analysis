@@ -26,6 +26,8 @@ export function lowerYul(assembly,{nodes,typeOf}) {
     if(n.nodeType==='YulIdentifier')return identifier(n,resolve(n,env));
     if(n.nodeType==='YulFunctionCall') {
       const name=n.functionName.name,args=n.arguments.map(a=>expr(a,env));
+      if(name==='mload'&&args.length===1)return ast(n,'YulMemoryLoad',{arguments:args});
+      if(['mstore','mstore8'].includes(name)&&args.length===2)return ast(n,'YulMemoryStore',{arguments:args,memoryWidth:name==='mstore'?32:1});
       if(WORD_ARITIES[name]===args.length)return ast(n,'YulBuiltin',{functionName:{name},arguments:args});
       const fn=env.get('function:'+name);
       if(!fn)fail('BUILTIN_UNSUPPORTED:'+name);
@@ -43,6 +45,8 @@ export function lowerYul(assembly,{nodes,typeOf}) {
       const parameters=(f.parameters||[]).map(p=>{const d=decl(p,p.name);local.set(p.name,d);return d;});
       const returns=(f.returnVariables||[]).map(p=>{const d=decl(p,p.name);local.set(p.name,d);return d;});
       fn.parameters={parameters};fn.returnParameters={parameters:returns};fn.body=block(f.body,local);
+      function memoryEffect(n){return ['YulMemoryLoad','YulMemoryStore'].includes(n.nodeType)||Object.values(n).some(v=>Array.isArray(v)?v.some(x=>x?.nodeType&&memoryEffect(x)):v?.nodeType&&memoryEffect(v));}
+      if(memoryEffect(fn.body))fn.stateMutability='nonpayable';
     }
     for(const p of n.statements||[])if(p.nodeType!=='YulFunctionDefinition')statements.push(stmt(p,env));
     return ast(n,'Block',{statements});

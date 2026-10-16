@@ -43,6 +43,10 @@ export function applyDataflow(result) {
         const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
         const merged={...own,unresolved:unique([...own.unresolved,...values.flatMap(v=>v.unresolved)]),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
         if(e.symbolic_format==='evm_word')return {...merged,text:e.operator+'('+values.map(v=>v.text).join(', ')+')'};
+        if(e.symbolic_format==='yul_memory_access')return {...merged,text:'memory_write_'+e.memory_width+'('+values.map(v=>v.text).join(', ')+')'};
+        if(e.symbolic_format==='yul_memory_read')return {...merged,text:'mload_after_ordered_writes('+values.map(v=>v.text).join(', ')+')'};
+        if(e.symbolic_format==='inductive_affine_loop')return {...merged,text:'('+values[0].text+' '+e.operator+' integer_product('+values[1].text+', '+values[2].text+'))',
+          induction_model_id:e.loop_model_id,proof_obligation_ids:e.proof_obligation_ids};
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
         if(e.symbolic_format==='identity')return {...merged,text:values[0].text};
         if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+values[0].text+')'};

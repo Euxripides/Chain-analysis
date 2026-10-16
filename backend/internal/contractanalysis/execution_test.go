@@ -22,6 +22,20 @@ func TestContractCallcodeCallerContext(t *testing.T) {
 	}
 }
 
+func TestContractCallValueInheritance(t *testing.T) {
+	raw := []byte(`{"type":"CALL","from":"user","to":"proxy","value":"0x11","calls":[{"type":"DELEGATECALL","from":"proxy","to":"library","calls":[{"type":"DELEGATECALL","from":"proxy","to":"nested"}]},{"type":"CALLCODE","from":"proxy","to":"library","value":"0x7","calls":[{"type":"DELEGATECALL","from":"proxy","to":"nested"}]},{"type":"STATICCALL","from":"proxy","to":"view"}]}`)
+	rows, err := TraceRows(raw, "tx", true, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, expected := range []struct{ value, caller string }{{"17", "user"}, {"17", "user"}, {"17", "user"}, {"7", "proxy"}, {"7", "proxy"}, {"0", "proxy"}} {
+		row := rowTestMap(rows["execution_calls"][i])
+		if row["value_raw"] != expected.value || row["effective_caller"] != expected.caller {
+			t.Fatalf("wrong msg.value or msg.sender in frame %d: %s", i, rows["execution_calls"][i])
+		}
+	}
+}
+
 func TestContractCallcodeSavedRuntime(t *testing.T) {
 	path := os.Getenv("CONTRACT_CALLCODE_RUNTIME")
 	if path == "" {

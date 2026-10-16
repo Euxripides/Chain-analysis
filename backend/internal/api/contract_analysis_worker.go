@@ -416,6 +416,13 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 				return e
 			}
 		}
+		if artifact.Kind == "source_pc_map" {
+			var e error
+			data, e = contractScopePCMap(data, originalID, remap)
+			if e != nil {
+				return e
+			}
+		}
 		object, e := s.contractSaveObject(ctx, "artifact", data, artifact.MediaType)
 		if e != nil {
 			return e
@@ -445,6 +452,9 @@ func mergeContractResult(result *ca.Result, part ca.Result) {
 		result.RuleVersion = part.RuleVersion
 	}
 	for key, rows := range part.Sections {
+		if result.Sections[key] == nil {
+			result.Sections[key] = []json.RawMessage{}
+		}
 		result.Sections[key] = append(result.Sections[key], rows...)
 	}
 	if result.Metrics != nil && part.Metrics != nil {
@@ -602,6 +612,7 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 	s.contractHistory(ctx, q, &result)
 	contractLinkDependencies(&result)
 	contractEnrichExternalReturns(&result)
+	contractBindReturnCallsites(&result)
 	result.Metrics["analyzed_codes"] = len(result.Sections["contracts"])
 	result.Metrics["method_count"] = len(result.Sections["methods"])
 	return result, nil

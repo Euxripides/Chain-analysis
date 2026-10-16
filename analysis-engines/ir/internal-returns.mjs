@@ -1,6 +1,7 @@
 import {numericLiteral} from '../literals.mjs';
 import {lowerYul} from './yul.mjs';
 import {evmWord} from './evm-word.mjs';
+import {detectAffineLoop} from '../verification/loops.mjs';
 
 // Bounded read-only execution. Local scalar writes use immutable expression
 // bindings; branch guards and evaluations retain their execution order.
@@ -14,12 +15,12 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   const stack = context.return_stack || [];
   if (stack.length >= 12 || stack.includes(target.id)) fail('INTERNAL_RETURN_RECURSION_OR_DEPTH');
   let count = 0, serial = 0, loopIterations = 0;
-  const loops = new Map(), results = [], frontier = [], effectCache = new WeakMap();
+  const loops = new Map(), results = [], frontier = [], memoryEffects=[], effectCache = new WeakMap();
   const expressionChildren = n => Object.entries(n || {}).filter(([k]) => !['typeDescriptions','documentation'].includes(k))
     .flatMap(([,v]) => Array.isArray(v) ? v.filter(x=>x?.nodeType) : v?.nodeType ? [v] : []);
   const fork = (s,suffix) => ({...s,path:s.path+'/'+suffix,parameter_arguments:{...s.parameter_arguments},
     parameter_expression_bindings:{...s.parameter_expression_bindings},compiletime_bindings:{...s.compiletime_bindings},
-    range_bindings:{...s.range_bindings},
+    range_bindings:{...s.range_bindings},yul_memory:[...(s.yul_memory||[])],
     return_conditions:[...s.return_conditions],execution_steps:[...s.execution_steps]});
   const bounded = rows => {if(rows.length+results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');return rows;};
   function validate(n) {
@@ -40,6 +41,8 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
     if(n.nodeType==='Identifier')reads.add(n.referencedDeclaration);
     if(n.nodeType==='Assignment')writes.add(n.leftHandSide?.referencedDeclaration??'unsupported_target');
     if(n.nodeType==='UnaryOperation'&&['++','--'].includes(n.operator))writes.add(n.subExpression?.referencedDeclaration??'unsupported_target');
+    if(n.nodeType==='YulMemoryLoad')reads.add('yul_memory');
+    if(n.nodeType==='YulMemoryStore')writes.add('yul_memory');
     const found={reads,writes};effectCache.set(n,found);return found;
   }
   // Ordinary sibling order is unspecified. Source-order traversal is valid
@@ -159,7 +162,39 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   }
   function evaluate(n,s) {
     if(++count>1024)fail('INTERNAL_RETURN_EXPRESSION_BUDGET');
-    if(!effects(n).writes.size)return [{s,key:build(n,{...s,path:s.path+'/expr:'+(serial++)}),known:truthKnown(n,s),range:interval(n,s)}];
+    if(n.nodeType==='YulMemoryStore'||n.nodeType==='YulMemoryLoad') {
+      return evaluateList(n.arguments,s).map(row=>{
+        const width=n.memoryWidth||32,offset=row.keys[0],offsetKnown=row.known[0],
+          canonical=n.arguments[0].nodeType==='Identifier'?row.s.parameter_expression_bindings[n.arguments[0].referencedDeclaration]||offset:offset;
+        const writes=row.s.yul_memory||[];
+        if(n.nodeType==='YulMemoryStore') {
+          if(writes.length>=64)fail('INTERNAL_RETURN_YUL_MEMORY_WRITE_BUDGET');
+          const bounds=offsetKnown===null?interval(n.arguments[0],row.s):[offsetKnown,offsetKnown];
+          if(!bounds||!(bounds[0]>=128n||bounds[1]+BigInt(width)<=64n))frontier.push({kind:'assembly_compiler_memory_alias',ast_id:n.id,
+            conditions:[...row.s.return_conditions],reason:'INTERNAL_RETURN_YUL_RESERVED_MEMORY_REGION_MAY_BE_CLOBBERED'});
+          row.s.yul_memory=[...writes,{offset,value:row.keys[1],width,canonical,known:offsetKnown?.toString()??null}];
+          memoryEffects.push({kind:width===32?'mstore':'mstore8',ast_id:n.id,path:row.s.path,offset_expression_id:offset,value_expression_id:row.keys[1],conditions:[...row.s.return_conditions],scope:'one_inline_assembly_block'});
+          const key=synthetic(n,'yul_memory_access',[offset,row.keys[1]],row.s,{memory_width:width,type:'uint256',width:256,signed:false,arithmetic:'wrap'});
+          row.s.execution_steps.push({kind:'evaluate',expression_id:key});return {s:row.s,key,known:0n};
+        }
+        const covered=new Set();for(const w of writes) {
+          if(w.width===32&&w.canonical===canonical)for(let i=0;i<32;i++)covered.add(i);
+          if(offsetKnown!==null&&w.known!==null)for(let i=0;i<32;i++)if(offsetKnown+BigInt(i)>=BigInt(w.known)&&offsetKnown+BigInt(i)<BigInt(w.known)+BigInt(w.width))covered.add(i);
+        }
+        const operands=[offset,...writes.flatMap(w=>[w.offset,w.value])],memory_writes=writes.map((w,i)=>({offset_operand:1+i*2,value_operand:2+i*2,width:w.width,
+          offset_known:w.known,offset_equals_read:w.canonical===canonical}));
+        const key=synthetic(n,'yul_memory_read',operands,row.s,{memory_writes,type:'uint256',width:256,signed:false,arithmetic:'wrap',
+          initial_memory:'symbolic_solidity_assembly_entry_memory',read_offset_known:offsetKnown?.toString()??null,all_read_bytes_written:covered.size===32,
+          ...(covered.size===32?{}:{unresolved_return_value:'INTERNAL_RETURN_YUL_MEMORY_ENTRY_BYTES_UNKNOWN'})});
+        memoryEffects.push({kind:'mload',ast_id:n.id,path:row.s.path,offset_expression_id:offset,result_expression_id:key,
+          all_read_bytes_written:covered.size===32,conditions:[...row.s.return_conditions],scope:'one_inline_assembly_block'});
+        return {s:row.s,key,known:null};
+      });
+    }
+    if(!effects(n).writes.size&&!effects(n).reads.has('yul_memory'))return [{s,key:build(n,{...s,path:s.path+'/expr:'+(serial++)}),known:truthKnown(n,s),range:interval(n,s)}];
+    if(n.nodeType==='YulBuiltin')return evaluateList(n.arguments,s).map(row=>({s:row.s,
+      key:synthetic(n,'evm_word',row.keys,row.s,{operator:n.functionName.name,type:'uint256',width:256,signed:false,arithmetic:'wrap'}),known:null}));
+    if(n.nodeType==='YulWordCast')return evaluate(n.expression,s).map(row=>({s:row.s,key:synthetic(n,'identity',[row.key],row.s,{type:typeOf(n),yul_word_assignment:true,arithmetic:'wrap'}),known:null}));
     if(n.nodeType==='Assignment') {
       if(n.leftHandSide?.nodeType==='TupleExpression')fail('INTERNAL_RETURN_NESTED_TUPLE_ASSIGNMENT_UNSUPPORTED');
       const d=local(n.leftHandSide,s),old=s.parameter_expression_bindings[d.id],oldKnown=s.compiletime_bindings[d.id]??null,oldRange=interval(n.leftHandSide,s);
@@ -244,8 +279,38 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
       const rows=n.expression?tupleValues(n.expression,output.length,s):[{s,keys:output.map(d=>s.parameter_expression_bindings[d.id])}];
       for(const row of rows)returned(row.keys,row.s);return [];
     }
-    if(n.nodeType==='InlineAssembly')return execute(lowerYul(n,{nodes,typeOf}),s);
+    if(n.nodeType==='InlineAssembly') {
+      // Solidity can use scratch and ABI memory before any assembly block.
+      // A fresh symbolic entry prevents invented zero bytes or propagation
+      // across high-level compiler memory effects between separate blocks.
+      const states=execute(lowerYul(n,{nodes,typeOf}),{...s,yul_memory:[]});
+      return states.map(row=>({...row,yul_memory:[]}));
+    }
     if(['ForStatement','WhileStatement','DoWhileStatement'].includes(n.nodeType)) {
+      const proved=context.loop_summaries?.get(n.id);
+      if(proved?.complete&&n.nodeType==='ForStatement') {
+        let descriptor;try{descriptor=detectAffineLoop(n,nodes,{unchecked:s.unchecked});}catch{}
+        if(descriptor&&descriptor.recurrences.every(r=>r.total_increment)) {
+          let rows=n.initializationExpression?execute(n.initializationExpression,s):[s];
+          rows=rows.flatMap(p=>value(descriptor.bound,p).map(bound=>{
+            const state=bound.s;
+            for(const r of descriptor.recurrences) {
+              const increments=value(r.increment,state);if(increments.length!==1)fail('INTERNAL_RETURN_INDUCTION_INCREMENT_BRANCH');
+              const d=nodes.get(r.declaration),before=state.parameter_expression_bindings[r.declaration];
+              if(!before)fail('INTERNAL_RETURN_INDUCTION_INITIAL_VALUE');
+              const increment=increments[0],key=synthetic(d,'inductive_affine_loop',[before,bound.key,increment.key],state,
+                {operator:r.operator,type:typeOf(d),width:r.width,signed:false,arithmetic:r.unchecked?'wrap':'checked',
+                  loop_model_id:proved.model_id,proof_obligation_ids:proved.obligations,scope:'all_successful_loop_iterations'});
+              state.execution_steps.push({kind:'evaluate',expression_id:key});bind(d,key,null,state);
+            }
+            bind(nodes.get(descriptor.counter),bound.key,bound.known,state);
+            return state;
+          }));
+          loops.set(n.id,{ast_id:n.id,iterations:null,bound_basis:'proved_inductive_affine_summary',dynamic_bound:true,inductive:true,
+            model_id:proved.model_id,proof_obligation_ids:proved.obligations,complete:true,remaining_paths:0});
+          return rows;
+        }
+      }
       let pending=n.initializationExpression?execute(n.initializationExpression,s):[s],finished=[],iteration=0,dynamic=false,truncated=false;
       do {
         const active=[];
@@ -325,5 +390,5 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   const unresolved_model_reasons=[...new Set(frontier.map(f=>f.reason))];
   const output_expression_ids=output.map((d,i)=>{const paths=results.map(r=>({...r,expression_id:r.expression_ids[i]}));return synthetic(call,'return_cases',paths.map(r=>r.expression_id),initial,{paths,type:typeOf(d),unresolved_model_reasons});});
   return {expression_id:output.length===1?output_expression_ids[0]:synthetic(call,'tuple',output_expression_ids,initial,{type:'tuple('+output.map(typeOf).join(',')+')'}),
-    output_expression_ids,paths:results,loops:[...loops.values()],frontier,unresolved:unresolved_model_reasons,scope:output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',ordered_evaluations_preserved:true,all_execution_paths_verified:false};
+    output_expression_ids,paths:results,loops:[...loops.values()],frontier,memory_effects:memoryEffects,unresolved:unresolved_model_reasons,scope:output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',ordered_evaluations_preserved:true,all_execution_paths_verified:false};
 }

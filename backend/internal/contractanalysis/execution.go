@@ -45,8 +45,8 @@ func TraceRows(raw []byte, txHash string, success bool, limit int) (map[string][
 	}
 	out := map[string][]json.RawMessage{"execution_calls": {}, "executed_funds": {}, "execution_evidence": {}}
 	count := 0
-	var walk func(CallFrame, string, string, string, string, bool) error
-	walk = func(frame CallFrame, path, storage, caller, parentCode string, ancestorSuccess bool) error {
+	var walk func(CallFrame, string, string, string, string, string, bool) error
+	walk = func(frame CallFrame, path, storage, caller, parentCode, parentValue string, ancestorSuccess bool) error {
 		count++
 		if count > limit {
 			return fmt.Errorf("complete trace exceeds max_records")
@@ -63,7 +63,13 @@ func TraceRows(raw []byte, txHash string, success bool, limit int) (map[string][
 			storage = code
 			caller = strings.ToLower(frame.From)
 		}
-		value, e := RawInteger(frame.Value)
+		reportedValue := frame.Value
+		if kind == "DELEGATECALL" {
+			reportedValue = parentValue
+		} else if kind == "STATICCALL" {
+			reportedValue = "0"
+		}
+		value, e := RawInteger(reportedValue)
 		if e != nil {
 			return e
 		}
@@ -84,13 +90,13 @@ func TraceRows(raw []byte, txHash string, success bool, limit int) (map[string][
 				"asset": "native", "from": strings.ToLower(frame.From), "to": strings.ToLower(frame.To), "amount_raw": value, "unit": "wei", "settlement": "executed_" + strings.ToLower(kind), "evidence_ids": []string{eid}}))
 		}
 		for i, child := range frame.Calls {
-			if e = walk(child, fmt.Sprintf("%s.%d", path, i), storage, caller, code, settled); e != nil {
+			if e = walk(child, fmt.Sprintf("%s.%d", path, i), storage, caller, code, value, settled); e != nil {
 				return e
 			}
 		}
 		return nil
 	}
-	if e := walk(root, "0", "", "", "", success); e != nil {
+	if e := walk(root, "0", "", "", "", "0", success); e != nil {
 		return nil, e
 	}
 	return out, nil

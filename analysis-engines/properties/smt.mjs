@@ -83,6 +83,28 @@ export function propertyTranslator(result,method,definitionIDs=[]) {
     if(e.op==='MemberAccess'&&['msg.sender','tx.origin','block.timestamp','block.number','msg.value'].includes(e.text.replace(/\s/g,'')))return variable(e);
     if(['IndexAccess','MemberAccess'].includes(e.op))return storageValue(e);
     if(e.symbolic_format==='identity'){const v=walk(e.operands[0]);return e.yul_word_assignment?normalized(v.term,{...e,arithmetic:'wrap'},v.ok):v;}
+    if(['yul_memory_access','yul_memory_read'].includes(e.symbolic_format)) {
+      const args=e.operands.map(walk),limit=1n<<256n,checks=args.map(a=>a.ok),offset=args[0].term;
+      const range=(p,size)=>checks.push('(and (<= 0 '+p+') (<= (+ '+p+' '+size+') '+limit+'))');
+      range(offset,e.memory_width||32);
+      if(e.symbolic_format==='yul_memory_access')return {term:'0',kind:'Int',ok:and(checks)};
+      if(!e.all_read_bytes_written)fail('SMT_YUL_MEMORY_ENTRY_BYTES_UNKNOWN');
+      for(const w of e.memory_writes)range(args[w.offset_operand].term,w.width);
+      const bytes=[];for(let i=0;i<32;i++){
+        const address='(+ '+offset+' '+i+')';let value='0';
+        for(const w of e.memory_writes){const p=args[w.offset_operand].term,v='(mod '+args[w.value_operand].term+' '+limit+')';
+          const index=w.offset_equals_read?i:e.read_offset_known!==null&&w.offset_known!==null?Number(BigInt(e.read_offset_known)+BigInt(i)-BigInt(w.offset_known)):null;
+          if(index!==null&&(index<0||index>=w.width))continue;
+          let byte=w.width===1?'(mod '+v+' 256)':index!==null?'(mod (div '+v+' '+(1n<<BigInt((31-index)*8))+') 256)':'0';
+          if(w.width===32&&index===null)for(let j=31;j>=0;j--)byte='(ite (= '+address+' (+ '+p+' '+j+')) (mod (div '+v+' '+(1n<<BigInt((31-j)*8))+') 256) '+byte+')';
+          value='(ite (and (>= '+address+' '+p+') (< '+address+' (+ '+p+' '+w.width+'))) '+byte+' '+value+')';}
+        bytes.push('(* '+value+' '+(1n<<BigInt((31-i)*8))+')');
+      }
+      return {term:'(+ '+bytes.join(' ')+')',kind:'Int',ok:and(checks)};
+    }
+    if(e.symbolic_format==='inductive_affine_loop') {
+      const [a,n,c]=e.operands.map(walk);return normalized('('+e.operator+' '+a.term+' (* '+n.term+' '+c.term+'))',e,and([a.ok,n.ok,c.ok]));
+    }
     if(e.op==='FunctionCall'&&e.call_kind==='typeConversion'){const v=walk(e.argument_expression_ids[0]);return normalized(v.term,{...e,arithmetic:'wrap'},v.ok);}
     if(e.op==='TupleExpression'&&e.operands.length===1)return walk(e.operands[0]);
     const op=e.operator||e.op;

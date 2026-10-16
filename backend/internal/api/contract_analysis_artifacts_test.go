@@ -35,3 +35,31 @@ func TestContractPropertyProofScopedIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestContractPCMapScopedIdentity(t *testing.T) {
+	original, scoped := ca.ID("pc-map"), ca.ID("pc-map", "snapshot")
+	raw := ca.Row(map[string]any{"schema_version": "contract-runtime-source-pc-v1", "source_map": "1:2:0;-1:0:-1", "call_instructions": []any{map[string]any{"pc": 12, "artifact_id": original}}})
+	data, err := contractScopePCMap(raw, original, map[string]string{original: scoped})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err = json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document["call_instructions"].([]any)[0].(map[string]any)["artifact_id"] != scoped || document["source_map"] != "1:2:0;-1:0:-1" {
+		t.Fatal(string(data))
+	}
+	if _, err = contractScopePCMap(raw, scoped, map[string]string{scoped: original}); err == nil {
+		t.Fatal("accepted wrong PC artifact identity")
+	}
+}
+
+func TestContractMergedEmptySectionExportsAsArray(t *testing.T) {
+	result := ca.Result{Sections: map[string][]json.RawMessage{}}
+	part := ca.Result{Sections: map[string][]json.RawMessage{"source_pc_maps": {}}}
+	mergeContractResult(&result, part)
+	if string(ca.Row(result.Sections["source_pc_maps"])) != "[]" {
+		t.Fatalf("empty exported section differs from the paged API: %s", ca.Row(result.Sections))
+	}
+}

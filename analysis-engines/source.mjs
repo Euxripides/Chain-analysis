@@ -4,6 +4,11 @@ import { legacyLayout } from './layout.mjs';
 import { numericLiteral } from './literals.mjs';
 import { verifySolidityRuntime } from './source-match.mjs';
 import { summarizeInternalReturns } from './ir/internal-returns.mjs';
+import { addSourcePCMap } from './source-pc.mjs';
+import { analyzeLoopInvariants } from './verification/loops.mjs';
+import { analyzeStateModels } from './verification/state.mjs';
+import { analyzePolicies } from './verification/policies.mjs';
+import { executeAssembly } from './verification/assembly.mjs';
 const require = createRequire(import.meta.url);
 const {keccak_256}=require('@noble/hashes/sha3.js');
 const compilers = new Set(Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('solc-')).map(k => k.slice(5)));
@@ -200,6 +205,7 @@ export function analyzeSource(result, source, bytecode) {
         const normalize=d=>typeOf(d).replace(/ (memory|storage|calldata)( ref| pointer)?/g,'').replace(/^contract [^\[\]\s]+/,'address').replace(/^address payable/,'address');
         const signature=target.name+'('+(target.parameters?.parameters||[]).map(normalize).join(',')+')';
         const dependency={dependency_id,method_id:method.method_id,expression_id,source_callsite:callsite,
+          representation_scope:context.entry_return_summary?'entry_return_summary':context.return_stack?.length?'internal_return_summary':'source_statement',
           target_expression_id:expression(method,node.expression?.expression,context),target_expression:sourceText(node.expression?.expression),
           signature,selector:target.functionSelector?'0x'+target.functionSelector:null,
           arguments:row.argument_expression_ids,return_types:(target.returnParameters?.parameters||[]).map(normalize),
@@ -209,6 +215,24 @@ export function analyzeSource(result, source, bytecode) {
           call_type:delegate?'DELEGATECALL':['pure','view'].includes(target.stateMutability)&&Number(source.compilation.compilerVersion.split('.')[1])>=5?'STATICCALL':'CALL',
           conditions:[...(context.conditions||[])],path:context.path,state_scope:'call_execution_state',
           status:'requires_target_identity_and_execution',evidence_ids:row.evidence_ids};
+        dependency.source_callsite_id=id(method.method_id,callsite.file,callsite.start,callsite.length,dependency.call_type,signature);
+        result.sections.external_returns||=[];result.sections.external_returns.push(dependency);row.external_return_dependency_id=dependency_id;
+      }
+    }
+    if(node.nodeType==='FunctionCall'&&!row.external_return_dependency_id) {
+      const callee=node.expression?.nodeType==='FunctionCallOptions'?node.expression.expression:node.expression;
+      const nativeCall=['send','transfer'].includes(callee?.memberName)&&/^address(?: payable)?$/.test(typeOf(callee.expression));
+      const callType={call:'CALL',staticcall:'STATICCALL',delegatecall:'DELEGATECALL',callcode:'CALLCODE'}[callee?.memberName]||(nativeCall?'CALL':null);
+      if(callType){
+        const callsite=location(node),dependency_id=id(expression_id,'external-return');
+        const dependency={dependency_id,method_id:method.method_id,expression_id,source_callsite:callsite,
+          source_callsite_id:id(method.method_id,callsite.file,callsite.start,callsite.length,callType,'raw-call'),
+          representation_scope:context.entry_return_summary?'entry_return_summary':'source_statement',
+          call_type:callType,signature:nativeCall?'native_'+callee.memberName:'raw_evm_call',selector:null,
+          return_schema:nativeCall?'native_call_success_and_evm_return_bytes':'evm_return_bytes',return_types:nativeCall?(callee.memberName==='send'?['bool']:[]):['bool','bytes'],
+          target_expression:sourceText(callee.expression),target_expression_id:expression(method,callee.expression,context),arguments:row.argument_expression_ids,
+          caller_code_address:method.code_address,caller_storage_address:method.storage_address,state_scope:'call_execution_state',
+          status:'requires_target_identity_and_execution',conditions:[...(context.conditions||[])],evidence_ids:row.evidence_ids};
         result.sections.external_returns||=[];result.sections.external_returns.push(dependency);row.external_return_dependency_id=dependency_id;
       }
     }
@@ -445,7 +469,12 @@ export function analyzeSource(result, source, bytecode) {
       if (node.nodeType === 'IndexAccess') scanExpression(method, node.indexExpression, context);
     }
     for (const child of children(node)) scanExpression(method, child, context, access);
-    if (node.nodeType === 'FunctionCall') analyzeCall(method, node, context);
+    if (node.nodeType === 'FunctionCall') {
+      const callee=node.expression?.nodeType==='FunctionCallOptions'?node.expression.expression:node.expression;
+      if(['call','delegatecall','staticcall','callcode'].includes(callee?.memberName)||
+        ['send','transfer'].includes(callee?.memberName)&&/^address(?: payable)?$/.test(typeOf(callee.expression)))expression(method,node,context);
+      analyzeCall(method, node, context);
+    }
   };
   const analyzeBlock = (method, node, context) => {
     if (!node) return;
@@ -486,7 +515,7 @@ export function analyzeSource(result, source, bytecode) {
     if (node.nodeType === 'RevertStatement') { const step = addStep(method, node, 'revert', `回滚 ${sourceText(node.errorCall)}`, context); method.failure_ids.push(step.step_id); return 'revert'; }
     if (node.nodeType === 'InlineAssembly' || node.nodeType === 'TryStatement') {
       addStep(method, node, node.nodeType === 'InlineAssembly' ? 'assembly' : 'try', sourceText(node).slice(0, 2048), context);
-      if(node.nodeType==='InlineAssembly')analyzeEncodedAssemblyCall(method,node,context);
+      if(node.nodeType==='InlineAssembly'){analyzeAssemblyReturnCallsites(method,node,context);analyzeEncodedAssemblyCall(method,node,context);}
       method.completeness.unresolved.push({ code: node.nodeType === 'InlineAssembly' ? 'ASSEMBLY_SEMANTICS_UNRESOLVED' : 'TRY_CATCH_PATHS_UNRESOLVED', ast_id: node.id });
       if (node.nodeType === 'TryStatement') for (const child of children(node)) analyzeBlock(method, child, context);
       return;
@@ -511,6 +540,21 @@ export function analyzeSource(result, source, bytecode) {
     if (['Break', 'Continue', 'PlaceholderStatement'].includes(node.nodeType)) { addStep(method, node, 'control', sourceText(node), context); return node.nodeType==='PlaceholderStatement'?undefined:'jump'; }
     for (const child of children(node)) scanExpression(method, child, context);
   };
+  function analyzeAssemblyReturnCallsites(method,assembly,context) {
+    function scan(y){
+      const type={call:'CALL',staticcall:'STATICCALL',delegatecall:'DELEGATECALL',callcode:'CALLCODE'}[y.functionName?.name];
+      if(y.nodeType==='YulFunctionCall'&&type){
+        const node={...y,id:'yul-call:'+assembly.id+':'+y.src},loc=location(node),eid=getEvidence(method,node),dependency_id=id(method.method_id,node.id,context.path,'external-return');
+        result.sections.external_returns||=[];result.sections.external_returns.push({dependency_id,method_id:method.method_id,source_callsite:loc,
+          source_callsite_id:id(method.method_id,loc.file,loc.start,loc.length,type,'raw-call'),representation_scope:'source_statement',
+          expression_id:null,call_type:type,signature:'raw_yul_call',selector:null,return_schema:'evm_return_bytes',return_types:['success_word','returndata'],
+          target_expression:sourceText(y.arguments?.[1]),caller_code_address:method.code_address,caller_storage_address:method.storage_address,
+          conditions:[...(context.conditions||[])],state_scope:'call_execution_state',status:'requires_target_identity_and_execution',evidence_ids:[eid]});
+      }
+      for(const child of children(y))scan(child);
+    }
+    if(assembly.AST)scan(assembly.AST);
+  }
   function analyzeEncodedAssemblyCall(method,node,context) {
     // Recognize a direct CALL of unmodified abi.encodeCall bytes. Other assembly
     // paths stay unresolved; calldata construction alone never becomes a transfer.
@@ -580,10 +624,11 @@ export function analyzeSource(result, source, bytecode) {
     };
     return execute(0);
   }
+  const loopSummaries=analyzeLoopInvariants(result,{functions,nodes,methodByAST,location,getEvidence,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8});
   for (const fn of functions) {
     const method = methodByAST.get(fn.id);
     if (!method) continue;
-    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false,legacy_arithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8 };
+    const context = { path: 'entry', conditions: [], stack: [fn.id], function_frame:fn.id, unchecked: false,loop_summaries:loopSummaries,legacy_arithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8 };
     analyzeFunctionWithModifiers(method,fn,context);
     if(['view','pure'].includes(method.state_mutability)&&(fn.returnParameters?.parameters||[]).length) {
       try {
@@ -616,6 +661,9 @@ export function analyzeSource(result, source, bytecode) {
     const step = addStep(method, variable, 'return', `读取并返回 ${name}${method.parameters.length ? ' 对应键值' : ''}`, context);
     method.return_ids.push(step.step_id); result.sections.methods.push(method);
   }
+  const verificationContext={functions,nodes,methodByAST,location,getEvidence,layout,stateVars,mainContract,sourceText,assembly:executeAssembly,evmRules:result.snapshot.evm_rules,legacyArithmetic:Number(source.compilation.compilerVersion.split('.')[1])<8};
+  analyzePolicies(result,verificationContext,analyzeStateModels(result,verificationContext));
+  addSourcePCMap(result,{compiled,bytecode,output,compiler:source.compilation.compilerVersion});
   for (const [path, value] of Object.entries(sources)) result.sections.artifacts.push({ artifact_id: id('source', path, hash(value.content)),
     kind: 'verified_source', filename: path, media_type: 'text/plain; charset=utf-8', text: value.content, sha256: hash(value.content) });
   result.sections.artifacts.push({ artifact_id: id('layout', result.snapshot.code_hash), kind: 'storage_layout', filename: 'storage-layout.json', media_type: 'application/json', text: JSON.stringify(layout || {}), sha256: hash(JSON.stringify(layout || {})) });

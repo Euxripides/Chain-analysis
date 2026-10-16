@@ -1,6 +1,6 @@
 """Bounded HTTP/UI/lifecycle acceptance for the candidate, never the production DB."""
 import datetime,json,os,pathlib,subprocess,sys,urllib.parse
-ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015','contract-deepening-20261015']
+ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name in ['contract-coverage-20261014','contract-semantics-20261014','contract-mechanisms-20261015','contract-expressions-20261015','contract-deepening-20261015','contract-verification-20261015']
 sys.path.insert(0,str(ROOT/'scripts/contract-analysis'));from qa_support import dotenv
 OUT=ROOT/os.environ.get('CONTRACT_QA_OUT','acceptance/contract-analysis-coverage');env=os.environ.copy();env['PATH']='/home/euripides/.nvm/versions/node/v24.20.0/bin:/usr/local/go/bin:'+env['PATH']
 env.update({'CONTRACT_QA_OUT':str(OUT.relative_to(ROOT)),'CONTRACT_QA_API':'http://127.0.0.1:18091','CONTRACT_QA_MCP':'http://127.0.0.1:18092/mcp','CONTRACT_QA_CONSOLE':'http://127.0.0.1:18093/app-v2','CONTRACT_QA_ENV':os.environ.get('CONTRACT_QA_ENV','/home/euripides/.config/blockchain-platform/contract-coverage-qa-20261014.env'),'CONTRACT_QA_WORKER':'blockchain-contract-coverage-qa-worker.service'})

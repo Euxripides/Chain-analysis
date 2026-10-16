@@ -105,6 +105,25 @@ func rowMap(raw json.RawMessage) map[string]any {
 	return m
 }
 
+func contractScopePCMap(data []byte, originalID string, remap map[string]string) ([]byte, error) {
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		return nil, fmt.Errorf("invalid source PC map JSON")
+	}
+	rows, ok := document["call_instructions"].([]any)
+	if document["schema_version"] != "contract-runtime-source-pc-v1" || !ok || remap[originalID] == "" {
+		return nil, fmt.Errorf("invalid source PC map schema")
+	}
+	for _, raw := range rows {
+		row, ok := raw.(map[string]any)
+		if !ok || row["artifact_id"] != originalID {
+			return nil, fmt.Errorf("source PC map artifact identity mismatch")
+		}
+		row["artifact_id"] = remap[originalID]
+	}
+	return json.Marshal(document)
+}
+
 func contractScopePropertyProof(data []byte, originalID string, remap map[string]string) ([]byte, error) {
 	var proof map[string]any
 	if err := nextDecode(data, &proof); err != nil {
@@ -193,7 +212,7 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				report.WriteString("\n")
 			}
 		}
-		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}, {"external_returns", "外部返回依赖"}, {"external_return_observations", "执行返回结果"}, {"property_obligations", "性质验证"}} {
+		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}, {"external_returns", "外部返回依赖"}, {"external_return_observations", "执行返回结果"}, {"property_obligations", "性质验证"}, {"loop_invariants", "循环归纳"}, {"state_transitions", "状态转换"}, {"initial_state_models", "源码初始化"}, {"verification_obligations", "模型证明义务"}} {
 			items := []map[string]any{}
 			for _, row := range result.Sections[part.section] {
 				item := rowMap(row)
@@ -252,7 +271,7 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					var loops []map[string]any
 					if nextDecode(ca.Row(item["loops"]), &loops) == nil {
 						for _, loop := range loops {
-							fmt.Fprintf(&report, "  已展开循环：AST %v；执行 %v 次；边界依据 %s。\n", loop["ast_id"], loop["iterations"], loop["bound_basis"])
+							fmt.Fprintf(&report, "  循环摘要：AST %v；执行次数 %s；边界依据 %s。\n", loop["ast_id"], contractReportField(loop, "iterations"), loop["bound_basis"])
 						}
 					}
 				case "control_effects":
@@ -271,7 +290,12 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					fmt.Fprintf(&report, "- %s；目标 %s；返回类型 %s；调用者 %s；状态 %s。\n", item["signature"], item["target_expression"], strings.Join(stringList(item["return_types"]), "，"), item["callee_msg_sender"], item["status"])
 				case "external_return_observations":
 					fmt.Fprintf(&report, "- 交易 %s；调用路径 %s；代码地址 %s；状态地址 %s；完整返回数据 %s；状态 %s。\n", item["tx_hash"], item["trace_path"], item["code_address"], item["storage_address"], item["return_data"], item["status"])
-				case "property_obligations":
+					fmt.Fprintf(&report, "  源码关联：%s；执行指令位置 %s；源码调用点 %s。\n", contractReportField(item, "source_binding_status"), contractReportField(item, "program_counter"), contractReportField(item, "source_callsite_id"))
+				case "loop_invariants":
+					fmt.Fprintf(&report, "- 计数器 %s；上限 %s；状态 %s；验证范围 %s；证明结果 %s；证明义务 %s；待解析内容 %s。\n", contractReportField(item, "counter"), contractReportField(item, "bound"), item["status"], item["scope"], ca.Row(item["proof_counts"]), strings.Join(stringList(item["obligations"]), "，"), strings.Join(stringList(item["unresolved"]), "，"))
+				case "state_transitions", "initial_state_models":
+					fmt.Fprintf(&report, "- 状态转换范围 %s；模型完成 %v；成功路径 %v；回滚路径 %v；待解析内容 %s。\n", item["scope"], item["complete"], item["successful_path_count"], item["reverted_path_count"], strings.Join(stringList(item["unresolved"]), "，"))
+				case "property_obligations", "verification_obligations":
 					fmt.Fprintf(&report, "- %s；命题 %s；状态 %s；假设 %s；证明文件 %s。\n", item["property"], contractReportField(item, "proposition", "amount_expression"), item["status"], strings.Join(stringList(item["assumptions"]), "，"), contractReportField(item, "proof_artifact_id"))
 					if item["counterexample"] != nil {
 						fmt.Fprintf(&report, "  反例：%s\n", ca.Row(item["counterexample"]))
@@ -301,6 +325,25 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				}
 			}
 			report.WriteString("\n")
+		}
+	}
+	for _, part := range []struct{ section, label string }{{"authorization_models", "权限模型证明"}, {"protocol_invariants", "协议不变量证明"}} {
+		if len(result.Sections[part.section]) == 0 {
+			continue
+		}
+		fmt.Fprintf(&report, "## %s\n\n", part.label)
+		for _, raw := range result.Sections[part.section] {
+			m := rowMap(raw)
+			fmt.Fprintf(&report, "- 模型 %s；范围 %s；命题 %s；状态 %s；成立条件 %s；证明结果 %s；待解析内容 %s。\n", m["kind"], m["scope"], contractReportField(m, "proposition"), m["status"], strings.Join(stringList(m["assumptions"]), "，"), ca.Row(m["proof_counts"]), strings.Join(stringList(m["unresolved"]), "，"))
+			fmt.Fprintf(&report, "  模型标识 %s；证明义务 %s。\n", m["model_id"], strings.Join(stringList(m["obligations"]), "，"))
+		}
+		report.WriteString("\n")
+	}
+	if len(result.Sections["verification_closure"]) > 0 {
+		report.WriteString("## 模型覆盖\n\n")
+		for _, raw := range result.Sections["verification_closure"] {
+			m := rowMap(raw)
+			fmt.Fprintf(&report, "声明模型全部完成：%v；全部权限已证明：%v；全部协议经济模型已证明：%v；待完成要求：%s。\n\n", m["all_declared_models_complete"], m["whole_authorization_proved"], m["whole_protocol_economics_proved"], strings.Join(stringList(m["remaining_requirements"]), "，"))
 		}
 	}
 	if report.Len() > 16<<20 {

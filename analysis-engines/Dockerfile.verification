@@ -1,0 +1,7 @@
+FROM platform-contract-deepening:20261015@sha256:b1b1ac0f9509f75d16cc58630b51a4f7ef3f66921bbb0d953ec1432f9af95025
+USER root
+COPY analyze.mjs source.mjs model.mjs capabilities.mjs replay.mjs source-pc.mjs opcode-witness.mjs /engine/
+COPY ir /engine/ir
+COPY properties /engine/properties
+COPY verification /engine/verification
+USER 65532:65532
