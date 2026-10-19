@@ -158,8 +158,8 @@ export function buildStateTransition(fn,method,ctx) {
    if(!field||!child)fail('STATE_MEMORY_STRUCT_LAYOUT_UNAVAILABLE');
    const childLoc=memoryMemberLocation(loc,field,s);
    if(child.members){fields.set(member.id,memoryFromStorage(childLoc,nodes.get(child.struct_ast_id),s,node,depth+1));continue;}
-   if(child.base)fail('STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED');
-   if(child.encoding!=='inplace')fail('STATE_MEMORY_STRUCT_DYNAMIC_FIELD_UNSUPPORTED');
+   if(child.base){fields.set(member.id,{sort:'MemoryAggregateOpaque',reason:'STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED'});continue;}
+   if(child.encoding!=='inplace'){fields.set(member.id,{sort:'MemoryAggregateOpaque',reason:'STATE_MEMORY_STRUCT_DYNAMIC_FIELD_UNSUPPORTED'});continue;}
    fields.set(member.id,readLocation(childLoc,s));
   }
   return{sort:'MemoryAggregate',type:'struct '+definition.name,struct_ast_id:definition.id,definition,object:{fields}};
@@ -256,6 +256,15 @@ export function buildStateTransition(fn,method,ctx) {
    const override=functions.find(f=>f.baseFunctions?.includes(d.id)&&f.body);if(!override)break;d=override;
   }return d;
  }
+ const staticCallTarget=node=>{
+  if(node?.nodeType!=='FunctionCall'||['typeConversion','structConstructorCall'].includes(node.kind))return null;
+  if(node.expression?.nodeType!=='MemberAccess')return null;
+  const definition=nodes.get(node.expression.referencedDeclaration);
+  if(definition?.nodeType!=='FunctionDefinition'||!['pure','view'].includes(definition.stateMutability))return null;
+  if(Number(String(ctx.compilerVersion||'0.8').split('.')[1]||0)<5)return null;
+  if(nodes.get(definition.scope)?.contractKind==='library')return null;
+  return definition;
+ };
  function invoke(node,s) {
   const callee=node.expression;
   if(callee?.nodeType==='MemberAccess'&&['transfer','send'].includes(callee.memberName)&&/^address(?: payable)?$/.test(callee.expression?.typeDescriptions?.typeString||'')){
@@ -266,7 +275,25 @@ export function buildStateTransition(fn,method,ctx) {
     success_requires_execution_evidence:true,reentrancy:'gas_stipend_cannot_write_storage',transfer_on_failure:'reverts_whole_frame'});
    return[{state:s,values:callee.memberName==='send'?[{...bool,term:'true'}]:[]}];
   }
-  const d=target(node);if(!d)fail('STATE_EXTERNAL_CALL_REQUIRES_MODEL');
+  const d=target(node);
+  if(!d){
+   const definition=staticCallTarget(node);
+   if(definition){
+    independent(node.arguments);
+    const args=node.arguments.map(a=>expr(a,s)),values=(definition.returnParameters?.parameters||[]).map((p,index)=>{
+     let type=null;try{type=scalarType(p);}catch{}
+     if(!type)fail('STATE_STATIC_CALL_RETURN_TYPE_UNSUPPORTED:'+(p.typeDescriptions?.typeString||p.name||'unknown'));
+     return terms.variable('static_return_'+node.id+'_'+index,type,'static call return value of '+definition.name);
+    });
+    effects.push({kind:'static_call',call_type:'STATICCALL',signature:definition.name+'('+((definition.parameters?.parameters||[]).map(p=>p.typeDescriptions?.typeString||'').join(','))+')',
+     selector:definition.functionSelector?'0x'+definition.functionSelector:null,target_expression:sourceText(node.expression?.expression),
+     arguments:args.map(v=>asInt(v)),return_count:values.length,return_binding:'requires_target_identity_and_execution',
+     state_effect:'none_by_execution_rules',failure:'reverts_on_failure',condition:and(s.conditions),
+     execution_case_ids:(s.symbolic_cases||rootCases()).map(c=>c.case_id),source_location:location(node)});
+    return[{state:s,values}];
+   }
+   fail('STATE_EXTERNAL_CALL_REQUIRES_MODEL');
+  }
   const parent=nodes.get(d.scope),receiver=parent?.contractKind==='library'&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id,
    arguments_=receiver?[callee.expression,...node.arguments]:node.arguments;
   independent(arguments_);const args=arguments_.map(a=>expr(a,s));return call(d,args,s);
@@ -299,11 +326,13 @@ export function buildStateTransition(fn,method,ctx) {
    if(['min','max'].includes(n.memberName)&&n.expression?.nodeType==='FunctionCall'&&n.expression.expression?.name==='type'){
     const t=scalarType(n);return {term:number(n.memberName==='max'?t.max:t.min),...t};
    }if(n.memberName==='length'){
+    if(n.expression?.nodeType==='MemberAccess'){const base=memoryAggregateValue(n.expression.expression,s),field=base?.object?.fields.get(n.expression.referencedDeclaration);
+     if(field?.sort==='MemoryAggregateOpaque')fail(field.reason);if(field?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_NESTED_LENGTH_UNSUPPORTED');}
     const loc=locate(n.expression,s),type=layout.types[loc.type_id],info=type?.base?storageArrayInfo(type,layout.types):null;
     if(info)return terms.value(info.dynamic?readWord(s.storage,loc.slot):info.length,uint256);
    }
    const aggregate=memoryAggregateValue(n.expression,s);
-   if(aggregate){const value=aggregate.object.fields.get(n.referencedDeclaration);if(!value)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');return value;}
+   if(aggregate){const value=aggregate.object.fields.get(n.referencedDeclaration);if(!value)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');if(value.sort==='MemoryAggregateOpaque')fail(value.reason);return value;}
    return locationValue(locate(n,s,{conservative:aggregateStorageType(storageTypes.forNode(n))}),s);
   }
   if(n.nodeType==='IndexAccess')return locationValue(locate(n,s,{conservative:aggregateStorageType(storageTypes.forNode(n))}),s);
@@ -389,14 +418,21 @@ export function buildStateTransition(fn,method,ctx) {
    const count=rows[0].values.length;if(rows.some(r=>r.values.length!==count))fail('STATE_TUPLE_RETURN_ARITY');
    const values=Array.from({length:count},(_,i)=>joinValue(rows,r=>r.values[i]));joinStates(s,rows);return values;
   }
+  if(n?.nodeType==='FunctionCall'&&staticCallTarget(n)){
+   const definition=staticCallTarget(n),count=(definition.returnParameters?.parameters||[]).length,rows=invoke(n,s);
+   if(count===1)return[rows[0].values[0]];
+   if(!rows.length||rows.some(r=>r.values.length!==count))fail('STATE_STATIC_CALL_RETURN_ARITY');
+   return Array.from({length:count},(_,index)=>rows[0].values[index]);
+  }
   return[expr(n,s)];
  }
  function assign(n,v,s,node) {
   if(n.nodeType==='MemberAccess'){
    const aggregate=memoryAggregateValue(n.expression,s);
    if(aggregate){
-    const member=nodes.get(n.referencedDeclaration);
-    if(memoryStructDeclaration(member)||aggregate.object.fields.get(n.referencedDeclaration)?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_NESTED_WRITE_UNSUPPORTED');
+    const member=nodes.get(n.referencedDeclaration),existing=aggregate.object.fields.get(n.referencedDeclaration);
+    if(existing?.sort==='MemoryAggregateOpaque')fail(existing.reason);
+    if(memoryStructDeclaration(member)||existing?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_NESTED_WRITE_UNSUPPORTED');
     if(!member)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');
     aggregate.object.fields.set(member.id,coerce(v,scalarType(member)));return;
    }
@@ -508,6 +544,7 @@ export function buildStateTransition(fn,method,ctx) {
    }
    if(e?.nodeType==='FunctionCall'&&e.kind!=='typeConversion'&&target(e))return invoke(e,s).map(r=>r.state);
    if(e?.nodeType==='FunctionCall'&&['transfer','send'].includes(e.expression?.memberName)&&/^address(?: payable)?$/.test(e.expression?.expression?.typeDescriptions?.typeString||''))return invoke(e,s).map(r=>r.state);
+   if(e?.nodeType==='FunctionCall'&&staticCallTarget(e))return invoke(e,s).map(r=>r.state);
    expr(e,s);return [s];
   }
   fail('STATE_CONTROL_UNSUPPORTED:'+n.nodeType);

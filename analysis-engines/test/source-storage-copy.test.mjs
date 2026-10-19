@@ -43,6 +43,9 @@ for(const optimized of[false,true]){
   const{method}=records(r,'twoCopies'),state=r.sections.state_transitions.find(t=>t.method_id===method.method_id);assert.ok(state);assert.equal(state.complete,true);assert.deepEqual(state.unresolved,[]);
   const dynamic=records(r,'dynamicFieldCopy'),dynamicState=r.sections.state_transitions.find(t=>t.method_id===dynamic.method.method_id);
   assert.equal(dynamic.fund.amount_derivation_status,'partial');assert.equal(dynamicState.complete,false);assert.ok(dynamicState.unresolved.some(s=>s.startsWith('STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED')));
+  const bag=records(r,'bagCopyOnly');assert.equal(bag.fund.amount_derivation_status,'represented_source_dependencies_resolved');
+  const bagState=r.sections.state_transitions.find(t=>t.method_id===bag.method.method_id);assert.ok(bagState);assert.equal(bagState.complete,true);
+  const copyVersion=r.sections.expressions.find(e=>e.method_id===bag.method.method_id&&e.source_storage_copy);assert.ok(copyVersion);assert.ok(copyVersion.source_storage_copy.field_gaps.some(g=>g.reason.startsWith('SOURCE_AGGREGATE_STORAGE_COPY_FIELD_TYPE_UNSUPPORTED:values')));
   for(const e of snapshots(r,method)){assert.equal(e.storage_value_bound,false);assert.equal(e.all_execution_paths_verified,false);}
  });
 }

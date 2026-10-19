@@ -68,6 +68,9 @@ contract StorageCopyCases {
     function dynamicFieldCopy(address payable to) external {
         Bag memory b = bag; to.transfer(b.values.length);
     }
+    function bagCopyOnly(address payable to) external {
+        Bag memory b = bag; to.transfer(1);
+    }
     function twoCopies(uint256 x, address payable to) external {
         Cell memory a = cell; cell.amount = uint128(x); Cell memory b = cell; to.transfer(a.amount + b.amount);
     }
