@@ -195,6 +195,18 @@ export function buildStateTransition(fn,method,ctx) {
  };
  function storeLocation(loc,value,s,node) {
   if(value?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_TO_STORAGE_UNMODELED');
+  if(value?.sort==='Bytes'){
+   const kind=/^(string|bytes)(?: storage(?: ref| pointer)?)?$/.exec(loc.scalar_type||'');
+   if(!kind)fail('STATE_BYTES_STORAGE_WRITE_TYPE_UNSUPPORTED');
+   if(value.segments?.length!==1||!/^\d+$/.test(value.segments[0].term))fail('STATE_BYTES_STORAGE_WRITE_VALUE_UNSUPPORTED');
+   if(value.length>31)fail('STATE_DYNAMIC_STORAGE_WRITE_LONG_UNSUPPORTED');
+   const data=BigInt(value.segments[0].term),word=((data<<BigInt(8*(32-value.length)))|BigInt(value.length*2)).toString(),previous=readWord(s.storage,loc.slot);
+   s.storage=terms.define('(store '+s.storage+' '+loc.slot+' '+word+')',ARRAY);
+   s.writes.push({root_ast_id:loc.root,variable:nodes.get(loc.root)?.name,slot:loc.slot,offset:0,bits:256,keys:loc.keys,
+    execution_case_ids:(s.symbolic_cases||rootCases()).map(c=>c.case_id),old_value:previous,new_value:word,fields:loc.fields||[],source_location:location(node),
+    physical_storage_after:s.storage,dynamic_encoding:'short_inline_string'});
+   if(s.writes.length>64)fail('STATE_WRITE_BUDGET');return;
+  }
   const type=scalarType({type:loc.scalar_type});value=coerce(value,type);
   const bits=type.bits||8,dynamic=typeof loc.offset==='string',base=dynamic?null:1n<<BigInt(loc.offset*8),above=dynamic?null:base*(1n<<BigInt(bits)),old=readLocation(loc,s),word=readWord(s.storage,loc.slot);
   const encoded=type.sort==='Bool'?'(ite '+asBool(value)+' 1 0)':!type.signed&&!value.signed&&value.bits<=type.bits?asInt(value):terms.normalize(asInt(value),{...type,signed:false});
@@ -511,7 +523,8 @@ export function buildStateTransition(fn,method,ctx) {
     let final=statement(n.body,last,placeholder);if(n.loopExpression)final=final.flatMap(row=>statement(n.loopExpression,row,placeholder));
     if(final.length!==1||final[0].storage!==state.storage||final[0].halt)fail('STATE_COUPLED_LOOP_LAST_ITERATION_EFFECT');
     state.conditions.push('(or (= '+count+' 0) '+and(final[0].conditions)+')');
-    for(const r of descriptor.recurrences)state.locals.set(r.declaration,typed(nodes.get(r.declaration),at(r,count),state));
+    const wrapped=state.unchecked||descriptor.unchecked;
+    for(const r of descriptor.recurrences)state.locals.set(r.declaration,typed(nodes.get(r.declaration),at(r,count),{...state,unchecked:wrapped}));
     state.locals.set(counter.id,terms.value(count,scalarType(counter)));
     effects.push({kind:'inductive_coupled_loop',ast_id:n.id,loop_model_id:proof.model_id,proof_obligation_ids:proof.obligations,scope:'all_successful_loop_iterations',source_update_order:descriptor.recurrences.map(r=>r.declaration)});
     return state;

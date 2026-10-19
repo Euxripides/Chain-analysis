@@ -88,7 +88,6 @@ export function coupledPolynomialSMT(polynomial,n,factor){
 export function addCoupledRefinementObligations(model,descriptor,queries,counterDomain,counterDeclarations,counterInputs){
  const byID=new Map(descriptor.recurrences.map(r=>[r.declaration,r])),leaves=new Map();
  for(const r of byID.values()){
-  if(r.unchecked)throw Error('LOOP_COUPLED_WORD_RING_REFINEMENT_PENDING');
   for(const l of [...r.polynomial.leaves,...r.coupled_state_polynomial.leaves])leaves.set(l.key,l);
   for(const l of r.polynomial.source_polynomial.leaves)if(!byID.has(l.node.referencedDeclaration))leaves.set(l.key,l);
  }
@@ -100,24 +99,27 @@ export function addCoupledRefinementObligations(model,descriptor,queries,counter
  for(const r of byID.values()){
   const stateNames=new Map(r.coupled_dependencies.map(d=>[d.declaration,'coupled_read_'+d.declaration]));
   const decl=declarations+'\n'+[...stateNames.values()].map(s=>'(declare-const '+s+' Int)').join('\n'),conditions=[domain];
+  const wordMod=1n<<BigInt(r.width);
   for(const d of r.coupled_dependencies){
-   const p=byID.get(d.declaration).coupled_state_polynomial,name=stateNames.get(d.declaration),at=d.read_phase==='after_update'?'(+ i 1)':'i';
-   conditions.push('(= (* '+p.coefficient_scale+' '+name+') '+polynomialSMT(p,at,key=>symbols.get(key))+')');
-   conditions.push('(<= 0 '+name+')','(<= '+name+' '+((1n<<BigInt(r.width))-1n)+')');
+   const p=byID.get(d.declaration).coupled_state_polynomial,name=stateNames.get(d.declaration),at=d.read_phase==='after_update'?'(+ i 1)':'i',
+    expression=polynomialSMT(p,at,key=>symbols.get(key));
+   conditions.push(r.unchecked?'(= '+name+' (mod '+expression+' '+wordMod+'))':' (= (* '+p.coefficient_scale+' '+name+') '+expression+')');
+   conditions.push('(<= 0 '+name+')','(<= '+name+' '+(wordMod-1n)+')');
   }
   const original=r.polynomial.source_polynomial,source=polynomialSMT(original,'i',key=>{
    const leaf=original.leaves.find(l=>l.key===key),dep=leaf.node.referencedDeclaration;
    return stateNames.has(dep)?stateNames.get(dep):symbols.get(key);
   }),numerator=polynomialSMT(r.polynomial,'i',key=>symbols.get(key)),tag=r.declaration;
   const readInputs=[...inputs,...[...stateNames].map(([id,name])=>({name,expression:'iteration read of '+byID.get(id).name,type:'uint'+r.width}))];
-  const q=obligation(model,'coupled_source_increment_refinement_'+tag,decl,and(conditions),
-   '(distinct '+numerator+' (* '+r.polynomial.coefficient_scale+' '+source+'))',readInputs);queries.push(q);
+  const violation=r.unchecked?'(distinct (mod '+numerator+' (* '+r.polynomial.coefficient_scale+' '+wordMod+')) (mod (* '+r.polynomial.coefficient_scale+' '+source+') (* '+r.polynomial.coefficient_scale+' '+wordMod+')))'
+   :'(distinct '+numerator+' (* '+r.polynomial.coefficient_scale+' '+source+'))';
+  const q=obligation(model,'coupled_source_increment_refinement_'+tag,decl,and(conditions),violation,readInputs);queries.push(q);
   const d=r.polynomial.coefficient_scale,g=obligation(model,'coupled_source_integrality_'+tag,'(declare-const x Int)\n(declare-const p Int)',
    '(= x (* '+d+' p))','(distinct (mod x '+d+') 0)',[{name:'x',kind:'proof_ghost_integer'},{name:'p',kind:'proof_ghost_integer'}]);queries.push(g);
   certificates.push({schema_version:'coupled-source-refinement-v1',accumulator_ast_id:tag,increment_ast_id:r.increment?.id,
    dependencies:r.coupled_dependencies,coefficient_scale:r.polynomial.coefficient_scale,state_polynomial:r.coupled_state_polynomial,
    proof_obligation_ids:[q.property.property_id,g.property.property_id],derivation_order:descriptor.coupled.derivation_order,
-   arithmetic:'checked_monotone',scope:'source_reads_at_their_actual_update_position'});
+   arithmetic:r.unchecked?'unchecked_word_ring':'checked_monotone',scope:'source_reads_at_their_actual_update_position'});
  }
  model.coupled_certificates=certificates;
 }

@@ -399,6 +399,13 @@ export function analyzeSource(result, source, bytecode, options = {}) {
     const keys=[];let slotNodes=0,valid=true;
     const slots=(term,depth=0)=>{if(!term||++slotNodes>128||depth>32){valid=false;return;}if(term.op==='expression'){if(!storageCopyKeyKnown(term.expression_id))valid=false;keys.push(term.expression_id);}else if(term.op!=='constant'&&!['keccak_words','add','mul','div','mod'].includes(term.op))valid=false;for(const child of term.args||[])slots(child,depth+1);};
     slots(projection.slot_expression);if(!valid)return fail('SOURCE_AGGREGATE_STORAGE_COPY_KEY_OR_SLOT_UNMODELED');
+    const literalBytesOf=row=>{
+      if(!row)return null;
+      if(row.literal_hex_value&&/^[0-9a-fA-F]*$/.test(row.literal_hex_value))return Buffer.from(row.literal_hex_value,'hex');
+      if(row.literal_kind==='hexString'&&typeof row.raw_literal==='string')return Buffer.from(row.raw_literal.replace(/^0x/,'').replace(/[^0-9a-fA-F]/g,''),'hex');
+      if(row.literal_kind==='string'&&typeof row.raw_literal==='string')return Buffer.from(row.raw_literal,'utf8');
+      return null;
+    };
     const copyProjectionMatches=(left,right)=>{
       if(!left||!right||left.root_state_ast_id!==right.root_state_ast_id)return false;
       const a=left.path||[],b=right.path||[];if(a.length!==b.length)return false;
@@ -406,14 +413,14 @@ export function analyzeSource(result, source, bytecode, options = {}) {
         if(step.kind==='mapping')return Boolean(step.key_expression_id)&&step.key_expression_id===other.key_expression_id;
         return step.field_ast_id===other.field_ast_id&&step.index===other.index;});
     };
-    const dominatingStorageWrite=(fieldProjection,method,context)=>{
+    const dominatingStorageWrite=(fieldProjection,method,context,options={})=>{
       const order=method.step_ids.length,conditions=context.conditions||[];
       const rows=(result.sections.storage||[]).filter(row=>row.method_id===method.method_id&&row.access==='write'&&row.storage_projection&&copyProjectionMatches(row.storage_projection,fieldProjection)&&(row.order??Infinity)<order&&(row.conditions||[]).every(condition=>conditions.includes(condition)));
       if(!rows.length)return null;
       const latest=rows.at(-1);
       if(latest.operation!=='='||!latest.value_expression_id)return null;
       const value=expressionByID.get(latest.value_expression_id);
-      if(!value||value.type!==fieldProjection.scalar_type||value.unresolved_model_reasons?.length||value.unresolved_evaluation_effect||value.unresolved_return_value||value.source_scalar_binding_unavailable)return null;
+      if(!value||(options.requireType!==false&&value.type!==fieldProjection.scalar_type)||value.unresolved_model_reasons?.length||value.unresolved_evaluation_effect||value.unresolved_return_value||value.source_scalar_binding_unavailable)return null;
       const writeLocation=latest.source_location,copyLocation=location(node);
       if(!writeLocation||!copyLocation||writeLocation.file!==copyLocation.file||!(writeLocation.start<copyLocation.start))return null;
       const intervening=(result.sections.external_returns||[]).some(row=>row.method_id===method.method_id&&row.source_callsite&&row.source_callsite.file===writeLocation.file&&row.source_callsite.start>writeLocation.start&&row.source_callsite.start<copyLocation.start);
@@ -430,6 +437,20 @@ export function analyzeSource(result, source, bytecode, options = {}) {
         const field=layoutType.members.find(f=>f.astId===member.id),child=storageMember(at,field,layout.types),nested=aggregateType(member);
         if(!child)return model.unknown(copyType,'SOURCE_AGGREGATE_STORAGE_COPY_FIELD_LAYOUT_UNAVAILABLE',ctx);
         if(nested){const reference=read(nested,child,depth+1,[...stack,copyType.declaration_id]);fields.push({declaration_id:member.id,type:typeOf(member),reference,evaluation_may_fail:false});continue;}
+        const memberType=typeOf(member).replace(/ (memory|storage|calldata)( ref| pointer)?/g,'');
+        if(['string','bytes'].includes(memberType)){
+          const prior=dominatingStorageWrite(child,method,context,{requireType:false}),literal=prior?literalBytesOf(prior.value):null;
+          if(literal&&literal.length<=256&&context.source_memory){
+            const captured=context.source_memory.capture({originExpressionId:prior.value.expression_id,encoding:'raw_bytes',rawCells:Array.from(literal,value=>({kind:'constant',value})),
+              context:{path:context.path,order:method.step_ids.length,conditions:context.conditions},evidence_ids:unique([getEvidence(method,node),getEvidence(method,member),...(prior.evidence_ids||[])])});
+            fields.push({declaration_id:member.id,type:typeOf(member),bytes_value:captured,bytes_length:literal.length,bytes_hex:literal.toString('hex'),bytes_source:'dominating_literal_storage_write',evaluation_may_fail:false});
+            continue;
+          }
+          const gap=literal?'SOURCE_AGGREGATE_STORAGE_COPY_FIELD_CONTENT_TOO_LONG':'SOURCE_AGGREGATE_STORAGE_COPY_FIELD_CONTENT_NOT_PROVEN';
+          fieldGaps.push({declaration_id:member.id,type:typeOf(member),reason:gap});
+          fields.push({declaration_id:member.id,type:typeOf(member),value_expression_id:null,field_gap:gap+':'+member.name,evaluation_may_fail:false});
+          continue;
+        }
         const shape=storageCopyScalar(member),storageType=layout.types[child.type_id],bytes=Number(storageType?.numberOfBytes);
         if(!shape||storageType?.encoding!=='inplace'||storageType?.base||storageType?.members||!Number.isSafeInteger(bytes)||bytes<1||bytes>32||bytes*8!==shape.bits||!Number.isInteger(child.offset)||child.offset<0||child.offset+bytes>32){
           const gap='SOURCE_AGGREGATE_STORAGE_COPY_FIELD_TYPE_UNSUPPORTED:'+member.name;
@@ -1015,6 +1036,14 @@ export function analyzeSource(result, source, bytecode, options = {}) {
       return sourceBytesType(node)?unknownBytes('SOURCE_BYTES_ARGUMENT_UNBOUND'):null;
     }
     if(node.nodeType==='FunctionCall'&&node.kind==='typeConversion'&&sourceBytesType(node))return resolveSourceBytes(node.arguments?.[0],context,next);
+    if(node.nodeType==='MemberAccess'&&context.source_aggregates){
+      const reference=node.expression?.nodeType==='Identifier'?context.source_aggregates.get(node.expression.referencedDeclaration):null;
+      if(reference){
+        const projected=context.source_aggregates.project(reference,{declaration_id:node.referencedDeclaration,type:typeOf(node)},{context:aggregateContext(memory.method,node,context)});
+        if(projected?.kind==='source_bytes_value')return projected.binding;
+        return unknownBytes(projected?.unresolved?.[0]||'SOURCE_BYTES_AGGREGATE_FIELD_UNAVAILABLE');
+      }
+    }
     const expression_id=expression(memory.method,node,context);
     if(node.nodeType==='FunctionCall'){
       const returned=memory.shared.callReturns.get(expression_id);if(returned)return returned.components?.[0]||unknownBytes('SOURCE_BYTES_RETURN_COMPONENT_UNAVAILABLE');

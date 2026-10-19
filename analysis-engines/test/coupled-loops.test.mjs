@@ -57,13 +57,20 @@ test('coupled summaries reach state transitions and ledger proofs only after all
  assert.equal(result.sections.protocol_invariants.find(m=>m.kind==='erc20_ledger_conservation').complete,true);
  const bad=run(source.replace('totalSupply+=b;','totalSupply+=b+1;'));assert.equal(bad.sections.protocol_invariants.find(m=>m.kind==='erc20_ledger_conservation').status,'counterexample');
 });
-test('unchecked coupled refinements and feedback remain explicit until proved',()=>{
+test('checked cyclic feedback stays explicit while unchecked acyclic chains derive',()=>{
  const result=analyze(compileVerificationFixture(true,'pragma solidity ^0.8.24;contract Verification{'+
   'function feedback(uint n)external pure returns(uint a){uint b;for(uint i;i<n;i++){a+=b;b+=a;}}'+
   'function wrapping(uint n,uint c)external pure returns(uint a,uint b){unchecked{for(uint i;i<n;i++){a+=c;b+=a;}}}}'));
- for(const m of result.sections.loop_invariants)assert.equal(m.complete,false);
- assert.ok(result.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('COUPLED_CYCLIC'))));
- assert.ok(result.sections.loop_invariants.some(m=>m.unresolved.some(s=>s.includes('WORD_RING_REFINEMENT_PENDING'))));
+ const byMethod=name=>{const method=result.sections.methods.find(m=>m.name===name);return result.sections.loop_invariants.find(m=>m.method_id===method.method_id);};
+ const feedback=byMethod('feedback');assert.ok(feedback);assert.equal(feedback.complete,false);assert.ok(feedback.unresolved.some(s=>s.includes('COUPLED_CYCLIC')));
+ const wrapping=byMethod('wrapping');assert.ok(wrapping);assert.deepEqual(wrapping.unresolved,[]);assert.ok(wrapping.coupled_certificates.every(c=>c.arithmetic==='unchecked_word_ring'));
+ if(!solver)return;
+ assert.equal(wrapping.complete,true);
+ const M=1n<<256n;
+ for(const [n,c] of[[0n,3n],[1n,3n],[17n,5n],[1000n,7n],[1000n,M-2n]]){
+  let a=0n,b=0n;for(let i=0n;i<n;i++){a=(a+c)%M;b=(b+a)%M;}
+  assert.deepEqual(evaluateReturn(result,'wrapping',{n,c}),[a,b],'wrapping:'+n+':'+c);
+ }
 });
 test('coupled while loops preserve their counter update inside the body',()=>{
  const result=run('function calc(uint n,uint c)external pure returns(uint a,uint b){uint i;while(i<n){a+=c;b+=a;i++;}}');
@@ -75,4 +82,20 @@ test('narrow checked counter multiplication is preserved within coupled wide acc
  if(!solver)return;
  for(const n of[0n,1n,15n,16n]){let a=0n,b=0n;for(let i=0n;i<n;i++){a+=i*i;b+=a;}assert.deepEqual(evaluateReturn(result,'calc',{n}),[a,b]);}
  for(const n of[17n,255n])assert.throws(()=>evaluateReturn(result,'calc',{n}),/panic_0x11/);
+});
+
+test('unchecked coupled loops prove word-ring summaries and wrap exactly',()=>{
+ const result=run('function chain(uint n,uint seed)external pure returns(uint a,uint b){a=seed;b=seed+1;uint c=3;unchecked{for(uint i;i<n;i++){a+=b;b+=c;}}return(a,b);}');
+ assert.equal(result.sections.loop_invariants.length,1);assert.equal(result.sections.loop_invariants[0].summary.values.every(v=>v.arithmetic==='wrap'),true);
+ assert.ok(result.sections.loop_invariants[0].coupled_certificates.every(c=>c.arithmetic==='unchecked_word_ring'));
+ if(!solver)return;
+ const M=1n<<256n;
+ for(const [n,seed] of[[0n,5n],[1n,5n],[5n,7n],[1000n,5n],[1000n,1n<<250n],[17n,M-2n]]){
+  let a=seed%M,b=(seed+1n)%M;for(let i=0n;i<n;i++){a=(a+b)%M;b=(b+3n)%M;}
+  assert.deepEqual(evaluateReturn(result,'chain',{n,seed}),[a,b],'chain:'+n+':'+seed);
+ }
+});
+test('cyclic unchecked recurrences stay an explicit gap',()=>{
+ const result=analyze(compileVerificationFixture(true,'pragma solidity ^0.8.30;contract Verification{function cyclic(uint n,uint seed)external pure returns(uint a,uint b){a=seed;b=seed+1;unchecked{for(uint i;i<n;i++){a+=b;b+=a;}}return(a,b);}}'));
+ const model=result.sections.loop_invariants[0];assert.equal(model.complete,false);assert.ok(model.unresolved.includes('LOOP_COUPLED_CYCLIC_RECURRENCE'));
 });

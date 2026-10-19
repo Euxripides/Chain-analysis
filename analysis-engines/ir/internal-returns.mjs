@@ -328,7 +328,7 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
                 }
                 const checkIndices=checks.map(key=>{const i=operands.length;operands.push(key);return i;}),before=entry.parameter_expression_bindings[r.declaration];
                 const beforeIndex=operands.length;operands.push(before);
-                return synthetic(nodes.get(r.declaration),'coupled_polynomial_value',operands,context,{type:'uint'+r.width,width:r.width,signed:false,arithmetic:'checked',
+                return synthetic(nodes.get(r.declaration),'coupled_polynomial_value',operands,context,{type:'uint'+r.width,width:r.width,signed:false,arithmetic:r.unchecked?'wrap':'checked',
                   polynomial_terms:poly.terms.map(t=>({...t,factor_operands:t.factors.map(f=>indices.get(f))})),coefficient_scale:poly.coefficient_scale,
                   last_iteration_check_operands:checkIndices,entry_value_operand:beforeIndex,empty_loop_is_entry:checks.length>0,
                   loop_model_id:proved.model_id,proof_obligation_ids:proved.obligations,scope:'all_successful_loop_iterations'});

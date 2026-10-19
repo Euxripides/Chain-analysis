@@ -60,7 +60,7 @@ export class SourceAggregates{
   if(depth>this.budget.maxDepth)return this.unknown(type,'SOURCE_AGGREGATE_NESTING_BUDGET',context);
   if(fields.length>this.budget.maxFields)return this.unknown(type,'SOURCE_AGGREGATE_FIELD_BUDGET',context);
   if(fields.some(f=>!Number.isSafeInteger(f.declaration_id))||new Set(fields.map(f=>f.declaration_id)).size!==fields.length)return this.unknown(type,'SOURCE_AGGREGATE_FIELD_IDENTITY_UNAVAILABLE',context);
-  if(fields.some(f=>!f.value_expression_id&&!f.reference&&!f.field_gap))return this.unknown(type,'SOURCE_AGGREGATE_FIELD_VALUE_UNAVAILABLE',context);
+  if(fields.some(f=>!f.value_expression_id&&!f.reference&&!f.field_gap&&!f.bytes_value))return this.unknown(type,'SOURCE_AGGREGATE_FIELD_VALUE_UNAVAILABLE',context);
   if(fields.some(f=>f.reference&&!this._referenceWithinBudget(f.reference)))return this.unknown(type,'SOURCE_AGGREGATE_REFERENCE_BUDGET',context);
   for(const field of fields)if(field.reference){const nested=this._objectDepth(field.reference);if(nested===null)return this.unknown(type,'SOURCE_AGGREGATE_NESTED_VALUE_UNAVAILABLE',context);if(nested+1>this.budget.maxDepth)return this.unknown(type,'SOURCE_AGGREGATE_NESTING_BUDGET',context);}
   if(this.budget.versions>=this.budget.maxVersions||this.shared.methodVersions>=this.budget.maxPerMethod)return this.unknown(type,'SOURCE_AGGREGATE_VERSION_BUDGET',context);
@@ -99,6 +99,7 @@ export class SourceAggregates{
     unresolved=unique([...(reference.unresolved||[]),...history.unresolved,...(history.mayFail?['SOURCE_AGGREGATE_PRIOR_EVALUATION_REQUIRES_FAILURE_MODEL']:[]),...((value.fields||[]).some(f=>f!==found&&f.evaluation_may_fail&&(!found.evaluation_group_id||f.evaluation_group_id!==found.evaluation_group_id))?['SOURCE_AGGREGATE_SIBLING_EVALUATION_REQUIRES_FAILURE_MODEL']:[])]);
   if(found.reference){const nested=clone(found.reference);nested.aggregate_version_ids=unique([...(nested.aggregate_version_ids||[]),...versions]);nested.aggregate_evaluation_expression_ids=unique([...(nested.aggregate_evaluation_expression_ids||[]),...evaluation]);nested.aggregate_return_expression_ids=unique([...(nested.aggregate_return_expression_ids||[]),...(reference.aggregate_return_expression_ids||[])]);nested.unresolved=unique([...(nested.unresolved||[]),...unresolved]);return{kind:'nested_aggregate_reference',reference:nested,type:found.type,aggregate_version_ids:versions};}
   if(found.field_gap)return failed([found.field_gap]);
+  if(found.bytes_value)return{kind:'source_bytes_value',binding:found.bytes_value,length:found.bytes_length,source:found.bytes_source,type:found.type,field_declaration_id:found.declaration_id,aggregate_version_ids:versions,aggregate_evaluation_expression_ids:evaluation,aggregate_return_expression_ids:reference.aggregate_return_expression_ids||[],unresolved};
   if(!found.value_expression_id)return failed(['SOURCE_AGGREGATE_FIELD_VALUE_UNAVAILABLE']);
   return{kind:'source_aggregate_field_value',value_expression_id:found.value_expression_id,type:found.type,field_declaration_id:found.declaration_id,aggregate_version_ids:versions,aggregate_evaluation_expression_ids:evaluation,aggregate_return_expression_ids:reference.aggregate_return_expression_ids||[],unresolved};
  }

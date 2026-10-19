@@ -8,6 +8,7 @@ contract StorageCopyCases {
     enum Mode { Off, On }
     struct Tagged { uint128 amount; Mode mode; }
     struct Bag { uint128[] values; }
+    struct Text { string label; uint128 amount; }
     Cell public cell;
     mapping(uint256 => Cell) public items;
     Nested private nested;
@@ -18,6 +19,7 @@ contract StorageCopyCases {
     mapping(bytes4 => Cell) private byteItems;
     Tagged public tagged;
     Bag private bag;
+    Text private text;
 
     constructor(address payable receiver) {
         cell = Cell(7, 5);
@@ -67,6 +69,15 @@ contract StorageCopyCases {
     }
     function dynamicFieldCopy(address payable to) external {
         Bag memory b = bag; to.transfer(b.values.length);
+    }
+    function shortLiteralCopy(address payable to) external {
+        text.label = "abc"; Text memory m = text; to.transfer(m.amount);
+    }
+    function longLiteralCopy(address payable to) external {
+        text.label = "0123456789012345678901234567890123456789"; Text memory m = text; to.transfer(m.amount);
+    }
+    function unknownContentCopy(address payable to) external {
+        Text memory m = text; to.transfer(m.amount);
     }
     function bagCopyOnly(address payable to) external {
         Bag memory b = bag; to.transfer(1);

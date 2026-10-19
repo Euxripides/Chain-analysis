@@ -51,6 +51,13 @@ for(const optimized of[false,true]){
   assert.equal(wholeState.paths[0].writes.length,2);
   const copied=records(r,'storageStructCopy').method,copiedState=r.sections.state_transitions.find(t=>t.method_id===copied.method_id);
   assert.equal(copiedState.paths[0].writes.length,2);
+  const byteCopies=name=>r.sections.expressions.find(e=>e.method_id===records(r,name).method.method_id&&e.source_storage_copy)?.fields||[];
+  const shortFields=byteCopies('shortLiteralCopy');assert.equal(shortFields.find(f=>f.type==='string').bytes_length,3);
+  const shortBinding=shortFields.find(f=>f.type==='string').bytes_value;assert.ok(shortBinding);
+  const longText='0123456789012345678901234567890123456789';
+  const longFields=byteCopies('longLiteralCopy');assert.equal(longFields.find(f=>f.type==='string').bytes_length,Buffer.byteLength(longText));
+  const unknownFields=byteCopies('unknownContentCopy');assert.match(unknownFields.find(f=>f.type==='string').field_gap,/CONTENT_NOT_PROVEN/);
+  assert.equal(records(r,'unknownContentCopy').fund.amount_derivation_status,'represented_source_dependencies_resolved');
   const bag=records(r,'bagCopyOnly');assert.equal(bag.fund.amount_derivation_status,'represented_source_dependencies_resolved');
   const bagState=r.sections.state_transitions.find(t=>t.method_id===bag.method.method_id);assert.ok(bagState);assert.equal(bagState.complete,true);
   const copyVersion=r.sections.expressions.find(e=>e.method_id===bag.method.method_id&&e.source_storage_copy);assert.ok(copyVersion);assert.ok(copyVersion.source_storage_copy.field_gaps.some(g=>g.reason.startsWith('SOURCE_AGGREGATE_STORAGE_COPY_FIELD_TYPE_UNSUPPORTED:values')));
