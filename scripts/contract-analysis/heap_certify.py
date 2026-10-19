@@ -73,7 +73,7 @@ for name in sorted(paths):
 evidence=[]
 for base in[BASE/'frozen-engine'/image[7:23],BASE/'business-assessment'/image[7:23],BASE/'service-validation'/image[7:23],BASE/'release']:
     for p in sorted(base.rglob('*')):
-        if p.is_file()and not p.is_symlink()and p.stat().st_size<4<<20:evidence.append({'path':str(p.relative_to(ROOT)),'sha256':sha(p),'byte_size':p.stat().st_size})
+        if p.is_file()and not p.is_symlink()and p.stat().st_size<4<<20 and p.name not in {'manifest.json','candidate-freeze.json','publication-summary.json','production-verification.json','production-smoke.json','release-gates.json'} and p.suffix!='.log':evidence.append({'path':str(p.relative_to(ROOT)),'sha256':sha(p),'byte_size':p.stat().st_size})
 for phase in required:
     directory=ROOT/phases[phase]['directory']
     for p in sorted(directory.glob('*.json')):
