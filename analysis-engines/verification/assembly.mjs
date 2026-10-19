@@ -147,7 +147,7 @@ export function executeAssembly(assembly,state,api) {
   if(name==='origin')return word(env.get('tx.origin').term,null,{range_max:(1n<<160n)-1n});
   if(name==='callvalue')return word(env.get('msg.value').term);
   if(name==='timestamp'||name==='number')return word(env.get('block.'+name).term);
-  if(name==='address')return word(BigInt(method.storage_address).toString(),BigInt(method.storage_address));
+  if(name==='address'){const address=env.get('address(this)');return address?word(address.term,/^\d+$/.test(address.term)?BigInt(address.term):null):word(BigInt(method.storage_address).toString(),BigInt(method.storage_address));}
   if(name==='mstore'||name==='mstore8'){
    const width=name==='mstore8'?1n:32n;
    if(a.known===null||!(a.known>=128n||a.known+width<=64n))api.recordGap('YUL_COMPILER_MEMORY_ALIAS_REQUIRES_EXECUTION_WITNESS_OR_VERIFIED_REGION');

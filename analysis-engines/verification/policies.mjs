@@ -8,7 +8,7 @@ import {namespaceAccessPath,namespaceCalleeID,namespaceGetterPath} from '../name
 const returnNode=fn=>fn?.body?.statements?.length===1&&fn.body.statements[0].nodeType==='Return'?fn.body.statements[0].expression:null;
 const identifier=d=>({...d,nodeType:'Identifier',referencedDeclaration:d.id});
 function getter(ctx,name,inputs) {
- const fn=ctx.functions.find(f=>f.name===name&&f.parameters?.parameters?.length===inputs&&['public','external'].includes(f.visibility)&&ctx.methodByAST.get(f.id)?.dispatch_role!=='overridden_source_definition');
+ const fn=ctx.functions.find(f=>f.name===name&&f.parameters?.parameters?.length===inputs&&['public','external'].includes(f.visibility)&&ctx.methodByAST.has(f.id)&&ctx.methodByAST.get(f.id).dispatch_role!=='overridden_source_definition');
  if(fn)return {fn,...(namespaceGetterPath(fn,ctx.namespace_registry,ctx.nodes,ctx.functions)||{node:returnNode(fn)})};
  const d=ctx.stateVars.find(v=>v.name===name&&v.visibility==='public');
  return d?{node:identifier(d),declaration:d}:null;

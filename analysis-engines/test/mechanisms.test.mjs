@@ -41,7 +41,7 @@ test('vault and AMM returns preserve state inputs, division order and constraint
  assert.match(entry(vault,'previewDeposit').symbolic_expression,/feeBps/);assert.match(entry(vault,'previewRedeem').symbolic_expression,/managed/);
  assert.match(entry(quotes,'amountOut').symbolic_expression,/997/);assert.match(entry(quotes,'amountOut').symbolic_expression,/1000/);
  assert.ok(entry(quotes,'amountIn').successful_return_paths[0].conditions.some(c=>c.includes('reserveOut>output')));
- const fee=entry(quotes,'conditionalFee');assert.equal(fee.successful_return_paths.length,2);assert.ok(fee.successful_return_paths.some(p=>p.value==='(amount, 0)'));
+ const fee=entry(quotes,'conditionalFee');assert.equal(fee.successful_return_paths.length,2);assert.ok(fee.successful_return_paths.some(p=>p.value==='(amount, uint256(0))'));
  const profile=vault.sections.protocols.find(p=>p.profile==='erc4626');assert.equal(profile.economic_model_status,'code_derived_formulas_with_execution_obligations');
  assert.ok(profile.method_models.some(m=>m.signature==='previewDeposit(uint256)'&&m.return_formulas.some(f=>f.expression.includes('feeBps'))));
  assert.ok(vault.sections.property_obligations.some(p=>p.property==='erc4626_deposit_preview_bound'&&p.status==='requires_execution_with_declared_state'));

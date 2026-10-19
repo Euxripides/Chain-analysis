@@ -5,6 +5,7 @@ import { disassemble } from '../bytecode.mjs';
 import { compileFixture } from './fixtures.mjs';
 import { legacyLayout } from '../layout.mjs';
 import { numericLiteral } from '../literals.mjs';
+const evaluateFormula=(text,values)=>new Function(...Object.keys(values),'return '+text.replace(/\b(0x[0-9a-fA-F]+|[0-9]+)\b/g,'$1n'))(...Object.values(values));
 
 test('ownership assignment and an ambiguous transferFrom uint argument do not become ERC20 quantities',()=>{
  const result=analyze(compileFixture('OwnershipLedger')),assign=result.sections.methods.find(m=>m.name==='assign'),forward=result.sections.methods.find(m=>m.name==='forward');
@@ -26,7 +27,7 @@ test('typed encoded CALL follows library parameters and snapshot immutable value
  const result=analyze(input),pay=result.sections.methods.find(m=>m.name==='pay');
  const funds=result.sections.funds.filter(f=>f.method_id===pay.method_id);
  assert.equal(funds.length,1,JSON.stringify(result.sections.calls));
- assert.equal(funds[0].expanded_amount_expression,'amount*137/10000');
+ for(const amount of [0n,1n,9999n,9007199254740993n])assert.equal(evaluateFormula(funds[0].expanded_amount_expression,{amount}),amount*137n/10000n);
  assert.equal(funds[0].expanded_asset_expression,values.asset);
  assert.equal(funds[0].expanded_to_expression,values.treasury);
  assert.equal(funds[0].settlement,'requires_execution_evidence');
@@ -50,13 +51,13 @@ test('verified source explains guards, fee rounding, separate recipients and con
   assert.deepEqual(payments.map(f => f.to_expression).sort(), ['msg.sender', 'recipient']);
   assert.ok(payments.every(f => f.conditions.includes('!paused')));
   const net = payments.find(f => f.to_expression === 'msg.sender');
-  assert.equal(net.expanded_amount_expression, 'amount-(amount * feeBps / 10000)');
+  for(const amount of [0n,1n,10001n,9007199254740993n])for(const feeBps of [0n,1n,137n])assert.equal(evaluateFormula(net.expanded_amount_expression,{amount,feeBps}),amount-amount*feeBps/10000n);
   assert.equal(net.amount_derivation_status, 'represented_source_dependencies_resolved');
   const sequence = result.sections.steps.filter(s => s.method_id === redeem.method_id);
   assert.ok(sequence.findIndex(s => s.kind === 'external_call' && s.text.includes('recipient')) < sequence.findIndex(s => s.kind === 'guard' && s.text.includes('asset.transfer(recipient')));
   assert.ok(redeem.dependency_methods.includes(configure.method_id));
   const detail=result.sections.method_details.find(d=>d.method_id===redeem.method_id);
-  assert.equal(detail.asset_effects.find(f=>f.recipient==='msg.sender').amount,'amount-(amount * feeBps / 10000)');
+  assert.equal(detail.asset_effects.find(f=>f.recipient==='msg.sender').amount,net.expanded_amount_expression);
   assert.ok(result.sections.control_effects.some(c=>c.method_id===configure.method_id&&c.affected_method_ids.includes(redeem.method_id)&&c.caller_condition_basis==='represented_caller_condition'));
   assert.ok(result.sections.permissions.some(g => g.method_id === configure.method_id && g.condition === 'msg.sender == owner'));
   const misleading = find('withdraw');
@@ -67,12 +68,13 @@ test('verified source explains guards, fee rounding, separate recipients and con
   assert.ok(result.sections.storage.filter(s=>s.key_expression==='shares[msg.sender]').every(s=>s.slot_role==='layout_base'));
   for (const method of result.sections.methods) for (const eid of method.evidence_ids) assert.ok(result.sections.evidence.some(e => e.evidence_id === eid));
 });
-test('local amount reassignment expands prior definitions and preserves conditional and compound gaps',()=>{
+test('local amount reassignment and conditional versions preserve prior values while compound updates stay explicit',()=>{
  const result=analyze(compileFixture('DataflowPaths'));
  const payment=name=>result.sections.funds.find(f=>f.method_id===result.sections.methods.find(m=>m.name===name).method_id);
- assert.equal(payment('reassigned').expanded_amount_expression,'((amount/2)/3)');
+ for(const amount of [0n,1n,5n,13n,9007199254740993n])assert.equal(evaluateFormula(payment('reassigned').expanded_amount_expression,{amount}),(amount/2n)/3n);
  assert.equal(payment('reassigned').amount_derivation_status,'represented_source_dependencies_resolved');
- assert.equal(payment('conditional').amount_derivation_status,'partial');
+ assert.equal(payment('conditional').amount_derivation_status,'represented_source_dependencies_resolved');
+ for(const change of[false,true])for(const amount of[0n,1n,7n,9007199254740993n])assert.equal(evaluateFormula(payment('conditional').expanded_amount_expression,{amount,change}),change?amount/2n:amount);
  assert.equal(payment('compound').amount_derivation_status,'partial');
 });
 test('verified compiler layout retains nested mapping keys and packed member offset',()=>{
@@ -86,11 +88,12 @@ test('verified compiler layout retains nested mapping keys and packed member off
 test('internal and using-for library returns preserve parameter bindings, parentheses and overflow scope',()=>{
  const result=analyze(compileFixture('HelperFlow'));
  const method=name=>result.sections.methods.find(m=>m.name===name),payment=name=>result.sections.funds.find(f=>f.method_id===method(name).method_id);
- assert.equal(payment('pay').expanded_amount_expression,'amount-(amount*rate/10000)');
+ for(const amount of [0n,1n,10001n,9007199254740993n])for(const rate of [0n,1n,137n])assert.equal(evaluateFormula(payment('pay').expanded_amount_expression,{amount,rate}),amount-amount*rate/10000n);
  assert.equal(payment('pay').amount_derivation_status,'represented_source_dependencies_resolved');
- assert.equal(payment('wrapped').expanded_amount_expression,'((amount+1)+1)*2');
+ for(const amount of [0n,1n,9007199254740993n])assert.equal(evaluateFormula(payment('wrapped').expanded_amount_expression,{amount}),((amount+1n)+1n)*2n);
  const guard=result.sections.permissions.find(g=>g.method_id===method('configure').method_id);
- assert.equal(guard.expanded_condition,'(msg.sender)==(controller)');
+ assert.equal(evaluateFormula(guard.expanded_condition,{msg:{sender:'0x'+'1'.repeat(40)},controller:'0x'+'1'.repeat(40)}),true);
+ assert.equal(evaluateFormula(guard.expanded_condition,{msg:{sender:'0x'+'2'.repeat(40)},controller:'0x'+'1'.repeat(40)}),false);
  const calleeAddition=result.sections.expressions.find(e=>e.method_id===method('wrapped').method_id&&e.text==='quantity+1'&&e.op==='+');
  assert.equal(calleeAddition.arithmetic,'checked');
  assert.ok(result.sections.expressions.some(e=>e.method_id===method('wrapped').method_id&&e.text==='amount+1'&&e.op==='+'&&e.arithmetic==='wrap'));

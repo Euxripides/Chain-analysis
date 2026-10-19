@@ -88,6 +88,17 @@ test("health reports the actual registered tool count", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok", tools: toolDefinitions.length });
 });
+test("large source crosses the real MCP HTTP transport intact and envelopes remain bounded",async()=>{
+ const client=new Client({name:"large-source-transport",version:"1.0.0"});
+ try{
+  await client.connect(new StreamableHTTPClientTransport(mcpUrl,{requestInit:{headers:{authorization:`Bearer ${mcpKey}`}}}));
+  const content="pragma solidity ^0.8.24;contract Token{}/*"+"x".repeat(160000)+"*/";
+  const result=await client.callTool({name:"analyze_contract",arguments:{input:{kind:"source",source:{language:"Solidity",files:{"Token.sol":content},compiler_version:"0.8.30+commit.73712a01",target:"Token.sol:Token"}}}});
+  assert.equal(result.isError,undefined);assert.equal(lastRESTRequest.url,"/api/v1/analysis/contracts/analyze_contract");assert.equal(JSON.parse(lastRESTBody).input.source.files["Token.sol"],content);
+ }finally{await client.close();}
+ const response=await fetch(mcpUrl,{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${mcpKey}`},body:JSON.stringify({padding:"x".repeat((2<<20)+(64<<10))})});
+ assert.equal(response.status,413);assert.deepEqual(await response.json(),{error:"request_too_large"});
+});
 
 test("initialize, list tools and call a real REST-backed tool", async () => {
   const client = new Client({ name: "mcp-test", version: "1.0.0" });

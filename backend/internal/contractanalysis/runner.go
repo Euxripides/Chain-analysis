@@ -3,6 +3,7 @@ package contractanalysis
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
@@ -73,7 +74,15 @@ func (r Runner) Run(ctx context.Context, jobID string, fence int64, input Input)
 	}
 	name := fmt.Sprintf("contract-analysis-%s-%d", jobID, fence)
 	// The container has no network, host secrets, mounted project or Docker socket.
-	args := []string{"run", "--rm", "--pull", "never", "-i", "--name", name, "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "65532:65532", "--cpus", "2", "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "128", "--log-driver", "none", "--tmpfs", "/tmp:rw,nosuid,size=192m", r.Image}
+	args := []string{"run", "--rm", "--pull", "never", "-i", "--name", name, "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "65532:65532", "--cpus", "2", "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "128", "--log-driver", "none", "--tmpfs", "/tmp:rw,nosuid,size=192m"}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline).Milliseconds()
+		if remaining <= 0 {
+			return result, context.DeadlineExceeded
+		}
+		args = append(args, "--env", "CONTRACT_ANALYSIS_REMAINING_MS="+strconv.FormatInt(remaining, 10))
+	}
+	args = append(args, "--ulimit", "core=0", r.Image)
 	raw := Row(input)
 	if len(raw) > 24<<20 {
 		return result, fmt.Errorf("engine input exceeds 24 MiB")
@@ -96,5 +105,64 @@ func (r Runner) Run(ctx context.Context, jobID string, fence int64, input Input)
 	if err != nil {
 		return result, fmt.Errorf("ENGINE_RUN_FAILED: %w: %s", err, stderr.String())
 	}
-	return ParseResult(stdout.Bytes())
+	result, err = ParseResult(stdout.Bytes())
+	if err != nil {
+		return result, err
+	}
+	resource, found, err := containerExecutionResource(stderr.Bytes(), stdout.Bytes())
+	if err != nil {
+		return result, err
+	}
+	rule, _ := strconv.Atoi(strings.TrimPrefix(result.RuleVersion, "funds-semantics-"))
+	if rule >= 15 && !found {
+		return result, fmt.Errorf("ENGINE_RESOURCE_MISSING: complete container metrics required")
+	}
+	if found {
+		if result.Metrics == nil {
+			result.Metrics = map[string]any{}
+		}
+		result.Metrics["container_execution"] = resource
+	}
+	return result, nil
+}
+
+func containerExecutionResource(stderr, stdout []byte) (map[string]any, bool, error) {
+	const prefix = "CONTRACT_CONTAINER_RESOURCE_V1:"
+	var resource map[string]any
+	found := false
+	for _, line := range strings.Split(string(stderr), "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		if found {
+			return nil, false, fmt.Errorf("ENGINE_RESOURCE_CONFLICT: duplicate completed measurements")
+		}
+		found = true
+		raw := []byte(strings.TrimPrefix(line, prefix))
+		var identity struct {
+			Version         string                 `json:"version"`
+			Scope           string                 `json:"scope"`
+			Bytes           int64                  `json:"stdout_bytes"`
+			SHA256          string                 `json:"stdout_sha256"`
+			MemoryPeakBytes uint64                 `json:"memory_peak_bytes"`
+			ExitCode        int                    `json:"engine_exit_code"`
+			CPUStat         map[string]json.Number `json:"cpu_stat"`
+		}
+		decodeErr := json.Unmarshal(raw, &identity)
+		cpuRecorded := false
+		for _, key := range []string{"usage_usec", "usage_nanoseconds"} {
+			if value, err := strconv.ParseUint(string(identity.CPUStat[key]), 10, 64); err == nil && value > 0 {
+				cpuRecorded = true
+			}
+		}
+		if decodeErr != nil || identity.Version != "container-execution-resource-v1" || identity.Scope != "after_engine_exit_and_complete_output_forwarding" || identity.Bytes != int64(len(stdout)) || identity.SHA256 != SHA256(stdout) || identity.MemoryPeakBytes == 0 || identity.ExitCode != 0 || !cpuRecorded {
+			return nil, false, fmt.Errorf("ENGINE_RESOURCE_INTEGRITY_FAILED: completed measurement does not bind engine output")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&resource); err != nil {
+			return nil, false, err
+		}
+	}
+	return resource, found, nil
 }

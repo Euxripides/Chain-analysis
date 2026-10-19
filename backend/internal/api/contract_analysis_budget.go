@@ -27,6 +27,9 @@ func (s *Server) contractBudgetContext(ctx context.Context, scope tenantScope, i
 		return ctx, fmt.Errorf("immutable analysis budget changed")
 	}
 	return provider.WithDownloadBudget(ctx, func(callCtx context.Context, calls int64, credits, cost float64) error {
+		if q.CodeOnly() {
+			return fmt.Errorf("code-only analysis cannot reserve provider requests")
+		}
 		final, _ := callCtx.Value(contractFinalGuardKey{}).(bool)
 		limit := q.Budget.MaxRPCRequests - 1
 		if final {

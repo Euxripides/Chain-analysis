@@ -101,7 +101,7 @@
     "/api/v1/analysis/contracts/analyze_contract": {
       "post": {
         "operationId": "analyze_contract",
-        "description": "Queue detailed EVM analysis at an immutable block/hash. Default engines: WhatsABI, sevm, verified/recompiled Solidity AST (Vyper 0.4.3 for matching source), Heimdall, Slither and Gigahorse TAC. Read method_details, operating_flows, control_effects, protocols, dataflow, ir_dataflow, ir_effects, source_verification and existing sections for conditions, exact formulas, recipients, runtime immutables, configuration effects and evidence. Interface profiles do not certify economic behavior. Proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes for execution/prestate/diffs and ledger reconciliation. No on-chain writes or automatic full historical downloads.",
+        "description": "Queue EVM address, submitted Solidity source, or bytecode analysis. Keep legacy chain/address requests; alternatively input.kind=source with named files, exact compiler version/settings and file:Contract target, or input.kind=bytecode with full bytes and runtime/creation code_phase. Code-only input performs zero provider requests, retains symbolic state and declared environment separately, and never invents deployment addresses or blocks. Optional chain/address binds submitted runtime/source to observed deployment code. Compile failures preserve input/diagnostics; supplied runtime permits bytecode fallback. Creation input preserves disassembly and explicit runtime frontier. Read methods, flows, formulas, permissions, conclusions/analysis_gaps and evidence through the existing tools. State/transactions require deployment binding; selected transactions preserve execution/prestate/diffs. No on-chain writes.",
         "x-mcp-read-only": false,
         "requestBody": {
           "required": true,
@@ -137,6 +137,125 @@
                     "type": "string",
                     "pattern": "^0x[0-9a-fA-F]{40}$",
                     "description": "Complete EVM contract address"
+                  },
+                  "input": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "source"
+                          },
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string",
+                                "const": "Solidity"
+                              },
+                              "files": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                },
+                                "propertyNames": {
+                                  "minLength": 1,
+                                  "maxLength": 256
+                                }
+                              },
+                              "compiler_version": {
+                                "type": "string",
+                                "pattern": "^0\\.[0-9]+\\.[0-9]+\\+commit\\.[0-9a-f]{8}$"
+                              },
+                              "settings": {
+                                "type": "object",
+                                "additionalProperties": {}
+                              },
+                              "target": {
+                                "type": "string",
+                                "minLength": 3,
+                                "maxLength": 384
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "files",
+                              "compiler_version",
+                              "target"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "bytecode": {
+                            "type": "string",
+                            "pattern": "^0x(?:[0-9a-fA-F]{2}){1,49152}$"
+                          },
+                          "code_phase": {
+                            "type": "string",
+                            "enum": [
+                              "runtime",
+                              "creation"
+                            ]
+                          },
+                          "environment": {
+                            "type": "object",
+                            "properties": {
+                              "chain_id": {
+                                "type": "string",
+                                "pattern": "^[1-9][0-9]{0,77}$"
+                              },
+                              "execution_address": {
+                                "$ref": "#/properties/address",
+                                "description": "Complete EVM contract address"
+                              },
+                              "evm_rules": {
+                                "type": "string",
+                                "enum": [
+                                  "shanghai",
+                                  "cancun",
+                                  "prague"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "source"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "bytecode"
+                          },
+                          "bytecode": {
+                            "type": "string",
+                            "pattern": "^0x(?:[0-9a-fA-F]{2}){1,49152}$"
+                          },
+                          "code_phase": {
+                            "type": "string",
+                            "enum": [
+                              "runtime",
+                              "creation"
+                            ]
+                          },
+                          "environment": {
+                            "$ref": "#/properties/input/anyOf/0/properties/environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "bytecode",
+                          "code_phase"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   },
                   "block": {
                     "anyOf": [
@@ -249,10 +368,6 @@
                     "maxLength": 128
                   }
                 },
-                "required": [
-                  "chain",
-                  "address"
-                ],
                 "additionalProperties": false,
                 "$schema": "http://json-schema.org/draft-07/schema#"
               }

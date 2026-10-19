@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import type { NextFunction, Request, Response } from "express";
+import express from "express";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
@@ -29,7 +30,16 @@ export function createServer(config: Config, signal?: AbortSignal): McpServer {
 }
 
 export function createApp(config: Config) {
-  const app = createMcpExpressApp({ host: config.host, allowedHosts: config.allowedHosts });
+  const app=express();
+  // SDK 1.30 installs its fixed 100 KiB JSON parser. Parse the bounded MCP
+  // envelope first; the SDK still supplies the same host-validation middleware.
+  // Backend contract arguments retain their independent 2 MiB admission limit.
+  app.use("/mcp",express.json({limit:(2<<20)+(64<<10)}));
+  app.use("/mcp",(error:unknown,_req:Request,res:Response,next:NextFunction)=>{
+    if((error as {type?:string})?.type==="entity.too.large"){res.status(413).json({error:"request_too_large"});return;}
+    next(error);
+  });
+  app.use(createMcpExpressApp({ host: config.host, allowedHosts: config.allowedHosts }));
   const oauth = new ChainOAuthProvider(config);
   const issuer = new URL(config.publicBaseUrl);
   const resource = new URL(config.publicMcpUrl);

@@ -47,7 +47,12 @@ test('legacy SafeMath ledger assignments connect real fee writes without crediti
  assert.equal(funds('counterfeit').length,0);assert.equal(funds('replace').length,0);
  const effect=result.sections.control_effects.find(e=>e.method_id===m('configure').method_id&&e.configuration_key==='feeRate');
  assert.ok(effect?.impact_types.includes('amount_formula'),JSON.stringify(effect));
- assert.ok(effect.affected_operations.some(o=>o.dependency_status==='possible_dependency_in_unresolved_definitions'));
+ assert.ok(effect.affected_operations.some(o=>o.dependency_status==='represented_expression_dependency'));
+ const fee=funds('transfer').find(f=>f.to_expression==='owner'),evaluate=new Function('amount','feeRate','maximumFee','return '+fee.expanded_amount_expression.replace(/\b\d+\b/g,'$&n'));
+ assert.equal(fee.amount_derivation_status,'represented_source_dependencies_resolved');
+ for(const amount of[0n,7n,9007199254740993n])for(const feeRate of[0n,137n])for(const maximumFee of[0n,1000000n]){
+  const raw=amount*feeRate/10000n;assert.equal(evaluate(amount,feeRate,maximumFee),raw>maximumFee?maximumFee:raw);
+ }
  assert.ok(effect.caller_constraints.some(c=>c.target_value_resolution==='direct_state_address'));
 });
 test('NFT token ID one and its balance counter never become an ERC20 raw amount',()=>{

@@ -13,8 +13,8 @@ for(const optimized of [false,true])test('scalar return paths retain amount bind
  assert.match(local.symbolic_expression,/amount\/3/);assert.match(local.symbolic_expression,/\+ 7/);assert.match(local.symbolic_expression,/\*2/);
  const quote=returns('quote').find(d=>d.original_expression==='calculate(amount,exempt)');
  assert.equal(quote.status,'represented_source_dependencies_resolved');assert.equal(quote.successful_return_paths.length,3);
- assert.ok(quote.successful_return_paths.some(p=>p.value==='0'&&p.conditions.includes('(exempt)')));
- assert.ok(quote.successful_return_paths.some(p=>p.value==='1000000'&&p.conditions.some(c=>c.includes('feeBps'))));
+ assert.ok(quote.successful_return_paths.some(p=>p.value==='uint256(0)'&&p.conditions.includes('(exempt)')));
+ assert.ok(quote.successful_return_paths.some(p=>p.value==='uint256(1000000)'&&p.conditions.some(c=>c.includes('feeBps'))));
  assert.ok(quote.symbolic_expression.includes('?')&&quote.symbolic_expression.includes('amount*feeBps'));
  const named=returns('named')[0];assert.equal(named.successful_return_paths.length,2);assert.match(named.symbolic_expression,/\+ 5/);
  const positive=returns('reject')[0];assert.equal(positive.successful_return_paths.length,1);assert.ok(positive.successful_return_paths[0].conditions.includes('(amount>0)'));assert.ok(positive.successful_return_paths[0].conditions.includes('!(amount==2)'));

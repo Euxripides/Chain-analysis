@@ -1,0 +1,78 @@
+import{readFileSync,readdirSync,writeFileSync,mkdirSync}from'node:fs';import{createHash}from'node:crypto';import{execFileSync}from'node:child_process';import{gunzipSync}from'node:zlib';import assert from'node:assert/strict';
+import{Client}from'@modelcontextprotocol/sdk/client/index.js';import{StreamableHTTPClientTransport}from'@modelcontextprotocol/sdk/client/streamableHttp.js';import{storageFlowFixture,storageFlowSource}from'../../analysis-engines/test/fixtures/storage-flow.mjs';import{storageEffectsFixture,storageEffectsSource}from'../../analysis-engines/test/fixtures/storage-effects.mjs';
+const root=new URL('../../',import.meta.url),base=new URL('acceptance/contract-analysis-storage/',root),image=readFileSync(new URL('engine-image.txt',base),'utf8').trim(),out=new URL('mcp/'+image.slice(7,23)+'/'+new Date().toISOString().replace(/\D/g,'')+'Z/',base);mkdirSync(out,{recursive:true});
+const vars=Object.fromEntries(readFileSync('/home/euripides/projects/blockchain-platform/deploy/.env','utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i),l.slice(i+1).trim().replace(/^["']|["']$/g,'')]})),client=new Client({name:'contract-storage-reference-qa',version:'1.0.0'}),sha=b=>createHash('sha256').update(b).digest('hex'),save=(name,value)=>writeFileSync(new URL(name,out),JSON.stringify(value,null,2)),checks=[];
+function check(name,ok,evidence){checks.push({name,status:ok?'PASS':'FAIL',evidence});save('checks.json',checks);console.log(name,ok?'PASS':'FAIL');assert.ok(ok,name);}
+let last=0;const actions=new Set();
+async function raw(name,args={}){const delay=Math.max(0,last+1250-Date.now());if(delay)await new Promise(r=>setTimeout(r,delay));last=Date.now();actions.add(name);return client.callTool({name,arguments:args});}
+function payload(r){const e=r.structuredContent||JSON.parse(r.content.find(c=>c.type==='text').text);if(r.isError||e.success===false)throw Error(JSON.stringify(e.error||e));return e.data??e;}
+const call=async(name,args={})=>payload(await raw(name,args));
+async function all(name,args,size=200){const rows=[],seen=new Set();let cursor,count;do{const p=await call(name,{...args,page_size:size,...(cursor?{cursor}:{})});count??=p.record_count;assert.equal(p.record_count,count);rows.push(...p.items);cursor=p.has_more?p.next_cursor:null;if(cursor){assert.ok(!seen.has(cursor));seen.add(cursor);}}while(cursor);assert.equal(rows.length,count);return rows;}
+async function artifact(aid,item){const parts=[];let offset=0;for(;;){const r=await raw('get_contract_analysis_artifact',{analysis_id:aid,artifact_id:item.artifact_id,offset,chunk_size:4<<20}),m=payload(r),b=Buffer.from(r.content.find(c=>c.type==='resource').resource.blob,'base64');assert.equal(m.offset,offset);assert.equal(m.byte_length,b.length);assert.equal(m.chunk_sha256,sha(b));parts.push(b);if(m.complete)break;assert.equal(m.next_offset,offset+b.length);offset=m.next_offset;}const bytes=Buffer.concat(parts);assert.equal(bytes.length,item.byte_size);assert.equal(sha(bytes),item.sha256);return bytes;}
+const jobs=[],budget={max_contracts:1,max_rpc_requests:10,max_state_reads:1,max_records:20000,max_credits:5000,timeout_seconds:300};
+async function complete(key,input,engines){const request={input,engines,budget,idempotency_key:'storage-v2-'+image.slice(7,23)+'-'+key},s=await call('analyze_contract',request);save(key+'-request.json',request);save(key+'-submission.json',s);let job;
+ for(let i=0;i<400;i++){job=await call('get_contract_analysis',{analysis_id:s.analysis_id});if(!['queued','running'].includes(job.status))break;await new Promise(r=>setTimeout(r,500));}
+ save(key+'-job.json',job);jobs.push(job.analysis_id);check(key+'-completed-frozen-candidate',job.status==='completed'&&job.metadata.rule_version==='funds-semantics-17'&&job.metadata.metrics.engine_digest===image,{analysis_id:s.analysis_id,error:job.error_message});
+ const m=job.metadata.metrics,snapshot=job.metadata.snapshot;check(key+'-code-only-zero-provider-usage',snapshot.identity_kind==='code_only'&&m.rpc_http_requests===0&&Number(m.credits)===0&&m.durable_budget.reserved_rpc_http_requests===0&&m.durable_budget.state_read_attempts===0&&!['block_number','block_hash','code_address','storage_address'].some(k=>Object.hasOwn(snapshot,k)),m.durable_budget);
+ check(key+'-complete-container-observer',m.engine_resources?.length&&m.engine_resources.every(r=>r.metrics?.container_execution?.scope==='after_engine_exit_and_complete_output_forwarding'&&r.metrics.container_execution.memory_peak_bytes>0));return job;}
+async function verify(key,job,extraSections=[]){const files=await all('get_contract_analysis',{analysis_id:job.analysis_id,section:'artifacts'}),machine=files.find(f=>f.kind==='machine_result'),bytes=await artifact(job.analysis_id,machine);writeFileSync(new URL(key+'-machine.json',out),bytes);const full=JSON.parse(bytes);let sections=full.sections;
+ if(full.representation==='complete_section_artifacts_v1'){sections={};for(const[name,parts]of Object.entries(full.section_artifacts)){const rows=[];for(const part of parts){assert.equal(part.from_ordinal,rows.length);const p=JSON.parse(await artifact(job.analysis_id,part));assert.equal(p.length,part.record_count);rows.push(...p);}assert.equal(rows.length,job.metadata.sections[name]);sections[name]=rows;}}
+ else for(const[name,rows]of Object.entries(sections))if(name!=='artifacts')assert.equal(rows.length,job.metadata.sections[name]);
+ const archived=sections.artifacts||full.artifacts,archivedIDs=new Set(archived.map(a=>a.artifact_id));assert.equal(archived.length+2,files.length);assert.deepEqual(files.filter(a=>!archivedIDs.has(a.artifact_id)).map(a=>a.kind).sort(),['evidence_bundle','machine_result']);
+ for(const a of archived){const actual=files.find(f=>f.artifact_id===a.artifact_id);assert.ok(actual);assert.equal(actual.sha256,a.sha256);assert.equal(actual.byte_size,a.byte_size);}
+ const bundle=files.find(f=>f.kind==='evidence_bundle'),zip=await artifact(job.analysis_id,bundle),expected=files.filter(f=>f.kind!=='evidence_bundle').map(f=>({artifact_id:f.artifact_id,sha256:f.sha256,byte_size:f.byte_size}));
+ save(key+'-bundle-verification.json',JSON.parse(execFileSync('python3',[new URL('scripts/contract-analysis/p2_recovery_bundle.py',root).pathname],{input:Buffer.concat([Buffer.from(JSON.stringify(expected)+'\n'),zip]),maxBuffer:65536})));
+ const methods=await all('list_contract_methods',{analysis_id:job.analysis_id},13),flows=await all('get_contract_execution_flow',{analysis_id:job.analysis_id},97);assert.deepEqual(methods,sections.methods);assert.deepEqual(flows,sections.flows);
+ for(const name of extraSections)if(job.metadata.sections[name])assert.deepEqual(await all('get_contract_analysis',{analysis_id:job.analysis_id,section:name},89),sections[name],name);
+ const ids=new Set((sections.memory_versions||[]).map(v=>v.memory_version_id)),sourceIDs=new Set((sections.source_memory_versions||[]).map(v=>v.source_memory_version_id)),evidence=new Set(sections.evidence.map(e=>e.evidence_id));
+ for(const v of sections.memory_versions||[]){if(v.parent_version_id)assert.ok(ids.has(v.parent_version_id));assert.ok((v.evidence_ids||[]).every(e=>evidence.has(e)));}
+ for(const v of sections.source_memory_versions||[])if(v.object_memory_version_id)assert.ok(ids.has(v.object_memory_version_id));
+ for(const binding of sections.call_input_bindings||[]){assert.ok((binding.source_memory_version_ids||[]).every(v=>sourceIDs.has(v)));if(binding.memory_version_id)assert.ok(ids.has(binding.memory_version_id));}
+ let conclusions=sections.conclusions;
+ for(const d of sections.dependency_artifacts||[]){const raw=gunzipSync(await artifact(job.analysis_id,files.find(f=>f.artifact_id===d.artifact_id)));assert.equal(raw.length,d.uncompressed_bytes);assert.equal(sha(raw),d.uncompressed_sha256);const doc=JSON.parse(raw);assert.equal(doc.conclusions.length,sections.conclusions.length);assert.equal(doc.analysis_gaps.length,sections.analysis_gaps.length);conclusions=doc.conclusions;}
+ for(const name of['calls','call_input_bindings','source_memory_versions','source_memory_phis','memory_reads','abi_decodings','call_argument_models','fund_call_models','storage_references','storage_reference_phis','storage_access_bindings'])if(sections[name]?.length)assert.equal(conclusions.filter(c=>c.section===name).length,sections[name].length,name+' conclusion identities');
+ const referenceIDs=new Set((sections.storage_references||[]).map(r=>r.storage_reference_id)),bindingIDs=new Set((sections.storage_access_bindings||[]).map(r=>r.storage_access_binding_id)),storageIDs=new Set(sections.storage.map(r=>r.storage_id));
+ for(const phi of sections.storage_reference_phis||[])for(const c of phi.cases)if(c.storage_reference_id)assert.ok(referenceIDs.has(c.storage_reference_id));
+ for(const b of sections.storage_access_bindings||[]){assert.ok((b.storage_ids||[]).every(id=>storageIDs.has(id)));for(const c of b.cases||[])assert.ok((c.storage_reference_ids||[]).every(id=>referenceIDs.has(id)));}
+ for(const r of sections.storage)if(r.storage_access_binding_id)assert.ok(bindingIDs.has(r.storage_access_binding_id));
+ check(key+'-all-sections-pages-artifacts-and-version-references-match',true,{sections:job.metadata.sections,machine_sha256:machine.sha256});return{methods,sections,files};}
+function sourceInput(fixture,source){return{kind:'source',source:{language:'Solidity',files:{'StorageFlow.sol':source},compiler_version:fixture.source.compilation.compilerVersion.split('.Emscripten')[0],settings:fixture.source.stdJsonInput.settings,target:'StorageFlow.sol:StorageFlow'}};}
+const storageSections=['storage_references','storage_reference_phis','storage_access_bindings','state_transitions','method_details'];
+async function details(job,records,name){
+ const method=records.methods.find(m=>m.name===name);assert.ok(method);
+ const response=await call('get_contract_method_analysis',{analysis_id:job.analysis_id,method_id:method.method_id});assert.equal(response.items[0].method_id,method.method_id);
+ assert.deepEqual(response.items[0].storage_reference_ids,records.sections.storage_references.filter(r=>r.method_id===method.method_id).map(r=>r.storage_reference_id));
+ const detail=(await all('get_contract_analysis',{analysis_id:job.analysis_id,section:'method_details',method_id:method.method_id},2))[0];
+ for(const[section,query]of Object.entries(detail.storage_model_references)){
+  assert.equal(query.query.method_id,method.method_id);const expected=records.sections[section].filter(r=>r.method_id===method.method_id);assert.equal(query.record_count,expected.length);
+  assert.deepEqual(await all('get_contract_analysis',{analysis_id:job.analysis_id,section,method_id:method.method_id},2),expected);
+ }
+ return{method,detail};
+}
+async function semantics(job,records,name){
+ const method=records.methods.find(m=>m.name===name),transition=records.sections.state_transitions.find(t=>t.method_id===method.method_id),file=records.files.find(f=>f.artifact_id===transition.semantics_artifact_id);
+ assert.ok(transition.complete);assert.ok(file);const bytes=await artifact(job.analysis_id,file),value=JSON.parse(bytes);
+ assert.equal(value.method_id,method.method_id);assert.equal(value.model_id,transition.model_id);assert.equal(value.complete,true);assert.ok(value.declarations.includes('(Array Int Int)'));
+ assert.deepEqual(value.paths,transition.paths);assert.deepEqual(value.reverted_paths,transition.reverted_paths);return transition;
+}
+try{
+ await client.connect(new StreamableHTTPClientTransport(new URL('http://127.0.0.1:18092/mcp'),{requestInit:{headers:{Authorization:'Bearer '+vars.MCP_API_KEY}}}));
+ const caps=await call('get_contract_analysis_capabilities');check('storage-capabilities-frozen-and-proof-limits-preserved',caps.engine_digest===image&&caps.semantic_rules_version==='funds-semantics-17'&&caps.storage_reference_analysis.version==='storage-reference-v1'&&caps.storage_reference_analysis.all_execution_paths_verified===false&&caps.state_model_verification.whole_authorization_proved===false&&caps.state_model_verification.whole_protocol_economics_proved===false);
+ const fixture=storageFlowFixture(),sourceJob=await complete('source-storage',sourceInput(fixture,storageFlowSource),['whatsabi','sevm','solc-ast']),s=await verify('source-storage',sourceJob,storageSections),selected=await details(sourceJob,s,'captured');
+ const writes=s.sections.storage.filter(w=>w.method_id===selected.method.method_id&&w.access==='write'&&w.storage_projection);
+ check('captured-key-and-both-struct-writes-survive-MCP',writes.length===2&&writes.every(w=>w.variable==='users'&&w.storage_reference_ids.length===1)&&selected.detail.state_writes.every(w=>w.storage_access_binding_id));
+ const branch=await details(sourceJob,s,'branch'),branchWrites=s.sections.storage.filter(w=>w.method_id===branch.method.method_id&&w.access==='write'&&w.storage_projection);
+ check('conditional-locations-and-phi-query-are-readable',branchWrites.length===2&&branchWrites.every(w=>w.conditions.length>0)&&branch.detail.storage_model_references.storage_reference_phis.record_count>0);
+ const captured=await semantics(sourceJob,s,'captured'),rollback=await semantics(sourceJob,s,'rollback');
+ check('full-state-semantics-and-atomic-reverts-are-readable',captured.paths[0].writes.length===2&&rollback.reverted_paths.some(p=>p.attempted_writes.length===1)&&rollback.reverted_paths.every(p=>p.storage_after==='storage_0'));
+ const runtimeJob=await complete('same-runtime',{kind:'bytecode',code_phase:'runtime',bytecode:fixture.bytecode},['whatsabi','sevm']);await verify('same-runtime',runtimeJob);
+ const comparison=await call('compare_contract_versions',{analysis_id:sourceJob.analysis_id,compare_analysis_id:runtimeJob.analysis_id,page_size:37});check('source-runtime-version-comparison-readable',Array.isArray(comparison.items));
+ const effectFixture=storageEffectsFixture(),effectsJob=await complete('source-effects',sourceInput(effectFixture,storageEffectsSource),['whatsabi','sevm','solc-ast']),e=await verify('source-effects',effectsJob,storageSections);
+ const stateful=await semantics(effectsJob,e,'stateful'),short=await semantics(effectsJob,e,'shortEffect');await details(effectsJob,e,'tupleAssigned');
+ check('stateful-return-and-conditional-effect-paths-survive-saving',stateful.paths[0].writes.length===2&&new Set(short.paths.map(p=>p.writes.length)).size===2);
+ const ambiguous=e.sections.state_transitions.find(t=>t.method_id===e.methods.find(m=>m.name==='noncommuting').method_id);
+ check('noncommuting-sibling-gap-is-retained',ambiguous.complete===false&&ambiguous.unresolved.includes('STATE_UNSPECIFIED_SIBLING_EVALUATION_ORDER'));
+ const old=await call('get_contract_analysis',{analysis_id:'3235632e-8e6c-4b3b-85c6-80d0a281b362'});check('frozen-P1-result-keeps-original-rule',old.status==='completed'&&old.metadata.rule_version==='funds-semantics-14');
+ const transaction=await call('explain_contract_transaction',{analysis_id:'2401259f-d5e1-4947-9374-aa45d22919e0',tx_hash:'0xecdc668e16ada76f439b09c9b8c2faa7b76f80244933193c7691ac797e26eae7'});check('saved-transaction-explanation-remains-readable',transaction.items.length>0);
+ check('all-nine-contract-MCP-tools-used',actions.size===9,[...actions]);save('task-ids.json',jobs);save('result.json',{status:'PASS',image,jobs,checks:checks.length,external_provider_requests:0,quality:'offline_storage_and_effect_fixtures_not_general_or_fresh_blind_acceptance'});writeFileSync(new URL('mcp-current.txt',base),out.pathname+'\n');
+}catch(error){save('failure.json',{error:error.message,stack:error.stack,jobs});throw error;}finally{await client.close();}

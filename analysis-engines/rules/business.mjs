@@ -10,20 +10,35 @@ export function applyBusinessRules(result) {
     const rows=name=>(sections[name]||[]).filter(r=>r.method_id===m.method_id);
     const steps=rows('steps').sort((a,b)=>a.order-b.order),funds=rows('funds'),writes=rows('storage').filter(s=>s.access==='write'),guards=rows('permissions');
     const formulas=funds.map(f=>({fund_id:f.fund_id,asset:f.asset,unit:f.unit,
+      amount_expression_id:f.amount_expression_id||null,asset_expression_id:f.asset_expression_id||null,from_expression_id:f.from_expression_id||null,to_expression_id:f.to_expression_id||null,
       amount:f.expanded_amount_expression||f.amount_expression,recipient:f.expanded_to_expression||f.to_expression,sender:f.expanded_from_expression||f.from_expression,
       resolved_asset:f.expanded_asset_expression||f.asset,
       derivation_status:f.amount_derivation_status||'amount_expression_not_expanded',conditions:f.conditions||[],
-      settlement:f.settlement,evidence_ids:f.evidence_ids}));
+      settlement:f.settlement,economic_value_status:f.economic_value_status||null,call_input_binding_id:f.call_input_binding_id||null,source_memory_version_id:f.source_memory_version_id||null,
+      encoding_condition_groups:f.encoding_condition_groups||[],assumptions:f.assumptions||[],evidence_ids:f.evidence_ids}));
     sections.method_details.push({detail_id:id(m.method_id,'business-details'),method_id:m.method_id,
       schema_version:'contract-method-details-v1',signature:m.signature,code_address:m.code_address,storage_address:m.storage_address,
       inputs:m.parameters,outputs:m.outputs,conditions:guards.map(g=>({guard_id:g.guard_id,condition:g.expanded_condition||g.condition,original_condition:g.condition,path:g.path,parent_conditions:g.conditions,evidence_ids:g.evidence_ids})),
       returned_values:sections.dataflow.filter(d=>d.method_id===m.method_id&&(m.entry_return_derivation_id?d.kind==='entry_return_derivation':d.kind==='return_derivation')).map(d=>({dataflow_id:d.dataflow_id,expression:d.symbolic_expression,status:d.status,unresolved:d.unresolved,successful_return_paths:d.successful_return_paths||[],loops:d.loops||[]})),
       return_model_status:m.entry_return_model_status||'represented_return_statements',return_model_unresolved:m.entry_return_model_unresolved||[],
       calculation_rules:rows('expressions').filter(e=>e.symbolic_format==='binary'||['/','%','*','+','-'].includes(e.op)||e.arithmetic==='explicit_cast_truncation').map(e=>({expression_id:e.expression_id,expression:e.text,operator:e.operator||e.op,width:e.width,signed:e.signed,arithmetic:e.arithmetic,rounding:e.rounding||(e.operator==='/'?'toward_zero':null),evidence_ids:e.evidence_ids})),
-      state_reads:rows('storage').filter(s=>s.access==='read').map(s=>({storage_id:s.storage_id,key:s.key_expression,slot:s.slot,offset:s.offset,type:s.type,evidence_ids:s.evidence_ids})),
-      external_calls:rows('calls').map(c=>({call_id:c.call_id,type:c.call_type,target:c.target_expression,signature:c.signature,arguments:c.input_arguments,failure:c.failure_propagation,conditions:c.conditions,evidence_ids:c.evidence_ids})),
+      state_reads:rows('storage').filter(s=>s.access==='read').map(s=>({storage_id:s.storage_id,key:s.key_expression,slot:s.slot,offset:s.offset,type:s.type,
+        storage_access_binding_id:s.storage_access_binding_id||null,storage_reference_ids:s.storage_reference_ids||[],evidence_ids:s.evidence_ids})),
+      external_calls:rows('calls').map(c=>({call_id:c.call_id,type:c.call_type,target:c.target_expression,signature:c.signature,arguments:c.input_arguments,failure:c.failure_propagation,conditions:c.conditions,
+        call_input_binding_id:c.call_input_binding_id||null,source_memory_version_ids:c.source_memory_version_ids||[],encoding_condition_groups:c.encoding_condition_groups||[],assumptions:c.assumptions||[],evidence_ids:c.evidence_ids})),
+      memory_model_references:Object.fromEntries(Object.entries({memory_versions:'memory_version_id',memory_reads:'memory_read_id',memory_frontier:'memory_frontier_id',source_memory_versions:'source_memory_version_id',
+        source_memory_phis:'source_memory_phi_id',call_input_bindings:'call_input_binding_id',abi_values:'abi_value_id',abi_decodings:'abi_decoding_id',call_argument_models:'call_argument_model_id',fund_call_models:'fund_call_model_id'})
+        .map(([section,id_field])=>[section,{query:{section,method_id:m.method_id},id_field,record_count:(sections[section]||[]).filter(r=>r.method_id===m.method_id).length}])),
+      storage_model_references:Object.fromEntries(Object.entries({storage_references:'storage_reference_id',storage_reference_phis:'storage_reference_phi_id',storage_access_bindings:'storage_access_binding_id'})
+        .map(([section,id_field])=>[section,{query:{section,method_id:m.method_id},id_field,record_count:(sections[section]||[]).filter(r=>r.method_id===m.method_id).length}])),
+      scalar_model_references:Object.fromEntries(Object.entries({source_scalar_versions:'source_scalar_version_id',source_scalar_phis:'source_scalar_phi_id'})
+        .map(([section,id_field])=>[section,{query:{section,method_id:m.method_id},id_field,record_count:(sections[section]||[]).filter(r=>r.method_id===m.method_id).length}])),
+      aggregate_model_references:Object.fromEntries(Object.entries({expressions:'expression_id',dataflow:'dataflow_id'})
+        .map(([section,id_field])=>[section,{query:{section,method_id:m.method_id},id_field,record_count:(sections[section]||[]).filter(r=>r.method_id===m.method_id).length,
+          aggregate_records:section==='expressions'?rows(section).filter(r=>r.symbolic_format==='source_aggregate_version'||r.source_aggregate_reference||r.source_aggregate_field_declaration_id!==undefined).length:rows(section).filter(r=>r.kind==='source_aggregate_reference_binding').length}])),
       sequence:steps.map(s=>({step_id:s.step_id,order:s.order,kind:s.kind,operation:s.text,path:s.path,conditions:s.conditions,evidence_ids:s.evidence_ids})),
-      asset_effects:formulas,state_writes:writes.map(s=>({storage_id:s.storage_id,state_id:s.state_id,key:s.key_expression,operation:s.operation,value:s.value_expression,conditions:s.conditions,evidence_ids:s.evidence_ids})),
+      asset_effects:formulas,state_writes:writes.map(s=>({storage_id:s.storage_id,state_id:s.state_id,key:s.key_expression,operation:s.operation,value:s.value_expression,conditions:s.conditions,
+        storage_access_binding_id:s.storage_access_binding_id||null,storage_reference_ids:s.storage_reference_ids||[],projection_unresolved:s.projection_unresolved||[],evidence_ids:s.evidence_ids})),
       source_basis:m.completeness.basis,unresolved:m.completeness.unresolved,all_execution_paths_verified:false,
       evidence_ids:unique([...steps,...funds,...writes].flatMap(s=>s.evidence_ids||[]))});
     const paths=new Map();for(const s of steps){const path=s.path||'represented';const row=paths.get(path)||[];row.push(s);paths.set(path,row)}

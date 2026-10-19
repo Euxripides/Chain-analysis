@@ -3,7 +3,9 @@ package contractanalysis
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,6 +19,7 @@ import (
 const Version = "contract-analysis-v1"
 const Operation = "analyze_contract"
 const EngineOutputLimit = 64 << 20
+const EngineExpandedLimit = 128 << 20
 const ArtifactLimit = 32 << 20
 
 type Budget struct {
@@ -29,6 +32,7 @@ type Budget struct {
 	TimeoutSeconds  int   `json:"timeout_seconds"`
 }
 type Request struct {
+	Input             *SubmittedCode  `json:"input,omitempty"`
 	Program           *ProgramRequest `json:"program,omitempty"`
 	Chain             string          `json:"chain,omitempty"`
 	Address           string          `json:"address,omitempty"`
@@ -114,6 +118,11 @@ var CompleteHash = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 var Identifier = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func (q Request) Validate() error {
+	if q.Input != nil {
+		if err := q.ValidateCodeInput(); err != nil {
+			return err
+		}
+	}
 	if q.PageSize < 1 || q.PageSize > 200 || len(q.Cursor) > 2048 {
 		return fmt.Errorf("page_size must be 1-200")
 	}
@@ -180,33 +189,40 @@ func (q Request) Validate() error {
 }
 
 type Snapshot struct {
-	VMFamily         string         `json:"vm_family,omitempty"`
-	Slot             *uint64        `json:"slot,omitempty"`
-	ProgramLoader    string         `json:"program_loader,omitempty"`
-	Chain            string         `json:"chain"`
-	ChainID          string         `json:"chain_id"`
-	BlockNumber      uint64         `json:"block_number"`
-	BlockHash        string         `json:"block_hash"`
-	BlockTime        time.Time      `json:"block_time"`
-	EntryAddress     string         `json:"entry_address"`
-	CodeAddress      string         `json:"code_address"`
-	StorageAddress   string         `json:"storage_address"`
-	CodeHash         string         `json:"code_hash"`
-	CodeSHA256       string         `json:"code_sha256"`
-	EVMRules         string         `json:"evm_rules"`
-	EngineDigest     string         `json:"engine_digest"`
-	StateGranularity string         `json:"state_granularity"`
-	FetchedAt        time.Time      `json:"fetched_at"`
-	Proxy            map[string]any `json:"proxy,omitempty"`
+	IdentityKind        string               `json:"identity_kind,omitempty"`
+	InputKind           string               `json:"input_kind,omitempty"`
+	InputSHA256         string               `json:"input_sha256,omitempty"`
+	CodePhase           string               `json:"code_phase,omitempty"`
+	CodeIdentity        map[string]any       `json:"code_identity,omitempty"`
+	DeclaredEnvironment *DeclaredEnvironment `json:"declared_environment,omitempty"`
+	VMFamily            string               `json:"vm_family,omitempty"`
+	Slot                *uint64              `json:"slot,omitempty"`
+	ProgramLoader       string               `json:"program_loader,omitempty"`
+	Chain               string               `json:"chain"`
+	ChainID             string               `json:"chain_id"`
+	BlockNumber         uint64               `json:"block_number"`
+	BlockHash           string               `json:"block_hash"`
+	BlockTime           time.Time            `json:"block_time"`
+	EntryAddress        string               `json:"entry_address"`
+	CodeAddress         string               `json:"code_address"`
+	StorageAddress      string               `json:"storage_address"`
+	CodeHash            string               `json:"code_hash"`
+	CodeSHA256          string               `json:"code_sha256"`
+	EVMRules            string               `json:"evm_rules"`
+	EngineDigest        string               `json:"engine_digest"`
+	StateGranularity    string               `json:"state_granularity"`
+	FetchedAt           time.Time            `json:"fetched_at"`
+	Proxy               map[string]any       `json:"proxy,omitempty"`
 }
 type Input struct {
-	Program   json.RawMessage `json:"program,omitempty"`
-	Operation string          `json:"operation,omitempty"`
-	Witness   json.RawMessage `json:"witness,omitempty"`
-	Snapshot  Snapshot        `json:"snapshot"`
-	Bytecode  string          `json:"bytecode"`
-	Source    json.RawMessage `json:"source,omitempty"`
-	Engines   []string        `json:"engines"`
+	SubmittedInputJSON string          `json:"submitted_input_json,omitempty"`
+	Program            json.RawMessage `json:"program,omitempty"`
+	Operation          string          `json:"operation,omitempty"`
+	Witness            json.RawMessage `json:"witness,omitempty"`
+	Snapshot           Snapshot        `json:"snapshot"`
+	Bytecode           string          `json:"bytecode"`
+	Source             json.RawMessage `json:"source,omitempty"`
+	Engines            []string        `json:"engines"`
 }
 type FrozenInput struct {
 	Version       string            `json:"version"`
@@ -253,6 +269,45 @@ func ParseResult(raw []byte) (Result, error) {
 	e := d.Decode(&r)
 	if e == nil && (r.Version != Version || r.Sections == nil) {
 		e = fmt.Errorf("invalid engine protocol")
+	}
+	if rows, ok := r.Sections["engine_transport"]; e == nil && ok {
+		if len(rows) != 1 {
+			return r, fmt.Errorf("invalid engine transport")
+		}
+		var envelope struct {
+			Encoding      string `json:"encoding"`
+			Content       string `json:"content_base64"`
+			Bytes         int64  `json:"byte_size"`
+			SHA           string `json:"sha256"`
+			ExpandedBytes int64  `json:"expanded_bytes"`
+			ExpandedSHA   string `json:"expanded_sha256"`
+		}
+		if json.Unmarshal(rows[0], &envelope) != nil || envelope.Encoding != "engine-transport-gzip-v1" || envelope.Bytes < 1 || envelope.Bytes > ArtifactLimit || envelope.ExpandedBytes < 1 || envelope.ExpandedBytes > EngineExpandedLimit {
+			return r, fmt.Errorf("engine transport exceeds supported bounds")
+		}
+		compressed, err := base64.StdEncoding.DecodeString(envelope.Content)
+		if err != nil || int64(len(compressed)) != envelope.Bytes || SHA256(compressed) != envelope.SHA {
+			return r, fmt.Errorf("engine transport compressed integrity failed")
+		}
+		reader, err := gzip.NewReader(bytes.NewReader(compressed))
+		if err != nil {
+			return r, err
+		}
+		expanded, err := io.ReadAll(io.LimitReader(reader, EngineExpandedLimit+1))
+		closeErr := reader.Close()
+		if err != nil || closeErr != nil || int64(len(expanded)) != envelope.ExpandedBytes || SHA256(expanded) != envelope.ExpandedSHA {
+			return r, fmt.Errorf("engine transport expanded integrity failed")
+		}
+		var decoded Result
+		decoder := json.NewDecoder(bytes.NewReader(expanded))
+		decoder.UseNumber()
+		if decoder.Decode(&decoded) != nil || decoded.Sections == nil || decoded.Version != r.Version || decoded.RuleVersion != r.RuleVersion || !bytes.Equal(Row(decoded.Snapshot), Row(r.Snapshot)) {
+			return r, fmt.Errorf("engine transport identity mismatch")
+		}
+		if _, nested := decoded.Sections["engine_transport"]; nested {
+			return r, fmt.Errorf("nested engine transport rejected")
+		}
+		return decoded, nil
 	}
 	return r, e
 }

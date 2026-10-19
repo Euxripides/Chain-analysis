@@ -100,7 +100,8 @@ test('Vyper verified source retains fee, caller authorization, ledger and paymen
   assert.ok(redeem.verified_signature);
   const funds = result.sections.funds.filter(x => x.method_id === redeem.method_id);
   assert.deepEqual(funds.map(x => [x.to_expression,x.amount_expression]), [['self.recipient','fee'],['msg.sender','amount - fee']]);
-  assert.equal(funds[1].expanded_amount_expression, 'amount - (amount * self.fee_bps // 10000)');
+  const evaluate=new Function('amount','self','return '+funds[1].expanded_amount_expression.replaceAll('//','/').replace(/\b(0x[0-9a-fA-F]+|[0-9]+)\b/g,'$1n'));
+  for(const amount of [0n,1n,10001n,9007199254740993n])for(const fee of [0n,1n,137n])assert.equal(evaluate(amount,{fee_bps:fee}),amount-amount*fee/10000n);
   assert.ok(result.sections.expressions.some(x => x.method_id === redeem.method_id && x.text === 'amount * self.fee_bps // 10000'));
   const configure = result.sections.methods.find(x => x.name === 'configure');
   assert.ok(result.sections.permissions.some(x => x.method_id === configure.method_id && x.condition === 'msg.sender == self.owner'));

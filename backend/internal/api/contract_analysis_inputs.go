@@ -122,6 +122,14 @@ func (s *Server) contractMaterialize(ctx context.Context, q ca.Request, boundary
 	if reused {
 		return frozen, nil
 	}
+	if q.CodeOnly() {
+		input, err := s.contractSubmittedMaterial(ctx, q, boundary, ca.Snapshot{})
+		if err != nil {
+			return frozen, err
+		}
+		frozen = ca.FrozenInput{Version: ca.Version, Request: q, Snapshot: input.Snapshot, Contracts: []ca.Input{input}, SourceObjects: map[string]ca.Object{}, Frontier: []map[string]any{}, Transactions: []json.RawMessage{}, Coverage: []map[string]any{}}
+		return frozen, s.nextSaveFrozen(ctx, frozen)
+	}
 	if q.Program != nil {
 		var manifest struct {
 			Input ca.Object `json:"program_input"`
@@ -159,6 +167,17 @@ func (s *Server) contractMaterialize(ctx context.Context, q ca.Request, boundary
 	if e != nil {
 		return frozen, e
 	}
+	if q.Input != nil {
+		submitted, err := s.contractSubmittedMaterial(ctx, q, boundary, root.Snapshot)
+		if err != nil {
+			return frozen, err
+		}
+		root.Snapshot = submitted.Snapshot
+		root.SubmittedInputJSON = submitted.SubmittedInputJSON
+		if q.Input.Kind == "bytecode" && !strings.EqualFold(q.Input.Bytecode, root.Bytecode) {
+			return frozen, summaryError(422, "SUBMITTED_RUNTIME_SNAPSHOT_MISMATCH", "Submitted bytes differ from the observed runtime")
+		}
+	}
 	frozen.Snapshot = root.Snapshot
 	// Follow standard delegation identities while retaining each entry code and
 	// the original storage context. Cycles and unknown routing remain explicit.
@@ -176,7 +195,7 @@ func (s *Server) contractMaterialize(ctx context.Context, q ca.Request, boundary
 		for _, reason := range resolveErrors {
 			frozen.Coverage = append(frozen.Coverage, map[string]any{"dimension": "proxy", "address": key, "complete": false, "reason": reason})
 		}
-		if q.IncludeSource != nil && *q.IncludeSource {
+		if input.SubmittedInputJSON == "" && q.IncludeSource != nil && *q.IncludeSource {
 			source, err := s.contractSource(ctx, input)
 			if err == nil {
 				object, err := s.contractSaveObject(ctx, "source", source, "application/json")

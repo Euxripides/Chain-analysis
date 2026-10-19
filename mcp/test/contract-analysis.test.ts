@@ -8,6 +8,19 @@ import {RESTClient} from "../src/rest-client.js";
 import {createServer} from "node:http";
 import {once} from "node:events";
 const address="0x"+"1".repeat(40),tx="0x"+"2".repeat(64),job="00000000-0000-4000-8000-000000000001";
+test("source and bytecode inputs preserve phase, strict source boundaries and deployment binding",()=>{
+ const tool=contractAnalysisTools.find(t=>t.name==="analyze_contract")!,schema=z.object(tool.inputSchema as z.ZodRawShape).strict();
+ const source={kind:"source",source:{language:"Solidity",files:{"Token.sol":"contract Token {}"},compiler_version:"0.8.30+commit.73712a01",target:"Token.sol:Token"}};
+ for(const args of [{input:source},{input:{kind:"bytecode",bytecode:"0x6000",code_phase:"runtime"}},{input:{kind:"bytecode",bytecode:"0x6000",code_phase:"creation"}},{chain:"ethereum",address,input:source}])validateContractTool(tool.name,schema.parse(args));
+ for(const args of [{},{chain:"ethereum"},{input:source,block:1},{input:source,chain:"ethereum"},
+   {input:{...source,source:{...source.source,files:{"../Token.sol":"x"}}}},
+   {input:{...source,source:{...source.source,settings:{modelChecker:{engine:"all"}}}}},
+   {input:{kind:"bytecode",bytecode:"0x00",code_phase:"creation"},chain:"ethereum",address}]){
+  assert.throws(()=>validateContractTool(tool.name,schema.parse(args)));
+ }
+ assert.equal(schema.safeParse({input:{...source,object_key:"private"}}).success,false);
+ assert.equal(schema.safeParse({input:{kind:"bytecode",bytecode:"0x0",code_phase:"runtime"}}).success,false);
+});
 test("contract operation definitions constrain chains, budgets and exact identities",()=>{
  assert.equal(contractAnalysisTools.length,process.env.CONTRACT_PROGRAM_ANALYSIS_ENABLED==="1"?10:9);const tool=contractAnalysisTools.find(t=>t.name==="analyze_contract")!;
  const schema=z.object(tool.inputSchema as z.ZodRawShape).strict();const valid=schema.parse({chain:"ethereum",address,tx_hashes:[tx]});validateContractTool(tool.name,valid);

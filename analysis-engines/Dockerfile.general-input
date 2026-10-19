@@ -1,0 +1,6 @@
+FROM blockchain-contract-analysis:permit-nonces-c29c874732d2@sha256:c29c874732d26ccb8499c8256e42d1cb57578ce226e2890ebe0b6845dc2f6948
+USER root
+COPY model.mjs analyze.mjs source.mjs bytecode.mjs input.mjs conclusion-dependencies.mjs transport.mjs cli.mjs capabilities.mjs /engine/
+COPY verification/state.mjs verification/assembly.mjs verification/signatures.mjs /engine/verification/
+COPY ir/dataflow.mjs /engine/ir/
+USER 65532:65532

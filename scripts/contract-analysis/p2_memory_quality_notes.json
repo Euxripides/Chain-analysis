@@ -1,0 +1,7 @@
+{
+  "source_facts": {
+    "sushi-masterchef:3": ["partial", "已关联 poolInfo[_pid].lpToken、msg.sender、userInfo[_pid][msg.sender].amount 和 68 字节转账输入；UserInfo 清零状态写入尚未关联实际存储根，代币执行及结算尚未验证。"],
+    "uniswap-v3-staker:4": ["partial", "已关联 rewardToken、to、reward 和转账编码，并保存 rewards 扣减；reward 的分支到达定义仍有未解析依赖，代币返回及结算尚未验证。"],
+    "safe-singleton:4": ["partial", "原生币退款式经 72 组、代币退款式经 24 组独立整数求值验证；代币编码依赖内部入口 allocator 假设，实际付款与完整经济关系尚未验证。"]
+  }
+}

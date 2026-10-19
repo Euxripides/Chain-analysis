@@ -1,0 +1,7 @@
+FROM platform-contract-namespaced-storage:20261016@sha256:c0def36572929c176ad33937cf555aa89c92509e9e5479565fa33b873e48a1ed
+USER root
+COPY model.mjs capabilities.mjs /engine/
+COPY verification/signatures.mjs /engine/verification/signatures.mjs
+COPY verification/state.mjs /engine/verification/state.mjs
+COPY verification/policies.mjs /engine/verification/policies.mjs
+USER 65532:65532

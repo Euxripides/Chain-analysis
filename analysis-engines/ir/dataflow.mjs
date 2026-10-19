@@ -1,5 +1,12 @@
 import { id, unique } from '../model.mjs';
 
+// Substitution must preserve the precedence of an entire value, including a
+// conditional returned by a callee. Source spelling alone is not an operand.
+function formulaOperand(text) {
+  if (/^(?:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|[0-9]+|0x[0-9a-fA-F]+)$/.test(text)) return text;
+  return '('+text+')';
+}
+
 // Expand only definitions that dominate the use in the represented source path.
 // Branch-specific and compound definitions remain explicit unresolved inputs.
 export function applyDataflow(result) {
@@ -8,6 +15,16 @@ export function applyDataflow(result) {
   for (const method of result.sections.methods) {
     const expressions = new Map(result.sections.expressions.filter(e => e.method_id === method.method_id).map(e => [e.expression_id, e]));
     const definitions = (result.sections.definitions || []).filter(d => d.method_id === method.method_id);
+    const typedZero=(key,seen=new Set())=>{
+      if(!key||seen.has(key)||seen.size>=64)return false;const e=expressions.get(key);if(!e||e.source_scalar_binding_unavailable||e.unresolved_evaluation_effect)return false;const next=new Set([...seen,key]);
+      if(e.binding_expression_id)return typedZero(e.binding_expression_id,next);
+      const numericType=/^(?:u?int\d*|bytes(?:[1-9]|[12]\d|3[0-2])|address(?: payable)?)$/.test(e.type||'');
+      if(e.literal_kind==='number'||e.symbolic_format==='literal'&&numericType){const value=String(e.value??e.raw_literal??'');return /^(?:0+|0x0+)$/i.test(value);}
+      if(numericType&&['scalar_cast','identity'].includes(e.symbolic_format)&&e.operands?.length===1)return typedZero(e.operands[0],next);
+      if(numericType&&e.call_kind==='typeConversion'&&e.argument_expression_ids?.length===1)return typedZero(e.argument_expression_ids[0],next);
+      if(e.symbolic_format==='return_cases'&&e.paths?.length)return e.paths.every(p=>typedZero(p.expression_id,next));
+      return false;
+    };
     const expansionCache=new Map();
     const collectLoops=key=>{const seen=new Set(),pending=[key],loops=[];while(pending.length&&seen.size<4096){const k=pending.pop();if(seen.has(k))continue;seen.add(k);const e=expressions.get(k);if(!e)continue;
       loops.push(...(e.internal_return_model?.loops||e.entry_return_model?.loops||[]));pending.push(...(e.operands||[]));if(e.binding_expression_id)pending.push(e.binding_expression_id);}
@@ -30,14 +47,40 @@ export function applyDataflow(result) {
     const expandValue = (key, seen, budget, beforeOrder) => {
       const e = expressions.get(key);
       if (!e) return { text: '', unresolved: ['EXPRESSION_UNAVAILABLE'], definitions: [], evidence: [] };
-      const own = { text: e.text, unresolved: [e.unresolved_return_value,e.unresolved_evaluation_effect,...(e.unresolved_model_reasons||[])].filter(Boolean), definitions: [], evidence: [...(e.evidence_ids || [])] };
+      const own = { text: e.text, unresolved: [e.unresolved_return_value,e.unresolved_evaluation_effect,...(e.unresolved_model_reasons||[]),...(e.source_scalar_unresolved||[])].filter(Boolean), definitions: [], evidence: [...(e.evidence_ids || [])] };
       const next = new Set([...seen, key]);
+      // An unresolved write expression still names its compiler lvalue. Reading
+      // the operands for dependency evidence must never rewrite that target as
+      // its old value (for example, `z = x + y` becoming `0 = x + y`).
+      if(e.unresolved_evaluation_effect==='LOCAL_EXPRESSION_EFFECT_REQUIRES_ORDERED_RETURN_MODEL'&&!e.write_target_expression_id){
+        const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
+        return {...own,unresolved:unique([...own.unresolved,...values.flatMap(v=>v.unresolved)]),
+          definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
+      }
+      if(e.source_scalar_binding_unavailable)return {...own,unresolved:unique([...own.unresolved,'SOURCE_SCALAR_VALUE_UNAVAILABLE'])};
+      if(e.source_aggregate_binding_unavailable)return {...own,unresolved:unique([...own.unresolved,'SOURCE_AGGREGATE_FIELD_VALUE_UNAVAILABLE'])};
+      if(e.source_aggregate_reference){
+        const references=[e.source_aggregate_reference],missing=[],referenceDependencies=[];let visited=0;
+        while(references.length&&++visited<=64){const ref=references.pop();if(!ref)continue;missing.push(...(ref.unresolved||[]));referenceDependencies.push(...(ref.aggregate_return_expression_ids||[]));if(ref.kind==='conditional_aggregate_reference'){referenceDependencies.push(ref.condition_expression_id);references.push(ref.yes,ref.no);}}
+        if(references.length)missing.push('SOURCE_AGGREGATE_REFERENCE_BUDGET');
+        const ids=unique([...referenceDependencies,...(e.call_kind==='structConstructorCall'?e.argument_expression_ids||[]:[]),...(e.aggregate_return_paths||[]).flatMap(p=>[p.expression_id,...(p.conditions||[]).map(c=>c.expression_id),...(p.execution_steps||[]).map(s=>s.expression_id)])]),values=ids.filter(k=>k&&k!==key).map(k=>expand(k,next,budget,beforeOrder));
+        return{...own,text:e.text||'source_aggregate_reference',unresolved:unique([...own.unresolved,...missing,...values.flatMap(v=>v.unresolved)]),definitions:unique(values.flatMap(v=>v.definitions)),evidence:unique([...own.evidence,...values.flatMap(v=>v.evidence)])};
+      }
       if(e.symbolic_format==='tuple_component') {
-        let whole=expressions.get(e.operands?.[0]),index=e.component_index,tupleSeen=new Set();
-        while(whole?.binding_expression_id&&!tupleSeen.has(whole.expression_id)){tupleSeen.add(whole.expression_id);whole=expressions.get(whole.binding_expression_id);}
-        const component=(whole?.symbolic_format==='tuple'||whole?.op==='TupleExpression')?whole.operands?.[index]:null;
-        if(!component)return {...own,unresolved:['TUPLE_COMPONENT_UNAVAILABLE']};
-        const v=expand(component,next,budget,beforeOrder);return {...v,evidence:unique([...own.evidence,...v.evidence])};
+        let whole=expressions.get(e.operands?.[0]),index=e.component_index,tupleSeen=new Set(),chain=[];
+        while(whole&&!tupleSeen.has(whole.expression_id)){
+          tupleSeen.add(whole.expression_id);chain.push(whole);
+          if(!whole.binding_expression_id)break;
+          whole=expressions.get(whole.binding_expression_id);
+        }
+        const gaps=chain.flatMap(v=>[v.unresolved_return_value,v.unresolved_evaluation_effect,...(v.unresolved_model_reasons||[]),...(v.source_scalar_unresolved||[])]).filter(Boolean);
+        const component=whole?.abi_component_expression_ids?.[index]||(whole?.tuple_component_expression_ids?whole.tuple_component_expression_ids[index]:(whole?.symbolic_format==='tuple'||whole?.op==='TupleExpression')?whole.operands?.[index]:null);
+        const v=expand(component||e.operands?.[0],next,budget,beforeOrder);
+        // A tuple is never interchangeable with one of its values. Even an
+        // opaque return retains the projection index and the compiler type.
+        return {...v,text:component?v.text:'tuple_component('+v.text+', '+index+')',
+          unresolved:unique([...own.unresolved,...gaps,...v.unresolved,...(!component?['TUPLE_COMPONENT_UNAVAILABLE']:[])]),
+          evidence:unique([...own.evidence,...chain.flatMap(v=>v.evidence_ids||[]),...v.evidence])};
       }
       if(e.symbolic_format) {
         const values=(e.operands||[]).map(k=>expand(k,next,budget,beforeOrder));
@@ -49,11 +92,20 @@ export function applyDataflow(result) {
           induction_model_id:e.loop_model_id,proof_obligation_ids:e.proof_obligation_ids};
         if(e.symbolic_format==='inductive_polynomial_loop')return {...merged,text:'('+values[0].text+' '+e.operator+' sum_{i=0}^{'+values[1].text+'-1} ('+e.summation_terms.map(t=>t.coefficient+' * '+t.factor_operands.map(k=>values[k].text).concat(['i^'+t.degree]).join(' * ')).join(' + ')+'))',
           induction_model_id:e.loop_model_id,proof_obligation_ids:e.proof_obligation_ids,polynomial_certificate:e.polynomial_certificate};
+        if(e.symbolic_format==='source_storage_snapshot'){
+          const keyValues=new Map((e.operands||[]).map((key,i)=>[key,values[i]?.text]));let invalid=false,count=0;
+          const slot=(term,depth=0)=>{if(!term||++count>128||depth>32){invalid=true;return '?';}if(term.op==='constant'||term.op==='expression'){const value=term.op==='constant'?term.value:keyValues.get(term.expression_id);if(value===undefined)invalid=true;return term.encoding_type?'storage_key<'+term.encoding_type+'>('+value+')':value;}const parts=(term.args||[]).map(t=>slot(t,depth+1));if(term.op==='keccak_words')return 'keccak_words('+parts.join(', ')+')';const op={add:'+',mul:'*',div:'/',mod:'%'}[term.op];if(!op||parts.length!==2){invalid=true;return '?';}return '('+parts[0]+' '+op+' '+parts[1]+')';};
+          const text='storage_at_copy<'+e.type+'>('+e.source_storage_copy_point_id+', '+slot(e.storage_projection?.slot_expression)+', byte_offset='+e.storage_projection?.offset+')';
+          if(invalid||Buffer.byteLength(text)>16384)return {...merged,text:e.text,unresolved:unique([...merged.unresolved,invalid?'SOURCE_STORAGE_SNAPSHOT_SLOT_UNAVAILABLE':'EXPANDED_EXPRESSION_TOO_LARGE'])};
+          return {...merged,text};
+        }
         if(e.symbolic_format==='literal')return {...merged,text:e.value};
+        if(e.symbolic_format==='entry_scalar')return {...merged,text:e.value};
+        if(e.symbolic_format==='conditional')return {...merged,text:'('+values[0].text+' ? '+values[1].text+' : '+values[2].text+')'};
         if(e.symbolic_format==='identity')return {...merged,text:values[0].text};
-        if(e.symbolic_format==='scalar_cast')return {...merged,text:e.type+'('+values[0].text+')'};
-        if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+values[0].text+')'};
-        if(e.symbolic_format==='binary')return {...merged,text:'('+values[0].text+' '+e.operator+' '+values[1].text+')'};
+        if(e.symbolic_format==='scalar_cast')return {...merged,text:e.type+'('+(e.preserve_source_type?e.cast_source_type+'('+values[0].text+')':values[0].text)+')'};
+        if(e.symbolic_format==='unary')return {...merged,text:'('+e.operator+formulaOperand(values[0].text)+')'};
+        if(e.symbolic_format==='binary')return {...merged,text:'('+formulaOperand(values[0].text)+' '+e.operator+' '+formulaOperand(values[1].text)+')'};
         if(e.symbolic_format==='tuple')return {...merged,text:'('+values.map(v=>v.text).join(', ')+')',
           return_paths:values[0]?.return_paths?.map((p,i)=>({conditions:p.conditions,execution_steps:p.execution_steps||[],value:'('+values.map(v=>v.return_paths?.[i]?.value||v.text).join(', ')+')'}))||[]};
         if(e.symbolic_format==='return_cases') {
@@ -69,7 +121,7 @@ export function applyDataflow(result) {
         return {...merged,unresolved:[...merged.unresolved,'SYMBOLIC_FORMAT_UNSUPPORTED']};
       }
       if(e.resolved_value!==undefined)return {...own,text:e.resolved_value};
-      if (e.binding_expression_id) {const bound=expand(e.binding_expression_id,next,budget,beforeOrder);return {...bound,text:e.binding_kind==='function_return'?'('+bound.text+')':bound.text,evidence:unique([...own.evidence,...bound.evidence])}}
+      if (e.binding_expression_id) {const bound=expand(e.binding_expression_id,next,budget,beforeOrder),evaluations=unique([...(e.aggregate_evaluation_expression_ids||[]),...(e.aggregate_return_expression_ids||[])]).filter(k=>k!==e.binding_expression_id).map(k=>expand(k,next,budget,beforeOrder));return {...bound,text:e.binding_kind==='function_return'?'('+bound.text+')':formulaOperand(bound.text),unresolved:unique([...own.unresolved,...bound.unresolved,...evaluations.flatMap(v=>v.unresolved)]),definitions:unique([...bound.definitions,...evaluations.flatMap(v=>v.definitions)]),evidence:unique([...own.evidence,...bound.evidence,...evaluations.flatMap(v=>v.evidence)])}}
       // The synthetic entry argument captures the value before any body
       // assignment. Branch-local reassignments cannot redefine that input.
       if(e.entry_argument)return own;
@@ -82,6 +134,7 @@ export function applyDataflow(result) {
         matching.sort((a,b) => b.order - a.order);
         const selected = matching[0];
         const later = local.some(d => d.order < useOrder && d.order > (selected?.order ?? -1));
+        if(!selected&&!later&&method.parameters.some(p=>p.source_ast_id===e.referenced_declaration))return own;
         if (!selected || later) return { ...own, unresolved: ['DEFINITION_DOES_NOT_DOMINATE_USE'] };
         const value = expand(selected.value_expression_id, next, budget, selected.order);
         return { ...value, text: '(' + value.text + ')', definitions: unique([...value.definitions, selected.definition_id]),
@@ -97,7 +150,10 @@ export function applyDataflow(result) {
         if (!at || at.start < location.start || at.start + at.length > location.start + location.length) continue;
         const expanded = expand(operand, next, budget, beforeOrder);
         own.unresolved.push(...expanded.unresolved); own.definitions.push(...expanded.definitions); own.evidence.push(...expanded.evidence);
-        if (expanded.text !== child.text) replacements.push({ start: at.start - location.start, length: at.length, text: expanded.text });
+        // Preserve the compiler write target while still expanding read values
+        // on the right with their actual caller/frame bindings.
+        if(operand===e.write_target_expression_id)continue;
+        if (expanded.text !== child.text) replacements.push({ start: at.start - location.start, length: at.length, text: formulaOperand(expanded.text) });
       }
       replacements.sort((a,b) => a.start - b.start || b.length - a.length);
       const disjoint = replacements.filter((r,i,list) => !list.slice(0,i).some(p => p.start <= r.start && p.start + p.length > r.start));
@@ -142,6 +198,11 @@ export function applyDataflow(result) {
       fund.amount_derivation_id = flow_id;
       fund.expanded_amount_expression = amount.text;
       fund.amount_derivation_status = row.status;
+      if(fund.kind==='native_payment'&&!amount.unresolved.length&&(typedZero(fund.amount_expression_id)||/^\(*0\)*$/.test(amount.text.replace(/\s/g,'')))){
+        fund.economic_value_status='zero_call_value';
+        fund.economic_value_basis='resolved_zero_literal_or_compiler_typed_zero_binding';
+        for(const flow of result.sections.flows)if(flow.fund_id===fund.fund_id)flow.economic_value_status='zero_call_value';
+      }
     }
     for(const fund of result.sections.funds.filter(f=>f.method_id===method.method_id))for(const field of ['asset','from','to']) {
       const key=fund[field+'_expression_id'];if(!key)continue;
@@ -161,6 +222,24 @@ export function applyDataflow(result) {
       const returned=expressions.get(step.expression_id),key=returned?.op==='Return'&&returned.operands?.length===1?returned.operands[0]:step.expression_id,value=expand(key);
       const dataflow_id=id(step.step_id,'return-dataflow');result.sections.dataflow.push({dataflow_id,method_id:method.method_id,step_id:step.step_id,kind:'return_derivation',original_expression:expressions.get(key)?.text,
         symbolic_expression:value.text,status:value.unresolved.length?'partial':'represented_source_dependencies_resolved',unresolved:value.unresolved,definition_ids:value.definitions,evidence_ids:value.evidence,all_execution_paths_verified:false});
+    }
+    for(const version of (result.sections.source_memory_versions||[]).filter(v=>v.method_id===method.method_id&&!v.mutation&&v.argument_expression_ids?.length)){
+      version.argument_derivation_ids=[];
+      for(const [index,expression_id]of version.argument_expression_ids.entries()){
+        const value=expand(expression_id),dataflow_id=id(version.source_memory_version_id,'argument-dataflow',index);
+        result.sections.dataflow.push({dataflow_id,method_id:method.method_id,source_memory_version_id:version.source_memory_version_id,kind:'source_abi_argument_derivation',argument_index:index,
+          expression_id,original_expression:version.argument_texts[index],symbolic_expression:value.text,status:value.unresolved.length?'partial':'represented_source_dependencies_resolved',
+          unresolved:value.unresolved,definition_ids:value.definitions,evidence_ids:value.evidence,all_execution_paths_verified:false});
+        version.argument_derivation_ids.push(dataflow_id);
+      }
+    }
+    for(const version of(result.sections.source_scalar_versions||[]).filter(v=>v.method_id===method.method_id&&v.value_expression_id)){
+      const value=expand(version.value_expression_id),dataflow_id=id(version.source_scalar_version_id,'value-dataflow');
+      result.sections.dataflow.push({dataflow_id,method_id:method.method_id,source_scalar_version_id:version.source_scalar_version_id,kind:'source_scalar_value_derivation',
+        expression_id:version.value_expression_id,original_expression:expressions.get(version.value_expression_id)?.text,
+        symbolic_expression:value.text,status:value.unresolved.length?'partial':'represented_source_dependencies_resolved',unresolved:value.unresolved,
+        definition_ids:value.definitions,evidence_ids:value.evidence,all_execution_paths_verified:false});
+      version.value_derivation_id=dataflow_id;version.value_derivation_status=value.unresolved.length?'partial':'represented_source_dependencies_resolved';
     }
     method.return_derivation_ids=result.sections.dataflow.filter(d=>d.method_id===method.method_id&&d.kind==='return_derivation').map(d=>d.dataflow_id);
     method.amount_derivation_ids = result.sections.dataflow.filter(d => d.method_id === method.method_id&&d.kind==='amount_derivation').map(d => d.dataflow_id);

@@ -111,7 +111,7 @@ test('a bad virtual override cannot inherit a validated base namespace accessor'
  assert.ok(layout.namespace_storage.accessors.some(a=>a.unresolved.includes('NAMESPACE_ACTUAL_ROOT_MISMATCH')));
 });
 
-test('conditional and loop pointer rebindings do not publish an assumed physical field',()=>{
+test('conditional pointers keep both field locations and loop candidates retain their unresolved invariant',()=>{
  const body=`pragma solidity ^0.8.24;contract Verification{
  /// @custom:storage-location erc7201:example.main
  struct Store{Config first;Config second;}struct Config{uint value;}bytes32 constant ROOT=${root};
@@ -121,7 +121,10 @@ test('conditional and loop pointer rebindings do not publish an assumed physical
  }`;
  const r=run(body);for(const name of['branch','loop']){
   const method=r.sections.methods.find(m=>m.name===name);assert.ok(method);
-  assert.equal(r.sections.storage.filter(s=>s.method_id===method.method_id&&s.access==='write').length,0);
+  const writes=r.sections.storage.filter(s=>s.method_id===method.method_id&&s.access==='write'&&s.storage_reference_ids?.length);
+  assert.equal(writes.length,2);
+  if(name==='branch')assert.deepEqual(writes.map(s=>s.conditions),[['choose'],['!(choose)']]);
+  else assert.ok(writes.every(s=>s.projection_unresolved.includes('STORAGE_REFERENCE_LOOP_REQUIRES_INVARIANT')));
   const transition=r.sections.state_transitions.find(t=>t.method_id===method.method_id);
   if(name==='branch'){assert.equal(transition.complete,true,JSON.stringify(transition));assert.equal(transition.paths.length,2);}
   else assert.equal(transition.complete,false);

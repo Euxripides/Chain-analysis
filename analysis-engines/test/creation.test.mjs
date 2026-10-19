@@ -59,3 +59,44 @@ test('creation gaps and invalid initial issuance remain visible to the policy re
  const unknown=run(inheritedInitializationSource.replace('constructor(){x=42;}','constructor(){assembly{let p:=mload(64) sstore(p,1)}}'));
  assert.equal(initialization(unknown).complete,false);assert.ok(unknown.sections.initial_state_models[0].paths.some(p=>p.writes.some(w=>w.root_ast_id===null)));
 });
+
+import {createHash as creationHash}from'node:crypto';
+import {id as creationRecordID}from'../model.mjs';
+
+function creationMaterial(value,{explicit=false}={}){
+ const body=explicit?`uint256 public value;constructor(){value=${value};}`:`uint256 public value=${value};`;
+ const source=`pragma solidity ^0.8.30;contract Verification{${body}function set(uint256 n)external{value=n;}}`;
+ return {kind:'source',source:{language:'Solidity',files:{'Verification.sol':source},compiler_version:'0.8.30+commit.73712a01',target:'Verification.sol:Verification',settings:{evmVersion:'shanghai',metadata:{bytecodeHash:'none'}}}};
+}
+function creationFromMaterial(material){
+ const raw=JSON.stringify(material),input_sha256=creationHash('sha256').update(raw).digest('hex');
+ const model=analyze({submitted_input_json:raw,snapshot:{identity_kind:'code_only',input_kind:'source',input_sha256,state_granularity:'symbolic_state',evm_rules:'shanghai'},engines:['solc-ast']});
+ assert.equal(model.sections.engines.find(e=>e.engine==='solc-ast')?.status,'completed');
+ const initial=model.sections.initial_state_models[0],method=model.sections.methods.find(m=>m.method_id===initial.method_id);assert.ok(method);
+ return {model,initial,method,input_sha256};
+}
+test('different input and initcode with equal runtime retain different implicit creation and initial model identities',()=>{
+ const left=creationFromMaterial(creationMaterial(7)),right=creationFromMaterial(creationMaterial(9));
+ assert.equal(left.model.snapshot.code_hash,right.model.snapshot.code_hash);assert.notEqual(left.input_sha256,right.input_sha256);
+ assert.notEqual(left.initial.creation_identity.initcode,right.initial.creation_identity.initcode);
+ assert.notEqual(left.method.method_id,right.method.method_id);assert.notEqual(left.initial.model_id,right.initial.model_id);
+ assert.equal(left.method.dispatch_role,'implicit_source_definition');assert.equal(right.method.dispatch_role,'implicit_source_definition');
+ for(const result of[left,right]){
+  assert.equal(result.initial.deployment_identity_verified,false);assert.ok(result.method.completeness.unresolved.includes('DEPLOYMENT_CREATION_IDENTITY_NOT_VERIFIED'));
+  const evidence=new Map(result.model.sections.evidence.map(e=>[e.evidence_id,e]));assert.ok(result.method.evidence_ids.length);for(const eid of result.method.evidence_ids)assert.equal(evidence.get(eid)?.method_id,result.method.method_id);
+ }
+});
+test('the same submitted source material retains stable creation and model identities across analysis runs',()=>{
+ const material=creationMaterial(7),left=creationFromMaterial(material),right=creationFromMaterial(material);
+ assert.equal(left.method.method_id,right.method.method_id);assert.equal(left.initial.model_id,right.initial.model_id);assert.deepEqual(left.method.evidence_ids,right.method.evidence_ids);
+});
+test('observed templates without submitted input keep the existing implicit creation identity',()=>{
+ const fixture=compileVerificationFixture(true,'pragma solidity ^0.8.30;contract Verification{uint256 public value=7;function set(uint256 n)external{value=n;}}','shanghai');
+ assert.equal(fixture.snapshot.input_sha256,undefined);const model=analyze(fixture),initial=model.sections.initial_state_models[0],method=model.sections.methods.find(m=>m.method_id===initial.method_id);
+ assert.equal(method.dispatch_role,'implicit_source_definition');assert.equal(method.method_id,creationRecordID(fixture.snapshot.code_hash,fixture.snapshot.storage_address,'source-creation'));assert.equal(initial.deployment_identity_verified,false);
+});
+test('explicit constructors retain their original declaration binding and submitted material separation',()=>{
+ const left=creationFromMaterial(creationMaterial(7,{explicit:true})),right=creationFromMaterial(creationMaterial(9,{explicit:true}));
+ assert.equal(left.model.snapshot.code_hash,right.model.snapshot.code_hash);assert.notEqual(left.method.method_id,right.method.method_id);
+ for(const result of[left,right]){assert.notEqual(result.method.dispatch_role,'implicit_source_definition');assert.equal(result.model.sections.methods.filter(m=>m.method_id===result.initial.method_id).length,1);assert.equal(result.initial.deployment_identity_verified,false);}
+});

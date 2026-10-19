@@ -19,7 +19,7 @@ for(const legacy of [false,true])for(const optimizer of [false,true])test('local
  }
  if(legacy) {
   assert.equal(model('mul').successful_return_paths.length,2);
-  assert.ok(model('mul').successful_return_paths.some(p=>p.value==='0'&&p.conditions.some(c=>c.replace(/\s/g,'').includes('y==0'))));
+  assert.ok(model('mul').successful_return_paths.some(p=>p.value==='uint256(0)'&&p.conditions.some(c=>c.replace(/\s/g,'').includes('y==0'))));
   assert.ok(result.sections.funds.filter(f=>f.method_id===method('pay').method_id).every(f=>f.amount_derivation_status==='represented_source_dependencies_resolved'));
   assert.ok(result.sections.expressions.some(e=>e.symbolic_format==='identity'&&e.arithmetic==='wrap'));
  }else {

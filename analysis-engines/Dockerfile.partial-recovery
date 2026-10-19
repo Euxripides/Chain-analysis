@@ -1,0 +1,5 @@
+FROM blockchain-contract-analysis:general-input-2c294c4501ea@sha256:2c294c4501eab28cfb7947154b79dbca74cc0350167c4e664d6761cacca9b7ec
+USER root
+COPY model.mjs analyze.mjs source.mjs bytecode.mjs capabilities.mjs conclusion-dependencies.mjs section-checkpoint.mjs bytecode-sevm.mjs bytecode-sevm-worker.mjs bytecode-sevm-protocol.mjs runner-resource.py /engine/
+USER 65532:65532
+ENTRYPOINT ["/opt/contract-python/bin/python","/engine/runner-resource.py"]

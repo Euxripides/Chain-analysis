@@ -129,6 +129,22 @@ func (s *Server) handleNextInvestigation(w http.ResponseWriter, r *http.Request,
 		investigationError(w, summaryError(422, "INLINE_RESULT_TOO_LARGE", "Result exceeds 8 MiB; use mode=async and cursor result pages"))
 		return
 	}
+	if op == "cancel_analysis" || op == "resume_analysis" {
+		if record, ok := data.(map[string]any); ok && record["version"] == ca.Version {
+			scope, err := s.nextTenant(ctx)
+			if err != nil {
+				investigationError(w, err)
+				return
+			}
+			ev := auditEventFor(r, PrincipalFrom(r.Context()), metaFrom(r.Context()), "contract_analysis."+strings.TrimSuffix(op, "_analysis"), "analysis", "contract_analysis", q.AnalysisID, "success", map[string]any{"organization_id": scope.OrganizationID, "workspace_id": scope.WorkspaceID, "status": record["status"], "phase": record["phase"]})
+			ev.ActorType, ev.ActorName = "api_client", "MCP/GPT Actions"
+			ev.OrganizationID, ev.WorkspaceID = scope.OrganizationID, scope.WorkspaceID
+			if err = s.emitAudit(ctx, ev); err != nil {
+				investigationError(w, summaryError(503, "AUDIT_UNAVAILABLE", "Analysis audit could not be saved"))
+				return
+			}
+		}
+	}
 	actionOK(w, data, map[string]any{"source": "rpc_and_indexed_evidence", "dataset_version": nextVersion, "coverage": map[string]any{"complete": false, "basis": "Inspect operation-specific coverage dimensions"}})
 }
 func nextComputable(op string) bool {

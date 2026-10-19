@@ -19,8 +19,15 @@ const budget = z.object({
   max_rpc_requests: z.number().int().min(10).max(2000).optional(), max_credits: z.number().int().min(1).max(1000000).optional(),
   timeout_seconds: z.number().int().min(30).max(1800).optional(),
 }).strict().default({});
+const declaredEnvironment=z.object({chain_id:z.string().regex(/^[1-9][0-9]{0,77}$/).optional(),execution_address:address.optional(),evm_rules:z.enum(["shanghai","cancun","prague"]).optional()}).strict();
+const submittedSource=z.object({language:z.literal("Solidity"),files:z.record(z.string().min(1).max(256),z.string()),
+  compiler_version:z.string().regex(/^0\.[0-9]+\.[0-9]+\+commit\.[0-9a-f]{8}$/),settings:z.record(z.string(),z.unknown()).optional(),target:z.string().min(3).max(384)}).strict();
+const submittedCode=z.discriminatedUnion("kind",[
+  z.object({kind:z.literal("source"),source:submittedSource,bytecode:z.string().regex(/^0x(?:[0-9a-fA-F]{2}){1,49152}$/).optional(),code_phase:z.enum(["runtime","creation"]).optional(),environment:declaredEnvironment.optional()}).strict(),
+  z.object({kind:z.literal("bytecode"),bytecode:z.string().regex(/^0x(?:[0-9a-fA-F]{2}){1,49152}$/),code_phase:z.enum(["runtime","creation"]),environment:declaredEnvironment.optional()}).strict(),
+]);
 export const contractAnalysisInputShape = {
-  chain, address, block: z.union([integer,z.enum(["latest","safe","finalized"])]).optional(),
+  chain:chain.optional(), address:address.optional(), input:submittedCode.optional(),block: z.union([integer,z.enum(["latest","safe","finalized"])]).optional(),
   timestamp: z.string().datetime({ offset: true }).optional(), from_block: integer.optional(), to_block: integer.optional(),
   tx_hashes: z.array(tx).max(50).optional(), include_source: z.boolean().default(true),
   engines: z.array(z.enum(["whatsabi","sevm","solc-ast","heimdall","slither","gigahorse","vyper-ast"])).min(2).max(7).default(["whatsabi","sevm","solc-ast","heimdall","slither","gigahorse"]),
@@ -37,7 +44,7 @@ export const allContractAnalysisTools:ToolDefinition[] = [
     tx_hashes:z.array(z.string().min(64).max(100)).max(50).optional(),budget,idempotency_key:z.string().max(128).optional(),
   },false),
   tool("get_contract_analysis_capabilities","Read the capabilities observed from the configured digest-pinned runtime: installed engines, source compiler versions, supported execution families and precise historical replay restrictions. Availability is separate from protocol certification. No blockchain requests.",{}),
-  tool("analyze_contract","Queue detailed EVM analysis at an immutable block/hash. Default engines: WhatsABI, sevm, verified/recompiled Solidity AST (Vyper 0.4.3 for matching source), Heimdall, Slither and Gigahorse TAC. Read method_details, operating_flows, control_effects, protocols, dataflow, ir_dataflow, ir_effects, source_verification and existing sections for conditions, exact formulas, recipients, runtime immutables, configuration effects and evidence. Interface profiles do not certify economic behavior. Proxy code/storage identities stay separate. Supply bounded history and up to 20 transaction hashes for execution/prestate/diffs and ledger reconciliation. No on-chain writes or automatic full historical downloads.",contractAnalysisInputShape,false),
+  tool("analyze_contract","Queue EVM address, submitted Solidity source, or bytecode analysis. Keep legacy chain/address requests; alternatively input.kind=source with named files, exact compiler version/settings and file:Contract target, or input.kind=bytecode with full bytes and runtime/creation code_phase. Code-only input performs zero provider requests, retains symbolic state and declared environment separately, and never invents deployment addresses or blocks. Optional chain/address binds submitted runtime/source to observed deployment code. Compile failures preserve input/diagnostics; supplied runtime permits bytecode fallback. Creation input preserves disassembly and explicit runtime frontier. Read methods, flows, formulas, permissions, conclusions/analysis_gaps and evidence through the existing tools. State/transactions require deployment binding; selected transactions preserve execution/prestate/diffs. No on-chain writes.",contractAnalysisInputShape,false),
   tool("get_contract_analysis","Read scoped contract job status, immutable snapshot, exact section counts and completeness. With section, traverse every saved row using filter/snapshot-bound cursors; no top-200 truncation. Job completed and semantic coverage complete are independent.",{analysis_id,section:z.string().max(100).optional(),method_id:item.optional(),evidence_id:item.optional(),...page}),
   tool("list_contract_methods","List all discovered contract methods, stable method IDs, selectors, verified signatures versus candidates, body-derived Chinese purpose, behaviors and per-method coverage. Filter by text/selector or behavior and traverse all pages.",{analysis_id,search:z.string().max(200).optional(),behavior:z.string().max(100).optional(),...page}),
   tool("get_contract_method_analysis","Read the method model: parameters/outputs, conditions, ordered step references, storage/call/fund/expression/evidence IDs, formulas, dependencies and observed transaction links. Retrieve referenced sections with get_contract_analysis(method_id=...). Function names and comments do not prove behavior.",{analysis_id,method_id:item}),
@@ -49,6 +56,28 @@ export const allContractAnalysisTools:ToolDefinition[] = [
 export const contractAnalysisTools = allContractAnalysisTools.filter(t=>t.name!=="analyze_program"||process.env.CONTRACT_PROGRAM_ANALYSIS_ENABLED==="1");
 export function validateContractTool(name:string,input:Record<string,unknown>):void {
   if (!allContractAnalysisTools.some(t=>t.name===name)) return;
+  if(name==="analyze_contract") {
+    if(Buffer.byteLength(JSON.stringify(input))>2<<20)throw new Error("Contract arguments exceed 2 MiB");
+    const material=input.input as z.infer<typeof submittedCode>|undefined;
+    if(!material&&(!input.chain||!input.address))throw new Error("Provide chain/address or input source/bytecode");
+    if(Boolean(input.chain)!==Boolean(input.address))throw new Error("Deployment binding requires chain and address together");
+    if(material){
+      const bound=Boolean(input.chain);
+      if(!bound&&[input.block,input.timestamp,input.from_block,input.to_block,input.tx_hashes].some(x=>x!==undefined))throw new Error("Block, history and transactions require deployment binding");
+      if(material.bytecode&&!material.code_phase)throw new Error("Bytecode requires explicit code_phase");
+      if(bound&&material.code_phase==="creation")throw new Error("Creation code cannot be equated with deployed runtime");
+      if(material.environment?.chain_id&&BigInt(material.environment.chain_id)>=(1n<<256n))throw new Error("Declared chain identity exceeds uint256");
+      if(material.kind==="source"){
+        const files=Object.entries(material.source.files);
+        if(!files.length||files.length>256||files.reduce((n,[p,s])=>n+Buffer.byteLength(p)+Buffer.byteLength(s),0)>1536<<10)throw new Error("Source file budget exceeded");
+        if(files.some(([p])=>{const logical=p.replace(/^(?:\.\/)+/,'');return !logical||/(?:^|\/)\.\.?($|\/)|[\\:\x00\r\n\t]|^\/|\/\//.test(logical)||logical.endsWith('/')}))throw new Error("Source paths must be relative and canonical");
+        const split=material.source.target.lastIndexOf(':'),file=material.source.target.slice(0,split),target=material.source.target.slice(split+1);
+        if(!Object.hasOwn(material.source.files,file)||!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(target))throw new Error("Target must identify a supplied source contract");
+        const settings=material.source.settings||{},allowed=new Set(['optimizer','viaIR','evmVersion','libraries','remappings','metadata','debug']);
+        if(Object.keys(settings).some(k=>!allowed.has(k))||Buffer.byteLength(JSON.stringify(settings))>64<<10)throw new Error("Unsupported compiler settings");
+      }
+    }
+  }
   if (name === "analyze_program") {
     const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     const decode=(value:string):Buffer=>{

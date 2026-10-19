@@ -3,15 +3,21 @@ import {lowerYul} from './yul.mjs';
 import {evmWord} from './evm-word.mjs';
 import {detectLoopRecurrences} from '../verification/loops.mjs';
 import {builtin,internalDispatch} from './source-symbols.mjs';
-import {fixedBytesShift,fixedBytesValue} from './scalar-casts.mjs';
+import {fixedBytesValue,scalarDefaultLiteral,scalarAssignmentConversion} from './scalar-casts.mjs';
 
 // Bounded read-only execution. Local scalar writes use immutable expression
 // bindings; branch guards and evaluations retain their execution order.
-export function summarizeInternalReturns({target, call, context, args, build, synthetic, nodes, typeOf,expressionType=()=>null}) {
+export function summarizeInternalReturns({target, call, context, args, build, synthetic, nodes, typeOf,expressionType=()=>null,expressionInfo=()=>null,aggregates=null}) {
   const fail = code => { throw new Error(code); };
   const output = target.returnParameters?.parameters || [];
-  const scalar = d => /^(?:u?int\d*|bool|bytes(?:[1-9]|[12]\d|3[0-2])|address(?: payable)?|contract [^\[\]\s]+)$/.test(typeOf(d));
-  if (!output.length || output.length > 8 || output.some(d => !scalar(d))) fail('INTERNAL_RETURN_NONSCALAR_OR_TUPLE');
+  const scalar = d => /^(?:u?int\d*|bool|bytes(?:[1-9]|[12]\d|3[0-2])|address(?: payable)?|contract [^\[\]\s]+|enum [^\[\]\s]+)$/.test(typeOf(d));
+  const enumConstants=new Map();for(const definition of nodes.values())if(definition.nodeType==='EnumDefinition')for(const[index,member]of(definition.members||[]).entries())enumConstants.set(member.id,BigInt(index));
+  const aggregate=d=>Boolean(aggregates?.isAggregate(d)),aggregateNodes=[];
+  function findAggregate(n){if(!n?.nodeType)return;if(aggregate(n))aggregateNodes.push(n);for(const[k,v]of Object.entries(n))if(!['typeDescriptions','documentation'].includes(k)){if(Array.isArray(v))v.forEach(findAggregate);else if(v?.nodeType)findAggregate(v);}}
+  if(aggregates)findAggregate(target);
+  const aggregateActive=aggregateNodes.length>0,aggregateResults=[];
+  if (!output.length || output.length > 8 || output.some(d => !scalar(d)&&!aggregate(d))) fail('INTERNAL_RETURN_NONSCALAR_OR_TUPLE');
+  if(aggregateActive&&!aggregates.readonly(target))fail('INTERNAL_RETURN_AGGREGATE_HEAP_EFFECT_UNSUPPORTED');
   if (!['pure','view'].includes(target.stateMutability) && !target.constant) fail('INTERNAL_RETURN_STATE_EFFECT_UNSUPPORTED');
   if ((target.parameters?.parameters || []).some(p => p.storageLocation === 'storage')) fail('INTERNAL_RETURN_STORAGE_ALIAS_UNSUPPORTED');
   const stack = context.return_stack || [];
@@ -22,13 +28,13 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
     .flatMap(([,v]) => Array.isArray(v) ? v.filter(x=>x?.nodeType) : v?.nodeType ? [v] : []);
   const fork = (s,suffix) => ({...s,path:s.path+'/'+suffix,parameter_arguments:{...s.parameter_arguments},
     parameter_expression_bindings:{...s.parameter_expression_bindings},compiletime_bindings:{...s.compiletime_bindings},
-    range_bindings:{...s.range_bindings},yul_memory:[...(s.yul_memory||[])],
+    range_bindings:{...s.range_bindings},yul_memory:[...(s.yul_memory||[])],...(aggregateActive?{source_aggregates:s.source_aggregates.fork()}:{}),
     return_conditions:[...s.return_conditions],execution_steps:[...s.execution_steps]});
   const bounded = rows => {if(rows.length+results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');return rows;};
   function validate(n) {
     if (!n || ++count > 1024) fail('INTERNAL_RETURN_EXPRESSION_BUDGET');
     if (n.nodeType==='NewExpression' || n.nodeType==='UnaryOperation' && n.operator==='delete') fail('INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT');
-    if (n.nodeType === 'FunctionCall' && n.kind !== 'typeConversion') {
+    if (n.nodeType === 'FunctionCall' && n.kind !== 'typeConversion'&&!(aggregateActive&&n.kind==='structConstructorCall')) {
       const called = nodes.get(n.expression?.referencedDeclaration);
       if (called?.nodeType === 'FunctionDefinition' && !['pure','view'].includes(called.stateMutability) && !called.constant ||
           ['call','send','transfer','delegatecall','callcode','selfdestruct','suicide'].includes(n.expression?.memberName || n.expression?.name)) fail('INTERNAL_RETURN_EXPRESSION_SIDE_EFFECT');
@@ -64,6 +70,8 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   function constant(n,s,seen=new Set()) {
     if (!n || seen.has(n.id)) return null;
     const next=new Set([...seen,n.id]);
+    if(/^enum\s/.test(typeOf(n))&&enumConstants.has(n.referencedDeclaration))return enumConstants.get(n.referencedDeclaration);
+    if(n.nodeType==='MemberAccess'&&/^enum\s/.test(typeOf(n))){const definition=nodes.get(n.expression?.referencedDeclaration);if(definition?.nodeType==='EnumDefinition'&&/^type\(enum\s/.test(typeOf(n.expression))){const member=(definition.members||[]).find(m=>m.name===n.memberName);if(member&&enumConstants.has(member.id))return enumConstants.get(member.id);}}
     if(n.nodeType==='Literal') {
       if(n.kind==='bool')return n.value==='true'?1n:0n;
       if(n.kind==='number'){try{const v=numericLiteral(String(n.value),n.subdenomination).value;return v===null?null:BigInt(v)}catch{return null}}
@@ -133,21 +141,24 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   const initial = {...context,path:context.path+'/return:'+call.id,unchecked:false,return_stack:[...stack,target.id],
     parameter_arguments:{...context.parameter_arguments},parameter_expression_bindings:{...context.parameter_expression_bindings},
     compiletime_bindings:{},range_bindings:{},return_conditions:[],execution_steps:[]};
+  if(aggregateActive)initial.source_aggregates=context.source_aggregates.fork({newFunction:true,frameId:initial.path});
   for(const [i,p]of (target.parameters?.parameters||[]).entries()) {
     initial.parameter_arguments[p.id]=args[i];initial.parameter_expression_bindings[p.id]=castBinding(p,build(args[i],context),initial);
+    if(aggregateActive&&aggregate(p))aggregates.bind(p,initial.parameter_expression_bindings[p.id],initial);
     const known=constant(args[i],context);if(known!==null)initial.compiletime_bindings[p.id]=fixedBytesValue(known,typeOf(args[i]),typeOf(p));
   }
   function defaultValue(d,s) {
-    const type=typeOf(d);if(!scalar(d))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
-    return synthetic(d,'literal',[],s,{value:type==='bool'?'false':/^(address|contract )/.test(type)?'0x'+'0'.repeat(40):/^bytes/.test(type)?'0x'+'00'.repeat(Number(type.slice(5))):'0',type});
+    const type=typeOf(d);if(aggregate(d))return aggregates.unknown(d,s);if(!scalar(d))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
+    return synthetic(d,'literal',[],s,{value:scalarDefaultLiteral(type),type});
   }
-  for(const d of output)if(d.name){initial.parameter_expression_bindings[d.id]=defaultValue(d,initial);initial.compiletime_bindings[d.id]=0n;}
+  for(const d of output)if(d.name){initial.parameter_expression_bindings[d.id]=defaultValue(d,initial);if(aggregate(d))aggregates.bind(d,initial.parameter_expression_bindings[d.id],initial);else initial.compiletime_bindings[d.id]=0n;}
   function local(n,s) {
     const d=nodes.get(n?.referencedDeclaration);
-    if(n?.nodeType!=='Identifier'||!d||d.stateVariable||!scalar(d)||!Object.hasOwn(s.parameter_expression_bindings,d.id))fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
+    if(n?.nodeType!=='Identifier'||!d||d.stateVariable||!scalar(d)&&!aggregate(d)||!Object.hasOwn(s.parameter_expression_bindings,d.id))fail('INTERNAL_RETURN_ASSIGNMENT_TARGET_UNSUPPORTED');
     return d;
   }
   function bind(d,key,known,s,range=null) {
+    if(aggregate(d)){key=castBinding(d,key,s);s.parameter_expression_bindings[d.id]=key;aggregates.bind(d,key,s);delete s.compiletime_bindings[d.id];delete s.range_bindings[d.id];return;}
     const from=expressionType(key);key=castBinding(d,key,s);if(known!==null)known=fixedBytesValue(known,from,typeOf(d));
     s.parameter_expression_bindings[d.id]=key;
     delete s.range_bindings[d.id];
@@ -155,8 +166,11 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
     if(known===null&&range){const full=interval({nodeType:'Identifier',referencedDeclaration:d.id},s);if(full&&range[0]>=full[0]&&range[1]<=full[1])s.range_bindings[d.id]=range;}
   }
   function castBinding(d,key,s){
-    const from=expressionType(key),to=typeOf(d);if(!fixedBytesShift(from,to))return key;
-    return synthetic(d,'scalar_cast',[key],s,{type:to,width:Number(to.slice(5))*8,signed:false,arithmetic:'wrap',cast_source_type:from});
+    if(aggregate(d))return aggregates.wrap(d,key,s);
+    const info=expressionInfo(key)||{},from=info.type||expressionType(key),to=typeOf(d),conversion=scalarAssignmentConversion(from,to,info);
+    if(!conversion)return key;if(conversion.unresolved)fail('INTERNAL_RETURN_'+conversion.unresolved);
+    const{format,...details}=conversion;
+    return synthetic(d,format,[key],s,{type:to,width:Number(to.slice(5))*8,signed:false,arithmetic:'wrap',implicit_source_conversion:true,...details});
   }
   function guard(s,key,expected,failure) {
     const condition={expression_id:key,expected,...(failure?{failure}:{})};
@@ -268,7 +282,7 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   function returned(keys,s) {
     if(keys.some(v=>!v))fail('INTERNAL_RETURN_VALUE_UNAVAILABLE');
     keys=keys.map((key,i)=>castBinding(output[i],key,s));
-    results.push({expression_id:keys[0],expression_ids:keys,conditions:s.return_conditions,execution_steps:s.execution_steps});bounded([]);
+    const row={expression_id:keys[0],expression_ids:keys,conditions:s.return_conditions,execution_steps:s.execution_steps};results.push(row);if(aggregateActive)aggregateResults.push({row,model:s.source_aggregates});bounded([]);
   }
   function execute(n,s) {
     if(++count>1024||results.length>32)fail('INTERNAL_RETURN_PATH_BUDGET');
@@ -281,7 +295,7 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
     if(n.nodeType==='IfStatement')return bounded(value(n.condition,s).flatMap(row=>choose(row,n,'if').flatMap(branch=>execute(branch.expected?n.trueBody:n.falseBody,branch.s))));
     if(n.nodeType==='VariableDeclarationStatement') {
       const ds=n.declarations||[];
-      if(!ds.length||ds.some(d=>d&&(d.storageLocation==='storage'||!scalar(d))))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
+      if(!ds.length||ds.some(d=>d&&(d.storageLocation==='storage'||!scalar(d)&&!aggregate(d))))fail('INTERNAL_RETURN_LOCAL_TYPE_UNSUPPORTED');
       const rows=n.initialValue?tupleValues(n.initialValue,ds.length,s):[{s,keys:ds.map(d=>d?defaultValue(d,s):null),known:ds.map(()=>0n)}];
       return rows.map(row=>{for(const [i,d]of ds.entries())if(d)bind(d,row.keys[i],row.known[i],row.s,row.ranges?.[i]);return row.s;});
     }
@@ -409,8 +423,21 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
       }
       if(e?.nodeType==='FunctionCall'&&['require','assert'].some(n=>builtin(e.expression,n,nodes))) {
         independent(e.arguments);
-        if(e.arguments.slice(1).some(a=>a.nodeType!=='Literal'))fail('INTERNAL_RETURN_REQUIRE_MESSAGE_EFFECT_UNSUPPORTED');
-        return value(e.arguments[0],s).flatMap(row=>row.known===0n||!assume(e.arguments[0],true,row.s)?[]:[guard(row.s,row.key,true,name==='assert'?'panic':'revert')]);
+        const parameters=new Set((target.parameters?.parameters||[]).map(p=>p.id));
+        const readonlyMessage=a=>{
+          if(a.nodeType==='Literal')return true;
+          const d=nodes.get(a.referencedDeclaration);
+          return a.nodeType==='Identifier'&&parameters.has(d?.id)&&d.storageLocation!=='storage'&&/^string(?: (?:memory|calldata)(?: (?:ref|pointer))?)?$/.test(typeOf(d));
+        };
+        if(e.arguments.slice(1).some(a=>!readonlyMessage(a)))fail('INTERNAL_RETURN_REQUIRE_MESSAGE_EFFECT_UNSUPPORTED');
+        // Message arguments are evaluated even on the successful path. Keep
+        // them and require independent sibling effects before source order
+        // can represent these argument evaluations.
+        for(const argument of e.arguments)validate(argument);
+        return evaluateList(e.arguments,s).flatMap(row=>{
+          for(const key of row.keys)row.s.execution_steps.push({kind:'evaluate',expression_id:key});
+          return row.known[0]===0n||!assume(e.arguments[0],true,row.s)?[]:[guard(row.s,row.keys[0],true,name==='assert'?'panic':'revert')];
+        });
       }
       if(e?.nodeType==='FunctionCall'&&builtin(e.expression,'revert',nodes))return [];
       const called=e?.nodeType==='FunctionCall'?nodes.get(e.expression?.referencedDeclaration):null;
@@ -443,7 +470,8 @@ export function summarizeInternalReturns({target, call, context, args, build, sy
   }
   if(!results.length)fail('INTERNAL_RETURN_NO_SUCCESSFUL_PATH');
   const unresolved_model_reasons=[...new Set(frontier.map(f=>f.reason))];
-  const output_expression_ids=output.map((d,i)=>{const paths=results.map(r=>({...r,expression_id:r.expression_ids[i]}));return synthetic(call,'return_cases',paths.map(r=>r.expression_id),initial,{paths,type:typeOf(d),unresolved_model_reasons});});
+  if(aggregateActive)aggregates.adopt(context,aggregateResults);
+  const output_expression_ids=output.map((d,i)=>{const paths=results.map(r=>({...r,expression_id:r.expression_ids[i]}));if(aggregate(d))return aggregates.paths(call,d,paths,initial,unresolved_model_reasons);return synthetic(call,'return_cases',paths.map(r=>r.expression_id),initial,{paths,type:typeOf(d),unresolved_model_reasons});});
   return {expression_id:output.length===1?output_expression_ids[0]:synthetic(call,'tuple',output_expression_ids,initial,{type:'tuple('+output.map(typeOf).join(',')+')'}),
-    output_expression_ids,paths:results,loops:[...loops.values()],frontier,memory_effects:memoryEffects,unresolved:unresolved_model_reasons,scope:output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',ordered_evaluations_preserved:true,all_execution_paths_verified:false};
+    output_expression_ids,paths:results,loops:[...loops.values()],frontier,memory_effects:memoryEffects,unresolved:unresolved_model_reasons,scope:aggregateActive?'bounded_readonly_struct_scalar_and_enum_return_paths':output.length===1?'bounded_scalar_readonly_return_paths':'bounded_scalar_tuple_readonly_return_paths',ordered_evaluations_preserved:true,all_execution_paths_verified:false};
 }

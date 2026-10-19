@@ -227,21 +227,40 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 		return nil, summaryError(503, "CONTRACT_ENGINE_UNAVAILABLE", "Digest-pinned analysis engine is not configured")
 	}
 	var e error
-	q.Chain, e = canonicalActionChain(q.Chain)
-	if e != nil {
-		return nil, e
+	if q.Input != nil {
+		if e = q.ValidateCodeInput(); e != nil {
+			return nil, e
+		}
+		if e = q.Input.Canonicalize(); e != nil {
+			return nil, e
+		}
 	}
-	cfg := mustChain(s, q.Chain)
-	if q.Program == nil && !cfg.IsEVM() {
-		return nil, fmt.Errorf("contract engine supports EVM chains only")
-	}
-	if q.Program == nil && !ca.CompleteAddress.MatchString(q.Address) {
-		return nil, fmt.Errorf("complete EVM contract address required")
-	}
-	if q.Program == nil {
-		q.Address = strings.ToLower(q.Address)
-		for i := range q.TxHashes {
-			q.TxHashes[i] = strings.ToLower(q.TxHashes[i])
+	if !q.CodeOnly() {
+		q.Chain, e = canonicalActionChain(q.Chain)
+		if e != nil {
+			return nil, e
+		}
+		cfg := mustChain(s, q.Chain)
+		if q.Program == nil && !cfg.IsEVM() {
+			return nil, fmt.Errorf("contract engine supports EVM chains only")
+		}
+		if q.Program == nil && !ca.CompleteAddress.MatchString(q.Address) {
+			return nil, fmt.Errorf("complete EVM contract address required")
+		}
+		if q.Program == nil {
+			q.Address = strings.ToLower(q.Address)
+			for i := range q.TxHashes {
+				q.TxHashes[i] = strings.ToLower(q.TxHashes[i])
+			}
+		}
+		if q.Input != nil && q.Input.Environment != nil {
+			env := q.Input.Environment
+			if env.ChainID != "" && env.ChainID != fmt.Sprint(cfg.ChainID) {
+				return nil, fmt.Errorf("declared chain identity differs from selected deployment chain")
+			}
+			if env.ExecutionAddress != "" && !strings.EqualFold(env.ExecutionAddress, q.Address) {
+				return nil, fmt.Errorf("declared execution address differs from deployment storage context")
+			}
 		}
 	}
 	scope, e := s.nextTenant(ctx)
@@ -258,7 +277,7 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	}
 	digest := nextHash(map[string]any{"operation": ca.Operation, "version": ca.Version, "request": q, "engine": runner.Image})
 	if reused, found, err := nextReuseSubmission(s.deps.Store.Pool.QueryRow(ctx, nextSubmissionSQL, scope.OrganizationID, scope.WorkspaceID, key), digest, key); err != nil || found {
-		return reused, err
+		return contractPublicReuse(reused), err
 	}
 	if s.deps.Raw == nil {
 		return nil, summaryError(503, "OBJECT_STORE_UNAVAILABLE", "Durable contract evidence storage unavailable")
@@ -277,7 +296,7 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	var programObject ca.Object
 	if q.Program != nil {
 		point, programObject, e = s.pinProgram(ctx, q, runner.Image)
-	} else {
+	} else if !q.CodeOnly() {
 		point, e = s.deps.ChainRead.ResolveState(ctx, q.Chain, ref, at, contractOptions(ctx, q))
 	}
 	if e != nil {
@@ -286,11 +305,19 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	if q.ToBlock != nil && *q.ToBlock > point.Block {
 		return nil, fmt.Errorf("history range ends after the selected snapshot")
 	}
-	q.Block = json.RawMessage(fmt.Sprint(point.Block))
-	q.Timestamp = ""
 	boundary := map[string]any{"chain": q.Chain, "point": point, "engine_digest": runner.Image}
+	if q.CodeOnly() {
+		delete(boundary, "chain")
+		delete(boundary, "point")
+	} else {
+		q.Block = json.RawMessage(fmt.Sprint(point.Block))
+		q.Timestamp = ""
+	}
 	if q.Program != nil {
 		boundary["program_input"] = programObject
+	}
+	if e = s.contractPinSubmittedInput(ctx, q, runner.Image, boundary); e != nil {
+		return nil, e
 	}
 	tx, e := s.deps.Store.Pool.Begin(ctx)
 	if e != nil {
@@ -306,7 +333,7 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 		if e = tx.Commit(ctx); e != nil {
 			return nil, e
 		}
-		return reused, nil
+		return contractPublicReuse(reused), nil
 	}
 	var active int
 	if e = tx.QueryRow(ctx, `SELECT count(*) FROM investigation_analysis_jobs WHERE organization_id=$1 AND workspace_id=$2 AND status IN ('queued','running')`, scope.OrganizationID, scope.WorkspaceID).Scan(&active); e != nil {
@@ -326,7 +353,7 @@ func (s *Server) contractSubmit(ctx context.Context, q ca.Request) (any, error) 
 	if e = tx.Commit(ctx); e != nil {
 		return nil, e
 	}
-	return map[string]any{"analysis_id": analysisID, "status": "queued", "version": ca.Version, "snapshot": boundary, "idempotency_key": key, "reused": false, "result_tools": contractOperations[1:]}, nil
+	return map[string]any{"analysis_id": analysisID, "status": "queued", "version": ca.Version, "snapshot": contractPublicBoundary(ca.Row(boundary)), "idempotency_key": key, "reused": false, "result_tools": contractOperations[1:]}, nil
 }
 func (s *Server) contractJob(ctx context.Context, id string) (nextJob, error) {
 	j, e := s.nextGetJob(ctx, id)
@@ -400,7 +427,7 @@ func (s *Server) contractPage(ctx context.Context, q ca.Request) (any, error) {
 	if e = nextDecode(job.Meta, &meta); e != nil {
 		return nil, e
 	}
-	out := map[string]any{"analysis_id": job.ID, "version": job.Version, "status": job.Status, "phase": job.Phase, "attempts": job.Attempts, "snapshot": json.RawMessage(job.Boundary), "metadata": meta, "error_code": job.ErrorCode, "error_message": job.ErrorMessage, "result_sha256": job.ResultSHA, "created_at": job.Created, "updated_at": job.Updated}
+	out := map[string]any{"analysis_id": job.ID, "version": job.Version, "status": job.Status, "phase": job.Phase, "attempts": job.Attempts, "snapshot": contractPublicBoundary(job.Boundary), "metadata": meta, "error_code": job.ErrorCode, "error_message": job.ErrorMessage, "result_sha256": job.ResultSHA, "created_at": job.Created, "updated_at": job.Updated}
 	if q.Section == "" {
 		return out, nil
 	}

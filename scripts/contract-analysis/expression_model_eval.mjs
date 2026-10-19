@@ -16,14 +16,17 @@ export function evaluateReturn(model,name,inputs) {
  }
  function compute(e){
   if(e.binding_expression_id)return walk(e.binding_expression_id);
+  if(e.symbolic_format==='source_storage_snapshot'){if(typeof inputs.__storageSnapshot!=='function')fail('MODEL_STATE_WITNESS_UNAVAILABLE');const keys=new Map((e.operands||[]).map(k=>[k,walk(k)]));return inputs.__storageSnapshot(e,keys);}
   if(e.symbolic_format==='return_cases'){
    for(const path of e.paths){let matches=true;for(const step of path.execution_steps||path.conditions.map(c=>({kind:'guard',...c}))){
      const value=walk(step.expression_id);if(step.kind==='guard'&&truth(value)!==step.expected){if(step.failure)fail(step.failure==='panic'?'panic_0x01':'revert');matches=false;break;}
     }if(matches)return walk(path.expression_id);
    }fail('revert');
   }
+  if(e.symbolic_format==='entry_scalar'){if(Object.hasOwn(inputs,e.value))return inputs[e.value];fail('MODEL_INPUT',e.value);}
+  if(e.symbolic_format==='conditional'){if(e.operands.length!==3)fail('MODEL_CONDITIONAL_LAYOUT_UNAVAILABLE');const key=truth(walk(e.operands[0]))?e.operands[1]:e.operands[2];return fixedBytesValue(walk(key),expressions.get(key)?.type,e.type);}
   if(e.symbolic_format==='identity')return e.yul_word_assignment?normalize(walk(e.operands[0]),e):walk(e.operands[0]);
-  if(e.symbolic_format==='scalar_cast')return fixedBytesValue(walk(e.operands[0]),e.cast_source_type,e.type);
+  if(e.symbolic_format==='scalar_cast')return normalize(fixedBytesValue(walk(e.operands[0]),e.cast_source_type,e.type),{...e,arithmetic:'wrap'});
   if(['yul_memory_access','yul_memory_read'].includes(e.symbolic_format)) {
    const args=e.operands.map(walk),mod=1n<<256n,offset=args[0],valid=(p,size)=>{if(p<0n||p+BigInt(size)>mod)fail('memory_range_overflow');};
    valid(offset,e.memory_width||32);if(e.symbolic_format==='yul_memory_access')return 0n;

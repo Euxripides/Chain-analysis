@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const VERSION = 'contract-analysis-v1';
-export const RULE_VERSION = 'funds-semantics-12';
+export const RULE_VERSION = 'funds-semantics-20';
 export const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 export const id = (...parts) => hash(parts).slice(0, 40);
 export const stringify = value => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v);
@@ -13,7 +13,9 @@ export function emptyResult(snapshot) {
   ].map(key => [key, []])) };
 }
 export function makeMethod(snapshot, entry, selector = '', name = '') {
-  const method_id = id(snapshot.code_hash, snapshot.code_address, snapshot.storage_address, entry, selector);
+  const parts=[snapshot.code_hash, snapshot.code_address, snapshot.storage_address, entry, selector];
+  if(snapshot.input_sha256)parts.push(snapshot.input_sha256);
+  const method_id = id(...parts);
   return { method_id, selector, name, signature: '', signature_candidates: [], verified_signature: false,
     code_address: snapshot.code_address, storage_address: snapshot.storage_address,
     code_hash: snapshot.code_hash, entry, visibility: 'bytecode', parameters: [], outputs: [],
@@ -107,7 +109,7 @@ export function finalize(result) {
   for (const call of calls) flows.push({ edge_id: id(call.call_id, 'call'), edge_type: call.call_type === 'DELEGATECALL' ? 'delegates' : 'calls',
     from: call.method_id, to: call.target || call.target_expression, evidence_ids: call.evidence_ids, call_id: call.call_id });
   for (const fund of funds) flows.push({ edge_id: id(fund.fund_id, 'fund'), edge_type: 'transfers',
-    from: fund.from_expression, to: fund.to_expression, method_id: fund.method_id, asset: fund.asset,
+    from: fund.from_expression, to: fund.to_expression, method_id: fund.method_id, fund_id:fund.fund_id,asset: fund.asset,
     amount_expression: fund.amount_expression, settlement: 'static_intent', evidence_ids: fund.evidence_ids });
   for (const method of methods) method.dependency_methods = unique(method.dependency_methods);
   result.sections.flows = [...new Map(flows.map(e => [e.edge_id, e])).values()];

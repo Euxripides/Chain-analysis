@@ -67,10 +67,14 @@ export function analyzeGigahorse(result, bytecode) {
         method.entry_kind=selector?'function':fallback?'fallback':receive?'receive':'bytecode_internal_function';method.visibility=selector||fallback||receive?'external':'internal';
         method.dispatch_role=selector?'external_dispatch':fallback||receive?'unselected_entry':'bytecode_internal_function';
         method.completeness={complete:false,basis:'gigahorse',unresolved:[],execution_paths:'not_exhaustively_verified'};
-        result.sections.methods.push(method);
+        const existing=result.sections.methods.find(m=>m.method_id===method.method_id);
+        if(existing)method=existing;else result.sections.methods.push(method);
       }
+      method.gigahorse_function_entries=unique([...(method.gigahorse_function_entries||[]),fn]);
       methods.set(fn,method);
     }
+    const statementNext=new Map(),statementPrevious=new Map();
+    for(const[from,to]of relations.TAC_Statement_Next){statementNext.set(from,unique([...(statementNext.get(from)||[]),to]));statementPrevious.set(to,unique([...(statementPrevious.get(to)||[]),from]));}
     result.sections.ir ||= [];result.sections.control_flow ||= [];
     for (const [stmt,op] of relations.TAC_Op) for (const fn of members.get(blocks.get(stmt)) || []) {
       const method = methods.get(fn);if (!method) continue;
@@ -78,9 +82,12 @@ export function analyzeGigahorse(result, bytecode) {
       const define=(defs.get(stmt)||[]).sort((a,b)=>a.position-b.position);
       const eid=evidence(result,method,'gigahorse_tac',{artifact_id,statement:stmt,block:blocks.get(stmt),original_statement:originals.get(stmt)||null},op);
       const ir_id=id(method.method_id,'gigahorse',stmt);
-      result.sections.ir.push({ir_id,method_id:method.method_id,engine:'gigahorse',op,statement:stmt,block:blocks.get(stmt),
+      result.sections.ir.push({ir_id,method_id:method.method_id,engine:'gigahorse',op,statement:stmt,block:blocks.get(stmt),gigahorse_function_id:fn,
+        original_statement:originals.get(stmt)||null,statement_successors:statementNext.get(stmt)||[],statement_predecessors:statementPrevious.get(stmt)||[],
         reads:use.map(x=>x.value),definitions:define.map(x=>x.value),
         constants:use.filter(x=>constants.has(x.value)).map(x=>({variable:x.value,value:constants.get(x.value)})),
+        constant_candidates:use.filter(x=>values.has(x.value)).map(x=>({variable:x.value,values:[...values.get(x.value)]})),
+        constant_definitions:define.filter(x=>values.has(x.value)).map(x=>({variable:x.value,values:[...values.get(x.value)]})),
         text:`${define.map(x=>x.value).join(',')} ${define.length?'=':''} ${op} ${use.map(x=>constants.get(x.value)||x.value).join(', ')}`,
         evidence_ids:[eid],basis:'decompiled_tac',type:'evm_word',width:256,all_paths_verified:false});
       method.ir_ids=unique([...(method.ir_ids||[]),ir_id]);
@@ -88,7 +95,7 @@ export function analyzeGigahorse(result, bytecode) {
     }
     for(const [block,functions] of members)for(const fn of functions){const method=methods.get(fn);if(!method)continue;
       result.sections.control_flow.push({cfg_id:id(method.method_id,'gigahorse-cfg',block),method_id:method.method_id,engine:'gigahorse',block,
-        successors:edges.get(block)||[],basis:'decompiled_cfg',artifact_id,complete:false});
+        successors:edges.get(block)||[],function_entry:fn,gigahorse_function_id:fn,basis:'decompiled_cfg',artifact_id,complete:false});
     }
     engine.status='completed';engine.artifact_id=artifact_id;engine.statements=relations.TAC_Op.length;
     engine.functions=relations.Function.length;engine.public_functions=relations.PublicFunction.length;

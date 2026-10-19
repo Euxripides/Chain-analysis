@@ -1,6 +1,8 @@
-import { Contract, sol } from 'sevm';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { whatsabi } from '@shazow/whatsabi';
-import { id, hash, makeMethod, evidence, unique } from './model.mjs';
+import { id, hash, makeMethod } from './model.mjs';
+import { sevmRequest, mergeSevmResponse, decodeSevmResponse, SEVM_OUTPUT_LIMIT } from './bytecode-sevm-protocol.mjs';
 
 const OPCODES = {
   0x00: 'STOP', 0x01: 'ADD', 0x02: 'MUL', 0x03: 'SUB', 0x04: 'DIV', 0x05: 'SDIV', 0x06: 'MOD', 0x07: 'SMOD',
@@ -26,160 +28,66 @@ export function disassemble(bytecode) {
   }
   return rows;
 }
-function raw(node, state = { seen: new WeakMap(), sequence: 0 }, depth = 0) {
-  if (typeof node === 'bigint') return node.toString();
-  if (node == null || typeof node !== 'object') return node;
-  if (depth > 24) return { unresolved: 'expression_depth' };
-  if (state.seen.has(node)) return { $ref: state.seen.get(node) };
-  const nodeID=++state.sequence;state.seen.set(node,nodeID);
-  if (Array.isArray(node)) return { $id:nodeID, items:node.map(v => raw(v, state, depth + 1)) };
-  return { $id:nodeID,...Object.fromEntries(Object.entries(node).filter(([k, v]) => !['mappings', 'variable', 'contract'].includes(k) && typeof v !== 'function').map(([k, v]) => [k, raw(v, state, depth + 1)])) };
-}
-function render(node) {
-  if (!node) return '';
-  let text;try { text=sol`${node.tag ? node.eval() : node}` } catch { text=JSON.stringify(raw(node)) }
-  // Large symbolic trees stay in the IR artifact. Their display form is an
-  // explicit reference, never a truncated amount formula presented as complete.
-  return Buffer.byteLength(text)>4096 ? `symbolic_expression:${hash(text)}` : text;
-}
-export function analyzeBytecode(result, bytecode, signatures = []) {
+
+export function analyzeBytecode(result, bytecode, signatures = [], options = {}) {
   const started = performance.now(), instructions = disassemble(bytecode);
   const opText = instructions.map(o => `${o.pc.toString(16).padStart(6, '0')} ${o.mnemonic}${o.data ? ' ' + o.data : ''}`).join('\n');
-  result.sections.artifacts.push({ artifact_id: id('disassembly', result.snapshot.code_hash), kind: 'disassembly', filename: 'disassembly.txt', media_type: 'text/plain; charset=utf-8', text: opText, sha256: hash(opText) });
-  let selectors = [];
-  try { selectors = whatsabi.selectorsFromBytecode(bytecode); result.sections.engines.push({ engine: 'whatsabi', version: '0.29.0', adapter_version: 'entry-1', status: 'completed', selectors, duration_ms: Math.round(performance.now() - started) }); }
-  catch (error) { result.sections.engines.push({ engine: 'whatsabi', version: '0.29.0', status: 'failed', error_code: 'SELECTOR_EXTRACTION_FAILED', error_message: String(error.message).slice(0, 300) }); }
-  let contract;
-  try { contract = new Contract(bytecode); }
-  catch (error) {
-    result.sections.engines.push({ engine: 'sevm', version: '0.7.4', status: 'failed', error_code: 'SYMBOLIC_EXECUTION_FAILED', error_message: String(error.message).slice(0, 500), duration_ms: Math.round(performance.now() - started) });
-    for (const selector of selectors) {
-      if (result.sections.methods.some(m => m.selector === selector)) continue;
-      const method = makeMethod(result.snapshot, `selector:${selector}`, selector);
-      method.completeness.unresolved.push({ code: 'SYMBOLIC_EXECUTION_FAILED' }); result.sections.methods.push(method);
-    }
-    result.sections.coverage.push({ dimension: 'bytecode', complete: false, unresolved: 'symbolic_execution_failed', discovered_selectors: selectors.length });
+  result.sections.artifacts.push({ artifact_id:id('disassembly',result.snapshot.code_hash),kind:'disassembly',filename:'disassembly.txt',
+    media_type:'text/plain; charset=utf-8',text:opText,sha256:hash(opText) });
+  if(result.snapshot.code_identity?.unbound_immutable_ranges?.length || result.snapshot.code_identity?.unbound_library_ranges?.length) {
+    for(const engine of ['whatsabi','sevm']) result.sections.engines.push({engine,status:'skipped',reason:'compiled_template_has_unbound_deployment_ranges'});
+    result.sections.coverage.push({dimension:'bytecode',complete:false,reason:'compiled_template_values_are_not_observed_runtime',code_identity:result.snapshot.code_identity});
     return;
   }
-  let pseudocode = '';
-  try { pseudocode = contract.solidify(); } catch (e) { pseudocode = `PSEUDOCODE_RENDER_FAILED: ${e.message}`; }
-  result.sections.artifacts.push({ artifact_id: id('pseudocode', result.snapshot.code_hash), kind: 'pseudocode', filename: 'decompiled.sol', media_type: 'text/plain; charset=utf-8', text: pseudocode, sha256: hash(pseudocode) });
-  const blocks = [...contract.blocks].map(([pc, b]) => ({ pc, pc_end: b.pcend, opcodes: b.opcodes.map(o => o.opcode.pc), states: b.states.map(s => raw(s.stmts)) }));
-  const ir = JSON.stringify({ main: raw(contract.main), functions: Object.fromEntries(Object.entries(contract.functions).map(([k, v]) => [k, raw(v.stmts)])), blocks });
-  result.sections.artifacts.push({ artifact_id: id('symbolic-ir', result.snapshot.code_hash), kind: 'symbolic_ir', filename: 'symbolic-ir.json', media_type: 'application/json', text: ir, sha256: hash(ir) });
-  const originalSource = result.sections.methods.some(m => m.completeness.basis === 'source');
-  const locations = new WeakMap();
-  for (const [pc, block] of contract.blocks) for (const state of block.states) for (const stmt of state.stmts) locations.set(stmt, { pc, pc_end: block.pcend, granularity: 'basic_block' });
-  const failures = contract.errors.map(e => ({ code: 'UNRESOLVED_SYMBOLIC_PATH', reason: e.err.reason, pc: e.err.opcode?.pc, opcode: e.err.opcode?.mnemonic }));
-  const functions = Object.entries(contract.functions).map(([selector, fn]) => ({ selector: '0x' + selector, stmts: fn.stmts, entry: contract.functionBranches.get(selector)?.pc ?? null }));
-  functions.push({ selector: '', stmts: contract.main, entry: 0 });
-  for (const fn of functions) {
-    const sourceMethod=result.sections.methods.find(m=>m.selector===fn.selector&&m.completeness.basis==='source'&&m.dispatch_role!=='overridden_source_definition'&&(fn.selector||['fallback','receive'].includes(m.entry_kind)));
-    if (originalSource && (!sourceMethod || !sourceMethod.completeness.unresolved.length)) continue;
-    const method = sourceMethod || makeMethod(result.snapshot, fn.selector ? `selector:${fn.selector}` : 'dispatch', fn.selector, fn.selector ? '' : 'fallback / dispatcher');
-    if(sourceMethod) {method.completeness.basis='mixed_source_and_bytecode';method.completeness.additional_bases=['source','bytecode_symbolic'];method.completeness.complete=false}
-    method.entry_pc = fn.entry;
-    method.signature_candidates = signatures.filter(s => s.selector === fn.selector).map(s => ({ signature: s.signature, source: s.source || 'signature_database', verified: false }));
-    if(!sourceMethod)result.sections.methods.push(method);
-    const exprCache = new WeakMap();
-    const recordedCalls = new WeakSet();
-    const expr = (node, location, depth = 0) => {
-      if (!node || typeof node !== 'object') return null;
-      if (exprCache.has(node)) return exprCache.get(node);
-      const expression_id = id(method.method_id, exprCache.size || result.sections.expressions.length, raw(node), location);
-      exprCache.set(node, expression_id);
-      const operands = depth < 24 ? Object.entries(node).filter(([key]) => !['mappings', 'variable'].includes(key)).flatMap(([, v]) => Array.isArray(v) ? v : [v]).filter(v => v?.tag).map(v => expr(v, location, depth + 1)) : [];
-      const evidence_id = evidence(result, method, 'bytecode', location, render(node).slice(0, 2048));
-      const rawNode=raw(node),serialized=JSON.stringify(rawNode);
-      const largeRaw=Buffer.byteLength(serialized)>65536,display=render(node);
-      if(largeRaw||display.startsWith('symbolic_expression:'))method.completeness.unresolved.push({code:'EXPRESSION_REQUIRES_IR_ARTIFACT',expression_id,location});
-      result.sections.expressions.push({ expression_id, method_id: method.method_id,origin:'bytecode_symbolic', op: node.tag || node.name || 'unresolved', text: display,
-        width: 256, signed: node.tag === 'Sar' ? true : null, arithmetic: 'evm_word_wrap', rounding: node.tag === 'Div' ? 'unsigned_floor' : null,
-        value: node.tag === 'Val' ? node.val.toString() : null, operands, raw_node: largeRaw ? {artifact_id:location.artifact_id,ir_path:location.ir_path,sha256:hash(serialized),status:'read_original_ir'} : rawNode, evidence_ids: [evidence_id] });
-      return expression_id;
-    };
-    const walk = (stmts, context) => {
-      for (let ordinal = 0; ordinal < stmts.length; ordinal++) {
-        const stmt = stmts[ordinal], kind = stmt.name || stmt.tag;
-        const location = { artifact_id: id('symbolic-ir', result.snapshot.code_hash), ...locations.get(stmt), entry_pc: fn.entry, ir_path: `${context.path}/${ordinal}` };
-        const evidence_id = evidence(result, method, 'bytecode_ir', location, render(stmt).slice(0, 2048));
-        const step_id = id(method.method_id, location.ir_path);
-        method.step_ids.push(step_id);
-        result.sections.steps.push({ step_id, method_id: method.method_id, origin:'bytecode_symbolic',order: method.step_ids.length - 1,
-          kind: ({ Require: 'guard', If: 'branch', SStore: 'assignment', MappingStore: 'assignment', Return: 'return', Revert: 'revert', Log: 'event' })[kind] || kind,
-          text: render(stmt).slice(0, 4096), conditions: context.conditions, path: context.path, evidence_ids: [evidence_id] });
-        if (kind === 'Require') {
-          const guard_id = id(step_id, 'guard'); method.guard_ids.push(guard_id);
-          result.sections.permissions.push({ guard_id, method_id: method.method_id,origin:'bytecode_symbolic', condition: render(stmt.condition), expression_id: expr(stmt.condition, location), conditions: context.conditions, failure: 'revert', evidence_ids: [evidence_id] });
-        }
-        if (kind === 'If') {
-          walk(stmt.trueBlock || [], { path: `${location.ir_path}/true`, conditions: [...context.conditions, render(stmt.condition)] });
-          walk(stmt.falseBlock || [], { path: `${location.ir_path}/false`, conditions: [...context.conditions, `!(${render(stmt.condition)})`] });
-        }
-        if (kind === 'Return') method.return_ids.push(step_id);
-        if (kind === 'Revert' || kind === 'Throw' || kind === 'Invalid') method.failure_ids.push(step_id);
-        if (kind === 'Throw') method.completeness.unresolved.push({ code: 'UNRESOLVED_SYMBOLIC_PATH', reason: stmt.reason, location });
-        scan(stmt, location, context, new Set());
-        function scan(node, loc, ctx, seen) {
-          if (!node || typeof node !== 'object' || seen.has(node)) return;
-          seen.add(node);
-          const tag = node.tag || node.name;
-          if (['SLoad', 'MappingLoad', 'SStore', 'MappingStore'].includes(tag)) {
-            const storage_id = id(step_id, tag, render(node)); const key_expression = render(node.slot);
-            if (!result.sections.storage.some(s => s.storage_id === storage_id)) {
-              const state_id = id(result.snapshot.storage_address, result.snapshot.code_hash, node.location ?? key_expression);
-              result.sections.storage.push({ storage_id, state_id, method_id: method.method_id, access: tag.endsWith('Store') ? 'write' : 'read',
-                slot: node.slot?.tag === 'Val' ? node.slot.val.toString() : node.location == null ? null : String(node.location), offset: null, type: 'evm_word',slot_role:tag.startsWith('Mapping')?'layout_base':'direct_slot',
-                key_expression, key_expression_id: expr(node.slot, loc), value_expression: render(node.data), value_expression_id: expr(node.data, loc),
-                storage_address: result.snapshot.storage_address, code_address: result.snapshot.code_address, layout_status: 'inferred_bytecode',
-                conditions: ctx.conditions, evidence_ids: [evidence_id] }); method.storage_ids.push(storage_id);
-            }
-          }
-          if (['Call', 'DelegateCall', 'StaticCall', 'CallCode', 'Create', 'Create2'].includes(tag) && !recordedCalls.has(node)) {
-            recordedCalls.add(node);
-            const call_id = id(step_id, tag, render(node));
-            if (!result.sections.calls.some(c => c.call_id === call_id)) {
-              result.sections.calls.push({ call_id, method_id: method.method_id, call_type: tag.toUpperCase(), target_expression: render(node.address),
-                target_expression_id: expr(node.address, loc), value_expression: render(node.value), value_expression_id: expr(node.value, loc),
-                input_expression: render(node), failure_propagation: node.throwOnFail ? 'reverts_on_failure' : 'returns_success_flag', conditions: [], condition_status: 'symbolic_call_control_unresolved', evidence_ids: [evidence_id] });
-              method.call_ids.push(call_id);
-              let evaluatedValue;try{evaluatedValue=node.value?.eval()}catch{}
-              if (tag === 'Call' && !(evaluatedValue?.tag === 'Val' && evaluatedValue.val === 0n)) {
-                const fund_id = id(call_id, 'native');
-                result.sections.funds.push({ fund_id, method_id: method.method_id, call_id, kind: 'native_payment', asset: 'native', unit: 'wei',
-                  from_expression: 'address(this)', to_expression: render(node.address), amount_expression: render(node.value), amount_expression_id: expr(node.value, loc),
-                  settlement: 'static_intent', conditions: [], condition_status: 'symbolic_call_control_unresolved', evidence_ids: [evidence_id] }); method.fund_ids.push(fund_id);
-              }
-            }
-          }
-          if (tag === 'CallDataLoad' && node.location?.eval()?.tag === 'Val') {
-            const offset = node.location.eval().val;
-            if (offset >= 4n && (offset - 4n) % 32n === 0n && offset < 8192n) {
-              const index = Number((offset - 4n) / 32n);
-              if (!method.parameters.some(p => p.index === index)) method.parameters.push({ index, name: `calldata_word_${index}`, type: 'bytes32', type_status: 'raw_word_only', unit: null, offset: offset.toString(), evidence_ids: [evidence_id] });
-            }
-          }
-          if (node.tag) expr(node, loc);
-          for (const [key, value] of Object.entries(node)) {
-            if (['trueBlock', 'falseBlock', 'mappings', 'variable', 'contract'].includes(key)) continue;
-            for (const child of Array.isArray(value) ? value : [value]) if (child && typeof child === 'object') scan(child, loc, ctx, seen);
-          }
-        }
-      }
-    };
-    walk(fn.stmts, { path: 'entry', conditions: [] });
-    method.completeness.unresolved.push(...failures);
+  let selectors = [];
+  try {
+    selectors = whatsabi.selectorsFromBytecode(bytecode);
+    result.sections.engines.push({engine:'whatsabi',version:'0.29.0',adapter_version:'entry-1',status:'completed',selectors,duration_ms:Math.round(performance.now()-started)});
+  } catch(error) {
+    result.sections.engines.push({engine:'whatsabi',version:'0.29.0',status:'failed',error_code:'SELECTOR_EXTRACTION_FAILED',error_message:String(error.message).slice(0,300)});
+  }
+  const timeout = Math.min(options.timeoutMs ?? 60000,60000), request = sevmRequest(result,bytecode,signatures,selectors);
+  let failure = null, usage;
+  if(timeout < 1) failure = {code:'SEVM_CHILD_BUDGET_UNAVAILABLE',detail:'Parent save and interpretation reserve retained'};
+  else {
+    const run = spawnSync(process.execPath,['--max-old-space-size='+Math.min(options.heapMiB ?? 512,512),
+      options.workerPath || fileURLToPath(new URL('./bytecode-sevm-worker.mjs',import.meta.url))],{
+      input:JSON.stringify(request),encoding:'utf8',timeout:Math.floor(timeout),killSignal:'SIGKILL',
+      maxBuffer:Math.min(options.maxBuffer ?? SEVM_OUTPUT_LIMIT,SEVM_OUTPUT_LIMIT),
+      env:{...process.env,NODE_OPTIONS:''},windowsHide:true,
+    });
+    if(run.error?.code === 'ETIMEDOUT') failure = {code:'SEVM_CHILD_TIMEOUT',timeout_ms:Math.floor(timeout)};
+    else if(run.error?.code === 'ENOBUFS') failure = {code:'SEVM_CHILD_OUTPUT_LIMIT'};
+    else if(/heap out of memory|reached heap limit|allocation failed.*heap/i.test(run.stderr || '')) failure = {code:'SEVM_CHILD_OOM',heap_limit_mib:Math.min(options.heapMiB ?? 512,512)};
+    else if(run.signal) failure = {code:'SEVM_CHILD_SIGNAL',signal:run.signal};
+    else if(run.status !== 0) failure = {code:/^SEVM_(?:EXPANDED_)?OUTPUT_LIMIT/.test(run.stderr || '')?'SEVM_CHILD_OUTPUT_LIMIT':'SEVM_CHILD_EXIT',exit_code:run.status,detail:String(run.stderr || run.error?.code || '').slice(0,1000)};
+    else {
+      try { const decoded=decodeSevmResponse(JSON.parse(run.stdout));usage = {...mergeSevmResponse(result,request,decoded.response),response_transport:decoded.transport}; }
+      catch(error) { failure = {code:'SEVM_CHILD_INVALID_OUTPUT',detail:String(error.message).slice(0,500)}; }
+    }
+  }
+  const resource = {timeout_ms:Math.max(0,Math.floor(timeout)),heap_limit_mib:Math.min(options.heapMiB ?? 512,512),output_limit_bytes:Math.min(options.maxBuffer ?? SEVM_OUTPUT_LIMIT,SEVM_OUTPUT_LIMIT),
+    wall_ms:Math.round(performance.now()-started),...usage};
+  if(!failure) {
+    const engine = result.sections.engines.findLast(e => e.engine === 'sevm');
+    if(engine) engine.isolation = {kind:'node_child_process',...resource};
+    return;
+  }
+  for(const selector of selectors) if(!result.sections.methods.some(m => m.selector === selector)) {
+    result.sections.methods.push(makeMethod(result.snapshot,'selector:'+selector,selector));
+  }
+  if(!result.sections.methods.length) result.sections.methods.push(makeMethod(result.snapshot,'dispatch','','fallback / dispatcher'));
+  const affected = [];
+  for(const method of result.sections.methods) if(method.entry_kind !== 'constructor' && !method.code_phase?.startsWith('creation') &&
+      method.dispatch_role !== 'overridden_source_definition' && (method.completeness.basis !== 'source' || method.completeness.unresolved.length)) {
     method.completeness.complete = false;
-    method.completeness.execution_paths = 'symbolic_paths_not_exhaustively_verified';
-    method.parameters.sort((a, b) => a.index - b.index);
+    method.completeness.unresolved.push({...failure,engine:'sevm',scope:'bytecode_method_body'});
+    affected.push(method.method_id);
   }
-  for (const selector of selectors) if (!result.sections.methods.some(m => m.selector === selector)) {
-    const method = makeMethod(result.snapshot, `selector:${selector}`, selector);
-    method.completeness.unresolved.push({ code: 'SELECTOR_WITHOUT_PARSED_BODY' }); result.sections.methods.push(method);
-  }
-  const discovered = unique([...selectors, ...Object.keys(contract.functions).map(s => '0x' + s)]);
-  result.sections.engines.push({ engine: 'sevm', version: '0.7.4', adapter_version: 'symbolic-1', status: failures.length ? 'partial' : 'completed',
-    duration_ms: Math.round(performance.now() - started), parsed_functions: Object.keys(contract.functions).length, unresolved: failures });
-  result.sections.coverage.push({ dimension: 'bytecode', complete: false, discovered_selectors: discovered.length,
-    parsed_functions: Object.keys(contract.functions).length, unresolved: failures, basis: 'symbolic_paths_not_exhaustive' });
+  result.sections.engines.push({engine:'sevm',version:'0.7.4',adapter_version:'isolated-symbolic-2',status:'failed',error_code:failure.code,
+    error_message:failure.detail || failure.code,isolation:{kind:'node_child_process',...resource}});
+  result.sections.coverage.push({dimension:'bytecode',complete:false,reason:failure.code,discovered_selectors:selectors.length,
+    affected_method_ids:affected,preserved:['disassembly','compiler_entries','successful_source_method_models'],...failure});
+  result.sections.frontier.push({frontier_id:id(result.snapshot.code_hash,'sevm-child',failure.code),kind:'bytecode_engine',engine:'sevm',
+    reason:failure.code,affected_method_ids:affected});
 }

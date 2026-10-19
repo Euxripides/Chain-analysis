@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -38,7 +39,10 @@ func (s *Server) contractReadArtifact(ctx context.Context, q ca.Request, preview
 	if e != nil {
 		return nil, e
 	}
-	if job.Status != "completed" {
+	var admission contractCodeBoundary
+	_ = json.Unmarshal(job.Boundary, &admission)
+	admissionRead := admission.InputArtifact.ArtifactID != "" && admission.InputArtifact.ArtifactID == q.ArtifactID
+	if job.Status != "completed" && !admissionRead {
 		return nil, summaryError(409, "ANALYSIS_NOT_COMPLETED", "Artifacts publish with completed analysis")
 	}
 	scope, e := s.nextTenant(ctx)
@@ -46,9 +50,13 @@ func (s *Server) contractReadArtifact(ctx context.Context, q ca.Request, preview
 		return nil, e
 	}
 	var artifact ca.Artifact
-	e = s.deps.Store.Pool.QueryRow(ctx, `SELECT artifact_id,kind,filename,media_type,object_key,byte_size,sha256,method_id FROM contract_analysis_artifacts WHERE analysis_id=$1 AND artifact_id=$2 AND organization_id=$3 AND workspace_id=$4`, job.ID, q.ArtifactID, scope.OrganizationID, scope.WorkspaceID).Scan(&artifact.ArtifactID, &artifact.Kind, &artifact.Filename, &artifact.MediaType, &artifact.ObjectKey, &artifact.Bytes, &artifact.SHA256, &artifact.MethodID)
-	if e != nil {
-		return nil, summaryError(404, "ARTIFACT_NOT_FOUND", "Contract artifact not found")
+	if admissionRead {
+		artifact = admission.InputArtifact
+	} else {
+		e = s.deps.Store.Pool.QueryRow(ctx, `SELECT artifact_id,kind,filename,media_type,object_key,byte_size,sha256,method_id FROM contract_analysis_artifacts WHERE analysis_id=$1 AND artifact_id=$2 AND organization_id=$3 AND workspace_id=$4`, job.ID, q.ArtifactID, scope.OrganizationID, scope.WorkspaceID).Scan(&artifact.ArtifactID, &artifact.Kind, &artifact.Filename, &artifact.MediaType, &artifact.ObjectKey, &artifact.Bytes, &artifact.SHA256, &artifact.MethodID)
+		if e != nil {
+			return nil, summaryError(404, "ARTIFACT_NOT_FOUND", "Contract artifact not found")
+		}
 	}
 	if len(preview) > 0 && preview[0] {
 		allowed := map[string]bool{"verified_source": true, "pseudocode": true, "disassembly": true, "symbolic_ir": true, "storage_layout": true, "bytecode": true, "heimdall_output": true}
@@ -124,6 +132,58 @@ func contractScopePCMap(data []byte, originalID string, remap map[string]string)
 	return json.Marshal(document)
 }
 
+func contractScopeDependencyArchive(data []byte, originalID string, remap map[string]string, result *ca.Result) ([]byte, error) {
+	var descriptor struct {
+		ArtifactID string `json:"artifact_id"`
+		SHA        string `json:"uncompressed_sha256"`
+		Bytes      int64  `json:"uncompressed_bytes"`
+	}
+	index := -1
+	for i, row := range result.Sections["dependency_artifacts"] {
+		if err := json.Unmarshal(row, &descriptor); err != nil {
+			return nil, err
+		}
+		if descriptor.ArtifactID == originalID {
+			index = i
+			break
+		}
+	}
+	if index < 0 || descriptor.Bytes < 1 || descriptor.Bytes > 64<<20 {
+		return nil, fmt.Errorf("dependency archive descriptor invalid")
+	}
+	r, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("dependency gzip invalid: %w", err)
+	}
+	raw, err := io.ReadAll(io.LimitReader(r, (64<<20)+1))
+	closeErr := r.Close()
+	if err != nil || closeErr != nil || int64(len(raw)) != descriptor.Bytes || ca.SHA256(raw) != descriptor.SHA || !json.Valid(raw) {
+		return nil, fmt.Errorf("dependency archive integrity failed")
+	}
+	var header struct {
+		Schema string `json:"schema_version"`
+	}
+	if json.Unmarshal(raw, &header) != nil || header.Schema != "conclusion-dependencies-v1" {
+		return nil, fmt.Errorf("dependency archive schema invalid")
+	}
+	for oldID, newID := range remap {
+		raw = bytes.ReplaceAll(raw, []byte(`"`+oldID+`"`), []byte(`"`+newID+`"`))
+	}
+	row := rowMap(result.Sections["dependency_artifacts"][index])
+	row["uncompressed_sha256"] = ca.SHA256(raw)
+	row["uncompressed_bytes"] = len(raw)
+	result.Sections["dependency_artifacts"][index] = ca.Row(row)
+	var output bytes.Buffer
+	w := gzip.NewWriter(&output)
+	if _, err = w.Write(raw); err != nil {
+		return nil, err
+	}
+	if err = w.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
 func contractScopePropertyProof(data []byte, originalID string, remap map[string]string) ([]byte, error) {
 	var proof map[string]any
 	if err := nextDecode(data, &proof); err != nil {
@@ -189,7 +249,11 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 		return e
 	}
 	var report strings.Builder
-	fmt.Fprintf(&report, "# %s %s 合约运行与方法分析\n\n区块：%d\n\n区块哈希：%s\n\n", result.Snapshot.Chain, result.Snapshot.EntryAddress, result.Snapshot.BlockNumber, result.Snapshot.BlockHash)
+	if result.Snapshot.IdentityKind == "code_only" {
+		fmt.Fprintf(&report, "# 合约代码与方法分析\n\n输入 SHA256：%s\n\n代码阶段：%s\n\n状态：符号状态\n\n", result.Snapshot.InputSHA256, result.Snapshot.CodePhase)
+	} else {
+		fmt.Fprintf(&report, "# %s %s 合约运行与方法分析\n\n区块：%d\n\n区块哈希：%s\n\n", result.Snapshot.Chain, result.Snapshot.EntryAddress, result.Snapshot.BlockNumber, result.Snapshot.BlockHash)
+	}
 	for _, raw := range result.Sections["methods"] {
 		m := rowMap(raw)
 		mid := fmt.Sprint(m["method_id"])
@@ -197,7 +261,11 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 		if title == "" {
 			title = contractReportField(m, "selector", "name", "entry", "method_id")
 		}
-		fmt.Fprintf(&report, "## %s\n\n代码地址：%s\n\n状态地址：%s\n\n%s。\n\n", title, m["code_address"], m["storage_address"], m["purpose"])
+		if result.Snapshot.IdentityKind == "code_only" {
+			fmt.Fprintf(&report, "## %s\n\n%s。\n\n", title, m["purpose"])
+		} else {
+			fmt.Fprintf(&report, "## %s\n\n代码地址：%s\n\n状态地址：%s\n\n%s。\n\n", title, m["code_address"], m["storage_address"], m["purpose"])
+		}
 		for _, key := range []string{"parameters", "outputs"} {
 			var values []map[string]any
 			if nextDecode(ca.Row(m[key]), &values) == nil && len(values) > 0 {
@@ -212,7 +280,7 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 				report.WriteString("\n")
 			}
 		}
-		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}, {"external_returns", "外部返回依赖"}, {"external_return_observations", "执行返回结果"}, {"property_obligations", "性质验证"}, {"loop_invariants", "循环归纳"}, {"state_transitions", "状态转换"}, {"initial_state_models", "源码初始化"}, {"verification_obligations", "模型证明义务"}} {
+		for _, part := range []struct{ section, label string }{{"permissions", "执行条件"}, {"steps", "执行步骤"}, {"funds", "资金作用"}, {"dataflow", "表达式推导"}, {"storage", "状态读写"}, {"control_effects", "配置与资金关联"}, {"calls", "外部调用"}, {"call_input_bindings", "CALL 输入"}, {"source_memory_versions", "源码 bytes 版本"}, {"abi_values", "ABI 字段"}, {"abi_decodings", "源码 ABI 解码"}, {"call_argument_models", "调用参数候选"}, {"fund_call_models", "资金调用候选"}, {"memory_frontier", "内存分析待完成内容"}, {"external_returns", "外部返回依赖"}, {"external_return_observations", "执行返回结果"}, {"property_obligations", "性质验证"}, {"loop_invariants", "循环归纳"}, {"state_transitions", "状态转换"}, {"initial_state_models", "源码初始化"}, {"verification_obligations", "模型证明义务"}} {
 			items := []map[string]any{}
 			for _, row := range result.Sections[part.section] {
 				item := rowMap(row)
@@ -286,6 +354,16 @@ func (s *Server) contractExportArtifacts(ctx context.Context, result *ca.Result,
 					if item["resolved_target_address"] != nil {
 						fmt.Fprintf(&report, "  解析目标：%s；状态地址 %s；代码哈希 %s；依赖状态 %s。\n", item["resolved_target_address"], contractReportField(item, "dependency_storage_address"), contractReportField(item, "dependency_code_hash"), contractReportField(item, "dependency_status"))
 					}
+				case "call_input_bindings":
+					fmt.Fprintf(&report, "- 输入标识 %s；内存版本 %s；字节数 %s；状态 %s；待解析内容 %s。\n", contractReportField(item, "call_input_binding_id"), contractReportField(item, "memory_version_id", "source_memory_version_ids"), contractReportField(item, "byte_length", "input_length_expression"), contractReportField(item, "status"), strings.Join(stringList(item["unresolved"]), "，"))
+				case "source_memory_versions":
+					fmt.Fprintf(&report, "- 版本 %s；构造方式 %s；参数 %s；字节数 %s；状态 %s；待解析内容 %s。\n", contractReportField(item, "source_memory_version_id"), contractReportField(item, "encoding"), strings.Join(stringList(item["argument_texts"]), "，"), contractReportField(item, "byte_length"), contractReportField(item, "status"), strings.Join(stringList(item["unresolved"]), "，"))
+				case "abi_values":
+					fmt.Fprintf(&report, "- 字段 %s；类型 %s；数据偏移 %s；值 %s；状态 %s。\n", contractReportField(item, "path"), contractReportField(item, "type"), contractReportField(item, "data_offset"), contractReportField(item, "value_expression", "value"), contractReportField(item, "status"))
+				case "abi_decodings", "call_argument_models", "fund_call_models":
+					fmt.Fprintf(&report, "- 标识 %s；候选接口 %s；输入关联 %s；状态 %s；待解析内容 %s。\n", contractReportField(item, "abi_decoding_id", "call_argument_model_id", "fund_call_model_id"), contractReportField(item, "signature_candidate"), contractReportField(item, "call_input_binding_id", "input_expression_id"), contractReportField(item, "status"), strings.Join(stringList(item["unresolved"]), "，"))
+				case "memory_frontier":
+					fmt.Fprintf(&report, "- 指令 %s；原因 %s；标识 %s。\n", contractReportField(item, "statement"), contractReportField(item, "reason"), contractReportField(item, "memory_frontier_id"))
 				case "external_returns":
 					fmt.Fprintf(&report, "- %s；目标 %s；返回类型 %s；调用者 %s；状态 %s。\n", item["signature"], item["target_expression"], strings.Join(stringList(item["return_types"]), "，"), item["callee_msg_sender"], item["status"])
 				case "external_return_observations":
@@ -486,6 +564,9 @@ func (s *Server) contractCompare(ctx context.Context, q ca.Request) (any, error)
 	}
 	if e = json.Unmarshal(right.Meta, &rm); e != nil {
 		return nil, e
+	}
+	if (lm.Snapshot.IdentityKind == "code_only") != (rm.Snapshot.IdentityKind == "code_only") || lm.Snapshot.IdentityKind == "code_only" && string(ca.Row(lm.Snapshot.DeclaredEnvironment)) != string(ca.Row(rm.Snapshot.DeclaredEnvironment)) {
+		return nil, fmt.Errorf("versions require compatible code-only or observed deployment contexts")
 	}
 	if lm.Snapshot.ChainID != rm.Snapshot.ChainID || lm.Snapshot.VMFamily != rm.Snapshot.VMFamily || (lm.Snapshot.Chain == "solana" && lm.Snapshot.EntryAddress != rm.Snapshot.EntryAddress) || (lm.Snapshot.Chain != "solana" && !strings.EqualFold(lm.Snapshot.EntryAddress, rm.Snapshot.EntryAddress)) {
 		return nil, fmt.Errorf("versions must name the same chain and entry address")

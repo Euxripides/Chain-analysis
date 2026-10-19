@@ -6,7 +6,10 @@ export function applyFundsRules(result) {
   result.sections.semantics = [];
   for (const method of result.sections.methods) {
     const match = section => result.sections[section].filter(r => r.method_id === method.method_id);
-    const funds = match('funds'), guards = match('permissions'), stores = match('storage'), expressions = match('expressions'), calls = match('calls'), steps = match('steps');
+    const allFunds=match('funds'),funds=allFunds.filter(f=>f.economic_value_status!=='zero_call_value'), guards = match('permissions'), stores = match('storage'), expressions = match('expressions'), calls = match('calls'), steps = match('steps');
+    if(allFunds.some(f=>f.economic_value_status==='zero_call_value')&&!funds.some(f=>f.kind==='native_payment')){
+      method.behaviors=method.behaviors.filter(b=>b!=='原生币支付');if(!funds.length&&calls.length){method.behaviors=unique([...method.behaviors,'外部合约交互']);method.purpose=calls.map(c=>`${c.call_type} 调用 ${c.target_expression}`).join('；');}
+    }
     const byID=new Map(expressions.map(e=>[e.expression_id,e]));
     const declarations=key=>{const refs=new Set(),visited=new Set();const scan=id=>{if(!id||visited.has(id))return;visited.add(id);const e=byID.get(id);if(!e)return;if(e.referenced_declaration!=null)refs.add(e.referenced_declaration);for(const child of e.operands||[])scan(child)};scan(key);return refs};
     for(const parameter of method.parameters) {
@@ -18,7 +21,7 @@ export function applyFundsRules(result) {
       for(const parameter of method.parameters)if(references.has(parameter.source_ast_id)){
         parameter.amount_expression_ids=unique([...(parameter.amount_expression_ids||[]),fund.amount_expression_id]);
         parameter.unit_status='participates_in_amount_expression';
-        if(direct?.op==='Identifier'&&direct.referenced_declaration===parameter.source_ast_id){parameter.unit=fund.unit;parameter.unit_status='direct_amount_argument';parameter.unit_evidence_ids=unique([...(parameter.unit_evidence_ids||[]),...fund.evidence_ids])}
+        if((direct?.op==='Identifier'||direct?.symbolic_format==='entry_scalar'&&direct.entry_argument===true)&&direct.referenced_declaration===parameter.source_ast_id){parameter.unit=fund.unit;parameter.unit_status='direct_amount_argument';parameter.unit_evidence_ids=unique([...(parameter.unit_evidence_ids||[]),...fund.evidence_ids])}
       }
     }
     const add = (rule_id, behavior, text, rows) => {

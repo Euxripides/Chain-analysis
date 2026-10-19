@@ -158,7 +158,7 @@ func (s *Server) contractWorkOne(parent context.Context, owner string) error {
 	if e == nil {
 		if q.Program != nil {
 			e = s.programBlockGuard(ctx, q, b.Point)
-		} else {
+		} else if !q.CodeOnly() {
 			e = s.contractBlockGuard(ctx, q, b.Point, true)
 		}
 	}
@@ -342,7 +342,10 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 		_, _ = s.deps.Store.Pool.Exec(ctx, `UPDATE contract_analysis_engine_runs SET status='failed',finished_at=now(),duration_ms=$1,error_code='ENGINE_RUN_FAILED',timed_out=$2 WHERE id=$3 AND fence=$4`, time.Since(started).Milliseconds(), errors.Is(engineCtx.Err(), context.DeadlineExceeded), runID, w.Fence)
 		return result, e
 	}
-	if result.Snapshot.CodeHash != input.Snapshot.CodeHash || result.Snapshot.BlockHash != input.Snapshot.BlockHash || result.Snapshot.StorageAddress != input.Snapshot.StorageAddress || result.Snapshot.CodeAddress != input.Snapshot.CodeAddress || result.Snapshot.ChainID != input.Snapshot.ChainID || result.Snapshot.EntryAddress != input.Snapshot.EntryAddress || result.Snapshot.StateGranularity != input.Snapshot.StateGranularity {
+	if e = ca.ValidateInputResult(input, result.Snapshot); e != nil {
+		return ca.Result{}, e
+	}
+	if !q.CodeOnly() && (result.Snapshot.CodeHash != input.Snapshot.CodeHash || result.Snapshot.BlockHash != input.Snapshot.BlockHash || result.Snapshot.StorageAddress != input.Snapshot.StorageAddress || result.Snapshot.CodeAddress != input.Snapshot.CodeAddress || result.Snapshot.ChainID != input.Snapshot.ChainID || result.Snapshot.EntryAddress != input.Snapshot.EntryAddress || result.Snapshot.StateGranularity != input.Snapshot.StateGranularity) {
 		return ca.Result{}, fmt.Errorf("engine snapshot identity mismatch")
 	}
 	if e = contractCompactMethodDetails(&result); e != nil {
@@ -351,7 +354,7 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	if e = s.contractSaveArtifacts(ctx, &result); e != nil {
 		return result, e
 	}
-	if q.Program == nil {
+	if q.Program == nil && !q.CodeOnly() {
 		s.contractReadState(ctx, q, &result)
 		contractEnrichAuthoritySnapshot(&result)
 		contractEnrichCallTargets(&result)
@@ -416,9 +419,23 @@ func (s *Server) contractSaveArtifacts(ctx context.Context, result *ca.Result) e
 				return e
 			}
 		}
+		if artifact.Kind == "state_transition_semantics" {
+			var e error
+			data, e = contractScopeStateSemantics(data, remap)
+			if e != nil {
+				return e
+			}
+		}
 		if artifact.Kind == "source_pc_map" {
 			var e error
 			data, e = contractScopePCMap(data, originalID, remap)
+			if e != nil {
+				return e
+			}
+		}
+		if artifact.Kind == "conclusion_dependencies" {
+			var e error
+			data, e = contractScopeDependencyArchive(data, originalID, remap, result)
 			if e != nil {
 				return e
 			}
@@ -464,7 +481,7 @@ func mergeContractResult(result *ca.Result, part ca.Result) {
 }
 func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Request, frozen ca.FrozenInput, engine string) (ca.Result, error) {
 	result := ca.Result{Version: ca.Version, RuleVersion: "funds-semantics-1", Snapshot: frozen.Snapshot, Sections: map[string][]json.RawMessage{}, Metrics: map[string]any{"engine_digest": engine, "rpc_usage_job_id": w.JobID, "credits": nil, "estimated_usd": nil}}
-	if q.Program != nil {
+	if q.Program != nil || q.CodeOnly() {
 		if len(frozen.Contracts) != 1 {
 			return result, fmt.Errorf("invalid frozen program input")
 		}
@@ -473,6 +490,9 @@ func (s *Server) contractProcess(ctx context.Context, w nextWorkerState, q ca.Re
 			return result, err
 		}
 		mergeContractResult(&result, part)
+		if q.CodeOnly() {
+			result.Snapshot = part.Snapshot
+		}
 		return result, nil
 	}
 	inputs := append([]ca.Input{}, frozen.Contracts...)
@@ -864,6 +884,20 @@ func (s *Server) contractPublish(ctx context.Context, w nextWorkerState, frozen 
 	if e := s.contractPhase(ctx, w, "publishing"); e != nil {
 		return e
 	}
+	if frozen.Request.Input != nil {
+		job, err := s.contractJob(ctx, w.JobID)
+		if err != nil {
+			return err
+		}
+		var boundary contractCodeBoundary
+		if err = json.Unmarshal(job.Boundary, &boundary); err != nil {
+			return err
+		}
+		if boundary.InputArtifact.ArtifactID == "" {
+			return fmt.Errorf("submitted input artifact missing")
+		}
+		result.Sections["artifacts"] = append(result.Sections["artifacts"], ca.Row(boundary.InputArtifact))
+	}
 	if e := s.contractExportArtifacts(ctx, &result, frozen); e != nil {
 		return e
 	}
@@ -927,10 +961,12 @@ func (s *Server) contractPublish(ctx context.Context, w nextWorkerState, frozen 
 			return e
 		}
 	}
-	snap := frozen.Snapshot
-	_, e = tx.Exec(ctx, `INSERT INTO contract_analysis_snapshots(organization_id,workspace_id,analysis_id,chain_id,block_number,block_hash,entry_address,code_address,storage_address,code_hash,snapshot_manifest_object,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(analysis_id) DO NOTHING`, w.Scope.OrganizationID, w.Scope.WorkspaceID, w.JobID, snap.ChainID, snap.BlockNumber, snap.BlockHash, snap.EntryAddress, snap.CodeAddress, snap.StorageAddress, snap.CodeHash, w.InputObject, w.InputSHA)
-	if e != nil {
-		return e
+	if frozen.Snapshot.IdentityKind != "code_only" {
+		snap := frozen.Snapshot
+		_, e = tx.Exec(ctx, `INSERT INTO contract_analysis_snapshots(organization_id,workspace_id,analysis_id,chain_id,block_number,block_hash,entry_address,code_address,storage_address,code_hash,snapshot_manifest_object,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(analysis_id) DO NOTHING`, w.Scope.OrganizationID, w.Scope.WorkspaceID, w.JobID, snap.ChainID, snap.BlockNumber, snap.BlockHash, snap.EntryAddress, snap.CodeAddress, snap.StorageAddress, snap.CodeHash, w.InputObject, w.InputSHA)
+		if e != nil {
+			return e
+		}
 	}
 	_, e = tx.Exec(ctx, `UPDATE investigation_analysis_jobs SET status='completed',phase='completed',result_object=$1,result_sha=$2,result_meta=$3,completed_at=now(),updated_at=now(),lease_owner=NULL,lease_until=NULL,error_code=NULL,error_message=NULL WHERE id=$4 AND fence=$5`, object.Key, object.SHA256, ca.Row(meta), w.JobID, w.Fence)
 	if e != nil {
