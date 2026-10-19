@@ -17,7 +17,16 @@ for(const optimized of[false,true]){
   for(const name of['memoryAlias','callMemory','implicitMemoryArgument']){
    const{fund}=records(r,name),reads=valueReads(r,fund.amount_expression_id);assert.equal(reads.length,1,name);assert.equal(reads[0].storage_projection.path.at(-1).name,'bonus',name);
   }
-  const{method,fund}=records(r,'twoCopies'),reads=valueReads(r,fund.amount_expression_id);assert.equal(reads.length,2);assert.notEqual(reads[0].source_storage_copy_point_id,reads[1].source_storage_copy_point_id);assert.notEqual(reads[0].source_order,reads[1].source_order);assert.ok(snapshots(r,method).every(e=>e.storage_value_bound===false));
+  const{method,fund}=records(r,'twoCopies'),reads=valueReads(r,fund.amount_expression_id),bound=r.sections.expressions.filter(e=>e.method_id===method.method_id&&e.storage_value_bound===true);
+  assert.equal(reads.length,1);assert.equal(bound.length,1);assert.equal(bound[0].storage_value_basis,'dominating_scalar_storage_write_before_copy');assert.ok(bound[0].source_storage_write_order<bound[0].source_order);assert.notEqual(reads[0].source_storage_copy_point_id,bound[0].source_storage_copy_point_id);assert.ok(snapshots(r,method).every(e=>e.storage_value_bound===false));
+ });
+ test(`dominating writes fold into the copy while compounds stay at the copy point optimizer=${optimized}`,()=>{
+  const r=inspect(optimized),plain=records(r,'storeThenCopy');
+  assert.equal(plain.fund.amount_derivation_status,'represented_source_dependencies_resolved');assert.match(plain.fund.expanded_amount_expression,/(^|[^A-Za-z_])x([^A-Za-z_]|$)/);
+  const plainBound=r.sections.expressions.filter(e=>e.method_id===plain.method.method_id&&e.storage_value_bound===true);assert.equal(plainBound.length,1);assert.equal(plainBound[0].type,'uint128');
+  const compound=records(r,'compoundThenCopy'),compoundBound=r.sections.expressions.filter(e=>e.method_id===compound.method.method_id&&e.storage_value_bound===true);
+  assert.equal(compound.fund.amount_derivation_status,'represented_source_dependencies_resolved');assert.equal(compoundBound.length,0);assert.ok(snapshots(r,compound.method).every(e=>e.storage_value_bound===false));
+  const enumCase=records(r,'enumCopy');assert.equal(enumCase.fund.amount_derivation_status,'represented_source_dependencies_resolved');
  });
  test(`mapping keys are frozen by their scalar values before later reassignment optimizer=${optimized}`,()=>{
   const r=inspect(optimized),{method}=records(r,'twoCopyKeyValues'),reads=snapshots(r,method),values=new Map();
@@ -31,6 +40,9 @@ for(const optimized of[false,true]){
  test(`unmodeled copies keep gaps and typed source reads cannot promote state proofs optimizer=${optimized}`,()=>{
   const r=inspect(optimized);
   for(const name of['keyDivisionDiscarded','keyEffects','dirtyAllocator','arrayElementCopy','conditionalReference']){const{fund,flow}=records(r,name);assert.equal(fund.amount_derivation_status,'partial',name);assert.ok(flow.unresolved.length,name);}
-  const{method}=records(r,'twoCopies'),state=r.sections.state_transitions.find(t=>t.method_id===method.method_id);assert.ok(state);assert.equal(state.complete,false);assert.ok(state.unresolved.some(s=>s.startsWith('STATE_SCALAR_TYPE_UNSUPPORTED:')));for(const e of snapshots(r,method)){assert.equal(e.storage_value_bound,false);assert.equal(e.all_execution_paths_verified,false);}
+  const{method}=records(r,'twoCopies'),state=r.sections.state_transitions.find(t=>t.method_id===method.method_id);assert.ok(state);assert.equal(state.complete,true);assert.deepEqual(state.unresolved,[]);
+  const dynamic=records(r,'dynamicFieldCopy'),dynamicState=r.sections.state_transitions.find(t=>t.method_id===dynamic.method.method_id);
+  assert.equal(dynamic.fund.amount_derivation_status,'partial');assert.equal(dynamicState.complete,false);assert.ok(dynamicState.unresolved.some(s=>s.startsWith('STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED')));
+  for(const e of snapshots(r,method)){assert.equal(e.storage_value_bound,false);assert.equal(e.all_execution_paths_verified,false);}
  });
 }

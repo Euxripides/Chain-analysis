@@ -5,6 +5,9 @@ contract StorageCopyCases {
     struct Nested { Cell cell; uint128 extra; }
     struct Recipient { address payable payee; uint128 amount; }
     struct Flags { int128 signedAmount; uint64 amount; bool enabled; bytes4 tag; }
+    enum Mode { Off, On }
+    struct Tagged { uint128 amount; Mode mode; }
+    struct Bag { uint128[] values; }
     Cell public cell;
     mapping(uint256 => Cell) public items;
     Nested private nested;
@@ -13,6 +16,8 @@ contract StorageCopyCases {
     Flags public flags;
     uint256 public keyCalls;
     mapping(bytes4 => Cell) private byteItems;
+    Tagged public tagged;
+    Bag private bag;
 
     constructor(address payable receiver) {
         cell = Cell(7, 5);
@@ -24,6 +29,8 @@ contract StorageCopyCases {
         recipient = Recipient(receiver, 13);
         flags = Flags(-3, 11, true, bytes4(0x11223344));
         byteItems[0x11223344] = Cell(29, 3);
+        tagged = Tagged(19, Mode.On);
+        bag.values.push(3);
     }
     function readNested() external view returns (uint128, uint128, uint128) {
         return (nested.cell.amount, nested.cell.bonus, nested.extra);
@@ -48,6 +55,18 @@ contract StorageCopyCases {
     function nestedCopy(uint256 x, address payable to) external {
         Nested memory a = nested; nested.cell.amount = uint128(x); a.cell.bonus = uint128(x);
         to.transfer(a.cell.amount + a.cell.bonus + a.extra);
+    }
+    function storeThenCopy(uint128 x, address payable to) external {
+        cell.amount = x; Cell memory a = cell; to.transfer(a.amount + a.bonus);
+    }
+    function compoundThenCopy(uint128 x, address payable to) external {
+        cell.bonus += x; Cell memory a = cell; to.transfer(a.amount + a.bonus);
+    }
+    function enumCopy(address payable to) external {
+        Tagged memory a = tagged; tagged.amount = 1; to.transfer(a.amount);
+    }
+    function dynamicFieldCopy(address payable to) external {
+        Bag memory b = bag; to.transfer(b.values.length);
     }
     function twoCopies(uint256 x, address payable to) external {
         Cell memory a = cell; cell.amount = uint128(x); Cell memory b = cell; to.transfer(a.amount + b.amount);

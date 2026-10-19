@@ -371,6 +371,7 @@ export function analyzeSource(result, source, bytecode, options = {}) {
     if(integer)return{type,bits:Number(integer[2]||256),signed:integer[1]==='int',kind:'integer'};
     if(bytes)return{type,bits:Number(bytes[1])*8,signed:false,kind:'fixed_bytes'};
     if(type==='bool')return{type,bits:8,signed:false,kind:'bool'};
+    if(/^enum\s/.test(type))return{type,bits:8,signed:false,kind:'enum'};
     if(/^address(?: payable)?$/.test(type)||/^contract\s/.test(type))return{type,bits:160,signed:false,kind:'address'};
     return null;
   };
@@ -398,6 +399,27 @@ export function analyzeSource(result, source, bytecode, options = {}) {
     const keys=[];let slotNodes=0,valid=true;
     const slots=(term,depth=0)=>{if(!term||++slotNodes>128||depth>32){valid=false;return;}if(term.op==='expression'){if(!storageCopyKeyKnown(term.expression_id))valid=false;keys.push(term.expression_id);}else if(term.op!=='constant'&&!['keccak_words','add','mul','div','mod'].includes(term.op))valid=false;for(const child of term.args||[])slots(child,depth+1);};
     slots(projection.slot_expression);if(!valid)return fail('SOURCE_AGGREGATE_STORAGE_COPY_KEY_OR_SLOT_UNMODELED');
+    const copyProjectionMatches=(left,right)=>{
+      if(!left||!right||left.root_state_ast_id!==right.root_state_ast_id)return false;
+      const a=left.path||[],b=right.path||[];if(a.length!==b.length)return false;
+      return a.every((step,index)=>{const other=b[index];if(step.kind!==other.kind)return false;
+        if(step.kind==='mapping')return Boolean(step.key_expression_id)&&step.key_expression_id===other.key_expression_id;
+        return step.field_ast_id===other.field_ast_id&&step.index===other.index;});
+    };
+    const dominatingStorageWrite=(fieldProjection,method,context)=>{
+      const order=method.step_ids.length,conditions=context.conditions||[];
+      const rows=(result.sections.storage||[]).filter(row=>row.method_id===method.method_id&&row.access==='write'&&row.storage_projection&&copyProjectionMatches(row.storage_projection,fieldProjection)&&(row.order??Infinity)<order&&(row.conditions||[]).every(condition=>conditions.includes(condition)));
+      if(!rows.length)return null;
+      const latest=rows.at(-1);
+      if(latest.operation!=='='||!latest.value_expression_id)return null;
+      const value=expressionByID.get(latest.value_expression_id);
+      if(!value||value.type!==fieldProjection.scalar_type||value.unresolved_model_reasons?.length||value.unresolved_evaluation_effect||value.unresolved_return_value||value.source_scalar_binding_unavailable)return null;
+      const writeLocation=latest.source_location,copyLocation=location(node);
+      if(!writeLocation||!copyLocation||writeLocation.file!==copyLocation.file||!(writeLocation.start<copyLocation.start))return null;
+      const intervening=(result.sections.external_returns||[]).some(row=>row.method_id===method.method_id&&row.source_callsite&&row.source_callsite.file===writeLocation.file&&row.source_callsite.start>writeLocation.start&&row.source_callsite.start<copyLocation.start);
+      if(intervening)return null;
+      return {...latest,value};
+    };
     const origin=expression(method,node,context),point=id(method.method_id,origin,method.step_ids.length,context.path,'storage-to-memory-copy',model.shared.serial),keyIDs=unique(keys);
     const read=(copyType,at,depth,stack=[])=>{
       checkMethodTime();if(depth>model.budget.maxDepth||stack.includes(copyType.declaration_id))return model.unknown(copyType,'SOURCE_AGGREGATE_STORAGE_COPY_NESTING_BUDGET',ctx);
@@ -410,7 +432,9 @@ export function analyzeSource(result, source, bytecode, options = {}) {
         if(nested){const reference=read(nested,child,depth+1,[...stack,copyType.declaration_id]);fields.push({declaration_id:member.id,type:typeOf(member),reference,evaluation_may_fail:false});continue;}
         const shape=storageCopyScalar(member),storageType=layout.types[child.type_id],bytes=Number(storageType?.numberOfBytes);
         if(!shape||storageType?.encoding!=='inplace'||storageType?.base||storageType?.members||!Number.isSafeInteger(bytes)||bytes<1||bytes>32||bytes*8!==shape.bits||!Number.isInteger(child.offset)||child.offset<0||child.offset+bytes>32)return model.unknown(copyType,'SOURCE_AGGREGATE_STORAGE_COPY_FIELD_TYPE_UNSUPPORTED',ctx);
-        const value=synthetic(method,node,'source_storage_snapshot',keyIDs,context,{op:'SourceStorageReadAtCopy',type:shape.type,width:shape.kind==='integer'?shape.bits:null,signed:shape.signed,arithmetic:'storage_cleanup',source_storage_scalar:shape,source_storage_copy_point_id:point,source_copy_expression_id:origin,source_storage_copy_source:location(node),source_storage_field_declaration_id:member.id,storage_projection:structuredClone(child),storage_reference_ids:[...base.storage_reference_ids],source_order:method.step_ids.length,source_frame_path:context.path,storage_value_bound:false,validation_scope:'compiler_storage_location_and_source_copy_point_not_historical_state',all_execution_paths_verified:false,evidence_ids:unique([getEvidence(method,node),getEvidence(method,member)])});
+        const prior=dominatingStorageWrite(child,method,context),priorValue=prior?.value?.expression_id;
+        const value=priorValue?synthetic(method,node,'identity',[priorValue],context,{type:shape.type,source_storage_scalar:shape,source_storage_copy_point_id:point,source_copy_expression_id:origin,source_storage_copy_source:location(node),source_storage_field_declaration_id:member.id,source_storage_write_order:prior.order,source_storage_write_expression_id:priorValue,storage_projection:structuredClone(child),storage_reference_ids:[...base.storage_reference_ids],source_order:method.step_ids.length,source_frame_path:context.path,storage_value_bound:true,storage_value_basis:'dominating_scalar_storage_write_before_copy',state_binding:'dominating_write_within_same_source_frame',validation_scope:'compiler_storage_location_and_source_copy_point_not_historical_state',all_execution_paths_verified:false,evidence_ids:unique([getEvidence(method,node),getEvidence(method,member),...(prior.evidence_ids||[])])})
+          :synthetic(method,node,'source_storage_snapshot',keyIDs,context,{op:'SourceStorageReadAtCopy',type:shape.type,width:shape.kind==='integer'?shape.bits:null,signed:shape.signed,arithmetic:'storage_cleanup',source_storage_scalar:shape,source_storage_copy_point_id:point,source_copy_expression_id:origin,source_storage_copy_source:location(node),source_storage_field_declaration_id:member.id,storage_projection:structuredClone(child),storage_reference_ids:[...base.storage_reference_ids],source_order:method.step_ids.length,source_frame_path:context.path,storage_value_bound:false,validation_scope:'compiler_storage_location_and_source_copy_point_not_historical_state',all_execution_paths_verified:false,evidence_ids:unique([getEvidence(method,node),getEvidence(method,member)])});
         fields.push({declaration_id:member.id,type:typeOf(member),value_expression_id:value,evaluation_may_fail:false});
       }
       const reference=model.allocate(copyType,fields,{context:ctx,depth});
@@ -844,7 +868,7 @@ export function analyzeSource(result, source, bytecode, options = {}) {
       slot_role:baseOnly?'layout_base':'direct_slot',key_expression: accessText, key_expression_id: expression(method, node, context),
       value_expression: valueNode ? sourceText(valueNode) : null, value_expression_id: expression(method, valueNode, context), operation,
       conditions: unique([...context.conditions,...item.conditions]), evidence_ids: [evidence_id], layout_status: slot ? slot.layout_basis || 'verified_compiler_layout' : 'layout_unavailable',
-      storage_projection: projection,storage_reference_ids:item.storage_reference_ids,storage_access_binding_id:bindingID,projection_unresolved:item.unresolved,...(namespaceField?{namespace_id:namespaceField.namespace_id,
+      storage_projection: projection,storage_reference_ids:item.storage_reference_ids,storage_access_binding_id:bindingID,projection_unresolved:item.unresolved,order:method.step_ids.length,source_location:location(node),...(namespaceField?{namespace_id:namespaceField.namespace_id,
         namespace_struct_ast_id:namespaceField.namespace_struct_ast_id,namespace_root_slot:namespaceField.base_slot}:{} ) };
     result.sections.storage.push(row);
     method.storage_ids.push(storage_id);

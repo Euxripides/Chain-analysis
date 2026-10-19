@@ -4,7 +4,7 @@ export function scalarType(node) {
  const text=node?.typeDescriptions?.typeString||node?.name||node?.type||'';
  if(text==='bool')return {sort:'Bool',type:'bool'};
  const integer=/^(u?int)(\d*)$/.exec(text),bytes=/^bytes(\d+)$/.exec(text);
- const bits=integer?Number(integer[2]||256):/^(address|contract )/.test(text)?160:bytes?Number(bytes[1])*8:null;
+ const bits=integer?Number(integer[2]||256):/^(address|contract )/.test(text)?160:/^enum\s/.test(text)?8:bytes?Number(bytes[1])*8:null;
  if(!bits)throw new Error('STATE_SCALAR_TYPE_UNSUPPORTED:'+text);
  const signed=integer?.[1]==='int',mod=1n<<BigInt(bits);
  return {sort:'Int',type:text,bits,signed,min:signed?-(mod>>1n):0n,max:signed?(mod>>1n)-1n:mod-1n,mod};

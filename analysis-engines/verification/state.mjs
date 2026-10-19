@@ -20,7 +20,14 @@ const bool={sort:'Bool',type:'bool'};
 export function buildStateTransition(fn,method,ctx) {
  const {nodes,functions,layout,location,sourceText}=ctx,terms=new Terms(),failure=[],unresolved=[],effects=[],staticSlots=unique([...(layout.storage||[]).map(s=>s.slot),...(layout.namespace_static_slots||[])]);
  const storageTypes=ctx.storage_types||storageTypeRegistry(layout,nodes);
- const localType=d=>(ctx.namespace_registry&&namespacePointerType(d,ctx.namespace_registry))||storageTypes.pointerType(d)||scalarLocalType(d);
+ const memoryStructDeclaration=d=>{
+  if(!d||d.stateVariable||d.storageLocation==='storage')return null;
+  const match=/^t_struct\$_.*_\$(\d+)_memory(?:_ptr)?$/.exec(d.typeDescriptions?.typeIdentifier||''),definition=match?nodes.get(Number(match[1])):null;
+  return definition?.nodeType==='StructDefinition'?definition:null;
+ };
+ const localType=d=>{const memory=memoryStructDeclaration(d);
+  if(memory)return{sort:'MemoryAggregate',type:'struct '+memory.name,struct_ast_id:memory.id,definition:memory};
+  return (ctx.namespace_registry&&namespacePointerType(d,ctx.namespace_registry))||storageTypes.pointerType(d)||scalarLocalType(d);};
  const layoutByID=new Map((layout.storage||[]).map(s=>[s.astId,s])),env=new Map();
  const caller=terms.variable('caller',{...uint256,bits:160,max:(1n<<160n)-1n,mod:1n<<160n},'msg.sender');env.set('msg.sender',caller);
  for(const [name,type]of [['tx.origin',{...uint256,bits:160,max:(1n<<160n)-1n,mod:1n<<160n}],['msg.value',uint256],['block.timestamp',uint256],['block.number',uint256]])env.set(name,terms.variable(name.replace('.','_'),type,name));
@@ -68,6 +75,7 @@ export function buildStateTransition(fn,method,ctx) {
   return terms.value(wrap||s.unchecked?terms.normalize(term,type):term,type);
  };
  const coerce=(v,type)=>{
+  if(type?.sort==='MemoryAggregate'||v?.sort==='MemoryAggregate'){if(v?.sort==='MemoryAggregate'&&type?.sort==='MemoryAggregate')return v;fail('STATE_MEMORY_STRUCT_VALUE_UNSUPPORTED');}
   if(v.sort==='StorageReference'||type.sort==='StorageReference'){
    if(v.sort!==type.sort||!v.storage_location||(type.type_id?v.storage_location.type_id!==type.type_id:v.struct_ast_id!==type.struct_ast_id))fail('STATE_STORAGE_REFERENCE_TYPE_OR_ORIGIN_MISMATCH');return {...v,...type};
   }
@@ -134,7 +142,35 @@ export function buildStateTransition(fn,method,ctx) {
     '(mod (div '+raw+' '+(1n<<BigInt(loc.offset*8))+') '+(type.mod||256n)+')';
   return terms.value(type.bits===256&&!type.signed&&loc.offset===0?raw:type.sort==='Bool'?'(not (= '+low+' 0))':type.signed?'(ite (>= '+low+' '+(type.mod>>1n)+') (- '+low+' '+type.mod+') '+low+')':low,type);
  }
+ const memoryMemberLocation=(loc,field,s)=>{
+  const type=layout.types[loc.type_id],child=layout.types?.[field?.type];
+  if(!type?.members||!field||!child)fail('STATE_MEMORY_STRUCT_LAYOUT_UNAVAILABLE');
+  const slot=field.slot==='0'?loc.slot:terms.define(mod('(+ '+loc.slot+' '+field.slot+')'));
+  if(field.slot!=='0'&&loc.hash_semantics!=='congruence_without_collision_axioms')terms.reserveDerivedField(slot);
+  return{...loc,root:loc.namespace_root?field.astId:loc.root,slot,offset:field.offset||0,type_id:field.type,scalar_type:child.label,
+   fields:loc.namespace_root?[]:[...(loc.fields||[]),field.astId],namespace_root:false};
+ };
+ const memoryFromStorage=(loc,definition,s,node,depth)=>{
+  if(!definition||depth>4)fail('STATE_MEMORY_STRUCT_NESTING_BUDGET');
+  const fields=new Map();
+  for(const member of definition.members||[]){
+   const type=layout.types[loc.type_id],field=(type?.members||[]).find(f=>f.astId===member.id),child=field&&layout.types?.[field.type];
+   if(!field||!child)fail('STATE_MEMORY_STRUCT_LAYOUT_UNAVAILABLE');
+   const childLoc=memoryMemberLocation(loc,field,s);
+   if(child.members){fields.set(member.id,memoryFromStorage(childLoc,nodes.get(child.struct_ast_id),s,node,depth+1));continue;}
+   if(child.base)fail('STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED');
+   if(child.encoding!=='inplace')fail('STATE_MEMORY_STRUCT_DYNAMIC_FIELD_UNSUPPORTED');
+   fields.set(member.id,readLocation(childLoc,s));
+  }
+  return{sort:'MemoryAggregate',type:'struct '+definition.name,struct_ast_id:definition.id,definition,object:{fields}};
+ };
+ const memoryAggregateValue=(node,s)=>{
+  if(node?.nodeType==='Identifier'){const value=s.locals.get(node.referencedDeclaration);return value?.sort==='MemoryAggregate'?value:null;}
+  if(node?.nodeType==='MemberAccess'){const base=memoryAggregateValue(node.expression,s),value=base?.object?.fields.get(node.referencedDeclaration);return value?.sort==='MemoryAggregate'?value:null;}
+  return null;
+ };
  function storeLocation(loc,value,s,node) {
+  if(value?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_TO_STORAGE_UNMODELED');
   const type=scalarType({type:loc.scalar_type});value=coerce(value,type);
   const bits=type.bits||8,dynamic=typeof loc.offset==='string',base=dynamic?null:1n<<BigInt(loc.offset*8),above=dynamic?null:base*(1n<<BigInt(bits)),old=readLocation(loc,s),word=readWord(s.storage,loc.slot);
   const encoded=type.sort==='Bool'?'(ite '+asBool(value)+' 1 0)':!type.signed&&!value.signed&&value.bits<=type.bits?asInt(value):terms.normalize(asInt(value),{...type,signed:false});
@@ -221,8 +257,17 @@ export function buildStateTransition(fn,method,ctx) {
   }return d;
  }
  function invoke(node,s) {
+  const callee=node.expression;
+  if(callee?.nodeType==='MemberAccess'&&['transfer','send'].includes(callee.memberName)&&/^address(?: payable)?$/.test(callee.expression?.typeDescriptions?.typeString||'')){
+   independent(node.arguments);
+   const recipient=expr(callee.expression,s),amount=coerce(expr(node.arguments[0],s),uint256);
+   effects.push({kind:'native_'+callee.memberName,state_ast_id:null,recipient:asInt(recipient),amount:asInt(amount),condition:and(s.conditions),
+    execution_case_ids:(s.symbolic_cases||rootCases()).map(c=>c.case_id),source_location:location(node),
+    success_requires_execution_evidence:true,reentrancy:'gas_stipend_cannot_write_storage',transfer_on_failure:'reverts_whole_frame'});
+   return[{state:s,values:callee.memberName==='send'?[{...bool,term:'true'}]:[]}];
+  }
   const d=target(node);if(!d)fail('STATE_EXTERNAL_CALL_REQUIRES_MODEL');
-  const parent=nodes.get(d.scope),callee=node.expression,receiver=parent?.contractKind==='library'&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id,
+  const parent=nodes.get(d.scope),receiver=parent?.contractKind==='library'&&callee?.nodeType==='MemberAccess'&&callee.expression?.referencedDeclaration!==parent.id,
    arguments_=receiver?[callee.expression,...node.arguments]:node.arguments;
   independent(arguments_);const args=arguments_.map(a=>expr(a,s));return call(d,args,s);
  }
@@ -256,7 +301,10 @@ export function buildStateTransition(fn,method,ctx) {
    }if(n.memberName==='length'){
     const loc=locate(n.expression,s),type=layout.types[loc.type_id],info=type?.base?storageArrayInfo(type,layout.types):null;
     if(info)return terms.value(info.dynamic?readWord(s.storage,loc.slot):info.length,uint256);
-   }return locationValue(locate(n,s,{conservative:aggregateStorageType(storageTypes.forNode(n))}),s);
+   }
+   const aggregate=memoryAggregateValue(n.expression,s);
+   if(aggregate){const value=aggregate.object.fields.get(n.referencedDeclaration);if(!value)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');return value;}
+   return locationValue(locate(n,s,{conservative:aggregateStorageType(storageTypes.forNode(n))}),s);
   }
   if(n.nodeType==='IndexAccess')return locationValue(locate(n,s,{conservative:aggregateStorageType(storageTypes.forNode(n))}),s);
   if(n.nodeType==='TupleExpression'&&n.components?.length===1)return expr(n.components[0],s);
@@ -344,8 +392,25 @@ export function buildStateTransition(fn,method,ctx) {
   return[expr(n,s)];
  }
  function assign(n,v,s,node) {
+  if(n.nodeType==='MemberAccess'){
+   const aggregate=memoryAggregateValue(n.expression,s);
+   if(aggregate){
+    const member=nodes.get(n.referencedDeclaration);
+    if(memoryStructDeclaration(member)||aggregate.object.fields.get(n.referencedDeclaration)?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_NESTED_WRITE_UNSUPPORTED');
+    if(!member)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');
+    aggregate.object.fields.set(member.id,coerce(v,scalarType(member)));return;
+   }
+  }
   const d=nodes.get(n.referencedDeclaration);
-  if(n.nodeType==='Identifier'&&d&&!d.stateVariable){s.locals.set(d.id,coerce(v,localType(d)));return;}
+  if(n.nodeType==='Identifier'&&d&&!d.stateVariable){
+   const type=localType(d);
+   if(type.sort==='MemoryAggregate'){
+    const value=v?.sort==='MemoryAggregate'?v:v?.sort==='StorageReference'?memoryFromStorage(v.storage_location,type.definition,s,node,0):null;
+    if(!value)fail('STATE_MEMORY_STRUCT_ASSIGNMENT_UNSUPPORTED');
+    s.locals.set(d.id,value);return;
+   }
+   s.locals.set(d.id,coerce(v,type));return;
+  }
   if(n.nodeType==='Identifier'&&d?.mutability==='immutable'){
    if(!ctx.zeroInitialStorage)fail('STATE_RUNTIME_IMMUTABLE_WRITE');
    const type=scalarType(d);v=coerce(v,type);const term=type.sort==='Bool'?v.term:terms.define(terms.normalize(asInt(v),type));s.immutables.set(d.id,{...type,term});
@@ -412,6 +477,13 @@ export function buildStateTransition(fn,method,ctx) {
   }
   if(['ForStatement','WhileStatement'].includes(n.nodeType))return loopStatement(n,s,placeholder);
   if(n.nodeType==='VariableDeclarationStatement') {
+   const aggregate=n.declarations.length===1&&memoryStructDeclaration(n.declarations[0]);
+   if(aggregate){
+    const declaration=n.declarations[0],source=n.initialValue?expr(n.initialValue,s):null,
+     value=source?.sort==='MemoryAggregate'?source:source?.sort==='StorageReference'?memoryFromStorage(source.storage_location,aggregate,s,n,0):null;
+    if(!value)fail('STATE_MEMORY_STRUCT_INITIALIZER_UNSUPPORTED');
+    s.locals.set(declaration.id,value);return [s];
+   }
    const values=n.initialValue?tupleValues(n.initialValue,s):null;if(values&&values.length!==n.declarations.length)fail('STATE_LOCAL_TUPLE_ARITY');
    for(const[i,d]of n.declarations.entries())if(d){const type=localType(d);if(type.sort==='StorageReference'&&!values)fail('STATE_STORAGE_REFERENCE_UNBOUND');
     const value=values?coerce(values[i],type):type.sort==='Bytes'?{...byteSequence([]),...type}:{term:type.sort==='Bool'?'false':'0',...type};s.locals.set(d.id,value);
@@ -435,6 +507,7 @@ export function buildStateTransition(fn,method,ctx) {
     gate(s,asBool(expr(e.arguments[0],s)),e.expression.name==='assert'?'panic_0x01':'revert');return [s];
    }
    if(e?.nodeType==='FunctionCall'&&e.kind!=='typeConversion'&&target(e))return invoke(e,s).map(r=>r.state);
+   if(e?.nodeType==='FunctionCall'&&['transfer','send'].includes(e.expression?.memberName)&&/^address(?: payable)?$/.test(e.expression?.expression?.typeDescriptions?.typeString||''))return invoke(e,s).map(r=>r.state);
    expr(e,s);return [s];
   }
   fail('STATE_CONTROL_UNSUPPORTED:'+n.nodeType);
