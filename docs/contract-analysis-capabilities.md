@@ -2,7 +2,7 @@
 
 本功能以固定区块、区块哈希和代码哈希为分析身份，输出运行机制、方法作用、执行条件、有序步骤、金额公式、状态读写、权限、依赖关系、选定交易和证据文件。入口地址、实现代码地址和状态地址分别保存。方法名称、注释及候选 ABI 不替代函数体和交易证据。
 
-2026-10-17 核对的生产规则为 funds-semantics-8；nonce 最小单元的隔离验收规则为 funds-semantics-13。funds-semantics-14 已完成源码、字节码入口和结论依赖的隔离功能验收，通用业务深度仍未通过。本工作树正在开发 funds-semantics-15 的方法保存点和 SEVM 隔离，当前状态以 acceptance/contract-analysis-partial-recovery 的冻结镜像、实际服务验证和逐项结果为准。源码存在、阶段验收与生产上线分别记录。运行中的真实版本通过 get_contract_analysis_capabilities 查询。
+2026-10-19 核对：生产规则为 funds-semantics-8（镜像 sha256:466f29f2…），本工作树候选为 funds-semantics-20（镜像 sha256:4440baad…）。13 至 20 依次补充 nonce 与签名检查、源码与字节码提交入口、方法保存点和 SEVM 隔离、字节内存与堆写入、存储到内存复制、元组与聚合左值、隐式创建身份、历史前序状态与代理升级连续性。功能验收以 acceptance/contract-analysis-heap-writes 的冻结镜像、实际执行和逐项结果为准；通用业务质量仍为 NO_GO，源码侧 13 项静态恢复、42 项部分、9 项不可得，隐藏来源 64 项未恢复，盲测样本为 0。源码存在、阶段验收和生产上线分别记录，运行中的真实版本通过 get_contract_analysis_capabilities 查询。
 
 引擎、运行时源码核对及计算型余额见 [EVM 合约分析](contract-analysis-evm-coverage.md)；资金参数和固定区块控制地址见 [资金公式与控制权限](contract-analysis-evm-semantics.md)；多返回值、循环、角色条件、跨合约上下文及协议公式见 [方法机制与资金依赖](contract-analysis-evm-mechanisms.md)。下文保留原发布基础能力的说明，各阶段验收记录保存在对应 acceptance 目录。
 
