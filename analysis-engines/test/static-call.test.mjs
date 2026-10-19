@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyze} from '../analyze.mjs';
 import {compileVerificationFixture} from './verification-fixtures.mjs';
+import {RULE_VERSION} from '../model.mjs';
 
 const source=`pragma solidity ^0.8.30;
 interface IOracle { function quote(uint256 x) external view returns (uint256); function pair(uint256 x) external view returns (uint256,uint256); function blob() external view returns (bytes memory); }
@@ -15,7 +16,7 @@ contract Verification {
  function mutate(ISink sink,uint256 x) external { sink.poke(x); }
 }`;
 const cache=new Map();
-function inspect(optimized){if(cache.has(optimized))return cache.get(optimized);const result=analyze(compileVerificationFixture(optimized,source));assert.equal(result.rule_version,'funds-semantics-22');assert.equal(result.sections.engines.find(e=>e.engine==='solc-ast')?.status,'completed');cache.set(optimized,result);return result;}
+function inspect(optimized){if(cache.has(optimized))return cache.get(optimized);const result=analyze(compileVerificationFixture(optimized,source));assert.equal(result.rule_version,RULE_VERSION);assert.equal(result.sections.engines.find(e=>e.engine==='solc-ast')?.status,'completed');cache.set(optimized,result);return result;}
 const method=(result,name)=>{const row=result.sections.methods.find(m=>m.name===name&&m.dispatch_role==='external_dispatch');assert.ok(row,name);return row;};
 const transition=(result,name)=>{const row=result.sections.state_transitions.find(t=>t.method_id===method(result,name).method_id);assert.ok(row,name);return row;};
 

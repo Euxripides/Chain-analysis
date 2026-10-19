@@ -43,6 +43,14 @@ for(const optimized of[false,true]){
   const{method}=records(r,'twoCopies'),state=r.sections.state_transitions.find(t=>t.method_id===method.method_id);assert.ok(state);assert.equal(state.complete,true);assert.deepEqual(state.unresolved,[]);
   const dynamic=records(r,'dynamicFieldCopy'),dynamicState=r.sections.state_transitions.find(t=>t.method_id===dynamic.method.method_id);
   assert.equal(dynamic.fund.amount_derivation_status,'partial');assert.equal(dynamicState.complete,false);assert.ok(dynamicState.unresolved.some(s=>s.startsWith('STATE_MEMORY_STRUCT_ARRAY_FIELD_UNSUPPORTED')));
+  for(const name of['implicitStorageArgument','structReturn','wholeStructWrite','storageStructCopy']){
+   const{fund,flow}=records(r,name);assert.equal(fund.amount_derivation_status,'represented_source_dependencies_resolved',name);
+   const state=r.sections.state_transitions.find(t=>t.method_id===records(r,name).method.method_id);assert.ok(state,name);assert.equal(state.complete,true,name+':'+JSON.stringify(state.unresolved));
+  }
+  const whole=records(r,'wholeStructWrite').method,wholeState=r.sections.state_transitions.find(t=>t.method_id===whole.method_id);
+  assert.equal(wholeState.paths[0].writes.length,2);
+  const copied=records(r,'storageStructCopy').method,copiedState=r.sections.state_transitions.find(t=>t.method_id===copied.method_id);
+  assert.equal(copiedState.paths[0].writes.length,2);
   const bag=records(r,'bagCopyOnly');assert.equal(bag.fund.amount_derivation_status,'represented_source_dependencies_resolved');
   const bagState=r.sections.state_transitions.find(t=>t.method_id===bag.method.method_id);assert.ok(bagState);assert.equal(bagState.complete,true);
   const copyVersion=r.sections.expressions.find(e=>e.method_id===bag.method.method_id&&e.source_storage_copy);assert.ok(copyVersion);assert.ok(copyVersion.source_storage_copy.field_gaps.some(g=>g.reason.startsWith('SOURCE_AGGREGATE_STORAGE_COPY_FIELD_TYPE_UNSUPPORTED:values')));

@@ -75,6 +75,12 @@ contract StorageCopyCases {
         Cell memory a = cell; cell.amount = uint128(x); Cell memory b = cell; to.transfer(a.amount + b.amount);
     }
     function mutate(Cell memory a, uint256 x) internal pure { a.amount = uint128(x); }
+    function payCell(Cell memory a, address payable to) internal { to.transfer(a.amount + a.bonus); }
+    function implicitStorageArgument(address payable to) external { payCell(cell, to); }
+    function makeCell(uint128 x) internal pure returns (Cell memory) { return Cell(x, 2); }
+    function structReturn(uint128 x, address payable to) external { Cell memory a = makeCell(x); to.transfer(a.amount + a.bonus); }
+    function wholeStructWrite(uint128 x, address payable to) external { Cell memory a = Cell(x, 3); cell = a; to.transfer(a.amount + a.bonus); }
+    function storageStructCopy(address payable to) external { Cell memory a = items[1]; cell = a; to.transfer(a.amount + a.bonus); }
     function callMemory(uint256 x, address payable to) external {
         Cell memory a = cell; mutate(a, x); to.transfer(a.amount + a.bonus);
     }

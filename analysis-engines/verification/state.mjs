@@ -169,6 +169,30 @@ export function buildStateTransition(fn,method,ctx) {
   if(node?.nodeType==='MemberAccess'){const base=memoryAggregateValue(node.expression,s),value=base?.object?.fields.get(node.referencedDeclaration);return value?.sort==='MemoryAggregate'?value:null;}
   return null;
  };
+ const sameStorageLocation=(left,right)=>Boolean(left&&right)&&left.root===right.root&&JSON.stringify(left.slot)===JSON.stringify(right.slot)&&JSON.stringify(left.offset)===JSON.stringify(right.offset)&&JSON.stringify(left.keys||[])===JSON.stringify(right.keys||[]);
+ const writeMemoryAggregateToLocation=(loc,value,s,node,depth=0)=>{
+  if(depth>4)fail('STATE_STRUCT_STORAGE_WRITE_DEPTH_BUDGET');
+  const type=layout.types[loc.type_id];
+  if(!type?.members||value?.sort!=='MemoryAggregate')fail('STATE_STRUCT_STORAGE_WRITE_UNSUPPORTED');
+  for(const member of type.members){
+   const child=memoryMemberLocation(loc,member,s),field=value.object.fields.get(member.astId),childType=layout.types[child.type_id];
+   if(!field)fail('STATE_MEMORY_STRUCT_FIELD_UNAVAILABLE');
+   if(childType?.members){writeMemoryAggregateToLocation(child,field,s,node,depth+1);continue;}
+   if(field.sort==='MemoryAggregateOpaque')fail(field.reason);
+   storeLocation(child,field,s,node);
+  }
+ };
+ const copyStorageAggregateLocation=(target,source,s,node,depth=0)=>{
+  if(depth>4)fail('STATE_STRUCT_STORAGE_COPY_DEPTH_BUDGET');
+  const type=layout.types[target.type_id];
+  if(!type?.members)fail('STATE_STRUCT_STORAGE_WRITE_UNSUPPORTED');
+  for(const member of type.members){
+   const targetChild=memoryMemberLocation(target,member,s),sourceChild=memoryMemberLocation(source,member,s);
+   if(sameStorageLocation(targetChild,sourceChild))continue;
+   if(layout.types[targetChild.type_id]?.members){copyStorageAggregateLocation(targetChild,sourceChild,s,node,depth+1);continue;}
+   storeLocation(targetChild,readLocation(sourceChild,s),s,node);
+  }
+ };
  function storeLocation(loc,value,s,node) {
   if(value?.sort==='MemoryAggregate')fail('STATE_MEMORY_STRUCT_TO_STORAGE_UNMODELED');
   const type=scalarType({type:loc.scalar_type});value=coerce(value,type);
@@ -386,6 +410,17 @@ export function buildStateTransition(fn,method,ctx) {
    if(n.operator!=='=') {const left=expr(n.leftHandSide,s);if(!['+=','-=','*='].includes(n.operator))fail('STATE_ASSIGNMENT_UNSUPPORTED');value=typed(n.leftHandSide,'('+n.operator[0]+' '+asInt(left)+' '+asInt(right)+')',s);}
    assign(n.leftHandSide,value,s,n);return value;
   }
+  if(n.nodeType==='FunctionCall'&&n.kind==='structConstructorCall'){
+   const match=/^t_struct\$_.*_\$(\d+)_(?:memory|memory_ptr)$/.exec(n.typeDescriptions?.typeIdentifier||''),definition=match?nodes.get(Number(match[1])):null;
+   if(definition?.nodeType!=='StructDefinition'||(definition.members||[]).length!==(n.arguments||[]).length)fail('STATE_STRUCT_CONSTRUCTOR_UNSUPPORTED');
+   const fields=new Map();
+   for(const[index,member]of(definition.members||[]).entries()){
+    const value=expr(n.arguments[index],s),nested=memoryStructDeclaration(member);
+    if(nested){if(value?.sort!=='MemoryAggregate')fail('STATE_STRUCT_CONSTRUCTOR_NESTED_UNSUPPORTED');fields.set(member.id,value);continue;}
+    fields.set(member.id,coerce(value,scalarType(member)));
+   }
+   return{sort:'MemoryAggregate',type:'struct '+definition.name,struct_ast_id:definition.id,definition,object:{fields}};
+  }
   if(n.nodeType==='FunctionCall') {
    const callee=n.expression;
    if(/^t_function_array(?:push|pop)_/.test(callee?.typeDescriptions?.typeIdentifier||''))fail('STATE_ARRAY_MUTATION_REQUIRES_LENGTH_AND_ELEMENT_VERSION');
@@ -438,6 +473,10 @@ export function buildStateTransition(fn,method,ctx) {
    }
   }
   const d=nodes.get(n.referencedDeclaration);
+  if(n.nodeType==='Identifier'&&d?.stateVariable){
+   if(v?.sort==='MemoryAggregate'){writeMemoryAggregateToLocation(locate(n,s),v,s,node);return;}
+   if(v?.sort==='StorageReference'&&v.storage_location){const location=locate(n,s);if(sameStorageLocation(location,v.storage_location))return;copyStorageAggregateLocation(location,v.storage_location,s,node);return;}
+  }
   if(n.nodeType==='Identifier'&&d&&!d.stateVariable){
    const type=localType(d);
    if(type.sort==='MemoryAggregate'){
@@ -552,7 +591,17 @@ export function buildStateTransition(fn,method,ctx) {
  function call(d,args,s) {
   if((s.stack||[]).length>=12||(s.stack||[]).includes(d.id))fail('STATE_RECURSION_OR_DEPTH');
   const saved=s.locals,stack=s.stack,callerUnchecked=s.unchecked,entry=clone(s);entry.stack=[...(stack||[]),d.id];entry.unchecked=ctx.legacyArithmetic||false;
-  for(const [i,p]of(d.parameters?.parameters||[]).entries()){if(!args[i])fail('STATE_CALL_ARGUMENT_MISSING');entry.locals.set(p.id,coerce(args[i],localType(p)));}
+  for(const [i,p]of(d.parameters?.parameters||[]).entries()){
+   if(!args[i])fail('STATE_CALL_ARGUMENT_MISSING');
+   const type=localType(p);
+   if(type.sort==='MemoryAggregate'){
+    const value=args[i];
+    if(value?.sort==='MemoryAggregate'){if(value.struct_ast_id!==type.struct_ast_id)fail('STATE_MEMORY_STRUCT_ARGUMENT_TYPE_MISMATCH');entry.locals.set(p.id,value);continue;}
+    if(value?.sort==='StorageReference'&&value.storage_location){entry.locals.set(p.id,memoryFromStorage(value.storage_location,type.definition,entry,null,0));continue;}
+    fail('STATE_MEMORY_STRUCT_ARGUMENT_UNSUPPORTED');
+   }
+   entry.locals.set(p.id,coerce(args[i],type));
+  }
   for(const r of d.returnParameters?.parameters||[])if(r.name){const type=localType(r);entry.locals.set(r.id,type.sort==='StorageReference'?{...type,storage_location:null}:type.sort==='Bytes'?{...byteSequence([]),...type}:{term:type.sort==='Bool'?'false':'0',...type});}
   const modifiers=(d.modifiers||[]).filter(m=>!(ctx.zeroInitialStorage&&nodes.get(m.modifierName?.referencedDeclaration)?.nodeType==='ContractDefinition'));
   function execute(index,state) {
