@@ -1,5 +1,5 @@
 """Switch the four contract analysis services to the funds-semantics-25 engine image."""
-import argparse,hashlib,json,os,pathlib,subprocess,time,urllib.parse,urllib.request
+import argparse,hashlib,json,os,pathlib,subprocess,sys,time,urllib.parse,urllib.request
 os.environ.setdefault('XDG_RUNTIME_DIR','/run/user/'+str(os.getuid()))
 ROOT=pathlib.Path(__file__).resolve().parents[2];assert ROOT.name=='contract-permit-nonces-20261016'
 BASE=ROOT/'acceptance/contract-analysis-semantics25';OUT=BASE/'release';OUT.mkdir(parents=True,exist_ok=True)
