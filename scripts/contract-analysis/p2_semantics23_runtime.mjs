@@ -18,7 +18,7 @@ const compilerInput={language:'Solidity',sources:{'StorageCopyCases.sol':{conten
 assert.deepEqual((compiled.errors||[]).filter(e=>e.severity==='error'),[]);const contract=compiled.contracts['StorageCopyCases.sol'].StorageCopyCases;
 const material={kind:'source',source:{language:'Solidity',files:{'StorageCopyCases.sol':source},compiler_version:solc.version().split('.Emscripten')[0],target:'StorageCopyCases.sol:StorageCopyCases',settings:{evmVersion:'shanghai',optimizer:{enabled:false}}}},raw=JSON.stringify(material);
 const model=analyze({submitted_input_json:raw,snapshot:{identity_kind:'code_only',input_kind:'source',input_sha256:sha(raw),engine_digest:'local-source'},engines:['solc-ast']});
-assert.equal(model.rule_version,'funds-semantics-23');write('model.json',model);
+assert.equal(model.rule_version,process.env.CONTRACT_EXPECTED_RULE_VERSION||'funds-semantics-23');write('model.json',model);
 const method=name=>{const row=model.sections.methods.find(m=>m.name===name&&m.dispatch_role==='external_dispatch');assert.ok(row,name);return row;};
 const fund=name=>{const rows=model.sections.funds.filter(f=>f.method_id===method(name).method_id&&f.kind==='native_payment');assert.equal(rows.length,1,name);return rows[0];};
 const state=name=>model.sections.state_transitions.find(t=>t.method_id===method(name).method_id);
@@ -64,6 +64,6 @@ try{
   assert.equal(await rpc('evm_revert',[snapshot]),true);
  }
  assert.equal(records.length,8);
- write('report.json',{status:'PASS_MEMORY_STRUCT_PLUMBING_ACTUAL_EXECUTION',rule_version:'funds-semantics-23',records,actual_transactions:records.length,provider_requests:0,scope:'One owned fixture. Implicit storage-to-memory arguments, internal struct parameters and returns, struct constructors and whole-struct storage writes are compared with actual balances and storage after execution.'});
+ write('report.json',{status:'PASS_MEMORY_STRUCT_PLUMBING_ACTUAL_EXECUTION',rule_version:process.env.CONTRACT_EXPECTED_RULE_VERSION||'funds-semantics-23',records,actual_transactions:records.length,provider_requests:0,scope:'One owned fixture. Implicit storage-to-memory arguments, internal struct parameters and returns, struct constructors and whole-struct storage writes are compared with actual balances and storage after execution.'});
  console.log('SEMANTICS23_ACTUAL_PASS',JSON.stringify({directory:out,transactions:records.length}));
 }catch(error){write('failure.json',{error:error.message,stack:error.stack,completed:records});throw error;}finally{await vm?.close();}

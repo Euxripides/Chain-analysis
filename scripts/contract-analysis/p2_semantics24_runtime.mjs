@@ -27,7 +27,7 @@ const compilerInput={language:'Solidity',sources:{'Loops.sol':{content:source}},
 const compiled=JSON.parse(solc.compile(JSON.stringify(compilerInput)));assert.deepEqual((compiled.errors||[]).filter(e=>e.severity==='error'),[]);
 const contract=compiled.contracts['Loops.sol'].Loops,material={kind:'source',source:{language:'Solidity',files:{'Loops.sol':source},compiler_version:solc.version().split('.Emscripten')[0],target:'Loops.sol:Loops',settings:{evmVersion:'shanghai',optimizer:{enabled:false}}}},raw=JSON.stringify(material);
 const model=analyze({submitted_input_json:raw,snapshot:{identity_kind:'code_only',input_kind:'source',input_sha256:sha(raw),engine_digest:'local-source'},engines:['solc-ast']});
-assert.equal(model.rule_version,'funds-semantics-24');write('model.json',model);
+assert.equal(model.rule_version,process.env.CONTRACT_EXPECTED_RULE_VERSION||'funds-semantics-24');write('model.json',model);
 assert.equal(model.sections.engines.find(e=>e.engine==='solc-ast').status,'completed');
 const loops=model.sections.loop_invariants;assert.equal(loops.length,2);assert.ok(loops.every(m=>m.complete),JSON.stringify(loops.map(m=>({unresolved:m.unresolved,obligations:m.obligations}))));
 assert.ok(loops.every(m=>m.coupled_certificates.every(c=>c.arithmetic==='unchecked_word_ring')));
@@ -55,6 +55,6 @@ try{
   const total=await getter('total()'),tail=await getter('tail()');assert.deepEqual([total,tail],[expectedA,expectedB],'settle:'+n+':'+seed);
   records.push({n:n.toString(),seed:seed.toString(),chain:[expectedA.toString(),expectedB.toString()],modeled:modeled.map(String),settled:[total.toString(),tail.toString()],transaction:settlement});
  }
- write('report.json',{status:'PASS_UNCHECKED_COUPLED_LOOP_ACTUAL_EXECUTION',rule_version:'funds-semantics-24',records,actual_transactions:vectors.length,provider_requests:0,loop_models:loops.map(m=>({complete:m.complete,arithmetic:m.coupled_certificates.map(c=>c.arithmetic),obligations:m.obligations.length})),scope:'One owned implementation. Word-ring polynomial summaries proved by SMT and compared with actual EVM return values and storage after execution, including overflow-wrapping inputs.'});
+ write('report.json',{status:'PASS_UNCHECKED_COUPLED_LOOP_ACTUAL_EXECUTION',rule_version:process.env.CONTRACT_EXPECTED_RULE_VERSION||'funds-semantics-24',records,actual_transactions:vectors.length,provider_requests:0,loop_models:loops.map(m=>({complete:m.complete,arithmetic:m.coupled_certificates.map(c=>c.arithmetic),obligations:m.obligations.length})),scope:'One owned implementation. Word-ring polynomial summaries proved by SMT and compared with actual EVM return values and storage after execution, including overflow-wrapping inputs.'});
  console.log('SEMANTICS24_ACTUAL_PASS',JSON.stringify({directory:out,vectors:vectors.length}));
 }catch(error){write('failure.json',{error:error.message,stack:error.stack,records});throw error;}finally{await vm?.close();}
