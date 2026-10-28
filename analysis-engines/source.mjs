@@ -927,6 +927,17 @@ export function analyzeSource(result, source, bytecode, options = {}) {
     addStep(method, node, 'guard', `检查 ${sourceText(condition)}；不满足时 ${reason}`, context, { guard_id });
     context.conditions.push(sourceText(condition));
   };
+  // `if (c) revert E();` is require(!c): the guard holds the continuing branch's condition as a typed negation, never the reverting one.
+  const ifRevertGuard = (method, node, conditionExpression, context, continueWhenTrue) => {
+    const text = continueWhenTrue ? sourceText(node.condition) : `!(${sourceText(node.condition)})`;
+    const expression_id = continueWhenTrue ? conditionExpression :
+      synthetic(method, node.condition, 'boolean_negation', [conditionExpression], context, { op: '!', type: 'bool', text });
+    const guard_id = id(method.method_id, node.id, context.path, 'guard');
+    result.sections.permissions.push({ guard_id, method_id: method.method_id, condition: text, expression_id,
+      conditions: [...context.conditions], path: context.path, failure: 'revert', guard_form: 'if_revert', evidence_ids: [getEvidence(method, node)] });
+    method.guard_ids.push(guard_id);
+    addStep(method, node, 'guard', `检查 ${text}；不满足时 revert`, context, { guard_id });
+  };
   const decodeEncodedTransfer=(encoded,context,{raw=false,describeOnly=false}={})=>{
     if(!raw&&context.source_memory){const binding=resolveSourceBytes(encoded,context);if(binding){
       const captured=context.source_memory.conditionalSingle(binding);if(!captured)return null;
@@ -1635,6 +1646,8 @@ export function analyzeSource(result, source, bytecode, options = {}) {
       for(const key of context.namespace_aliases?.keys()||[]){const a=yesContext.namespace_aliases.get(key),b=noContext.namespace_aliases.get(key);
         context.namespace_aliases.set(key,yes&&!no?b:no&&!yes?a:a?.id===b?.id?a:null);}
       if(yes&&no)return yes===no?yes:'terminated';
+      if(yes==='revert')ifRevertGuard(method,node,conditionExpression,context,false);
+      if(no==='revert')ifRevertGuard(method,node,conditionExpression,context,true);
       if(yes)context.conditions.push(`!(${condition})`);
       if(no)context.conditions.push(condition);
       return;

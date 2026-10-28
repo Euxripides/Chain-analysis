@@ -1,0 +1,5 @@
+# Engine semantics25 + if-revert caller guards (source.mjs, rules/authority.mjs). Base is the live 2026-10-19 release image.
+# Built 2026-10-28 as blockchain-contract-analysis:semantics25-ifrevert-20261028 (image sha256:ae118631c88ea60f882e3e907ddcee07c3e560dc83fbacd00815c7afe6e47ba8).
+FROM blockchain-contract-analysis:semantics25-968aff450a81c89f
+COPY --chmod=664 source.mjs /engine/source.mjs
+COPY --chmod=664 rules/authority.mjs /engine/rules/authority.mjs

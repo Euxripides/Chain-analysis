@@ -45,9 +45,11 @@ export function applyAuthorityRules(result) {
       }
     }
     predicates(guard.expression_id);
-    function inspect(key,scope='whole_guard',seen=new Set()) {
+    // expected=false walks a negated condition: !(a != b) is a == b and !(x || y) is a conjunction.
+    function inspect(key,scope='whole_guard',seen=new Set(),expected=true) {
       if(seen.has(key))return;const e=unwrap(key);if(!e)return;const next=new Set([...seen,key]);
-      if(e.op==='=='&&e.operands?.length===2) {
+      if(e.op==='!'&&e.operands?.length===1)return inspect(e.operands[0],scope,next,!expected);
+      if(e.op===(expected?'==':'!=')&&e.operands?.length===2) {
         for(const [callerKey,targetKey] of [[e.operands[0],e.operands[1]],[e.operands[1],e.operands[0]]]) {
           const caller=unwrap(callerKey),principal=caller?.builtin_global;
           if(!['msg.sender','tx.origin'].includes(principal))continue;
@@ -60,8 +62,8 @@ export function applyAuthorityRules(result) {
             resolved_literal:target?.resolved_value||target?.op==='Literal'&&/^0x[0-9a-fA-F]{40}$/.test(target.value||'')&&target.value||null,
             evidence_ids:unique([...(e.evidence_ids||[]),...stateReads.flatMap(r=>r.evidence_ids||[])]),authorization_sufficiency_verified:false});
         }
-      } else if(e.op==='&&')for(const k of e.operands||[])inspect(k,scope==='whole_guard'?'conjunct':scope,next);
-      else if(e.op==='||')for(const k of e.operands||[])inspect(k,'alternative_in_compound_condition',next);
+      } else if(e.op===(expected?'&&':'||'))for(const k of e.operands||[])inspect(k,scope==='whole_guard'?'conjunct':scope,next,expected);
+      else if(e.op===(expected?'||':'&&'))for(const k of e.operands||[])inspect(k,'alternative_in_compound_condition',next,expected);
     }
     inspect(guard.expression_id);
   }
