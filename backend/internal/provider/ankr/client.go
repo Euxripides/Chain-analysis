@@ -170,6 +170,7 @@ var methodByDataset = map[string]string{
 	"nft_transfers":   "ankr_getNftTransfers",
 	"logs":            "ankr_getLogs",
 	"balances":        "ankr_getAccountBalance",
+	"token_holders":   "ankr_getTokenHolders",
 }
 
 // idleBodyReader 监控 body 读取进展（§22）：只有连续 N 秒无进展才算卡死。
@@ -450,6 +451,13 @@ func (c *Client) Fetch(ctx context.Context, req provider.FetchRequest) (provider
 
 func (c *Client) buildParams(req provider.FetchRequest) map[string]any {
 	params := map[string]any{}
+	if req.Dataset == "token_holders" {
+		params["blockchain"], params["contractAddress"], params["pageSize"] = req.Chain, req.Address, req.PageSize
+		if req.PageToken != "" {
+			params["pageToken"] = req.PageToken
+		}
+		return params
+	}
 	if req.Dataset == "balances" {
 		params["blockchain"] = req.Chain
 		params["walletAddress"] = req.Address
@@ -508,8 +516,10 @@ func (c *Client) parseResult(dataset string, raw []byte) (provider.FetchResult, 
 		rows = pr.Transfers
 	case "logs":
 		rows = pr.Logs
+	case "token_holders":
+		rows = pr.Holders
 	}
-	return provider.FetchResult{Rows: rows, NextPageToken: pr.NextPageToken, HasMore: pr.NextPageToken != ""}, len(rows), nil
+	return provider.FetchResult{Rows: rows, NextPageToken: pr.NextPageToken, HasMore: pr.NextPageToken != "", Total: pr.HoldersCount}, len(rows), nil
 }
 
 // classifyCtxErr 优先 context 错误（§10/§25 优先级 1）。

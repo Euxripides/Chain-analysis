@@ -32,6 +32,9 @@ type pagedResult struct {
 	// Ankr 实际响应：token_transfers 与 nft_transfers 都放在 transfers 键下
 	Transfers []json.RawMessage `json:"transfers"`
 	Logs      []json.RawMessage `json:"logs"`
+	// token_holders：按余额降序的持有人与总持有人数
+	Holders      []json.RawMessage `json:"holders"`
+	HoldersCount int64             `json:"holdersCount"`
 }
 
 type balanceResult struct {

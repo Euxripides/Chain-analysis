@@ -66,3 +66,16 @@ func TestBuildParamsSendsTopicsOnlyForLogs(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenHoldersParamsAndResult(t *testing.T) {
+	client := &Client{}
+	params := client.buildParams(provider.FetchRequest{Chain: "bsc", Dataset: "token_holders", Address: "0xToken", PageSize: 25, PageToken: "next"})
+	want := map[string]any{"blockchain": "bsc", "contractAddress": "0xToken", "pageSize": 25, "pageToken": "next"}
+	if !reflect.DeepEqual(params, want) {
+		t.Fatalf("params = %#v", params)
+	}
+	result, n, err := client.parseResult("token_holders", []byte(`{"holders":[{"holderAddress":"0xa","balanceRawInteger":"9"},{"holderAddress":"0xb","balanceRawInteger":"1"}],"holdersCount":11189,"nextPageToken":"p2"}`))
+	if err != nil || n != 2 || result.Total != 11189 || !result.HasMore || result.NextPageToken != "p2" {
+		t.Fatalf("result = %+v n=%d err=%v", result, n, err)
+	}
+}

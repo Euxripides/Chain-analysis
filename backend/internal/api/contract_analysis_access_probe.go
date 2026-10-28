@@ -244,6 +244,8 @@ func (s *Server) contractProbeCallerAccess(ctx context.Context, q ca.Request, re
 		return s.deps.ChainRead.CallContract(ctx, chainread.ContractCall{Chain: q.Chain, To: to, From: chain.Address(from), Data: data, BlockRef: block}, contractOptions(ctx, q))
 	}
 	contractApplyAccessProbes(result, call)
+	holders, code := s.contractHolderSources(ctx, q, result)
+	contractApplyTokenHolders(result, holders, code)
 	contractApplyRoleHolders(result, s.contractRoleLogs(ctx, q, result), call)
 }
 

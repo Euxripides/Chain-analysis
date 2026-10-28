@@ -53,6 +53,9 @@ type FetchResult struct {
 	RawResponseBody   []byte
 	StartedAt         time.Time
 	BodyCompleteAt    time.Time
+	// Total is a provider-reported total row count when the dataset exposes one
+	// (token_holders); zero means unknown.
+	Total int64
 }
 
 // TRC20ActivityProfile is a cheap planning sample from the address index. It

@@ -94,6 +94,16 @@ func contractBuildSchemeProfile(result *ca.Result) {
 			probes[id] = p
 		}
 	}
+	roleHeld := map[string]int{}
+	for _, r := range roles {
+		held := 0
+		for _, m := range r["members"].([]any) {
+			if member, _ := m.(map[string]any); member["has_role_at_snapshot"] != false {
+				held++
+			}
+		}
+		roleHeld[fmt.Sprint(r["role"])] = held
+	}
 	related := map[string][]string{}
 	relate := func(address, relation string) {
 		address = contractNormalizeAddress(address)
@@ -175,6 +185,16 @@ func contractBuildSchemeProfile(result *ca.Result) {
 						gate[k] = v
 					}
 				}
+				if role, _ := p["required_role"].(string); role != "" {
+					switch held, known := roleHeld[role]; {
+					case !known:
+						gate["holder_status"] = "unknown_no_role_events"
+					case held == 0:
+						gate["holder_status"] = "no_current_holder"
+					default:
+						gate["holder_status"] = "held"
+					}
+				}
 				admin = append(admin, gate)
 				for _, a := range append(stringList(p["role_members"]), stringList(p["confirmed_callers"])...) {
 					relate(a, "can call "+short)
@@ -214,6 +234,17 @@ func contractBuildSchemeProfile(result *ca.Result) {
 			}
 		}
 	}
+	topHolders := []map[string]any{}
+	for _, h := range rowsOf("token_holders") {
+		profileHolders, _ := h["top_holders"].([]any)
+		for _, raw := range profileHolders {
+			entry, _ := raw.(map[string]any)
+			if len(topHolders) < 10 {
+				topHolders = append(topHolders, map[string]any{"rank": entry["rank"], "address": entry["address"], "share_percent": entry["share_percent"], "is_contract": entry["is_contract"]})
+			}
+			relate(fmt.Sprint(entry["address"]), fmt.Sprintf("top holder #%v (%v%% of supply)", entry["rank"], entry["share_percent"]))
+		}
+	}
 	formulas := []map[string]any{}
 	for _, sem := range semantics {
 		if sem["behavior"] == "比例与取整计算" && len(formulas) < contractProfileMaxFormulas {
@@ -244,8 +275,8 @@ func contractBuildSchemeProfile(result *ca.Result) {
 		"code_address": result.Snapshot.CodeAddress, "entry_address": result.Snapshot.EntryAddress, "chain": result.Snapshot.Chain,
 		"block_number": result.Snapshot.BlockNumber, "analysis_basis": basis, "proxy": result.Snapshot.Proxy,
 		"function_count": len(functions), "functions": functions, "inflow_functions": inflow, "outflow_functions": outflow,
-		"caller_gated_functions": admin, "configuration_values": config, "related_addresses": relatedRows, "fee_and_ratio_formulas": formulas,
+		"caller_gated_functions": admin, "configuration_values": config, "top_holders": topHolders, "related_addresses": relatedRows, "fee_and_ratio_formulas": formulas,
 		"name_hints": hints, "hint_basis": "function names (verified or public candidates) only; confirm with fund effects, storage and transactions",
-		"read_next": []string{"caller_access_probes", "role_holders", "funds", "calls", "semantics", "methods"}}
+		"read_next": []string{"caller_access_probes", "role_holders", "token_holders", "funds", "calls", "semantics", "methods"}}
 	result.Sections["scheme_profile"] = append(result.Sections["scheme_profile"], json.RawMessage(ca.Row(profile)))
 }
