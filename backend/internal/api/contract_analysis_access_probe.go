@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"strings"
 
@@ -188,6 +189,35 @@ func contractAddressWord(address string) []byte {
 	return append(make([]byte, 12), b...)
 }
 
+// contractGetterValue decodes the return of a no-argument function (signature or public candidate ending in "()"):
+// an address, a uint256 word or a short ABI string. Calls with arguments ran with zeros and are not decoded.
+func contractGetterValue(signature, candidate string, out []byte) map[string]any {
+	name := signature
+	if name == "" {
+		name = candidate
+	}
+	if !strings.HasSuffix(name, "()") || len(out) < 32 {
+		return nil
+	}
+	value := map[string]any{"returned_word": "0x" + hex.EncodeToString(out[:32])}
+	if len(out) == 32 {
+		// A left-padded word above 2^128 is read as an address; small values are numbers.
+		if n := new(big.Int).SetBytes(out); n.BitLen() <= 160 {
+			value["returned_uint"] = n.String()
+			if n.BitLen() > 128 {
+				value["returned_address"] = contractProbeAddress(out)
+			}
+		}
+		return value
+	}
+	if contractWord(out[:32]) == 32 && len(out) >= 64 {
+		if n := contractWord(out[32:64]); n <= 256 && uint64(len(out)) >= 64+n {
+			value["returned_text"] = string(out[64 : 64+n])
+		}
+	}
+	return value
+}
+
 func contractProbeAddress(out []byte) string {
 	if len(out) != 32 {
 		return ""
@@ -220,9 +250,9 @@ func (s *Server) contractProbeCallerAccess(ctx context.Context, q ca.Request, re
 // contractApplyAccessProbes adds the caller_access_probes section, a coverage row and a per-method summary.
 func contractApplyAccessProbes(result *ca.Result, call contractCallFunc) {
 	type entry struct {
-		selector, signature string
-		methodIDs           []string
-		state               bool
+		selector, signature, candidate string
+		methodIDs                      []string
+		state                          bool
 	}
 	var entries []*entry
 	bySelector := map[string]*entry{}
@@ -242,6 +272,10 @@ func contractApplyAccessProbes(result *ca.Result, call contractCallFunc) {
 		e.methodIDs = append(e.methodIDs, fmt.Sprint(m["method_id"]))
 		if sig, _ := m["signature"].(string); sig != "" {
 			e.signature = sig
+		} else if c, _ := m["candidate_name"].(string); c != "" && e.candidate == "" {
+			if list, _ := m["signature_candidates"].([]any); len(list) > 0 {
+				e.candidate, _ = list[0].(map[string]any)["signature"].(string)
+			}
 		}
 		for _, b := range stringList(m["behaviors"]) {
 			if b == "修改合约状态" || b == "可接收原生币" || b == "外部合约交互" || strings.HasSuffix(b, "支付") || strings.HasSuffix(b, "调用") {
@@ -319,7 +353,7 @@ func contractApplyAccessProbes(result *ca.Result, call contractCallFunc) {
 	summaries := map[string]map[string]any{}
 	for _, o := range outcomes {
 		probeID := ca.ID(target, result.Snapshot.CodeAddress, o.e.selector, "caller-access-probe")
-		row := map[string]any{"probe_id": probeID, "method_ids": o.e.methodIDs, "selector": o.e.selector, "signature": o.e.signature,
+		row := map[string]any{"probe_id": probeID, "method_ids": o.e.methodIDs, "selector": o.e.selector, "signature": o.e.signature, "signature_candidate": o.e.candidate,
 			"target_address": target, "code_address": result.Snapshot.CodeAddress, "entry_address": result.Snapshot.EntryAddress, "block_number": result.Snapshot.BlockNumber, "block_hash": result.Snapshot.BlockHash,
 			"probe_caller": contractProbeCaller, "zeroed_argument_words": contractProbeArgWords, "state_changing_hint": o.e.state,
 			"basis": "eth_call_simulation_at_snapshot_block", "authorization_sufficiency_verified": false}
@@ -333,6 +367,9 @@ func contractApplyAccessProbes(result *ca.Result, call contractCallFunc) {
 			case o.first.Success:
 				row["outcome"] = "success"
 				classification = "callable_by_probe_caller"
+				for k, v := range contractGetterValue(o.e.signature, o.e.candidate, o.first.Data) {
+					row[k] = v
+				}
 			default:
 				row["outcome"] = "reverted"
 				row["revert_selector"], row["revert_signal"], row["revert_reason"] = o.first.Revert.Selector, o.first.Revert.Signal, o.first.Revert.Reason

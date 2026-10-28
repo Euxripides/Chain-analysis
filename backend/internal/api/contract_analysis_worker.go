@@ -354,11 +354,17 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	if e = s.contractSaveArtifacts(ctx, &result); e != nil {
 		return result, e
 	}
+	if q.Program == nil {
+		contractNameSelectors(ctx, &result)
+	}
 	if q.Program == nil && !q.CodeOnly() {
 		s.contractReadState(ctx, q, &result)
 		contractEnrichAuthoritySnapshot(&result)
 		contractEnrichCallTargets(&result)
 		s.contractProbeCallerAccess(ctx, q, &result)
+	}
+	if q.Program == nil {
+		contractBuildSchemeProfile(&result)
 	}
 	manifest, e := s.contractCacheResult(ctx, result)
 	if e != nil {
