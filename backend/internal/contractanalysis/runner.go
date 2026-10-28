@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -14,6 +15,15 @@ import (
 )
 
 var imageIdentity = regexp.MustCompile(`^(sha256:[0-9a-f]{64}|[a-zA-Z0-9./_:-]+@sha256:[0-9a-f]{64})$`)
+var memoryLimit = regexp.MustCompile(`^[1-9][0-9]{0,5}[mMgG]$`)
+
+// EngineMemoryLimit is the container memory cap (swap disabled). CONTRACT_ENGINE_MEMORY overrides the 2g default; malformed values keep the default.
+func EngineMemoryLimit() string {
+	if v := strings.TrimSpace(os.Getenv("CONTRACT_ENGINE_MEMORY")); memoryLimit.MatchString(v) {
+		return strings.ToLower(v)
+	}
+	return "2g"
+}
 
 type limitedBuffer struct {
 	bytes.Buffer
@@ -73,8 +83,9 @@ func (r Runner) Run(ctx context.Context, jobID string, fence int64, input Input)
 		docker = "/usr/bin/docker"
 	}
 	name := fmt.Sprintf("contract-analysis-%s-%d", jobID, fence)
+	memory := EngineMemoryLimit()
 	// The container has no network, host secrets, mounted project or Docker socket.
-	args := []string{"run", "--rm", "--pull", "never", "-i", "--name", name, "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "65532:65532", "--cpus", "2", "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "128", "--log-driver", "none", "--tmpfs", "/tmp:rw,nosuid,size=192m"}
+	args := []string{"run", "--rm", "--pull", "never", "-i", "--name", name, "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "65532:65532", "--cpus", "2", "--memory", memory, "--memory-swap", memory, "--pids-limit", "128", "--log-driver", "none", "--tmpfs", "/tmp:rw,nosuid,size=192m"}
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline).Milliseconds()
 		if remaining <= 0 {
