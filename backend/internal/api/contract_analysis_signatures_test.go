@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -80,4 +81,51 @@ func TestNameSelectorsUsesOpenchainThenFourByteAndRejectsMismatches(t *testing.T
 	if requests != 1 {
 		t.Fatalf("openchain requests = %d", requests)
 	}
+}
+
+func TestNameEventsFromPush32TopicsOnly(t *testing.T) {
+	transfer, claimed := method.Topic0Of("Transfer(address,address,uint256)"), method.Topic0Of("RewardsClaimed(address,uint8,uint256,uint256,uint256)")
+	unknown := "0x" + strings.Repeat("ab", 32)
+	push32 := func(topic string) string { return "7f" + strings.TrimPrefix(topic, "0x") }
+	// PUSH2 0x7f00 hides a 0x7f byte inside push data; it must not be read as PUSH32.
+	code := "0x617f00" + push32(transfer) + "50" + push32(claimed) + push32(unknown) + push32(transfer)
+	if got := contractCodeTopics(mustHexString(t, code), 10); len(got) != 3 || got[0] != transfer || got[1] != claimed || got[2] != unknown {
+		t.Fatalf("topics = %v", got)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("event") == "" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"event": map[string]any{
+			transfer: []map[string]string{{"name": "Transfer(address,address,uint256)"}},
+			claimed:  []map[string]string{{"name": "RewardsClaimed(address,uint8,uint256,uint256,uint256)"}, {"name": "Wrong(uint256)"}},
+			unknown:  nil,
+		}}})
+	}))
+	defer server.Close()
+	old := contractOpenchainURL
+	contractOpenchainURL = server.URL
+	defer func() { contractOpenchainURL = old }()
+	contractSignatureCache.Lock()
+	contractSignatureCache.items = map[string]selectorCacheEntry{}
+	contractSignatureCache.Unlock()
+	result := &ca.Result{Sections: map[string][]json.RawMessage{}}
+	contractNameEvents(context.Background(), result, code)
+	got := map[string]map[string]any{}
+	for _, raw := range result.Sections["event_signatures"] {
+		r := rowMap(raw)
+		got[r["topic0"].(string)] = r
+	}
+	if len(got) != 2 || got[claimed]["signature"] != "RewardsClaimed(address,uint8,uint256,uint256,uint256)" || len(got[claimed]["candidates"].([]any)) != 1 || got[transfer] == nil {
+		t.Fatalf("events = %v", got)
+	}
+}
+
+func mustHexString(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

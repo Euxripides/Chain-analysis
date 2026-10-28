@@ -79,3 +79,15 @@ func TestTokenHoldersParamsAndResult(t *testing.T) {
 		t.Fatalf("result = %+v n=%d err=%v", result, n, err)
 	}
 }
+
+func TestBuildParamsSendsDescOrderOnlyWhenAsked(t *testing.T) {
+	client := &Client{}
+	block := uint64(100)
+	params := client.buildParams(provider.FetchRequest{Chain: "bsc", Dataset: "token_transfers", Address: "0x1", ToBlock: &block, PageSize: 50, DescOrder: true})
+	if params["descOrder"] != true || params["toBlock"] != "0x64" {
+		t.Fatalf("params = %#v", params)
+	}
+	if _, ok := client.buildParams(provider.FetchRequest{Chain: "bsc", Dataset: "transactions", Address: "0x1"})["descOrder"]; ok {
+		t.Fatal("descOrder sent without being asked")
+	}
+}

@@ -245,6 +245,12 @@ func contractBuildSchemeProfile(result *ca.Result) {
 			relate(fmt.Sprint(entry["address"]), fmt.Sprintf("top holder #%v (%v%% of supply)", entry["rank"], entry["share_percent"]))
 		}
 	}
+	events := []map[string]any{}
+	for _, ev := range rowsOf("event_signatures") {
+		if len(events) < 64 {
+			events = append(events, map[string]any{"topic0": ev["topic0"], "signature": ev["signature"]})
+		}
+	}
 	formulas := []map[string]any{}
 	for _, sem := range semantics {
 		if sem["behavior"] == "比例与取整计算" && len(formulas) < contractProfileMaxFormulas {
@@ -275,8 +281,8 @@ func contractBuildSchemeProfile(result *ca.Result) {
 		"code_address": result.Snapshot.CodeAddress, "entry_address": result.Snapshot.EntryAddress, "chain": result.Snapshot.Chain,
 		"block_number": result.Snapshot.BlockNumber, "analysis_basis": basis, "proxy": result.Snapshot.Proxy,
 		"function_count": len(functions), "functions": functions, "inflow_functions": inflow, "outflow_functions": outflow,
-		"caller_gated_functions": admin, "configuration_values": config, "top_holders": topHolders, "related_addresses": relatedRows, "fee_and_ratio_formulas": formulas,
+		"caller_gated_functions": admin, "configuration_values": config, "top_holders": topHolders, "events": events, "related_addresses": relatedRows, "fee_and_ratio_formulas": formulas,
 		"name_hints": hints, "hint_basis": "function names (verified or public candidates) only; confirm with fund effects, storage and transactions",
-		"read_next": []string{"caller_access_probes", "role_holders", "token_holders", "funds", "calls", "semantics", "methods"}}
+		"read_next": []string{"caller_access_probes", "role_holders", "token_holders", "event_signatures", "funds", "calls", "semantics", "methods"}}
 	result.Sections["scheme_profile"] = append(result.Sections["scheme_profile"], json.RawMessage(ca.Row(profile)))
 }

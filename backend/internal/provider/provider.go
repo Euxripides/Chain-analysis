@@ -34,6 +34,9 @@ type FetchRequest struct {
 	// position is an OR list). Providers that cannot filter ignore it, so
 	// callers must re-check topics on the returned rows.
 	Topics [][]string
+	// DescOrder asks for newest rows first where the provider supports it
+	// (Ankr transactions and token transfers); others return their usual order.
+	DescOrder bool
 }
 
 type FetchResult struct {

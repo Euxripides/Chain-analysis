@@ -493,6 +493,9 @@ func (c *Client) buildParams(req provider.FetchRequest) map[string]any {
 	if req.Dataset == "logs" && len(req.Topics) > 0 {
 		params["topics"] = req.Topics
 	}
+	if req.DescOrder {
+		params["descOrder"] = true
+	}
 	return params
 }
 

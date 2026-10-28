@@ -356,6 +356,7 @@ func (s *Server) contractRunInput(ctx context.Context, w nextWorkerState, q ca.R
 	}
 	if q.Program == nil {
 		contractNameSelectors(ctx, &result)
+		contractNameEvents(ctx, &result, input.Bytecode)
 	}
 	if q.Program == nil && !q.CodeOnly() {
 		s.contractReadState(ctx, q, &result)
