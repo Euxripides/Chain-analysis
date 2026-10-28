@@ -2,6 +2,8 @@ package ankrrpc
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -43,6 +45,34 @@ func mapHTTPError(status int, body []byte, retryAfter time.Duration) *rpc.Error 
 		return &rpc.Error{Class: rpc.ClassUpstream, HTTPStatus: status, Retryable: true,
 			Message: "provider http " + strconv.Itoa(status)}
 	}
+}
+
+// maxRevertDataBytes 限制错误上保留的回滚载荷大小。
+const maxRevertDataBytes = 4096
+
+// withRevertData 保留 execution_reverted 的十六进制回滚载荷。Provider 返回 "0x…" 字符串或嵌套的
+// {"data":"0x…"}；其他形态或超长载荷不设置。
+func withRevertData(err *rpc.Error, data json.RawMessage) *rpc.Error {
+	if err.Class != rpc.ClassExecutionReverted || len(data) == 0 {
+		return err
+	}
+	var text string
+	if json.Unmarshal(data, &text) != nil {
+		var nested struct {
+			Data string `json:"data"`
+		}
+		if json.Unmarshal(data, &nested) != nil {
+			return err
+		}
+		text = nested.Data
+	}
+	if !strings.HasPrefix(text, "0x") || len(text)%2 != 0 || (len(text)-2)/2 > maxRevertDataBytes {
+		return err
+	}
+	if b, e := hex.DecodeString(text[2:]); e == nil {
+		err.RevertData = b
+	}
+	return err
 }
 
 // mapRPCError JSON-RPC error 对象 → 统一分类。

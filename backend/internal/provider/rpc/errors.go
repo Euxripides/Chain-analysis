@@ -62,6 +62,10 @@ type Error struct {
 
 	Message string
 	Cause   error
+
+	// RevertData 是 execution_reverted 的 eth_call 原始回滚载荷（Provider 返回时才有）；
+	// 自定义错误（如 OwnableUnauthorizedAccount）的身份只在这里，不在 Message 里。
+	RevertData []byte
 }
 
 func (e *Error) Error() string {

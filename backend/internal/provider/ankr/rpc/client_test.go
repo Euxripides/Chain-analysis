@@ -2,6 +2,7 @@ package ankrrpc
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -103,6 +104,27 @@ func TestExecutionRevertedMapping(t *testing.T) {
 	mapped := rpc.AsError(err)
 	if mapped.Class != rpc.ClassExecutionReverted || mapped.Retryable {
 		t.Fatalf("mapped = %+v", mapped)
+	}
+}
+
+// 自定义错误的身份只在 error.data 里：revert 时保留原始载荷，非 revert 和畸形载荷不保留。
+func TestExecutionRevertedKeepsRevertData(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"code":3,"message":"execution reverted","data":"0x118cdaa7000000000000000000000000000000000000000000000000000000000000dead"}`: "118cdaa7000000000000000000000000000000000000000000000000000000000000dead",
+		`{"code":-32000,"message":"execution reverted","data":{"data":"0xe2517d3f"}}`:                                                   "e2517d3f",
+		`{"code":3,"message":"execution reverted","data":"0x"}`:                                                                         "",
+		`{"code":3,"message":"execution reverted","data":"0xzz"}`:                                                                       "",
+		`{"code":3,"message":"execution reverted","data":"0x123"}`:                                                                      "",
+		`{"code":-32602,"message":"invalid params","data":"0x118cdaa7"}`:                                                                "",
+	} {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"error":` + body + `}`))
+		}, 1<<20)
+		_, err := client.Call(context.Background(), rpc.Request{Chain: "bsc", Method: "eth_call",
+			Params: []any{map[string]any{"to": "0x1", "data": "0x95d89b41"}, "latest"}, Class: rpc.ClassContractRead})
+		if got := hex.EncodeToString(rpc.AsError(err).RevertData); got != want {
+			t.Fatalf("body %s: revert data %q, want %q", body, got, want)
+		}
 	}
 }
 

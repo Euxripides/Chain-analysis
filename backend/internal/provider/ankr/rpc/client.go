@@ -105,7 +105,7 @@ func (c *Client) Call(ctx context.Context, req rpc.Request) (rpc.Response, error
 			Chain: req.Chain, Method: req.Method, Retryable: true, Message: "provider returned invalid json"}
 	}
 	if decoded.Error != nil {
-		mapped := mapRPCError(decoded.Error.Code, decoded.Error.Message, req.Class)
+		mapped := withRevertData(mapRPCError(decoded.Error.Code, decoded.Error.Message, req.Class), decoded.Error.Data)
 		mapped.Provider, mapped.Chain, mapped.Method = c.Name(), req.Chain, req.Method
 		mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 		c.recordFailure(mapped.Message)
@@ -151,7 +151,7 @@ func (c *Client) BatchCall(ctx context.Context, reqs []rpc.Request) ([]rpc.Respo
 		// 某些 Provider 在整批错误时返回单个对象
 		var single jsonRPCResponse
 		if err2 := json.Unmarshal(raw, &single); err2 == nil && single.Error != nil {
-			mapped := mapRPCError(single.Error.Code, single.Error.Message, reqs[0].Class)
+			mapped := withRevertData(mapRPCError(single.Error.Code, single.Error.Message, reqs[0].Class), single.Error.Data)
 			mapped.Provider, mapped.Chain = c.Name(), reqs[0].Chain
 			mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 			c.recordFailure(mapped.Message)
@@ -179,7 +179,7 @@ func (c *Client) BatchCall(ctx context.Context, reqs []rpc.Request) ([]rpc.Respo
 		response := rpc.Response{Provider: c.Name(), Chain: reqs[idx].Chain, Method: reqs[idx].Method,
 			Bytes: perItemBytes, BatchSize: len(reqs)}
 		if item.Error != nil {
-			mapped := mapRPCError(item.Error.Code, item.Error.Message, reqs[idx].Class)
+			mapped := withRevertData(mapRPCError(item.Error.Code, item.Error.Message, reqs[idx].Class), item.Error.Data)
 			mapped.Message = c.redactEndpointMessage(mapped.Message, endpoint)
 			mapped.Provider, mapped.Chain, mapped.Method = c.Name(), reqs[idx].Chain, reqs[idx].Method
 			response.Error = mapped
