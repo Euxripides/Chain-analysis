@@ -30,6 +30,10 @@ type FetchRequest struct {
 	// Priority is propagated by the download scheduler so providers can apply
 	// quota policy without coupling to job storage. Empty means normal.
 	Priority string
+	// Topics optionally narrows the logs dataset by event topic position (each
+	// position is an OR list). Providers that cannot filter ignore it, so
+	// callers must re-check topics on the returned rows.
+	Topics [][]string
 }
 
 type FetchResult struct {

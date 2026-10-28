@@ -1,6 +1,7 @@
 package ankr
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -51,4 +52,17 @@ func TestBuildParamsUsesExactlyOneRangeDimension(t *testing.T) {
 			t.Fatalf("logs must not send unsupported timestamps: %#v", params)
 		}
 	})
+}
+
+func TestBuildParamsSendsTopicsOnlyForLogs(t *testing.T) {
+	client := &Client{}
+	topics := [][]string{{"0x2f87", "0xf6391f"}}
+	if params := client.buildParams(provider.FetchRequest{Chain: "bsc", Dataset: "logs", Address: "0x1", Topics: topics}); !reflect.DeepEqual(params["topics"], topics) {
+		t.Fatalf("logs topics missing: %#v", params)
+	}
+	for _, req := range []provider.FetchRequest{{Chain: "bsc", Dataset: "logs", Address: "0x1"}, {Chain: "bsc", Dataset: "transactions", Address: "0x1", Topics: topics}} {
+		if _, ok := client.buildParams(req)["topics"]; ok {
+			t.Fatalf("unexpected topics for %#v", req)
+		}
+	}
 }

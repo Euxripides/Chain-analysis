@@ -482,6 +482,9 @@ func (c *Client) buildParams(req provider.FetchRequest) map[string]any {
 	if req.PageToken != "" {
 		params["pageToken"] = req.PageToken
 	}
+	if req.Dataset == "logs" && len(req.Topics) > 0 {
+		params["topics"] = req.Topics
+	}
 	return params
 }
 
