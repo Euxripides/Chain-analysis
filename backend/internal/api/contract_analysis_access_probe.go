@@ -210,9 +210,11 @@ func (s *Server) contractProbeCallerAccess(ctx context.Context, q ca.Request, re
 		return
 	}
 	to, block := chain.Address(contractProbeTarget(result.Snapshot)), chain.AtBlock(result.Snapshot.BlockNumber)
-	contractApplyAccessProbes(result, func(from string, data []byte) ([]byte, error) {
+	call := func(from string, data []byte) ([]byte, error) {
 		return s.deps.ChainRead.CallContract(ctx, chainread.ContractCall{Chain: q.Chain, To: to, From: chain.Address(from), Data: data, BlockRef: block}, contractOptions(ctx, q))
-	})
+	}
+	contractApplyAccessProbes(result, call)
+	contractApplyRoleHolders(result, s.contractRoleLogs(ctx, q, result), call)
 }
 
 // contractApplyAccessProbes adds the caller_access_probes section, a coverage row and a per-method summary.
